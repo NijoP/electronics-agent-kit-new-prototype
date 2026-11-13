@@ -35,7 +35,10 @@ fn serve(
                 continue;
             }
             let mut p = line.split_whitespace();
-            let (method, path) = (p.next().unwrap_or("").to_string(), p.next().unwrap_or("").to_string());
+            let (method, path) = (
+                p.next().unwrap_or("").to_string(),
+                p.next().unwrap_or("").to_string(),
+            );
             let (mut len, mut auth) = (0usize, String::new());
             loop {
                 let mut h = String::new();
@@ -54,7 +57,9 @@ fn serve(
             let mut body = vec![0u8; len];
             reader.read_exact(&mut body).unwrap();
             let (status, out) = route(&method, &path);
-            log.lock().unwrap().push(format!("{method} {path} | {auth}"));
+            log.lock()
+                .unwrap()
+                .push(format!("{method} {path} | {auth}"));
             let _ = stream.write_all(
                 format!(
                     "HTTP/1.1 {status} X\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{out}",
@@ -88,9 +93,16 @@ fn profiles_persist_without_secrets_and_keys_stay_in_the_store() {
     let keys = Arc::new(MemoryKeyStore::default());
     let s = settings(Some(file.clone()), keys.clone());
     let v = s
-        .save(input(ProviderKind::OpenAiCompatible, "http://127.0.0.1:1/v1/", Some("m")), Some(SECRET.into()))
+        .save(
+            input(
+                ProviderKind::OpenAiCompatible,
+                "http://127.0.0.1:1/v1/",
+                Some("m"),
+            ),
+            Some(SECRET.into()),
+        )
         .unwrap();
-    assert!(v.has_key && v.needs_key == false);
+    assert!(v.has_key && !v.needs_key);
     assert_eq!(v.profile.base_url.as_deref(), Some("http://127.0.0.1:1/v1"));
     assert_eq!(keys.get(&v.profile.id).unwrap().as_deref(), Some(SECRET));
 
@@ -115,14 +127,21 @@ fn profiles_persist_without_secrets_and_keys_stay_in_the_store() {
     again.remove(&v.profile.id).unwrap();
     assert!(again.list().unwrap().is_empty());
     assert_eq!(keys.get(&v.profile.id).unwrap(), None);
-    assert!(!std::fs::read_to_string(&file).unwrap().contains(&v.profile.id));
+    assert!(!std::fs::read_to_string(&file)
+        .unwrap()
+        .contains(&v.profile.id));
 }
 
 #[test]
 fn key_can_be_replaced_and_cleared_without_touching_the_profile() {
     let keys = Arc::new(MemoryKeyStore::default());
     let s = settings(None, keys.clone());
-    let v = s.save(input(ProviderKind::Anthropic, "https://api.anthropic.com", None), None).unwrap();
+    let v = s
+        .save(
+            input(ProviderKind::Anthropic, "https://api.anthropic.com", None),
+            None,
+        )
+        .unwrap();
     assert!(!v.has_key && v.needs_key);
     assert!(s.set_key(&v.profile.id, "  ").is_err());
     assert!(s.set_key(&v.profile.id, "k1").unwrap().has_key);
@@ -152,9 +171,13 @@ fn a_corrupt_settings_file_is_reported_not_overwritten() {
     let d = tmpdir("corrupt");
     let file = d.join("model-providers.json");
     std::fs::write(&file, "{not json").unwrap();
-    let e = ModelSettings::new(Some(file.clone()), Arc::new(MemoryKeyStore::default()), default_transport())
-        .err()
-        .expect("must fail");
+    let e = ModelSettings::new(
+        Some(file.clone()),
+        Arc::new(MemoryKeyStore::default()),
+        default_transport(),
+    )
+    .err()
+    .expect("must fail");
     assert!(e.contains("not valid"), "{e}");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "{not json");
 }
@@ -162,7 +185,10 @@ fn a_corrupt_settings_file_is_reported_not_overwritten() {
 #[test]
 fn list_and_test_use_the_stored_key_over_real_http() {
     let (base, seen) = serve(|m, p| match (m, p) {
-        ("GET", "/v1/models") => (200, r#"{"data":[{"id":"gpt-local"},{"id":"another"}]}"#.into()),
+        ("GET", "/v1/models") => (
+            200,
+            r#"{"data":[{"id":"gpt-local"},{"id":"another"}]}"#.into(),
+        ),
         ("POST", "/v1/chat/completions") => (
             200,
             r#"{"choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}"#.into(),
@@ -171,29 +197,53 @@ fn list_and_test_use_the_stored_key_over_real_http() {
     });
     let s = settings(None, Arc::new(MemoryKeyStore::default()));
     let v = s
-        .save(input(ProviderKind::OpenAiCompatible, &format!("{base}/v1"), Some("gpt-local")), Some(SECRET.into()))
+        .save(
+            input(
+                ProviderKind::OpenAiCompatible,
+                &format!("{base}/v1"),
+                Some("gpt-local"),
+            ),
+            Some(SECRET.into()),
+        )
         .unwrap();
-    assert_eq!(s.list_models(&v.profile.id).unwrap(), ["another", "gpt-local"]);
+    assert_eq!(
+        s.list_models(&v.profile.id).unwrap(),
+        ["another", "gpt-local"]
+    );
     let r = s.test_connection(&v.profile.id).unwrap();
     assert!(r.ok, "{r:?}");
     assert!(!r.message.contains(SECRET));
     let seen = seen.lock().unwrap();
     assert_eq!(seen.len(), 2);
-    assert!(seen.iter().all(|l| l.contains(&format!("bearer {SECRET}").to_ascii_lowercase())), "{seen:?}");
+    assert!(
+        seen.iter()
+            .all(|l| l.contains(&format!("bearer {SECRET}").to_ascii_lowercase())),
+        "{seen:?}"
+    );
 }
 
 #[test]
 fn provider_errors_are_shown_and_the_key_is_redacted() {
     let (base, _) = serve(|_, _| {
-        (401, format!(r#"{{"error":{{"message":"bad key {SECRET} for org"}}}}"#))
+        (
+            401,
+            format!(r#"{{"error":{{"message":"bad key {SECRET} for org"}}}}"#),
+        )
     });
     let s = settings(None, Arc::new(MemoryKeyStore::default()));
     let v = s
-        .save(input(ProviderKind::OpenAiCompatible, &base, Some("m")), Some(SECRET.into()))
+        .save(
+            input(ProviderKind::OpenAiCompatible, &base, Some("m")),
+            Some(SECRET.into()),
+        )
         .unwrap();
     let r = s.test_connection(&v.profile.id).unwrap();
     assert!(!r.ok);
-    assert!(r.message.contains("bad key") && r.message.contains("401"), "{}", r.message);
+    assert!(
+        r.message.contains("bad key") && r.message.contains("401"),
+        "{}",
+        r.message
+    );
     assert!(!r.message.contains(SECRET), "{}", r.message);
     let e = s.list_models(&v.profile.id).unwrap_err();
     assert!(!e.contains(SECRET), "{e}");
@@ -206,7 +256,13 @@ fn the_environment_is_never_a_key_source() {
     let s = settings(None, Arc::new(MemoryKeyStore::default()));
     let v = s
         .save(
-            ProfileInput { id: None, label: "OpenAI".into(), kind: ProviderKind::OpenAiCompatible, base_url: None, model: Some("m".into()) },
+            ProfileInput {
+                id: None,
+                label: "OpenAI".into(),
+                kind: ProviderKind::OpenAiCompatible,
+                base_url: None,
+                model: Some("m".into()),
+            },
             None,
         )
         .unwrap();
@@ -218,11 +274,16 @@ fn the_environment_is_never_a_key_source() {
 fn ollama_works_without_a_key() {
     let (base, _) = serve(|m, p| match (m, p) {
         ("GET", "/api/tags") => (200, r#"{"models":[{"name":"llama3:8b"}]}"#.into()),
-        ("POST", "/api/chat") => (200, r#"{"message":{"role":"assistant","content":"OK"},"done":true}"#.into()),
+        ("POST", "/api/chat") => (
+            200,
+            r#"{"message":{"role":"assistant","content":"OK"},"done":true}"#.into(),
+        ),
         _ => (404, "{}".into()),
     });
     let s = settings(None, Arc::new(MemoryKeyStore::default()));
-    let v = s.save(input(ProviderKind::Ollama, &base, Some("llama3:8b")), None).unwrap();
+    let v = s
+        .save(input(ProviderKind::Ollama, &base, Some("llama3:8b")), None)
+        .unwrap();
     assert!(!v.needs_key);
     assert_eq!(s.list_models(&v.profile.id).unwrap(), ["llama3:8b"]);
     assert!(s.test_connection(&v.profile.id).unwrap().ok);
@@ -235,12 +296,9 @@ fn ollama_works_without_a_key() {
 fn os_credential_store_round_trip() {
     let id = format!("eak-test-{}", std::process::id());
     let store = OsKeyStore;
-    match store.set(&id, SECRET) {
-        Err(e) => {
-            eprintln!("SKIPPED os_credential_store_round_trip: no usable credential store: {e}");
-            return;
-        }
-        Ok(()) => {}
+    if let Err(e) = store.set(&id, SECRET) {
+        eprintln!("SKIPPED os_credential_store_round_trip: no usable credential store: {e}");
+        return;
     }
     assert_eq!(store.get(&id).unwrap().as_deref(), Some(SECRET));
     store.delete(&id).unwrap();

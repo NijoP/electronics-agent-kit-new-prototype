@@ -73,10 +73,18 @@ impl KeyStore for MemoryKeyStore {
         Ok(())
     }
     fn get(&self, id: &str) -> Result<Option<String>, String> {
-        Ok(self.0.lock().map_err(|_| "poisoned".to_string())?.get(id).cloned())
+        Ok(self
+            .0
+            .lock()
+            .map_err(|_| "poisoned".to_string())?
+            .get(id)
+            .cloned())
     }
     fn delete(&self, id: &str) -> Result<(), String> {
-        self.0.lock().map_err(|_| "poisoned".to_string())?.remove(id);
+        self.0
+            .lock()
+            .map_err(|_| "poisoned".to_string())?
+            .remove(id);
         Ok(())
     }
 }
@@ -179,7 +187,8 @@ impl ModelSettings {
     fn persist(&self, profiles: &[ProviderProfile]) -> Result<(), String> {
         let Some(f) = &self.file else { return Ok(()) };
         if let Some(dir) = f.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+            std::fs::create_dir_all(dir)
+                .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
         }
         let tmp = f.with_extension("json.tmp");
         let text = serde_json::to_string_pretty(profiles).map_err(|e| e.to_string())?;
@@ -207,7 +216,11 @@ impl ModelSettings {
     }
 
     /// Add or update a provider; a non-empty `api_key` replaces the stored key.
-    pub fn save(&self, input: ProfileInput, api_key: Option<String>) -> Result<ProviderView, String> {
+    pub fn save(
+        &self,
+        input: ProfileInput,
+        api_key: Option<String>,
+    ) -> Result<ProviderView, String> {
         let label = input.label.trim().to_string();
         if label.is_empty() {
             return Err("give the provider a name".into());
@@ -296,7 +309,11 @@ impl ModelSettings {
     /// except for an unknown provider id.
     pub fn test_connection(&self, id: &str) -> Result<ConnectionReport, String> {
         let cfg = self.config(id)?;
-        Ok(adaptor::test_connection(&cfg, self.transport.clone(), &CancelToken::new()))
+        Ok(adaptor::test_connection(
+            &cfg,
+            self.transport.clone(),
+            &CancelToken::new(),
+        ))
     }
 }
 
@@ -350,7 +367,10 @@ pub mod cmd {
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
-    pub fn model_remove_provider(state: State<'_, ModelSettings>, id: String) -> Result<(), String> {
+    pub fn model_remove_provider(
+        state: State<'_, ModelSettings>,
+        id: String,
+    ) -> Result<(), String> {
         state.remove(&id)
     }
 
@@ -364,12 +384,18 @@ pub mod cmd {
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
-    pub fn model_clear_key(state: State<'_, ModelSettings>, id: String) -> Result<ProviderView, String> {
+    pub fn model_clear_key(
+        state: State<'_, ModelSettings>,
+        id: String,
+    ) -> Result<ProviderView, String> {
         state.clear_key(&id)
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
-    pub fn model_list_models(state: State<'_, ModelSettings>, id: String) -> Result<Vec<String>, String> {
+    pub fn model_list_models(
+        state: State<'_, ModelSettings>,
+        id: String,
+    ) -> Result<Vec<String>, String> {
         state.list_models(&id)
     }
 

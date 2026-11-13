@@ -508,7 +508,11 @@ pub fn run() {
             }
             app.manage(Session::new(index));
             // Profiles are plain JSON in the config dir; keys go to the OS credential store.
-            let profiles = app.path().app_config_dir().ok().map(|d| d.join("model-providers.json"));
+            let profiles = app
+                .path()
+                .app_config_dir()
+                .ok()
+                .map(|d| d.join("model-providers.json"));
             match models::ModelSettings::system(profiles) {
                 Ok(m) => {
                     app.manage(m);

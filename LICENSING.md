@@ -11,6 +11,7 @@ EAK is proprietary (see LICENSE). No third-party source code has been copied int
 | uuid | MIT OR Apache-2.0 | object ids |
 | rusqlite (bundled SQLite) | MIT; SQLite is public domain | metadata index |
 | tauri, tauri-build (2.x) | MIT OR Apache-2.0 | desktop shell (`apps/desktop/src-tauri`) |
+| keyring 3 (`apple-native`, `windows-native`, `sync-secret-service`, `crypto-rust`) | MIT OR Apache-2.0 | OS credential storage for model API keys (`apps/desktop/src-tauri`); transitive backends not yet inventoried |
 | ureq 3 (`rustls` feature; optional, `remote-http`) | MIT OR Apache-2.0 | HTTPS client for model providers (`eak-intelligence`) |
 
 ### Crates added by `eak-intelligence` (feature `remote-http`)

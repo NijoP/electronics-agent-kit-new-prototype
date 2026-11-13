@@ -84,15 +84,21 @@ fn cfg(kind: ProviderKind, base: &str, key: Option<&str>) -> ProviderConfig {
 
 #[test]
 fn openai_compatible_list_and_test_over_real_http() {
-    let (base, seen) = serve(|m, p| match (m, p) {
+    let (base, seen) = serve(|m, p| {
+        match (m, p) {
         ("GET", "/v1/models") => (200, r#"{"data":[{"id":"zeta"},{"id":"alpha"}]}"#.into()),
         ("POST", "/v1/chat/completions") => (
             200,
             r#"{"choices":[{"message":{"content":"OK"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}"#.into(),
         ),
         _ => (404, r#"{"error":{"message":"no route"}}"#.into()),
+    }
     });
-    let c = cfg(ProviderKind::OpenAiCompatible, &format!("{base}/v1"), Some("sk-local"));
+    let c = cfg(
+        ProviderKind::OpenAiCompatible,
+        &format!("{base}/v1"),
+        Some("sk-local"),
+    );
     let ids = list_models(&c, default_transport(), &CancelToken::new()).unwrap();
     assert_eq!(ids, ["alpha", "zeta"]);
     let r = test_connection(&c, default_transport(), &CancelToken::new());
@@ -111,7 +117,8 @@ fn openai_compatible_list_and_test_over_real_http() {
 
 #[test]
 fn anthropic_and_ollama_shapes_over_real_http() {
-    let (base, seen) = serve(|m, p| match (m, p) {
+    let (base, seen) = serve(|m, p| {
+        match (m, p) {
         ("GET", p) if p.starts_with("/v1/models") => (200, r#"{"data":[{"id":"claude-test"}]}"#.into()),
         ("POST", "/v1/messages") => (
             200,
@@ -123,6 +130,7 @@ fn anthropic_and_ollama_shapes_over_real_http() {
             r#"{"message":{"role":"assistant","content":"OK"},"done":true}"#.into(),
         ),
         _ => (404, "{}".into()),
+    }
     });
     let a = cfg(ProviderKind::Anthropic, &base, Some("ak-local"));
     assert_eq!(
@@ -164,7 +172,11 @@ fn provider_error_text_is_reported_and_the_key_is_not() {
 #[test]
 fn an_unreachable_endpoint_reports_a_transport_error() {
     // Port 9 (discard) on loopback refuses the connection.
-    let c = cfg(ProviderKind::OpenAiCompatible, "http://127.0.0.1:9/v1", None);
+    let c = cfg(
+        ProviderKind::OpenAiCompatible,
+        "http://127.0.0.1:9/v1",
+        None,
+    );
     let r = test_connection(&c, default_transport(), &CancelToken::new());
     assert!(!r.ok, "{r:?}");
 }

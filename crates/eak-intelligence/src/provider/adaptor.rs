@@ -37,10 +37,7 @@ fn auth_headers(kind: ProviderKind, key: Option<&ApiKey>) -> Vec<(String, String
             ("x-api-key".into(), key.expose().to_string()),
             ("anthropic-version".into(), anthropic::API_VERSION.into()),
         ],
-        _ => vec![(
-            "authorization".into(),
-            format!("Bearer {}", key.expose()),
-        )],
+        _ => vec![("authorization".into(), format!("Bearer {}", key.expose()))],
     }
 }
 
@@ -158,7 +155,10 @@ mod tests {
 
     #[test]
     fn lists_models_for_each_provider_shape() {
-        let t = RecordingTransport::with(vec![(200, r#"{"data":[{"id":"b"},{"id":"a"},{"id":"a"}]}"#)]);
+        let t = RecordingTransport::with(vec![(
+            200,
+            r#"{"data":[{"id":"b"},{"id":"a"},{"id":"a"}]}"#,
+        )]);
         let ids = list_models(
             &cfg(ProviderKind::OpenAiCompatible, Some("sk-1")),
             t.clone(),
@@ -168,20 +168,29 @@ mod tests {
         assert_eq!(ids, ["a", "b"]);
         let sent = t.requests.lock().unwrap()[0].clone();
         assert_eq!(sent.url, "https://api.openai.com/v1/models");
-        assert!(sent.headers.contains(&("authorization".into(), "Bearer sk-1".into())));
+        assert!(sent
+            .headers
+            .contains(&("authorization".into(), "Bearer sk-1".into())));
 
         let t = RecordingTransport::with(vec![(200, r#"{"data":[{"id":"claude-x"}]}"#)]);
-        let ids =
-            list_models(&cfg(ProviderKind::Anthropic, Some("ak")), t.clone(), &CancelToken::new())
-                .unwrap();
+        let ids = list_models(
+            &cfg(ProviderKind::Anthropic, Some("ak")),
+            t.clone(),
+            &CancelToken::new(),
+        )
+        .unwrap();
         assert_eq!(ids, ["claude-x"]);
         let sent = t.requests.lock().unwrap()[0].clone();
         assert!(sent.url.ends_with("/v1/models?limit=1000"));
         assert!(sent.headers.contains(&("x-api-key".into(), "ak".into())));
 
         let t = RecordingTransport::with(vec![(200, r#"{"models":[{"name":"llama3:8b"}]}"#)]);
-        let ids = list_models(&cfg(ProviderKind::Ollama, None), t.clone(), &CancelToken::new())
-            .unwrap();
+        let ids = list_models(
+            &cfg(ProviderKind::Ollama, None),
+            t.clone(),
+            &CancelToken::new(),
+        )
+        .unwrap();
         assert_eq!(ids, ["llama3:8b"]);
         assert!(t.requests.lock().unwrap()[0].headers.is_empty());
     }
@@ -231,7 +240,11 @@ mod tests {
     #[test]
     fn missing_key_or_model_is_a_failure_never_success() {
         let t = RecordingTransport::with(vec![]);
-        let r = test_connection(&cfg(ProviderKind::Anthropic, None), t.clone(), &CancelToken::new());
+        let r = test_connection(
+            &cfg(ProviderKind::Anthropic, None),
+            t.clone(),
+            &CancelToken::new(),
+        );
         assert!(!r.ok && r.message.contains("missing API key"), "{r:?}");
         let mut no_model = ProviderConfig::new(ProviderKind::Ollama);
         no_model.model = None;

@@ -3,6 +3,21 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## Model adaptor: providers, OS-keyring keys, model list, connection test (2026-11-14)
+
+**Platform tested:** Linux (Ubuntu, GNOME Secret Service running), Rust stable. Windows and macOS credential stores: **not run** (the code uses `keyring`'s `windows-native`/`apple-native` backends; unverified there). No real provider account was used.
+
+### Implemented and tested
+- `eak-intelligence`: `HttpTransport::get`; `provider::adaptor::{list_models, test_connection}` for Anthropic, OpenAI-compatible (any base URL: OpenAI, OpenRouter, Groq, Together, local servers) and Ollama. Provider error text is returned with the key redacted. Unit tests (canned JSON) plus `tests/adaptor_http.rs`: the real `ureq` transport against a real loopback HTTP server (list, test, 401 text, unreachable endpoint).
+- `apps/desktop/src-tauri/src/models.rs`: profile store (JSON, no secrets), `KeyStore` with `OsKeyStore` (keyring v3), IPC commands `model_*` (7). The environment is never a key source in the desktop. `tests/models.rs` (9 tests): profiles/UI view/disk contain no key, remove deletes the key, corrupt file is not overwritten, list/test over real HTTP using the stored key, redaction, env not used, Ollama keyless, and a **real OS credential store round trip** (ran and passed on Linux).
+- UI: `ModelSettings.tsx` (add/edit/remove provider, presets, write-only key field, fetch models into a picker with free-text fallback, test connection), opened from a button in `App.tsx`. 5 vitest tests added.
+
+### Not verified / not implemented
+- Never run against a live provider endpoint (no key was available); wire formats are checked against canned and loopback responses only.
+- Windows Credential Manager and macOS Keychain paths unexercised. If no Secret Service runs on Linux, saving a key fails visibly.
+- Not exercised in a real window. The settings button is a floating button, not part of the toolbar.
+- The agent loop is not yet wired to the chosen provider in the UI (this task is the adaptor and settings only).
+
 ## Desktop shell: Tauri 2 + React bound to the command engine (2026-11-13)
 
 **Platform tested:** Windows 11, Rust 1.99.1 `x86_64-pc-windows-gnu`, Node 24.21 / npm 11.19.
