@@ -9,6 +9,32 @@ wrap EasyEDA, KiCad or any other ECAD tool, and it has no mandatory Freerouting 
 > **Status: early development.** See [STATUS.md](STATUS.md) for what is implemented and what has
 > actually been verified. Nothing in this repository is a manufacturing-ready claim.
 
+## Development handoff (continue on Linux)
+
+Development moved from a Windows laptop to a Linux laptop on 2026-11-13. **Start here:**
+[docs/handoff/LINUX_HANDOFF.md](docs/handoff/LINUX_HANDOFF.md). It contains the state at handoff, Linux
+setup, and the **master prompt** for the Linux Firstmate that recreates the secondmate crew.
+The governing delivery directive is [docs/handoff/FINAL_DIRECTIVE_2026-11-14.md](docs/handoff/FINAL_DIRECTIVE_2026-11-14.md).
+
+**Unfinished work at handoff** (details, owners and next actions in the handoff file):
+
+- Open, unmerged pull requests:
+  - green: #12 desktop shell (awaits desktop dependency approval), #11 CLI + CI, #9 ESP32 acceptance
+    project, #3 intelligence core;
+  - red, needs rebase or re-run: #10 power acceptance project, #1, #4, #5, #6, #7, #8.
+- GitHub Actions currently refuses to start jobs: the account's billing or spending limit must be fixed
+  before any check can pass.
+- Not started yet:
+  - design system and interaction architecture;
+  - editor-enabling typed commands;
+  - interactive schematic editor and 2-layer PCB editor;
+  - actionable ERC/DRC findings;
+  - full LCSC integration and JLCPCB preparation;
+  - universal AI providers and the assistant dock;
+  - Windows/Linux/macOS installer packaging;
+  - both acceptance projects built through the app.
+- Deferred by the directive: 3D workspace, Terminal Center, Model Provider Center UI.
+
 ## Source of truth
 
 The product is governed by the three documents in [`docs/source-of-truth/`](docs/source-of-truth/):
