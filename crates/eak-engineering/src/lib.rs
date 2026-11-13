@@ -3,7 +3,8 @@
 //! * `ipc`     – trace ampacity, clearance, creepage, via current (provenance: DESK audit).
 //! * `calc`    – circuit calculations and engineering value parsing.
 //! * `netlist` – schematic connectivity → canonical nets.
-//! * `copper`  – PCB copper shapes, zone fill and physical connectivity.
+//! * `copper`  – PCB copper shapes, zone fill with thermal reliefs, physical connectivity.
+//! * `silk`    – silkscreen legend: stroke-font reference designators, mask-opening clip.
 //! * `router`  – EAK's native two-layer grid router.
 //! * `placer`  – constructive footprint placement.
 //! * `scene3d` – board/component geometry for the 3D workspace and mechanical checks.
@@ -15,3 +16,4 @@ pub mod netlist;
 pub mod placer;
 pub mod router;
 pub mod scene3d;
+pub mod silk;

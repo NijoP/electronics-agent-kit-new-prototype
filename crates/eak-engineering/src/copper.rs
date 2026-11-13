@@ -2,7 +2,9 @@
 //! rasterised zone fill and physical copper connectivity.
 
 use eak_core::geom::{point_in_polygon, point_segment_distance, segment_segment_distance};
-use eak_core::{CopperLayer, Id, Nm, PadKind, PadShape, Point, Project, Rect, Rotation, Side};
+use eak_core::{
+    CopperLayer, Id, Nm, PadKind, PadShape, Point, Project, Rect, Rotation, Side, Zone,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -234,7 +236,8 @@ pub fn items(p: &Project) -> Vec<CopperItem> {
     out
 }
 
-/// Rasterised zone fill: zone polygon minus (other-net copper inflated by clearance).
+/// Rasterised zone fill: zone polygon minus (other-net copper inflated by clearance), with
+/// thermal reliefs around same-net pads (a copper-free gap bridged by up to four spokes).
 #[derive(Debug, Clone)]
 pub struct ZoneFill {
     pub zone_id: Id,
@@ -247,6 +250,8 @@ pub struct ZoneFill {
     /// Island index per cell (0 = empty, k = island k).
     pub cells: Vec<u32>,
     pub islands: u32,
+    /// One entry per same-net pad on this layer that the zone surrounds or reaches.
+    pub reliefs: Vec<ThermalRelief>,
 }
 
 impl ZoneFill {
@@ -282,21 +287,181 @@ impl ZoneFill {
 
 pub const ZONE_FILL_PITCH: Nm = 100_000; // 0.1 mm
 
+/// Thermal-relief geometry applied to same-net pads inside a zone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReliefRule {
+    /// Copper-free ring kept between the pad and the surrounding fill.
+    pub gap: Nm,
+    /// Nominal width of each spoke.
+    pub spoke_width: Nm,
+}
+
+/// Relief parameters used for zone `z`.
+pub fn relief_rule(p: &Project, z: &Zone) -> ReliefRule {
+    // shortcut: gap = zone clearance and spoke width = the zone net's class track width (never
+    // below the minimum track width), because the EAK-IR `Zone` has no thermal-relief fields;
+    // upgrade when an ADR adds per-zone/per-pad relief settings (gap, spoke width, count, solid).
+    let c = &p.constraints;
+    ReliefRule {
+        gap: z.clearance.max(0),
+        spoke_width: c.class_for(&z.net).track_width.max(c.min_track_width),
+    }
+}
+
+/// Spoke directions, in order +X, +Y, -X, -Y (spokes are axis-aligned: pads rotate in
+/// quarter turns only).
+pub const SPOKE_DIRS: [(i64, i64); 4] = [(1, 0), (0, 1), (-1, 0), (0, -1)];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Spoke {
+    pub dir: (i64, i64),
+    /// True when the spoke's copper runs unbroken from the pad across the gap into zone fill.
+    pub connected: bool,
+    /// Narrowest copper width of the spoke across the gap as filled on the raster
+    /// (0 when not connected).
+    pub width: Nm,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThermalRelief {
+    pub footprint_id: Id,
+    pub pad: String,
+    pub center: Point,
+    pub spokes: Vec<Spoke>,
+}
+
+impl ThermalRelief {
+    pub fn connected_spokes(&self) -> usize {
+        self.spokes.iter().filter(|s| s.connected).count()
+    }
+    /// Total copper width of the connected spokes.
+    pub fn connected_width(&self) -> Nm {
+        self.spokes
+            .iter()
+            .filter(|s| s.connected)
+            .map(|s| s.width)
+            .sum()
+    }
+}
+
+fn core_center(core: &Core) -> Point {
+    match core {
+        Core::Segment(a, b) => Point::new((a.x + b.x) / 2, (a.y + b.y) / 2),
+        Core::Polygon(poly) => Rect::from_points(poly)
+            .map(|r| r.center())
+            .unwrap_or_default(),
+    }
+}
+
+/// Raster addressing shared by the fill passes.
+struct Grid {
+    origin: Point,
+    pitch: Nm,
+    cols: usize,
+    rows: usize,
+}
+
+impl Grid {
+    fn center(&self, c: usize, r: usize) -> Point {
+        Point::new(
+            self.origin.x + c as Nm * self.pitch + self.pitch / 2,
+            self.origin.y + r as Nm * self.pitch + self.pitch / 2,
+        )
+    }
+    /// Call `f` with the index of every cell whose centre lies inside `s`.
+    fn mark(&self, s: &Shape, mut f: impl FnMut(usize)) {
+        let ib = s.bbox();
+        let p = self.pitch;
+        let c0 = ((ib.min.x - self.origin.x) / p).max(0) as usize;
+        let r0 = ((ib.min.y - self.origin.y) / p).max(0) as usize;
+        let c1 = ((((ib.max.x - self.origin.x) / p).max(-1) + 1) as usize).min(self.cols);
+        let r1 = ((((ib.max.y - self.origin.y) / p).max(-1) + 1) as usize).min(self.rows);
+        for r in r0..r1 {
+            for c in c0..c1 {
+                if s.contains(self.center(c, r)) {
+                    f(r * self.cols + c);
+                }
+            }
+        }
+    }
+    fn cell_of(&self, pt: Point) -> Option<(i64, i64)> {
+        let c = (pt.x - self.origin.x).div_euclid(self.pitch);
+        let r = (pt.y - self.origin.y).div_euclid(self.pitch);
+        self.inside(c, r).then_some((c, r))
+    }
+    fn inside(&self, c: i64, r: i64) -> bool {
+        c >= 0 && r >= 0 && (c as usize) < self.cols && (r as usize) < self.rows
+    }
+    /// Walk a spoke's centre line from the pad centre outward. The spoke is connected when
+    /// every cell inside the relief void is filled and the first cell past the void is
+    /// filled zone copper. Returns (connected, narrowest raster width across the gap).
+    fn trace_spoke(
+        &self,
+        center: Point,
+        dir: (i64, i64),
+        pad: &Shape,
+        void: &Shape,
+        filled: &dyn Fn(usize) -> bool,
+    ) -> (bool, Option<Nm>) {
+        let Some((mut c, mut r)) = self.cell_of(center) else {
+            return (false, None);
+        };
+        let mut narrowest: Option<Nm> = None;
+        while self.inside(c, r) {
+            let i = r as usize * self.cols + c as usize;
+            let pt = self.center(c as usize, r as usize);
+            if !void.contains(pt) {
+                return (filled(i), narrowest);
+            }
+            if !filled(i) {
+                return (false, None);
+            }
+            if !pad.contains(pt) {
+                // In the gap: count filled void cells across the spoke.
+                let mut n = 1;
+                for side in [1, -1] {
+                    let (mut cc, mut rr) = (c + side * dir.1, r + side * dir.0);
+                    while self.inside(cc, rr) {
+                        let j = rr as usize * self.cols + cc as usize;
+                        if !filled(j) || !void.contains(self.center(cc as usize, rr as usize)) {
+                            break;
+                        }
+                        n += 1;
+                        cc += side * dir.1;
+                        rr += side * dir.0;
+                    }
+                }
+                let w = n * self.pitch;
+                narrowest = Some(narrowest.map_or(w, |m| m.min(w)));
+            }
+            c += dir.0;
+            r += dir.1;
+        }
+        (false, None)
+    }
+}
+
 pub fn fill_zone(p: &Project, zone_id: &str, copper: &[CopperItem]) -> Option<ZoneFill> {
     let z = p.pcb.zones.get(zone_id)?;
     let bb = Rect::from_points(&z.outline)?;
     let pitch = ZONE_FILL_PITCH;
-    let cols = (bb.width() / pitch) as usize + 1;
-    let rows = (bb.height() / pitch) as usize + 1;
-    let mut cells = vec![0u32; cols * rows];
+    let grid = Grid {
+        origin: bb.min,
+        pitch,
+        cols: (bb.width() / pitch) as usize + 1,
+        rows: (bb.height() / pitch) as usize + 1,
+    };
+    let n = grid.cols * grid.rows;
+    // A filled cell's copper reaches up to ~0.71 pitch from its centre, so every keep-out
+    // is inflated by that much to keep the true clearance on the raster.
+    let halo = pitch as f64 * 0.71;
     let board = &p.pcb.board.outline;
     let edge = p.constraints.board_edge_clearance as f64;
-    for r in 0..rows {
-        for c in 0..cols {
-            let pt = Point::new(
-                bb.min.x + c as Nm * pitch + pitch / 2,
-                bb.min.y + r as Nm * pitch + pitch / 2,
-            );
+    // `allowed`: inside the zone and board-edge rule, clear of other-net copper.
+    let mut allowed = vec![false; n];
+    for r in 0..grid.rows {
+        for c in 0..grid.cols {
+            let pt = grid.center(c, r);
             if !point_in_polygon(pt, &z.outline) {
                 continue;
             }
@@ -305,36 +470,113 @@ pub fn fill_zone(p: &Project, zone_id: &str, copper: &[CopperItem]) -> Option<Zo
             {
                 continue;
             }
-            cells[r * cols + c] = u32::MAX; // tentatively filled
+            allowed[r * grid.cols + c] = true;
         }
     }
-    // Knock out clearance around other-net copper on this layer.
     for it in copper
         .iter()
         .filter(|i| i.layer == z.layer && i.net != z.net)
     {
-        let inflated = Shape {
+        let keepout = Shape {
             core: it.shape.core.clone(),
-            radius: it.shape.radius + z.clearance as f64 + pitch as f64 * 0.71,
+            radius: it.shape.radius + z.clearance as f64 + halo,
         };
-        let ib = inflated.bbox();
-        let c0 = ((ib.min.x - bb.min.x) / pitch).max(0) as usize;
-        let r0 = ((ib.min.y - bb.min.y) / pitch).max(0) as usize;
-        let c1 = ((((ib.max.x - bb.min.x) / pitch).max(-1) + 1) as usize).min(cols);
-        let r1 = ((((ib.max.y - bb.min.y) / pitch).max(-1) + 1) as usize).min(rows);
-        for r in r0..r1 {
-            for c in c0..c1 {
-                let pt = Point::new(
-                    bb.min.x + c as Nm * pitch + pitch / 2,
-                    bb.min.y + r as Nm * pitch + pitch / 2,
-                );
-                if inflated.contains(pt) {
-                    cells[r * cols + c] = 0;
-                }
+        grid.mark(&keepout, |i| allowed[i] = false);
+    }
+    // Thermal reliefs: a void of `gap` around every same-net pad, bridged by spokes.
+    let rule = relief_rule(p, z);
+    let pads: Vec<(&CopperItem, Point, Shape)> = copper
+        .iter()
+        .filter(|i| {
+            i.kind == ItemKind::Pad && i.layer == z.layer && i.net == z.net && !z.net.is_empty()
+        })
+        .map(|pad| {
+            let void = Shape {
+                core: pad.shape.core.clone(),
+                radius: pad.shape.radius + rule.gap as f64 + halo,
+            };
+            (pad, core_center(&pad.shape.core), void)
+        })
+        .collect();
+    let mut in_void = vec![false; n];
+    for (_, _, void) in &pads {
+        grid.mark(void, |i| in_void[i] = true);
+    }
+    let spoke_shape = |center: Point, void: &Shape, dir: (i64, i64)| {
+        let vb = void.bbox();
+        let reach = match dir {
+            (1, _) => vb.max.x - center.x,
+            (-1, _) => center.x - vb.min.x,
+            (_, 1) => vb.max.y - center.y,
+            _ => center.y - vb.min.y,
+        };
+        Shape {
+            core: Core::Segment(
+                center,
+                Point::new(center.x + dir.0 * reach, center.y + dir.1 * reach),
+            ),
+            // Paint every cell the nominal spoke overlaps, so the raster (fabricated) spoke
+            // is never narrower than nominal (and less than two pitches wider).
+            radius: (rule.spoke_width + pitch) as f64 / 2.0 - 1.0,
+        }
+    };
+    // Start with every spoke, then drop spokes that do not reach fill (no dangling stubs)
+    // until the set is stable; removing a stub can only disconnect, so this terminates.
+    let mut active: Vec<Vec<bool>> = vec![vec![true; SPOKE_DIRS.len()]; pads.len()];
+    let (filled, reliefs) = loop {
+        let mut spoke_mask = vec![false; n];
+        for ((_, center, void), on) in pads.iter().zip(&active) {
+            for (dir, _) in SPOKE_DIRS.iter().zip(on).filter(|(_, on)| **on) {
+                grid.mark(&spoke_shape(*center, void, *dir), |i| spoke_mask[i] = true);
             }
         }
-    }
+        let filled: Vec<bool> = (0..n)
+            .map(|i| allowed[i] && (!in_void[i] || spoke_mask[i]))
+            .collect();
+        let is_filled = |i: usize| filled[i];
+        let mut next = active.clone();
+        let mut reliefs = Vec::new();
+        for (k, (pad, center, void)) in pads.iter().enumerate() {
+            let mut spokes = Vec::new();
+            for (d, dir) in SPOKE_DIRS.iter().enumerate() {
+                let (connected, narrowest) = if active[k][d] {
+                    grid.trace_spoke(*center, *dir, &pad.shape, void, &is_filled)
+                } else {
+                    (false, None)
+                };
+                next[k][d] = connected;
+                spokes.push(Spoke {
+                    dir: *dir,
+                    connected,
+                    // No raster cell inside the gap: the junction is as wide as the spoke.
+                    width: if connected {
+                        narrowest.unwrap_or(rule.spoke_width)
+                    } else {
+                        0
+                    },
+                });
+            }
+            if spokes.iter().any(|s| s.connected) || point_in_polygon(*center, &z.outline) {
+                reliefs.push(ThermalRelief {
+                    footprint_id: pad.object_id.clone(),
+                    pad: pad.sub.clone(),
+                    center: *center,
+                    spokes,
+                });
+            }
+        }
+        if next == active {
+            break (filled, reliefs);
+        }
+        active = next;
+    };
+    let mut cells: Vec<u32> = filled
+        .iter()
+        .map(|&f| if f { u32::MAX } else { 0 })
+        .collect();
     // Label islands (4-connectivity flood fill).
+    let cols = grid.cols;
+    let rows = grid.rows;
     let mut islands = 0u32;
     let mut stack = Vec::new();
     for start in 0..cells.len() {
@@ -376,6 +618,7 @@ pub fn fill_zone(p: &Project, zone_id: &str, copper: &[CopperItem]) -> Option<Zo
         rows,
         cells,
         islands,
+        reliefs,
     })
 }
 
@@ -479,12 +722,7 @@ pub fn analyse(p: &Project) -> Connectivity {
     let mut net_pads: BTreeMap<String, Vec<(usize, Point)>> = BTreeMap::new();
     for (i, it) in items.iter().enumerate() {
         if it.kind == ItemKind::Pad && !it.net.is_empty() {
-            let c = match &it.shape.core {
-                Core::Segment(a, b) => Point::new((a.x + b.x) / 2, (a.y + b.y) / 2),
-                Core::Polygon(poly) => Rect::from_points(poly)
-                    .map(|r| r.center())
-                    .unwrap_or_default(),
-            };
+            let c = core_center(&it.shape.core);
             net_pads.entry(it.net.clone()).or_default().push((i, c));
         }
     }
@@ -527,4 +765,149 @@ pub fn analyse(p: &Project) -> Connectivity {
         }
     }
     conn
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eak_core::{FootprintInstance, Track};
+
+    /// A 20 × 20 mm board with a bottom GND zone and one single-pad THT footprint per entry
+    /// of `pads` (1.7 mm square pad, 1.0 mm drill) on net GND.
+    fn board(pads: &[Point], zone: &[Point]) -> Project {
+        let mut p = Project::new("relief");
+        let mut def = eak_core::builtin::get("CONN_1x02_P2.54").unwrap();
+        def.footprint.pads.truncate(1);
+        def.footprint.pads[0].position = Point::default();
+        p.library.insert(def.id.clone(), def.clone());
+        p.pcb.board.outline = vec![
+            Point::mm(0.0, 0.0),
+            Point::mm(20.0, 0.0),
+            Point::mm(20.0, 20.0),
+            Point::mm(0.0, 20.0),
+        ];
+        for (k, at) in pads.iter().enumerate() {
+            let id = format!("fp{k}");
+            p.pcb.footprints.insert(
+                id.clone(),
+                FootprintInstance {
+                    id,
+                    symbol_id: format!("sym{k}"),
+                    component_id: def.id.clone(),
+                    refdes: format!("J{}", k + 1),
+                    position: *at,
+                    rotation: Rotation::R0,
+                    side: Side::Top,
+                    pad_nets: [("1".to_string(), "GND".to_string())].into(),
+                    locked: false,
+                },
+            );
+        }
+        p.pcb.zones.insert(
+            "z".into(),
+            Zone {
+                id: "z".into(),
+                layer: CopperLayer::Bottom,
+                net: "GND".into(),
+                outline: zone.to_vec(),
+                clearance: 300_000,
+            },
+        );
+        p
+    }
+
+    fn full_zone() -> Vec<Point> {
+        vec![
+            Point::mm(1.0, 1.0),
+            Point::mm(19.0, 1.0),
+            Point::mm(19.0, 19.0),
+            Point::mm(1.0, 19.0),
+        ]
+    }
+
+    fn fill(p: &Project) -> ZoneFill {
+        fill_zone(p, "z", &items(p)).unwrap()
+    }
+
+    fn cell_at(f: &ZoneFill, pt: Point) -> u32 {
+        let c = ((pt.x - f.origin.x) / f.pitch) as usize;
+        let r = ((pt.y - f.origin.y) / f.pitch) as usize;
+        f.cells[r * f.cols + c]
+    }
+
+    #[test]
+    fn same_net_pad_gets_four_spokes_and_a_relief_gap() {
+        let p = board(&[Point::mm(10.0, 10.0)], &full_zone());
+        let f = fill(&p);
+        let rule = relief_rule(&p, &p.pcb.zones["z"]);
+        assert_eq!(f.reliefs.len(), 1);
+        let rel = &f.reliefs[0];
+        assert_eq!((rel.footprint_id.as_str(), rel.pad.as_str()), ("fp0", "1"));
+        assert_eq!(rel.connected_spokes(), 4);
+        for s in &rel.spokes {
+            assert!(s.width >= rule.spoke_width, "{s:?}");
+            assert!(s.width < rule.spoke_width + 2 * ZONE_FILL_PITCH, "{s:?}");
+        }
+        // The diagonal of the gap is copper-free; the spoke axis and outer fill are copper.
+        assert_eq!(cell_at(&f, Point::mm(11.05, 11.05)), 0);
+        assert_eq!(cell_at(&f, Point::mm(8.95, 8.95)), 0);
+        assert_ne!(cell_at(&f, Point::mm(11.05, 10.0)), 0);
+        assert_ne!(cell_at(&f, Point::mm(10.0, 8.95)), 0);
+        assert_ne!(cell_at(&f, Point::mm(12.0, 12.0)), 0);
+        // One island: the pad is joined to the pour through its spokes.
+        assert_eq!(f.islands, 1);
+        assert_eq!(f.islands_touching(&items(&p)[0].shape).len(), 1);
+    }
+
+    #[test]
+    fn blocked_spoke_is_removed_and_connectivity_follows_the_spokes() {
+        let mut p = board(&[Point::mm(10.0, 10.0), Point::mm(4.0, 10.0)], &full_zone());
+        // An other-net track just past the +X relief gap of J1 blocks that spoke's landing.
+        p.pcb.tracks.insert(
+            "t".into(),
+            Track {
+                id: "t".into(),
+                layer: CopperLayer::Bottom,
+                width: 250_000,
+                a: Point::mm(11.6, 8.5),
+                b: Point::mm(11.6, 11.5),
+                net: "SIG".into(),
+            },
+        );
+        let f = fill(&p);
+        let rel = f.reliefs.iter().find(|r| r.footprint_id == "fp0").unwrap();
+        let conn: Vec<bool> = rel.spokes.iter().map(|s| s.connected).collect();
+        assert_eq!(conn, vec![false, true, true, true]);
+        assert_eq!(rel.spokes[0].width, 0);
+        // No dangling stub is left in the gap of the removed spoke.
+        assert_eq!(cell_at(&f, Point::mm(11.05, 10.0)), 0);
+        // Both GND pads still join through the remaining spokes and the pour.
+        assert_eq!(analyse(&p).net_groups["GND"], 1);
+    }
+
+    #[test]
+    fn pad_without_landing_fill_has_no_connected_spokes() {
+        // The zone ends left of the pad: no spoke can land, so the pad is not connected.
+        let zone = vec![
+            Point::mm(1.0, 1.0),
+            Point::mm(8.0, 1.0),
+            Point::mm(8.0, 19.0),
+            Point::mm(1.0, 19.0),
+        ];
+        let p = board(&[Point::mm(10.0, 10.0), Point::mm(4.0, 10.0)], &zone);
+        let f = fill(&p);
+        assert!(f.reliefs.iter().all(|r| r.footprint_id != "fp0"));
+        assert_eq!(analyse(&p).net_groups["GND"], 2);
+        // Pads at a zone edge keep only the spokes that land in fill.
+        let zone = vec![
+            Point::mm(9.0, 9.6),
+            Point::mm(19.0, 9.6),
+            Point::mm(19.0, 10.4),
+            Point::mm(9.0, 10.4),
+        ];
+        let p = board(&[Point::mm(10.0, 10.0)], &zone);
+        let f = fill(&p);
+        let conn: Vec<bool> = f.reliefs[0].spokes.iter().map(|s| s.connected).collect();
+        assert_eq!(conn, vec![true, false, false, false]);
+    }
 }
