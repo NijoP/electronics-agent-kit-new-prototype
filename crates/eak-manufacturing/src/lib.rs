@@ -9,6 +9,7 @@
 
 pub mod drill;
 pub mod gerber;
+pub mod sourcing;
 
 use eak_core::{geom::to_mm, CopperLayer, Project, Side};
 use eak_validation::{report::project_hash, Outcome, Report};
