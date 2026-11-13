@@ -7,9 +7,13 @@
 //! hash and contain no errors. Even then it is "internally verified", never
 //! "manufacturing-ready": independent engineering review and fabricator DFM are required.
 
+pub mod bom;
 pub mod drill;
 pub mod gerber;
+pub mod jlcpcb;
+pub mod lcsc;
 pub mod sourcing;
+pub mod zip;
 
 use eak_core::{geom::to_mm, CopperLayer, Project, Side};
 use eak_validation::{report::project_hash, Outcome, Report};

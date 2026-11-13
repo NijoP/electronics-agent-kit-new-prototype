@@ -13,6 +13,12 @@ eak-runtime.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+# Read-only HTTPS client for the LCSC provider (rustls: no system OpenSSL on any OS).
+ureq = { version = "3", default-features = false, features = ["rustls"], optional = true }
+
+[features]
+default = ["live-http"]
+live-http = ["dep:ureq"]
 
 [lints]
 workspace = true

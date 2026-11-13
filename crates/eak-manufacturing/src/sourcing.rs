@@ -118,6 +118,9 @@ pub struct SourcingRecord {
     pub mpn: Option<String>,
     pub manufacturer: Option<String>,
     pub package: Option<String>,
+    /// Catalogue path as LCSC wrote it (`parent / sub` category), when stated.
+    #[serde(default)]
+    pub category: Option<String>,
     pub description: Option<String>,
     pub datasheet_url: Option<String>,
     pub specs: Vec<Spec>,
@@ -329,6 +332,13 @@ pub fn ingest_product_detail(
     let mpn = f.get("productModel", Some("mpn"), text);
     let manufacturer = f.get("brandNameEn", Some("manufacturer"), text);
     let package = f.get("encapStandard", Some("package"), text);
+    let category = {
+        let part = |k: &str| product.get(k).and_then(|v| text(v).ok());
+        match (part("parentCatalogName"), part("catalogName")) {
+            (Some(a), Some(b)) => Some(format!("{a} / {b}")),
+            (a, b) => a.or(b),
+        }
+    };
     let description = f.get("productIntroEn", None, |v| bounded_text(v, MAX_DESCRIPTION));
     let datasheet_url = f.get("pdfUrl", Some("datasheet_url"), |v| {
         let s = v.as_str().ok_or("not a string")?;
@@ -370,6 +380,7 @@ pub fn ingest_product_detail(
         mpn,
         manufacturer,
         package,
+        category,
         description,
         datasheet_url,
         specs,
