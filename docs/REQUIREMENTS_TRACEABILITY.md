@@ -19,8 +19,38 @@ documents (`docs/source-of-truth/`).
 | 3D-01 | 3D view and mechanical checks | `scene3d.rs`, `mech.rs` | MECH run in e2e | PARTIAL (no viewport, parametric bodies only) |
 | MFG-01 | Revision-bound manufacturing package with release gate | `eak-manufacturing` | e2e: release candidate status, re-verification, tamper detection | PASS (internal verification only; no fabricator DFM) |
 | UI-01 | Desktop workspace (Tauri 2 + React) | `apps/desktop` | — | NOT STARTED |
-| AI-01, AG-01..03 | Lead agent using the same typed commands under approval | `eak-intelligence` | Approval policy exists in the engine | NOT STARTED (agent) |
+| AI-01, AG-01..03 | Lead agent using the same typed commands under approval | `eak-intelligence` | See "Intelligence Engine" below | OFFLINE_TESTED (see below) |
 | BROW-01 | Optional research browser | — | — | NOT STARTED |
 | SEC-01 | No secrets in the repo; approval for external or irreversible actions | `.gitignore`, approval policy | Manual review | PARTIAL |
 | BOOT-01 | Cross-platform build and installers | `.github/workflows/ci.yml` | CI matrix defined but not yet run | PARTIAL |
 | PERF-01 | Performance targets | — | — | UNKNOWN |
+
+## Intelligence Engine (owner: eak-intelligence)
+
+Source references: Spec = Development Intelligence and Interface Research Specification;
+Exec = Claude Code Execution Instructions; Guide = GitHub Reference Repository Development Guide.
+`INT-*` rows are crate-level requirements taken from
+the captain's brief; they are not IDs from the source documents. All tests use a scripted mock
+provider or a recording HTTP transport, so no test uses the network. No run against a live
+model endpoint has been executed.
+
+Status values in this section use the maturity vocabulary: NOT_STARTED, DRAFT, IMPLEMENTED,
+OFFLINE_TESTED, VERIFIED_AGAINST_SOURCE, LIVE_VERIFIED, NEEDS_HARDWARE_VALIDATION, UNSUPPORTED,
+BLOCKED. Code tested only with the mock provider is at most OFFLINE_TESTED; nothing here is
+LIVE_VERIFIED.
+
+| ID | Requirement (summary) | Source | Evidence (tests) | Gaps | Status |
+|---|---|---|---|---|---|
+| AI-01 | Lead agent performs bounded, approved engineering operations; agent run log | Exec §18, §5, §10.1 | `tests/agent.rs`: `assisted_mode_applies_an_approved_command_as_the_agent_actor`, `the_loop_is_bounded_by_max_turns`; `AgentRun` serialises as the run log (`every_mode_offers_…`) | No Agent Studio UI; the run log is not yet persisted to `evidence/`; no context engine or skills; never run against a live model | OFFLINE_TESTED |
+| AG-01 | Manual and agent edits of the same operation call the same Rust command implementation | Spec §9, §2.1; Exec CMD-01 | `persisted_project_journals_agent_commands` (agent `PlaceSymbol` goes through `Engine::execute`, is journaled as `agent:lead` and survives a reopen) | — | OFFLINE_TESTED |
+| AG-02 | Consequential operations show scope, affected objects and impact before approval | Spec §9, §6.1 | `ApprovalRequest` carries a dry-run `CommandResponse` (created and affected ids, warnings), the class and the checks to re-run (`assisted_mode_…`, `a_command_the_engine_would_reject_is_not_put_to_the_user`) | No approval UI; impact is limited to ids and warnings (no geometric diff) | OFFLINE_TESTED |
+| AG-03 | A stale-revision command is rejected or safely rebased, never silently applied | Spec §9, §7.4 | `stale_view_is_refused_until_the_agent_refreshes`, `a_plan_made_against_an_older_revision_is_refused`; the engine's own `StaleRevision` check also applies | — | OFFLINE_TESTED |
+| INT-01 | Provider trait with OpenAI-compatible, Anthropic Messages and Ollama adapters | Exec §5, §12 ("user-selected providers") | `provider::{openai,anthropic,ollama}` tests check the wire format against canned JSON over a recording transport; `http` tests cover retry, status mapping, malformed bodies and cancel; live HTTPS is behind the optional `remote-http` feature | No streaming; no live endpoint test; `Retry-After` is ignored (fixed backoff) | OFFLINE_TESTED (not LIVE_VERIFIED) |
+| INT-02 | Keys only from user configuration or the environment, never committed or logged | Exec §1.2; Spec §10.1 (redaction) | `key_resolution_order_and_requirements`, `api_key_is_redacted_and_config_parses` (`ApiKey` is never serialised and `Debug` is redacted) | No OS keychain storage | OFFLINE_TESTED |
+| INT-03 | Cancellable agent loop with bounded turns | Spec §5.1; Guide §6.2 | `cancellation_mid_run_stops_before_any_mutation`, `the_loop_is_bounded_by_max_turns`, `per_turn_tool_calls_and_output_are_bounded`, `cancelled_before_send_never_reaches_transport` | Pause and retry controls are UI work | OFFLINE_TESTED |
+| INT-04 | Typed tool schemas generated from the `eak_runtime::Command` enum | Exec §7.2; Spec §5.1 | `tools::commands` tests: one tool for each of the 38 commands; every schema accepts the serde form of its command; the required fields alone deserialise; arguments decode only into a real `Command` | Schemas are written by hand against an exhaustive `match` (a new variant fails to compile until it has a schema); the IR types have no schema derive | OFFLINE_TESTED |
+| INT-05 | Read-only tools: netlist, ERC/DRC reports, calculators that use deterministic engine code | Spec §6.1; Exec §9.1 | `tools::readonly` tests: calculators equal the `eak-engineering` results; reports include `not_implemented` and `limitations`; non-physical inputs are refused | No MECH report tool; no via-current or creepage calculators yet (the engine functions exist) | OFFLINE_TESTED (MECH, via-current, creepage tools NOT_STARTED) |
+| INT-06 | Every agent mutation is an Agent-actor `CommandRequest` carrying an `Approval` that covers its `OperationClass` | Spec §6.1; Exec §11 | `denied_or_insufficient_approval_is_never_submitted`, `autonomous_mode_uses_the_scope_but_destructive_commands_still_ask` | — | OFFLINE_TESTED |
+| INT-07 | Agent modes Manual / Assisted / Autonomous | Captain brief (the source documents do not define these names; the behaviour follows the Spec §6.1 lifecycle and per-class policy) | `manual_mode_records_a_previewed_plan_without_touching_the_project`, `assisted_mode_…`, `autonomous_mode_…` | Mode definitions are not in the source-of-truth PDFs: confirm with the product owner | OFFLINE_TESTED (behaviour); definitions BLOCKED (not in the source documents; awaiting the product owner) |
+| INT-08 | Tools cover the full design path (project, schematic, parts, board, placement, routing, vias, zones, ERC/DRC, Gerber/Excellon/BOM/CPL) | Captain brief | All 38 runtime commands are exposed; ERC/DRC are exposed | Project create/open is a host action (`Engine::create`/`open`); a manufacturing-export tool over `eak_manufacturing::compile` is not exposed yet; MECH is not exposed | OFFLINE_TESTED (commands, ERC/DRC); NOT_STARTED (manufacturing-export and MECH tools) |
+| INT-09 | Live HTTP is optional: without the `remote-http` feature the crate builds, the mock-provider loop and every test pass, and remote providers return a typed "transport not compiled in" error instead of accessing the network | Captain approval condition for ureq + rustls | `without_remote_http_every_remote_provider_reports_missing_transport`, `offline_transport_refuses_with_a_typed_error`; CI step `cargo test -p eak-intelligence --no-default-features` on all OS jobs; the default build compiles no ureq/rustls/ring (`cargo tree`) | — | OFFLINE_TESTED |

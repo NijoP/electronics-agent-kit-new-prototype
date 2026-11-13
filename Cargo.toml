@@ -5,7 +5,7 @@ members = [
     "crates/eak-engineering",
     "crates/eak-validation",
     "crates/eak-runtime",
-#    "crates/eak-intelligence",
+    "crates/eak-intelligence",
     "crates/eak-manufacturing",
 #    "apps/cli",
 #    "apps/desktop/src-tauri",

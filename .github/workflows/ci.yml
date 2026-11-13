@@ -26,3 +26,9 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace --release
+      - name: eak-intelligence offline build (no remote-http) and remote-http build
+        shell: bash
+        run: |
+          cargo test -p eak-intelligence --no-default-features
+          cargo clippy -p eak-intelligence --all-targets --features remote-http -- -D warnings
+          cargo test -p eak-intelligence --features remote-http
