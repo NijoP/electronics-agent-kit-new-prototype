@@ -98,7 +98,6 @@ Injected short and clearance violations are detected (`drc_detects_injected_shor
 - No approval/Agent Studio UI; the run log is not yet written to `evidence/`.
 - Not exposed as tools yet: manufacturing export (`eak_manufacturing::compile`), MECH, via-current and creepage calculators. Project create/open stays a host action.
 - Manual/Assisted/Autonomous are not defined in the source-of-truth PDFs; the mapping is recorded in `docs/REQUIREMENTS_TRACEABILITY.md` (INT-07).
-- `LICENSING.md` does not yet list the new dependencies: ureq (MIT/Apache-2.0), rustls (Apache-2.0/ISC/MIT), ring (Apache-2.0 AND ISC), webpki-roots (CDLA-Permissive-2.0).
 
 ## Coordination note
 The Firstmate crew could not be started on this host: the Firstmate session lock does not
