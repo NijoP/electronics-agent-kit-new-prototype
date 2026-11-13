@@ -22,12 +22,12 @@ Project revision 217. IPC tables verified against the standard text: **false**.
 | U1 junction temperature (JEDEC 2s2p θJA) | `eak_engineering::calc::junction_temp_c` | Ta 40 °C, P 0.93 W (hand estimate), θJA 118.9 °C/W (TI SLVSDG6C §5.4) | Tj ≈ 150.6 °C (abs max 150 °C, shutdown 160 °C) | Tj ≤ 125 °C design target (25 °C below abs max) | FAIL against 125 °C target (estimate) - board copper must perform like TI EVM; NOT VERIFIED |
 | U1 junction temperature (TI EVM θJA) | `eak_engineering::calc::junction_temp_c` | Ta 40 °C, P 0.93 W (hand estimate), θJA 57.2 °C/W (TI SLVSDG6C §5.4) | Tj ≈ 93.2 °C (abs max 150 °C, shutdown 160 °C) | Tj ≤ 125 °C design target (25 °C below abs max) | PASS (estimate only - NOT VERIFIED without measurement) |
 | Q1 reverse-polarity MOSFET dissipation and Tj | `eak_engineering::calc::resistor_power_w / junction_temp_c` | Iin 1.55 A (11.4 V, η 0.85 assumed), RDS(on) 0.014 Ω (unverified), θJA 75 °C/W (unverified) | P ≈ 34 mW, Tj ≈ 42.5 °C | Tj ≤ 125 °C | PASS (estimate on unverified ratings - NOT VERIFIED) |
-| GND pour fill, Bottom layer | `eak_engineering::copper::fill_zone` | clearance 0.60 mm, 0.1 mm raster | 1870 mm² filled in 1 island(s) | informational | INFO |
 | GND pour fill, Top layer | `eak_engineering::copper::fill_zone` | clearance 0.60 mm, 0.1 mm raster | 1522 mm² filled in 2 island(s) | informational | INFO |
+| GND pour fill, Bottom layer | `eak_engineering::copper::fill_zone` | clearance 0.60 mm, 0.1 mm raster | 1870 mm² filled in 1 island(s) | informational | INFO |
 
 ## Not computable in EAK today (NOT VERIFIED by EAK)
 
-- Buck operating point: duty cycle, inductor ripple/peak/RMS current (eak-engineering)
+- Switching-converter operating point (generic, topology-parameterised; this board is a buck): duty cycle, inductor ripple/peak/RMS current (eak-engineering)
 - Output voltage ripple and output-capacitor RMS current (eak-engineering)
 - Input-capacitor RMS ripple current and input voltage ripple (eak-engineering)
 - MOSFET conduction + switching loss and converter efficiency (eak-engineering)

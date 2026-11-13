@@ -2,7 +2,7 @@
 //!
 //! This module does not add any electrical formula of its own. It only feeds
 //! declared operating conditions and datasheet ratings (from the project library) into
-//! EAK's calculation functions and compares the results with the routed copper. Buck-stage
+//! EAK's calculation functions and compares the results with the routed copper. Switching-stage
 //! quantities that EAK cannot calculate yet (duty cycle, inductor ripple, capacitor RMS
 //! current, switching loss) are listed as `missing_in_eak`. Their hand calculations live
 //! in DESIGN.md and are NOT presented as EAK results.
@@ -283,7 +283,7 @@ pub fn run(p: &Project) -> Result<CalcReport, String> {
         ipc_tables_verified_against_standard: ipc::VERIFIED_AGAINST_STANDARD,
         lines,
         missing_in_eak: vec![
-            "Buck operating point: duty cycle, inductor ripple/peak/RMS current (eak-engineering)".into(),
+            "Switching-converter operating point (generic, topology-parameterised; this board is a buck): duty cycle, inductor ripple/peak/RMS current (eak-engineering)".into(),
             "Output voltage ripple and output-capacitor RMS current (eak-engineering)".into(),
             "Input-capacitor RMS ripple current and input voltage ripple (eak-engineering)".into(),
             "MOSFET conduction + switching loss and converter efficiency (eak-engineering)".into(),

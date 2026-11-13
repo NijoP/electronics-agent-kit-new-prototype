@@ -147,24 +147,24 @@
       "status": "PASS (estimate on unverified ratings - NOT VERIFIED)"
     },
     {
-      "item": "GND pour fill, Bottom layer",
-      "function": "eak_engineering::copper::fill_zone",
-      "inputs": "clearance 0.60 mm, 0.1 mm raster",
-      "result": "1870 mm² filled in 1 island(s)",
-      "requirement": "informational",
-      "status": "INFO"
-    },
-    {
       "item": "GND pour fill, Top layer",
       "function": "eak_engineering::copper::fill_zone",
       "inputs": "clearance 0.60 mm, 0.1 mm raster",
       "result": "1522 mm² filled in 2 island(s)",
       "requirement": "informational",
       "status": "INFO"
+    },
+    {
+      "item": "GND pour fill, Bottom layer",
+      "function": "eak_engineering::copper::fill_zone",
+      "inputs": "clearance 0.60 mm, 0.1 mm raster",
+      "result": "1870 mm² filled in 1 island(s)",
+      "requirement": "informational",
+      "status": "INFO"
     }
   ],
   "missing_in_eak": [
-    "Buck operating point: duty cycle, inductor ripple/peak/RMS current (eak-engineering)",
+    "Switching-converter operating point (generic, topology-parameterised; this board is a buck): duty cycle, inductor ripple/peak/RMS current (eak-engineering)",
     "Output voltage ripple and output-capacitor RMS current (eak-engineering)",
     "Input-capacitor RMS ripple current and input voltage ripple (eak-engineering)",
     "MOSFET conduction + switching loss and converter efficiency (eak-engineering)",

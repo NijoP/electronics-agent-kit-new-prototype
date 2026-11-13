@@ -1,35 +1,35 @@
 {
   "schema_version": 1,
-  "id": "prj_d28c9fa2d517404a",
+  "id": "prj_2dadda078068495a",
   "name": "EAK Power Buck 12-24V to 5V 3A",
   "revision": 217,
   "requirements": [
     {
-      "id": "req_5e1de8e3c27044e5",
+      "id": "req_21febd3a06d1410a",
       "text": "REQ-IN: input 11.4-25.2 V DC (12 V -5 % to 24 V +5 %) from a SELV / IEC 62368-1 ES1 source; steady-state input above 25.2 V is out of specification"
     },
     {
-      "id": "req_1ab425f1dfa64bfb",
+      "id": "req_d0bfc92d39c9425d",
       "text": "REQ-OUT: output 5.0 V nominal (TPS54302 internal reference, 105k/14.3k divider), 0-3 A continuous, 15 W"
     },
     {
-      "id": "req_15edc42798fd405d",
+      "id": "req_bed9cbf36da544f5",
       "text": "REQ-TOPO: non-isolated synchronous buck, TI TPS54302 (integrated 85/40 mOhm FETs, 400 kHz, internal compensation)"
     },
     {
-      "id": "req_9083351eb1d24fc8",
+      "id": "req_18b91e223a1b462a",
       "text": "REQ-ENV: ambient 0-40 C, natural convection, altitude <= 2000 m, pollution degree 2, no conformal coating"
     },
     {
-      "id": "req_282780a657d64001",
+      "id": "req_077294006e634765",
       "text": "REQ-PROT: 3 A slow-blow input fuse; P-MOSFET reverse-polarity protection; SMAJ26A TVS after the reverse-polarity switch; controller cycle-by-cycle current limit and thermal shutdown"
     },
     {
-      "id": "req_3c5624dac48a43bc",
+      "id": "req_adeaad9f055f45f1",
       "text": "REQ-PCB: 2-layer FR-4 1.6 mm, 2 oz outer copper, conductor temperature rise <= 10 C at declared currents (IPC-2221)"
     },
     {
-      "id": "req_9deeadcdfada47c5",
+      "id": "req_32c9232872f84fab",
       "text": "REQ-ISO: no isolation barrier; output 0 V is input 0 V; the board inherits the safety class of its SELV/ES1 source"
     }
   ],
@@ -1993,209 +1993,17 @@
   },
   "schematic": {
     "sheets": {
-      "sht_37b327bfb81f46a9": {
-        "id": "sht_37b327bfb81f46a9",
+      "sht_d1ba7ae71a5241c1": {
+        "id": "sht_d1ba7ae71a5241c1",
         "name": "Sheet 1",
         "width": 297000000,
         "height": 210000000
       }
     },
     "symbols": {
-      "sym_182a04d5023c4491": {
-        "id": "sym_182a04d5023c4491",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "SRP1265A-100M",
-        "refdes": "L1",
-        "value": "10u",
-        "position": {
-          "x": 220000000,
-          "y": 118000000
-        },
-        "rotation": "R0"
-      },
-      "sym_1c934c7952d742aa": {
-        "id": "sym_1c934c7952d742aa",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "MH_M3_PTH",
-        "refdes": "H4",
-        "value": "M3",
-        "position": {
-          "x": 80000000,
-          "y": 8000000
-        },
-        "rotation": "R0"
-      },
-      "sym_1f2afd1a75fb4995": {
-        "id": "sym_1f2afd1a75fb4995",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "R_0603_100K",
-        "refdes": "R1",
-        "value": "100k",
-        "position": {
-          "x": 110000000,
-          "y": 118000000
-        },
-        "rotation": "R0"
-      },
-      "sym_1f37f30835c948e3": {
-        "id": "sym_1f37f30835c948e3",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "C_1210_22u_25V_X7R",
-        "refdes": "C7",
-        "value": "22u 25V X7R",
-        "position": {
-          "x": 250000000,
-          "y": 88000000
-        },
-        "rotation": "R0"
-      },
-      "sym_28d8ce6e95534b0e": {
-        "id": "sym_28d8ce6e95534b0e",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "MH_M3_PTH",
-        "refdes": "H1",
-        "value": "M3",
-        "position": {
-          "x": 20000000,
-          "y": 8000000
-        },
-        "rotation": "R0"
-      },
-      "sym_34620e49da954733": {
-        "id": "sym_34620e49da954733",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "LED_0603_APT1608SGC",
-        "refdes": "D3",
-        "value": "Green",
-        "position": {
-          "x": 250000000,
-          "y": 28000000
-        },
-        "rotation": "R0"
-      },
-      "sym_40b5dd75186d4535": {
-        "id": "sym_40b5dd75186d4535",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "SMAJ26A_SMA",
-        "refdes": "D2",
-        "value": "SMAJ26A",
-        "position": {
-          "x": 110000000,
-          "y": 148000000
-        },
-        "rotation": "R0"
-      },
-      "sym_5441d7da474b4119": {
-        "id": "sym_5441d7da474b4119",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "C_0603_100n_50V_X7R",
-        "refdes": "C4",
-        "value": "100n 50V X7R",
-        "position": {
-          "x": 140000000,
-          "y": 58000000
-        },
-        "rotation": "R0"
-      },
-      "sym_5bddbe9a2f804185": {
-        "id": "sym_5bddbe9a2f804185",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "FUSE_1206_3A_SLOW",
-        "refdes": "F1",
-        "value": "3A slow",
-        "position": {
-          "x": 50000000,
-          "y": 148000000
-        },
-        "rotation": "R0"
-      },
-      "sym_5f0281e3451f4d59": {
-        "id": "sym_5f0281e3451f4d59",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "TERM_1x02_P5.08",
-        "refdes": "J1",
-        "value": "VIN 12-24V",
-        "position": {
-          "x": 20000000,
-          "y": 138000000
-        },
-        "rotation": "R0"
-      },
-      "sym_72065d47b12d4c7f": {
-        "id": "sym_72065d47b12d4c7f",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "R_0603_1K5",
-        "refdes": "R4",
-        "value": "1.5k",
-        "position": {
-          "x": 250000000,
-          "y": 58000000
-        },
-        "rotation": "R0"
-      },
-      "sym_73b18ae19aa84818": {
-        "id": "sym_73b18ae19aa84818",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "AO4407A",
-        "refdes": "Q1",
-        "value": "AO4407A",
-        "position": {
-          "x": 80000000,
-          "y": 148000000
-        },
-        "rotation": "R0"
-      },
-      "sym_91ebc9ceeaf64619": {
-        "id": "sym_91ebc9ceeaf64619",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "C_1210_22u_25V_X7R",
-        "refdes": "C6",
-        "value": "22u 25V X7R",
-        "position": {
-          "x": 250000000,
-          "y": 118000000
-        },
-        "rotation": "R0"
-      },
-      "sym_92762fb1c4c043fa": {
-        "id": "sym_92762fb1c4c043fa",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "C_1210_10u_50V_X7R",
-        "refdes": "C3",
-        "value": "10u 50V X7R",
-        "position": {
-          "x": 140000000,
-          "y": 88000000
-        },
-        "rotation": "R0"
-      },
-      "sym_9cc3861b202f4c73": {
-        "id": "sym_9cc3861b202f4c73",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "R_0603_14K3",
-        "refdes": "R3",
-        "value": "14.3k",
-        "position": {
-          "x": 220000000,
-          "y": 58000000
-        },
-        "rotation": "R0"
-      },
-      "sym_a15b3697220346ba": {
-        "id": "sym_a15b3697220346ba",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "TPS54302DDCR",
-        "refdes": "U1",
-        "value": "TPS54302DDCR",
-        "position": {
-          "x": 180000000,
-          "y": 118000000
-        },
-        "rotation": "R0"
-      },
-      "sym_b8f23a8bccf84c5f": {
-        "id": "sym_b8f23a8bccf84c5f",
-        "sheet_id": "sht_37b327bfb81f46a9",
+      "sym_0f619dcce9b34775": {
+        "id": "sym_0f619dcce9b34775",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
         "component_id": "C_0603_100n_50V_X7R",
         "refdes": "C5",
         "value": "100n 50V X7R",
@@ -2205,69 +2013,33 @@
         },
         "rotation": "R0"
       },
-      "sym_bceb8599fae04614": {
-        "id": "sym_bceb8599fae04614",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "MMSZ5242B_SOD-123",
-        "refdes": "D1",
-        "value": "MMSZ5242B 12V",
+      "sym_0fc67bba5dc14ce2": {
+        "id": "sym_0fc67bba5dc14ce2",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_1210_22u_25V_X7R",
+        "refdes": "C7",
+        "value": "22u 25V X7R",
         "position": {
-          "x": 80000000,
-          "y": 118000000
+          "x": 250000000,
+          "y": 88000000
         },
         "rotation": "R0"
       },
-      "sym_c0d672bfb6724dbd": {
-        "id": "sym_c0d672bfb6724dbd",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "CP_EEE-FK1H470P",
-        "refdes": "C1",
-        "value": "47u 50V",
+      "sym_121347513cf140b3": {
+        "id": "sym_121347513cf140b3",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "R_0603_1K5",
+        "refdes": "R4",
+        "value": "1.5k",
         "position": {
-          "x": 140000000,
-          "y": 148000000
+          "x": 250000000,
+          "y": 58000000
         },
         "rotation": "R0"
       },
-      "sym_c144ea7a503c43c3": {
-        "id": "sym_c144ea7a503c43c3",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "MH_M3_PTH",
-        "refdes": "H2",
-        "value": "M3",
-        "position": {
-          "x": 40000000,
-          "y": 8000000
-        },
-        "rotation": "R0"
-      },
-      "sym_c30f7e35d2504a12": {
-        "id": "sym_c30f7e35d2504a12",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "C_1210_10u_50V_X7R",
-        "refdes": "C2",
-        "value": "10u 50V X7R",
-        "position": {
-          "x": 140000000,
-          "y": 118000000
-        },
-        "rotation": "R0"
-      },
-      "sym_c700419eca444437": {
-        "id": "sym_c700419eca444437",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "component_id": "MH_M3_PTH",
-        "refdes": "H3",
-        "value": "M3",
-        "position": {
-          "x": 60000000,
-          "y": 8000000
-        },
-        "rotation": "R0"
-      },
-      "sym_d93a94ff6d8841a8": {
-        "id": "sym_d93a94ff6d8841a8",
-        "sheet_id": "sht_37b327bfb81f46a9",
+      "sym_13db8822d83c4ca7": {
+        "id": "sym_13db8822d83c4ca7",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
         "component_id": "R_0603_105K",
         "refdes": "R2",
         "value": "105k",
@@ -2277,9 +2049,81 @@
         },
         "rotation": "R0"
       },
-      "sym_f432710a21034157": {
-        "id": "sym_f432710a21034157",
-        "sheet_id": "sht_37b327bfb81f46a9",
+      "sym_17784ec749bd4e5a": {
+        "id": "sym_17784ec749bd4e5a",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "MMSZ5242B_SOD-123",
+        "refdes": "D1",
+        "value": "MMSZ5242B 12V",
+        "position": {
+          "x": 80000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_268a192e795e4df9": {
+        "id": "sym_268a192e795e4df9",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "R_0603_100K",
+        "refdes": "R1",
+        "value": "100k",
+        "position": {
+          "x": 110000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_3ee2ce240cf348b0": {
+        "id": "sym_3ee2ce240cf348b0",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "AO4407A",
+        "refdes": "Q1",
+        "value": "AO4407A",
+        "position": {
+          "x": 80000000,
+          "y": 148000000
+        },
+        "rotation": "R0"
+      },
+      "sym_4361045d67584254": {
+        "id": "sym_4361045d67584254",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "CP_EEE-FK1H470P",
+        "refdes": "C1",
+        "value": "47u 50V",
+        "position": {
+          "x": 140000000,
+          "y": 148000000
+        },
+        "rotation": "R0"
+      },
+      "sym_455c5a80872d49ef": {
+        "id": "sym_455c5a80872d49ef",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "R_0603_14K3",
+        "refdes": "R3",
+        "value": "14.3k",
+        "position": {
+          "x": 220000000,
+          "y": 58000000
+        },
+        "rotation": "R0"
+      },
+      "sym_567526de365441fe": {
+        "id": "sym_567526de365441fe",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "TPS54302DDCR",
+        "refdes": "U1",
+        "value": "TPS54302DDCR",
+        "position": {
+          "x": 180000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_671b58bb6d374b06": {
+        "id": "sym_671b58bb6d374b06",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
         "component_id": "TERM_1x02_P5.08",
         "refdes": "J2",
         "value": "VOUT 5V",
@@ -2288,103 +2132,169 @@
           "y": 118000000
         },
         "rotation": "R0"
+      },
+      "sym_79a8db7603f143e9": {
+        "id": "sym_79a8db7603f143e9",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "FUSE_1206_3A_SLOW",
+        "refdes": "F1",
+        "value": "3A slow",
+        "position": {
+          "x": 50000000,
+          "y": 148000000
+        },
+        "rotation": "R0"
+      },
+      "sym_85f32aeee3a24dd4": {
+        "id": "sym_85f32aeee3a24dd4",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_1210_10u_50V_X7R",
+        "refdes": "C3",
+        "value": "10u 50V X7R",
+        "position": {
+          "x": 140000000,
+          "y": 88000000
+        },
+        "rotation": "R0"
+      },
+      "sym_983fa4b857434b8b": {
+        "id": "sym_983fa4b857434b8b",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "SMAJ26A_SMA",
+        "refdes": "D2",
+        "value": "SMAJ26A",
+        "position": {
+          "x": 110000000,
+          "y": 148000000
+        },
+        "rotation": "R0"
+      },
+      "sym_bdf2178cefb9487d": {
+        "id": "sym_bdf2178cefb9487d",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "TERM_1x02_P5.08",
+        "refdes": "J1",
+        "value": "VIN 12-24V",
+        "position": {
+          "x": 20000000,
+          "y": 138000000
+        },
+        "rotation": "R0"
+      },
+      "sym_be99597b0d4745ef": {
+        "id": "sym_be99597b0d4745ef",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "LED_0603_APT1608SGC",
+        "refdes": "D3",
+        "value": "Green",
+        "position": {
+          "x": 250000000,
+          "y": 28000000
+        },
+        "rotation": "R0"
+      },
+      "sym_c681a05e69ac4ba1": {
+        "id": "sym_c681a05e69ac4ba1",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_1210_10u_50V_X7R",
+        "refdes": "C2",
+        "value": "10u 50V X7R",
+        "position": {
+          "x": 140000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_c97235c3d4a648ad": {
+        "id": "sym_c97235c3d4a648ad",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H2",
+        "value": "M3",
+        "position": {
+          "x": 40000000,
+          "y": 8000000
+        },
+        "rotation": "R0"
+      },
+      "sym_cabe0e18e0c545b7": {
+        "id": "sym_cabe0e18e0c545b7",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "SRP1265A-100M",
+        "refdes": "L1",
+        "value": "10u",
+        "position": {
+          "x": 220000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_d4652c2d8807456f": {
+        "id": "sym_d4652c2d8807456f",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H4",
+        "value": "M3",
+        "position": {
+          "x": 80000000,
+          "y": 8000000
+        },
+        "rotation": "R0"
+      },
+      "sym_d4abe814a0d444ce": {
+        "id": "sym_d4abe814a0d444ce",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H3",
+        "value": "M3",
+        "position": {
+          "x": 60000000,
+          "y": 8000000
+        },
+        "rotation": "R0"
+      },
+      "sym_e5654a387a0a416e": {
+        "id": "sym_e5654a387a0a416e",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_1210_22u_25V_X7R",
+        "refdes": "C6",
+        "value": "22u 25V X7R",
+        "position": {
+          "x": 250000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_e57192eff7d241b9": {
+        "id": "sym_e57192eff7d241b9",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H1",
+        "value": "M3",
+        "position": {
+          "x": 20000000,
+          "y": 8000000
+        },
+        "rotation": "R0"
+      },
+      "sym_fb854062880e441c": {
+        "id": "sym_fb854062880e441c",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_0603_100n_50V_X7R",
+        "refdes": "C4",
+        "value": "100n 50V X7R",
+        "position": {
+          "x": 140000000,
+          "y": 58000000
+        },
+        "rotation": "R0"
       }
     },
     "wires": {},
     "labels": {
-      "lbl_040f70cd152345ad": {
-        "id": "lbl_040f70cd152345ad",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN",
-        "position": {
-          "x": 74920000,
-          "y": 118000000
-        },
-        "kind": "net"
-      },
-      "lbl_1074d5841da24190": {
-        "id": "lbl_1074d5841da24190",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 134920000,
-          "y": 58000000
-        },
-        "kind": "net"
-      },
-      "lbl_142d9772cdac4b0a": {
-        "id": "lbl_142d9772cdac4b0a",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "FB",
-        "position": {
-          "x": 190160000,
-          "y": 115460000
-        },
-        "kind": "net"
-      },
-      "lbl_288c50f2106d4daa": {
-        "id": "lbl_288c50f2106d4daa",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "FB",
-        "position": {
-          "x": 225080000,
-          "y": 58000000
-        },
-        "kind": "net"
-      },
-      "lbl_299bd75c83304403": {
-        "id": "lbl_299bd75c83304403",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN",
-        "position": {
-          "x": 169840000,
-          "y": 115460000
-        },
-        "kind": "net"
-      },
-      "lbl_2f1912ed5cb24dc8": {
-        "id": "lbl_2f1912ed5cb24dc8",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 274920000,
-          "y": 116730000
-        },
-        "kind": "net"
-      },
-      "lbl_3f5ec6bf22e847c4": {
-        "id": "lbl_3f5ec6bf22e847c4",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 145080000,
-          "y": 148000000
-        },
-        "kind": "net"
-      },
-      "lbl_43709050fa384027": {
-        "id": "lbl_43709050fa384027",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VOUT",
-        "position": {
-          "x": 214920000,
-          "y": 88000000
-        },
-        "kind": "net"
-      },
-      "lbl_454fcd09af5f45aa": {
-        "id": "lbl_454fcd09af5f45aa",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 115080000,
-          "y": 148000000
-        },
-        "kind": "net"
-      },
-      "lbl_47298164864b4757": {
-        "id": "lbl_47298164864b4757",
-        "sheet_id": "sht_37b327bfb81f46a9",
+      "lbl_011debf4921c49f0": {
+        "id": "lbl_011debf4921c49f0",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
         "name": "VIN",
         "position": {
           "x": 104920000,
@@ -2392,279 +2302,9 @@
         },
         "kind": "net"
       },
-      "lbl_481ebfcb90864186": {
-        "id": "lbl_481ebfcb90864186",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "SW",
-        "position": {
-          "x": 225080000,
-          "y": 148000000
-        },
-        "kind": "net"
-      },
-      "lbl_596a9382bb154c4f": {
-        "id": "lbl_596a9382bb154c4f",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VOUT",
-        "position": {
-          "x": 244920000,
-          "y": 58000000
-        },
-        "kind": "net"
-      },
-      "lbl_6d3fd3273ed2461f": {
-        "id": "lbl_6d3fd3273ed2461f",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VOUT",
-        "position": {
-          "x": 255080000,
-          "y": 118000000
-        },
-        "kind": "net"
-      },
-      "lbl_74968854f82b4a4c": {
-        "id": "lbl_74968854f82b4a4c",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 244920000,
-          "y": 28000000
-        },
-        "kind": "net"
-      },
-      "lbl_7d6355ffc15b4819": {
-        "id": "lbl_7d6355ffc15b4819",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN_F",
-        "position": {
-          "x": 72380000,
-          "y": 148000000
-        },
-        "kind": "net"
-      },
-      "lbl_7d8c54696a9642db": {
-        "id": "lbl_7d8c54696a9642db",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 214920000,
-          "y": 58000000
-        },
-        "kind": "net"
-      },
-      "lbl_82b66bcf0f174c50": {
-        "id": "lbl_82b66bcf0f174c50",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 134920000,
-          "y": 118000000
-        },
-        "kind": "net"
-      },
-      "lbl_9452f6198ae244ff": {
-        "id": "lbl_9452f6198ae244ff",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 134920000,
-          "y": 88000000
-        },
-        "kind": "net"
-      },
-      "lbl_96f001deed9e4206": {
-        "id": "lbl_96f001deed9e4206",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN",
-        "position": {
-          "x": 145080000,
-          "y": 88000000
-        },
-        "kind": "net"
-      },
-      "lbl_96f7639c07c447be": {
-        "id": "lbl_96f7639c07c447be",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "FB",
-        "position": {
-          "x": 225080000,
-          "y": 88000000
-        },
-        "kind": "net"
-      },
-      "lbl_97ae78a0b2494242": {
-        "id": "lbl_97ae78a0b2494242",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN_RAW",
-        "position": {
-          "x": 14920000,
-          "y": 139270000
-        },
-        "kind": "power"
-      },
-      "lbl_9c40a0754cdf4ab2": {
-        "id": "lbl_9c40a0754cdf4ab2",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VOUT",
-        "position": {
-          "x": 225080000,
-          "y": 118000000
-        },
-        "kind": "net"
-      },
-      "lbl_9e2137f5cc154185": {
-        "id": "lbl_9e2137f5cc154185",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VOUT",
-        "position": {
-          "x": 274920000,
-          "y": 119270000
-        },
-        "kind": "net"
-      },
-      "lbl_a2dfe27caddc45ef": {
-        "id": "lbl_a2dfe27caddc45ef",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN",
-        "position": {
-          "x": 145080000,
-          "y": 58000000
-        },
-        "kind": "net"
-      },
-      "lbl_aa547e3d64a34928": {
-        "id": "lbl_aa547e3d64a34928",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 244920000,
-          "y": 118000000
-        },
-        "kind": "net"
-      },
-      "lbl_ac50e0b8388c415b": {
-        "id": "lbl_ac50e0b8388c415b",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 169840000,
-          "y": 120540000
-        },
-        "kind": "net"
-      },
-      "lbl_af1413cb8b41410b": {
-        "id": "lbl_af1413cb8b41410b",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "Q1_G",
-        "position": {
-          "x": 85080000,
-          "y": 118000000
-        },
-        "kind": "net"
-      },
-      "lbl_b16987545c4a4271": {
-        "id": "lbl_b16987545c4a4271",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "Q1_G",
-        "position": {
-          "x": 80000000,
-          "y": 140380000
-        },
-        "kind": "net"
-      },
-      "lbl_bab9f19eebb54505": {
-        "id": "lbl_bab9f19eebb54505",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN_F",
-        "position": {
-          "x": 55080000,
-          "y": 148000000
-        },
-        "kind": "net"
-      },
-      "lbl_bb06696b9bfb4f72": {
-        "id": "lbl_bb06696b9bfb4f72",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "LED_A",
-        "position": {
-          "x": 255080000,
-          "y": 28000000
-        },
-        "kind": "net"
-      },
-      "lbl_bec509f36acf4b90": {
-        "id": "lbl_bec509f36acf4b90",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "BOOT",
-        "position": {
-          "x": 214920000,
-          "y": 148000000
-        },
-        "kind": "net"
-      },
-      "lbl_bfa0144de1294df8": {
-        "id": "lbl_bfa0144de1294df8",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN",
-        "position": {
-          "x": 145080000,
-          "y": 118000000
-        },
-        "kind": "net"
-      },
-      "lbl_c20d16603b76446a": {
-        "id": "lbl_c20d16603b76446a",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "LED_A",
-        "position": {
-          "x": 255080000,
-          "y": 58000000
-        },
-        "kind": "net"
-      },
-      "lbl_c7445d096e544bce": {
-        "id": "lbl_c7445d096e544bce",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN_RAW",
-        "position": {
-          "x": 44920000,
-          "y": 148000000
-        },
-        "kind": "net"
-      },
-      "lbl_ca068006a3104cae": {
-        "id": "lbl_ca068006a3104cae",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN",
-        "position": {
-          "x": 87620000,
-          "y": 148000000
-        },
-        "kind": "power"
-      },
-      "lbl_ccae1b60257e421d": {
-        "id": "lbl_ccae1b60257e421d",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "SW",
-        "position": {
-          "x": 169840000,
-          "y": 118000000
-        },
-        "kind": "net"
-      },
-      "lbl_d1e4f025c1f2456e": {
-        "id": "lbl_d1e4f025c1f2456e",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "VIN",
-        "position": {
-          "x": 134920000,
-          "y": 148000000
-        },
-        "kind": "net"
-      },
-      "lbl_d4b4006ced984272": {
-        "id": "lbl_d4b4006ced984272",
-        "sheet_id": "sht_37b327bfb81f46a9",
+      "lbl_107a97112c624ef8": {
+        "id": "lbl_107a97112c624ef8",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
         "name": "BOOT",
         "position": {
           "x": 190160000,
@@ -2672,39 +2312,39 @@
         },
         "kind": "net"
       },
-      "lbl_d9166c54da6c4a27": {
-        "id": "lbl_d9166c54da6c4a27",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "SW",
-        "position": {
-          "x": 214920000,
-          "y": 118000000
-        },
-        "kind": "net"
-      },
-      "lbl_dd97089d307145b2": {
-        "id": "lbl_dd97089d307145b2",
-        "sheet_id": "sht_37b327bfb81f46a9",
-        "name": "GND",
-        "position": {
-          "x": 244920000,
-          "y": 88000000
-        },
-        "kind": "net"
-      },
-      "lbl_e6ee1b7dcd8c41e1": {
-        "id": "lbl_e6ee1b7dcd8c41e1",
-        "sheet_id": "sht_37b327bfb81f46a9",
+      "lbl_28edfe5f212a474d": {
+        "id": "lbl_28edfe5f212a474d",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
         "name": "VOUT",
         "position": {
-          "x": 255080000,
+          "x": 214920000,
           "y": 88000000
         },
         "kind": "net"
       },
-      "lbl_e975f7de517c47da": {
-        "id": "lbl_e975f7de517c47da",
-        "sheet_id": "sht_37b327bfb81f46a9",
+      "lbl_294e5ade5a2747b2": {
+        "id": "lbl_294e5ade5a2747b2",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 134920000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_2ae02cd1034a45cb": {
+        "id": "lbl_2ae02cd1034a45cb",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 169840000,
+          "y": 120540000
+        },
+        "kind": "net"
+      },
+      "lbl_45ad6d9664df4f03": {
+        "id": "lbl_45ad6d9664df4f03",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
         "name": "GND",
         "position": {
           "x": 14920000,
@@ -2712,9 +2352,9 @@
         },
         "kind": "power"
       },
-      "lbl_fc0d23a18e8240c2": {
-        "id": "lbl_fc0d23a18e8240c2",
-        "sheet_id": "sht_37b327bfb81f46a9",
+      "lbl_49c645adc06f4aaf": {
+        "id": "lbl_49c645adc06f4aaf",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
         "name": "Q1_G",
         "position": {
           "x": 104920000,
@@ -2722,21 +2362,381 @@
         },
         "kind": "net"
       },
-      "lbl_fe17aa6a8b62473e": {
-        "id": "lbl_fe17aa6a8b62473e",
-        "sheet_id": "sht_37b327bfb81f46a9",
+      "lbl_516564d03799462d": {
+        "id": "lbl_516564d03799462d",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "SW",
+        "position": {
+          "x": 214920000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_5ad5e99a56b94db6": {
+        "id": "lbl_5ad5e99a56b94db6",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 145080000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_6194de79266a4499": {
+        "id": "lbl_6194de79266a4499",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 145080000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_64323207bdaf408c": {
+        "id": "lbl_64323207bdaf408c",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 255080000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_65093e69e8a54cef": {
+        "id": "lbl_65093e69e8a54cef",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 244920000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_69d69fbb0dbb46c4": {
+        "id": "lbl_69d69fbb0dbb46c4",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "SW",
+        "position": {
+          "x": 169840000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_70ff68bbcb9742ba": {
+        "id": "lbl_70ff68bbcb9742ba",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 145080000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_757a3f4d966641d1": {
+        "id": "lbl_757a3f4d966641d1",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "FB",
+        "position": {
+          "x": 225080000,
+          "y": 88000000
+        },
+        "kind": "net"
+      },
+      "lbl_77dc09eef3134b68": {
+        "id": "lbl_77dc09eef3134b68",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 214920000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_7814ad7d4e914351": {
+        "id": "lbl_7814ad7d4e914351",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
         "name": "GND",
         "position": {
           "x": 115080000,
           "y": 118000000
         },
         "kind": "net"
+      },
+      "lbl_7851d4f3897c4b23": {
+        "id": "lbl_7851d4f3897c4b23",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 244920000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_8267f6b149784d08": {
+        "id": "lbl_8267f6b149784d08",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 115080000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_8417572d6b274f3c": {
+        "id": "lbl_8417572d6b274f3c",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 87620000,
+          "y": 148000000
+        },
+        "kind": "power"
+      },
+      "lbl_843bbdac24774cc9": {
+        "id": "lbl_843bbdac24774cc9",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "SW",
+        "position": {
+          "x": 225080000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_84c42b9a569745c3": {
+        "id": "lbl_84c42b9a569745c3",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 244920000,
+          "y": 28000000
+        },
+        "kind": "net"
+      },
+      "lbl_8973a38616854f22": {
+        "id": "lbl_8973a38616854f22",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 134920000,
+          "y": 88000000
+        },
+        "kind": "net"
+      },
+      "lbl_8d74cf44ac0d4d75": {
+        "id": "lbl_8d74cf44ac0d4d75",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 169840000,
+          "y": 115460000
+        },
+        "kind": "net"
+      },
+      "lbl_95cc337e90034790": {
+        "id": "lbl_95cc337e90034790",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "FB",
+        "position": {
+          "x": 225080000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_9b8ae79ddf934d19": {
+        "id": "lbl_9b8ae79ddf934d19",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 134920000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_a36ad76c79fe42fb": {
+        "id": "lbl_a36ad76c79fe42fb",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN_F",
+        "position": {
+          "x": 72380000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_aedc4e41e6c14231": {
+        "id": "lbl_aedc4e41e6c14231",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 225080000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_b74aa98b5fc74fd9": {
+        "id": "lbl_b74aa98b5fc74fd9",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN_F",
+        "position": {
+          "x": 55080000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_bcfd5318c6014184": {
+        "id": "lbl_bcfd5318c6014184",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "Q1_G",
+        "position": {
+          "x": 85080000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_c01b548951d64bd1": {
+        "id": "lbl_c01b548951d64bd1",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN_RAW",
+        "position": {
+          "x": 44920000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_c6d906c05c044075": {
+        "id": "lbl_c6d906c05c044075",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 255080000,
+          "y": 88000000
+        },
+        "kind": "net"
+      },
+      "lbl_cdfb38458b934647": {
+        "id": "lbl_cdfb38458b934647",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "FB",
+        "position": {
+          "x": 190160000,
+          "y": 115460000
+        },
+        "kind": "net"
+      },
+      "lbl_d5534d4d9e12428d": {
+        "id": "lbl_d5534d4d9e12428d",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "LED_A",
+        "position": {
+          "x": 255080000,
+          "y": 28000000
+        },
+        "kind": "net"
+      },
+      "lbl_d5ff4b9981f546cc": {
+        "id": "lbl_d5ff4b9981f546cc",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 134920000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_da6a16bfcd744837": {
+        "id": "lbl_da6a16bfcd744837",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 145080000,
+          "y": 88000000
+        },
+        "kind": "net"
+      },
+      "lbl_e16a1b83755b4851": {
+        "id": "lbl_e16a1b83755b4851",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "LED_A",
+        "position": {
+          "x": 255080000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_e201f3470af44bd8": {
+        "id": "lbl_e201f3470af44bd8",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 274920000,
+          "y": 119270000
+        },
+        "kind": "net"
+      },
+      "lbl_e295458c9d304ee6": {
+        "id": "lbl_e295458c9d304ee6",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 274920000,
+          "y": 116730000
+        },
+        "kind": "net"
+      },
+      "lbl_e81315d6c561444c": {
+        "id": "lbl_e81315d6c561444c",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 74920000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_ea17e8fa5f1a48e2": {
+        "id": "lbl_ea17e8fa5f1a48e2",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "BOOT",
+        "position": {
+          "x": 214920000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_f08a6618f34a4889": {
+        "id": "lbl_f08a6618f34a4889",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "Q1_G",
+        "position": {
+          "x": 80000000,
+          "y": 140380000
+        },
+        "kind": "net"
+      },
+      "lbl_f2fd50533fa54400": {
+        "id": "lbl_f2fd50533fa54400",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN_RAW",
+        "position": {
+          "x": 14920000,
+          "y": 139270000
+        },
+        "kind": "power"
+      },
+      "lbl_f35071fb2d294fb6": {
+        "id": "lbl_f35071fb2d294fb6",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 244920000,
+          "y": 88000000
+        },
+        "kind": "net"
       }
     },
     "no_connects": {
-      "nc_bdc93b34dd934d93": {
-        "id": "nc_bdc93b34dd934d93",
-        "symbol_id": "sym_a15b3697220346ba",
+      "nc_c9562cd084d14867": {
+        "id": "nc_c9562cd084d14867",
+        "symbol_id": "sym_567526de365441fe",
         "pin": "5"
       }
     }
@@ -2769,9 +2769,9 @@
       }
     },
     "footprints": {
-      "fp_056cb68446eb489f": {
-        "id": "fp_056cb68446eb489f",
-        "symbol_id": "sym_5f0281e3451f4d59",
+      "fp_00bfcadfa6534406": {
+        "id": "fp_00bfcadfa6534406",
+        "symbol_id": "sym_bdf2178cefb9487d",
         "component_id": "TERM_1x02_P5.08",
         "refdes": "J1",
         "position": {
@@ -2786,176 +2786,9 @@
         },
         "locked": true
       },
-      "fp_07a80f0cd8c6469e": {
-        "id": "fp_07a80f0cd8c6469e",
-        "symbol_id": "sym_5441d7da474b4119",
-        "component_id": "C_0603_100n_50V_X7R",
-        "refdes": "C4",
-        "position": {
-          "x": 39500000,
-          "y": 14000000
-        },
-        "rotation": "R90",
-        "side": "top",
-        "pad_nets": {
-          "1": "GND",
-          "2": "VIN"
-        },
-        "locked": true
-      },
-      "fp_0e2b8dc0f9d64c60": {
-        "id": "fp_0e2b8dc0f9d64c60",
-        "symbol_id": "sym_34620e49da954733",
-        "component_id": "LED_0603_APT1608SGC",
-        "refdes": "D3",
-        "position": {
-          "x": 61000000,
-          "y": 9500000
-        },
-        "rotation": "R180",
-        "side": "top",
-        "pad_nets": {
-          "1": "GND",
-          "2": "LED_A"
-        },
-        "locked": true
-      },
-      "fp_2069194fda874732": {
-        "id": "fp_2069194fda874732",
-        "symbol_id": "sym_c144ea7a503c43c3",
-        "component_id": "MH_M3_PTH",
-        "refdes": "H2",
-        "position": {
-          "x": 62000000,
-          "y": 4000000
-        },
-        "rotation": "R0",
-        "side": "top",
-        "pad_nets": {},
-        "locked": true
-      },
-      "fp_2226c34c0fc74ab8": {
-        "id": "fp_2226c34c0fc74ab8",
-        "symbol_id": "sym_b8f23a8bccf84c5f",
-        "component_id": "C_0603_100n_50V_X7R",
-        "refdes": "C5",
-        "position": {
-          "x": 45800000,
-          "y": 13500000
-        },
-        "rotation": "R90",
-        "side": "top",
-        "pad_nets": {
-          "1": "BOOT",
-          "2": "SW"
-        },
-        "locked": true
-      },
-      "fp_2a7ad2ecd6e1446e": {
-        "id": "fp_2a7ad2ecd6e1446e",
-        "symbol_id": "sym_c30f7e35d2504a12",
-        "component_id": "C_1210_10u_50V_X7R",
-        "refdes": "C2",
-        "position": {
-          "x": 37000000,
-          "y": 14000000
-        },
-        "rotation": "R90",
-        "side": "top",
-        "pad_nets": {
-          "1": "GND",
-          "2": "VIN"
-        },
-        "locked": true
-      },
-      "fp_3e90a1ee9f35439e": {
-        "id": "fp_3e90a1ee9f35439e",
-        "symbol_id": "sym_92762fb1c4c043fa",
-        "component_id": "C_1210_10u_50V_X7R",
-        "refdes": "C3",
-        "position": {
-          "x": 33700000,
-          "y": 14000000
-        },
-        "rotation": "R90",
-        "side": "top",
-        "pad_nets": {
-          "1": "GND",
-          "2": "VIN"
-        },
-        "locked": true
-      },
-      "fp_50c15b5ee20147af": {
-        "id": "fp_50c15b5ee20147af",
-        "symbol_id": "sym_1c934c7952d742aa",
-        "component_id": "MH_M3_PTH",
-        "refdes": "H4",
-        "position": {
-          "x": 62000000,
-          "y": 29000000
-        },
-        "rotation": "R0",
-        "side": "top",
-        "pad_nets": {},
-        "locked": true
-      },
-      "fp_58b8ceb36078434c": {
-        "id": "fp_58b8ceb36078434c",
-        "symbol_id": "sym_1f37f30835c948e3",
-        "component_id": "C_1210_22u_25V_X7R",
-        "refdes": "C7",
-        "position": {
-          "x": 54600000,
-          "y": 13500000
-        },
-        "rotation": "R90",
-        "side": "top",
-        "pad_nets": {
-          "1": "GND",
-          "2": "VOUT"
-        },
-        "locked": true
-      },
-      "fp_6348a524e57f4bf9": {
-        "id": "fp_6348a524e57f4bf9",
-        "symbol_id": "sym_a15b3697220346ba",
-        "component_id": "TPS54302DDCR",
-        "refdes": "U1",
-        "position": {
-          "x": 42000000,
-          "y": 14000000
-        },
-        "rotation": "R270",
-        "side": "top",
-        "pad_nets": {
-          "1": "GND",
-          "2": "SW",
-          "3": "VIN",
-          "4": "FB",
-          "6": "BOOT"
-        },
-        "locked": true
-      },
-      "fp_686729dae6274f0d": {
-        "id": "fp_686729dae6274f0d",
-        "symbol_id": "sym_40b5dd75186d4535",
-        "component_id": "SMAJ26A_SMA",
-        "refdes": "D2",
-        "position": {
-          "x": 31000000,
-          "y": 19700000
-        },
-        "rotation": "R270",
-        "side": "top",
-        "pad_nets": {
-          "1": "VIN",
-          "2": "GND"
-        },
-        "locked": true
-      },
-      "fp_729017e3d66848ff": {
-        "id": "fp_729017e3d66848ff",
-        "symbol_id": "sym_d93a94ff6d8841a8",
+      "fp_033f26b1fcb84122": {
+        "id": "fp_033f26b1fcb84122",
+        "symbol_id": "sym_13db8822d83c4ca7",
         "component_id": "R_0603_105K",
         "refdes": "R2",
         "position": {
@@ -2970,74 +2803,9 @@
         },
         "locked": true
       },
-      "fp_72bb29dde1a34bf8": {
-        "id": "fp_72bb29dde1a34bf8",
-        "symbol_id": "sym_9cc3861b202f4c73",
-        "component_id": "R_0603_14K3",
-        "refdes": "R3",
-        "position": {
-          "x": 38600000,
-          "y": 10325000
-        },
-        "rotation": "R0",
-        "side": "top",
-        "pad_nets": {
-          "1": "GND",
-          "2": "FB"
-        },
-        "locked": true
-      },
-      "fp_78255cf9505e4ac1": {
-        "id": "fp_78255cf9505e4ac1",
-        "symbol_id": "sym_28d8ce6e95534b0e",
-        "component_id": "MH_M3_PTH",
-        "refdes": "H1",
-        "position": {
-          "x": 4000000,
-          "y": 4000000
-        },
-        "rotation": "R0",
-        "side": "top",
-        "pad_nets": {},
-        "locked": true
-      },
-      "fp_830e0a28aa064e0d": {
-        "id": "fp_830e0a28aa064e0d",
-        "symbol_id": "sym_91ebc9ceeaf64619",
-        "component_id": "C_1210_22u_25V_X7R",
-        "refdes": "C6",
-        "position": {
-          "x": 51300000,
-          "y": 13500000
-        },
-        "rotation": "R90",
-        "side": "top",
-        "pad_nets": {
-          "1": "GND",
-          "2": "VOUT"
-        },
-        "locked": true
-      },
-      "fp_93df33f5a2d646be": {
-        "id": "fp_93df33f5a2d646be",
-        "symbol_id": "sym_bceb8599fae04614",
-        "component_id": "MMSZ5242B_SOD-123",
-        "refdes": "D1",
-        "position": {
-          "x": 28000000,
-          "y": 21255000
-        },
-        "rotation": "R90",
-        "side": "top",
-        "pad_nets": {
-          "1": "VIN",
-          "2": "Q1_G"
-        },
-        "locked": true
-      },
-      "fp_9c60a0151ac14c7b": {
-        "id": "fp_9c60a0151ac14c7b",
-        "symbol_id": "sym_1f2afd1a75fb4995",
+      "fp_0eef6e1daaf74148": {
+        "id": "fp_0eef6e1daaf74148",
+        "symbol_id": "sym_268a192e795e4df9",
         "component_id": "R_0603_100K",
         "refdes": "R1",
         "position": {
@@ -3052,9 +2820,43 @@
         },
         "locked": true
       },
-      "fp_b15e3fddc26d47c0": {
-        "id": "fp_b15e3fddc26d47c0",
-        "symbol_id": "sym_73b18ae19aa84818",
+      "fp_0fc95662a3af42ec": {
+        "id": "fp_0fc95662a3af42ec",
+        "symbol_id": "sym_121347513cf140b3",
+        "component_id": "R_0603_1K5",
+        "refdes": "R4",
+        "position": {
+          "x": 57500000,
+          "y": 10000000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {
+          "1": "VOUT",
+          "2": "LED_A"
+        },
+        "locked": true
+      },
+      "fp_181009fa1a5a4dd2": {
+        "id": "fp_181009fa1a5a4dd2",
+        "symbol_id": "sym_fb854062880e441c",
+        "component_id": "C_0603_100n_50V_X7R",
+        "refdes": "C4",
+        "position": {
+          "x": 39500000,
+          "y": 14000000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "VIN"
+        },
+        "locked": true
+      },
+      "fp_2d79e9a432ec4e8d": {
+        "id": "fp_2d79e9a432ec4e8d",
+        "symbol_id": "sym_3ee2ce240cf348b0",
         "component_id": "AO4407A",
         "refdes": "Q1",
         "position": {
@@ -3075,16 +2877,33 @@
         },
         "locked": true
       },
-      "fp_b1a4ce96c8b34e3f": {
-        "id": "fp_b1a4ce96c8b34e3f",
-        "symbol_id": "sym_c0d672bfb6724dbd",
-        "component_id": "CP_EEE-FK1H470P",
-        "refdes": "C1",
+      "fp_39e364b16fad4973": {
+        "id": "fp_39e364b16fad4973",
+        "symbol_id": "sym_671b58bb6d374b06",
+        "component_id": "TERM_1x02_P5.08",
+        "refdes": "J2",
         "position": {
-          "x": 24000000,
-          "y": 12000000
+          "x": 61000000,
+          "y": 18000000
         },
-        "rotation": "R180",
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "VOUT",
+          "2": "GND"
+        },
+        "locked": true
+      },
+      "fp_556e2523a0f04ced": {
+        "id": "fp_556e2523a0f04ced",
+        "symbol_id": "sym_983fa4b857434b8b",
+        "component_id": "SMAJ26A_SMA",
+        "refdes": "D2",
+        "position": {
+          "x": 31000000,
+          "y": 19700000
+        },
+        "rotation": "R270",
         "side": "top",
         "pad_nets": {
           "1": "VIN",
@@ -3092,40 +2911,43 @@
         },
         "locked": true
       },
-      "fp_bb0fd06cded04f36": {
-        "id": "fp_bb0fd06cded04f36",
-        "symbol_id": "sym_5bddbe9a2f804185",
-        "component_id": "FUSE_1206_3A_SLOW",
-        "refdes": "F1",
+      "fp_5bdc6edbde6442b5": {
+        "id": "fp_5bdc6edbde6442b5",
+        "symbol_id": "sym_0f619dcce9b34775",
+        "component_id": "C_0603_100n_50V_X7R",
+        "refdes": "C5",
         "position": {
-          "x": 15000000,
-          "y": 21635000
+          "x": 45800000,
+          "y": 13500000
         },
-        "rotation": "R0",
+        "rotation": "R90",
         "side": "top",
         "pad_nets": {
-          "1": "VIN_RAW",
-          "2": "VIN_F"
+          "1": "BOOT",
+          "2": "SW"
         },
         "locked": true
       },
-      "fp_bd0935af07ee4a12": {
-        "id": "fp_bd0935af07ee4a12",
-        "symbol_id": "sym_c700419eca444437",
-        "component_id": "MH_M3_PTH",
-        "refdes": "H3",
+      "fp_5c360702cfb34b2a": {
+        "id": "fp_5c360702cfb34b2a",
+        "symbol_id": "sym_c681a05e69ac4ba1",
+        "component_id": "C_1210_10u_50V_X7R",
+        "refdes": "C2",
         "position": {
-          "x": 4000000,
-          "y": 29000000
+          "x": 37000000,
+          "y": 14000000
         },
-        "rotation": "R0",
+        "rotation": "R90",
         "side": "top",
-        "pad_nets": {},
+        "pad_nets": {
+          "1": "GND",
+          "2": "VIN"
+        },
         "locked": true
       },
-      "fp_c38581b8edd94b22": {
-        "id": "fp_c38581b8edd94b22",
-        "symbol_id": "sym_182a04d5023c4491",
+      "fp_60599d4dbbbf4852": {
+        "id": "fp_60599d4dbbbf4852",
+        "symbol_id": "sym_cabe0e18e0c545b7",
         "component_id": "SRP1265A-100M",
         "refdes": "L1",
         "position": {
@@ -3140,128 +2962,222 @@
         },
         "locked": true
       },
-      "fp_cd2c5533fad14e64": {
-        "id": "fp_cd2c5533fad14e64",
-        "symbol_id": "sym_72065d47b12d4c7f",
-        "component_id": "R_0603_1K5",
-        "refdes": "R4",
+      "fp_67b3e120430a43ef": {
+        "id": "fp_67b3e120430a43ef",
+        "symbol_id": "sym_c97235c3d4a648ad",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H2",
         "position": {
-          "x": 57500000,
-          "y": 10000000
+          "x": 62000000,
+          "y": 4000000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {},
+        "locked": true
+      },
+      "fp_70237e34e42e4de1": {
+        "id": "fp_70237e34e42e4de1",
+        "symbol_id": "sym_455c5a80872d49ef",
+        "component_id": "R_0603_14K3",
+        "refdes": "R3",
+        "position": {
+          "x": 38600000,
+          "y": 10325000
         },
         "rotation": "R0",
         "side": "top",
         "pad_nets": {
-          "1": "VOUT",
-          "2": "LED_A"
+          "1": "GND",
+          "2": "FB"
         },
         "locked": true
       },
-      "fp_f560061b977740b2": {
-        "id": "fp_f560061b977740b2",
-        "symbol_id": "sym_f432710a21034157",
-        "component_id": "TERM_1x02_P5.08",
-        "refdes": "J2",
+      "fp_958c7a5a95d940a1": {
+        "id": "fp_958c7a5a95d940a1",
+        "symbol_id": "sym_567526de365441fe",
+        "component_id": "TPS54302DDCR",
+        "refdes": "U1",
         "position": {
-          "x": 61000000,
-          "y": 18000000
+          "x": 42000000,
+          "y": 14000000
+        },
+        "rotation": "R270",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "SW",
+          "3": "VIN",
+          "4": "FB",
+          "6": "BOOT"
+        },
+        "locked": true
+      },
+      "fp_a0886346d7684fe9": {
+        "id": "fp_a0886346d7684fe9",
+        "symbol_id": "sym_e5654a387a0a416e",
+        "component_id": "C_1210_22u_25V_X7R",
+        "refdes": "C6",
+        "position": {
+          "x": 51300000,
+          "y": 13500000
         },
         "rotation": "R90",
         "side": "top",
         "pad_nets": {
-          "1": "VOUT",
+          "1": "GND",
+          "2": "VOUT"
+        },
+        "locked": true
+      },
+      "fp_a5a21813d42a479a": {
+        "id": "fp_a5a21813d42a479a",
+        "symbol_id": "sym_d4abe814a0d444ce",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H3",
+        "position": {
+          "x": 4000000,
+          "y": 29000000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {},
+        "locked": true
+      },
+      "fp_a7b5e1921d024ed1": {
+        "id": "fp_a7b5e1921d024ed1",
+        "symbol_id": "sym_85f32aeee3a24dd4",
+        "component_id": "C_1210_10u_50V_X7R",
+        "refdes": "C3",
+        "position": {
+          "x": 33700000,
+          "y": 14000000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "VIN"
+        },
+        "locked": true
+      },
+      "fp_be543b92d23b4b52": {
+        "id": "fp_be543b92d23b4b52",
+        "symbol_id": "sym_e57192eff7d241b9",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H1",
+        "position": {
+          "x": 4000000,
+          "y": 4000000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {},
+        "locked": true
+      },
+      "fp_bec382ecd9444e2e": {
+        "id": "fp_bec382ecd9444e2e",
+        "symbol_id": "sym_be99597b0d4745ef",
+        "component_id": "LED_0603_APT1608SGC",
+        "refdes": "D3",
+        "position": {
+          "x": 61000000,
+          "y": 9500000
+        },
+        "rotation": "R180",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "LED_A"
+        },
+        "locked": true
+      },
+      "fp_c9d5bcf9e2574cae": {
+        "id": "fp_c9d5bcf9e2574cae",
+        "symbol_id": "sym_d4652c2d8807456f",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H4",
+        "position": {
+          "x": 62000000,
+          "y": 29000000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {},
+        "locked": true
+      },
+      "fp_d78cd863c7b34341": {
+        "id": "fp_d78cd863c7b34341",
+        "symbol_id": "sym_0fc67bba5dc14ce2",
+        "component_id": "C_1210_22u_25V_X7R",
+        "refdes": "C7",
+        "position": {
+          "x": 54600000,
+          "y": 13500000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "VOUT"
+        },
+        "locked": true
+      },
+      "fp_dba12abf78b14e09": {
+        "id": "fp_dba12abf78b14e09",
+        "symbol_id": "sym_79a8db7603f143e9",
+        "component_id": "FUSE_1206_3A_SLOW",
+        "refdes": "F1",
+        "position": {
+          "x": 15000000,
+          "y": 21635000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {
+          "1": "VIN_RAW",
+          "2": "VIN_F"
+        },
+        "locked": true
+      },
+      "fp_dfbde51587f341c0": {
+        "id": "fp_dfbde51587f341c0",
+        "symbol_id": "sym_17784ec749bd4e5a",
+        "component_id": "MMSZ5242B_SOD-123",
+        "refdes": "D1",
+        "position": {
+          "x": 28000000,
+          "y": 21255000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "VIN",
+          "2": "Q1_G"
+        },
+        "locked": true
+      },
+      "fp_e9d97e29ed1140e5": {
+        "id": "fp_e9d97e29ed1140e5",
+        "symbol_id": "sym_4361045d67584254",
+        "component_id": "CP_EEE-FK1H470P",
+        "refdes": "C1",
+        "position": {
+          "x": 24000000,
+          "y": 12000000
+        },
+        "rotation": "R180",
+        "side": "top",
+        "pad_nets": {
+          "1": "VIN",
           "2": "GND"
         },
         "locked": true
       }
     },
     "tracks": {
-      "trk_02836c2d3d314d4b": {
-        "id": "trk_02836c2d3d314d4b",
-        "layer": "top",
-        "width": 600000,
-        "a": {
-          "x": 39500000,
-          "y": 15140000
-        },
-        "b": {
-          "x": 41050000,
-          "y": 15140000
-        },
-        "net": "VIN"
-      },
-      "trk_062eb61dc7934c7a": {
-        "id": "trk_062eb61dc7934c7a",
-        "layer": "top",
-        "width": 800000,
-        "a": {
-          "x": 51300000,
-          "y": 15000000
-        },
-        "b": {
-          "x": 48500000,
-          "y": 15000000
-        },
-        "net": "VOUT"
-      },
-      "trk_092e09e4bc3446c8": {
-        "id": "trk_092e09e4bc3446c8",
-        "layer": "top",
-        "width": 1000000,
-        "a": {
-          "x": 16450000,
-          "y": 21635000
-        },
-        "b": {
-          "x": 20300000,
-          "y": 21635000
-        },
-        "net": "VIN_F"
-      },
-      "trk_09338037805c4777": {
-        "id": "trk_09338037805c4777",
-        "layer": "top",
-        "width": 800000,
-        "a": {
-          "x": 45800000,
-          "y": 17500000
-        },
-        "b": {
-          "x": 42000000,
-          "y": 17500000
-        },
-        "net": "SW"
-      },
-      "trk_0e9eff711d804a3c": {
-        "id": "trk_0e9eff711d804a3c",
-        "layer": "top",
-        "width": 800000,
-        "a": {
-          "x": 45800000,
-          "y": 14325000
-        },
-        "b": {
-          "x": 45800000,
-          "y": 17500000
-        },
-        "net": "SW"
-      },
-      "trk_155e8c0d39fd4444": {
-        "id": "trk_155e8c0d39fd4444",
-        "layer": "top",
-        "width": 1000000,
-        "a": {
-          "x": 27350000,
-          "y": 20365000
-        },
-        "b": {
-          "x": 27350000,
-          "y": 12000000
-        },
-        "net": "VIN"
-      },
-      "trk_159444b0d0b64d8b": {
-        "id": "trk_159444b0d0b64d8b",
+      "trk_01f2fa1153504b70": {
+        "id": "trk_01f2fa1153504b70",
         "layer": "top",
         "width": 300000,
         "a": {
@@ -3274,22 +3190,8 @@
         },
         "net": "FB"
       },
-      "trk_17008d7e69754b47": {
-        "id": "trk_17008d7e69754b47",
-        "layer": "top",
-        "width": 800000,
-        "a": {
-          "x": 43200000,
-          "y": 15140000
-        },
-        "b": {
-          "x": 44300000,
-          "y": 15140000
-        },
-        "net": "GND"
-      },
-      "trk_191972cce08143d1": {
-        "id": "trk_191972cce08143d1",
+      "trk_0513a14283d94f4f": {
+        "id": "trk_0513a14283d94f4f",
         "layer": "top",
         "width": 300000,
         "a": {
@@ -3302,92 +3204,22 @@
         },
         "net": "BOOT"
       },
-      "trk_35f799b28aa24004": {
-        "id": "trk_35f799b28aa24004",
+      "trk_12f1895b8ba84c20": {
+        "id": "trk_12f1895b8ba84c20",
         "layer": "top",
-        "width": 1000000,
+        "width": 600000,
         "a": {
-          "x": 7000000,
-          "y": 21540000
-        },
-        "b": {
-          "x": 13550000,
-          "y": 21540000
-        },
-        "net": "VIN_RAW"
-      },
-      "trk_45a04c44387f4487": {
-        "id": "trk_45a04c44387f4487",
-        "layer": "top",
-        "width": 300000,
-        "a": {
-          "x": 39425000,
-          "y": 10325000
+          "x": 39500000,
+          "y": 15140000
         },
         "b": {
           "x": 41050000,
-          "y": 10325000
-        },
-        "net": "FB"
-      },
-      "trk_4751c679cf73460f": {
-        "id": "trk_4751c679cf73460f",
-        "layer": "top",
-        "width": 1000000,
-        "a": {
-          "x": 35350000,
-          "y": 20365000
-        },
-        "b": {
-          "x": 35350000,
-          "y": 15900000
+          "y": 15140000
         },
         "net": "VIN"
       },
-      "trk_4da650a2288f4e4d": {
-        "id": "trk_4da650a2288f4e4d",
-        "layer": "top",
-        "width": 1000000,
-        "a": {
-          "x": 33700000,
-          "y": 15900000
-        },
-        "b": {
-          "x": 39500000,
-          "y": 15900000
-        },
-        "net": "VIN"
-      },
-      "trk_503ede4e6b8c4785": {
-        "id": "trk_503ede4e6b8c4785",
-        "layer": "top",
-        "width": 800000,
-        "a": {
-          "x": 44300000,
-          "y": 14100000
-        },
-        "b": {
-          "x": 44300000,
-          "y": 16200000
-        },
-        "net": "GND"
-      },
-      "trk_551c9aceaad148e7": {
-        "id": "trk_551c9aceaad148e7",
-        "layer": "top",
-        "width": 1000000,
-        "a": {
-          "x": 25700000,
-          "y": 20365000
-        },
-        "b": {
-          "x": 35350000,
-          "y": 20365000
-        },
-        "net": "VIN"
-      },
-      "trk_6d8e528c6065414a": {
-        "id": "trk_6d8e528c6065414a",
+      "trk_179f0de461784e84": {
+        "id": "trk_179f0de461784e84",
         "layer": "top",
         "width": 1500000,
         "a": {
@@ -3400,92 +3232,8 @@
         },
         "net": "VOUT"
       },
-      "trk_6e3c2ef0c0374caa": {
-        "id": "trk_6e3c2ef0c0374caa",
-        "layer": "top",
-        "width": 2000000,
-        "a": {
-          "x": 42000000,
-          "y": 17000000
-        },
-        "b": {
-          "x": 42000000,
-          "y": 21500000
-        },
-        "net": "SW"
-      },
-      "trk_86861364646c4b0c": {
-        "id": "trk_86861364646c4b0c",
-        "layer": "top",
-        "width": 1000000,
-        "a": {
-          "x": 20300000,
-          "y": 19095000
-        },
-        "b": {
-          "x": 20300000,
-          "y": 22905000
-        },
-        "net": "VIN_F"
-      },
-      "trk_8c3834bc2ad240e3": {
-        "id": "trk_8c3834bc2ad240e3",
-        "layer": "top",
-        "width": 300000,
-        "a": {
-          "x": 25700000,
-          "y": 22905000
-        },
-        "b": {
-          "x": 28000000,
-          "y": 22905000
-        },
-        "net": "Q1_G"
-      },
-      "trk_b06fc347af924d29": {
-        "id": "trk_b06fc347af924d29",
-        "layer": "top",
-        "width": 300000,
-        "a": {
-          "x": 28000000,
-          "y": 22905000
-        },
-        "b": {
-          "x": 28000000,
-          "y": 24775000
-        },
-        "net": "Q1_G"
-      },
-      "trk_c2f2759d6aab40bb": {
-        "id": "trk_c2f2759d6aab40bb",
-        "layer": "top",
-        "width": 800000,
-        "a": {
-          "x": 48500000,
-          "y": 8675000
-        },
-        "b": {
-          "x": 41050000,
-          "y": 8675000
-        },
-        "net": "VOUT"
-      },
-      "trk_cedf578fbb8c4fba": {
-        "id": "trk_cedf578fbb8c4fba",
-        "layer": "top",
-        "width": 300000,
-        "a": {
-          "x": 58325000,
-          "y": 10000000
-        },
-        "b": {
-          "x": 60175000,
-          "y": 9500000
-        },
-        "net": "LED_A"
-      },
-      "trk_dc3bae5c2b124580": {
-        "id": "trk_dc3bae5c2b124580",
+      "trk_1a4aeea2091543f8": {
+        "id": "trk_1a4aeea2091543f8",
         "layer": "top",
         "width": 800000,
         "a": {
@@ -3498,50 +3246,22 @@
         },
         "net": "VIN"
       },
-      "trk_e5ac79e9dff44f05": {
-        "id": "trk_e5ac79e9dff44f05",
-        "layer": "top",
-        "width": 1000000,
-        "a": {
-          "x": 25700000,
-          "y": 19095000
-        },
-        "b": {
-          "x": 25700000,
-          "y": 21635000
-        },
-        "net": "VIN"
-      },
-      "trk_e7dd8ddbe710423f": {
-        "id": "trk_e7dd8ddbe710423f",
+      "trk_1abf43ff21e84e95": {
+        "id": "trk_1abf43ff21e84e95",
         "layer": "top",
         "width": 800000,
         "a": {
-          "x": 56675000,
-          "y": 15000000
+          "x": 45800000,
+          "y": 14325000
         },
         "b": {
-          "x": 56675000,
-          "y": 10000000
-        },
-        "net": "VOUT"
-      },
-      "trk_ecad56d25bc44764": {
-        "id": "trk_ecad56d25bc44764",
-        "layer": "top",
-        "width": 850000,
-        "a": {
-          "x": 42000000,
-          "y": 15140000
-        },
-        "b": {
-          "x": 42000000,
-          "y": 17000000
+          "x": 45800000,
+          "y": 17500000
         },
         "net": "SW"
       },
-      "trk_f2bbd588520d409c": {
-        "id": "trk_f2bbd588520d409c",
+      "trk_62612937d3df447d": {
+        "id": "trk_62612937d3df447d",
         "layer": "top",
         "width": 1500000,
         "a": {
@@ -3554,8 +3274,274 @@
         },
         "net": "VOUT"
       },
-      "trk_fc2658681bf54ea2": {
-        "id": "trk_fc2658681bf54ea2",
+      "trk_687f107b244d4bf7": {
+        "id": "trk_687f107b244d4bf7",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 45800000,
+          "y": 17500000
+        },
+        "b": {
+          "x": 42000000,
+          "y": 17500000
+        },
+        "net": "SW"
+      },
+      "trk_76d1b3484b574407": {
+        "id": "trk_76d1b3484b574407",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 48500000,
+          "y": 8675000
+        },
+        "b": {
+          "x": 41050000,
+          "y": 8675000
+        },
+        "net": "VOUT"
+      },
+      "trk_77829a5d31ad4011": {
+        "id": "trk_77829a5d31ad4011",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 33700000,
+          "y": 15900000
+        },
+        "b": {
+          "x": 39500000,
+          "y": 15900000
+        },
+        "net": "VIN"
+      },
+      "trk_7d326ca52a91487b": {
+        "id": "trk_7d326ca52a91487b",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 25700000,
+          "y": 19095000
+        },
+        "b": {
+          "x": 25700000,
+          "y": 21635000
+        },
+        "net": "VIN"
+      },
+      "trk_844d5fe107b84534": {
+        "id": "trk_844d5fe107b84534",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 44300000,
+          "y": 14100000
+        },
+        "b": {
+          "x": 44300000,
+          "y": 16200000
+        },
+        "net": "GND"
+      },
+      "trk_855386892a354689": {
+        "id": "trk_855386892a354689",
+        "layer": "top",
+        "width": 2000000,
+        "a": {
+          "x": 42000000,
+          "y": 17000000
+        },
+        "b": {
+          "x": 42000000,
+          "y": 21500000
+        },
+        "net": "SW"
+      },
+      "trk_89e70875ab864fbd": {
+        "id": "trk_89e70875ab864fbd",
+        "layer": "top",
+        "width": 300000,
+        "a": {
+          "x": 58325000,
+          "y": 10000000
+        },
+        "b": {
+          "x": 60175000,
+          "y": 9500000
+        },
+        "net": "LED_A"
+      },
+      "trk_8b6d3b36d9324431": {
+        "id": "trk_8b6d3b36d9324431",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 7000000,
+          "y": 21540000
+        },
+        "b": {
+          "x": 13550000,
+          "y": 21540000
+        },
+        "net": "VIN_RAW"
+      },
+      "trk_aa9cd443b9a04114": {
+        "id": "trk_aa9cd443b9a04114",
+        "layer": "top",
+        "width": 850000,
+        "a": {
+          "x": 42000000,
+          "y": 15140000
+        },
+        "b": {
+          "x": 42000000,
+          "y": 17000000
+        },
+        "net": "SW"
+      },
+      "trk_aecbfb0c2b364589": {
+        "id": "trk_aecbfb0c2b364589",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 20300000,
+          "y": 19095000
+        },
+        "b": {
+          "x": 20300000,
+          "y": 22905000
+        },
+        "net": "VIN_F"
+      },
+      "trk_b095ec2a67c24372": {
+        "id": "trk_b095ec2a67c24372",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 25700000,
+          "y": 20365000
+        },
+        "b": {
+          "x": 35350000,
+          "y": 20365000
+        },
+        "net": "VIN"
+      },
+      "trk_bb348589050e46b9": {
+        "id": "trk_bb348589050e46b9",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 16450000,
+          "y": 21635000
+        },
+        "b": {
+          "x": 20300000,
+          "y": 21635000
+        },
+        "net": "VIN_F"
+      },
+      "trk_ccefb7459374420e": {
+        "id": "trk_ccefb7459374420e",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 27350000,
+          "y": 20365000
+        },
+        "b": {
+          "x": 27350000,
+          "y": 12000000
+        },
+        "net": "VIN"
+      },
+      "trk_d3d6cd246da74ddd": {
+        "id": "trk_d3d6cd246da74ddd",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 51300000,
+          "y": 15000000
+        },
+        "b": {
+          "x": 48500000,
+          "y": 15000000
+        },
+        "net": "VOUT"
+      },
+      "trk_d426a04ce56f41d5": {
+        "id": "trk_d426a04ce56f41d5",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 35350000,
+          "y": 20365000
+        },
+        "b": {
+          "x": 35350000,
+          "y": 15900000
+        },
+        "net": "VIN"
+      },
+      "trk_d711dfe660594fe2": {
+        "id": "trk_d711dfe660594fe2",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 56675000,
+          "y": 15000000
+        },
+        "b": {
+          "x": 56675000,
+          "y": 10000000
+        },
+        "net": "VOUT"
+      },
+      "trk_e5c46af401dc4eaa": {
+        "id": "trk_e5c46af401dc4eaa",
+        "layer": "top",
+        "width": 300000,
+        "a": {
+          "x": 39425000,
+          "y": 10325000
+        },
+        "b": {
+          "x": 41050000,
+          "y": 10325000
+        },
+        "net": "FB"
+      },
+      "trk_ea9305cd864f433e": {
+        "id": "trk_ea9305cd864f433e",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 43200000,
+          "y": 15140000
+        },
+        "b": {
+          "x": 44300000,
+          "y": 15140000
+        },
+        "net": "GND"
+      },
+      "trk_eea2e9658a764c8a": {
+        "id": "trk_eea2e9658a764c8a",
+        "layer": "top",
+        "width": 300000,
+        "a": {
+          "x": 25700000,
+          "y": 22905000
+        },
+        "b": {
+          "x": 28000000,
+          "y": 22905000
+        },
+        "net": "Q1_G"
+      },
+      "trk_f5ca9d484b434cc2": {
+        "id": "trk_f5ca9d484b434cc2",
         "layer": "top",
         "width": 800000,
         "a": {
@@ -3567,171 +3553,25 @@
           "y": 8675000
         },
         "net": "VOUT"
+      },
+      "trk_fb49e1c81355452d": {
+        "id": "trk_fb49e1c81355452d",
+        "layer": "top",
+        "width": 300000,
+        "a": {
+          "x": 28000000,
+          "y": 22905000
+        },
+        "b": {
+          "x": 28000000,
+          "y": 24775000
+        },
+        "net": "Q1_G"
       }
     },
     "vias": {
-      "via_16b7b375929a4fe6": {
-        "id": "via_16b7b375929a4fe6",
-        "position": {
-          "x": 44300000,
-          "y": 15150000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_1a2f543c34af40d3": {
-        "id": "via_1a2f543c34af40d3",
-        "position": {
-          "x": 49600000,
-          "y": 10500000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_32bd3fc0b81041b3": {
-        "id": "via_32bd3fc0b81041b3",
-        "position": {
-          "x": 12000000,
-          "y": 8000000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_36d85b21b10042b6": {
-        "id": "via_36d85b21b10042b6",
-        "position": {
-          "x": 31000000,
-          "y": 15600000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_3fac8db0a93943d4": {
-        "id": "via_3fac8db0a93943d4",
-        "position": {
-          "x": 55600000,
-          "y": 10500000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_5080e534821d4e05": {
-        "id": "via_5080e534821d4e05",
-        "position": {
-          "x": 52950000,
-          "y": 10500000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_719bf6094d68497c": {
-        "id": "via_719bf6094d68497c",
-        "position": {
-          "x": 33700000,
-          "y": 10800000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_7b853e10b2c64e3b": {
-        "id": "via_7b853e10b2c64e3b",
-        "position": {
-          "x": 44300000,
-          "y": 14100000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_844018e600814ad1": {
-        "id": "via_844018e600814ad1",
-        "position": {
-          "x": 45000000,
-          "y": 30000000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_8e8b1db1e2d342e6": {
-        "id": "via_8e8b1db1e2d342e6",
-        "position": {
-          "x": 54600000,
-          "y": 10500000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_8eb1a9ca9bc0476e": {
-        "id": "via_8eb1a9ca9bc0476e",
-        "position": {
-          "x": 38300000,
-          "y": 11500000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_92d1bc134aa1411f": {
-        "id": "via_92d1bc134aa1411f",
-        "position": {
-          "x": 63300000,
-          "y": 9500000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_93941ed961884252": {
-        "id": "via_93941ed961884252",
-        "position": {
-          "x": 35350000,
-          "y": 11200000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_b028542e566f49b3": {
-        "id": "via_b028542e566f49b3",
-        "position": {
-          "x": 44300000,
-          "y": 16200000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_b1ed169441b64f60": {
-        "id": "via_b1ed169441b64f60",
-        "position": {
-          "x": 39500000,
-          "y": 11900000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_b28a41cc5ac1487b": {
-        "id": "via_b28a41cc5ac1487b",
-        "position": {
-          "x": 30000000,
-          "y": 4000000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_b734f1208eb84fc0": {
-        "id": "via_b734f1208eb84fc0",
+      "via_0410a62848f64e38": {
+        "id": "via_0410a62848f64e38",
         "position": {
           "x": 51300000,
           "y": 10500000
@@ -3740,8 +3580,18 @@
         "diameter": 600000,
         "net": "GND"
       },
-      "via_baaabadfd25f4f00": {
-        "id": "via_baaabadfd25f4f00",
+      "via_0cfebd5629cf4af6": {
+        "id": "via_0cfebd5629cf4af6",
+        "position": {
+          "x": 49600000,
+          "y": 10500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_2271a0c6820040e8": {
+        "id": "via_2271a0c6820040e8",
         "position": {
           "x": 20650000,
           "y": 9600000
@@ -3750,8 +3600,58 @@
         "diameter": 600000,
         "net": "GND"
       },
-      "via_c4f2f100691b46e9": {
-        "id": "via_c4f2f100691b46e9",
+      "via_29cc65f785564459": {
+        "id": "via_29cc65f785564459",
+        "position": {
+          "x": 38300000,
+          "y": 11500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_35558af628a2407e": {
+        "id": "via_35558af628a2407e",
+        "position": {
+          "x": 31000000,
+          "y": 15600000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_47420f17da4c4628": {
+        "id": "via_47420f17da4c4628",
+        "position": {
+          "x": 30000000,
+          "y": 4000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_47b619601f06449e": {
+        "id": "via_47b619601f06449e",
+        "position": {
+          "x": 54600000,
+          "y": 10500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_5ce077337fc045b4": {
+        "id": "via_5ce077337fc045b4",
+        "position": {
+          "x": 44300000,
+          "y": 14100000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_7839405eb59c4686": {
+        "id": "via_7839405eb59c4686",
         "position": {
           "x": 17900000,
           "y": 12000000
@@ -3760,38 +3660,18 @@
         "diameter": 600000,
         "net": "GND"
       },
-      "via_ca180461e0264e19": {
-        "id": "via_ca180461e0264e19",
+      "via_7fb897cc5073482d": {
+        "id": "via_7fb897cc5073482d",
         "position": {
-          "x": 45000000,
-          "y": 4000000
+          "x": 63300000,
+          "y": 9500000
         },
         "drill": 300000,
         "diameter": 600000,
         "net": "GND"
       },
-      "via_cdbdd0dacd7a427b": {
-        "id": "via_cdbdd0dacd7a427b",
-        "position": {
-          "x": 15000000,
-          "y": 28000000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_ed0837ca1e37463f": {
-        "id": "via_ed0837ca1e37463f",
-        "position": {
-          "x": 28000000,
-          "y": 28000000
-        },
-        "drill": 300000,
-        "diameter": 600000,
-        "net": "GND"
-      },
-      "via_fb5b6835fadf4e49": {
-        "id": "via_fb5b6835fadf4e49",
+      "via_8145ce8c583c432b": {
+        "id": "via_8145ce8c583c432b",
         "position": {
           "x": 36500000,
           "y": 10600000
@@ -3800,8 +3680,118 @@
         "diameter": 600000,
         "net": "GND"
       },
-      "via_fc6caa825f19460c": {
-        "id": "via_fc6caa825f19460c",
+      "via_8f7fa2fc2ca649d0": {
+        "id": "via_8f7fa2fc2ca649d0",
+        "position": {
+          "x": 28000000,
+          "y": 28000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_9774213335374a63": {
+        "id": "via_9774213335374a63",
+        "position": {
+          "x": 44300000,
+          "y": 15150000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_9c75313896824ab8": {
+        "id": "via_9c75313896824ab8",
+        "position": {
+          "x": 35350000,
+          "y": 11200000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_a2b86e7ff9f043ee": {
+        "id": "via_a2b86e7ff9f043ee",
+        "position": {
+          "x": 39500000,
+          "y": 11900000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_c77b24809f454711": {
+        "id": "via_c77b24809f454711",
+        "position": {
+          "x": 45000000,
+          "y": 4000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_ca7861e7cc6046a2": {
+        "id": "via_ca7861e7cc6046a2",
+        "position": {
+          "x": 55600000,
+          "y": 10500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_d27050e776c14741": {
+        "id": "via_d27050e776c14741",
+        "position": {
+          "x": 12000000,
+          "y": 8000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_de05f03b24224de5": {
+        "id": "via_de05f03b24224de5",
+        "position": {
+          "x": 52950000,
+          "y": 10500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_e5fc7553eb6e4d37": {
+        "id": "via_e5fc7553eb6e4d37",
+        "position": {
+          "x": 44300000,
+          "y": 16200000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_f05e9a0744fd4c72": {
+        "id": "via_f05e9a0744fd4c72",
+        "position": {
+          "x": 15000000,
+          "y": 28000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_f3c35be21e3540dc": {
+        "id": "via_f3c35be21e3540dc",
+        "position": {
+          "x": 33700000,
+          "y": 10800000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_f84e49641c514769": {
+        "id": "via_f84e49641c514769",
         "position": {
           "x": 55000000,
           "y": 4000000
@@ -3809,12 +3799,22 @@
         "drill": 300000,
         "diameter": 600000,
         "net": "GND"
+      },
+      "via_feb75cef433e400f": {
+        "id": "via_feb75cef433e400f",
+        "position": {
+          "x": 45000000,
+          "y": 30000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
       }
     },
     "zones": {
-      "zon_740d3a3e1a37416f": {
-        "id": "zon_740d3a3e1a37416f",
-        "layer": "bottom",
+      "zon_56d9e347ed29497d": {
+        "id": "zon_56d9e347ed29497d",
+        "layer": "top",
         "net": "GND",
         "outline": [
           {
@@ -3852,9 +3852,9 @@
         ],
         "clearance": 600000
       },
-      "zon_785449a93f8d4895": {
-        "id": "zon_785449a93f8d4895",
-        "layer": "top",
+      "zon_617e375195fe4cee": {
+        "id": "zon_617e375195fe4cee",
+        "layer": "bottom",
         "net": "GND",
         "outline": [
           {
