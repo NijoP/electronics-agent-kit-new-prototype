@@ -23,5 +23,5 @@ documents (`docs/source-of-truth/`).
 | AI-01, AG-01..03 | Lead agent using the same typed commands under approval | `eak-intelligence` | Approval policy exists in the engine | NOT STARTED (agent) |
 | BROW-01 | Optional research browser | — | — | NOT STARTED |
 | SEC-01 | No secrets in the repo; approval for external or irreversible actions | `.gitignore`, approval policy | Manual review | PARTIAL |
-| BOOT-01 | Cross-platform build and installers | `.github/workflows/ci.yml` (`rust` + `desktop` jobs on Windows, Ubuntu, macOS arm64/x64) | Windows local build and tests; CI results recorded in STATUS.md when run | PARTIAL (no installers) |
+| BOOT-01 | Cross-platform build and installers | `.github/workflows/ci.yml` (`rust` + `desktop` jobs on Windows, Ubuntu, macOS arm64/x64) | Windows local build and tests; CI run on 599bf91 green on all four runners for both jobs (recorded in STATUS.md) | PARTIAL (no installers; Linux/macOS verified by CI only) |
 | PERF-01 | Performance targets | — | — | UNKNOWN |

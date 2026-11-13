@@ -6,8 +6,8 @@ the listed tests pass; it does not mean professionally validated.
 ## Desktop shell: Tauri 2 + React bound to the command engine (2026-11-13)
 
 **Platform tested:** Windows 11, Rust 1.99.1 `x86_64-pc-windows-gnu`, Node 24.21 / npm 11.19.
-CI now runs Linux, macOS arm64 and macOS x64 as well (`rust` and `desktop` jobs). Their results
-are recorded here only after a run has completed.
+**CI (commit 599bf91, pull-request run https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43431886918):**
+all 8 jobs passed: `rust` (policy script, fmt, clippy, `cargo test --workspace --release`) and `desktop` (`npm ci`, typecheck, vitest, `tauri build --no-bundle`) on `windows-latest`, `ubuntu-latest`, `macos-latest` (arm64) and `macos-15-intel` (x64). Linux and macOS are verified by CI only, not on a local machine; no window was opened on any runner.
 
 ### Implemented and tested
 - `apps/desktop/src-tauri` (crate `eak-desktop`, a workspace member) holds the IPC layer, which is plain Rust functions over one `Session` (one open `Engine` plus the SQLite recent-project index):
@@ -50,7 +50,7 @@ are recorded here only after a run has completed.
 ## Milestone M1: engineering foundation and headless vertical slice (2026-11-13)
 
 **Platform tested:** Windows 11 (Git Bash), Rust 1.99.1 `x86_64-pc-windows-gnu`, WinLibs GCC 16.2,
-AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: CI workflow added, **not yet run**.
+AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI run is recorded under "Desktop shell" above.
 
 ### Implemented and tested
 - EAK-IR v1 (`eak-core`): project, library, schematic, PCB, constraints, manufacturing config;
