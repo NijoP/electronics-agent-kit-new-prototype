@@ -3,6 +3,21 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## Model adaptor: providers, OS-keyring keys, model list, connection test (2026-11-14)
+
+**Platform tested:** Linux (Ubuntu, GNOME Secret Service running), Rust stable. Windows and macOS credential stores: **not run** (the code uses `keyring`'s `windows-native`/`apple-native` backends; unverified there). No real provider account was used.
+
+### Implemented and tested
+- `eak-intelligence`: `HttpTransport::get`; `provider::adaptor::{list_models, test_connection}` for Anthropic, OpenAI-compatible (any base URL: OpenAI, OpenRouter, Groq, Together, local servers) and Ollama. Provider error text is returned with the key redacted. Unit tests (canned JSON) plus `tests/adaptor_http.rs`: the real `ureq` transport against a real loopback HTTP server (list, test, 401 text, unreachable endpoint).
+- `apps/desktop/src-tauri/src/models.rs`: profile store (JSON, no secrets), `KeyStore` with `OsKeyStore` (keyring v3), IPC commands `model_*` (7). The environment is never a key source in the desktop. `tests/models.rs` (9 tests): profiles/UI view/disk contain no key, remove deletes the key, corrupt file is not overwritten, list/test over real HTTP using the stored key, redaction, env not used, Ollama keyless, and a **real OS credential store round trip** (ran and passed on Linux).
+- UI: `ModelSettings.tsx` (add/edit/remove provider, presets, write-only key field, fetch models into a picker with free-text fallback, test connection), opened from a button in `App.tsx`. 5 vitest tests added.
+
+### Not verified / not implemented
+- Never run against a live provider endpoint (no key was available); wire formats are checked against canned and loopback responses only.
+- Windows Credential Manager and macOS Keychain paths unexercised. If no Secret Service runs on Linux, saving a key fails visibly.
+- Not exercised in a real window. The settings button is a floating button, not part of the toolbar.
+- The agent loop is not yet wired to the chosen provider in the UI (this task is the adaptor and settings only).
+
 ## Interactive editors and Gerber export (2026-11-14, branch fm/eak-o1-editors)
 
 **Platform tested:** Linux, Rust stable, Node (see PR body for exact verification output). No window was opened;
@@ -116,11 +131,50 @@ Injected short and clearance violations are detected (`drc_detects_injected_shor
 
 ### Not yet implemented (acceptance gaps)
 - Desktop application: superseded. See "Desktop shell" above (read-only views; editors not started).
-- AI Intelligence Engine (agent loop, model providers): not started.
+- Intelligence Engine: core crate exists (see below); no UI, no live-provider run, no context engine/skills.
 - Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser, LCSC/JLCPCB integrations.
 - Multi-layer (>2) boards, differential pairs, impedance, thermal reliefs, silkscreen text.
 - Linux/macOS builds have not been executed yet; packaging and installers do not exist yet.
 - Independent engineering review and fabricator DFM: not performed (required before any manufacturing claim).
+
+## Intelligence Engine core: `eak-intelligence` (2026-11-13)
+
+**Platform tested:** same host as M1 (Windows 11, Rust 1.99.1 `x86_64-pc-windows-gnu`). Linux and macOS: CI only.
+
+### Implemented and tested
+- **Providers:**
+  - A `Provider` trait with OpenAI-compatible, Anthropic Messages and Ollama adapters.
+  - Cancellable HTTPS transport (ureq + rustls) behind the optional `remote-http` Cargo feature (off by default): bounded retries on 429, 5xx and transport errors; typed error mapping; 16 MiB body limit. Without the feature, remote providers fail with `ProviderError::TransportNotCompiledIn` and nothing touches the network.
+  - Model and endpoint come from the user's `ProviderConfig`.
+  - Keys come from the configuration value or an environment variable (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` by default) and are never serialised or printed.
+  - Anthropic assistant content, including thinking blocks, is replayed verbatim.
+- **Tools:**
+  - One typed tool per `Command` variant (38).
+  - Arguments decode only through serde into the real `Command`; an exhaustive `match` forces a schema for every new variant.
+  - Read-only tools: design summary, library, netlist, ERC, DRC, and calculators. The calculators are trace width, conductor clearance, LED resistor, divider, linear regulator and RC; they call `eak-engineering`.
+- **Agent loop:**
+  - Bounded turns, tool calls per turn and tool-output size.
+  - Cancellation is checked before every provider and tool call and aborts in-flight HTTP. The transcript stays valid after a cancel.
+  - Modes: Manual, Assisted and Autonomous.
+    - Manual previews and records a plan; nothing is applied until `execute_plan`.
+    - Assisted asks for per-command approval.
+    - Autonomous applies commands within the user's pre-authorised scope; destructive commands always ask.
+  - Every mutation is previewed on a sandbox copy, then submitted as an `Agent`-actor `CommandRequest` carrying an approval that covers its class.
+  - Stale views and stale plans are refused.
+  - The `AgentRun` log records actions, approvals, responses and events.
+
+### Tests executed
+`cargo test --workspace --release`: **69 passed, 0 failed** (the 35 M1 tests plus 34 new). Clippy (`-D warnings`), `cargo fmt --check` and the Python-free scan are clean.
+
+`cargo test -p eak-intelligence`: **34 passed, 0 failed** with and without `--features remote-http` (CI runs both, plus `--no-default-features`):
+- 21 unit tests: providers, transport (including the typed `TransportNotCompiledIn` refusal without `remote-http`), key handling, schemas against the serde shape, read-only tools.
+- 13 integration tests in `tests/agent.rs`, run with a scripted provider and no network.
+
+### Known gaps
+- No run against a live model endpoint, and no streaming.
+- No approval/Agent Studio UI; the run log is not yet written to `evidence/`.
+- Not exposed as tools yet: manufacturing export (`eak_manufacturing::compile`), MECH, via-current and creepage calculators. Project create/open stays a host action.
+- Manual/Assisted/Autonomous are not defined in the source-of-truth PDFs; the mapping is recorded in `docs/REQUIREMENTS_TRACEABILITY.md` (INT-07).
 
 ## Coordination note
 The Firstmate crew could not be started on this host: the Firstmate session lock does not
@@ -130,4 +184,4 @@ installed. Development is proceeding directly in this repository.
 ## Next dependency-ready work
 1. Interactive schematic editor driving the same commands (the desktop shell above is the base).
 2. PCB editor and 3D view; Manufacturing Center and installer bundles.
-3. Intelligence Engine: provider abstraction, typed tools over commands, approval flow.
+3. Intelligence Engine: manufacturing-export and MECH tools, run-log evidence persistence, desktop approval UI.
