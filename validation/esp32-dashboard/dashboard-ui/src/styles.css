@@ -1,0 +1,22 @@
+:root { font-family: system-ui, sans-serif; color: #1d2330; background: #f4f5f7; }
+body { margin: 0; }
+header { background: #1d2330; color: #fff; padding: 12px 20px; }
+header h1 { margin: 0; font-size: 20px; }
+.source { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+.banner { background: #ffe08a; color: #3d2f00; padding: 6px 20px; font-weight: 600; }
+main { padding: 16px 20px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.card { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+.card h2 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; color: #5a6275; letter-spacing: 0.04em; }
+.value { font-size: 34px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.detail, .muted { font-size: 12px; color: #5a6275; margin-top: 4px; font-weight: 400; }
+.wide { grid-column: 1 / -1; }
+.alarm { display: inline-block; background: #d93a3a; color: #fff; border-radius: 4px; padding: 2px 8px; margin: 2px; font-size: 13px; }
+.ok { color: #227a3a; font-weight: 600; }
+.chart { margin: 8px 0; }
+.chart figcaption { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.chart svg { width: 100%; height: 180px; background: #fafbfc; border-radius: 6px; display: block; }
+.chart path { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.chart path.temp { stroke: #d93a3a; }
+.chart path.rh { stroke: #2f6fd6; }
+.chart .limit { stroke: #8a8f99; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
+.oled { width: 100%; max-width: 384px; image-rendering: pixelated; border-radius: 4px; display: block; }

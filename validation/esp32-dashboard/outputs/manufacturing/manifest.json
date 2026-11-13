@@ -1,0 +1,117 @@
+{
+  "project_id": "prj_17445941672740ee",
+  "project_name": "ESP32-C3 Environment Dashboard",
+  "revision": 221,
+  "input_sha256": "734ad996b3ec5c3afe629f75245b576f6f5c2fe45df3fd0f1d07269c3a37717e",
+  "generator": "eak-manufacturing 0.1.0",
+  "generated_ms": 1794571464366,
+  "status": "INTERNALLY_VERIFIED_RELEASE_CANDIDATE",
+  "gates": [
+    {
+      "check": "ERC",
+      "revision": 221,
+      "outcome": "NO_ERRORS_IN_IMPLEMENTED_CHECKS",
+      "errors": 0,
+      "warnings": 0,
+      "bound_to_this_revision": true
+    },
+    {
+      "check": "DRC",
+      "revision": 221,
+      "outcome": "NO_ERRORS_IN_IMPLEMENTED_CHECKS",
+      "errors": 0,
+      "warnings": 2,
+      "bound_to_this_revision": true
+    },
+    {
+      "check": "MECH",
+      "revision": 221,
+      "outcome": "NO_ERRORS_IN_IMPLEMENTED_CHECKS",
+      "errors": 0,
+      "warnings": 0,
+      "bound_to_this_revision": true
+    }
+  ],
+  "blocking_reasons": [],
+  "files": [
+    {
+      "name": "ESP32_C3_Environment_Dashboard-F_Cu.gtl",
+      "bytes": 279802,
+      "sha256": "25dc5638691c786ce1b2aa62d6d49f5e9f86cf72531fe6b431637a7557e46993",
+      "kind": "gerber"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-B_Cu.gbl",
+      "bytes": 222249,
+      "sha256": "e98494c6f47a107978064ee38917029ebd7785a8a76e6fccf4db47de7ee404a7",
+      "kind": "gerber"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-F_Mask.gts",
+      "bytes": 2932,
+      "sha256": "daa5eeac163daec6226e0bc946a6ee42ec13b14796e66850612fdf6a8b092a87",
+      "kind": "gerber"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-B_Mask.gbs",
+      "bytes": 936,
+      "sha256": "08fa8458d3a1d324120904770bb99cc0e01cea6dadcdf415f0b3af78574f44b1",
+      "kind": "gerber"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-F_Paste.gtp",
+      "bytes": 2197,
+      "sha256": "2d000f93a851529c8fdc16eac8f46a44a672477b524981b018caef53457ec8df",
+      "kind": "gerber"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-B_Paste.gbp",
+      "bytes": 221,
+      "sha256": "c7b18c212d47e3f41356689f46b940aa63932017451f7aee51d5850fb41e7598",
+      "kind": "gerber"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-F_Silkscreen.gto",
+      "bytes": 6444,
+      "sha256": "010c45ab95cb1dc093a7348c4c042708348c5db42311effc598ad0b80d493e36",
+      "kind": "gerber"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-B_Silkscreen.gbo",
+      "bytes": 222,
+      "sha256": "f95e1301db4fb413903580498f3f1f368bd952bb3c7411462f3bd02e6fb8190a",
+      "kind": "gerber"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-Edge_Cuts.gm1",
+      "bytes": 374,
+      "sha256": "2797831a7949dbfec1df7b65902c929ec6875fe3974497260a98e7bc5d9de6de",
+      "kind": "gerber"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-PTH.drl",
+      "bytes": 1172,
+      "sha256": "3b0814e2dafffa4c91cda34fa3ea17cc87ae54d1f11c7f0d7ff736e3de138d37",
+      "kind": "drill"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-BOM.csv",
+      "bytes": 958,
+      "sha256": "ec03a9b1e07f7fb9345194131908734f92a595f8dc4c0cf4ce33ea6abab9f029",
+      "kind": "bom"
+    },
+    {
+      "name": "ESP32_C3_Environment_Dashboard-CPL.csv",
+      "bytes": 876,
+      "sha256": "90c0bcffddd9915bcef9ac11a6690f24c075791a6bb794005f07efda290b8eea",
+      "kind": "cpl"
+    }
+  ],
+  "statement": "Internal automated checks passed for this exact revision. This is NOT a manufacturing-ready claim: independent electrical engineering review and fabricator DFM review are still required.",
+  "not_verified": [
+    "Independent senior electronics engineering review",
+    "Fabricator DFM review of these exact files",
+    "Physical prototype / bench testing",
+    "Checks listed as not implemented in the ERC/DRC/MECH reports"
+  ]
+}

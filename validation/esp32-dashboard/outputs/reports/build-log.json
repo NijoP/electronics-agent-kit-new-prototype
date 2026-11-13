@@ -1,0 +1,1141 @@
+{
+  "commands": [
+    {
+      "command": "AddRequirement",
+      "revision": 1,
+      "warnings": []
+    },
+    {
+      "command": "AddRequirement",
+      "revision": 2,
+      "warnings": []
+    },
+    {
+      "command": "AddRequirement",
+      "revision": 3,
+      "warnings": []
+    },
+    {
+      "command": "AddRequirement",
+      "revision": 4,
+      "warnings": []
+    },
+    {
+      "command": "AddRequirement",
+      "revision": 5,
+      "warnings": []
+    },
+    {
+      "command": "AddRequirement",
+      "revision": 6,
+      "warnings": []
+    },
+    {
+      "command": "AddRequirement",
+      "revision": 7,
+      "warnings": []
+    },
+    {
+      "command": "AddRequirement",
+      "revision": 8,
+      "warnings": []
+    },
+    {
+      "command": "UpsertComponentDefinition",
+      "revision": 9,
+      "warnings": []
+    },
+    {
+      "command": "UpsertComponentDefinition",
+      "revision": 10,
+      "warnings": []
+    },
+    {
+      "command": "UpsertComponentDefinition",
+      "revision": 11,
+      "warnings": []
+    },
+    {
+      "command": "UpsertComponentDefinition",
+      "revision": 12,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 13,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 14,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 15,
+      "warnings": [
+        "imported library component AMS1117-3.3_SOT-223 into the project"
+      ]
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 16,
+      "warnings": [
+        "imported library component C_0805 into the project"
+      ]
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 17,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 18,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 19,
+      "warnings": [
+        "imported library component C_0603 into the project"
+      ]
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 20,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 21,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 22,
+      "warnings": [
+        "imported library component R_0603 into the project"
+      ]
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 23,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 24,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 25,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 26,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 27,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 28,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 29,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 30,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 31,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 32,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 33,
+      "warnings": [
+        "imported library component LED_0603 into the project"
+      ]
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 34,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 35,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 36,
+      "warnings": [
+        "imported library component CONN_1x04_P2.54 into the project"
+      ]
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 37,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 38,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 39,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 40,
+      "warnings": []
+    },
+    {
+      "command": "PlaceSymbol",
+      "revision": 41,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 42,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 43,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 44,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 45,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 46,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 47,
+      "warnings": []
+    },
+    {
+      "command": "SetNoConnect",
+      "revision": 48,
+      "warnings": []
+    },
+    {
+      "command": "SetNoConnect",
+      "revision": 49,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 50,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 51,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 52,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 53,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 54,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 55,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 56,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 57,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 58,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 59,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 60,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 61,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 62,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 63,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 64,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 65,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 66,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 67,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 68,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 69,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 70,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 71,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 72,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 73,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 74,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 75,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 76,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 77,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 78,
+      "warnings": []
+    },
+    {
+      "command": "SetNoConnect",
+      "revision": 79,
+      "warnings": []
+    },
+    {
+      "command": "SetNoConnect",
+      "revision": 80,
+      "warnings": []
+    },
+    {
+      "command": "SetNoConnect",
+      "revision": 81,
+      "warnings": []
+    },
+    {
+      "command": "SetNoConnect",
+      "revision": 82,
+      "warnings": []
+    },
+    {
+      "command": "SetNoConnect",
+      "revision": 83,
+      "warnings": []
+    },
+    {
+      "command": "SetNoConnect",
+      "revision": 84,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 85,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 86,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 87,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 88,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 89,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 90,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 91,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 92,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 93,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 94,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 95,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 96,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 97,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 98,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 99,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 100,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 101,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 102,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 103,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 104,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 105,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 106,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 107,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 108,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 109,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 110,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 111,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 112,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 113,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 114,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 115,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 116,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 117,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 118,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 119,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 120,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 121,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 122,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 123,
+      "warnings": []
+    },
+    {
+      "command": "LabelPin",
+      "revision": 124,
+      "warnings": []
+    },
+    {
+      "command": "SetStackup",
+      "revision": 124,
+      "warnings": [
+        "no-op: SetStackup: no change"
+      ]
+    },
+    {
+      "command": "SetBoardOutline",
+      "revision": 125,
+      "warnings": []
+    },
+    {
+      "command": "SetDesignRules",
+      "revision": 126,
+      "warnings": []
+    },
+    {
+      "command": "UpsertNetClass",
+      "revision": 127,
+      "warnings": []
+    },
+    {
+      "command": "UpsertNetClass",
+      "revision": 128,
+      "warnings": []
+    },
+    {
+      "command": "SetNetCurrent",
+      "revision": 129,
+      "warnings": []
+    },
+    {
+      "command": "SetNetVoltage",
+      "revision": 130,
+      "warnings": []
+    },
+    {
+      "command": "SetNetCurrent",
+      "revision": 131,
+      "warnings": []
+    },
+    {
+      "command": "SetNetVoltage",
+      "revision": 132,
+      "warnings": []
+    },
+    {
+      "command": "SetNetCurrent",
+      "revision": 133,
+      "warnings": []
+    },
+    {
+      "command": "SyncSchematicToPcb",
+      "revision": 134,
+      "warnings": [
+        "29 new footprint(s) staged outside the board; place them (AutoPlace or manual)"
+      ]
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 135,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 136,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 137,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 138,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 139,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 140,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 141,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 142,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 143,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 144,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 145,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 146,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 147,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 148,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 149,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 150,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 151,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 152,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 153,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 154,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 155,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 156,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 157,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 158,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 159,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 160,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 161,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 162,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 163,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 164,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 165,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 166,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 167,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 168,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 169,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 170,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 171,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 172,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 173,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 174,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 175,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 176,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 177,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 178,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 179,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 180,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 181,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 182,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 183,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 184,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 185,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 186,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 187,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 188,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 189,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 190,
+      "warnings": []
+    },
+    {
+      "command": "MoveFootprint",
+      "revision": 191,
+      "warnings": []
+    },
+    {
+      "command": "SetFootprintLocked",
+      "revision": 192,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 193,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 194,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 195,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 196,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 197,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 198,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 199,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 200,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 201,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 202,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 203,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 204,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 205,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 206,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 207,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 208,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 209,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 210,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 211,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 212,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 213,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 214,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 215,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 216,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 217,
+      "warnings": []
+    },
+    {
+      "command": "AddTrack",
+      "revision": 218,
+      "warnings": []
+    },
+    {
+      "command": "AutoRoute",
+      "revision": 219,
+      "warnings": [
+        "router: 62 connection(s) routed, 0 failed"
+      ]
+    },
+    {
+      "command": "AddZone",
+      "revision": 220,
+      "warnings": []
+    },
+    {
+      "command": "AddZone",
+      "revision": 221,
+      "warnings": []
+    }
+  ],
+  "commands_executed": 222,
+  "erc_after_schematic": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "placement_routing_notes": [
+    "router: 62 connection(s) routed, 0 failed"
+  ],
+  "project_revision": 221
+}

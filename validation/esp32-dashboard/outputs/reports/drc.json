@@ -1,0 +1,124 @@
+{
+  "check": "DRC",
+  "project_id": "prj_17445941672740ee",
+  "revision": 221,
+  "input_sha256": "734ad996b3ec5c3afe629f75245b576f6f5c2fe45df3fd0f1d07269c3a37717e",
+  "tool": "eak-validation 0.1.0",
+  "rules": [
+    {
+      "id": "DRC-001",
+      "description": "Minimum / net-class track width",
+      "parameters": "min 0.150 mm",
+      "source": "Project constraints"
+    },
+    {
+      "id": "DRC-002",
+      "description": "Copper clearance",
+      "parameters": "min 0.150 mm, net classes, declared net voltages",
+      "source": "Project constraints; IPC-2221B Table 6-1 B2 for declared voltages (table unverified against standard text)"
+    },
+    {
+      "id": "DRC-003",
+      "description": "Shorts between nets",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "DRC-004",
+      "description": "Unrouted connections",
+      "parameters": "physical copper connectivity incl. zone fill islands (0.1 mm raster)",
+      "source": "EAK"
+    },
+    {
+      "id": "DRC-005",
+      "description": "Board edge clearance",
+      "parameters": "0.300 mm",
+      "source": "Project constraints"
+    },
+    {
+      "id": "DRC-006",
+      "description": "Drill size / annular ring",
+      "parameters": "drill ≥ 0.300 mm, ring ≥ 0.130 mm",
+      "source": "Project constraints"
+    },
+    {
+      "id": "DRC-007",
+      "description": "Courtyard overlap",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "DRC-008",
+      "description": "Track current capacity",
+      "parameters": "ΔT 10 °C, outer copper 1 oz",
+      "source": "IPC-2221 (via DESK audit; verified_against_standard = false)"
+    },
+    {
+      "id": "DRC-009",
+      "description": "Board outline",
+      "parameters": "closed simple polygon",
+      "source": "EAK"
+    },
+    {
+      "id": "DRC-010",
+      "description": "Schematic/PCB net consistency",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "DRC-011",
+      "description": "Missing footprints",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "DRC-012",
+      "description": "Dangling tracks",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "DRC-013",
+      "description": "Zone islands",
+      "parameters": "",
+      "source": "EAK"
+    }
+  ],
+  "findings": [
+    {
+      "rule_id": "DRC-013",
+      "severity": "warning",
+      "message": "zone zon_8d52c19f902745d3 has 9 isolated copper island(s) not connected to any GND pad",
+      "objects": [
+        "zon_8d52c19f902745d3"
+      ],
+      "location": null
+    },
+    {
+      "rule_id": "DRC-013",
+      "severity": "warning",
+      "message": "zone zon_a70eb62219c04f79 has 16 isolated copper island(s) not connected to any GND pad",
+      "objects": [
+        "zon_a70eb62219c04f79"
+      ],
+      "location": null
+    }
+  ],
+  "outcome": "NO_ERRORS_IN_IMPLEMENTED_CHECKS",
+  "errors": 0,
+  "warnings": 2,
+  "not_implemented": [
+    "Controlled impedance and signal integrity",
+    "Differential-pair length/skew matching",
+    "Thermal reliefs, thermal analysis and copper current density in zones",
+    "Creepage (surface path) analysis — only voltage-based clearance (air gap) is checked",
+    "Silkscreen, solder-mask sliver and paste checks",
+    "Copper-to-hole and hole-to-hole spacing",
+    "Acid traps and copper slivers"
+  ],
+  "limitations": [
+    "Zone fill connectivity is evaluated on a 0.1 mm raster; necks narrower than the raster may be misjudged",
+    "Two copper layers only",
+    "Pad shapes: rectangle, circle, oval (no rounded-rectangle or custom polygons)"
+  ]
+}

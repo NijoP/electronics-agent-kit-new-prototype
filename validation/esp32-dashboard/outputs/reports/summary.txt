@@ -1,0 +1,8 @@
+project revision 221
+router: 62 connection(s) routed, 0 failed
+ERC: revision 221 errors 0 warnings 0 outcome NoErrorsInImplementedChecks
+DRC: revision 221 errors 0 warnings 2 outcome NoErrorsInImplementedChecks
+  DRC-013 Warning zone zon_8d52c19f902745d3 has 9 isolated copper island(s) not connected to any GND pad
+  DRC-013 Warning zone zon_a70eb62219c04f79 has 16 isolated copper island(s) not connected to any GND pad
+MECH: revision 221 errors 0 warnings 0 outcome NoErrorsInImplementedChecks
+manufacturing package: InternallyVerifiedReleaseCandidate; blocking: []; files: 12; re-verify problems: []
