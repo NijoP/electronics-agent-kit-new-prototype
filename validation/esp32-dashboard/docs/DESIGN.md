@@ -32,7 +32,10 @@ USB-C J1 ──VBUS──► AMS1117-3.3 U2 ──+3V3──► ESP32-C3-WROOM-0
 Firmware (esp32c3/) ── uses ── dashboard-core (no_std: pins, SHT4x driver, frame protocol, model, OLED)
       │ USB Serial/JTAG CDC: "$EAKD,1,seq,uptime,T,RH,VBUS,btn,faults*CRC\r\n" at 1 Hz
       ▼
-dashboard-host (std): serial reader or simulated firmware ─► Dashboard model ─► HTTP UI and JSON API
+dashboard-host (std): serial reader or simulated firmware ─► Dashboard model ─► JSON API + static UI
+      │ GET /api/state, /api/history, /display.txt (1 Hz poll)
+      ▼
+dashboard-ui (React + TypeScript, Vite build → static dist/ served by dashboard-host)
 ```
 
 There is a single source of truth for pins:
@@ -123,5 +126,15 @@ Dropout headroom at VBUS = 4.75 V is 1.45 V, against an assumed maximum dropout 
 - **`firmware/dashboard-host`**:
   - `dashboard --serial <device>` reads the real board.
   - `dashboard --simulate [--faults]` runs the same `Sampler` code against a byte-level SHT40 model, with optional NACK, CRC and line-noise fault injection.
-  - Both modes serve `http://127.0.0.1:8080/`: a live page plus `/api/state`, `/api/history` and `/display.txt`. `/display.txt` is the OLED frame buffer rendered by the firmware's renderer.
+  - Both modes serve `http://127.0.0.1:8080/`.
+    - The JSON API: `/api/state`, `/api/history` and `/display.txt`. `/display.txt` is the OLED frame buffer, drawn by the firmware's own renderer.
+    - The built dashboard page from `dashboard-ui/dist`, which `--ui-dir` can override.
+  - Only GET is served. Static paths are limited to at most two safe segments with known file types, so there is no traversal.
+  - The Content-Security-Policy allows only same-origin script and style, with no inline code.
+  - If the page has not been built, `/` answers 503 with build instructions, while the API keeps working.
   - Simulated data is labelled SIMULATED in the UI and in the API.
+- **`dashboard-ui`**: React 19 + TypeScript (strict) + Vite. Approved by the captain for this acceptance project only; it is kept separate from the EAK desktop app.
+  - It polls the API once a second.
+  - It shows the latest values with statistics, link health (CRC-rejected frames, sequence gaps, sensor faults), alarms, and per-quantity history charts with the alarm threshold. A failed sensor read appears as a gap in the line; it is never interpolated.
+  - It also shows a canvas mirror of the OLED.
+  - There is no Node server: `npm run build` (`tsc --noEmit` then `vite build`) writes static files only.

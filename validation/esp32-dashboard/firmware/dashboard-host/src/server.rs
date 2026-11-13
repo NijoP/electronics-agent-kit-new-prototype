@@ -1,17 +1,78 @@
 //! Minimal HTTP/1.1 dashboard server (std only).
 //!
-//! Routes: `GET /` (dashboard page), `GET /api/state` (latest values, statistics, alarms,
-//! link health), `GET /api/history` (rolling samples). Only GET is served, request heads are
-//! capped at 8 KiB, and the default bind address is loopback.
+//! Routes:
+//! - `GET /api/state`: latest values, statistics, alarms and link health.
+//! - `GET /api/history`: rolling samples.
+//! - `GET /display.txt`: the OLED frame-buffer mirror.
+//! - `GET /` and `GET /assets/*`: the React + TypeScript dashboard page.
+//!
+//! The page is the static Vite bundle built from `validation/esp32-dashboard/dashboard-ui`
+//! (`npm ci && npm run build` writes `dashboard-ui/dist`), served under a CSP with no inline
+//! script. Only GET is served, request heads are capped at 8 KiB, and the default bind
+//! address is loopback.
 
 use crate::{host_ms, Shared};
 use dashboard_core::model::{Alarm, Stats};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 const MAX_HEAD: usize = 8 * 1024;
+
+/// Same-origin module script and stylesheet only: no inline script or style, no plugins,
+/// no framing.
+pub const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
+/// `dashboard-ui/dist` next to this crate's workspace (where `npm run build` writes it).
+pub fn default_ui_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dashboard-ui/dist")
+}
+
+fn content_type(name: &str) -> Option<&'static str> {
+    Some(match name.rsplit_once('.')?.1 {
+        "html" => "text/html; charset=utf-8",
+        "js" => "text/javascript; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "ico" => "image/x-icon",
+        "woff2" => "font/woff2",
+        _ => return None,
+    })
+}
+
+/// Maps a request path to a file in the UI bundle, or `None` if it is not a servable path.
+///
+/// Only these are served:
+/// - `/` (mapped to `index.html`);
+/// - paths of at most two segments, where each segment uses only `[A-Za-z0-9._-]`, does not
+///   start with `.`, and the last segment has a known extension.
+///
+/// No percent-decoding is done, so traversal, hidden files and arbitrary types are refused.
+pub fn ui_file(ui_dir: &Path, path: &str) -> Option<(PathBuf, &'static str)> {
+    let rel = if path == "/" {
+        "index.html"
+    } else {
+        path.strip_prefix('/')?
+    };
+    let segments: Vec<&str> = rel.split('/').collect();
+    let safe = |s: &&str| {
+        !s.is_empty()
+            && !s.starts_with('.')
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    };
+    if segments.len() > 2 || !segments.iter().all(safe) {
+        return None;
+    }
+    let ctype = content_type(segments.last()?)?;
+    let mut file = ui_dir.to_path_buf();
+    file.extend(&segments);
+    Some((file, ctype))
+}
 
 fn stats(s: Option<Stats>, scale: f64) -> Value {
     match s {
@@ -108,14 +169,14 @@ pub fn display_ascii(state: &Shared) -> String {
 fn respond(stream: &mut TcpStream, status: &str, ctype: &str, body: &[u8]) -> std::io::Result<()> {
     write!(
         stream,
-        "HTTP/1.1 {status}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'self'; script-src 'unsafe-inline' 'self'; style-src 'unsafe-inline'\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {status}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: {CSP}\r\nConnection: close\r\n\r\n",
         body.len()
     )?;
     stream.write_all(body)?;
     stream.flush()
 }
 
-pub fn handle(mut stream: TcpStream, state: &Shared) -> std::io::Result<()> {
+pub fn handle(mut stream: TcpStream, state: &Shared, ui_dir: &Path) -> std::io::Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut request_line = String::new();
@@ -147,15 +208,14 @@ pub fn handle(mut stream: TcpStream, state: &Shared) -> std::io::Result<()> {
             b"GET only",
         );
     }
-    match path.split('?').next().unwrap_or("") {
-        "/" | "/index.html" => respond(
-            &mut stream,
-            "200 OK",
-            "text/html; charset=utf-8",
-            PAGE.as_bytes(),
-        ),
+    let path = path.split('?').next().unwrap_or("");
+    match path {
         "/api/state" => {
             let body = serde_json::to_vec(&state_json(state)).expect("json");
+            respond(&mut stream, "200 OK", "application/json", &body)
+        }
+        "/api/history" => {
+            let body = serde_json::to_vec(&history_json(state)).expect("json");
             respond(&mut stream, "200 OK", "application/json", &body)
         }
         "/display.txt" => {
@@ -167,74 +227,61 @@ pub fn handle(mut stream: TcpStream, state: &Shared) -> std::io::Result<()> {
                 body.as_bytes(),
             )
         }
-        "/api/history" => {
-            let body = serde_json::to_vec(&history_json(state)).expect("json");
-            respond(&mut stream, "200 OK", "application/json", &body)
-        }
-        _ => respond(&mut stream, "404 Not Found", "text/plain", b"not found"),
+        _ => match ui_file(ui_dir, path) {
+            Some((file, ctype)) => match std::fs::read(&file) {
+                Ok(body) => respond(&mut stream, "200 OK", ctype, &body),
+                Err(_) if path == "/" || path == "/index.html" => respond(
+                    &mut stream,
+                    "503 Service Unavailable",
+                    "text/plain; charset=utf-8",
+                    b"dashboard UI bundle not built: run `npm ci && npm run build` in validation/esp32-dashboard/dashboard-ui, or pass --ui-dir. The JSON API (/api/state, /api/history) is available.",
+                ),
+                Err(_) => respond(&mut stream, "404 Not Found", "text/plain", b"not found"),
+            },
+            None => respond(&mut stream, "404 Not Found", "text/plain", b"not found"),
+        },
     }
 }
 
-/// Serve forever (one short-lived thread per connection).
-pub fn serve(listener: TcpListener, state: Shared) {
+/// Serve forever (one short-lived thread per connection). `ui_dir` holds the built
+/// dashboard page (`index.html` + `assets/`).
+pub fn serve(listener: TcpListener, state: Shared, ui_dir: PathBuf) {
+    let ui_dir = Arc::new(ui_dir);
     for stream in listener.incoming().flatten() {
-        let st = state.clone();
+        let (st, ui) = (state.clone(), ui_dir.clone());
         std::thread::spawn(move || {
-            let _ = handle(stream, &st);
+            let _ = handle(stream, &st, &ui);
         });
     }
 }
 
-/// Dashboard page. All values are inserted with `textContent` (no HTML injection).
-pub const PAGE: &str = r##"<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP32-C3 Environment Dashboard</title>
-<style>
-body{font-family:system-ui,sans-serif;margin:0;background:#f4f5f7;color:#1d2330}
-header{background:#1d2330;color:#fff;padding:12px 20px}
-header h1{margin:0;font-size:20px} #src{font-size:13px;opacity:.85;margin-top:4px}
-#sim{display:none;background:#ffe08a;color:#3d2f00;padding:6px 20px;font-weight:600}
-main{padding:16px 20px;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.card{background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.card h2{margin:0 0 6px;font-size:13px;text-transform:uppercase;color:#5a6275;letter-spacing:.04em}
-.v{font-size:34px;font-weight:650} .s{font-size:12px;color:#5a6275;margin-top:4px}
-.wide{grid-column:1/-1} .alarm{display:inline-block;background:#d93a3a;color:#fff;border-radius:4px;padding:2px 8px;margin:2px;font-size:13px}
-.ok{color:#227a3a;font-weight:600} svg{width:100%;height:220px;background:#fafbfc;border-radius:6px}
-</style></head><body>
-<header><h1>ESP32-C3 Environment Dashboard</h1><div id="src">connecting…</div></header>
-<div id="sim">SIMULATED DATA — not a physical hardware measurement</div>
-<main>
-<div class="card"><h2>Temperature</h2><div class="v" id="t">–</div><div class="s" id="ts"></div></div>
-<div class="card"><h2>Relative humidity</h2><div class="v" id="h">–</div><div class="s" id="hs"></div></div>
-<div class="card"><h2>USB VBUS</h2><div class="v" id="vb">–</div><div class="s" id="vs"></div></div>
-<div class="card"><h2>Link</h2><div class="v" id="seq">–</div><div class="s" id="link"></div></div>
-<div class="card wide"><h2>Alarms</h2><div id="alarms"></div></div>
-<div class="card wide"><h2>History (temperature °C red, humidity % blue)</h2><svg id="chart" viewBox="0 0 600 220" preserveAspectRatio="none"></svg></div>
-</main>
-<script>
-const $=id=>document.getElementById(id);
-const f=(v,d,u)=>v===null||v===undefined?'no data':v.toFixed(d)+u;
-const st=(s,d,u)=>s?`min ${s.min.toFixed(d)} · mean ${s.mean.toFixed(d)} · max ${s.max.toFixed(d)} ${u} (${s.count} samples)`:'no samples';
-function line(vals,lo,hi,color){const n=vals.length;if(n<2)return'';let p='';
- vals.forEach((v,i)=>{if(v===null)return;const x=i*600/(n-1),y=210-(v-lo)/(hi-lo||1)*200;p+=(p?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)});
- return `<path d="${p}" fill="none" stroke="${color}" stroke-width="2"/>`;}
-async function tick(){try{
- const s=await (await fetch('/api/state')).json();
- $('src').textContent=s.source; $('sim').style.display=s.simulated?'block':'none';
- const l=s.latest||{};
- $('t').textContent=f(l.temperature_c,2,' °C'); $('ts').textContent=st(s.stats.temperature_c,2,'°C');
- $('h').textContent=f(l.humidity_pct,1,' %'); $('hs').textContent=st(s.stats.humidity_pct,1,'%');
- $('vb').textContent=f(l.vbus_v,2,' V'); $('vs').textContent=st(s.stats.vbus_v,2,'V');
- $('seq').textContent=l.seq===undefined?'–':'#'+l.seq;
- $('link').textContent=`${s.link.frames_ok} ok · ${s.link.frames_rejected} rejected · ${s.link.sequence_gaps} gaps · sensor faults ${l.sensor_faults??'–'} · button ${l.button_pressed?'PRESSED':'released'}`;
- const a=$('alarms'); a.replaceChildren();
- if(!s.alarms.length){const o=document.createElement('span');o.className='ok';o.textContent='No active alarms';a.append(o);}
- s.alarms.forEach(x=>{const e=document.createElement('span');e.className='alarm';e.textContent=x;a.append(e);});
- const h=await (await fetch('/api/history')).json();
- const T=h.rows.map(r=>r[2]),H=h.rows.map(r=>r[3]);
- const tv=T.filter(v=>v!==null),hv=H.filter(v=>v!==null);
- $('chart').innerHTML=line(T,Math.min(...tv)-0.5,Math.max(...tv)+0.5,'#d93a3a')+line(H,Math.min(...hv)-1,Math.max(...hv)+1,'#2f6fd6');
-}catch(e){$('src').textContent='dashboard server unreachable: '+e;}}
-tick(); setInterval(tick,1000);
-</script></body></html>
-"##;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_safe_bundle_paths_map_to_files() {
+        let d = Path::new("ui");
+        let (f, t) = ui_file(d, "/").unwrap();
+        assert_eq!((f, t), (d.join("index.html"), "text/html; charset=utf-8"));
+        let (f, t) = ui_file(d, "/assets/index-D5SW_sTU6.js").unwrap();
+        assert_eq!(f, d.join("assets").join("index-D5SW_sTU6.js"));
+        assert!(t.starts_with("text/javascript"));
+        for bad in [
+            "/../Cargo.toml",
+            "/assets/../../x.js",
+            "/assets/%2e%2e/x.js",
+            "/.git/config",
+            "/assets/.hidden.js",
+            "/a/b/c.js",
+            "//x.js",
+            "/assets/",
+            r"/assets\..\x.js",
+            "/main.rs",
+            "assets/x.js",
+            "/C:/x.js",
+        ] {
+            assert!(ui_file(d, bad).is_none(), "{bad}");
+        }
+    }
+}

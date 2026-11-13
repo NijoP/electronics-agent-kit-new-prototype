@@ -6,7 +6,7 @@ flashed or measured.** Every firmware and dashboard result below is either a hos
 unit/interface test or a simulation, and is labelled as such.
 
 **Run environment:** Windows 11, Git Bash, Rust 1.99.1 (`x86_64-pc-windows-gnu`, target
-`riscv32imc-unknown-none-elf`), EAK at `bedd9b5` (M1), 2026-11-13.
+`riscv32imc-unknown-none-elf`), Node 24.21.0 / npm 11.19.0 (dashboard UI build only), EAK at `bedd9b5` (M1), 2026-11-13.
 
 **Status values**
 - **PASS** — the command ran and its checks passed.
@@ -55,13 +55,14 @@ unit/interface test or a simulation, and is labelled as such.
 | # | Test | Command | Result | Evidence | Limitations |
 |---|---|---|---|---|---|
 | F1 | no_std core unit tests: CRC-8 datasheet vector (0xBEEF→0x92), SHT4x conversions, frame protocol, dashboard model, pin map, SSD1306 byte stream and rendering | `cd firmware && cargo test --release` | PASS: 19/19 | `firmware/dashboard-core/src/*.rs` | Host tests. |
-| F2 | SIMULATED end-to-end: firmware `Sampler` → byte-level SHT40 model (NACK while converting, CRC) → frames → parser → model → HTTP API, compared with simulator ground truth | `dashboard-host` tests `end_to_end.rs` | PASS: 3/3 (clean link, all 30 frames; |ΔT| < 0.06 °C, |ΔRH| < 0.1 %; with fault injection, every frame is accounted for and faults never become values; HTTP 404/405 handling) | `firmware/dashboard-host/tests/end_to_end.rs` | **Simulation.** The SHT40 model is written from the datasheet protocol, not from silicon. |
+| F2 | SIMULATED end-to-end: firmware `Sampler` → byte-level SHT40 model (NACK while converting, CRC) → frames → parser → model → HTTP API, compared with simulator ground truth | `dashboard-host` tests `end_to_end.rs` | PASS: 4/4 (clean link, all 30 frames; |ΔT| < 0.06 °C, |ΔRH| < 0.1 %; with fault injection, every frame is accounted for and faults never become values; UI bundle and assets served, traversal/hidden/unknown paths 404, POST 405, CSP without `unsafe-inline`; missing bundle gives 503 while the API works). Plus 4/4 `dashboard-host` unit tests (static path mapping refuses traversal) | `firmware/dashboard-host/tests/end_to_end.rs` | **Simulation.** The SHT40 model is written from the datasheet protocol, not from silicon. |
 | F3 | Device firmware builds for ESP32-C3 (`riscv32imc-unknown-none-elf`, esp-hal 1.2.2, no ESP-IDF) | `cd firmware/esp32c3 && cargo build --release` | PASS: ELF with `esp_app_desc`, .text 25 KB | `firmware/esp32c3/src/main.rs` | Firmware pins are compile-time asserted against `pins.rs`. |
 | F4 | Firmware runs on hardware (flash, boot, USB enumeration, I2C to a real SHT40/OLED, ADC accuracy) | — | NOT VERIFIED | — | No hardware available. `espflash` not run. |
-| F5 | Live dashboard in a browser | `cargo run --release --bin dashboard -- --simulate --seed 42 --faults --bind 127.0.0.1:8093`, opened in Chrome | PASS (simulated data): values, statistics, link counters (CRC-rejected frame and sequence gap shown), history chart and the SIMULATED banner all update every second | screenshot kept outside the repo by the task runner | Simulated data path. The `--serial` path is NOT VERIFIED against a device. |
+| F5 | Live React + TypeScript dashboard in a browser | `cd dashboard-ui && npm ci && npm run build`, then `cd firmware && cargo run --release --bin dashboard -- --simulate --faults`, opened in Chrome (chrome-devtools-axi) at 1280×1100 | PASS (simulated data): values, statistics, link counters (CRC-rejected frame, sequence gap, sensor faults), alarms with the last link error, temperature and humidity history with gaps for failed reads, OLED mirror and the SIMULATED banner all update every second. The browser console is empty: no CSP violations and no failed requests. Network: index, JS and CSS assets, /api/state, /api/history and /display.txt all 200 | screenshot kept outside the repo by the task runner | Simulated data path. The `--serial` path is NOT VERIFIED against a device. |
 | F6 | SSD1306 init sequence correct for real modules | — | NOT VERIFIED | `firmware/dashboard-core/src/display.rs` | Common sequence; not checked against the Solomon Systech datasheet or a module. |
 | F7 | Lint and format | `cargo fmt --check` + `cargo clippy --all-targets -D warnings` in `design/`, `firmware/`, `firmware/esp32c3/` | PASS | — | — |
 | F8 | Python-free | `bash scripts/check-no-python.sh` | PASS | — | — |
+| F9 | Dashboard UI type-check and production build | `cd dashboard-ui && npm ci && npm run build` (`tsc --noEmit` strict, then `vite build`); then `cargo test --release -p dashboard-host --test end_to_end -- --ignored` serves the real bundle | PASS: 0 type errors; bundle = index.html + 1 JS (224.6 kB, 70.6 kB gzip) + 1 CSS + favicon; the ignored real-bundle test passes 1/1 | `dashboard-ui/src/*.tsx` | There are no UI unit tests: a test runner would be a further dependency that was not requested. UI behaviour is covered by F5 (browser) and the API tests in F2. |
 
 ## 5. Datasheet provenance
 
@@ -99,6 +100,6 @@ unit/interface test or a simulation, and is labelled as such.
 
 | Item | Status |
 |---|---|
-| Rust only, no Python, no Node/TS backend service | Compliant (`scripts/check-no-python.sh` PASS). |
-| New dependencies: `esp-hal`, `esp-bootloader-esp-idf`, `embedded-hal`, `nb` (and `serde_json`, already an EAK workspace dependency) | **Awaiting captain approval.** Submitted as a needs-decision with justification; to be removed if refused. |
-| Dashboard UI | **Non-compliant pending decision.** The page served by the Rust `dashboard-host` uses plain inline JavaScript, not React + TypeScript. A React + TypeScript + Vite rewrite has been proposed. |
+| Rust only, no Python, no Node/TS backend service | Compliant (`scripts/check-no-python.sh` PASS). Node is used only as the frontend build tool; at run time the Rust `dashboard-host` serves the static bundle. |
+| New dependencies: `esp-hal`, `esp-bootloader-esp-idf`, `embedded-hal`, `nb` (and `serde_json`, already an EAK workspace dependency) | **Approved by the captain (2026-11-13 13:21 UTC), only for the `validation/esp32-dashboard` firmware.** They live in this project's own Cargo workspaces and are never an EAK core dependency. |
+| Dashboard UI | **Compliant. React + TypeScript + Vite served by the Rust host, approved by the captain (2026-11-13 13:21 UTC) only for this acceptance project.** The UI lives in `dashboard-ui/`, separate from the EAK desktop app. The earlier inline-JavaScript page has been removed. npm dependencies are pinned exactly in `package.json`/`package-lock.json`: `react`, `react-dom` 19.3.1; dev: `typescript` 7.0.2, `vite` 8.3.8, `@vitejs/plugin-react` 6.3.0, `@types/react`, `@types/react-dom` 19.3.0. |

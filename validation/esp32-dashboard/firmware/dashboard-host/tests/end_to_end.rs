@@ -6,6 +6,7 @@ use dashboard_host::producer::{run_simulation, sim_environment};
 use dashboard_host::{server, shared, Source};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::PathBuf;
 
 fn get(addr: std::net::SocketAddr, path: &str) -> (String, String) {
     let mut s = TcpStream::connect(addr).unwrap();
@@ -17,11 +18,15 @@ fn get(addr: std::net::SocketAddr, path: &str) -> (String, String) {
 }
 
 fn start(seed: u64, faults: bool, frames: u64) -> std::net::SocketAddr {
+    start_with_ui(seed, faults, frames, server::default_ui_dir())
+}
+
+fn start_with_ui(seed: u64, faults: bool, frames: u64, ui: PathBuf) -> std::net::SocketAddr {
     let state = shared(Source::Simulated { seed, faults });
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     let st = state.clone();
-    std::thread::spawn(move || server::serve(listener, st));
+    std::thread::spawn(move || server::serve(listener, st, ui));
     run_simulation(state, seed, faults, Some(frames), 0);
     addr
 }
@@ -73,21 +78,105 @@ fn faults_are_counted_and_never_turned_into_fake_values() {
     assert!(count < ok, "{count} < {ok}");
 }
 
+/// A throwaway UI bundle (index.html + one asset) in a unique temp directory.
+fn fake_bundle(tag: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!(
+        "esp32-dashboard-ui-{tag}-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("assets")).unwrap();
+    std::fs::write(
+        dir.join("index.html"),
+        "<!DOCTYPE html><script type=\"module\" src=\"/assets/app-1.js\"></script>",
+    )
+    .unwrap();
+    std::fs::write(dir.join("assets/app-1.js"), "export {};").unwrap();
+    std::fs::write(dir.join("secret.txt"), "not served").unwrap();
+    dir
+}
+
 #[test]
-fn page_is_served_and_other_methods_and_paths_are_refused() {
-    let addr = start(5, false, 2);
+fn ui_bundle_api_and_oled_are_served_and_other_methods_and_paths_are_refused() {
+    let ui = fake_bundle("serve");
+    let addr = start_with_ui(5, false, 2, ui.clone());
     let (head, body) = get(addr, "/");
-    assert!(head.contains("text/html"));
-    assert!(body.contains("fetch('/api/state')") && body.contains("SIMULATED DATA"));
+    assert!(
+        head.starts_with("HTTP/1.1 200") && head.contains("text/html"),
+        "{head}"
+    );
+    assert!(body.contains("/assets/app-1.js"));
+    assert!(
+        head.contains("script-src 'self';"),
+        "no inline script allowed: {head}"
+    );
+    assert!(!head.contains("unsafe-inline"), "{head}");
+    let (head, js) = get(addr, "/assets/app-1.js");
+    assert!(
+        head.starts_with("HTTP/1.1 200") && head.contains("text/javascript"),
+        "{head}"
+    );
+    assert_eq!(js, "export {};");
+    for refused in [
+        "/secret.txt",
+        "/assets/../secret.txt",
+        "/assets/%2e%2e/secret.txt",
+        "/assets/missing.js",
+        "/nope",
+    ] {
+        let (head, _) = get(addr, refused);
+        assert!(head.starts_with("HTTP/1.1 404"), "{refused}: {head}");
+    }
     let (head, oled) = get(addr, "/display.txt");
     assert!(head.starts_with("HTTP/1.1 200"));
     assert_eq!(oled.lines().count(), 64);
     assert!(oled.lines().all(|l| l.len() == 128) && oled.contains('#'));
-    let (head, _) = get(addr, "/nope");
-    assert!(head.starts_with("HTTP/1.1 404"));
     let mut s = TcpStream::connect(addr).unwrap();
     write!(s, "POST /api/state HTTP/1.1\r\n\r\n").unwrap();
     let mut out = String::new();
     s.read_to_string(&mut out).unwrap();
     assert!(out.starts_with("HTTP/1.1 405"));
+    let _ = std::fs::remove_dir_all(ui);
+}
+
+#[test]
+fn missing_ui_bundle_is_reported_and_the_api_still_works() {
+    let addr = start_with_ui(
+        6,
+        false,
+        2,
+        std::env::temp_dir().join("esp32-dashboard-no-ui"),
+    );
+    let (head, body) = get(addr, "/");
+    assert!(head.starts_with("HTTP/1.1 503"), "{head}");
+    assert!(body.contains("npm run build"));
+    let (head, _) = get(addr, "/api/state");
+    assert!(head.starts_with("HTTP/1.1 200"));
+}
+
+/// Needs the real bundle: `npm ci && npm run build` in dashboard-ui first, then
+/// `cargo test --release -- --ignored`. Ignored by default so a plain `cargo test` never
+/// depends on Node.
+#[test]
+#[ignore = "needs dashboard-ui/dist (npm run build)"]
+fn built_react_bundle_is_served_with_its_assets() {
+    let addr = start(7, false, 2);
+    let (head, index) = get(addr, "/");
+    assert!(
+        head.starts_with("HTTP/1.1 200"),
+        "build dashboard-ui first: {head}"
+    );
+    assert!(index.contains("<div id=\"root\"></div>"));
+    let assets: Vec<&str> = index
+        .split('"')
+        .filter(|s| s.starts_with("/assets/"))
+        .collect();
+    assert!(assets.iter().any(|a| a.ends_with(".js")), "{index}");
+    assert!(assets.iter().any(|a| a.ends_with(".css")), "{index}");
+    for a in assets {
+        let (head, body) = get(addr, a);
+        assert!(head.starts_with("HTTP/1.1 200"), "{a}: {head}");
+        assert!(!body.is_empty());
+    }
 }

@@ -1,7 +1,7 @@
 //! `dashboard`: live web dashboard for the ESP32-C3 environment board.
 //!
 //! ```text
-//! dashboard --simulate [--seed N] [--faults] [--bind 127.0.0.1:8080] [--frames N] [--period-ms 1000]
+//! dashboard --simulate [--seed N] [--faults] [--bind 127.0.0.1:8080] [--frames N] [--period-ms 1000] [--ui-dir DIR]
 //! dashboard --serial <device>   (e.g. \\.\COM5 on Windows, /dev/ttyACM0 on Linux)
 //! ```
 //!
@@ -21,6 +21,7 @@ struct Args {
     bind: String,
     frames: Option<u64>,
     period_ms: u64,
+    ui_dir: std::path::PathBuf,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -31,6 +32,7 @@ fn parse_args() -> Result<Args, String> {
         bind: "127.0.0.1:8080".into(),
         frames: None,
         period_ms: SAMPLE_PERIOD_MS as u64,
+        ui_dir: server::default_ui_dir(),
     };
     let mut it = std::env::args().skip(1);
     while let Some(x) = it.next() {
@@ -41,12 +43,13 @@ fn parse_args() -> Result<Args, String> {
             "--seed" => a.seed = val()?.parse().map_err(|e| format!("--seed: {e}"))?,
             "--faults" => a.faults = true,
             "--bind" => a.bind = val()?,
+            "--ui-dir" => a.ui_dir = val()?.into(),
             "--frames" => a.frames = Some(val()?.parse().map_err(|e| format!("--frames: {e}"))?),
             "--period-ms" => {
                 a.period_ms = val()?.parse().map_err(|e| format!("--period-ms: {e}"))?
             }
             "-h" | "--help" => {
-                println!("dashboard [--simulate [--seed N] [--faults] [--frames N] [--period-ms MS]] [--serial DEVICE] [--bind ADDR]");
+                println!("dashboard [--simulate [--seed N] [--faults] [--frames N] [--period-ms MS]] [--serial DEVICE] [--bind ADDR] [--ui-dir DIR]");
                 std::process::exit(0);
             }
             other => return Err(format!("unknown argument {other}")),
@@ -77,6 +80,13 @@ fn main() {
         listener.local_addr().unwrap(),
         state.lock().unwrap().source.label()
     );
+    let ui_dir = a.ui_dir.clone();
+    if !ui_dir.join("index.html").is_file() {
+        eprintln!(
+            "warning: no dashboard UI bundle at {} (run `npm ci && npm run build` in validation/esp32-dashboard/dashboard-ui, or pass --ui-dir); serving the JSON API only",
+            ui_dir.display()
+        );
+    }
     let st = state.clone();
     let producer = std::thread::spawn(move || match a.serial {
         Some(p) => run_serial(st, p),
@@ -85,13 +95,13 @@ fn main() {
     if a.frames.is_some() {
         // Bounded run: serve while producing, then print the final state and exit.
         let st = state.clone();
-        std::thread::spawn(move || server::serve(listener, st));
+        std::thread::spawn(move || server::serve(listener, st, ui_dir));
         producer.join().unwrap();
         println!(
             "{}",
             serde_json::to_string_pretty(&server::state_json(&state)).unwrap()
         );
     } else {
-        server::serve(listener, state);
+        server::serve(listener, state, ui_dir);
     }
 }
