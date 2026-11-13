@@ -1,0 +1,18 @@
+[package]
+name = "eak-manufacturing"
+description = "EAK manufacturing compiler: Gerber, Excellon, BOM, CPL, revision-bound manifest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+eak-core.workspace = true
+eak-engineering.workspace = true
+eak-validation.workspace = true
+eak-runtime.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

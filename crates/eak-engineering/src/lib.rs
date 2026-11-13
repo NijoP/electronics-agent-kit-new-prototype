@@ -1,0 +1,17 @@
+//! # eak-engineering — deterministic engineering core
+//!
+//! * `ipc`     – trace ampacity, clearance, creepage, via current (provenance: DESK audit).
+//! * `calc`    – circuit calculations and engineering value parsing.
+//! * `netlist` – schematic connectivity → canonical nets.
+//! * `copper`  – PCB copper shapes, zone fill and physical connectivity.
+//! * `router`  – EAK's native two-layer grid router.
+//! * `placer`  – constructive footprint placement.
+//! * `scene3d` – board/component geometry for the 3D workspace and mechanical checks.
+
+pub mod calc;
+pub mod copper;
+pub mod ipc;
+pub mod netlist;
+pub mod placer;
+pub mod router;
+pub mod scene3d;

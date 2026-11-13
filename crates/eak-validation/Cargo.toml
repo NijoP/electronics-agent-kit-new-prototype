@@ -1,0 +1,15 @@
+[package]
+name = "eak-validation"
+description = "EAK verification engine: ERC, DRC, mechanical checks with revision-bound evidence"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+eak-core.workspace = true
+eak-engineering.workspace = true
+serde.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

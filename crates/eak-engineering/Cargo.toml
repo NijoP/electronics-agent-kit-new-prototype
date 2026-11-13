@@ -1,0 +1,14 @@
+[package]
+name = "eak-engineering"
+description = "EAK engineering core: calculations, connectivity, copper geometry, placement, routing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+eak-core.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

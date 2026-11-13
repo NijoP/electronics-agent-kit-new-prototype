@@ -1,0 +1,17 @@
+[package]
+name = "eak-runtime"
+description = "EAK runtime: typed command engine, transactions, undo/redo, journal, recovery, processes, tasks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+eak-core.workspace = true
+eak-engineering.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+rusqlite = { version = "0.37", features = ["bundled"] }
+
+[lints]
+workspace = true
