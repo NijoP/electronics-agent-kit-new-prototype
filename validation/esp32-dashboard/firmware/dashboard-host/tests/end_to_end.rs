@@ -79,6 +79,10 @@ fn page_is_served_and_other_methods_and_paths_are_refused() {
     let (head, body) = get(addr, "/");
     assert!(head.contains("text/html"));
     assert!(body.contains("fetch('/api/state')") && body.contains("SIMULATED DATA"));
+    let (head, oled) = get(addr, "/display.txt");
+    assert!(head.starts_with("HTTP/1.1 200"));
+    assert_eq!(oled.lines().count(), 64);
+    assert!(oled.lines().all(|l| l.len() == 128) && oled.contains('#'));
     let (head, _) = get(addr, "/nope");
     assert!(head.starts_with("HTTP/1.1 404"));
     let mut s = TcpStream::connect(addr).unwrap();

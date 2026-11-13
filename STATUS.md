@@ -69,3 +69,5 @@ installed. Development is proceeding directly in this repository.
 1. Tauri 2 desktop shell + React workspace bound to the command engine (Phase 1/4).
 2. Schematic and PCB editor canvases driving the same commands.
 3. Intelligence Engine: provider abstraction, typed tools over commands, approval flow.
+
+Validation project (ESP32-C3 dashboard built through EAK): [validation/esp32-dashboard/READINESS.md](validation/esp32-dashboard/READINESS.md)

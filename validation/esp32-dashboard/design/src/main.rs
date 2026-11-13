@@ -44,7 +44,8 @@ fn main() {
         std::fs::remove_dir_all(out.join("manufacturing")).expect("remove old package");
     }
 
-    let mut engine = Engine::create(&proj_dir, "ESP32-C3 Environment Dashboard").expect("create project");
+    let mut engine =
+        Engine::create(&proj_dir, "ESP32-C3 Environment Dashboard").expect("create project");
     let mut d = Driver::new(&mut engine);
     build_schematic(&mut d).unwrap_or_else(|e| panic!("schematic: {e}"));
     let erc_sch = erc::run(d.engine.project());
@@ -56,9 +57,18 @@ fn main() {
     let drc_r = drc::run(&p);
     let mech_r = mech::run(&p);
     let rep = out.join("reports");
-    write(&rep.join("erc.json"), &serde_json::to_string_pretty(&erc_r).unwrap());
-    write(&rep.join("drc.json"), &serde_json::to_string_pretty(&drc_r).unwrap());
-    write(&rep.join("mech.json"), &serde_json::to_string_pretty(&mech_r).unwrap());
+    write(
+        &rep.join("erc.json"),
+        &serde_json::to_string_pretty(&erc_r).unwrap(),
+    );
+    write(
+        &rep.join("drc.json"),
+        &serde_json::to_string_pretty(&drc_r).unwrap(),
+    );
+    write(
+        &rep.join("mech.json"),
+        &serde_json::to_string_pretty(&mech_r).unwrap(),
+    );
     write(
         &rep.join("engineering.json"),
         &serde_json::to_string_pretty(&report::compute()).unwrap(),
@@ -72,18 +82,31 @@ fn main() {
         .map(|n| {
             (
                 n.name.clone(),
-                json!(n.pins.iter().map(|x| format!("{}.{} ({})", x.refdes, x.pin, x.pin_name)).collect::<Vec<_>>()),
+                json!(n
+                    .pins
+                    .iter()
+                    .map(|x| format!("{}.{} ({})", x.refdes, x.pin, x.pin_name))
+                    .collect::<Vec<_>>()),
             )
         })
         .collect();
-    write(&rep.join("netlist.json"), &serde_json::to_string_pretty(&nets).unwrap());
+    write(
+        &rep.join("netlist.json"),
+        &serde_json::to_string_pretty(&nets).unwrap(),
+    );
 
     let cmds: Vec<_> = log
         .commands
         .iter()
         .map(|(n, rev, w)| json!({"command": n, "revision": rev, "warnings": w}))
         .collect();
-    let routing_notes: Vec<_> = notes.iter().filter(|n| n.starts_with("router") || n.starts_with("unrouted") || n.starts_with("could not")).cloned().collect();
+    let routing_notes: Vec<_> = notes
+        .iter()
+        .filter(|n| {
+            n.starts_with("router") || n.starts_with("unrouted") || n.starts_with("could not")
+        })
+        .cloned()
+        .collect();
     write(
         &rep.join("build-log.json"),
         &serde_json::to_string_pretty(&json!({

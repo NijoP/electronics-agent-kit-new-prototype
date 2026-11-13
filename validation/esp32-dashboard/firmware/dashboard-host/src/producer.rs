@@ -37,7 +37,13 @@ pub fn run_simulation(state: Shared, seed: u64, faults: bool, frames: Option<u64
     loop {
         let uptime = (clock.now_us() / 1000) as u32;
         let button = (n / 10) % 6 == 5; // pressed for 10 s every minute
-        let frame = sampler.sample(&mut sensor, &mut delay, Some(adc_pin_mv(&env, &mut rng)), button, uptime);
+        let frame = sampler.sample(
+            &mut sensor,
+            &mut delay,
+            Some(adc_pin_mv(&env, &mut rng)),
+            button,
+            uptime,
+        );
         let mut buf = [0u8; MAX_FRAME_LEN];
         let len = frame.encode(&mut buf).expect("frame fits");
         let mut wire = buf[..len].to_vec();
@@ -78,4 +84,3 @@ pub fn run_serial(state: Shared, path: String) {
         std::thread::sleep(Duration::from_secs(1));
     }
 }
-

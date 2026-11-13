@@ -54,7 +54,11 @@ impl<'a> Driver<'a> {
             // The engine refuses no-op commands; declaring a value that is already the
             // default (e.g. the stackup) is not an error for this driver.
             if let Some(eak_runtime::CommandError::NothingTo(why)) = &r.error {
-                self.log.commands.push((cmd.name(), r.revision_after, vec![format!("no-op: {why}")]));
+                self.log.commands.push((
+                    cmd.name(),
+                    r.revision_after,
+                    vec![format!("no-op: {why}")],
+                ));
                 return Ok(r);
             }
             return Err(format!("{} rejected: {:?}", cmd.name(), r.error));
@@ -65,7 +69,14 @@ impl<'a> Driver<'a> {
         Ok(r)
     }
 
-    fn place(&mut self, refdes: &str, comp: &str, value: Option<&str>, x: f64, y: f64) -> Result<Id, String> {
+    fn place(
+        &mut self,
+        refdes: &str,
+        comp: &str,
+        value: Option<&str>,
+        x: f64,
+        y: f64,
+    ) -> Result<Id, String> {
         let r = self.run(C::PlaceSymbol {
             sheet_id: None,
             component_id: comp.into(),
@@ -191,7 +202,13 @@ pub fn build_schematic(d: &mut Driver) -> Result<(), String> {
     ];
     for (i, (r, comp, val)) in cells.iter().enumerate() {
         let (col, row) = (i % 6, i / 6);
-        d.place(r, comp, *val, 30.0 + 45.0 * col as f64, 30.0 + 32.0 * row as f64)?;
+        d.place(
+            r,
+            comp,
+            *val,
+            30.0 + 45.0 * col as f64,
+            30.0 + 32.0 * row as f64,
+        )?;
     }
 
     // USB-C input (sink: 5.1 k on CC1/CC2 per USB Type-C rev 2.x Rd).
@@ -301,14 +318,15 @@ pub fn build_pcb(d: &mut Driver) -> Result<Vec<String>, String> {
             clearance: 150_000,
             via_drill: 300_000,
             via_diameter: 600_000,
-            nets: vec![pins::USB_DP.net.into(), pins::USB_DM.net.into(), "CC1".into(), "CC2".into()],
+            nets: vec![
+                pins::USB_DP.net.into(),
+                pins::USB_DM.net.into(),
+                "CC1".into(),
+                "CC2".into(),
+            ],
         },
     })?;
-    for (net, amps, volts) in [
-        ("VBUS", 0.5, 5.25),
-        ("+3V3", 0.5, 3.3),
-        ("GND", 0.5, 0.0),
-    ] {
+    for (net, amps, volts) in [("VBUS", 0.5, 5.25), ("+3V3", 0.5, 3.3), ("GND", 0.5, 0.0)] {
         d.run(C::SetNetCurrent {
             net: net.into(),
             amps: Some(amps),
@@ -352,9 +370,16 @@ pub fn build_pcb(d: &mut Driver) -> Result<Vec<String>, String> {
     d.put("R9", 8.5, 24.0, Rotation::R0)?;
     // Remaining passives in the open area above the module.
     for (r, x, y) in [
-        ("R4", 15.0, 18.0), ("R5", 19.0, 18.0), ("R6", 23.0, 18.0), ("R7", 27.0, 18.0), ("D1", 31.0, 18.0),
-        ("R10", 15.0, 22.0), ("R11", 19.0, 22.0), ("C6", 23.0, 22.0),
-        ("R3", 15.0, 26.0), ("C5", 19.0, 26.0),
+        ("R4", 15.0, 18.0),
+        ("R5", 19.0, 18.0),
+        ("R6", 23.0, 18.0),
+        ("R7", 27.0, 18.0),
+        ("D1", 31.0, 18.0),
+        ("R10", 15.0, 22.0),
+        ("R11", 19.0, 22.0),
+        ("C6", 23.0, 22.0),
+        ("R3", 15.0, 26.0),
+        ("C5", 19.0, 26.0),
     ] {
         d.put(r, x, y, Rotation::R0)?;
     }
@@ -391,7 +416,12 @@ pub fn build_pcb(d: &mut Driver) -> Result<Vec<String>, String> {
 /// * Every escaping net ends in a stub 1.0 mm apart from its neighbours, from where the
 ///   auto-router continues.
 pub fn usb_escape(d: &mut Driver, center: Point) -> Result<(), String> {
-    let at = |x: f64, y: f64| Point::new(center.x + eak_core::geom::mm(x), center.y + eak_core::geom::mm(y));
+    let at = |x: f64, y: f64| {
+        Point::new(
+            center.x + eak_core::geom::mm(x),
+            center.y + eak_core::geom::mm(y),
+        )
+    };
     let row = -3.4; // land row (local y), lands span row +- 0.575
     let tr = |d: &mut Driver, net: &str, a: Point, b: Point| -> Result<(), String> {
         d.run(C::AddTrack {
@@ -436,8 +466,28 @@ pub fn usb_escape(d: &mut Driver, center: Point) -> Result<(), String> {
         Ok(())
     };
     // D- to module pad 13 (IO18), D+ to pad 14 (IO19), down a corridor right of the module.
-    path(d, dm, &[(25.75, 34.8), (25.75, 33.6), (38.0, 33.6), (38.0, 8.4), (34.75, 8.4)])?;
-    path(d, dp, &[(26.75, 34.8), (26.75, 34.2), (38.6, 34.2), (38.6, 6.9), (34.75, 6.9)])?;
+    path(
+        d,
+        dm,
+        &[
+            (25.75, 34.8),
+            (25.75, 33.6),
+            (38.0, 33.6),
+            (38.0, 8.4),
+            (34.75, 8.4),
+        ],
+    )?;
+    path(
+        d,
+        dp,
+        &[
+            (26.75, 34.8),
+            (26.75, 34.2),
+            (38.6, 34.2),
+            (38.6, 6.9),
+            (34.75, 6.9),
+        ],
+    )?;
     // CC1 -> R1 pad 1, CC2 -> R2 pad 1 (R1/R2 pad 2 join the GND pour).
     path(d, "CC1", &[(24.75, 35.2), (24.75, 31.325)])?;
     path(d, "CC2", &[(27.75, 35.2), (30.675, 35.2)])?;

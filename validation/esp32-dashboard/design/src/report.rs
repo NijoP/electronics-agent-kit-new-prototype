@@ -57,7 +57,15 @@ fn verified(inp: &[Input], names: &[&str]) -> bool {
 }
 
 /// One calculation result with pass/fail against its limit.
-fn item(name: &str, value: f64, unit: &str, limit: &str, pass: bool, inputs_verified: bool, note: &str) -> Value {
+fn item(
+    name: &str,
+    value: f64,
+    unit: &str,
+    limit: &str,
+    pass: bool,
+    inputs_verified: bool,
+    note: &str,
+) -> Value {
     json!({
         "check": name,
         "value": (value * 1e6).round() / 1e6,
@@ -76,7 +84,10 @@ pub fn compute() -> Value {
 
     // --- Power / thermal: LDO dissipation, worst case = radio peak at 100 % duty.
     let i_other = 0.002 + 0.0013 + 0.001; // I2C pull-ups/LED/divider, generous
-    for (case, i_mod) in [("usb_telemetry_firmware", g("module_run_current")), ("worst_case_wifi_tx_continuous", g("module_peak_current"))] {
+    for (case, i_mod) in [
+        ("usb_telemetry_firmware", g("module_run_current")),
+        ("worst_case_wifi_tx_continuous", g("module_peak_current")),
+    ] {
         let i = i_mod + i_other;
         let p = calc::linear_reg_dissipation_w(g("vbus_max"), g("v3v3"), i, g("ldo_iq")).unwrap();
         let tj = calc::junction_temp_c(g("ambient_max"), p, g("ldo_theta_ja")).unwrap();
@@ -126,14 +137,14 @@ pub fn compute() -> Value {
         "power_track_width_required_0.5A_10C",
         w_req,
         "mm",
-        "<= 0.40 mm (Power net class width)",
-        w_req <= 0.40,
+        "<= 0.30 mm (Power net class width)",
+        w_req <= 0.30,
         true,
         "IPC-2221 external layer, 1 oz, dT 10 C (eak_engineering::ipc::trace_width_mm; formula constants not verified against the standard text)",
     ));
-    let i_cap = ipc::trace_current_a(0.40 / 0.0254, false, 1.0, 10.0);
+    let i_cap = ipc::trace_current_a(0.30 / 0.0254, false, 1.0, 10.0);
     items.push(item(
-        "power_track_capacity_0.40mm",
+        "power_track_capacity_0.30mm",
         i_cap,
         "A",
         ">= 0.5 A",
@@ -144,30 +155,120 @@ pub fn compute() -> Value {
 
     // --- EN RC delay (datasheet recommends R = 10 k, C = 1 uF).
     let tau = calc::rc_time_constant_s(10_000.0, 1e-6).unwrap();
-    items.push(item("en_rc_time_constant", tau, "s", "= 10 ms (datasheet recommendation R=10k, C=1uF)", (tau - 0.01).abs() < 1e-9, true, "ESP32-C3-WROOM-02 datasheet v1.7 section 8 note"));
+    items.push(item(
+        "en_rc_time_constant",
+        tau,
+        "s",
+        "= 10 ms (datasheet recommendation R=10k, C=1uF)",
+        (tau - 0.01).abs() < 1e-9,
+        true,
+        "ESP32-C3-WROOM-02 datasheet v1.7 section 8 note",
+    ));
 
     // --- VBUS sense divider vs ADC range.
-    let v_adc = calc::divider_vout(g("vbus_max"), pins::VBUS_DIV_TOP_OHM as f64, pins::VBUS_DIV_BOTTOM_OHM as f64).unwrap();
-    items.push(item("vbus_sense_adc_voltage_at_vbus_max", v_adc, "V", "< 2.5 V (ADC 11 dB range used by firmware) and < VDD", v_adc < 2.5, verified(&inp, &["vbus_max"]), "eak_engineering::calc::divider_vout"));
+    let v_adc = calc::divider_vout(
+        g("vbus_max"),
+        pins::VBUS_DIV_TOP_OHM as f64,
+        pins::VBUS_DIV_BOTTOM_OHM as f64,
+    )
+    .unwrap();
+    items.push(item(
+        "vbus_sense_adc_voltage_at_vbus_max",
+        v_adc,
+        "V",
+        "< 2.5 V (ADC 11 dB range used by firmware) and < VDD",
+        v_adc < 2.5,
+        verified(&inp, &["vbus_max"]),
+        "eak_engineering::calc::divider_vout",
+    ));
     let i_div = g("vbus_max") / (pins::VBUS_DIV_TOP_OHM + pins::VBUS_DIV_BOTTOM_OHM) as f64;
-    items.push(item("vbus_divider_current", i_div, "A", "< 100 uA", i_div < 100e-6, true, ""));
+    items.push(item(
+        "vbus_divider_current",
+        i_div,
+        "A",
+        "< 100 uA",
+        i_div < 100e-6,
+        true,
+        "",
+    ));
 
     // --- LED.
     let i_led = (g("v3v3") - g("led_vf")) / pins::LED_SERIES_OHM as f64;
     let r_for_2ma = calc::led_resistor_ohm(g("v3v3"), g("led_vf"), 0.002).unwrap();
-    items.push(item("status_led_current", i_led, "A", "<= GPIO IOH (40 mA) and <= 20 mA LED rating", i_led <= g("esp_ioh") && i_led <= 0.020, verified(&inp, &["led_vf", "esp_ioh"]), &format!("R7 = {} ohm; resistor for 2 mA would be {:.0} ohm", pins::LED_SERIES_OHM, r_for_2ma)));
+    items.push(item(
+        "status_led_current",
+        i_led,
+        "A",
+        "<= GPIO IOH (40 mA) and <= 20 mA LED rating",
+        i_led <= g("esp_ioh") && i_led <= 0.020,
+        verified(&inp, &["led_vf", "esp_ioh"]),
+        &format!(
+            "R7 = {} ohm; resistor for 2 mA would be {:.0} ohm",
+            pins::LED_SERIES_OHM,
+            r_for_2ma
+        ),
+    ));
     let p_r7 = calc::resistor_power_w(i_led, pins::LED_SERIES_OHM as f64).unwrap();
-    items.push(item("r7_power", p_r7, "W", "<= 0.1 W (0603, unverified)", p_r7 <= 0.1, false, ""));
+    items.push(item(
+        "r7_power",
+        p_r7,
+        "W",
+        "<= 0.1 W (0603, unverified)",
+        p_r7 <= 0.1,
+        false,
+        "",
+    ));
 
     // --- I2C: pull-up rise time and sink current, logic thresholds.
-    let tr = 0.8473 * calc::rc_time_constant_s(pins::I2C_PULLUP_OHM as f64, g("i2c_bus_capacitance")).unwrap();
-    items.push(item("i2c_rise_time", tr, "s", "<= 1000 ns (standard mode, 100 kHz)", tr <= g("i2c_tr_max_standard"), verified(&inp, &["i2c_bus_capacitance", "i2c_tr_max_standard"]), "tr = 0.8473 * Rp * Cb"));
+    let tr = 0.8473
+        * calc::rc_time_constant_s(pins::I2C_PULLUP_OHM as f64, g("i2c_bus_capacitance")).unwrap();
+    items.push(item(
+        "i2c_rise_time",
+        tr * 1e9,
+        "ns",
+        "<= 1000 ns (standard mode, 100 kHz)",
+        tr <= g("i2c_tr_max_standard"),
+        verified(&inp, &["i2c_bus_capacitance", "i2c_tr_max_standard"]),
+        "tr = 0.8473 * Rp * Cb",
+    ));
     let i_sink = g("v3v3") / pins::I2C_PULLUP_OHM as f64;
-    items.push(item("i2c_pullup_sink_current", i_sink, "A", "<= 3 mA (standard-mode VOL spec)", i_sink <= 0.003, false, "UM10204 3 mA sink limit (not re-read)"));
+    items.push(item(
+        "i2c_pullup_sink_current",
+        i_sink,
+        "A",
+        "<= 3 mA (standard-mode VOL spec)",
+        i_sink <= 0.003,
+        false,
+        "UM10204 3 mA sink limit (not re-read)",
+    ));
     let sht_vih = g("sht40_vih_frac") * g("v3v3");
-    items.push(item("i2c_logic_high_vs_sht40_vih", g("v3v3"), "V", &format!(">= {:.2} V (0.7*VDD)", sht_vih), g("v3v3") >= sht_vih, true, "Pull-ups to the same +3V3 rail as the sensor VDD"));
-    items.push(item("sht40_supply_within_range", g("v3v3"), "V", "1.08 .. 3.6 V", g("v3v3") <= g("sht40_vdd_max") && g("v3v3") >= 1.08, true, SHT));
-    items.push(item("usb_data_levels", 3.3, "V", "ESP32-C3 USB Serial/JTAG PHY on GPIO18/19 connected directly (no series resistors)", true, true, ESP));
+    items.push(item(
+        "i2c_logic_high_vs_sht40_vih",
+        g("v3v3"),
+        "V",
+        &format!(">= {:.2} V (0.7*VDD)", sht_vih),
+        g("v3v3") >= sht_vih,
+        true,
+        "Pull-ups to the same +3V3 rail as the sensor VDD",
+    ));
+    items.push(item(
+        "sht40_supply_within_range",
+        g("v3v3"),
+        "V",
+        "1.08 .. 3.6 V",
+        g("v3v3") <= g("sht40_vdd_max") && g("v3v3") >= 1.08,
+        true,
+        SHT,
+    ));
+    items.push(item(
+        "usb_data_levels",
+        3.3,
+        "V",
+        "ESP32-C3 USB Serial/JTAG PHY on GPIO18/19 connected directly (no series resistors)",
+        true,
+        true,
+        ESP,
+    ));
 
     json!({
         "title": "Engineering calculations — ESP32-C3 Environment Dashboard",

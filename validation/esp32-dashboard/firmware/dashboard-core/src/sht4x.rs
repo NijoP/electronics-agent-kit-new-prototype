@@ -91,6 +91,11 @@ impl<I2C: I2c> Sht4x<I2C> {
         self.i2c
     }
 
+    /// The shared bus (the SSD1306 display sits on the same I2C lines).
+    pub fn bus(&mut self) -> &mut I2C {
+        &mut self.i2c
+    }
+
     pub fn soft_reset(&mut self, delay: &mut impl DelayNs) -> Result<(), Error<I2C::Error>> {
         self.i2c
             .write(self.address, &[CMD_SOFT_RESET])
@@ -135,7 +140,7 @@ mod tests {
         assert_eq!(ticks_to_millicelsius(65_535), 130_000);
         assert_eq!(ticks_to_millipercent(0), 0); // -6 %RH cropped to 0
         assert_eq!(ticks_to_millipercent(65_535), 100_000); // 119 %RH cropped to 100
-        // 25 °C: (25 + 45) / 175 * 65535 = 26214
+                                                            // 25 °C: (25 + 45) / 175 * 65535 = 26214
         assert!((ticks_to_millicelsius(26_214) - 25_000).abs() <= 3);
     }
 

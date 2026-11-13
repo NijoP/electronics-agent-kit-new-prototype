@@ -23,7 +23,7 @@ pub fn vbus_mv_from_adc_mv(adc_mv: u32) -> u32 {
 /// Status LED pattern: on while a sensor fault is active, otherwise a heartbeat
 /// (on for one sample, off for the next).
 pub fn led_on(frame: &Frame) -> bool {
-    frame.temperature_mc.is_none() || frame.seq % 2 == 0
+    frame.temperature_mc.is_none() || frame.seq.is_multiple_of(2)
 }
 
 pub struct Sampler {

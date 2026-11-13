@@ -1,8 +1,8 @@
 {
   "check": "DRC",
-  "project_id": "prj_f1d2a782ee50453d",
+  "project_id": "prj_17445941672740ee",
   "revision": 221,
-  "input_sha256": "e19ee3824f7d56d9498a0347866d1cbc4931b228a2d280a7863aa60745d43ab4",
+  "input_sha256": "734ad996b3ec5c3afe629f75245b576f6f5c2fe45df3fd0f1d07269c3a37717e",
   "tool": "eak-validation 0.1.0",
   "rules": [
     {
@@ -88,18 +88,18 @@
     {
       "rule_id": "DRC-013",
       "severity": "warning",
-      "message": "zone zon_8795100cfe2044d8 has 18 isolated copper island(s) not connected to any GND pad",
+      "message": "zone zon_8d52c19f902745d3 has 9 isolated copper island(s) not connected to any GND pad",
       "objects": [
-        "zon_8795100cfe2044d8"
+        "zon_8d52c19f902745d3"
       ],
       "location": null
     },
     {
       "rule_id": "DRC-013",
       "severity": "warning",
-      "message": "zone zon_c11d6dad942541e7 has 6 isolated copper island(s) not connected to any GND pad",
+      "message": "zone zon_a70eb62219c04f79 has 16 isolated copper island(s) not connected to any GND pad",
       "objects": [
-        "zon_c11d6dad942541e7"
+        "zon_a70eb62219c04f79"
       ],
       "location": null
     }

@@ -218,20 +218,20 @@
     {
       "check": "power_track_width_required_0.5A_10C",
       "inputs_verified": true,
-      "limit": "<= 0.40 mm (Power net class width)",
+      "limit": "<= 0.30 mm (Power net class width)",
       "note": "IPC-2221 external layer, 1 oz, dT 10 C (eak_engineering::ipc::trace_width_mm; formula constants not verified against the standard text)",
       "result": "PASS",
       "unit": "mm",
       "value": 0.11614
     },
     {
-      "check": "power_track_capacity_0.40mm",
+      "check": "power_track_capacity_0.30mm",
       "inputs_verified": true,
       "limit": ">= 0.5 A",
       "note": "IPC-2221 external, 1 oz, dT 10 C",
       "result": "PASS",
       "unit": "A",
-      "value": 1.225611
+      "value": 0.994883
     },
     {
       "check": "en_rc_time_constant",
@@ -284,8 +284,8 @@
       "limit": "<= 1000 ns (standard mode, 100 kHz)",
       "note": "tr = 0.8473 * Rp * Cb",
       "result": "PASS_WITH_UNVERIFIED_INPUTS",
-      "unit": "s",
-      "value": 0.0
+      "unit": "ns",
+      "value": 398.231
     },
     {
       "check": "i2c_pullup_sink_current",

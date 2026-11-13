@@ -8,6 +8,7 @@
 
 pub mod app;
 pub mod crc;
+pub mod display;
 pub mod frame;
 pub mod model;
 pub mod pins;

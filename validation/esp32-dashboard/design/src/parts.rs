@@ -320,7 +320,12 @@ pub fn mounting_hole() -> ComponentDef {
 }
 
 pub fn all() -> Vec<ComponentDef> {
-    vec![esp32_c3_wroom_02(), usb4105(), tact_switch(), mounting_hole()]
+    vec![
+        esp32_c3_wroom_02(),
+        usb4105(),
+        tact_switch(),
+        mounting_hole(),
+    ]
 }
 
 #[cfg(test)]

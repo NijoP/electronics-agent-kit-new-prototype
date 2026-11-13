@@ -197,8 +197,8 @@ mod tests {
     fn module_pin_names_match_gpio_numbers() {
         for a in ALL {
             match a.gpio {
-                Some(18) | Some(19) | Some(2) | Some(3) | Some(4) | Some(5) | Some(8)
-                | Some(9) | Some(10) => {
+                Some(18) | Some(19) | Some(2) | Some(3) | Some(4) | Some(5) | Some(8) | Some(9)
+                | Some(10) => {
                     assert_eq!(a.module_pin_name, std::format!("IO{}", a.gpio.unwrap()))
                 }
                 None => assert_eq!(a.module_pin_name, "EN"),

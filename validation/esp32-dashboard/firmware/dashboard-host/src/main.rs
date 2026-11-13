@@ -42,7 +42,9 @@ fn parse_args() -> Result<Args, String> {
             "--faults" => a.faults = true,
             "--bind" => a.bind = val()?,
             "--frames" => a.frames = Some(val()?.parse().map_err(|e| format!("--frames: {e}"))?),
-            "--period-ms" => a.period_ms = val()?.parse().map_err(|e| format!("--period-ms: {e}"))?,
+            "--period-ms" => {
+                a.period_ms = val()?.parse().map_err(|e| format!("--period-ms: {e}"))?
+            }
             "-h" | "--help" => {
                 println!("dashboard [--simulate [--seed N] [--faults] [--frames N] [--period-ms MS]] [--serial DEVICE] [--bind ADDR]");
                 std::process::exit(0);
@@ -85,7 +87,10 @@ fn main() {
         let st = state.clone();
         std::thread::spawn(move || server::serve(listener, st));
         producer.join().unwrap();
-        println!("{}", serde_json::to_string_pretty(&server::state_json(&state)).unwrap());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&server::state_json(&state)).unwrap()
+        );
     } else {
         server::serve(listener, state);
     }

@@ -145,7 +145,9 @@ impl<'a> SimSht40<'a> {
                 self.pending = None;
                 Ok(())
             }
-            _ => Err(SimError(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Data))),
+            _ => Err(SimError(ErrorKind::NoAcknowledge(
+                NoAcknowledgeSource::Data,
+            ))),
         }
     }
 
@@ -153,9 +155,9 @@ impl<'a> SimSht40<'a> {
         let now = self.clock.now_us();
         match self.pending {
             // Datasheet: the sensor NACKs the read header while it is still measuring.
-            Some((ready, _)) if now < ready => {
-                Err(SimError(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address)))
-            }
+            Some((ready, _)) if now < ready => Err(SimError(ErrorKind::NoAcknowledge(
+                NoAcknowledgeSource::Address,
+            ))),
             Some((_, data)) => {
                 let n = buf.len().min(6);
                 buf[..n].copy_from_slice(&data[..n]);
@@ -165,7 +167,9 @@ impl<'a> SimSht40<'a> {
                 self.pending = None;
                 Ok(())
             }
-            None => Err(SimError(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address))),
+            None => Err(SimError(ErrorKind::NoAcknowledge(
+                NoAcknowledgeSource::Address,
+            ))),
         }
     }
 }
@@ -175,10 +179,16 @@ impl ErrorType for SimSht40<'_> {
 }
 
 impl I2c for SimSht40<'_> {
-    fn transaction(&mut self, address: u8, operations: &mut [Operation<'_>]) -> Result<(), SimError> {
+    fn transaction(
+        &mut self,
+        address: u8,
+        operations: &mut [Operation<'_>],
+    ) -> Result<(), SimError> {
         self.transactions += 1;
         if address != sht4x::ADDRESS || self.rng.chance(self.faults.nack) {
-            return Err(SimError(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address)));
+            return Err(SimError(ErrorKind::NoAcknowledge(
+                NoAcknowledgeSource::Address,
+            )));
         }
         for op in operations {
             match op {
@@ -199,7 +209,8 @@ impl I2c for SimSht40<'_> {
 pub fn adc_pin_mv(env: &Environment, rng: &mut Rng) -> u32 {
     let v = env.vbus_v + 0.02 * rng.signed_unit();
     let pin = v * dashboard_core::pins::VBUS_DIV_BOTTOM_OHM as f64
-        / (dashboard_core::pins::VBUS_DIV_TOP_OHM + dashboard_core::pins::VBUS_DIV_BOTTOM_OHM) as f64;
+        / (dashboard_core::pins::VBUS_DIV_TOP_OHM + dashboard_core::pins::VBUS_DIV_BOTTOM_OHM)
+            as f64;
     (pin * 1000.0).round() as u32
 }
 
@@ -211,7 +222,11 @@ mod tests {
     #[test]
     fn simulated_sensor_speaks_the_datasheet_protocol() {
         let clock = SimClock::default();
-        let env = Environment { base_temp_c: 22.0, base_rh: 45.0, vbus_v: 5.0 };
+        let env = Environment {
+            base_temp_c: 22.0,
+            base_rh: 45.0,
+            vbus_v: 5.0,
+        };
         let mut s = Sht4x::new(SimSht40::new(&clock, env, 7));
         let mut d = SimDelay(&clock);
         let m = s.measure(&mut d).unwrap();
@@ -223,9 +238,14 @@ mod tests {
     #[test]
     fn reading_before_conversion_is_nacked() {
         let clock = SimClock::default();
-        let env = Environment { base_temp_c: 22.0, base_rh: 45.0, vbus_v: 5.0 };
+        let env = Environment {
+            base_temp_c: 22.0,
+            base_rh: 45.0,
+            vbus_v: 5.0,
+        };
         let mut dev = SimSht40::new(&clock, env, 1);
-        dev.write(sht4x::ADDRESS, &[sht4x::CMD_MEASURE_HIGH]).unwrap();
+        dev.write(sht4x::ADDRESS, &[sht4x::CMD_MEASURE_HIGH])
+            .unwrap();
         let mut b = [0u8; 6];
         assert!(dev.read(sht4x::ADDRESS, &mut b).is_err());
         clock.advance_us(8_300);

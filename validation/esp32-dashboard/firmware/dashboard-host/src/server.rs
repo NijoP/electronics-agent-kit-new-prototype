@@ -86,6 +86,25 @@ pub fn history_json(state: &Shared) -> Value {
     json!({"columns": ["host_ms", "seq", "temperature_c", "humidity_pct", "vbus_v"], "rows": rows})
 }
 
+/// The SSD1306 frame buffer the firmware would show for the latest frame, as ASCII art
+/// (rendered by the same `dashboard_core::display::render` the firmware calls).
+pub fn display_ascii(state: &Shared) -> String {
+    use dashboard_core::display::{render, FrameBuffer, PAGES, WIDTH};
+    let s = state.lock().expect("state lock");
+    let mut fb = FrameBuffer::default();
+    if let Some((_, f)) = s.dashboard.latest() {
+        render(&mut fb, f);
+    }
+    let mut out = String::with_capacity((WIDTH + 1) * PAGES * 8);
+    for y in 0..PAGES * 8 {
+        for x in 0..WIDTH {
+            out.push(if fb.pixel(x, y) { '#' } else { '.' });
+        }
+        out.push('\n');
+    }
+    out
+}
+
 fn respond(stream: &mut TcpStream, status: &str, ctype: &str, body: &[u8]) -> std::io::Result<()> {
     write!(
         stream,
@@ -110,19 +129,43 @@ pub fn handle(mut stream: TcpStream, state: &Shared) -> std::io::Result<()> {
             break;
         }
         if head > MAX_HEAD {
-            return respond(&mut stream, "431 Request Header Fields Too Large", "text/plain", b"too large");
+            return respond(
+                &mut stream,
+                "431 Request Header Fields Too Large",
+                "text/plain",
+                b"too large",
+            );
         }
     }
     let mut parts = request_line.split_whitespace();
     let (method, path) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));
     if method != "GET" {
-        return respond(&mut stream, "405 Method Not Allowed", "text/plain", b"GET only");
+        return respond(
+            &mut stream,
+            "405 Method Not Allowed",
+            "text/plain",
+            b"GET only",
+        );
     }
     match path.split('?').next().unwrap_or("") {
-        "/" | "/index.html" => respond(&mut stream, "200 OK", "text/html; charset=utf-8", PAGE.as_bytes()),
+        "/" | "/index.html" => respond(
+            &mut stream,
+            "200 OK",
+            "text/html; charset=utf-8",
+            PAGE.as_bytes(),
+        ),
         "/api/state" => {
             let body = serde_json::to_vec(&state_json(state)).expect("json");
             respond(&mut stream, "200 OK", "application/json", &body)
+        }
+        "/display.txt" => {
+            let body = display_ascii(state);
+            respond(
+                &mut stream,
+                "200 OK",
+                "text/plain; charset=utf-8",
+                body.as_bytes(),
+            )
         }
         "/api/history" => {
             let body = serde_json::to_vec(&history_json(state)).expect("json");

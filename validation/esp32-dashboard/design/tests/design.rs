@@ -47,12 +47,18 @@ fn erc_drc_mech_report_no_errors_and_router_completes() {
             eprintln!("{} {} {:?} {}", r.check, f.rule_id, f.severity, f.message);
         }
         assert_eq!(r.errors, 0, "{} errors", r.check);
-        assert!(!r.not_implemented.is_empty(), "{} must list not-implemented checks", r.check);
+        assert!(
+            !r.not_implemented.is_empty(),
+            "{} must list not-implemented checks",
+            r.check
+        );
     }
     let router: Vec<_> = notes.iter().filter(|n| n.starts_with("router")).collect();
     assert_eq!(router.len(), 1);
     assert!(router[0].ends_with(", 0 failed"), "{router:?}");
-    assert!(!notes.iter().any(|n| n.starts_with("unrouted") || n.starts_with("could not place")));
+    assert!(!notes
+        .iter()
+        .any(|n| n.starts_with("unrouted") || n.starts_with("could not place")));
 }
 
 #[test]
@@ -69,7 +75,10 @@ fn manufacturing_package_compiles_and_reverifies() {
         m.blocking_reasons
     );
     for kind in ["gtl", "gbl", "gm1", "drl", "BOM.csv", "CPL.csv"] {
-        assert!(m.files.iter().any(|f| f.name.ends_with(kind)), "missing {kind}");
+        assert!(
+            m.files.iter().any(|f| f.name.ends_with(kind)),
+            "missing {kind}"
+        );
     }
     assert!(eak_manufacturing::verify_package(&dir).unwrap().is_empty());
     let _ = std::fs::remove_dir_all(&dir);
@@ -85,7 +94,12 @@ fn committed_project_matches_a_fresh_build() {
         p.pcb
             .footprints
             .values()
-            .map(|f| (f.refdes.clone(), (f.position.x, f.position.y, f.rotation.degrees())))
+            .map(|f| {
+                (
+                    f.refdes.clone(),
+                    (f.position.x, f.position.y, f.rotation.degrees()),
+                )
+            })
             .collect()
     };
     assert_eq!(place(&fresh), place(&saved));
@@ -104,10 +118,18 @@ fn committed_reports_are_bound_to_the_committed_revision() {
         let s = std::fs::read_to_string(dir.join(format!("reports/{check}.json"))).unwrap();
         let r: eak_validation::Report = serde_json::from_str(&s).unwrap();
         assert_eq!(r.revision, saved.revision, "{check}");
-        assert_eq!(r.input_sha256, eak_validation::report::project_hash(&saved), "{check}");
+        assert_eq!(
+            r.input_sha256,
+            eak_validation::report::project_hash(&saved),
+            "{check}"
+        );
         assert_eq!(r.errors, 0, "{check}");
     }
-    assert!(eak_manufacturing::verify_package(&dir.join("manufacturing")).unwrap().is_empty());
+    assert!(
+        eak_manufacturing::verify_package(&dir.join("manufacturing"))
+            .unwrap()
+            .is_empty()
+    );
 }
 
 /// The firmware pin map, the module datasheet pin names and the saved EAK netlist agree.
@@ -123,20 +145,39 @@ fn firmware_pin_map_matches_the_eak_netlist() {
         .expect("U1");
     let def = &p.library[&u1.component_id];
     for a in pins::ALL {
-        assert_eq!(conn.get(&format!("U1.{}", a.module_pin)), Some(&a.net.to_string()), "{}", a.signal);
+        assert_eq!(
+            conn.get(&format!("U1.{}", a.module_pin)),
+            Some(&a.net.to_string()),
+            "{}",
+            a.signal
+        );
         let pin = def.pin(a.module_pin).expect("module pin exists");
-        assert_eq!(pin.name, a.module_pin_name, "datasheet pin name for {}", a.signal);
+        assert_eq!(
+            pin.name, a.module_pin_name,
+            "datasheet pin name for {}",
+            a.signal
+        );
     }
     for nc in pins::UNUSED_MODULE_PINS {
-        assert!(conn.get(&format!("U1.{nc}")).is_none(), "U1.{nc} should be unconnected");
-        assert!(p.schematic.no_connects.values().any(|n| n.symbol_id == u1.id && n.pin == nc));
+        assert!(
+            !conn.contains_key(&format!("U1.{nc}")),
+            "U1.{nc} should be unconnected"
+        );
+        assert!(p
+            .schematic
+            .no_connects
+            .values()
+            .any(|n| n.symbol_id == u1.id && n.pin == nc));
     }
     // Power: module 3V3 and both GND pins.
     assert_eq!(conn["U1.1"], "+3V3");
     assert_eq!(conn["U1.9"], "GND");
     assert_eq!(conn["U1.19"], "GND");
     // Headers carry the bus the firmware drives, on the same 3.3 V rail as the module.
-    for (hdr, table) in [("J2", pins::J2_SENSOR_HEADER), ("J3", pins::J3_DISPLAY_HEADER)] {
+    for (hdr, table) in [
+        ("J2", pins::J2_SENSOR_HEADER),
+        ("J3", pins::J3_DISPLAY_HEADER),
+    ] {
         for (pin, net) in table {
             assert_eq!(conn[&format!("{hdr}.{pin}")], net);
         }
@@ -153,7 +194,15 @@ fn firmware_pin_map_matches_the_eak_netlist() {
         assert_eq!(conn[&format!("{r}.1")], "+3V3", "{r}");
         assert_eq!(conn[&format!("{r}.2")], net, "{r}");
     }
-    let value = |r: &str| p.schematic.symbols.values().find(|s| s.refdes == r).unwrap().value.clone();
+    let value = |r: &str| {
+        p.schematic
+            .symbols
+            .values()
+            .find(|s| s.refdes == r)
+            .unwrap()
+            .value
+            .clone()
+    };
     let ohm = |r: &str| eak_engineering::calc::parse_value(&value(r)).unwrap() as u32;
     assert_eq!(ohm("R8"), pins::I2C_PULLUP_OHM);
     assert_eq!(ohm("R9"), pins::I2C_PULLUP_OHM);
@@ -165,7 +214,12 @@ fn firmware_pin_map_matches_the_eak_netlist() {
     assert_eq!(conn["R10.2"], pins::VBUS_SENSE.net);
     assert_eq!(conn["R11.2"], "GND");
     // USB data lines reach the receptacle on both plug orientations (A6/B6, A7/B7).
-    let j1 = p.schematic.symbols.values().find(|s| s.refdes == "J1").unwrap();
+    let j1 = p
+        .schematic
+        .symbols
+        .values()
+        .find(|s| s.refdes == "J1")
+        .unwrap();
     let jdef = &p.library[&j1.component_id];
     assert_eq!(jdef.pin_map["5"], vec!["A6", "B6"]);
     assert_eq!(jdef.pin_map["6"], vec!["A7", "B7"]);
@@ -183,7 +237,14 @@ fn pcb_pad_nets_follow_the_schematic() {
         for (pin, pads) in &def.pin_map {
             let want = conn.get(&format!("{}.{}", fp.refdes, pin));
             for pad in pads {
-                assert_eq!(fp.pad_nets.get(pad), want, "{}.{} pad {}", fp.refdes, pin, pad);
+                assert_eq!(
+                    fp.pad_nets.get(pad),
+                    want,
+                    "{}.{} pad {}",
+                    fp.refdes,
+                    pin,
+                    pad
+                );
             }
         }
     }

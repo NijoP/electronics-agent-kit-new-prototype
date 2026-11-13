@@ -1,0 +1,26 @@
+[package]
+name = "esp32c3-dashboard-fw"
+description = "ESP32-C3 firmware for the EAK environment dashboard board (esp-hal, no ESP-IDF)"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+# Device-target workspace (riscv32imc-unknown-none-elf, see .cargo/config.toml).
+[workspace]
+
+[dependencies]
+dashboard-core = { path = "../dashboard-core" }
+esp-hal = { version = "1.2", features = ["esp32c3", "unstable"] }
+esp-bootloader-esp-idf = { version = "0.6", features = ["esp32c3"] }
+embedded-hal = "1.0"
+nb = "1"
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+debug = 2
+
+[profile.dev]
+opt-level = "s"
