@@ -56,18 +56,16 @@ pub fn run(p: &Project) -> Report {
             ));
         }
         if let Some(&amps) = c.net_currents_a.get(&t.net) {
-            match ipc::trace_width_mm(
-                amps,
-                false,
-                p.pcb.board.stackup.outer_copper_oz,
-                c.temp_rise_c,
-            ) {
+            // The copper weight of the layer this track is on; a layer missing from the
+            // stackup yields 0 oz, which the sizing rejects as an error (never a pass).
+            let oz = p.pcb.board.stackup.copper_oz(t.layer).unwrap_or(0.0);
+            match ipc::trace_width_mm(amps, false, oz, c.temp_rise_c) {
                 Ok(req) => {
                     if to_mm(t.width) + 1e-9 < req {
                         f.push(finding(
                             "DRC-008",
                             Error,
-                            format!("track on {} is {:.3} mm but {:.2} A needs ≥ {:.3} mm (IPC-2221, ΔT {} °C, {} oz; table not verified against standard text)", t.net, to_mm(t.width), amps, req, c.temp_rise_c, p.pcb.board.stackup.outer_copper_oz),
+                            format!("track on {} is {:.3} mm but {:.2} A needs ≥ {:.3} mm (IPC-2221, ΔT {} °C, {} oz; table not verified against standard text)", t.net, to_mm(t.width), amps, req, c.temp_rise_c, oz),
                             vec![t.id.clone()],
                             Some(t.a),
                         ));
@@ -454,7 +452,7 @@ pub fn run(p: &Project) -> Report {
         rule("DRC-005", "Board edge clearance", mm(c.board_edge_clearance as f64), "Project constraints"),
         rule("DRC-006", "Drill size / annular ring", format!("drill ≥ {}, ring ≥ {}", mm(c.min_drill as f64), mm(c.min_annular_ring as f64)), "Project constraints"),
         rule("DRC-007", "Courtyard overlap", "", "EAK"),
-        rule("DRC-008", "Track current capacity", format!("ΔT {} °C, outer copper {} oz", c.temp_rise_c, p.pcb.board.stackup.outer_copper_oz), "IPC-2221 (via DESK audit; verified_against_standard = false)"),
+        rule("DRC-008", "Track current capacity", format!("ΔT {} °C, copper weight of each track's own layer ({})", c.temp_rise_c, p.pcb.board.stackup.layers.iter().map(|l| format!("{:?} {} oz", l.layer, l.copper_oz)).collect::<Vec<_>>().join(", ")), "IPC-2221 (via DESK audit; verified_against_standard = false)"),
         rule("DRC-009", "Board outline", "closed simple polygon", "EAK"),
         rule("DRC-010", "Schematic/PCB net consistency", "", "EAK"),
         rule("DRC-011", "Missing footprints", "", "EAK"),
