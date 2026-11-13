@@ -120,7 +120,7 @@ pub fn run(p: &Project) -> Report {
                             )
                             .mm_min(to_mm(t.width), req)
                             .fix(format!(
-                                "Widen track {} to at least {:.3} mm for {:.2} A, or carry {} with a copper zone or parallel tracks. The width comes from an IPC-2221 table that is not verified against the standard.",
+                                "Widen track {} to at least {:.3} mm for {:.2} A, or correct the declared current of {} if it is overstated. This rule checks each track on its own, and the width comes from an IPC-2221 table that is not verified against the standard.",
                                 t.id, req, amps, t.net
                             )),
                         );
@@ -472,7 +472,7 @@ pub fn run(p: &Project) -> Report {
             } else if isolated > 0 {
                 f.push(
                     finding("DRC-013", Warning, format!("zone {} has {isolated} isolated copper island(s) not connected to any {} pad", z, fill.net), vec![z.clone()], None)
-                        .fix(format!("Tie the isolated island(s) of zone {z} to {} with vias or tracks, or reshape the zone so they are not created.", fill.net)),
+                        .fix(format!("Reshape zone {z} so the isolated island(s) are not created, or so they reach a {} pad; this check counts an island as connected only when it touches a pad of the zone net.", fill.net)),
                 );
             }
         }

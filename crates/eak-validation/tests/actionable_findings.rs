@@ -97,6 +97,33 @@ fn finding_id_is_deterministic_and_order_independent() {
 }
 
 #[test]
+fn colliding_ids_get_a_deterministic_suffix() {
+    // Two THT pads sharing a number on one footprint would give the same id.
+    let f = |msg: &str| Finding {
+        id: "DRC-006-aaaaaaaaaaaa".into(),
+        rule_id: "DRC-006".into(),
+        severity: Severity::Error,
+        message: msg.into(),
+        objects: vec!["fp".into()],
+        location: None,
+        measured: None,
+        required: None,
+        suggested_fix: None,
+    };
+    let r = Report::new(
+        "DRC",
+        &Project::new("x"),
+        vec![],
+        vec![f("b"), f("a")],
+        vec![],
+        vec![],
+    );
+    let ids: Vec<_> = r.findings.iter().map(|f| f.id.as_str()).collect();
+    assert_eq!(ids, ["DRC-006-aaaaaaaaaaaa", "DRC-006-aaaaaaaaaaaa-2"]);
+    assert_eq!(r.findings[0].message, "a");
+}
+
+#[test]
 fn reference_reports_are_actionable_and_ids_repeat_across_runs() {
     let p = reference();
     let ids = |r: &Report| r.findings.iter().map(|f| f.id.clone()).collect::<Vec<_>>();
