@@ -1,9 +1,125 @@
 //! Electrical rules check over the canonical schematic connectivity.
 
-use crate::report::{finding, rule, Finding, Report, Severity::*};
-use eak_core::{PinType, Project};
+use crate::report::{finding, rule, Finding, Report, Severity, Severity::*};
+use eak_core::{ComponentDef, PinType, Project, SymbolInstance, SymbolPin};
 use eak_engineering::{calc::parse_value, netlist};
 use std::collections::{BTreeMap, BTreeSet};
+
+/// Largest |declared value| over `nets`; `None` when none of them is declared.
+fn declared_max(nets: &[String], declared: &BTreeMap<String, f64>) -> Option<f64> {
+    nets.iter()
+        .filter_map(|n| declared.get(n))
+        .map(|v| v.abs())
+        .reduce(f64::max)
+}
+
+/// Shared component rating check (ERC-011, ERC-014..016).
+///
+/// `options` are (rating name, warning margin, margin note); the first rating the part has
+/// is used. Rating below the stress is an error, below `margin` × stress a warning. A part
+/// without the rating, a rating in another unit or a missing declared stress is reported
+/// as an Info "not checked" finding, and a pass on an unverified rating is reported as
+/// such: neither is ever silently treated as passing.
+#[allow(clippy::too_many_arguments)]
+fn check_rating(
+    f: &mut Vec<Finding>,
+    rule_id: &str,
+    s: &SymbolInstance,
+    def: &ComponentDef,
+    options: &[(&str, f64, &str)],
+    stress: Option<f64>,
+    quantity: &str,
+    unit: &str,
+) {
+    let (severity, message) = match rating_verdict(s, def, options, stress, quantity, unit) {
+        Some(v) => v,
+        None => return,
+    };
+    f.push(finding(
+        rule_id,
+        severity,
+        message,
+        vec![s.id.clone()],
+        None,
+    ));
+}
+
+/// Severity and message for [`check_rating`]; `None` only for a pass on a verified rating.
+fn rating_verdict(
+    s: &SymbolInstance,
+    def: &ComponentDef,
+    options: &[(&str, f64, &str)],
+    stress: Option<f64>,
+    quantity: &str,
+    unit: &str,
+) -> Option<(Severity, String)> {
+    let Some((rating, margin, note)) = options.iter().find_map(|(name, margin, note)| {
+        def.ratings
+            .iter()
+            .find(|r| r.name == *name)
+            .map(|r| (r, *margin, *note))
+    }) else {
+        let names: Vec<&str> = options.iter().map(|o| o.0).collect();
+        return Some((
+            Info,
+            format!(
+                "{} not checked: library part {} has no {} rating",
+                s.refdes,
+                def.id,
+                names.join(" or ")
+            ),
+        ));
+    };
+    if rating.unit != unit {
+        return Some((
+            Info,
+            format!(
+                "{} {} not checked: rating unit '{}' is not {unit}",
+                s.refdes, rating.name, rating.unit
+            ),
+        ));
+    }
+    let Some(stress) = stress else {
+        return Some((
+            Info,
+            format!(
+                "{} {} not checked: no declared {quantity} on its nets",
+                s.refdes, rating.name
+            ),
+        ));
+    };
+    let tag = if rating.verified {
+        ""
+    } else {
+        " (rating unverified)"
+    };
+    let what = format!(
+        "{} {} {} {unit} vs {stress} {unit} {quantity}",
+        s.refdes, rating.name, rating.value
+    );
+    if rating.value < stress {
+        Some((Error, format!("{what}: rating exceeded{tag}")))
+    } else if rating.value < margin * stress {
+        Some((Warning, format!("{what}: < {margin}x margin, {note}{tag}")))
+    } else if !rating.verified {
+        Some((
+            Info,
+            format!(
+                "{what}: within rating, but the rating is unverified ({})",
+                rating.source
+            ),
+        ))
+    } else {
+        None
+    }
+}
+
+fn is_drain_source_pin(name: &str) -> bool {
+    matches!(
+        name.to_ascii_uppercase().as_str(),
+        "D" | "DRAIN" | "S" | "SOURCE"
+    )
+}
 
 pub fn is_ground_net(name: &str) -> bool {
     let n = name.to_ascii_uppercase();
@@ -254,54 +370,121 @@ pub fn run(p: &Project) -> Report {
         ));
     }
 
-    // Capacitor voltage rating vs declared rail voltage (DESK-derived rule).
+    // Component ratings vs declared net voltages/currents (ERC-011, ERC-014..016). The
+    // declared values are peak working voltages / continuous currents (Constraints).
     for s in p.schematic.symbols.values() {
         let Some(def) = p.library.get(&s.component_id) else {
             continue;
         };
-        if def.category != "Capacitor" {
-            continue;
-        }
-        let Some(rating) = def.ratings.iter().find(|r| r.name == "voltage") else {
-            continue;
+        // Nets on the pins matching `keep`.
+        let nets_of = |keep: &dyn Fn(&SymbolPin) -> bool| -> Vec<String> {
+            def.symbol
+                .pins
+                .iter()
+                .filter(|pin| keep(pin))
+                .filter_map(|pin| nl.pin_net.get(&(s.id.clone(), pin.number.clone())))
+                .cloned()
+                .collect()
         };
-        let vmax = def
-            .symbol
-            .pins
-            .iter()
-            .filter_map(|pin| nl.pin_net.get(&(s.id.clone(), pin.number.clone())))
-            .filter_map(|n| p.constraints.net_voltages_v.get(n))
-            .fold(0.0f64, |a, &b| a.max(b.abs()));
-        if vmax <= 0.0 {
-            continue;
+        let all_nets = nets_of(&|_| true);
+        let volts = declared_max(&all_nets, &p.constraints.net_voltages_v);
+
+        if def.category == "Capacitor" {
+            check_rating(
+                &mut f,
+                "ERC-011",
+                s,
+                def,
+                &[("voltage", 1.5, "check DC-bias derating")],
+                volts,
+                "rail voltage",
+                "V",
+            );
         }
-        let tag = if rating.verified {
-            ""
-        } else {
-            " (rating unverified)"
-        };
-        if rating.value < vmax {
-            f.push(finding(
-                "ERC-011",
-                Error,
-                format!(
-                    "{} rated {} V on a {} V rail{tag}",
-                    s.refdes, rating.value, vmax
-                ),
-                vec![s.id.clone()],
-                None,
-            ));
-        } else if rating.value < 1.5 * vmax {
-            f.push(finding(
-                "ERC-011",
-                Warning,
-                format!(
-                    "{} rated {} V on {} V (< 1.5x margin; check DC-bias derating){tag}",
-                    s.refdes, rating.value, vmax
-                ),
-                vec![s.id.clone()],
-                None,
-            ));
+
+        // Regulator / IC supply input: highest declared rail on its supply-named power inputs.
+        let supply_nets =
+            nets_of(&|pin| pin.electrical_type == PinType::PowerIn && is_supply_pin(&pin.name));
+        if !supply_nets.is_empty() {
+            check_rating(
+                &mut f,
+                "ERC-014",
+                s,
+                def,
+                &[
+                    (
+                        "input_voltage_max",
+                        1.2,
+                        "no headroom for input transients; check the clamp",
+                    ),
+                    (
+                        "supply_voltage_max",
+                        1.05,
+                        "no headroom for rail regulation tolerance",
+                    ),
+                ],
+                declared_max(&supply_nets, &p.constraints.net_voltages_v),
+                "supply rail voltage",
+                "V",
+            );
+        }
+
+        if def.category == "Inductor" {
+            let amps = declared_max(&all_nets, &p.constraints.net_currents_a);
+            check_rating(
+                &mut f,
+                "ERC-015",
+                s,
+                def,
+                &[(
+                    "saturation_current",
+                    1.2,
+                    "peak current is 1.2x DC at a 40 % ripple ratio",
+                )],
+                amps,
+                "net current",
+                "A",
+            );
+            check_rating(
+                &mut f,
+                "ERC-015",
+                s,
+                def,
+                &[(
+                    "current",
+                    1.1,
+                    "little headroom for ripple RMS and self-heating",
+                )],
+                amps,
+                "net current",
+                "A",
+            );
+        }
+
+        // MOSFET drain-source: any pin named D/DRAIN or S/SOURCE.
+        let ds_nets = nets_of(&|pin| is_drain_source_pin(&pin.name));
+        let is_fet = def.ratings.iter().any(|r| r.name == "vds_max")
+            || (def.category == "Transistor"
+                && def
+                    .symbol
+                    .pins
+                    .iter()
+                    .any(|pin| is_drain_source_pin(&pin.name)));
+        if is_fet {
+            check_rating(
+                &mut f,
+                "ERC-016",
+                s,
+                def,
+                &[(
+                    "vds_max",
+                    1.25,
+                    "below the 80 % Vds derating for switch-node ringing",
+                )],
+                declared_max(&ds_nets, &p.constraints.net_voltages_v),
+                "drain/source rail voltage",
+                "V",
+            );
         }
     }
     // Resistor values must be numeric.
@@ -356,7 +539,8 @@ pub fn run(p: &Project) -> Report {
         rule(
             "ERC-011",
             "Capacitor voltage rating",
-            "rating >= rail (error), >= 1.5x rail (warning); uses declared net voltages",
+            "rating >= rail (error), >= 1.5x rail (warning); uses declared net voltages; \
+             missing rating or rail is reported as not checked",
             "DESK erc.py (reimplemented)",
         ),
         rule(
@@ -371,16 +555,403 @@ pub fn run(p: &Project) -> Report {
             "",
             "DESK erc.py (reimplemented)",
         ),
+        rule(
+            "ERC-014",
+            "Regulator/IC supply input voltage rating",
+            "highest declared rail on supply-named PowerIn pins vs input_voltage_max \
+             (warning < 1.2x) or supply_voltage_max (warning < 1.05x)",
+            "EAK (margins are design heuristics, not from a standard)",
+        ),
+        rule(
+            "ERC-015",
+            "Inductor current rating",
+            "highest declared net current vs saturation_current (warning < 1.2x: peak at \
+             40 % ripple, TI SLVA477B) and rated current (warning < 1.1x)",
+            "EAK; ripple guidance TI SLVA477B",
+        ),
+        rule(
+            "ERC-016",
+            "MOSFET drain-source voltage rating",
+            "highest declared rail on D/S pins vs vds_max (warning < 1.25x, i.e. 80 % derating)",
+            "EAK (80 % derating is a design heuristic, not from a standard)",
+        ),
     ];
     let not_implemented = vec![
         "Pin-to-pin compatibility matrix beyond driver conflicts".into(),
         "Hierarchical sheet / bus consistency (hierarchy not yet supported)".into(),
         "Analog simulation, operating-point and tolerance analysis".into(),
-        "Component stress/derating beyond capacitor voltage".into(),
+        "Component stress beyond capacitor voltage, IC supply voltage, inductor current and \
+         MOSFET Vds (diode reverse voltage, resistor power, MOSFET drain current and Vgs, \
+         thermal/junction temperature)"
+            .into(),
     ];
     let limitations = vec![
         "Pin-name heuristics for supply/ground pins can miss unusual naming".into(),
         "Ratings in the built-in library are unverified unless marked verified".into(),
+        "Rating checks use declared net voltages/currents only: switch-node ringing, input \
+         transients and inductor ripple peaks are not simulated (margins cover them \
+         heuristically); undeclared nets are reported as not checked"
+            .into(),
     ];
     Report::new("ERC", p, rules, f, not_implemented, limitations)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eak_core::geom::mm;
+    use eak_core::{
+        FootprintDef, LabelKind, Model3d, NetLabel, Point, Rating, Rotation, SymbolDef,
+    };
+
+    fn rating(name: &str, value: f64, unit: &str, verified: bool) -> Rating {
+        Rating {
+            name: name.into(),
+            value,
+            unit: unit.into(),
+            source: if verified {
+                "test datasheet".into()
+            } else {
+                "unverified".into()
+            },
+            verified,
+        }
+    }
+
+    fn part(category: &str, pins: &[(&str, PinType)], ratings: Vec<Rating>) -> ComponentDef {
+        let pins: Vec<SymbolPin> = pins
+            .iter()
+            .enumerate()
+            .map(|(i, (name, t))| SymbolPin {
+                number: (i + 1).to_string(),
+                name: (*name).into(),
+                electrical_type: *t,
+                position: Point::mm(2.54 * i as f64, 0.0),
+            })
+            .collect();
+        ComponentDef {
+            id: format!("TEST_{category}"),
+            name: category.into(),
+            category: category.into(),
+            refdes_prefix: "X".into(),
+            default_value: String::new(),
+            manufacturer: None,
+            mpn: None,
+            lcsc: None,
+            datasheet: None,
+            pin_map: pins
+                .iter()
+                .map(|p| (p.number.clone(), vec![p.number.clone()]))
+                .collect(),
+            symbol: SymbolDef {
+                pins,
+                body_half_w: mm(2.0),
+                body_half_h: mm(2.0),
+            },
+            footprint: FootprintDef {
+                name: "TEST".into(),
+                pads: vec![],
+                courtyard_half_w: mm(1.0),
+                courtyard_half_h: mm(1.0),
+                body_height: None,
+            },
+            ratings,
+            model3d: Model3d {
+                kind: "box".into(),
+                color: "#000".into(),
+                external_ref: None,
+            },
+            provenance: "test".into(),
+        }
+    }
+
+    /// One part with pin i labelled `nets[i]`, plus declared voltages/currents; returns the
+    /// findings of `rule_id`.
+    fn check(
+        def: ComponentDef,
+        nets: &[&str],
+        volts: &[(&str, f64)],
+        amps: &[(&str, f64)],
+        rule_id: &str,
+    ) -> Vec<(Severity, String)> {
+        let mut p = Project::new("t");
+        let sheet = p.first_sheet_id().unwrap().clone();
+        let sym = SymbolInstance {
+            id: "sym_1".into(),
+            sheet_id: sheet.clone(),
+            component_id: def.id.clone(),
+            refdes: "U1".into(),
+            value: String::new(),
+            position: Point::mm(50.0, 50.0),
+            rotation: Rotation::R0,
+        };
+        p.library.insert(def.id.clone(), def);
+        for (i, net) in nets.iter().enumerate() {
+            let pos = p.pin_position(&sym, &(i + 1).to_string()).unwrap();
+            let id = format!("lbl_{i}");
+            p.schematic.labels.insert(
+                id.clone(),
+                NetLabel {
+                    id,
+                    sheet_id: sheet.clone(),
+                    name: (*net).into(),
+                    position: pos,
+                    kind: LabelKind::Power,
+                },
+            );
+        }
+        p.schematic.symbols.insert(sym.id.clone(), sym);
+        for (n, v) in volts {
+            p.constraints.net_voltages_v.insert((*n).into(), *v);
+        }
+        for (n, a) in amps {
+            p.constraints.net_currents_a.insert((*n).into(), *a);
+        }
+        let r = run(&p);
+        assert!(
+            r.rules.iter().any(|x| x.id == rule_id),
+            "{rule_id} not listed"
+        );
+        r.findings
+            .into_iter()
+            .filter(|f| f.rule_id == rule_id)
+            .map(|f| (f.severity, f.message))
+            .collect()
+    }
+
+    fn severities(f: &[(Severity, String)]) -> Vec<Severity> {
+        let mut s: Vec<Severity> = f.iter().map(|x| x.0).collect();
+        s.sort();
+        s
+    }
+
+    fn regulator(r: Vec<Rating>) -> ComponentDef {
+        part(
+            "Power",
+            &[
+                ("VIN", PinType::PowerIn),
+                ("GND", PinType::PowerIn),
+                ("SW", PinType::Output),
+            ],
+            r,
+        )
+    }
+
+    const REG_NETS: &[&str] = &["VIN", "GND", "SW"];
+    const RAIL_24: &[(&str, f64)] = &[("VIN", 24.0)];
+
+    #[test]
+    fn erc014_regulator_input_voltage() {
+        let ok = check(
+            regulator(vec![rating("input_voltage_max", 40.0, "V", true)]),
+            REG_NETS,
+            RAIL_24,
+            &[],
+            "ERC-014",
+        );
+        assert!(ok.is_empty(), "{ok:?}");
+        // 28 V part on 24 V: within rating but under the 1.2x transient headroom.
+        let w = check(
+            regulator(vec![rating("input_voltage_max", 28.0, "V", true)]),
+            REG_NETS,
+            RAIL_24,
+            &[],
+            "ERC-014",
+        );
+        assert_eq!(severities(&w), vec![Warning]);
+        let e = check(
+            regulator(vec![rating("input_voltage_max", 20.0, "V", false)]),
+            REG_NETS,
+            RAIL_24,
+            &[],
+            "ERC-014",
+        );
+        assert_eq!(severities(&e), vec![Error]);
+        assert!(e[0].1.contains("rating unverified"), "{}", e[0].1);
+    }
+
+    #[test]
+    fn erc014_missing_rating_or_rail_is_not_checked() {
+        let none = check(regulator(vec![]), REG_NETS, RAIL_24, &[], "ERC-014");
+        assert_eq!(severities(&none), vec![Info]);
+        assert!(none[0].1.contains("not checked"), "{}", none[0].1);
+        let no_rail = check(
+            regulator(vec![rating("input_voltage_max", 40.0, "V", true)]),
+            REG_NETS,
+            &[],
+            &[],
+            "ERC-014",
+        );
+        assert_eq!(severities(&no_rail), vec![Info]);
+        assert!(no_rail[0].1.contains("no declared"), "{}", no_rail[0].1);
+        // MCU on 3.3 V with an unverified 3.6 V limit: passes, reported as unverified.
+        let mcu = part(
+            "MCU",
+            &[("VDD", PinType::PowerIn), ("GND", PinType::PowerIn)],
+            vec![rating("supply_voltage_max", 3.6, "V", false)],
+        );
+        let u = check(mcu, &["+3V3", "GND"], &[("+3V3", 3.3)], &[], "ERC-014");
+        assert_eq!(severities(&u), vec![Info]);
+        assert!(u[0].1.contains("unverified"), "{}", u[0].1);
+    }
+
+    fn inductor(r: Vec<Rating>) -> ComponentDef {
+        part(
+            "Inductor",
+            &[("~", PinType::Passive), ("~", PinType::Passive)],
+            r,
+        )
+    }
+
+    const L_NETS: &[&str] = &["SW", "+5V"];
+    const LOAD_3A: &[(&str, f64)] = &[("+5V", 3.0)];
+
+    #[test]
+    fn erc015_inductor_current() {
+        let ok = check(
+            inductor(vec![
+                rating("saturation_current", 4.5, "A", true),
+                rating("current", 4.0, "A", true),
+            ]),
+            L_NETS,
+            &[],
+            LOAD_3A,
+            "ERC-015",
+        );
+        assert!(ok.is_empty(), "{ok:?}");
+        // Isat 3.4 A < 1.2 x 3 A (warning); rated 2.5 A < 3 A (error).
+        let bad = check(
+            inductor(vec![
+                rating("saturation_current", 3.4, "A", true),
+                rating("current", 2.5, "A", true),
+            ]),
+            L_NETS,
+            &[],
+            LOAD_3A,
+            "ERC-015",
+        );
+        assert_eq!(severities(&bad), vec![Warning, Error]);
+        // Generic library inductor (rated current only): saturation is reported as not
+        // checked, never as passing.
+        let generic = check(
+            inductor(vec![rating("current", 1.0, "A", false)]),
+            L_NETS,
+            &[],
+            LOAD_3A,
+            "ERC-015",
+        );
+        assert_eq!(severities(&generic), vec![Info, Error]);
+        assert!(generic
+            .iter()
+            .any(|(s, m)| *s == Info && m.contains("saturation_current")));
+        let undeclared = check(
+            inductor(vec![rating("saturation_current", 4.5, "A", true)]),
+            L_NETS,
+            &[],
+            &[],
+            "ERC-015",
+        );
+        assert_eq!(severities(&undeclared), vec![Info, Info]);
+        assert!(undeclared.iter().all(|(_, m)| m.contains("not checked")));
+    }
+
+    fn mosfet(r: Vec<Rating>) -> ComponentDef {
+        part(
+            "Transistor",
+            &[
+                ("G", PinType::Input),
+                ("D", PinType::Passive),
+                ("S", PinType::Passive),
+            ],
+            r,
+        )
+    }
+
+    // High-side FET: drain on VIN (24 V), source on the switch node (undeclared).
+    const HS_NETS: &[&str] = &["HG", "VIN", "SW"];
+
+    #[test]
+    fn erc016_mosfet_vds() {
+        let ok = check(
+            mosfet(vec![rating("vds_max", 40.0, "V", true)]),
+            HS_NETS,
+            RAIL_24,
+            &[],
+            "ERC-016",
+        );
+        assert!(ok.is_empty(), "{ok:?}");
+        // 30 V is exactly 1.25 x 24 V: meets the 80 % derating.
+        let edge = check(
+            mosfet(vec![rating("vds_max", 30.0, "V", true)]),
+            HS_NETS,
+            RAIL_24,
+            &[],
+            "ERC-016",
+        );
+        assert!(edge.is_empty(), "{edge:?}");
+        let w = check(
+            mosfet(vec![rating("vds_max", 25.0, "V", true)]),
+            HS_NETS,
+            RAIL_24,
+            &[],
+            "ERC-016",
+        );
+        assert_eq!(severities(&w), vec![Warning]);
+        let e = check(
+            mosfet(vec![rating("vds_max", 20.0, "V", true)]),
+            HS_NETS,
+            RAIL_24,
+            &[],
+            "ERC-016",
+        );
+        assert_eq!(severities(&e), vec![Error]);
+        // Missing rating and wrong unit are not checked.
+        let none = check(mosfet(vec![]), HS_NETS, RAIL_24, &[], "ERC-016");
+        assert_eq!(severities(&none), vec![Info]);
+        let unit = check(
+            mosfet(vec![rating("vds_max", 30_000.0, "mV", true)]),
+            HS_NETS,
+            RAIL_24,
+            &[],
+            "ERC-016",
+        );
+        assert_eq!(severities(&unit), vec![Info]);
+        assert!(unit[0].1.contains("unit"), "{}", unit[0].1);
+    }
+
+    fn capacitor(r: Vec<Rating>) -> ComponentDef {
+        part(
+            "Capacitor",
+            &[("~", PinType::Passive), ("~", PinType::Passive)],
+            r,
+        )
+    }
+
+    #[test]
+    fn erc011_capacitor_voltage_uses_shared_rating_check() {
+        let cases = [
+            (50.0, true, vec![]),
+            (25.0, true, vec![Warning]),
+            (16.0, false, vec![Error]),
+            (50.0, false, vec![Info]),
+        ];
+        for (v, verified, want) in cases {
+            let got = check(
+                capacitor(vec![rating("voltage", v, "V", verified)]),
+                &["VIN", "GND"],
+                RAIL_24,
+                &[],
+                "ERC-011",
+            );
+            assert_eq!(severities(&got), want, "{v} V: {got:?}");
+        }
+        let no_rail = check(
+            capacitor(vec![rating("voltage", 50.0, "V", true)]),
+            &["VIN", "GND"],
+            &[],
+            &[],
+            "ERC-011",
+        );
+        assert_eq!(severities(&no_rail), vec![Info]);
+    }
 }

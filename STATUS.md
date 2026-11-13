@@ -15,14 +15,19 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: CI workflow added, **not yet r
 - Engineering core (`eak-engineering`):
   - IPC-2221 trace width, clearance, creepage and via current, re-implemented from the DESK
     audit, with DESK reference vectors as tests (tables **not verified against the standard text**).
-  - Circuit calculations.
+  - Circuit calculations, including synchronous-buck power-stage design (duty, inductor, ripple and
+    peak/RMS current, output/input capacitors, MOSFET and inductor losses, efficiency, E24/E96
+    feedback divider). Each formula is sourced in `docs/engineering/POWER_CALCULATIONS.md` and has
+    hand-computed tests. Not yet exposed as a runtime command.
   - Schematic netlist resolution.
   - Exact copper geometry and connectivity, with zone fill on a 0.1 mm raster.
   - A native two-layer A* router.
   - A constructive placer.
   - 3D scene data.
 - Verification (`eak-validation`):
-  - ERC: 13 rules.
+  - ERC: 16 rules. These include component rating checks (capacitor voltage, regulator/IC supply
+    voltage, inductor current, MOSFET Vds) that use declared net voltages and currents. A missing
+    rating or undeclared net is reported as not checked.
   - DRC: 13 rules, including current capacity and voltage clearance.
   - Mechanical: 3 rules.
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
@@ -40,8 +45,8 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: CI workflow added, **not yet r
   - Package re-verification that detects tampering.
 
 ### Tests executed (exact results)
-`cargo test --workspace --release`: **35 passed, 0 failed** (eak-core 7, eak-engineering 11,
-eak-runtime 10 engine + 4 process, eak-manufacturing 3 end-to-end).
+`cargo test --workspace --release`: **49 passed, 0 failed** (eak-core 7, eak-engineering 20,
+eak-validation 5, eak-runtime 10 engine + 4 process, eak-manufacturing 3 end-to-end).
 `cargo clippy --workspace --all-targets -- -D warnings`: clean. `cargo fmt --check`: clean.
 
 The key end-to-end test (`reference_design_end_to_end`) runs a 10-component ATtiny85 + AMS1117 board through
