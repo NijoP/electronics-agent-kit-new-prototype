@@ -13,9 +13,15 @@ eak-runtime.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-# HTTPS client for the model providers. rustls (pure Rust TLS) keeps the build identical on
+# Optional HTTPS client for the model providers (feature `remote-http`, off by default so the
+# offline build has no network stack). rustls (pure Rust TLS) keeps the build identical on
 # Windows, Linux and macOS without a system OpenSSL.
-ureq = { version = "3", default-features = false, features = ["rustls"] }
+ureq = { version = "3", default-features = false, features = ["rustls"], optional = true }
+
+[features]
+default = []
+# Live HTTPS to OpenAI-compatible, Anthropic and Ollama endpoints.
+remote-http = ["dep:ureq"]
 
 [lints]
 workspace = true

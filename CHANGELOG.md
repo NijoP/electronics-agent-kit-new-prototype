@@ -11,7 +11,8 @@
 
 ## Unreleased - Intelligence Engine core (`eak-intelligence`)
 - Provider trait with OpenAI-compatible (`/chat/completions`), Anthropic Messages (`/v1/messages`) and
-  Ollama (`/api/chat`) adapters. The HTTPS transport (ureq + rustls) is cancellable, with bounded retries
+  Ollama (`/api/chat`) adapters. The HTTPS transport (ureq + rustls) is optional (Cargo feature `remote-http`,
+  off by default; without it remote providers return `TransportNotCompiledIn`). It is cancellable, with bounded retries
   and a body-size limit.
 - API keys come only from user configuration or an environment variable. `ApiKey` is never
   serialised and `Debug` is redacted.

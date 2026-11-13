@@ -67,7 +67,7 @@ Injected short and clearance violations are detected (`drc_detects_injected_shor
 ### Implemented and tested
 - **Providers:**
   - A `Provider` trait with OpenAI-compatible, Anthropic Messages and Ollama adapters.
-  - Cancellable HTTPS transport (ureq + rustls): bounded retries on 429, 5xx and transport errors; typed error mapping; 16 MiB body limit.
+  - Cancellable HTTPS transport (ureq + rustls) behind the optional `remote-http` Cargo feature (off by default): bounded retries on 429, 5xx and transport errors; typed error mapping; 16 MiB body limit. Without the feature, remote providers fail with `ProviderError::TransportNotCompiledIn` and nothing touches the network.
   - Model and endpoint come from the user's `ProviderConfig`.
   - Keys come from the configuration value or an environment variable (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` by default) and are never serialised or printed.
   - Anthropic assistant content, including thinking blocks, is replayed verbatim.
@@ -87,10 +87,10 @@ Injected short and clearance violations are detected (`drc_detects_injected_shor
   - The `AgentRun` log records actions, approvals, responses and events.
 
 ### Tests executed
-`cargo test --workspace --release`: **67 passed, 0 failed** (the 35 M1 tests plus 32 new). Clippy (`-D warnings`), `cargo fmt --check` and the Python-free scan are clean.
+`cargo test --workspace --release`: **69 passed, 0 failed** (the 35 M1 tests plus 34 new). Clippy (`-D warnings`), `cargo fmt --check` and the Python-free scan are clean.
 
-`cargo test -p eak-intelligence`: **32 passed, 0 failed**:
-- 19 unit tests: providers, transport, key handling, schemas against the serde shape, read-only tools.
+`cargo test -p eak-intelligence`: **34 passed, 0 failed** with and without `--features remote-http` (CI runs both, plus `--no-default-features`):
+- 21 unit tests: providers, transport (including the typed `TransportNotCompiledIn` refusal without `remote-http`), key handling, schemas against the serde shape, read-only tools.
 - 13 integration tests in `tests/agent.rs`, run with a scripted provider and no network.
 
 ### Known gaps

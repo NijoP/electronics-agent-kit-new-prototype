@@ -3,7 +3,7 @@
 use super::{ApiKey, ProviderError};
 use crate::message::CancelToken;
 use serde_json::Value;
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,70 +26,107 @@ pub trait HttpTransport: Send + Sync {
     fn post(&self, req: HttpRequest, cancel: &CancelToken) -> Result<HttpResponse, ProviderError>;
 }
 
-/// Blocking HTTPS client (rustls) run on a worker thread so cancellation returns immediately;
-/// an abandoned request is bounded by its global timeout.
-pub struct UreqTransport;
-
 const POLL: Duration = Duration::from_millis(25);
-/// Response bodies larger than this are rejected (bounded memory).
-const MAX_BODY_BYTES: u64 = 16 * 1024 * 1024;
 
-impl HttpTransport for UreqTransport {
-    fn post(&self, req: HttpRequest, cancel: &CancelToken) -> Result<HttpResponse, ProviderError> {
-        if cancel.is_cancelled() {
-            return Err(ProviderError::Cancelled);
-        }
-        let (tx, rx) = mpsc::channel();
-        let timeout = req.timeout;
-        std::thread::spawn(move || {
-            let agent: ureq::Agent = ureq::Agent::config_builder()
-                .timeout_global(Some(req.timeout))
-                .http_status_as_error(false)
-                .build()
-                .into();
-            let mut b = agent.post(&req.url);
-            for (k, v) in &req.headers {
-                b = b.header(k.as_str(), v.as_str());
-            }
-            let result = match b.send(req.body.as_bytes()) {
-                Ok(mut resp) => {
-                    let status = resp.status().as_u16();
-                    resp.body_mut()
-                        .with_config()
-                        .limit(MAX_BODY_BYTES)
-                        .read_to_string()
-                        .map(|body| HttpResponse { status, body })
-                        .map_err(map_ureq_error)
-                }
-                Err(e) => Err(map_ureq_error(e)),
-            };
-            let _ = tx.send(result);
-        });
-        let deadline = Instant::now() + timeout + Duration::from_secs(5);
-        loop {
+/// Transport used when the `remote-http` feature is off: refuses every request with a typed
+/// error and never touches the network.
+pub struct OfflineTransport;
+
+impl HttpTransport for OfflineTransport {
+    fn post(&self, req: HttpRequest, _: &CancelToken) -> Result<HttpResponse, ProviderError> {
+        Err(ProviderError::TransportNotCompiledIn(req.url))
+    }
+}
+
+/// The transport `build_provider` uses: HTTPS when built with `remote-http`, otherwise
+/// [`OfflineTransport`].
+pub fn default_transport() -> Arc<dyn HttpTransport> {
+    #[cfg(feature = "remote-http")]
+    {
+        Arc::new(UreqTransport)
+    }
+    #[cfg(not(feature = "remote-http"))]
+    {
+        Arc::new(OfflineTransport)
+    }
+}
+
+#[cfg(feature = "remote-http")]
+pub use remote::UreqTransport;
+
+#[cfg(feature = "remote-http")]
+mod remote {
+    use super::*;
+    use std::sync::mpsc;
+
+    /// Blocking HTTPS client (rustls) run on a worker thread so cancellation returns
+    /// immediately; an abandoned request is bounded by its global timeout.
+    pub struct UreqTransport;
+
+    /// Response bodies larger than this are rejected (bounded memory).
+    const MAX_BODY_BYTES: u64 = 16 * 1024 * 1024;
+
+    impl HttpTransport for UreqTransport {
+        fn post(
+            &self,
+            req: HttpRequest,
+            cancel: &CancelToken,
+        ) -> Result<HttpResponse, ProviderError> {
             if cancel.is_cancelled() {
                 return Err(ProviderError::Cancelled);
             }
-            match rx.recv_timeout(POLL) {
-                Ok(r) => return r,
-                Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() > deadline => {
-                    return Err(ProviderError::Timeout)
+            let (tx, rx) = mpsc::channel();
+            let timeout = req.timeout;
+            std::thread::spawn(move || {
+                let agent: ureq::Agent = ureq::Agent::config_builder()
+                    .timeout_global(Some(req.timeout))
+                    .http_status_as_error(false)
+                    .build()
+                    .into();
+                let mut b = agent.post(&req.url);
+                for (k, v) in &req.headers {
+                    b = b.header(k.as_str(), v.as_str());
                 }
-                Err(mpsc::RecvTimeoutError::Timeout) => {}
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    return Err(ProviderError::Transport(
-                        "HTTP worker ended unexpectedly".into(),
-                    ))
+                let result = match b.send(req.body.as_bytes()) {
+                    Ok(mut resp) => {
+                        let status = resp.status().as_u16();
+                        resp.body_mut()
+                            .with_config()
+                            .limit(MAX_BODY_BYTES)
+                            .read_to_string()
+                            .map(|body| HttpResponse { status, body })
+                            .map_err(map_ureq_error)
+                    }
+                    Err(e) => Err(map_ureq_error(e)),
+                };
+                let _ = tx.send(result);
+            });
+            let deadline = Instant::now() + timeout + Duration::from_secs(5);
+            loop {
+                if cancel.is_cancelled() {
+                    return Err(ProviderError::Cancelled);
+                }
+                match rx.recv_timeout(POLL) {
+                    Ok(r) => return r,
+                    Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() > deadline => {
+                        return Err(ProviderError::Timeout)
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        return Err(ProviderError::Transport(
+                            "HTTP worker ended unexpectedly".into(),
+                        ))
+                    }
                 }
             }
         }
     }
-}
 
-fn map_ureq_error(e: ureq::Error) -> ProviderError {
-    match e {
-        ureq::Error::Timeout(_) => ProviderError::Timeout,
-        other => ProviderError::Transport(other.to_string()),
+    fn map_ureq_error(e: ureq::Error) -> ProviderError {
+        match e {
+            ureq::Error::Timeout(_) => ProviderError::Timeout,
+            other => ProviderError::Transport(other.to_string()),
+        }
     }
 }
 
@@ -291,7 +328,60 @@ mod tests {
             .unwrap_err();
         assert_eq!(e, ProviderError::Cancelled);
         assert!(t.requests.lock().unwrap().is_empty());
-        // The real transport also refuses a cancelled token without touching the network.
+    }
+
+    #[test]
+    fn offline_transport_refuses_with_a_typed_error() {
+        let r = OfflineTransport.post(
+            HttpRequest {
+                url: "https://api.anthropic.com/v1/messages".into(),
+                headers: vec![],
+                body: String::new(),
+                timeout: Duration::from_secs(1),
+            },
+            &CancelToken::new(),
+        );
+        assert_eq!(
+            r.unwrap_err(),
+            ProviderError::TransportNotCompiledIn("https://api.anthropic.com/v1/messages".into())
+        );
+        // Not a transient error: the endpoint never retries it.
+        assert!(!ProviderError::TransportNotCompiledIn(String::new()).is_retryable());
+    }
+
+    #[cfg(not(feature = "remote-http"))]
+    #[test]
+    fn without_remote_http_every_remote_provider_reports_missing_transport() {
+        use crate::message::{ChatMessage, ChatRequest};
+        use crate::provider::{build_provider, ApiKey, ProviderConfig, ProviderKind};
+        for kind in [
+            ProviderKind::OpenAiCompatible,
+            ProviderKind::Anthropic,
+            ProviderKind::Ollama,
+        ] {
+            let mut cfg = ProviderConfig::new(kind);
+            cfg.model = Some("m".into());
+            cfg.api_key = Some(ApiKey::new("k"));
+            let p = build_provider(&cfg).unwrap();
+            let req = ChatRequest {
+                system: "s".into(),
+                messages: vec![ChatMessage::User { text: "u".into() }],
+                tools: vec![],
+                max_tokens: 10,
+            };
+            let e = p.complete(&req, &CancelToken::new()).unwrap_err();
+            assert!(
+                matches!(e, ProviderError::TransportNotCompiledIn(_)),
+                "{kind:?}: {e}"
+            );
+        }
+    }
+
+    #[cfg(feature = "remote-http")]
+    #[test]
+    fn ureq_transport_refuses_a_cancelled_token_without_network() {
+        let c = CancelToken::new();
+        c.cancel();
         let r = UreqTransport.post(
             HttpRequest {
                 url: "http://127.0.0.1:9/".into(),

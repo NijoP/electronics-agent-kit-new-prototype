@@ -32,6 +32,8 @@ pub enum ProviderError {
     Server { status: u16, message: String },
     #[error("provider request failed (HTTP {status}): {message}")]
     Http { status: u16, message: String },
+    #[error("remote HTTP transport not compiled in (build eak-intelligence with the `remote-http` feature); refused request to {0}")]
+    TransportNotCompiledIn(String),
     #[error("network/transport error: {0}")]
     Transport(String),
     #[error("provider request timed out")]
@@ -226,9 +228,10 @@ impl ProviderConfig {
     }
 }
 
-/// Build a provider that talks to the real endpoint over HTTPS.
+/// Build a provider for the real endpoint. Live HTTPS needs the `remote-http` feature;
+/// without it every request fails with `ProviderError::TransportNotCompiledIn`.
 pub fn build_provider(config: &ProviderConfig) -> Result<Box<dyn Provider>, ProviderError> {
-    build_provider_with(config, Arc::new(http::UreqTransport))
+    build_provider_with(config, http::default_transport())
 }
 
 /// Build a provider over a caller-supplied transport (tests use a recording transport).
