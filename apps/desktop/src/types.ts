@@ -149,6 +149,23 @@ export interface Snapshot {
 
 /** Argument-free engine commands offered by the command palette (eak-runtime `Command`). */
 export type Command =
+  | { type: "PlaceSymbol"; sheet_id: Id | null; component_id: string; position: Point; rotation: Rotation; refdes: string | null; value: string | null }
+  | { type: "MoveSymbol"; symbol_id: Id; position: Point }
+  | { type: "RotateSymbol"; symbol_id: Id; rotation: Rotation }
+  | { type: "SetSymbolValue"; symbol_id: Id; value: string }
+  | { type: "SetRefdes"; symbol_id: Id; refdes: string }
+  | { type: "DeleteSymbol"; symbol_id: Id }
+  | { type: "AddWire"; sheet_id: Id | null; a: Point; b: Point }
+  | { type: "DeleteWire"; wire_id: Id }
+  | { type: "ConnectPins"; a_symbol: Id; a_pin: string; b_symbol: Id; b_pin: string }
+  | { type: "AddNetLabel"; sheet_id: Id | null; name: string; position: Point; kind: "net" | "power" }
+  | { type: "DeleteNetLabel"; label_id: Id }
+  | { type: "SetBoardOutline"; points: Point[] }
+  | { type: "MoveFootprint"; footprint_id: Id; position: Point; rotation: Rotation | null; side: Side | null }
+  | { type: "AddTrack"; layer: CopperLayer; a: Point; b: Point; width: Nm | null; net: string }
+  | { type: "DeleteTrack"; track_id: Id }
+  | { type: "AddVia"; position: Point; net: string; drill: Nm | null; diameter: Nm | null }
+  | { type: "DeleteVia"; via_id: Id }
   | { type: "Annotate" }
   | { type: "SyncSchematicToPcb" }
   | { type: "AutoPlace"; grid: Nm | null }
@@ -244,4 +261,33 @@ export interface ConnectionReport {
   ok: boolean;
   latency_ms: number;
   message: string;
+}
+
+/** A built-in library part (`library_components` IPC). */
+export interface LibraryEntry {
+  id: string;
+  name: string;
+  category: string;
+  refdes_prefix: string;
+  default_value: string;
+  pins: [string, string][];
+}
+
+export interface ExportFile {
+  name: string;
+  bytes: number;
+  sha256: string;
+  kind: string;
+}
+export interface ExportResult {
+  out_dir: string;
+  manifest: {
+    revision: number;
+    status: "DRAFT" | "INTERNALLY_VERIFIED_RELEASE_CANDIDATE";
+    statement: string;
+    blocking_reasons: string[];
+    files: ExportFile[];
+    not_verified: string[];
+  };
+  reports: Report[];
 }

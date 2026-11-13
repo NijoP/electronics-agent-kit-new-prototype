@@ -1,4 +1,4 @@
-# ADR-0008 Model adaptor and credential storage
+# ADR-0010 Model adaptor and credential storage
 
 **Date:** 2026-11-14 · **Status:** accepted (product-owner directive 2026-11-13: outcome 4, universal model adaptor)
 

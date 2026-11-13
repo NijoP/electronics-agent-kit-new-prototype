@@ -4,10 +4,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, describeError } from "./api";
 import { CommandPalette, type PaletteAction } from "./CommandPalette";
+import type { EditCtx } from "./EditContext";
 import { EngineeringMonitor } from "./EngineeringMonitor";
+import { ExportPanel } from "./ExportPanel";
 import { PcbView } from "./PcbView";
 import { SchematicView } from "./SchematicView";
-import type { Check, CheckResult, Command, CommandResponse, EngineEvent, Id, Snapshot } from "./types";
+import type { Check, CheckResult, Command, CommandResponse, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
   initial: Snapshot;
@@ -25,6 +27,9 @@ export function Workspace({ initial, onClosed }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [palette, setPalette] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [library, setLibrary] = useState<LibraryEntry[]>([]);
+  const [exported, setExported] = useState<ExportResult | null>(null);
+  const [layout, setLayout] = useState<"both" | "schematic" | "pcb">("both");
   const revision = snapshot.project.revision;
 
   const pullEvents = useCallback(async () => {
@@ -38,6 +43,13 @@ export function Workspace({ initial, onClosed }: Props) {
     setSnapshot(await api.currentProject());
     await pullEvents();
   }, [pullEvents]);
+
+  useEffect(() => {
+    api
+      .libraryComponents()
+      .then(setLibrary)
+      .catch((e) => setMessage(`Library unavailable: ${String(e)}`));
+  }, []);
 
   useEffect(() => {
     pullEvents().catch((e) => setMessage(String(e)));
@@ -70,6 +82,33 @@ export function Workspace({ initial, onClosed }: Props) {
     });
 
   const execute = (command: Command) => submit(() => api.execute(revision, command));
+  // Chain commands so each one carries the revision the previous one produced; stop at the
+  // first rejection (the engine already left the project untouched for it).
+  const executeAll = (commands: Command | Command[]) =>
+    guarded(async () => {
+      let rev = revision;
+      let last: CommandResponse | null = null;
+      for (const c of Array.isArray(commands) ? commands : [commands]) {
+        last = await api.execute(rev, c);
+        if (!last.accepted) break;
+        rev = last.revision_after;
+      }
+      if (last)
+        setMessage(
+          last.accepted
+            ? `${last.command} → revision ${last.revision_after}, saved`
+            : `${last.command} rejected: ${last.error ? describeError(last.error) : "unknown error"}`,
+        );
+      await refresh();
+    });
+  const edit: EditCtx = { execute: executeAll, busy, library, notify: setMessage };
+  const exportGerbers = () =>
+    guarded(async () => {
+      const r = await api.exportManufacturing();
+      setExported(r);
+      setMessage(`Exported ${r.manifest.files.length} files to ${r.out_dir} (${r.manifest.status})`);
+      await pullEvents();
+    });
   const undo = () => submit(() => api.undo(revision));
   const redo = () => submit(() => api.redo(revision));
   const check = (c: Check) =>
@@ -93,6 +132,7 @@ export function Workspace({ initial, onClosed }: Props) {
   const actions: PaletteAction[] = [
     { id: "undo", label: "Undo", run: undo, disabled: !snapshot.can_undo },
     { id: "redo", label: "Redo", run: redo, disabled: !snapshot.can_redo },
+    { id: "export", label: "Export Gerbers + drill", run: exportGerbers },
     { id: "erc", label: "Run ERC", run: () => check("erc") },
     { id: "drc", label: "Run DRC", run: () => check("drc") },
     { id: "annotate", label: "Annotate schematic", run: () => execute({ type: "Annotate" }) },
@@ -119,6 +159,9 @@ export function Workspace({ initial, onClosed }: Props) {
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette(true);
+      } else if (mod && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        setMessage(`Saved: every accepted command is already on disk (revision ${revision}).`);
       } else if (typing) {
         return;
       } else if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
@@ -142,6 +185,14 @@ export function Workspace({ initial, onClosed }: Props) {
       <header className="toolbar">
         <strong>{snapshot.project.name}</strong>
         <span className="muted">revision {revision}</span>
+        <span className="saved" title="Every accepted command is written to disk atomically before it returns">
+          Saved · r{revision}
+        </span>
+        <select aria-label="Layout" value={layout} onChange={(e) => setLayout(e.target.value as typeof layout)}>
+          <option value="both">Schematic + PCB</option>
+          <option value="schematic">Schematic only</option>
+          <option value="pcb">PCB only</option>
+        </select>
         <button type="button" onClick={undo} disabled={busy || !snapshot.can_undo} title="Undo (Ctrl+Z)">
           Undo
         </button>
@@ -153,6 +204,9 @@ export function Workspace({ initial, onClosed }: Props) {
         </button>
         <button type="button" onClick={() => check("drc")} disabled={busy}>
           Run DRC
+        </button>
+        <button type="button" onClick={exportGerbers} disabled={busy} title="Gerber, Excellon, BOM, CPL">
+          Export Gerbers
         </button>
         <button type="button" onClick={() => setPalette(true)} title="Ctrl+K">
           Commands
@@ -171,12 +225,13 @@ export function Workspace({ initial, onClosed }: Props) {
         </div>
       )}
       <div className="main">
-        <div className="views">
-          <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} />
-          <PcbView snapshot={snapshot} selected={selected} onSelect={setSelected} />
+        <div className={`views ${layout}`}>
+          {layout !== "pcb" && <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} />}
+          {layout !== "schematic" && <PcbView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} />}
         </div>
         <aside className="side">
           <EngineeringMonitor snapshot={snapshot} results={results} onProbe={setSelected} />
+          <ExportPanel result={exported} />
           <section className="activity" aria-label="Activity">
             <h2>Activity</h2>
             <ol>

@@ -9,4 +9,4 @@ pub mod erc;
 pub mod mech;
 pub mod report;
 
-pub use report::{Finding, Outcome, Report, Severity};
+pub use report::{Bound, Finding, Limit, Outcome, Quantity, Report, Severity};

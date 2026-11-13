@@ -11,6 +11,8 @@ import type {
   EngineEvent,
   ProfileInput,
   ProviderView,
+  ExportResult,
+  LibraryEntry,
   RecentProject,
   Snapshot,
 } from "./types";
@@ -35,6 +37,8 @@ export const IPC_COMMANDS = [
   "model_clear_key",
   "model_list_models",
   "model_test_connection",
+  "library_components",
+  "export_manufacturing",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
@@ -66,6 +70,8 @@ export const api = {
   clearKey: (id: string) => call<ProviderView>("model_clear_key", { id }),
   listModels: (id: string) => call<string[]>("model_list_models", { id }),
   testConnection: (id: string) => call<ConnectionReport>("model_test_connection", { id }),
+  libraryComponents: () => call<LibraryEntry[]>("library_components"),
+  exportManufacturing: () => call<ExportResult>("export_manufacturing"),
 };
 
 export function describeError(e: CommandError): string {
