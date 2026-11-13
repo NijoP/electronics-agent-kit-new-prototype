@@ -13,3 +13,7 @@ sha2.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+eak-runtime.workspace = true
+serde_json.workspace = true

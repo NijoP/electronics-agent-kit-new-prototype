@@ -118,7 +118,9 @@ version = "0.1.0"
 dependencies = [
  "eak-core",
  "eak-engineering",
+ "eak-runtime",
  "serde",
+ "serde_json",
  "sha2",
 ]
 

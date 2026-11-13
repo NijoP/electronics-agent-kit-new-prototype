@@ -1,0 +1,317 @@
+//! Actionable findings: stable ids, measured vs required values for quantitative rules,
+//! suggested fixes, and backward-compatible JSON.
+
+use eak_core::{geom::mm, CopperLayer, Point, Project, Track, Via};
+use eak_runtime::{fixtures, Engine};
+use eak_validation::report::finding_id;
+use eak_validation::{drc, erc, mech, Bound, Finding, Report, Severity};
+use std::collections::BTreeSet;
+
+fn reference() -> Project {
+    let mut e = Engine::in_memory(Project::new("ref"));
+    fixtures::build_schematic(&mut e).unwrap();
+    fixtures::build_pcb(&mut e).unwrap();
+    e.project().clone()
+}
+
+fn track(p: &mut Project, id: &str, net: &str, width: f64, a: (f64, f64), b: (f64, f64)) {
+    p.pcb.tracks.insert(
+        id.into(),
+        Track {
+            id: id.into(),
+            layer: CopperLayer::Top,
+            width: mm(width),
+            a: Point::mm(a.0, a.1),
+            b: Point::mm(b.0, b.1),
+            net: net.into(),
+        },
+    );
+}
+
+/// Findings of `rule` whose objects are exactly `objects`.
+fn find<'a>(r: &'a Report, rule: &str, objects: &[&str]) -> Vec<&'a Finding> {
+    let want: BTreeSet<&str> = objects.iter().copied().collect();
+    r.findings
+        .iter()
+        .filter(|f| {
+            f.rule_id == rule
+                && f.objects
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<BTreeSet<_>>()
+                    == want
+        })
+        .collect()
+}
+
+/// Every finding has a unique id prefixed by its rule and a suggested fix; measured and
+/// required are set together with the same unit.
+fn assert_actionable(r: &Report) {
+    let mut ids = BTreeSet::new();
+    for f in &r.findings {
+        assert!(f.id.starts_with(&format!("{}-", f.rule_id)), "{f:?}");
+        assert!(ids.insert(f.id.clone()), "duplicate id {}", f.id);
+        assert!(
+            f.suggested_fix
+                .as_deref()
+                .is_some_and(|s| !s.trim().is_empty()),
+            "no fix: {f:?}"
+        );
+        match (&f.measured, &f.required) {
+            (Some(m), Some(q)) => assert_eq!(m.unit, q.unit, "{f:?}"),
+            (None, None) => {}
+            _ => panic!("measured/required must be set together: {f:?}"),
+        }
+    }
+}
+
+fn assert_mm(f: &Finding, measured: f64, bound: Bound, required: f64) {
+    let m = f.measured.as_ref().expect("measured");
+    let q = f.required.as_ref().expect("required");
+    assert_eq!((m.unit.as_str(), q.unit.as_str()), ("mm", "mm"), "{f:?}");
+    assert!(
+        (m.value - measured).abs() < 1e-6,
+        "measured {} vs {measured}",
+        m.value
+    );
+    assert_eq!(q.bound, bound);
+    assert!(
+        (q.value - required).abs() < 1e-6,
+        "required {} vs {required}",
+        q.value
+    );
+}
+
+#[test]
+fn finding_id_is_deterministic_and_order_independent() {
+    let ab = finding_id("DRC-002", &["a".into(), "b".into()], "k");
+    // Pinned: SHA-256("DRC-002" 0x1f "a" 0x1f "b" 0x1e "k"), first 12 hex digits.
+    assert_eq!(ab, "DRC-002-6b4c35b291b2");
+    assert_eq!(
+        finding_id("DRC-002", &["b".into(), "a".into(), "a".into()], "k"),
+        ab
+    );
+    assert_ne!(finding_id("DRC-002", &["a".into(), "b".into()], "j"), ab);
+    assert_ne!(finding_id("DRC-003", &["a".into(), "b".into()], "k"), ab);
+    assert_eq!(finding_id("DRC-009", &[], ""), "DRC-009-7f529af239f0");
+}
+
+#[test]
+fn reference_reports_are_actionable_and_ids_repeat_across_runs() {
+    let p = reference();
+    let ids = |r: &Report| r.findings.iter().map(|f| f.id.clone()).collect::<Vec<_>>();
+    for (a, b) in [
+        (erc::run(&p), erc::run(&p)),
+        (drc::run(&p), drc::run(&p)),
+        (mech::run(&p), mech::run(&p)),
+    ] {
+        assert_actionable(&a);
+        assert_eq!(ids(&a), ids(&b));
+    }
+}
+
+#[test]
+fn id_survives_a_changed_measurement() {
+    let mut p = reference();
+    track(&mut p, "t_thin", "N_THIN", 0.10, (5.0, 5.0), (5.0, 6.0));
+    let first = find(&drc::run(&p), "DRC-001", &["t_thin"])[0].id.clone();
+    // Same violation, different measured width, later revision: same id.
+    p.pcb.tracks.get_mut("t_thin").unwrap().width = mm(0.12);
+    p.revision += 7;
+    let r = drc::run(&p);
+    let again = find(&r, "DRC-001", &["t_thin"]);
+    assert_eq!(again.len(), 1);
+    assert_eq!(again[0].id, first);
+    assert_mm(again[0], 0.12, Bound::Min, 0.15);
+}
+
+#[test]
+fn track_width_and_current_capacity_report_measured_and_required() {
+    let mut p = reference();
+    track(&mut p, "t_thin", "N_THIN", 0.10, (5.0, 5.0), (5.0, 6.0));
+    track(&mut p, "t_class", "N_CLASS", 0.20, (7.0, 5.0), (7.0, 6.0));
+    let r = drc::run(&p);
+    assert_actionable(&r);
+    let thin = find(&r, "DRC-001", &["t_thin"]);
+    assert_eq!(thin[0].severity, Severity::Error);
+    assert_mm(thin[0], 0.10, Bound::Min, 0.15);
+    let class = find(&r, "DRC-001", &["t_class"]);
+    assert_eq!(class[0].severity, Severity::Warning);
+    assert_mm(class[0], 0.20, Bound::Min, 0.25);
+
+    // DRC-008: a large declared current makes the routed +5V tracks too narrow.
+    let mut p = reference();
+    p.constraints.net_currents_a.insert("+5V".into(), 5.0);
+    let r = drc::run(&p);
+    assert_actionable(&r);
+    let hot: Vec<_> = r
+        .findings
+        .iter()
+        .filter(|f| f.rule_id == "DRC-008")
+        .collect();
+    assert!(!hot.is_empty());
+    for f in hot {
+        let (m, q) = (f.measured.as_ref().unwrap(), f.required.as_ref().unwrap());
+        let t = &p.pcb.tracks[&f.objects[0]];
+        assert!((m.value - t.width as f64 / 1e6).abs() < 1e-6);
+        assert_eq!(q.bound, Bound::Min);
+        assert!(q.value > m.value, "{f:?}");
+    }
+}
+
+#[test]
+fn via_drill_and_ring_are_separate_findings_with_values() {
+    let mut p = reference();
+    p.pcb.vias.insert(
+        "v_bad".into(),
+        Via {
+            id: "v_bad".into(),
+            position: Point::mm(20.0, 15.0),
+            drill: mm(0.2),
+            diameter: mm(0.4),
+            net: "N_VIA".into(),
+        },
+    );
+    let r = drc::run(&p);
+    assert_actionable(&r);
+    let v = find(&r, "DRC-006", &["v_bad"]);
+    assert_eq!(v.len(), 2, "{v:?}");
+    assert_ne!(v[0].id, v[1].id);
+    let drill = v.iter().find(|f| f.message.contains("drill")).unwrap();
+    assert_mm(drill, 0.2, Bound::Min, 0.3);
+    let ring = v.iter().find(|f| f.message.contains("annular")).unwrap();
+    assert_mm(ring, 0.1, Bound::Min, 0.13);
+}
+
+#[test]
+fn clearance_and_edge_findings_report_gap_and_limit() {
+    let mut p = reference();
+    // Two 0.2 mm tracks on different nets, 0.3 mm apart centre to centre: 0.1 mm gap.
+    track(&mut p, "t_a", "N_A", 0.2, (12.0, 2.0), (12.0, 3.0));
+    track(&mut p, "t_b", "N_B", 0.2, (12.3, 2.0), (12.3, 3.0));
+    // 0.2 mm track whose centreline is 0.3 mm from the left edge: 0.2 mm to the edge.
+    track(&mut p, "t_e", "N_E", 0.2, (0.3, 12.0), (0.3, 14.0));
+    let r = drc::run(&p);
+    assert_actionable(&r);
+    let gap = find(&r, "DRC-002", &["t_a", "t_b"]);
+    assert_eq!(gap.len(), 1, "{:?}", r.findings);
+    assert_mm(gap[0], 0.1, Bound::Min, 0.2);
+    let at = gap[0].location.expect("gap location");
+    assert!(at.x > mm(12.0) && at.x < mm(12.3), "{at:?}");
+    let edge = find(&r, "DRC-005", &["t_e"]);
+    assert_eq!(edge.len(), 1, "{:?}", r.findings);
+    assert_mm(edge[0], 0.2, Bound::Min, 0.3);
+}
+
+#[test]
+fn capacitor_rating_reports_volts_against_rail_and_margin() {
+    let mut p = reference();
+    p.constraints.net_voltages_v.insert("+5V".into(), 12.0);
+    let r = erc::run(&p);
+    assert_actionable(&r);
+    let w: Vec<_> = r
+        .findings
+        .iter()
+        .filter(|f| f.rule_id == "ERC-011")
+        .collect();
+    assert!(!w.is_empty());
+    for f in &w {
+        assert_eq!(f.severity, Severity::Warning);
+        assert_eq!(f.measured.as_ref().unwrap().value, 16.0);
+        let q = f.required.as_ref().unwrap();
+        assert_eq!((q.bound, q.value, q.unit.as_str()), (Bound::Min, 18.0, "V"));
+    }
+    p.constraints.net_voltages_v.insert("+5V".into(), 20.0);
+    let r = erc::run(&p);
+    let e: Vec<_> = r
+        .findings
+        .iter()
+        .filter(|f| f.rule_id == "ERC-011")
+        .collect();
+    assert!(!e.is_empty());
+    assert!(e
+        .iter()
+        .all(|f| f.severity == Severity::Error && f.required.as_ref().unwrap().value == 20.0));
+}
+
+#[test]
+fn component_height_reports_maximum() {
+    let mut p = reference();
+    p.constraints.max_component_height = Some(mm(0.1));
+    let r = mech::run(&p);
+    assert_actionable(&r);
+    let tall: Vec<_> = r
+        .findings
+        .iter()
+        .filter(|f| f.rule_id == "MECH-001")
+        .collect();
+    assert!(!tall.is_empty());
+    for f in tall {
+        let q = f.required.as_ref().unwrap();
+        assert_eq!((q.bound, q.value), (Bound::Max, 0.1));
+        assert!(f.measured.as_ref().unwrap().value > 0.1);
+    }
+}
+
+#[test]
+fn unconnected_pins_get_distinct_ids_and_pin_locations() {
+    let mut p = reference();
+    p.schematic
+        .labels
+        .retain(|_, l| l.name != "IO1" && l.name != "IO2");
+    let r = erc::run(&p);
+    assert_actionable(&r);
+    let u2 = p
+        .schematic
+        .symbols
+        .values()
+        .find(|s| s.refdes == "U2")
+        .unwrap();
+    let open = find(&r, "ERC-001", &[u2.id.as_str()]);
+    assert_eq!(open.len(), 2, "{open:?}");
+    assert_ne!(open[0].id, open[1].id);
+    for f in open {
+        assert!(f.measured.is_none() && f.required.is_none());
+        let pin = if f.message.contains("pin 6") {
+            "6"
+        } else {
+            "7"
+        };
+        assert!(f.location.is_some());
+        assert_eq!(f.location, p.pin_position(u2, pin));
+    }
+}
+
+#[test]
+fn old_finding_json_still_deserialises() {
+    let old = r#"{"rule_id":"ERC-001","severity":"error","message":"D1 pin 1 (K) is unconnected","objects":["fp_d1"],"location":null}"#;
+    let f: Finding = serde_json::from_str(old).unwrap();
+    assert_eq!(f.rule_id, "ERC-001");
+    assert_eq!(f.id, "");
+    assert!(f.measured.is_none() && f.required.is_none() && f.suggested_fix.is_none());
+    // Older still: no location key at all.
+    let older = r#"{"rule_id":"DRC-009","severity":"warning","message":"m","objects":[]}"#;
+    let f: Finding = serde_json::from_str(older).unwrap();
+    assert_eq!(f.location, None);
+}
+
+#[test]
+fn new_report_json_round_trips() {
+    let mut p = reference();
+    track(&mut p, "t_thin", "N_THIN", 0.10, (5.0, 5.0), (5.0, 6.0));
+    let r = drc::run(&p);
+    let json = serde_json::to_string(&r).unwrap();
+    let back: Report = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, r);
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let thin = v["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["objects"][0] == "t_thin" && f["rule_id"] == "DRC-001")
+        .unwrap();
+    assert_eq!(thin["measured"]["unit"], "mm");
+    assert_eq!(thin["required"]["bound"], "min");
+    assert!(thin["suggested_fix"].is_string());
+    assert!(thin["id"].as_str().unwrap().starts_with("DRC-001-"));
+}
