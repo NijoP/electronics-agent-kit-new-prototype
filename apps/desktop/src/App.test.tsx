@@ -71,6 +71,10 @@ async function openFromRecent() {
   render(<App />);
   fireEvent.click(await screen.findByText("Fixture board"));
   await screen.findByRole("img", { name: "Schematic canvas" });
+  // The canvas appears at commit, but Workspace attaches its global key listener in a passive
+  // effect that can run later on a slow runner. The event-log line comes from the effect declared
+  // just before it (same flush), so once it renders the Ctrl+K/Ctrl+Z listener is attached.
+  await screen.findByText(/opened at revision 7/);
 }
 
 describe("desktop shell flow", () => {
