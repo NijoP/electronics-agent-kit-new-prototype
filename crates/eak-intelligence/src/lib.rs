@@ -15,6 +15,7 @@
 //! * `mock`     – scripted provider for tests (no network).
 
 pub mod agent;
+pub mod domain;
 pub mod message;
 pub mod mock;
 pub mod provider;

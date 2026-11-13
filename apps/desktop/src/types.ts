@@ -291,3 +291,71 @@ export interface ExportResult {
   };
   reports: Report[];
 }
+
+// ---- Domain intelligence (`domain_classification` IPC; crates/eak-intelligence/src/domain)
+
+/** DESK evidence state; EAK never claims more for a class than this label allows. */
+export type Maturity =
+  | "DRAFT"
+  | "ADVISORY"
+  | "IMPLEMENTED"
+  | "OFFLINE_TESTED"
+  | "VERIFIED_AGAINST_SOURCE"
+  | "LIVE_VERIFIED"
+  | "NEEDS_HARDWARE_VALIDATION"
+  | "BLOCKED";
+
+export interface MaturityCeiling {
+  label: Maturity;
+  claim: string;
+  may_present_as_requirement: boolean;
+  may_show_guidance: boolean;
+}
+
+export interface DomainCandidate {
+  archetype_id: string;
+  name: string;
+  domain: string;
+  domain_name: string;
+  description: string;
+  score: number;
+  reasons: string[];
+  penalties: string[];
+  maturity: Maturity;
+  ceiling: MaturityCeiling;
+}
+
+export interface DomainGuidance {
+  archetype_id: string;
+  ceiling: MaturityCeiling;
+  heading: string;
+  critical_electrical_constraints: string[];
+  verification_requirements: string[];
+  required_component_roles: string[];
+  applicable_standards: string[];
+  unsupported_conditions: string[];
+  desk_rule_ids: string[];
+  maturity_evidence: string;
+}
+
+export interface DomainClassification {
+  status: "CLASSIFIED" | "REVIEW_REQUIRED" | "UNCLASSIFIED";
+  confidence: number;
+  primary: string | null;
+  secondary: string[];
+  candidates: DomainCandidate[];
+  overlays: string[];
+  required_component_families: string[];
+  missing_information: string[];
+  conflicts: string[];
+  evidence: string[];
+  guidance: DomainGuidance | null;
+  registry_classes: number;
+  not_implemented: string[];
+  limitations: string[];
+}
+
+export interface DomainReport {
+  revision: number;
+  classification: DomainClassification;
+}

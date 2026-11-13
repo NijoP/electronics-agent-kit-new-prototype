@@ -76,3 +76,9 @@ These are concepts only and none is a dependency; see docs/REPOSITORY_RESEARCH.m
 ## Engineering data
 Built-in parts are generic definitions. The AMS1117 and ATtiny85 pinouts follow publicly published
 datasheets; no datasheet content is redistributed.
+
+## DESK domain registry data
+`crates/eak-intelligence/data/desk_domains.json` is derived from the owner's DESK repository
+(github.com/NijoP/DESK, `library/pcb_domains`, MIT licence). It is reference data (class names,
+keywords, constraint and verification prompts, standard identifiers) with no standard text.
+DESK's Python code is not used; the classifier is re-implemented in Rust.
