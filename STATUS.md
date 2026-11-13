@@ -3,6 +3,50 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## Desktop shell: Tauri 2 + React bound to the command engine (2026-11-13)
+
+**Platform tested:** Windows 11, Rust 1.99.1 `x86_64-pc-windows-gnu`, Node 24.21 / npm 11.19.
+CI now runs Linux, macOS arm64 and macOS x64 as well (`rust` and `desktop` jobs). Their results
+are recorded here only after a run has completed.
+
+### Implemented and tested
+- `apps/desktop/src-tauri` (crate `eak-desktop`, a workspace member) holds the IPC layer, which is plain Rust functions over one `Session` (one open `Engine` plus the SQLite recent-project index):
+  - create, open (with recovery and explicit stale-lock take-over) and close a project;
+  - `execute_command`, which always uses the **Human** actor with the revision the UI rendered;
+  - undo/redo, `events_since` and recovery acknowledgement;
+  - ERC/DRC via `eak-validation`, with the report saved as revision-bound evidence;
+  - recent projects.
+  - Geometry for the views (absolute pins and pads) is derived on each request through `eak-core`. The UI keeps no project model.
+- The React/TypeScript/Vite UI has these parts:
+  - Project Home: recent projects, open and create.
+  - Workspace: a toolbar, a command palette (Ctrl/Cmd+K, keyboard navigation, confirmation for destructive commands) and keyboard undo/redo.
+  - Read-only SVG schematic and PCB views with wheel zoom and drag pan. Selecting an item cross-probes by `symbol_id` in both directions and from findings.
+  - Engineering Monitor: ERC/DRC findings, outcome text, a stale-revision marker, the not-implemented checks and the limitations.
+
+### Tests executed (exact results, Windows)
+- `cargo test -p eak-desktop --release`: **8 passed, 0 failed**. Covered:
+  - Human-actor execute, undo and redo, with stale-revision rejection;
+  - events;
+  - reopen with rebuilt history and the recent index;
+  - invalid paths;
+  - lock take-over;
+  - unknown-outcome write block and its acknowledgement;
+  - ERC/DRC revision binding and evidence;
+  - geometry identical to `Project::pin_position`/`pad_position` and cross-probe ids;
+  - frontend and Rust IPC command lists match.
+- `npm test` (vitest, jsdom): **18 passed, 0 failed**.
+- `npm run typecheck`: clean. `npm run build` (Vite): succeeds.
+- `cargo test --workspace --release`: **43 passed, 0 failed** (M1 suite 35 + eak-desktop 8).
+- `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check`: clean.
+- `npm run tauri -- build --no-bundle`: succeeds and produces `eak-desktop.exe` with the embedded frontend. A 6-second launch smoke check stayed running and created the SQLite index in the app data folder; no interactive use.
+
+### Not verified / not implemented
+- The app has not been exercised interactively in a real WebView in this change. Rendering, focus and layout are covered only by jsdom tests.
+- No editing tools, 3D viewport, library browser, Terminal Center, Manufacturing Center or Agent Studio yet.
+- No dockable, resizable or persisted panels (UI-01 is PARTIAL).
+- Project folders are typed as absolute paths; there is no native folder picker.
+- Installers are not produced (`bundle.active: false`).
+
 ## Milestone M1: engineering foundation and headless vertical slice (2026-11-13)
 
 **Platform tested:** Windows 11 (Git Bash), Rust 1.99.1 `x86_64-pc-windows-gnu`, WinLibs GCC 16.2,
@@ -53,7 +97,7 @@ the command API:
 Injected short and clearance violations are detected (`drc_detects_injected_short_and_clearance_violation`).
 
 ### Not yet implemented (acceptance gaps)
-- **Desktop application** (Tauri 2 + React): not started. There is no GUI yet.
+- Desktop application: superseded. See "Desktop shell" above (read-only views; editors not started).
 - AI Intelligence Engine (agent loop, model providers): not started.
 - Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser, LCSC/JLCPCB integrations.
 - Multi-layer (>2) boards, differential pairs, impedance, thermal reliefs, silkscreen text.
@@ -66,6 +110,6 @@ acquire under native Windows Git Bash (upstream fix pending), and no WSL distrib
 installed. Development is proceeding directly in this repository.
 
 ## Next dependency-ready work
-1. Tauri 2 desktop shell + React workspace bound to the command engine (Phase 1/4).
-2. Schematic and PCB editor canvases driving the same commands.
+1. Interactive schematic editor driving the same commands (the desktop shell above is the base).
+2. PCB editor and 3D view; Manufacturing Center and installer bundles.
 3. Intelligence Engine: provider abstraction, typed tools over commands, approval flow.

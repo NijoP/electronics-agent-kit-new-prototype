@@ -6,7 +6,7 @@ desktop process, one Rust runtime, a small set of crates with one-directional de
 ```
              +-------------------------+     +--------------------------+
  Desktop UI  | apps/desktop (Tauri 2 + |     | eak-intelligence (lead   |
- (planned)   | React/TS) — presentation|     | agent, typed tools)      |
+             | React/TS) — presentation|     | agent, typed tools)      |
              +-----------+-------------+     +------------+-------------+
                          | CommandRequest (typed)         | CommandRequest (Agent actor + approval)
                          v                                v
@@ -29,6 +29,8 @@ desktop process, one Rust runtime, a small set of crates with one-directional de
         | placer, 3D scene     |   | evidence           |   | release gate        |
         +----------------------+   +--------------------+   +---------------------+
 ```
+
+`apps/desktop` exists (thin Tauri shell over `Engine`; see `apps/desktop/README.md`). `eak-intelligence` is planned.
 
 ## Key decisions (see `docs/decisions/`)
 - **ADR-0001 Project format:** a folder holding `project.eak.json` (canonical, pretty and
