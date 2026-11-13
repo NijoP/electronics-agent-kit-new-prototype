@@ -1,0 +1,957 @@
+[
+  {
+    "id": "R_0603",
+    "name": "Resistor 0603",
+    "category": "Resistor",
+    "refdes_prefix": "R",
+    "default_value": "10k",
+    "manufacturer": null,
+    "mpn": null,
+    "lcsc": null,
+    "datasheet": null,
+    "symbol": {
+      "pins": [
+        {
+          "number": "1",
+          "name": "~",
+          "electrical_type": "passive",
+          "position": {
+            "x": -5080000,
+            "y": 0
+          }
+        },
+        {
+          "number": "2",
+          "name": "~",
+          "electrical_type": "passive",
+          "position": {
+            "x": 5080000,
+            "y": 0
+          }
+        }
+      ],
+      "body_half_w": 2540000,
+      "body_half_h": 1000000
+    },
+    "footprint": {
+      "name": "R_0603",
+      "pads": [
+        {
+          "number": "1",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": -825000,
+            "y": 0
+          },
+          "size_x": 800000,
+          "size_y": 950000,
+          "drill": null
+        },
+        {
+          "number": "2",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 825000,
+            "y": 0
+          },
+          "size_x": 800000,
+          "size_y": 950000,
+          "drill": null
+        }
+      ],
+      "courtyard_half_w": 1500000,
+      "courtyard_half_h": 750000,
+      "body_height": 450000
+    },
+    "pin_map": {
+      "1": [
+        "1"
+      ],
+      "2": [
+        "2"
+      ]
+    },
+    "ratings": [
+      {
+        "name": "power",
+        "value": 0.1,
+        "unit": "W",
+        "source": "unverified",
+        "verified": false
+      }
+    ],
+    "model3d": {
+      "kind": "box",
+      "color": "#202020",
+      "external_ref": null
+    },
+    "provenance": "EAK built-in generic definition (not verified against a specific manufacturer datasheet)"
+  },
+  {
+    "id": "C_0603",
+    "name": "Capacitor 0603 (MLCC)",
+    "category": "Capacitor",
+    "refdes_prefix": "C",
+    "default_value": "100n",
+    "manufacturer": null,
+    "mpn": null,
+    "lcsc": null,
+    "datasheet": null,
+    "symbol": {
+      "pins": [
+        {
+          "number": "1",
+          "name": "~",
+          "electrical_type": "passive",
+          "position": {
+            "x": -5080000,
+            "y": 0
+          }
+        },
+        {
+          "number": "2",
+          "name": "~",
+          "electrical_type": "passive",
+          "position": {
+            "x": 5080000,
+            "y": 0
+          }
+        }
+      ],
+      "body_half_w": 2540000,
+      "body_half_h": 1000000
+    },
+    "footprint": {
+      "name": "C_0603",
+      "pads": [
+        {
+          "number": "1",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": -825000,
+            "y": 0
+          },
+          "size_x": 800000,
+          "size_y": 950000,
+          "drill": null
+        },
+        {
+          "number": "2",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 825000,
+            "y": 0
+          },
+          "size_x": 800000,
+          "size_y": 950000,
+          "drill": null
+        }
+      ],
+      "courtyard_half_w": 1500000,
+      "courtyard_half_h": 750000,
+      "body_height": 800000
+    },
+    "pin_map": {
+      "1": [
+        "1"
+      ],
+      "2": [
+        "2"
+      ]
+    },
+    "ratings": [
+      {
+        "name": "voltage",
+        "value": 16.0,
+        "unit": "V",
+        "source": "unverified",
+        "verified": false
+      }
+    ],
+    "model3d": {
+      "kind": "box",
+      "color": "#b08a50",
+      "external_ref": null
+    },
+    "provenance": "EAK built-in generic definition (not verified against a specific manufacturer datasheet)"
+  },
+  {
+    "id": "C_0805",
+    "name": "Capacitor 0805 (MLCC)",
+    "category": "Capacitor",
+    "refdes_prefix": "C",
+    "default_value": "10u",
+    "manufacturer": null,
+    "mpn": null,
+    "lcsc": null,
+    "datasheet": null,
+    "symbol": {
+      "pins": [
+        {
+          "number": "1",
+          "name": "~",
+          "electrical_type": "passive",
+          "position": {
+            "x": -5080000,
+            "y": 0
+          }
+        },
+        {
+          "number": "2",
+          "name": "~",
+          "electrical_type": "passive",
+          "position": {
+            "x": 5080000,
+            "y": 0
+          }
+        }
+      ],
+      "body_half_w": 2540000,
+      "body_half_h": 1000000
+    },
+    "footprint": {
+      "name": "C_0805",
+      "pads": [
+        {
+          "number": "1",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": -950000,
+            "y": 0
+          },
+          "size_x": 1000000,
+          "size_y": 1450000,
+          "drill": null
+        },
+        {
+          "number": "2",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 950000,
+            "y": 0
+          },
+          "size_x": 1000000,
+          "size_y": 1450000,
+          "drill": null
+        }
+      ],
+      "courtyard_half_w": 1700000,
+      "courtyard_half_h": 1000000,
+      "body_height": 1250000
+    },
+    "pin_map": {
+      "1": [
+        "1"
+      ],
+      "2": [
+        "2"
+      ]
+    },
+    "ratings": [
+      {
+        "name": "voltage",
+        "value": 16.0,
+        "unit": "V",
+        "source": "unverified",
+        "verified": false
+      }
+    ],
+    "model3d": {
+      "kind": "box",
+      "color": "#b08a50",
+      "external_ref": null
+    },
+    "provenance": "EAK built-in generic definition (not verified against a specific manufacturer datasheet)"
+  },
+  {
+    "id": "LED_0603",
+    "name": "LED 0603",
+    "category": "LED",
+    "refdes_prefix": "D",
+    "default_value": "Green",
+    "manufacturer": null,
+    "mpn": null,
+    "lcsc": null,
+    "datasheet": null,
+    "symbol": {
+      "pins": [
+        {
+          "number": "1",
+          "name": "K",
+          "electrical_type": "passive",
+          "position": {
+            "x": -5080000,
+            "y": 0
+          }
+        },
+        {
+          "number": "2",
+          "name": "A",
+          "electrical_type": "passive",
+          "position": {
+            "x": 5080000,
+            "y": 0
+          }
+        }
+      ],
+      "body_half_w": 2540000,
+      "body_half_h": 1000000
+    },
+    "footprint": {
+      "name": "LED_0603",
+      "pads": [
+        {
+          "number": "1",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": -825000,
+            "y": 0
+          },
+          "size_x": 800000,
+          "size_y": 950000,
+          "drill": null
+        },
+        {
+          "number": "2",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 825000,
+            "y": 0
+          },
+          "size_x": 800000,
+          "size_y": 950000,
+          "drill": null
+        }
+      ],
+      "courtyard_half_w": 1500000,
+      "courtyard_half_h": 750000,
+      "body_height": 600000
+    },
+    "pin_map": {
+      "1": [
+        "1"
+      ],
+      "2": [
+        "2"
+      ]
+    },
+    "ratings": [
+      {
+        "name": "forward_current_max",
+        "value": 0.02,
+        "unit": "A",
+        "source": "unverified",
+        "verified": false
+      }
+    ],
+    "model3d": {
+      "kind": "box",
+      "color": "#40c040",
+      "external_ref": null
+    },
+    "provenance": "EAK built-in generic definition (not verified against a specific manufacturer datasheet)"
+  },
+  {
+    "id": "CONN_1x02_P2.54",
+    "name": "Pin header 1x02 2.54 mm",
+    "category": "Connector",
+    "refdes_prefix": "J",
+    "default_value": "CONN_1x02",
+    "manufacturer": null,
+    "mpn": null,
+    "lcsc": null,
+    "datasheet": null,
+    "symbol": {
+      "pins": [
+        {
+          "number": "1",
+          "name": "P1",
+          "electrical_type": "passive",
+          "position": {
+            "x": -5080000,
+            "y": 1270000
+          }
+        },
+        {
+          "number": "2",
+          "name": "P2",
+          "electrical_type": "passive",
+          "position": {
+            "x": -5080000,
+            "y": -1270000
+          }
+        }
+      ],
+      "body_half_w": 2540000,
+      "body_half_h": 2540000
+    },
+    "footprint": {
+      "name": "PinHeader_1x02_P2.54mm",
+      "pads": [
+        {
+          "number": "1",
+          "kind": "tht",
+          "shape": "rect",
+          "position": {
+            "x": 0,
+            "y": 1270000
+          },
+          "size_x": 1700000,
+          "size_y": 1700000,
+          "drill": 1000000
+        },
+        {
+          "number": "2",
+          "kind": "tht",
+          "shape": "circle",
+          "position": {
+            "x": 0,
+            "y": -1270000
+          },
+          "size_x": 1700000,
+          "size_y": 1700000,
+          "drill": 1000000
+        }
+      ],
+      "courtyard_half_w": 1500000,
+      "courtyard_half_h": 2800000,
+      "body_height": 8500000
+    },
+    "pin_map": {
+      "1": [
+        "1"
+      ],
+      "2": [
+        "2"
+      ]
+    },
+    "ratings": [
+      {
+        "name": "current",
+        "value": 3.0,
+        "unit": "A",
+        "source": "unverified",
+        "verified": false
+      }
+    ],
+    "model3d": {
+      "kind": "header",
+      "color": "#151515",
+      "external_ref": null
+    },
+    "provenance": "EAK built-in generic definition (not verified against a specific manufacturer datasheet)"
+  },
+  {
+    "id": "CONN_1x04_P2.54",
+    "name": "Pin header 1x04 2.54 mm",
+    "category": "Connector",
+    "refdes_prefix": "J",
+    "default_value": "CONN_1x04",
+    "manufacturer": null,
+    "mpn": null,
+    "lcsc": null,
+    "datasheet": null,
+    "symbol": {
+      "pins": [
+        {
+          "number": "1",
+          "name": "P1",
+          "electrical_type": "passive",
+          "position": {
+            "x": -5080000,
+            "y": 3810000
+          }
+        },
+        {
+          "number": "2",
+          "name": "P2",
+          "electrical_type": "passive",
+          "position": {
+            "x": -5080000,
+            "y": 1270000
+          }
+        },
+        {
+          "number": "3",
+          "name": "P3",
+          "electrical_type": "passive",
+          "position": {
+            "x": -5080000,
+            "y": -1270000
+          }
+        },
+        {
+          "number": "4",
+          "name": "P4",
+          "electrical_type": "passive",
+          "position": {
+            "x": -5080000,
+            "y": -3810000
+          }
+        }
+      ],
+      "body_half_w": 2540000,
+      "body_half_h": 5080000
+    },
+    "footprint": {
+      "name": "PinHeader_1x04_P2.54mm",
+      "pads": [
+        {
+          "number": "1",
+          "kind": "tht",
+          "shape": "rect",
+          "position": {
+            "x": 0,
+            "y": 3810000
+          },
+          "size_x": 1700000,
+          "size_y": 1700000,
+          "drill": 1000000
+        },
+        {
+          "number": "2",
+          "kind": "tht",
+          "shape": "circle",
+          "position": {
+            "x": 0,
+            "y": 1270000
+          },
+          "size_x": 1700000,
+          "size_y": 1700000,
+          "drill": 1000000
+        },
+        {
+          "number": "3",
+          "kind": "tht",
+          "shape": "circle",
+          "position": {
+            "x": 0,
+            "y": -1270000
+          },
+          "size_x": 1700000,
+          "size_y": 1700000,
+          "drill": 1000000
+        },
+        {
+          "number": "4",
+          "kind": "tht",
+          "shape": "circle",
+          "position": {
+            "x": 0,
+            "y": -3810000
+          },
+          "size_x": 1700000,
+          "size_y": 1700000,
+          "drill": 1000000
+        }
+      ],
+      "courtyard_half_w": 1500000,
+      "courtyard_half_h": 5300000,
+      "body_height": 8500000
+    },
+    "pin_map": {
+      "1": [
+        "1"
+      ],
+      "2": [
+        "2"
+      ],
+      "3": [
+        "3"
+      ],
+      "4": [
+        "4"
+      ]
+    },
+    "ratings": [],
+    "model3d": {
+      "kind": "header",
+      "color": "#151515",
+      "external_ref": null
+    },
+    "provenance": "EAK built-in generic definition (not verified against a specific manufacturer datasheet)"
+  },
+  {
+    "id": "AMS1117-3.3_SOT-223",
+    "name": "AMS1117-3.3 LDO regulator",
+    "category": "Power",
+    "refdes_prefix": "U",
+    "default_value": "AMS1117-3.3",
+    "manufacturer": "Advanced Monolithic Systems",
+    "mpn": "AMS1117-3.3",
+    "lcsc": "C6186",
+    "datasheet": null,
+    "symbol": {
+      "pins": [
+        {
+          "number": "1",
+          "name": "GND",
+          "electrical_type": "power_in",
+          "position": {
+            "x": 0,
+            "y": -7620000
+          }
+        },
+        {
+          "number": "2",
+          "name": "VOUT",
+          "electrical_type": "power_out",
+          "position": {
+            "x": 7620000,
+            "y": 0
+          }
+        },
+        {
+          "number": "3",
+          "name": "VIN",
+          "electrical_type": "power_in",
+          "position": {
+            "x": -7620000,
+            "y": 0
+          }
+        }
+      ],
+      "body_half_w": 5080000,
+      "body_half_h": 5080000
+    },
+    "footprint": {
+      "name": "SOT-223-3_TabPin2",
+      "pads": [
+        {
+          "number": "1",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": -2300000,
+            "y": -3150000
+          },
+          "size_x": 1000000,
+          "size_y": 2000000,
+          "drill": null
+        },
+        {
+          "number": "2",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 0,
+            "y": -3150000
+          },
+          "size_x": 1000000,
+          "size_y": 2000000,
+          "drill": null
+        },
+        {
+          "number": "3",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 2300000,
+            "y": -3150000
+          },
+          "size_x": 1000000,
+          "size_y": 2000000,
+          "drill": null
+        },
+        {
+          "number": "4",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 0,
+            "y": 3150000
+          },
+          "size_x": 3300000,
+          "size_y": 2000000,
+          "drill": null
+        }
+      ],
+      "courtyard_half_w": 3800000,
+      "courtyard_half_h": 4600000,
+      "body_height": 1800000
+    },
+    "pin_map": {
+      "1": [
+        "1"
+      ],
+      "2": [
+        "2",
+        "4"
+      ],
+      "3": [
+        "3"
+      ]
+    },
+    "ratings": [
+      {
+        "name": "input_voltage_max",
+        "value": 15.0,
+        "unit": "V",
+        "source": "unverified",
+        "verified": false
+      },
+      {
+        "name": "output_current_max",
+        "value": 1.0,
+        "unit": "A",
+        "source": "unverified",
+        "verified": false
+      },
+      {
+        "name": "dropout_voltage",
+        "value": 1.3,
+        "unit": "V",
+        "source": "unverified",
+        "verified": false
+      }
+    ],
+    "model3d": {
+      "kind": "box",
+      "color": "#2a2a2a",
+      "external_ref": null
+    },
+    "provenance": "Pinout from widely published AMS1117 datasheet; land pattern generic; LCSC part number from public catalogue listing, not re-verified in this build"
+  },
+  {
+    "id": "ATTINY85_SOIC-8",
+    "name": "ATtiny85 microcontroller (SOIC-8)",
+    "category": "MCU",
+    "refdes_prefix": "U",
+    "default_value": "ATtiny85",
+    "manufacturer": "Microchip",
+    "mpn": "ATTINY85-20SU",
+    "lcsc": null,
+    "datasheet": null,
+    "symbol": {
+      "pins": [
+        {
+          "number": "1",
+          "name": "PB5/RESET",
+          "electrical_type": "bidirectional",
+          "position": {
+            "x": -10160000,
+            "y": 3810000
+          }
+        },
+        {
+          "number": "2",
+          "name": "PB3",
+          "electrical_type": "bidirectional",
+          "position": {
+            "x": -10160000,
+            "y": 1270000
+          }
+        },
+        {
+          "number": "3",
+          "name": "PB4",
+          "electrical_type": "bidirectional",
+          "position": {
+            "x": -10160000,
+            "y": -1270000
+          }
+        },
+        {
+          "number": "4",
+          "name": "GND",
+          "electrical_type": "power_in",
+          "position": {
+            "x": -10160000,
+            "y": -3810000
+          }
+        },
+        {
+          "number": "5",
+          "name": "PB0",
+          "electrical_type": "bidirectional",
+          "position": {
+            "x": 10160000,
+            "y": -3810000
+          }
+        },
+        {
+          "number": "6",
+          "name": "PB1",
+          "electrical_type": "bidirectional",
+          "position": {
+            "x": 10160000,
+            "y": -1270000
+          }
+        },
+        {
+          "number": "7",
+          "name": "PB2",
+          "electrical_type": "bidirectional",
+          "position": {
+            "x": 10160000,
+            "y": 1270000
+          }
+        },
+        {
+          "number": "8",
+          "name": "VCC",
+          "electrical_type": "power_in",
+          "position": {
+            "x": 10160000,
+            "y": 3810000
+          }
+        }
+      ],
+      "body_half_w": 7620000,
+      "body_half_h": 6350000
+    },
+    "footprint": {
+      "name": "SOIC-8_3.9x4.9mm_P1.27mm",
+      "pads": [
+        {
+          "number": "1",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": -2700000,
+            "y": 1905000
+          },
+          "size_x": 1550000,
+          "size_y": 600000,
+          "drill": null
+        },
+        {
+          "number": "2",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": -2700000,
+            "y": 635000
+          },
+          "size_x": 1550000,
+          "size_y": 600000,
+          "drill": null
+        },
+        {
+          "number": "3",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": -2700000,
+            "y": -635000
+          },
+          "size_x": 1550000,
+          "size_y": 600000,
+          "drill": null
+        },
+        {
+          "number": "4",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": -2700000,
+            "y": -1905000
+          },
+          "size_x": 1550000,
+          "size_y": 600000,
+          "drill": null
+        },
+        {
+          "number": "5",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 2700000,
+            "y": -1905000
+          },
+          "size_x": 1550000,
+          "size_y": 600000,
+          "drill": null
+        },
+        {
+          "number": "6",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 2700000,
+            "y": -635000
+          },
+          "size_x": 1550000,
+          "size_y": 600000,
+          "drill": null
+        },
+        {
+          "number": "7",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 2700000,
+            "y": 635000
+          },
+          "size_x": 1550000,
+          "size_y": 600000,
+          "drill": null
+        },
+        {
+          "number": "8",
+          "kind": "smd",
+          "shape": "rect",
+          "position": {
+            "x": 2700000,
+            "y": 1905000
+          },
+          "size_x": 1550000,
+          "size_y": 600000,
+          "drill": null
+        }
+      ],
+      "courtyard_half_w": 3700000,
+      "courtyard_half_h": 2700000,
+      "body_height": 1750000
+    },
+    "pin_map": {
+      "1": [
+        "1"
+      ],
+      "2": [
+        "2"
+      ],
+      "3": [
+        "3"
+      ],
+      "4": [
+        "4"
+      ],
+      "5": [
+        "5"
+      ],
+      "6": [
+        "6"
+      ],
+      "7": [
+        "7"
+      ],
+      "8": [
+        "8"
+      ]
+    },
+    "ratings": [
+      {
+        "name": "supply_voltage_max",
+        "value": 5.5,
+        "unit": "V",
+        "source": "unverified",
+        "verified": false
+      }
+    ],
+    "model3d": {
+      "kind": "box",
+      "color": "#1a1a1a",
+      "external_ref": null
+    },
+    "provenance": "Pinout from Microchip ATtiny25/45/85 datasheet (as commonly published); land pattern generic"
+  }
+]

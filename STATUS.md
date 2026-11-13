@@ -11,7 +11,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: CI workflow added, **not yet r
 ### Implemented and tested
 - EAK-IR v1 (`eak-core`): project, library, schematic, PCB, constraints, manufacturing config;
   integer-nanometre geometry; byte-stable JSON; schema version gate (newer/corrupt files are
-  rejected safely); integrity checker; 7 built-in generic components.
+  rejected safely); integrity checker; built-in library of 48 components (see below).
 - Engineering core (`eak-engineering`):
   - IPC-2221 trace width, clearance, creepage and via current, re-implemented from the DESK
     audit, with DESK reference vectors as tests (tables **not verified against the standard text**).
@@ -39,8 +39,41 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: CI workflow added, **not yet r
   - Release gate that requires revision-bound ERC/DRC/MECH with zero errors, otherwise the package is marked DRAFT.
   - Package re-verification that detects tampering.
 
+### Built-in component library (`eak-core/src/builtin.rs`, 48 parts)
+- Generic parts (IPC-7351 nominal land patterns, approximate; every rating `verified: false`,
+  source "unverified"):
+  - R, C (MLCC) and L in 0402, 0603, 0805, 1206 and 1210.
+  - LEDs in 0603 and 0805; diodes in SOD-123 and SMA.
+  - NPN, PNP, N-MOSFET and P-MOSFET in SOT-23; a SOT-23-5 LDO (VIN/GND/EN/NC/VOUT).
+  - 1x02 to 1x10 2.54 mm pin headers; crystals in HC-49/US and 3225; a 6x6 mm tactile switch.
+- Parts for the two validation boards. Pinouts and land patterns come from the named manufacturer
+  datasheets, and each part's provenance names its source. Ratings carry the datasheet as their
+  source but stay `verified: false`, because EAK has not independently reviewed them.
+  - Espressif ESP32-C3-MINI-1.
+  - TI LMR33630 3 A synchronous buck (HSOIC-8 PowerPAD).
+  - Sensirion SHT40.
+  - AOS AO4406A SO-8 N-MOSFET.
+  - Power inductors: Bourns SRP1038A (Isat 12 A), Würth WE-PD 7345 and WE-LQS 5040 (both saturate
+    below 3 A).
+  - Panasonic-land SMD electrolytics (6.3 mm and 8 mm).
+  - Phoenix MKDS 5.08 mm 2-pin screw terminal.
+  - The 8 M1 parts are pinned to a golden fixture, so their definitions cannot change silently.
+- Tests check, for every part:
+  - unique ids;
+  - every symbol pin maps to a pad and every pad is mapped;
+  - no overlapping pads;
+  - pads lie inside the courtyard;
+  - no rating claims verification.
+- Known limits:
+  - **No USB-C receptacle yet.** Its shell tabs and locating pegs need slotted and non-plated holes,
+    which `FootprintDef` cannot express. This needs an IR type change.
+  - Antenna and sensor copper keep-outs, and paste-window sizes, are noted in provenance only; they
+    are not modelled.
+  - AO4406A pin numbers follow the standard SO-8 assignment; they were not read from the drawing.
+  - Generic part ratings are typical class values, not datasheet facts.
+
 ### Tests executed (exact results)
-`cargo test --workspace --release`: **35 passed, 0 failed** (eak-core 7, eak-engineering 11,
+`cargo test --workspace --release`: **39 passed, 0 failed** (eak-core 11, eak-engineering 11,
 eak-runtime 10 engine + 4 process, eak-manufacturing 3 end-to-end).
 `cargo clippy --workspace --all-targets -- -D warnings`: clean. `cargo fmt --check`: clean.
 
