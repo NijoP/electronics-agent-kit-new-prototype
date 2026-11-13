@@ -146,10 +146,37 @@ the command API:
 4. Package status: InternallyVerifiedReleaseCandidate; the package re-verifies and tampering is detected.
 Injected short and clearance violations are detected (`drc_detects_injected_short_and_clearance_violation`).
 
+### LCSC sourcing, offline only (2026-11-13)
+Implemented and tested on Windows 11 only. Details: `docs/engineering/sourcing.md`; test
+matrix: `docs/engineering/INTEGRATION_TEST_MATRIX.md`.
+- Sourcing records (`eak-manufacturing/src/sourcing.rs`): built from raw response bytes, a source
+  URL and a retrieval time. Each record keeps the SHA-256 of the raw bytes, the fields exactly
+  as parsed, and lists of missing and rejected fields.
+- Verification states: search hit, datasheet-matched (hashed PDF that names the MPN), verified
+  (named human reviewer against that datasheet hash). A search hit is never a verified part.
+- `SOURCING` report (`eak-validation/src/sourcing.rs`): 12 rules covering missing MPN, LCSC number,
+  datasheet and ratings, BOM-to-LCSC mapping, record state, and symbol, footprint and package
+  consistency. It is not part of the manufacturing release gate.
+- Tests: 9 offline fixture tests and 6 unit tests, all passing. Fixtures are synthetic.
+  Full run with these added, `cargo test --workspace --release`: **50 passed, 0 failed**
+  (eak-core 7, eak-engineering 11, eak-validation 6, eak-runtime 10 engine + 4 process,
+  eak-manufacturing 3 end-to-end + 9 sourcing). Clippy with `-D warnings` and `cargo fmt --check`: clean.
+
+Not done, and not to be read as done:
+- **No network access exists.** No live LCSC search, stock, price or datasheet retrieval, and no
+  network-dependent test. Neither LCSC nor JLCPCB offers documented machine access without
+  private credentials; the choice of access route is an open product-owner decision.
+- **The LCSC field mapping is unverified.** LCSC's site refused the automated browser, so its
+  API documentation could not be read; the mapping follows third-party reports.
+- Datasheet matching reads uncompressed PDF bytes only. Ratings, pinouts and land patterns are
+  not extracted from datasheets.
+- No real part has been sourced or verified with this module.
+
 ### Not yet implemented (acceptance gaps)
 - Desktop application: superseded. See "Desktop shell" above (read-only views; editors not started).
 - AI Intelligence Engine (agent loop, model providers): not started.
-- Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser, LCSC/JLCPCB integrations.
+- Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser.
+- Live LCSC and JLCPCB access (see the sourcing section above); JLCPCB preparation checks.
 - Multi-layer (>2) boards, differential pairs, impedance, thermal reliefs, silkscreen text.
 - Linux/macOS builds have not been executed yet; packaging and installers do not exist yet.
 - Independent engineering review and fabricator DFM: not performed (required before any manufacturing claim).

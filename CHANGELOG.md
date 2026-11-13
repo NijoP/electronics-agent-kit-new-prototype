@@ -29,3 +29,8 @@
   process supervisor, task model, SQLite index.
 - Manufacturing compiler: Gerber, Excellon, BOM, CPL, SHA-256 manifest, release gate, package verification.
 - Three-OS CI workflow and Python-free policy scan.
+- LCSC sourcing, offline only: provenance-carrying sourcing records with search-hit, datasheet-matched
+  and verified states; `SOURCING` report (12 rules) for missing data, BOM-to-LCSC mapping and
+  symbol, footprint and package consistency; synthetic offline fixtures. No network client.
+- Access and terms research for LCSC and JLCPCB (`docs/engineering/sourcing.md`) and a separate
+  integration test matrix (`docs/engineering/INTEGRATION_TEST_MATRIX.md`).
