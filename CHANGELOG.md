@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased - LCSC parts search and JLCPCB preparation
+- `eak-manufacturing`: `lcsc` (read-only LCSC product lookup over ureq + rustls, keyword search that reports LCSC's HTTP 403
+  instead of faking results, import plan onto existing library templates), `bom` (BOM view joined with stored sourcing
+  records, JLCPCB-format BOM), `jlcpcb` (CPL, DFM check against JLCPCB's published 2-layer limits, "prepared for review"
+  bundle) and `zip` (dependency-free store-only writer). `SourcingRecord` gains an optional `category`.
+- Desktop: `parts_search`, `parts_import`, `manufacturing_preview`, `jlcpcb_prepare` IPC commands; Parts and Manufacturing
+  panels; imported parts appear in the editors' part picker. No new `Command` (import uses `UpsertComponentDefinition`).
+- New dependency (feature `live-http`, on by default): `ureq` 3 with rustls, the client already approved for model providers.
+
 ## Unreleased - desktop shell
 - `apps/desktop`: Tauri 2 shell (`src-tauri`, workspace member `eak-desktop`) plus a React/TypeScript/Vite UI.
 - IPC commands wrap `eak_runtime::Engine`:

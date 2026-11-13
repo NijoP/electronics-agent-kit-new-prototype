@@ -3,6 +3,40 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## LCSC parts search, BOM and JLCPCB preparation (2026-11-14, branch fm/eak-o2-lcsc-jlcpcb)
+
+**Platform tested:** Linux, Rust stable, Node. No window was opened: the panels are verified by vitest (jsdom, mocked
+IPC) and by headless Rust IPC tests only. Not verified in a real WebView. Exact command results are in the PR body.
+
+- **Implemented and tested:**
+  - `eak-manufacturing::lcsc`: read-only product lookup by LCSC part number (`/ftps/wm/product/detail`) over ureq + rustls,
+    ingested through the audited `ingest_product_detail` boundary (state stays `SearchHit`). Tests run over real HTTP against a
+    local test server, never the live site.
+  - Import into the library: `import_plan` reuses the symbol, footprint and pin map of an existing library template
+    (chip resistor, MLCC capacitor or LED in a package the library holds, or an exact MPN match) and the desktop submits
+    `Command::UpsertComponentDefinition` as the Human actor with the rendered revision. LCSC supplies identity only
+    (manufacturer, MPN, LCSC number, datasheet URL); ratings stay unverified. The record is stored in `<project>/sourcing/`.
+  - `eak-manufacturing::bom`: BOM view joined with stored records (stock and price shown as a snapshot with its retrieval time),
+    JLCPCB-format BOM (`Comment, Designator, Footprint, LCSC Part #`) and a review BOM.
+  - `eak-manufacturing::jlcpcb`: JLCPCB CPL (`Designator, Mid X, Mid Y, Layer, Rotation`, surface-mount only), Gerber + Excellon
+    `.zip` (dependency-free store-only writer, CRC-checked in tests), a DFM check against the 2-layer 1 oz limits read from
+    JLCPCB's published capability page on 2026-11-14 (14 evaluated rules, 6 listed as `not_checked`), and a manifest labelled
+    "PREPARED FOR REVIEW". Nothing is uploaded, quoted or ordered.
+  - Desktop: Parts panel (search, results with stock/price/package/datasheet link, import) and Manufacturing panel (BOM view,
+    DFM results, bundle written to a folder the user types; foreign non-empty folders and relative paths are refused).
+    Imported parts appear in the editors' part picker.
+- **Observed on 2026-11-14 (read-only requests, no credentials):** the product-detail endpoint answers HTTP 200 JSON to an
+  unauthenticated request; the keyword search endpoint (`/ftps/wm/search/global`) answers **HTTP 403 "Access Denied"**.
+  Keyword search is therefore **not working against the live site**: the app reports the refusal in the panel and shows no
+  results. Part-number search works. The shape of a successful keyword-search response has never been observed; the code only
+  reads product codes from it and then fetches each through the verified detail path, and the one test of that path uses an
+  assumed shape.
+- **Limitations (unsupported / unverified):** no EasyEDA footprint import, so a part with no template in the library is refused
+  with the reason rather than guessed; CPL rotation/polarity is not corrected per package (JLC-051 `not_checked`); basic vs
+  extended assembly classification and fees are not known (JLC-050); silkscreen, soldermask, slot and pour rules are not
+  evaluated; pad shapes are measured as their bounding rectangle; JLCPCB's limits can change and its own DFM is authoritative;
+  no real JLCPCB upload of the bundle was attempted; the Gerber zip has not been opened by a fabricator's viewer.
+
 ## Interactive editors and Gerber export (2026-11-14, branch fm/eak-o1-editors)
 
 **Platform tested:** Linux, Rust stable, Node (see PR body for exact verification output). No window was opened;

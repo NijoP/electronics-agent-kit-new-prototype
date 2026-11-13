@@ -99,6 +99,19 @@ export interface Project {
     vias: Record<Id, Via>;
     zones: Record<Id, Zone>;
   };
+  /** Definitions in the project's own library (built-ins copied in, and imported parts). */
+  library?: Record<
+    string,
+    {
+      id: string;
+      name: string;
+      category: string;
+      refdes_prefix: string;
+      default_value: string;
+      lcsc?: string | null;
+      symbol: { pins: { number: string; name: string }[] };
+    }
+  >;
 }
 
 export interface PinGeom {
@@ -260,6 +273,106 @@ export interface ExportResult {
     blocking_reasons: string[];
     files: ExportFile[];
     not_verified: string[];
+  };
+  reports: Report[];
+}
+
+// ---- parts search, BOM and JLCPCB preparation (src-tauri/src/parts.rs) ----
+
+export interface SourcingRecord {
+  provider: string;
+  source_url: string;
+  retrieved_at_unix_s: number;
+  raw_sha256: string;
+  lcsc_part: string | null;
+  mpn: string | null;
+  manufacturer: string | null;
+  package: string | null;
+  category: string | null;
+  description: string | null;
+  datasheet_url: string | null;
+  specs: { name: string; value: string }[];
+  stock: number | null;
+  price_breaks: { min_quantity: number; unit_price: string; currency: string }[];
+  missing: string[];
+  rejected: string[];
+  state: string;
+}
+
+export interface LibraryHit {
+  id: string;
+  name: string;
+  category: string;
+  lcsc: string | null;
+  mpn: string | null;
+}
+
+export type LiveStatus = "ok" | "blocked" | "not_found" | "unreachable" | "bad_query" | "error";
+
+export interface PartsSearch {
+  query: string;
+  library: LibraryHit[];
+  stored: SourcingRecord[];
+  live: { status: LiveStatus; message: string; records: SourcingRecord[] };
+}
+
+export interface ImportResult {
+  component_id: string;
+  response: CommandResponse;
+  notes: string[];
+  record: SourcingRecord;
+}
+
+export interface BomLine {
+  component_id: string;
+  value: string;
+  designators: string[];
+  quantity: number;
+  footprint: string;
+  lcsc: string | null;
+  manufacturer: string | null;
+  mpn: string | null;
+  smd: boolean;
+  placed: number;
+  stock: number | null;
+  unit_price_usd: string | null;
+  price_as_of_unix_s: number | null;
+  issues: string[];
+}
+
+export type DfmStatus = "pass" | "warn" | "fail" | "not_checked";
+
+export interface DfmCheck {
+  id: string;
+  title: string;
+  status: DfmStatus;
+  required: string;
+  measured: string;
+  detail: string[];
+}
+
+export interface DfmReport {
+  profile: { id: string; version: string; source_url: string; verified_on: string };
+  checks: DfmCheck[];
+  failures: number;
+  warnings: number;
+  not_checked: number;
+  statement: string;
+  limitations: string[];
+}
+
+export interface ManufacturingPreview {
+  revision: number;
+  bom: BomLine[];
+  dfm: DfmReport;
+  default_out_dir: string | null;
+}
+
+export interface PrepareResult {
+  prep: {
+    out_dir: string;
+    manifest: { statement: string; files: ExportFile[]; not_verified: string[] };
+    dfm: DfmReport;
   };
   reports: Report[];
 }

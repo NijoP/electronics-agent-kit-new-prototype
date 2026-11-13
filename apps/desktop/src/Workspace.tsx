@@ -1,12 +1,14 @@
 // Project workspace: toolbar, schematic + PCB views with cross-probing, Engineering
 // Monitor, activity log, status bar and command palette. State shown here is always the
 // latest engine snapshot; edits are engine calls carrying the rendered revision.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, describeError } from "./api";
 import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
 import { EngineeringMonitor } from "./EngineeringMonitor";
 import { ExportPanel } from "./ExportPanel";
+import { ManufacturingPanel } from "./ManufacturingPanel";
+import { PartsPanel } from "./PartsPanel";
 import { PcbView } from "./PcbView";
 import { SchematicView } from "./SchematicView";
 import type { Check, CheckResult, Command, CommandResponse, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
@@ -30,7 +32,24 @@ export function Workspace({ initial, onClosed }: Props) {
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const [exported, setExported] = useState<ExportResult | null>(null);
   const [layout, setLayout] = useState<"both" | "schematic" | "pcb">("both");
+  const [panel, setPanel] = useState<"parts" | "mfg" | null>(null);
   const revision = snapshot.project.revision;
+  // Built-in parts plus parts imported into this project (e.g. from LCSC), so an imported
+  // part can be placed from the editors' part picker.
+  const fullLibrary = useMemo(() => {
+    const known = new Set(library.map((l) => l.id));
+    const imported = Object.values(snapshot.project.library ?? {})
+      .filter((d) => !known.has(d.id))
+      .map<LibraryEntry>((d) => ({
+        id: d.id,
+        name: d.name,
+        category: d.category,
+        refdes_prefix: d.refdes_prefix,
+        default_value: d.default_value,
+        pins: d.symbol.pins.map((p) => [p.number, p.name]),
+      }));
+    return [...library, ...imported];
+  }, [library, snapshot.project.library]);
 
   const pullEvents = useCallback(async () => {
     const fresh = await api.eventsSince(lastSeq.current);
@@ -101,7 +120,7 @@ export function Workspace({ initial, onClosed }: Props) {
         );
       await refresh();
     });
-  const edit: EditCtx = { execute: executeAll, busy, library, notify: setMessage };
+  const edit: EditCtx = { execute: executeAll, busy, library: fullLibrary, notify: setMessage };
   const exportGerbers = () =>
     guarded(async () => {
       const r = await api.exportManufacturing();
@@ -208,6 +227,12 @@ export function Workspace({ initial, onClosed }: Props) {
         <button type="button" onClick={exportGerbers} disabled={busy} title="Gerber, Excellon, BOM, CPL">
           Export Gerbers
         </button>
+        <button type="button" onClick={() => setPanel(panel === "parts" ? null : "parts")} aria-pressed={panel === "parts"}>
+          Parts
+        </button>
+        <button type="button" onClick={() => setPanel(panel === "mfg" ? null : "mfg")} aria-pressed={panel === "mfg"}>
+          Manufacturing
+        </button>
         <button type="button" onClick={() => setPalette(true)} title="Ctrl+K">
           Commands
         </button>
@@ -231,6 +256,16 @@ export function Workspace({ initial, onClosed }: Props) {
         </div>
         <aside className="side">
           <EngineeringMonitor snapshot={snapshot} results={results} onProbe={setSelected} />
+          {panel === "parts" && (
+            <PartsPanel
+              revision={revision}
+              onImported={async (m) => {
+                setMessage(m);
+                await refresh();
+              }}
+            />
+          )}
+          {panel === "mfg" && <ManufacturingPanel revision={revision} onPrepared={setMessage} />}
           <ExportPanel result={exported} />
           <section className="activity" aria-label="Activity">
             <h2>Activity</h2>

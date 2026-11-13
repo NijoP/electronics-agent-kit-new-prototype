@@ -9,7 +9,11 @@ import type {
   CommandResponse,
   EngineEvent,
   ExportResult,
+  ImportResult,
   LibraryEntry,
+  ManufacturingPreview,
+  PartsSearch,
+  PrepareResult,
   RecentProject,
   Snapshot,
 } from "./types";
@@ -29,6 +33,10 @@ export const IPC_COMMANDS = [
   "recent_projects",
   "library_components",
   "export_manufacturing",
+  "parts_search",
+  "parts_import",
+  "manufacturing_preview",
+  "jlcpcb_prepare",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
@@ -54,6 +62,11 @@ export const api = {
   recentProjects: (limit: number) => call<RecentProject[]>("recent_projects", { limit }),
   libraryComponents: () => call<LibraryEntry[]>("library_components"),
   exportManufacturing: () => call<ExportResult>("export_manufacturing"),
+  partsSearch: (query: string) => call<PartsSearch>("parts_search", { query }),
+  partsImport: (expectedRevision: number, lcsc: string) =>
+    call<ImportResult>("parts_import", { expected_revision: expectedRevision, lcsc }),
+  manufacturingPreview: () => call<ManufacturingPreview>("manufacturing_preview"),
+  jlcpcbPrepare: (outDir: string) => call<PrepareResult>("jlcpcb_prepare", { out_dir: outDir }),
 };
 
 export function describeError(e: CommandError): string {

@@ -9,6 +9,7 @@
 | Desktop UI (vitest + jsdom, headless) | `apps/desktop/src/**/*.test.ts(x)` | `npm test` in `apps/desktop` |
 | Desktop production build | `apps/desktop` | `npm run tauri -- build --no-bundle` |
 | Policy | `scripts/check-no-python.sh` | `bash scripts/check-no-python.sh` |
+| LCSC provider, BOM, JLCPCB prep (local test HTTP server, never the live site) | `crates/eak-manufacturing/tests/lcsc_jlcpcb.rs`, `apps/desktop/src-tauri/tests/parts_ipc.rs`, `apps/desktop/src/parts.test.tsx` | `cargo test -p eak-manufacturing --release --test lcsc_jlcpcb`, `cargo test -p eak-desktop --release --test parts_ipc` |
 | Sourcing (offline fixtures) | `crates/eak-manufacturing/tests/sourcing.rs`, `crates/eak-validation/src/sourcing.rs` | `cargo test -p eak-manufacturing --test sourcing --release`, `cargo test -p eak-validation` |
 
 Rules: every bug fix gets a regression test; tests never depend on network, AI providers or

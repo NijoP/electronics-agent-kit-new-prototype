@@ -13,6 +13,8 @@
 //! * ERC/DRC run in `eak-validation`, and their revision-bound reports are stored as
 //!   evidence by the engine.
 
+pub mod parts;
+
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
 use eak_runtime::index::{Index, RecentProject};
 use eak_runtime::store::RecoveryReport;
@@ -458,7 +460,11 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 13] = [
+pub const IPC_COMMANDS: [&str; 17] = [
+    "parts_search",
+    "parts_import",
+    "manufacturing_preview",
+    "jlcpcb_prepare",
     "library_components",
     "export_manufacturing",
     "create_project",
@@ -596,6 +602,10 @@ pub fn run() {
             cmd::recent_projects,
             cmd::library_components,
             cmd::export_manufacturing,
+            parts::cmd::parts_search,
+            parts::cmd::parts_import,
+            parts::cmd::manufacturing_preview,
+            parts::cmd::jlcpcb_prepare,
         ])
         .run(tauri::generate_context!())
         .expect("EAK desktop failed to start");
