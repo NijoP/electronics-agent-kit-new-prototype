@@ -10,3 +10,5 @@
 
 `VERIFIED_AGAINST_STANDARD = false` is exported by `ipc.rs`, and DRC messages state it. Promotion to
 verified requires a named engineer to check the tables against the purchased standards.
+
+See `IPC_RULE_VALUES.md` for every IPC/IEC table value and EAK default, each with its verification status.

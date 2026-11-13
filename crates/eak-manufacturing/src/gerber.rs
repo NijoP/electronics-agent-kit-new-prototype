@@ -1,7 +1,7 @@
 //! RS-274X (Gerber X2 attributes) writer and a structural re-reader for validation.
 
 use eak_core::{CopperLayer, Nm, PadKind, PadShape, Point, Project, Side};
-use eak_engineering::copper;
+use eak_engineering::{copper, silk};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
@@ -130,7 +130,7 @@ fn for_pads(p: &Project, layer: CopperLayer, mut f: impl FnMut(Point, PadShape, 
 
 pub fn copper_layer(p: &Project, layer: CopperLayer) -> String {
     let mut w = Writer::new();
-    // Zones: emit the verified raster fill as merged horizontal runs.
+    // Zones: emit the raster fill (with thermal reliefs) as merged horizontal runs.
     let items = copper::items(p);
     for zid in p.pcb.zones.keys() {
         let Some(fill) = copper::fill_zone(p, zid, &items) else {
@@ -208,32 +208,16 @@ pub fn paste(p: &Project, layer: CopperLayer) -> String {
     w.finish(f, "Positive", p)
 }
 
+/// Legend layer: courtyard outlines, pin-1 dots and stroke-font reference designators, as
+/// clipped clear of soldermask openings by `eak_engineering::silk` (the model DRC-015 checks).
 pub fn silkscreen(p: &Project, side: Side) -> String {
     let mut w = Writer::new();
-    let lw = 150_000;
-    for fp in p.pcb.footprints.values().filter(|f| f.side == side) {
-        let Some(def) = p.library.get(&fp.component_id) else {
-            continue;
-        };
-        let (cw, ch) = fp.rotation.apply_size(
-            def.footprint.courtyard_half_w * 2,
-            def.footprint.courtyard_half_h * 2,
-        );
-        let r = eak_core::Rect::centered(fp.position, cw, ch);
-        let c = [
-            r.min,
-            Point::new(r.max.x, r.min.y),
-            r.max,
-            Point::new(r.min.x, r.max.y),
-        ];
-        for i in 0..4 {
-            w.line(lw, c[i], c[(i + 1) % 4]);
+    for s in silk::legend(p, side) {
+        if s.a == s.b {
+            w.flash(Ap::Circle(s.width), s.a);
+        } else {
+            w.line(s.width, s.a, s.b);
         }
-        // Pin-1 marker dot outside the outline corner.
-        w.flash(
-            Ap::Circle(300_000),
-            Point::new(r.min.x - 300_000, r.max.y + 300_000),
-        );
     }
     let f = if side == Side::Top {
         "Legend,Top"
