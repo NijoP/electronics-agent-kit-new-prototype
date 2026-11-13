@@ -8,5 +8,6 @@ pub mod drc;
 pub mod erc;
 pub mod mech;
 pub mod report;
+pub mod sourcing;
 
 pub use report::{Finding, Outcome, Report, Severity};
