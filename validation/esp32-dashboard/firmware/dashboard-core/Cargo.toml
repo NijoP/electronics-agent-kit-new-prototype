@@ -1,0 +1,10 @@
+[package]
+name = "dashboard-core"
+description = "no_std logic of the EAK ESP32-C3 dashboard: pin map, SHT4x driver, telemetry protocol, dashboard model"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+[dependencies]
+embedded-hal = "1.0"

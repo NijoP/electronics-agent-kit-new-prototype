@@ -1,0 +1,26 @@
+[package]
+name = "esp32-dashboard-design"
+description = "Authors the ESP32-C3 dashboard board through the EAK command engine and runs EAK checks/outputs"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+# Standalone workspace: this validation project is not a member of the EAK root workspace.
+[workspace]
+
+[[bin]]
+name = "build-design"
+path = "src/main.rs"
+
+[dependencies]
+eak-core = { path = "../../../crates/eak-core" }
+eak-engineering = { path = "../../../crates/eak-engineering" }
+eak-validation = { path = "../../../crates/eak-validation" }
+eak-runtime = { path = "../../../crates/eak-runtime" }
+eak-manufacturing = { path = "../../../crates/eak-manufacturing" }
+dashboard-core = { path = "../firmware/dashboard-core" }
+serde_json = "1"
+
+[profile.release]
+codegen-units = 16

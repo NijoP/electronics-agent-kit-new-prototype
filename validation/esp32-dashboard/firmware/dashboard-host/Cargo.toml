@@ -1,0 +1,16 @@
+[package]
+name = "dashboard-host"
+description = "Host dashboard for the EAK ESP32-C3 board: serial or simulated telemetry, HTTP UI"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+[[bin]]
+name = "dashboard"
+path = "src/main.rs"
+
+[dependencies]
+dashboard-core = { path = "../dashboard-core" }
+embedded-hal = "1.0"
+serde_json = "1"

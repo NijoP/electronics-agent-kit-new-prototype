@@ -1,0 +1,329 @@
+{
+  "inputs": [
+    {
+      "name": "vbus_nominal",
+      "source": "USB 2.0 nominal",
+      "unit": "V",
+      "value": 5.0,
+      "verified": true
+    },
+    {
+      "name": "vbus_min",
+      "source": "USB 2.0 VBUS at device (not re-read in this project)",
+      "unit": "V",
+      "value": 4.75,
+      "verified": false
+    },
+    {
+      "name": "vbus_max",
+      "source": "USB 2.0 VBUS (not re-read in this project)",
+      "unit": "V",
+      "value": 5.25,
+      "verified": false
+    },
+    {
+      "name": "v3v3",
+      "source": "AMS1117-3.3 nominal output",
+      "unit": "V",
+      "value": 3.3,
+      "verified": false
+    },
+    {
+      "name": "module_vdd_min",
+      "source": "ESP32-C3-WROOM-02 datasheet v1.7 Table 6-2",
+      "unit": "V",
+      "value": 3.0,
+      "verified": true
+    },
+    {
+      "name": "module_vdd_max",
+      "source": "ESP32-C3-WROOM-02 datasheet v1.7 Table 6-2",
+      "unit": "V",
+      "value": 3.6,
+      "verified": true
+    },
+    {
+      "name": "module_peak_current",
+      "source": "ESP32-C3-WROOM-02 datasheet v1.7 Table 6-4 (802.11b TX 20.5 dBm, 100% duty)",
+      "unit": "A",
+      "value": 0.345,
+      "verified": true
+    },
+    {
+      "name": "module_run_current",
+      "source": "ESP32-C3-WROOM-02 datasheet v1.7 Table 6-5 (160 MHz CPU running, peripherals clocked, Wi-Fi gated)",
+      "unit": "A",
+      "value": 0.028,
+      "verified": true
+    },
+    {
+      "name": "supply_capability_required",
+      "source": "ESP32-C3-WROOM-02 datasheet v1.7 Table 6-2 (IVDD)",
+      "unit": "A",
+      "value": 0.5,
+      "verified": true
+    },
+    {
+      "name": "ldo_dropout_max",
+      "source": "AMS1117 datasheet (could not be fetched; EAK built-in library value)",
+      "unit": "V",
+      "value": 1.3,
+      "verified": false
+    },
+    {
+      "name": "ldo_iq",
+      "source": "AMS1117 datasheet (could not be fetched; conservative assumption)",
+      "unit": "A",
+      "value": 0.01,
+      "verified": false
+    },
+    {
+      "name": "ldo_theta_ja",
+      "source": "SOT-223 on small copper area (assumption; AMS1117 datasheet could not be fetched)",
+      "unit": "C/W",
+      "value": 90.0,
+      "verified": false
+    },
+    {
+      "name": "ldo_tj_max",
+      "source": "AMS1117 datasheet (could not be fetched; assumption)",
+      "unit": "C",
+      "value": 125.0,
+      "verified": false
+    },
+    {
+      "name": "ambient_max",
+      "source": "Project requirement (indoor dashboard)",
+      "unit": "C",
+      "value": 40.0,
+      "verified": true
+    },
+    {
+      "name": "sht40_vdd_max",
+      "source": "Sensirion SHT4x datasheet v7.3 section 3",
+      "unit": "V",
+      "value": 3.6,
+      "verified": true
+    },
+    {
+      "name": "sht40_vih_frac",
+      "source": "Sensirion SHT4x datasheet v7.3 Table 4",
+      "unit": "xVDD",
+      "value": 0.7,
+      "verified": true
+    },
+    {
+      "name": "esp_vih_frac",
+      "source": "ESP32-C3-WROOM-02 datasheet v1.7 Table 6-3 (extracted text misaligned)",
+      "unit": "xVDD",
+      "value": 0.75,
+      "verified": false
+    },
+    {
+      "name": "esp_vol_frac",
+      "source": "ESP32-C3-WROOM-02 datasheet v1.7 Table 6-3 (extracted text misaligned)",
+      "unit": "xVDD",
+      "value": 0.1,
+      "verified": false
+    },
+    {
+      "name": "esp_ioh",
+      "source": "ESP32-C3-WROOM-02 datasheet v1.7 Table 6-3 (extracted text misaligned)",
+      "unit": "A",
+      "value": 0.04,
+      "verified": false
+    },
+    {
+      "name": "led_vf",
+      "source": "Generic green 0603 LED (no MPN chosen; assumption)",
+      "unit": "V",
+      "value": 2.0,
+      "verified": false
+    },
+    {
+      "name": "i2c_bus_capacitance",
+      "source": "Assumption: board + two 10 cm cables + 2 devices",
+      "unit": "F",
+      "value": 1e-10,
+      "verified": false
+    },
+    {
+      "name": "i2c_tr_max_standard",
+      "source": "NXP UM10204 I2C specification, standard mode (not re-read in this project)",
+      "unit": "s",
+      "value": 1e-6,
+      "verified": false
+    }
+  ],
+  "not_verified": [
+    "AMS1117 dropout, quiescent current, thermal resistance and Tj max: datasheet could not be retrieved in this project; values are assumptions.",
+    "Thermal results are first-order Tj = Ta + P*thetaJA estimates; no thermal simulation was run (EAK has none).",
+    "No measurement on physical hardware."
+  ],
+  "results": [
+    {
+      "check": "ldo_dissipation_usb_telemetry_firmware",
+      "inputs_verified": false,
+      "limit": "informational",
+      "note": "I_load = 32 mA at VBUS 5.25 V",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "W",
+      "value": 0.115485
+    },
+    {
+      "check": "ldo_junction_temp_usb_telemetry_firmware",
+      "inputs_verified": false,
+      "limit": "<= 125 C",
+      "note": "Tj = Ta(40 C) + P * thetaJA (eak_engineering::calc::junction_temp_c)",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "C",
+      "value": 50.39365
+    },
+    {
+      "check": "ldo_dissipation_worst_case_wifi_tx_continuous",
+      "inputs_verified": false,
+      "limit": "informational",
+      "note": "I_load = 349 mA at VBUS 5.25 V",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "W",
+      "value": 0.733635
+    },
+    {
+      "check": "ldo_junction_temp_worst_case_wifi_tx_continuous",
+      "inputs_verified": false,
+      "limit": "<= 125 C",
+      "note": "Tj = Ta(40 C) + P * thetaJA (eak_engineering::calc::junction_temp_c)",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "C",
+      "value": 106.02715
+    },
+    {
+      "check": "ldo_dropout_headroom_at_vbus_min",
+      "inputs_verified": false,
+      "limit": ">= 1.3 V (AMS1117 max dropout)",
+      "note": "4.75 V - 3.3 V = 1.45 V. Margin is small; a low-dropout regulator (e.g. 3.3 V, <= 0.4 V dropout) is recommended for a production revision.",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "V",
+      "value": 1.45
+    },
+    {
+      "check": "rail_3v3_within_module_range",
+      "inputs_verified": false,
+      "limit": "3.0 .. 3.6 V",
+      "note": "AMS1117-3.3 output tolerance not verified (datasheet unavailable)",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "V",
+      "value": 3.3
+    },
+    {
+      "check": "power_track_width_required_0.5A_10C",
+      "inputs_verified": true,
+      "limit": "<= 0.40 mm (Power net class width)",
+      "note": "IPC-2221 external layer, 1 oz, dT 10 C (eak_engineering::ipc::trace_width_mm; formula constants not verified against the standard text)",
+      "result": "PASS",
+      "unit": "mm",
+      "value": 0.11614
+    },
+    {
+      "check": "power_track_capacity_0.40mm",
+      "inputs_verified": true,
+      "limit": ">= 0.5 A",
+      "note": "IPC-2221 external, 1 oz, dT 10 C",
+      "result": "PASS",
+      "unit": "A",
+      "value": 1.225611
+    },
+    {
+      "check": "en_rc_time_constant",
+      "inputs_verified": true,
+      "limit": "= 10 ms (datasheet recommendation R=10k, C=1uF)",
+      "note": "ESP32-C3-WROOM-02 datasheet v1.7 section 8 note",
+      "result": "PASS",
+      "unit": "s",
+      "value": 0.01
+    },
+    {
+      "check": "vbus_sense_adc_voltage_at_vbus_max",
+      "inputs_verified": false,
+      "limit": "< 2.5 V (ADC 11 dB range used by firmware) and < VDD",
+      "note": "eak_engineering::calc::divider_vout",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "V",
+      "value": 1.678571
+    },
+    {
+      "check": "vbus_divider_current",
+      "inputs_verified": true,
+      "limit": "< 100 uA",
+      "note": "",
+      "result": "PASS",
+      "unit": "A",
+      "value": 0.000036
+    },
+    {
+      "check": "status_led_current",
+      "inputs_verified": false,
+      "limit": "<= GPIO IOH (40 mA) and <= 20 mA LED rating",
+      "note": "R7 = 1000 ohm; resistor for 2 mA would be 650 ohm",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "A",
+      "value": 0.0013
+    },
+    {
+      "check": "r7_power",
+      "inputs_verified": false,
+      "limit": "<= 0.1 W (0603, unverified)",
+      "note": "",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "W",
+      "value": 0.00169
+    },
+    {
+      "check": "i2c_rise_time",
+      "inputs_verified": false,
+      "limit": "<= 1000 ns (standard mode, 100 kHz)",
+      "note": "tr = 0.8473 * Rp * Cb",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "s",
+      "value": 0.0
+    },
+    {
+      "check": "i2c_pullup_sink_current",
+      "inputs_verified": false,
+      "limit": "<= 3 mA (standard-mode VOL spec)",
+      "note": "UM10204 3 mA sink limit (not re-read)",
+      "result": "PASS_WITH_UNVERIFIED_INPUTS",
+      "unit": "A",
+      "value": 0.000702
+    },
+    {
+      "check": "i2c_logic_high_vs_sht40_vih",
+      "inputs_verified": true,
+      "limit": ">= 2.31 V (0.7*VDD)",
+      "note": "Pull-ups to the same +3V3 rail as the sensor VDD",
+      "result": "PASS",
+      "unit": "V",
+      "value": 3.3
+    },
+    {
+      "check": "sht40_supply_within_range",
+      "inputs_verified": true,
+      "limit": "1.08 .. 3.6 V",
+      "note": "Sensirion SHT4x datasheet v7.3 (June 2026)",
+      "result": "PASS",
+      "unit": "V",
+      "value": 3.3
+    },
+    {
+      "check": "usb_data_levels",
+      "inputs_verified": true,
+      "limit": "ESP32-C3 USB Serial/JTAG PHY on GPIO18/19 connected directly (no series resistors)",
+      "note": "ESP32-C3-WROOM-02 datasheet v1.7",
+      "result": "PASS",
+      "unit": "V",
+      "value": 3.3
+    }
+  ],
+  "title": "Engineering calculations — ESP32-C3 Environment Dashboard",
+  "tool": "eak-engineering calc/ipc functions"
+}
