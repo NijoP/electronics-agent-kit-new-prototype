@@ -337,6 +337,11 @@ pub fn run(p: &Project) -> Report {
         }
     }
     for (wire, pt) in &nl.dangling_wire_ends {
+        let end = if p.schematic.wires.get(wire).is_some_and(|w| w.a == *pt) {
+            "a"
+        } else {
+            "b"
+        };
         f.push(
             finding(
                 "ERC-008",
@@ -345,7 +350,7 @@ pub fn run(p: &Project) -> Report {
                 vec![wire.clone()],
                 Some(*pt),
             )
-            .key(&format!("end:{},{}", pt.x, pt.y))
+            .key(&format!("end:{end}"))
             .fix("Extend the wire end to a pin, wire or label, or delete the unused wire segment."),
         );
     }
@@ -397,7 +402,7 @@ pub fn run(p: &Project) -> Report {
                 .required(Bound::Min, vmax, "V")
                 .fix(fix),
             );
-        } else if rating.value < v_margin {
+        } else if rating.value < 1.5 * vmax {
             f.push(
                 finding(
                     "ERC-011",

@@ -1,7 +1,7 @@
 //! Actionable findings: stable ids, measured vs required values for quantitative rules,
 //! suggested fixes, and backward-compatible JSON.
 
-use eak_core::{geom::mm, CopperLayer, Point, Project, Track, Via};
+use eak_core::{geom::mm, CopperLayer, Point, Project, Track, Via, Wire, Zone};
 use eak_runtime::{fixtures, Engine};
 use eak_validation::report::finding_id;
 use eak_validation::{drc, erc, mech, Bound, Finding, Report, Severity};
@@ -341,4 +341,102 @@ fn new_report_json_round_trips() {
     assert_eq!(thin["required"]["bound"], "min");
     assert!(thin["suggested_fix"].is_string());
     assert!(thin["id"].as_str().unwrap().starts_with("DRC-001-"));
+}
+
+#[test]
+fn capacitor_margin_is_checked_before_rounding() {
+    let mut p = reference();
+    // 1.5 x 10.6669333 V = 16.0004 V, which rounds to 16.000 V; a 16 V part is still short.
+    p.constraints
+        .net_voltages_v
+        .insert("+5V".into(), 16.0004 / 1.5);
+    let r = erc::run(&p);
+    let w: Vec<_> = r
+        .findings
+        .iter()
+        .filter(|f| f.rule_id == "ERC-011")
+        .collect();
+    assert!(!w.is_empty(), "{:?}", r.findings);
+    for f in w {
+        assert_eq!(f.severity, Severity::Warning);
+        assert_eq!(f.required.as_ref().unwrap().value, 16.0);
+    }
+}
+
+#[test]
+fn dangling_wire_end_id_survives_moving_the_end() {
+    let mut p = reference();
+    let sheet = p.schematic.wires.values().next().unwrap().sheet_id.clone();
+    let put = |p: &mut Project, a: (f64, f64), b: (f64, f64)| {
+        p.schematic.wires.insert(
+            "w_float".into(),
+            Wire {
+                id: "w_float".into(),
+                sheet_id: sheet.clone(),
+                a: Point::mm(a.0, a.1),
+                b: Point::mm(b.0, b.1),
+            },
+        );
+    };
+    let ids = |p: &Project| {
+        let r = erc::run(p);
+        let mut v: Vec<_> = find(&r, "ERC-008", &["w_float"])
+            .iter()
+            .map(|f| (f.location, f.id.clone()))
+            .collect();
+        v.sort_by_key(|(l, _)| l.map(|l| (l.x, l.y)));
+        v
+    };
+    put(&mut p, (200.0, 200.0), (210.0, 200.0));
+    let before = ids(&p);
+    assert_eq!(before.len(), 2, "{before:?}");
+    assert_ne!(before[0].1, before[1].1);
+    put(&mut p, (200.0, 250.0), (230.0, 250.0));
+    let after = ids(&p);
+    assert_eq!(after.len(), 2, "{after:?}");
+    assert_eq!(after[0].1, before[0].1);
+    assert_eq!(after[1].1, before[1].1);
+    assert_ne!(after[0].0, before[0].0);
+}
+
+#[test]
+fn zone_and_failed_current_findings_carry_locations() {
+    let mut p = reference();
+    let outline = vec![
+        Point::mm(30.0, 10.0),
+        Point::mm(45.0, 10.0),
+        Point::mm(45.0, 20.0),
+        Point::mm(30.0, 20.0),
+    ];
+    p.pcb.zones.insert(
+        "z_out".into(),
+        Zone {
+            id: "z_out".into(),
+            layer: CopperLayer::Top,
+            net: "N_ZONE".into(),
+            outline: outline.clone(),
+            clearance: mm(0.2),
+        },
+    );
+    let r = drc::run(&p);
+    let edge = find(&r, "DRC-005", &["z_out"]);
+    assert_eq!(edge.len(), 1, "{:?}", r.findings);
+    assert_eq!(edge[0].location, Some(outline[1]));
+    let island = find(&r, "DRC-013", &["z_out"]);
+    assert_eq!(island.len(), 1, "{:?}", r.findings);
+    assert_eq!(island[0].location, Some(outline[0]));
+
+    let mut p = reference();
+    p.constraints.net_currents_a.insert("+5V".into(), 1.0);
+    p.constraints.temp_rise_c = 0.0;
+    let r = drc::run(&p);
+    let failed: Vec<_> = r
+        .findings
+        .iter()
+        .filter(|f| f.rule_id == "DRC-008")
+        .collect();
+    assert!(!failed.is_empty(), "{:?}", r.findings);
+    for f in failed {
+        assert_eq!(f.location, Some(p.pcb.tracks[&f.objects[0]].a), "{f:?}");
+    }
 }

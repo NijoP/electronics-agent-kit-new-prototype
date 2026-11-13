@@ -1,4 +1,10 @@
 # ADR-0009: Actionable ERC/DRC/MECH findings
+- **Status:** Accepted. Agreed on 2026-11-13 (~22:33 IST) by the main firstmate, acting as integration
+  authority for the platform-core (`eak-core`) and desktop (`eak-desktop`) owners. Agreed fields,
+  exactly as proposed: `id` `"<rule_id>-<12 hex>"`; `measured` `Quantity { value, unit }`;
+  `required` `Limit { bound: min|max, value, unit }` with string units; `suggested_fix`
+  `Option<String>`. All new fields are `#[serde(default)]`, so old JSON loads with an empty id. No new
+  dependency (`sha2` was already present).
 - **Date:** 2026-11-13
 - **Context:** The native schematic and PCB editors and the AI assistant need findings they can
   act on: which objects and where, which rule, the measured value against the required one, and

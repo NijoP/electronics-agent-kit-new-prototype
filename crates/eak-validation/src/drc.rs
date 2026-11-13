@@ -132,7 +132,7 @@ pub fn run(p: &Project) -> Report {
                         Error,
                         format!("current sizing for {} failed: {e}", t.net),
                         vec![t.id.clone()],
-                        None,
+                        Some(t.a),
                     )
                     .fix(format!(
                         "Check the declared current for {}, the temperature rise and the copper weight; current capacity could not be computed from them.",
@@ -414,9 +414,9 @@ pub fn run(p: &Project) -> Report {
             }
         }
         for z in p.pcb.zones.values() {
-            if z.outline.iter().any(|q| !point_in_polygon(*q, outline)) {
+            if let Some(q) = z.outline.iter().find(|q| !point_in_polygon(**q, outline)) {
                 f.push(
-                    finding("DRC-005", Warning, format!("zone {} extends beyond the board outline (fill is clipped to the board edge clearance)", z.id), vec![z.id.clone()], None)
+                    finding("DRC-005", Warning, format!("zone {} extends beyond the board outline (fill is clipped to the board edge clearance)", z.id), vec![z.id.clone()], Some(*q))
                         .key("zone")
                         .fix(format!("Pull the outline of zone {} inside the board outline; the fill is clipped at the edge clearance either way.", z.id)),
                 );
@@ -446,7 +446,8 @@ pub fn run(p: &Project) -> Report {
             );
         }
     }
-    for z in p.pcb.zones.keys() {
+    for (z, zone) in &p.pcb.zones {
+        let at = zone.outline.first().copied();
         if let Some(fill) = copper::fill_zone(p, z, &items) {
             let mut touched = BTreeSet::new();
             for it in items
@@ -463,7 +464,7 @@ pub fn run(p: &Project) -> Report {
                         Warning,
                         format!("zone {} has no fill (completely cleared)", z),
                         vec![z.clone()],
-                        None,
+                        at,
                     )
                     .fix(format!(
                         "Make room for zone {z}: enlarge its outline inside the board, or move other copper and keepouts that clear it completely."
@@ -471,7 +472,7 @@ pub fn run(p: &Project) -> Report {
                 );
             } else if isolated > 0 {
                 f.push(
-                    finding("DRC-013", Warning, format!("zone {} has {isolated} isolated copper island(s) not connected to any {} pad", z, fill.net), vec![z.clone()], None)
+                    finding("DRC-013", Warning, format!("zone {} has {isolated} isolated copper island(s) not connected to any {} pad", z, fill.net), vec![z.clone()], at)
                         .fix(format!("Reshape zone {z} so the isolated island(s) are not created, or so they reach a {} pad; this check counts an island as connected only when it touches a pad of the zone net.", fill.net)),
                 );
             }
