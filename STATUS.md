@@ -51,6 +51,7 @@ the command API:
 3. DRC: 0 errors; MECH: 0 errors.
 4. Package status: InternallyVerifiedReleaseCandidate; the package re-verifies and tampering is detected.
 Injected short and clearance violations are detected (`drc_detects_injected_short_and_clearance_violation`).
+Validation board (12-24 V to 5 V / 3 A buck, authored through the command engine): [validation/power-buck/README.md](validation/power-buck/README.md).
 
 ### Not yet implemented (acceptance gaps)
 - **Desktop application** (Tauri 2 + React): not started. There is no GUI yet.

@@ -183,18 +183,26 @@ pub fn run(p: &Project) -> Result<CalcReport, String> {
         function: "eak_engineering::calc::resistor_power_w".into(),
         inputs: format!("I = {:.1} µA, R = 105 kΩ", i_div * 1e6),
         result: format!("{:.3} mW", p_rtop * 1e3),
-        requirement: "≤ 50 % of 0603 rating (0.1 W, unverified generic)".into(),
+        requirement: "≤ 50 % of 0603 rating (Yageo RC0603 0.1 W, unverified)".into(),
         status: status(p_rtop <= 0.05),
     });
 
     // 5. LED indicator.
-    let r_led = calc::led_resistor_ohm(5.08, 2.0, 0.002).map_err(e)?;
-    let p_led = calc::resistor_power_w(0.002, 1500.0).map_err(e)?;
+    let vf = rating(p, "LED_0603_APT1608SGC", "forward_voltage_typ").unwrap_or(2.2);
+    let r_led = calc::led_resistor_ohm(4.972, vf, 0.002).map_err(e)?;
+    let i_led = (4.972 - vf) / 1500.0;
+    let p_led = calc::resistor_power_w(i_led, 1500.0).map_err(e)?;
     lines.push(Line {
         item: "Power LED series resistor".into(),
         function: "eak_engineering::calc::led_resistor_ohm / resistor_power_w".into(),
-        inputs: "VOUT 5.08 V, Vf 2.0 V (assumed green LED, unverified), If 2 mA".into(),
-        result: format!("{r_led:.0} Ω → 1.5 kΩ chosen; {:.1} mW in R4", p_led * 1e3),
+        inputs: format!(
+            "VOUT 4.972 V, Vf {vf} V (Kingbright APT1608SGC, unverified), target If 2 mA"
+        ),
+        result: format!(
+            "{r_led:.0} Ω → 1.5 kΩ chosen → {:.2} mA; {:.1} mW in R4",
+            i_led * 1e3,
+            p_led * 1e3
+        ),
         requirement: "R4 ≤ 50 % of rating".into(),
         status: status(p_led <= 0.05),
     });
@@ -212,7 +220,9 @@ pub fn run(p: &Project) -> Result<CalcReport, String> {
 
     // 7. Junction temperatures. Loss inputs are hand estimates from DESIGN.md §4 (not EAK-computed).
     let ta = 40.0;
-    let p_u1 = 0.78; // DESIGN.md §4: conduction 0.44 W + switching 0.30 W + quiescent/gate ~0.04 W at 25.2 V, 3 A
+    // DESIGN.md §4 hand estimate at 25.2 V / 3 A: conduction 0.58 W (RDS(on) x1.3 hot) +
+    // switching 0.30 W (10 ns edges assumed) + dead time 0.03 W + gate/quiescent 0.02 W.
+    let p_u1 = 0.93;
     let tj_max = rating(p, "TPS54302DDCR", "tj_abs_max").unwrap_or(150.0);
     let tsd = rating(p, "TPS54302DDCR", "thermal_shutdown_rising").unwrap_or(160.0);
     for (label, theta) in [

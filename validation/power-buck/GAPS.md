@@ -1,0 +1,19 @@
+# EAK capability gaps found while building the power-buck board
+
+Each gap is a capability this project needed that EAK (main at `bedd9b5`) does not have.
+None of them is implemented or faked inside `validation/power-buck/`. Where the design needed
+the number anyway, DESIGN.md gives a hand calculation labelled **hand calculation, not
+EAK-computed**, and READINESS.md marks the item NOT VERIFIED.
+
+| # | Missing capability | Owning crate / team | Smallest API that would close it | Effect on this board |
+|---|---|---|---|---|
+| G1 | Buck converter operating point: duty cycle, inductor ripple/peak/RMS current, input/output capacitor RMS current, output ripple, conduction + switching loss | `eak-engineering` (eak-electronics) | `calc::buck(BuckInput { vin, vout, iout, fsw, l, c_out, esr_out, rds_hs, rds_ls, t_rise_fall, efficiency_guess }) -> Result<BuckPoint { duty, ripple_a, i_peak, i_l_rms, i_cin_rms, i_cout_rms, v_ripple_out, p_cond_hs, p_cond_ls, p_sw }, CalcError>` | Inductor, capacitor and loss numbers are hand calculations (DESIGN.md §3-4) |
+| G2 | MLCC DC-bias / temperature capacitance derating | `eak-engineering` + library rating schema (eak-electronics) | `Rating` entries such as `capacitance_at_bias` (V, F pairs), plus `calc::effective_capacitance(def, v_dc)` | Effective Cout/Cin uses an assumed 60-75 % retention |
+| G3 | Copper-pour (zone) current density and PCB thermal spreading model | `eak-engineering` / `eak-validation` (eak-electronics) | `copper::zone_neck_width(project, zone_id, from, to) -> Nm` for DRC-008 on pours; `thermal::estimate_theta_ja(project, footprint_id, copper_area)` | The DRC current check covers tracks only; U1 Tj relies on datasheet θJA |
+| G4 | Zone-to-zone clearance for different nets on the same layer | `eak-validation` DRC (eak-electronics) | DRC rule `DRC-014`: zone fill polygons of different nets on one layer must keep the class or voltage clearance | Avoided by design (GND is the only pour net) |
+| G5 | Schematic drawing export (SVG/PDF) | `eak-core` / `apps/desktop` (eak-core, eak-desktop) | `export::schematic_svg(&Project, sheet_id) -> String` | The schematic exists only as native EAK-IR plus the netlist report; there is no drawing |
+| G6 | Silkscreen text (reference designators, polarity marks, board title) | `eak-manufacturing` gerber writer (eak-electronics) | `gerber::silkscreen` emits refdes text with stroke-font glyphs | The silkscreen has courtyard outlines and pin-1 dots only, so assembly needs the CPL |
+| G7 | Command-line front end (`apps/cli` is commented out of the workspace) | `apps/cli` (eak-core) | `eak run <script.json>` that executes a JSON array of `CommandRequest`s against a project folder | The design is driven by a small Rust program (`src/design.rs`) that calls `Engine::execute` |
+| G8 | Rounded-rectangle pads and footprint courtyard vs board-edge checks | `eak-core` library / `eak-validation` | `PadShape::RoundRect { radius_ratio }`; DRC rule "courtyard outside board" | The terminal-block courtyards are not checked against the edge |
+| G10 | Component research path: datasheet retrieval and parsing, LCSC part lookup, JLCPCB-format BOM/CPL/fabrication outputs | `eak-intelligence` research + `eak-manufacturing` (eak-intelligence, eak-electronics) | `research::lookup_part(mpn) -> PartRecord { datasheet_url, lcsc, ratings[], land_pattern }`; `manufacturing::profile("jlcpcb")` for JLC BOM/CPL column and rotation conventions | All non-TPS54302 ratings are UNVERIFIED designer assumptions; the BOM `LCSC Part #` column is empty; CPL rotation offsets have not been checked against JLCPCB |
+| G9 | Creepage (surface path) analysis | `eak-validation` (eak-electronics) | DRC creepage rule using `ipc::creepage_mm` over pad-to-pad surface distance | Not needed at ≤ 30 V SELV (DESIGN.md §6); reported NOT VERIFIED by EAK |

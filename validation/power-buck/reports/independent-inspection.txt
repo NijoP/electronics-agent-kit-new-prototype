@@ -1,0 +1,35 @@
+PASS gerber-structure EAK_Power_Buck_12_24V_to_5V_3A-B_Cu.gbl: FSLAX46Y46, MOMM, terminated by M02
+PASS gerber-apertures EAK_Power_Buck_12_24V_to_5V_3A-B_Cu.gbl: every selected aperture is defined
+PASS gerber-extent EAK_Power_Buck_12_24V_to_5V_3A-B_Cu.gbl: x 0.500..65.500 y 0.500..32.500 mm over 2302 coordinates (board 66x33)
+PASS gerber-structure EAK_Power_Buck_12_24V_to_5V_3A-B_Mask.gbs: FSLAX46Y46, MOMM, terminated by M02
+PASS gerber-apertures EAK_Power_Buck_12_24V_to_5V_3A-B_Mask.gbs: every selected aperture is defined
+PASS gerber-extent EAK_Power_Buck_12_24V_to_5V_3A-B_Mask.gbs: x 4.000..62.000 y 4.000..29.000 mm over 8 coordinates (board 66x33)
+PASS gerber-structure EAK_Power_Buck_12_24V_to_5V_3A-B_Paste.gbp: FSLAX46Y46, MOMM, terminated by M02
+PASS gerber-apertures EAK_Power_Buck_12_24V_to_5V_3A-B_Paste.gbp: every selected aperture is defined
+INFO gerber-extent EAK_Power_Buck_12_24V_to_5V_3A-B_Paste.gbp: no coordinates (empty layer)
+PASS gerber-structure EAK_Power_Buck_12_24V_to_5V_3A-B_Silkscreen.gbo: FSLAX46Y46, MOMM, terminated by M02
+PASS gerber-apertures EAK_Power_Buck_12_24V_to_5V_3A-B_Silkscreen.gbo: every selected aperture is defined
+INFO gerber-extent EAK_Power_Buck_12_24V_to_5V_3A-B_Silkscreen.gbo: no coordinates (empty layer)
+PASS gerber-structure EAK_Power_Buck_12_24V_to_5V_3A-Edge_Cuts.gm1: FSLAX46Y46, MOMM, terminated by M02
+PASS gerber-apertures EAK_Power_Buck_12_24V_to_5V_3A-Edge_Cuts.gm1: every selected aperture is defined
+PASS gerber-extent EAK_Power_Buck_12_24V_to_5V_3A-Edge_Cuts.gm1: x 0.000..66.000 y 0.000..33.000 mm over 8 coordinates (board 66x33)
+PASS gerber-structure EAK_Power_Buck_12_24V_to_5V_3A-F_Cu.gtl: FSLAX46Y46, MOMM, terminated by M02
+PASS gerber-apertures EAK_Power_Buck_12_24V_to_5V_3A-F_Cu.gtl: every selected aperture is defined
+PASS gerber-extent EAK_Power_Buck_12_24V_to_5V_3A-F_Cu.gtl: x 0.500..65.500 y 0.500..32.500 mm over 5804 coordinates (board 66x33)
+PASS gerber-structure EAK_Power_Buck_12_24V_to_5V_3A-F_Mask.gts: FSLAX46Y46, MOMM, terminated by M02
+PASS gerber-apertures EAK_Power_Buck_12_24V_to_5V_3A-F_Mask.gts: every selected aperture is defined
+PASS gerber-extent EAK_Power_Buck_12_24V_to_5V_3A-F_Mask.gts: x 4.000..62.000 y 4.000..29.000 mm over 54 coordinates (board 66x33)
+PASS gerber-structure EAK_Power_Buck_12_24V_to_5V_3A-F_Paste.gtp: FSLAX46Y46, MOMM, terminated by M02
+PASS gerber-apertures EAK_Power_Buck_12_24V_to_5V_3A-F_Paste.gtp: every selected aperture is defined
+PASS gerber-extent EAK_Power_Buck_12_24V_to_5V_3A-F_Paste.gtp: x 13.550..61.825 y 8.675..26.425 mm over 46 coordinates (board 66x33)
+PASS gerber-structure EAK_Power_Buck_12_24V_to_5V_3A-F_Silkscreen.gto: FSLAX46Y46, MOMM, terminated by M02
+PASS gerber-apertures EAK_Power_Buck_12_24V_to_5V_3A-F_Silkscreen.gto: every selected aperture is defined
+PASS gerber-extent EAK_Power_Buck_12_24V_to_5V_3A-F_Silkscreen.gto: x 0.500..65.600 y 0.800..32.500 mm over 216 coordinates (board 66x33)
+INFO drill-tools T1: 0.300 mm x 24 holes
+INFO drill-tools T2: 1.300 mm x 4 holes
+INFO drill-tools T3: 3.200 mm x 4 holes
+INFO drill-total: 32 plated holes
+PASS bom-vs-cpl: BOM quantity 24 = CPL rows 24
+PASS cpl-on-board: every placement centre lies on the board
+INFO bom-mpn: lines without manufacturer part number: none
+PASS manifest-hash: every file's sha256sum matches manifest.json

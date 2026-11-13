@@ -1,15 +1,15 @@
 {
-  "project_id": "prj_9925c736f38b4033",
+  "project_id": "prj_d28c9fa2d517404a",
   "project_name": "EAK Power Buck 12-24V to 5V 3A",
-  "revision": 214,
-  "input_sha256": "672ce0d3732319d0826b1d92cf58f500d6a3aff9ad1cd3e634f5ee3f0b6b858e",
+  "revision": 217,
+  "input_sha256": "94167c7e3ba2dc95c2fa761d50cf9c6ab08f6f63f1870658e32f124d61fca760",
   "generator": "eak-manufacturing 0.1.0",
-  "generated_ms": 1794571078944,
+  "generated_ms": 1794572027992,
   "status": "INTERNALLY_VERIFIED_RELEASE_CANDIDATE",
   "gates": [
     {
       "check": "ERC",
-      "revision": 214,
+      "revision": 217,
       "outcome": "NO_ERRORS_IN_IMPLEMENTED_CHECKS",
       "errors": 0,
       "warnings": 0,
@@ -17,7 +17,7 @@
     },
     {
       "check": "DRC",
-      "revision": 214,
+      "revision": 217,
       "outcome": "NO_ERRORS_IN_IMPLEMENTED_CHECKS",
       "errors": 0,
       "warnings": 0,
@@ -25,7 +25,7 @@
     },
     {
       "check": "MECH",
-      "revision": 214,
+      "revision": 217,
       "outcome": "NO_ERRORS_IN_IMPLEMENTED_CHECKS",
       "errors": 0,
       "warnings": 0,
@@ -36,68 +36,68 @@
   "files": [
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-F_Cu.gtl",
-      "bytes": 143090,
-      "sha256": "b433cd8203abe790dcb215aec09ecfc19f9d73391998e27fad256ef2d46ae11a",
+      "bytes": 143095,
+      "sha256": "8c30c71193c386344005cb8c74bffbb8d20f757d423d6ecac7e89cf01370d7d6",
       "kind": "gerber"
     },
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-B_Cu.gbl",
-      "bytes": 55288,
-      "sha256": "ad86f8dafeef4210c0f257813fe57ed486aa09fe21adb1942073cd447c62bfcb",
+      "bytes": 55283,
+      "sha256": "899b99ec8859066001e769de0d38d0165b945418002a5128ddb8a14d868699ed",
       "kind": "gerber"
     },
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-F_Mask.gts",
       "bytes": 1930,
-      "sha256": "8597c429a60a3a8e4eef947fea02afa5e0faccb4b7b3ab2d9e8118523be6408c",
+      "sha256": "a70832aea8219f955b071cf15699d6f45e97de427dcc25fca64bad518024e45f",
       "kind": "gerber"
     },
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-B_Mask.gbs",
-      "bytes": 500,
-      "sha256": "2b28d58a811a4694c4ecdb4f74cd45c1dfeab0e15da9052d29e4a56966e8efd4",
+      "bytes": 495,
+      "sha256": "ab2401b42260e814a537c35815536fb35a12066d1599bdd9fa21a11018eb9365",
       "kind": "gerber"
     },
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-F_Paste.gtp",
-      "bytes": 1646,
-      "sha256": "135017ca48a8ad69193e0b9bfc4d36fa993711bd5f274c821eea7f8208abf52f",
+      "bytes": 1636,
+      "sha256": "03123ce67e8ec3448c29e86c306ec35dc460232666fd4c5fddb110ffa3f5fa52",
       "kind": "gerber"
     },
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-B_Paste.gbp",
       "bytes": 221,
-      "sha256": "29f0f630bfe119800233a0e33b0d38e8587b479f5403c7f52e9c3fde6db51168",
+      "sha256": "33187ed4b6db79b1d60fd298cbbda511fcac5227b970ae4d9b6527148b623813",
       "kind": "gerber"
     },
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-F_Silkscreen.gto",
       "bytes": 5389,
-      "sha256": "776f89363461de36ab18f123537f8f11f9b176296824539d9eda198909e245fc",
+      "sha256": "06c24a4e15d9e0c9cf4a1557ed6e60e51eb4019da8f6f5a57b7293024e34e69b",
       "kind": "gerber"
     },
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-B_Silkscreen.gbo",
       "bytes": 222,
-      "sha256": "5860eba2a4fa616ee36ce3e6d4562bf6caf575139344ae9ffb680eaa11d90a57",
+      "sha256": "e13fe0c152f796d4c30acf46dda7fff597b86ef095e715dc365aaca738b0fef1",
       "kind": "gerber"
     },
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-Edge_Cuts.gm1",
       "bytes": 374,
-      "sha256": "ab2d403c1a2642eaa479727c050cd043456a9d47537437d2edd6f1f6cc49ca3d",
+      "sha256": "b7fb268d7f13ebe6a23cd8ff769a64716ebc112e0036c7e641ef0dbef495f6ee",
       "kind": "gerber"
     },
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-PTH.drl",
       "bytes": 697,
-      "sha256": "5f6a7b16fc30916aea017abaeb24263bcee94eb02bd3be342e52e33b0548c5cc",
+      "sha256": "a344a271f9bd2691b549147bde6fefd56c29e6b22270057bd374ce7813cd87b7",
       "kind": "drill"
     },
     {
       "name": "EAK_Power_Buck_12_24V_to_5V_3A-BOM.csv",
-      "bytes": 1180,
-      "sha256": "4d4af371d87b3bd5628758350d6e2038c95d9e7f2da6d687af318587651fda6b",
+      "bytes": 1313,
+      "sha256": "553378bc76e7c2257cd221ad9aa3f6f7f75c61b814b2ba50a38e1fec8140f0bc",
       "kind": "bom"
     },
     {

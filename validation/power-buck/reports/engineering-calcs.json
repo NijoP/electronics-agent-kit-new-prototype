@@ -1,5 +1,5 @@
 {
-  "project_revision": 214,
+  "project_revision": 217,
   "ipc_tables_verified_against_standard": false,
   "lines": [
     {
@@ -103,14 +103,14 @@
       "function": "eak_engineering::calc::resistor_power_w",
       "inputs": "I = 41.9 µA, R = 105 kΩ",
       "result": "0.184 mW",
-      "requirement": "≤ 50 % of 0603 rating (0.1 W, unverified generic)",
+      "requirement": "≤ 50 % of 0603 rating (Yageo RC0603 0.1 W, unverified)",
       "status": "PASS (calculation)"
     },
     {
       "item": "Power LED series resistor",
       "function": "eak_engineering::calc::led_resistor_ohm / resistor_power_w",
-      "inputs": "VOUT 5.08 V, Vf 2.0 V (assumed green LED, unverified), If 2 mA",
-      "result": "1540 Ω → 1.5 kΩ chosen; 6.0 mW in R4",
+      "inputs": "VOUT 4.972 V, Vf 2.2 V (Kingbright APT1608SGC, unverified), target If 2 mA",
+      "result": "1386 Ω → 1.5 kΩ chosen → 1.85 mA; 5.1 mW in R4",
       "requirement": "R4 ≤ 50 % of rating",
       "status": "PASS (calculation)"
     },
@@ -125,16 +125,16 @@
     {
       "item": "U1 junction temperature (JEDEC 2s2p θJA)",
       "function": "eak_engineering::calc::junction_temp_c",
-      "inputs": "Ta 40 °C, P 0.78 W (hand estimate), θJA 118.9 °C/W (TI SLVSDG6C §5.4)",
-      "result": "Tj ≈ 132.7 °C (abs max 150 °C, shutdown 160 °C)",
+      "inputs": "Ta 40 °C, P 0.93 W (hand estimate), θJA 118.9 °C/W (TI SLVSDG6C §5.4)",
+      "result": "Tj ≈ 150.6 °C (abs max 150 °C, shutdown 160 °C)",
       "requirement": "Tj ≤ 125 °C design target (25 °C below abs max)",
       "status": "FAIL against 125 °C target (estimate) - board copper must perform like TI EVM; NOT VERIFIED"
     },
     {
       "item": "U1 junction temperature (TI EVM θJA)",
       "function": "eak_engineering::calc::junction_temp_c",
-      "inputs": "Ta 40 °C, P 0.78 W (hand estimate), θJA 57.2 °C/W (TI SLVSDG6C §5.4)",
-      "result": "Tj ≈ 84.6 °C (abs max 150 °C, shutdown 160 °C)",
+      "inputs": "Ta 40 °C, P 0.93 W (hand estimate), θJA 57.2 °C/W (TI SLVSDG6C §5.4)",
+      "result": "Tj ≈ 93.2 °C (abs max 150 °C, shutdown 160 °C)",
       "requirement": "Tj ≤ 125 °C design target (25 °C below abs max)",
       "status": "PASS (estimate only - NOT VERIFIED without measurement)"
     },
@@ -147,18 +147,18 @@
       "status": "PASS (estimate on unverified ratings - NOT VERIFIED)"
     },
     {
-      "item": "GND pour fill, Top layer",
-      "function": "eak_engineering::copper::fill_zone",
-      "inputs": "clearance 0.60 mm, 0.1 mm raster",
-      "result": "1522 mm² filled in 2 island(s)",
-      "requirement": "informational",
-      "status": "INFO"
-    },
-    {
       "item": "GND pour fill, Bottom layer",
       "function": "eak_engineering::copper::fill_zone",
       "inputs": "clearance 0.60 mm, 0.1 mm raster",
       "result": "1870 mm² filled in 1 island(s)",
+      "requirement": "informational",
+      "status": "INFO"
+    },
+    {
+      "item": "GND pour fill, Top layer",
+      "function": "eak_engineering::copper::fill_zone",
+      "inputs": "clearance 0.60 mm, 0.1 mm raster",
+      "result": "1522 mm² filled in 2 island(s)",
       "requirement": "informational",
       "status": "INFO"
     }

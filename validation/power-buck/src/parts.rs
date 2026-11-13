@@ -539,9 +539,61 @@ pub fn inductor_10u() -> ComponentDef {
     )
 }
 
+/// Yageo RC0603 1 % thick-film resistor (one definition per value so the BOM carries the MPN).
+pub fn resistor_0603(id: &str, value: &str, mpn: &str) -> ComponentDef {
+    let ds = "Yageo RC_L series datasheet (yageo.com)";
+    two_pin(
+        id,
+        &format!("{value} 1 % 0.1 W thick-film resistor 0603"),
+        "Resistor",
+        "R",
+        value,
+        "Yageo",
+        mpn,
+        "https://www.yageo.com/upload/media/product/productsearch/datasheet/rchip/PYu-RC_Group_51_RoHS_L_12.pdf",
+        ("~", "~"),
+        (0.8, 0.95),
+        0.825,
+        (1.5, 0.75),
+        0.45,
+        vec![
+            assumed("power", 0.1, "W", ds),
+            assumed("tolerance", 0.01, "ratio", ds),
+        ],
+    )
+}
+
+pub fn led_green_0603() -> ComponentDef {
+    let ds = "Kingbright APT1608SGC datasheet (kingbrightusa.com)";
+    two_pin(
+        "LED_0603_APT1608SGC",
+        "Green LED 0603 (power indicator); pin 1 = cathode, pin 2 = anode",
+        "LED",
+        "D",
+        "Green",
+        "Kingbright",
+        "APT1608SGC",
+        "https://www.kingbrightusa.com/images/catalog/SPEC/APT1608SGC.pdf",
+        ("K", "A"),
+        (0.8, 0.95),
+        0.825,
+        (1.5, 0.75),
+        0.75,
+        vec![
+            assumed("forward_voltage_typ", 2.2, "V", ds),
+            assumed("forward_current_max", 0.025, "A", ds),
+        ],
+    )
+}
+
 /// All custom definitions used by the board.
 pub fn all() -> Vec<ComponentDef> {
     vec![
+        resistor_0603("R_0603_100K", "100k", "RC0603FR-07100KL"),
+        resistor_0603("R_0603_105K", "105k", "RC0603FR-07105KL"),
+        resistor_0603("R_0603_14K3", "14.3k", "RC0603FR-0714K3L"),
+        resistor_0603("R_0603_1K5", "1.5k", "RC0603FR-071K5L"),
+        led_green_0603(),
         tps54302(),
         ao4407a(),
         terminal_2p(),
