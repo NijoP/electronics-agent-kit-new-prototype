@@ -1,0 +1,84 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  background: #15181c;
+  color: #e3e6ea;
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+button, input, select { font: inherit; color: inherit; background: #252a31; border: 1px solid #3a414b; border-radius: 4px; padding: 4px 10px; }
+button:disabled { opacity: 0.45; }
+button:focus-visible, input:focus-visible, select:focus-visible, li:focus-visible { outline: 2px solid #e8c35a; outline-offset: 1px; }
+.muted { color: #8b94a1; }
+.error { color: #ff8a80; }
+.tag { margin-left: 8px; font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #5a2a2a; }
+.tag.warn { background: #5a4a1a; }
+
+/* Project Home */
+.home { max-width: 760px; margin: 0 auto; padding: 24px; display: grid; gap: 20px; }
+.home form, .home section { display: grid; gap: 8px; }
+.home label { display: grid; gap: 4px; }
+.home label.inline { display: flex; gap: 8px; align-items: center; }
+.recent { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.recent button { width: 100%; text-align: left; }
+
+/* Workspace */
+.workspace { height: 100%; display: grid; grid-template-rows: auto auto 1fr auto; }
+.toolbar { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid #2c323a; }
+.spacer { flex: 1; }
+.banner { background: #5a4a1a; padding: 6px 10px; display: flex; gap: 12px; align-items: center; }
+.main { min-height: 0; display: grid; grid-template-columns: 1fr 360px; }
+.views { min-height: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.view { min-height: 0; display: grid; grid-template-rows: auto 1fr; border-right: 1px solid #2c323a; }
+.view-header { display: flex; gap: 10px; align-items: center; padding: 4px 8px; }
+.side { min-height: 0; overflow: auto; padding: 0 10px; }
+.status { display: flex; gap: 16px; padding: 4px 10px; border-top: 1px solid #2c323a; color: #b7bec8; font-size: 12px; }
+.empty { padding: 16px; }
+
+/* Canvases */
+.canvas { width: 100%; height: 100%; background: #0e1013; cursor: grab; user-select: none; }
+.canvas text { font-size: 1.6px; text-anchor: middle; fill: #c9d1d9; pointer-events: none; }
+.sheet { fill: #13161a; stroke: #3a414b; stroke-width: 0.3; }
+.wire { stroke: #4caf50; stroke-width: 0.25; }
+.symbol { cursor: pointer; }
+.symbol .body { fill: #1e2a36; stroke: #9cc3e6; stroke-width: 0.25; }
+.symbol .pin { stroke: #9cc3e6; stroke-width: 0.2; }
+.symbol .pin-end { fill: #9cc3e6; }
+.symbol.selected .body { stroke: #e8c35a; stroke-width: 0.5; fill: #3a3218; }
+.label circle { fill: #4caf50; }
+.label text { text-anchor: start; fill: #8fd694; }
+.label.power text { fill: #ff8a80; }
+.no-connect { stroke: #ff8a80; stroke-width: 0.25; fill: none; }
+.board { fill: #10301f; stroke: #e8c35a; stroke-width: 0.15; }
+.zone { fill-opacity: 0.25; stroke-width: 0.05; }
+.zone.top { fill: #c0392b; stroke: #c0392b; }
+.zone.bottom { fill: #2e86de; stroke: #2e86de; }
+.track { stroke-linecap: round; }
+.track.top { stroke: #c0392b; }
+.track.bottom { stroke: #2e86de; }
+.footprint { cursor: pointer; }
+.footprint .courtyard { fill: none; stroke: #6b7480; stroke-width: 0.05; }
+.footprint.selected .courtyard { stroke: #e8c35a; stroke-width: 0.25; fill: rgba(232, 195, 90, 0.12); }
+.footprint text { font-size: 0.9px; }
+.pad rect { fill: #c8a24a; }
+.footprint.bottom .pad.smd rect { fill: #4f7fb3; }
+.drill { fill: #0e1013; }
+.via circle { fill: #b0b0b0; }
+.via .drill { fill: #0e1013; }
+
+/* Engineering Monitor */
+.monitor h3 { font-size: 13px; margin: 12px 0 4px; }
+.findings { list-style: none; padding: 0; margin: 0; display: grid; gap: 3px; }
+.finding button { width: 100%; text-align: left; border-color: transparent; }
+.finding.error .sev { color: #ff8a80; }
+.finding.warning .sev { color: #e8c35a; }
+.activity ol { list-style: none; padding: 0; font-size: 12px; display: grid; gap: 2px; }
+
+/* Command palette */
+.palette-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); display: grid; justify-items: center; align-items: start; padding-top: 12vh; }
+.palette { width: min(560px, 90vw); background: #1b1f24; border: 1px solid #3a414b; border-radius: 6px; padding: 8px; }
+.palette input { width: 100%; }
+.palette ul { list-style: none; padding: 0; margin: 6px 0 0; max-height: 50vh; overflow: auto; }
+.palette li { padding: 5px 8px; border-radius: 4px; cursor: pointer; }
+.palette li.active { background: #2e3540; }

@@ -8,7 +8,7 @@ members = [
 #    "crates/eak-intelligence",
     "crates/eak-manufacturing",
 #    "apps/cli",
-#    "apps/desktop/src-tauri",
+    "apps/desktop/src-tauri",
 ]
 
 [workspace.package]
