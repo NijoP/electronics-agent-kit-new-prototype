@@ -6,13 +6,17 @@ the listed tests pass; it does not mean professionally validated.
 ## M1.1: `eak` CLI and three-OS CI (2026-11-13)
 
 **Platform tested locally:** Windows 11 (Git Bash), Rust 1.99.1 `x86_64-pc-windows-gnu`.
-**Linux and macOS:** CI matrix is windows-latest, ubuntu-latest, macos-latest (Apple
-Silicon) and macos-15-intel. This change is the first whose CI run reaches the build and
-test steps on Linux and macOS (earlier runs stopped at the Python-free step, see below).
-No Linux or macOS result is claimed in this file until a green run of this exact
-revision is recorded here.
+**Linux and macOS (CI, executed):** the matrix is windows-latest, ubuntu-latest,
+macos-latest (Apple Silicon) and macos-15-intel. GitHub Actions run
+[43431745631](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43431745631)
+on commit `5cf01d4` (the code of this change; the commit that records this result
+changes documentation only) passed on all four jobs: Python-free check, `cargo fmt`,
+`cargo clippy -D warnings` and `cargo test --workspace --release` with
+**43 passed, 0 failed** on each. It is the first run to reach the build and test steps
+on Linux and macOS (earlier runs stopped at the Python-free step, see below). Nothing
+has been run on a Linux or macOS machine outside CI.
 
-### Implemented and tested (Windows, executed)
+### Implemented and tested (Windows locally; Windows, Linux and macOS in CI)
 - **`eak` CLI** (`apps/cli`, binary `eak`). It is a thin client of the shared engine:
   mutations go only through `Engine::execute` (or the engine's undo/redo/restore), and
   each invocation takes the project lock and releases it on exit. Subcommands:
@@ -48,8 +52,10 @@ revision is recorded here.
   - `scripts/*.sh` are committed executable (they were 100644, which failed Linux and macOS).
   - The retired `macos-13` label was replaced by `macos-15-intel`.
 
-### Tests executed (exact results, Windows)
-`cargo test --workspace --release`: **43 passed, 0 failed**. By crate:
+### Tests executed (exact results)
+`cargo test --workspace --release`: **43 passed, 0 failed** on Windows locally and on
+each of the four CI jobs of run 43431745631 (windows-latest, ubuntu-latest, macos-latest,
+macos-15-intel). By crate:
 - eak-cli: 5 end-to-end tests through the real binary.
 - eak-core: 7.
 - eak-engineering: 11.
@@ -75,7 +81,8 @@ Other CLI tests cover:
 
 New process tests:
 - `cancel_terminates_the_whole_process_tree`: the grandchild must die. Unix uses
-  `sh` + `sleep`; Windows uses PowerShell `Start-Process`.
+  `sh` + `sleep`; Windows uses PowerShell `Start-Process`. The Unix `killpg` path
+  passed on ubuntu-latest, macos-latest and macos-15-intel in run 43431745631.
 - `fast_exit_output_is_not_lost`.
 
 ### Known limitations
@@ -141,7 +148,7 @@ Injected short and clearance violations are detected (`drc_detects_injected_shor
 - AI Intelligence Engine (agent loop, model providers): not started.
 - Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser, LCSC/JLCPCB integrations.
 - Multi-layer (>2) boards, differential pairs, impedance, thermal reliefs, silkscreen text.
-- Linux/macOS: first CI execution happens with the M1.1 change (see above); packaging and installers do not exist yet.
+- Linux/macOS: built and tested in CI only, starting with the M1.1 change (see above); packaging and installers do not exist yet.
 - Independent engineering review and fabricator DFM: not performed (required before any manufacturing claim).
 
 ## Coordination note
