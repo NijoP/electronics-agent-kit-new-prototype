@@ -87,6 +87,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - DRC: 13 rules, including current capacity and voltage clearance.
   - Mechanical: 3 rules.
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
+  - Every finding carries a stable id, the affected objects and location, and a suggested fix; quantitative rules also report measured vs required values with units (ADR-0009). Desktop and AI display of the new fields is not yet wired.
 - Runtime (`eak-runtime`):
   - Typed command set (38 commands).
   - Revision checks and the agent approval policy.
