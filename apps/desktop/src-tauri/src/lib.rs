@@ -375,6 +375,76 @@ pub fn run_check(s: &Session, check: Check) -> Result<CheckResult, String> {
     })?
 }
 
+/// A built-in library part the UI can place (read-only catalogue; placing it is a `PlaceSymbol` command).
+#[derive(Debug, Clone, Serialize)]
+pub struct LibraryEntry {
+    pub id: String,
+    pub name: String,
+    pub category: String,
+    pub refdes_prefix: String,
+    pub default_value: String,
+    pub pins: Vec<(String, String)>,
+}
+
+pub fn library_components() -> Vec<LibraryEntry> {
+    eak_core::builtin::components()
+        .into_iter()
+        .map(|c| LibraryEntry {
+            pins: c
+                .symbol
+                .pins
+                .iter()
+                .map(|p| (p.number.clone(), p.name.clone()))
+                .collect(),
+            id: c.id,
+            name: c.name,
+            category: c.category,
+            refdes_prefix: c.refdes_prefix,
+            default_value: c.default_value,
+        })
+        .collect()
+}
+
+/// Result of a manufacturing export: the manifest plus the revision-bound check reports.
+#[derive(Debug, Clone, Serialize)]
+pub struct ExportResult {
+    pub out_dir: String,
+    pub manifest: eak_manufacturing::Manifest,
+    pub reports: Vec<Report>,
+}
+
+/// Run ERC, DRC and MECH on the current revision (saving each as evidence), then write
+/// Gerber, Excellon, BOM and CPL into `<project>/output/rev-<N>`. The package status is
+/// DRAFT unless every gate passes; it is never called manufacturing-ready.
+pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
+    s.with_engine(|e| {
+        let dir = e
+            .dir()
+            .ok_or("export needs a saved project folder")?
+            .to_path_buf();
+        let reports = vec![
+            erc::run(e.project()),
+            drc::run(e.project()),
+            eak_validation::mech::run(e.project()),
+        ];
+        for r in &reports {
+            let json = serde_json::to_string_pretty(r).map_err(|err| err.to_string())?;
+            e.save_evidence(&r.check, &json)
+                .ok_or_else(|| format!("{} evidence could not be saved", r.check))?;
+        }
+        let out = dir
+            .join("output")
+            .join(format!("rev-{}", e.project().revision));
+        let refs: Vec<&Report> = reports.iter().collect();
+        let manifest = eak_manufacturing::compile(e.project(), &refs, &out)?;
+        Ok(ExportResult {
+            out_dir: out.display().to_string(),
+            manifest,
+            reports,
+        })
+    })?
+}
+
 pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, String> {
     let index = s
         .index
@@ -388,7 +458,9 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 11] = [
+pub const IPC_COMMANDS: [&str; 13] = [
+    "library_components",
+    "export_manufacturing",
     "create_project",
     "open_project",
     "close_project",
@@ -476,6 +548,16 @@ pub mod cmd {
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
+    pub fn library_components() -> Vec<LibraryEntry> {
+        super::library_components()
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
+    pub fn export_manufacturing(state: State<'_, Session>) -> Result<ExportResult, String> {
+        super::export_manufacturing(&state)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
     pub fn recent_projects(
         state: State<'_, Session>,
         limit: usize,
@@ -512,6 +594,8 @@ pub fn run() {
             cmd::acknowledge_recovery,
             cmd::run_check,
             cmd::recent_projects,
+            cmd::library_components,
+            cmd::export_manufacturing,
         ])
         .run(tauri::generate_context!())
         .expect("EAK desktop failed to start");

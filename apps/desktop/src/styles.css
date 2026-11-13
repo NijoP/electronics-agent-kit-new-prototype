@@ -82,3 +82,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, li:focus-visibl
 .palette ul { list-style: none; padding: 0; margin: 6px 0 0; max-height: 50vh; overflow: auto; }
 .palette li { padding: 5px 8px; border-radius: 4px; cursor: pointer; }
 .palette li.active { background: #2e3540; }
+
+/* Editors */
+.views.schematic, .views.pcb { grid-template-columns: 1fr; }
+.view { grid-template-rows: auto auto 1fr; }
+.tools { display: flex; gap: 4px; flex-wrap: wrap; }
+.tools button.on { background: #3a3218; border-color: #e8c35a; }
+.tool-options { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 2px 8px 4px; min-height: 28px; }
+.tool-options label { display: flex; gap: 4px; align-items: center; }
+.hint { font-size: 12px; }
+.canvas.tool { cursor: crosshair; }
+.hit { stroke: transparent; stroke-width: 1.4; pointer-events: stroke; fill: none; }
+.wire.preview, .track.preview { opacity: 0.55; stroke-dasharray: 0.6 0.4; pointer-events: none; }
+.outline-draft { fill: none; stroke: #e8c35a; stroke-width: 0.2; stroke-dasharray: 0.6 0.4; pointer-events: none; }
+.anchor { fill: #e8c35a; pointer-events: none; }
+.symbol .pin-end.active { fill: #e8c35a; }
+.saved { color: #8fd694; font-size: 12px; }
+.export h2 { font-size: 14px; margin: 12px 0 4px; }
+.export .files { list-style: none; padding: 0; margin: 0; font-size: 12px; }

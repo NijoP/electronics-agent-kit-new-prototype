@@ -61,3 +61,9 @@ export function pan(vb: ViewBox, size: Size, dx: number, dy: number): ViewBox {
   const s = Math.min(size.width / vb.w, size.height / vb.h);
   return { ...vb, x: vb.x - dx / s, y: vb.y - dy / s };
 }
+
+/** View millimetres (Y down) to an EAK-IR point in whole nanometres (Y up). */
+export const fromView = (x: number, y: number): Point => ({
+  x: Math.round(x * NM_PER_MM),
+  y: Math.round(-y * NM_PER_MM) + 0,
+});
