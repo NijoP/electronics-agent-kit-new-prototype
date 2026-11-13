@@ -38,9 +38,16 @@ pub struct ProcInfo {
 
 const MAX_CAPTURE: usize = 256 * 1024;
 
+/// After a process leaves Running, how long `wait` lets the capture threads drain the
+/// pipes. Bounded because a detached grandchild may keep a pipe open indefinitely.
+const DRAIN_GRACE: Duration = Duration::from_secs(2);
+
+#[derive(Default)]
 struct Bounded {
     buf: VecDeque<u8>,
     truncated: bool,
+    /// The reader reached end-of-stream (every writer closed the pipe).
+    eof: bool,
 }
 
 impl Bounded {
@@ -79,13 +86,16 @@ fn reader<R: Read + Send + 'static>(mut r: R, sink: Arc<Mutex<Bounded>>) {
                 Ok(n) => sink.lock().expect("capture lock").push(&chunk[..n]),
             }
         }
+        sink.lock().expect("capture lock").eof = true;
     });
 }
 
-/// Terminate a process and all of its children.
+/// Terminate a process and all of its children. Must only be called before the child
+/// has been reaped, so its pid (and process-group id) cannot have been reused.
 fn kill_tree(child: &mut Child) {
     #[cfg(windows)]
     {
+        // `/T` walks the parent-pid tree; `/F` forces termination (no graceful close).
         let _ = Command::new("taskkill")
             .args(["/T", "/F", "/PID", &child.id().to_string()])
             .stdout(Stdio::null())
@@ -94,10 +104,17 @@ fn kill_tree(child: &mut Child) {
     }
     #[cfg(unix)]
     {
-        // The child was started as its own process-group leader.
-        let _ = Command::new("kill")
-            .args(["-TERM", &format!("-{}", child.id())])
-            .status();
+        // The child was started as the leader of its own process group (`process_group(0)`),
+        // so its pid is the group id. SIGKILL the whole group — the Unix equivalent of
+        // `taskkill /T /F` — directly via killpg(2) rather than relying on a `kill` binary
+        // whose negative-pid argument parsing differs between platforms.
+        if let Ok(pgid) = libc::pid_t::try_from(child.id()) {
+            // SAFETY: plain syscall with a pgid we own; failure (ESRCH: group already
+            // gone) is harmless and handled by the `child.kill()` fallback below.
+            unsafe {
+                libc::killpg(pgid, libc::SIGKILL);
+            }
+        }
     }
     let _ = child.kill();
     let _ = child.wait();
@@ -128,14 +145,8 @@ impl Supervisor {
             stderr_tail: String::new(),
             truncated: false,
         };
-        let out = Arc::new(Mutex::new(Bounded {
-            buf: VecDeque::new(),
-            truncated: false,
-        }));
-        let err = Arc::new(Mutex::new(Bounded {
-            buf: VecDeque::new(),
-            truncated: false,
-        }));
+        let out = Arc::new(Mutex::new(Bounded::default()));
+        let err = Arc::new(Mutex::new(Bounded::default()));
         let mut cmd = Command::new(program);
         cmd.args(args)
             .current_dir(cwd)
@@ -249,13 +260,23 @@ impl Supervisor {
         ids.into_iter().filter_map(|id| self.info(id)).collect()
     }
 
-    /// Block until the process leaves Running (bounded by its own timeout).
+    /// Block until the process leaves Running (bounded by its own timeout), then give the
+    /// capture threads up to `DRAIN_GRACE` to collect output still buffered in the pipes.
+    /// Without the drain, a fast-exiting process could be reported with empty output.
     pub fn wait(&mut self, id: u64) -> Option<ProcInfo> {
         loop {
             self.poll();
             match self.procs.get(&id) {
                 None => return None,
-                Some(p) if p.info.state != ProcState::Running => return self.info(id),
+                Some(p) if p.info.state != ProcState::Running => {
+                    let drained = Instant::now() + DRAIN_GRACE;
+                    while !(p.out.lock().expect("lock").eof && p.err.lock().expect("lock").eof)
+                        && Instant::now() < drained
+                    {
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    return self.info(id);
+                }
                 _ => std::thread::sleep(Duration::from_millis(20)),
             }
         }

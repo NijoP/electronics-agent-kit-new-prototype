@@ -210,7 +210,8 @@ fn persisted_project_reopens_with_history() {
         place(&mut e, "C_0603", 10.0, 0.0);
         rev = e.project().revision;
         // A second session cannot open while the lock is held.
-        assert!(Engine::open(&dir, false).is_err());
+        let held = Engine::open(&dir, false).err().unwrap();
+        assert!(held.contains("locked by process"), "{held}");
     }
     let mut e = Engine::open(&dir, false).unwrap();
     assert_eq!(e.project().revision, rev);
@@ -288,7 +289,25 @@ fn interrupted_operation_is_reconciled_on_open() {
         C::SetProjectName { name: "z".into() },
     );
     assert!(!r.accepted);
-    e.acknowledge_recovery();
+    // Regression: the block used to live only in memory, so simply reopening (the next
+    // CLI invocation) lifted it without any acknowledgement.
+    drop(e);
+    let mut e = Engine::open(&dir, false).unwrap();
+    assert!(e.recovery.reconciled.is_empty(), "already reconciled");
+    let reason = e
+        .blocked_reason()
+        .expect("block survives reopen")
+        .to_string();
+    assert!(reason.contains("op_weird"), "{reason}");
+    assert!(
+        !run(
+            &mut e,
+            Actor::human(),
+            C::SetProjectName { name: "z".into() }
+        )
+        .accepted
+    );
+    e.acknowledge_recovery().unwrap();
     assert!(
         run(
             &mut e,
@@ -298,6 +317,11 @@ fn interrupted_operation_is_reconciled_on_open() {
         .accepted
     );
     drop(e);
+    // Acknowledgement is durable too.
+    assert!(Engine::open(&dir, false)
+        .unwrap()
+        .blocked_reason()
+        .is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -353,4 +377,13 @@ fn sqlite_index_records_projects_and_events() {
         idx.log_event(&ev).unwrap();
     }
     assert!(idx.event_count(&e.project().id).unwrap() >= 1);
+}
+
+#[test]
+fn opening_a_missing_folder_reports_the_real_cause() {
+    // Regression: any lock-file I/O error used to be reported as "locked by process".
+    let dir = tmpdir("missing").join("no-such-project");
+    let err = Engine::open(&dir, false).err().unwrap();
+    assert!(!err.contains("locked by process"), "{err}");
+    assert!(err.contains("cannot create project lock"), "{err}");
 }

@@ -1,0 +1,20 @@
+[package]
+name = "eak-cli"
+description = "EAK command-line front end: a thin client of the shared typed command engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "eak"
+path = "src/main.rs"
+
+[dependencies]
+eak-core.workspace = true
+eak-runtime.workspace = true
+eak-validation.workspace = true
+eak-manufacturing.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

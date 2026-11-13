@@ -74,3 +74,108 @@ fn missing_program_is_reported_not_hidden() {
         ProcState::FailedToStart(_)
     ));
 }
+
+/// A command whose own child (the grandchild of the supervisor) prints its pid and then
+/// sleeps; the direct child waits on it. Cancelling must terminate both.
+fn tree_spawner() -> (String, Vec<String>) {
+    if cfg!(windows) {
+        (
+            "powershell".into(),
+            vec![
+                "-NoProfile".into(),
+                "-Command".into(),
+                "$p = Start-Process -FilePath powershell -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 60' -PassThru -WindowStyle Hidden; Write-Output \"GRANDCHILD=$($p.Id)\"; Wait-Process -Id $p.Id".into(),
+            ],
+        )
+    } else {
+        (
+            "sh".into(),
+            vec![
+                "-c".into(),
+                "sleep 60 & echo \"GRANDCHILD=$!\"; wait".into(),
+            ],
+        )
+    }
+}
+
+/// Is `pid` still a live (non-zombie) process? Uses platform tools so the test does not
+/// need its own FFI.
+fn alive(pid: u32) -> bool {
+    #[cfg(windows)]
+    {
+        std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!("if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ exit 0 }} else {{ exit 1 }}"),
+            ])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+    #[cfg(unix)]
+    {
+        // An orphaned grandchild is re-parented and reaped by init/launchd; until then
+        // it is a zombie ("Z"), which no longer runs and counts as terminated.
+        let out = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .expect("ps runs");
+        let stat = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        !stat.is_empty() && !stat.starts_with('Z')
+    }
+}
+
+#[test]
+fn cancel_terminates_the_whole_process_tree() {
+    let mut s = Supervisor::default();
+    let (p, a) = tree_spawner();
+    let id = s.start("prj_a", "tree", &p, &a, ".", Duration::from_secs(120));
+    // Wait (bounded) for the grandchild to report its pid.
+    let deadline = std::time::Instant::now() + Duration::from_secs(60);
+    let pid = loop {
+        let info = s.info(id).unwrap();
+        assert_eq!(info.state, ProcState::Running, "{info:?}");
+        if let Some(pid) = info
+            .stdout_tail
+            .lines()
+            .find_map(|l| l.trim().strip_prefix("GRANDCHILD="))
+            .and_then(|v| v.trim().parse::<u32>().ok())
+        {
+            break pid;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "grandchild never started"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert!(
+        alive(pid),
+        "grandchild {pid} should be running before cancel"
+    );
+    assert!(s.cancel(id));
+    assert_eq!(s.info(id).unwrap().state, ProcState::Cancelled);
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while alive(pid) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "grandchild {pid} survived cancellation of its process tree"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[test]
+fn fast_exit_output_is_not_lost() {
+    // Regression: `wait` used to return as soon as the child exited, before the capture
+    // threads had read the pipes, so short-lived output could be reported as empty.
+    let mut s = Supervisor::default();
+    for i in 0..20 {
+        let (p, a) = echo(&format!("line-{i}"));
+        let id = s.start("prj_a", "echo", &p, &a, ".", Duration::from_secs(30));
+        let info = s.wait(id).unwrap();
+        assert_eq!(info.state, ProcState::Exited(0));
+        assert!(info.stdout_tail.contains(&format!("line-{i}")), "{info:?}");
+    }
+}
