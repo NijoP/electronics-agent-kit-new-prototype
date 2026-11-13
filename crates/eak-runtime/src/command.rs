@@ -719,15 +719,9 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             p.pcb.board.outline = points.clone();
         }
         SetStackup { stackup } => {
-            if stackup.copper_layers != 2 {
-                return Err(CommandError::Invalid(
-                    "this build supports 2 copper layers".into(),
-                ));
-            }
-            if stackup.board_thickness <= 0 || !(stackup.outer_copper_oz > 0.0) {
-                return Err(CommandError::Invalid(
-                    "thickness and copper weight must be positive".into(),
-                ));
+            let problems = stackup.validate();
+            if !problems.is_empty() {
+                return Err(CommandError::Invalid(problems.join("; ")));
             }
             p.pcb.board.stackup = stackup.clone();
         }
