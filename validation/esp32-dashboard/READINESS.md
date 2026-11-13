@@ -48,6 +48,7 @@ unit/interface test or a simulation, and is labelled as such.
 | P8 | BOM / CPL suitability for assembly | inspection | NOT VERIFIED | `outputs/manufacturing/*-BOM.csv`, `*-CPL.csv` | Passives have no MPN/LCSC numbers. Mounting holes and THT parts appear in the CPL (EAK has no DNP/assembly flag, gap G7). CPL rotation convention not checked against a specific assembler. |
 | P9 | Silkscreen | inspection | NOT VERIFIED | `*-F_Silkscreen.gto` | EAK emits courtyard outlines only: no reference designators (gap G8). The module outline extends past the board edge. |
 | P10 | Thermal | `engineering.json` first-order estimates | PASS (unverified inputs): about 50 °C (shipped firmware) and about 106 °C (Wi-Fi TX continuously at peak) LDO junction, at 40 °C ambient | `outputs/reports/engineering.json` | No thermal simulation exists in EAK. θJA is assumed. |
+| P11 | Components sourced through EAK research / LCSC / JLCPCB path (datasheets, footprints, ratings, LCSC part numbers, JLCPCB-ready BOM/CPL) | — | NOT VERIFIED | — | Capability not on `main` (checked 2026-11-13 12:10 UTC at `bedd9b5`): EAK has no research browser, LCSC or JLCPCB integration (gap G9). Datasheets were fetched manually outside EAK; LCSC numbers are absent except the built-in AMS1117 entry (C6186, not re-verified). |
 
 ## 4. Firmware and dashboard
 
@@ -84,6 +85,7 @@ unit/interface test or a simulation, and is labelled as such.
 | G6 | Zone fill keeps isolated islands. | eak-electronics | Dead copper in both GND layers (DRC-013 warnings). |
 | G7 | No DNP / not-assembled flag for BOM and CPL. | eak-electronics | Mounting holes listed for assembly (P8). |
 | G8 | No reference-designator silkscreen text. | eak-electronics | Silkscreen has outlines only (P9). |
+| G9 | No research / datasheet retrieval, LCSC part lookup or JLCPCB export path. | eak-electronics (libraries) + eak-intelligence | P11 NOT VERIFIED; parts not sourced through EAK. |
 
 ## 7. Known design limitations (revision A)
 
@@ -92,3 +94,11 @@ unit/interface test or a simulation, and is labelled as such.
 - The SHT40 is off-board on a header. Its self-heating and placement relative to the board are not characterised.
 - The telemetry link is USB only; Wi-Fi/BLE are not used by the firmware.
 - The mounting holes are plated and tied to GND.
+
+## 8. Stack compliance (captain's frozen stack, received 2026-11-13 12:07 UTC)
+
+| Item | Status |
+|---|---|
+| Rust only, no Python, no Node/TS backend service | Compliant (`scripts/check-no-python.sh` PASS). |
+| New dependencies: `esp-hal`, `esp-bootloader-esp-idf`, `embedded-hal`, `nb` (and `serde_json`, already an EAK workspace dependency) | **Awaiting captain approval.** Submitted as a needs-decision with justification; to be removed if refused. |
+| Dashboard UI | **Non-compliant pending decision.** The page served by the Rust `dashboard-host` uses plain inline JavaScript, not React + TypeScript. A React + TypeScript + Vite rewrite has been proposed. |
