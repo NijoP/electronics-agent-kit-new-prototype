@@ -1,0 +1,28 @@
+[package]
+name = "eak-power-buck"
+description = "Validation project: a 12-24 V to 5 V / 3 A synchronous buck PCB authored through the EAK command engine"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+# Stand-alone package (not a member of the EAK workspace) so the validation project does
+# not change the workspace manifest owned by the eak-core team. It depends on the EAK crates
+# by path and drives them only through their public APIs.
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "build-power-buck"
+path = "src/main.rs"
+
+[dependencies]
+eak-core = { path = "../../crates/eak-core" }
+eak-engineering = { path = "../../crates/eak-engineering" }
+eak-validation = { path = "../../crates/eak-validation" }
+eak-runtime = { path = "../../crates/eak-runtime" }
+eak-manufacturing = { path = "../../crates/eak-manufacturing" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

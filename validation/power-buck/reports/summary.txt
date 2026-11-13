@@ -1,0 +1,9 @@
+project revision : 214
+ERC              : NoErrorsInImplementedChecks, 0 errors, 0 warnings
+DRC              : NoErrorsInImplementedChecks, 0 errors, 0 warnings
+MECH             : NoErrorsInImplementedChecks, 0 errors, 0 warnings
+package status   : InternallyVerifiedReleaseCandidate
+package files    : 12 (re-verification problems: 0)
+net groups       : {"BOOT": 1, "FB": 1, "GND": 1, "LED_A": 1, "Q1_G": 1, "SW": 1, "VIN": 1, "VIN_F": 1, "VIN_RAW": 1, "VOUT": 1}
+shorts           : 0
+evidence files   : 3
