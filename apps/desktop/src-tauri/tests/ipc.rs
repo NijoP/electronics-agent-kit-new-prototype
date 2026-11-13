@@ -396,11 +396,19 @@ fn editor_flow_places_wires_routes_and_exports_gerbers() {
     for ext in [".gtl", ".gbl", ".gm1", ".drl"] {
         assert!(names.iter().any(|n| n.ends_with(ext)), "missing {ext}");
     }
-    assert!(std::path::Path::new(&out.out_dir).join("manifest.json").exists());
-    assert!(eak_manufacturing::verify_package(std::path::Path::new(&out.out_dir))
-        .unwrap()
-        .is_empty());
-    assert!(!out.manifest.statement.to_lowercase().contains("manufacturing-ready claim: yes"));
+    assert!(std::path::Path::new(&out.out_dir)
+        .join("manifest.json")
+        .exists());
+    assert!(
+        eak_manufacturing::verify_package(std::path::Path::new(&out.out_dir))
+            .unwrap()
+            .is_empty()
+    );
+    assert!(!out
+        .manifest
+        .statement
+        .to_lowercase()
+        .contains("manufacturing-ready claim: yes"));
 
     close_project(&s).unwrap();
     let again = open_project(&s, &path(&d), false).unwrap();

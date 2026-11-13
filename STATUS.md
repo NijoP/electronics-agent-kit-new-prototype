@@ -3,6 +3,23 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## Interactive editors and Gerber export (2026-11-14, branch fm/eak-o1-editors)
+
+**Platform tested:** Linux, Rust stable, Node (see PR body for exact verification output). No window was opened;
+editors are verified by vitest (jsdom, mocked IPC) and by headless Rust IPC tests only. Not verified in a real WebView.
+
+- **Implemented and tested:** schematic tools (place library part, wire with pin snap, connect pins, net/power label,
+  move, delete, rotate `R`, edit ref/value), PCB tools (board outline rectangle/polygon, move/rotate/flip footprint,
+  route tracks on top/bottom with 45° and L segments, vias, delete), undo/redo and per-command durable save
+  (header shows "Saved · rN"), reopen, ERC/DRC, and "Export Gerbers" (Gerber, Excellon, BOM, CPL via `eak-manufacturing`
+  into `<project>/output/rev-N`). Every edit is `Engine::execute` (ADR-0008); no new Command.
+- **Tests:** `ipc.rs` `editor_flow_places_wires_routes_and_exports_gerbers`, `library_lists_builtin_parts_with_pins`,
+  `export_without_outline_or_project_fails_loudly`; vitest `editors.test.tsx`, `editing.test.ts`.
+- **Limitations (unsupported / unverified):** footprints only appear via "Sync schematic to PCB"; no zone, text or
+  multi-select editing; no drag-to-move (two-click move); no rubber-banding of wires on move; no manual pad/footprint
+  editor; export status is DRAFT unless ERC/DRC/MECH all pass for the exact revision and is never "manufacturing-ready";
+  Gerbers have not been viewed in an external viewer or sent to a fabricator.
+
 ## Desktop shell: Tauri 2 + React bound to the command engine (2026-11-13)
 
 **Platform tested:** Windows 11, Rust 1.99.1 `x86_64-pc-windows-gnu`, Node 24.21 / npm 11.19.

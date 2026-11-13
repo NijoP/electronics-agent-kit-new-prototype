@@ -418,7 +418,10 @@ pub struct ExportResult {
 /// DRAFT unless every gate passes; it is never called manufacturing-ready.
 pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
     s.with_engine(|e| {
-        let dir = e.dir().ok_or("export needs a saved project folder")?.to_path_buf();
+        let dir = e
+            .dir()
+            .ok_or("export needs a saved project folder")?
+            .to_path_buf();
         let reports = vec![
             erc::run(e.project()),
             drc::run(e.project()),
@@ -429,7 +432,9 @@ pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
             e.save_evidence(&r.check, &json)
                 .ok_or_else(|| format!("{} evidence could not be saved", r.check))?;
         }
-        let out = dir.join("output").join(format!("rev-{}", e.project().revision));
+        let out = dir
+            .join("output")
+            .join(format!("rev-{}", e.project().revision));
         let refs: Vec<&Report> = reports.iter().collect();
         let manifest = eak_manufacturing::compile(e.project(), &refs, &out)?;
         Ok(ExportResult {
