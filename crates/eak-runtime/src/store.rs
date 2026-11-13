@@ -10,6 +10,7 @@
 //!   evidence/          verification reports bound to revisions
 //!   outputs/           manufacturing packages
 //!   .lock              project write lock (pid)
+//!   recovery.blocked   present while an UNKNOWN_OUTCOME recovery awaits acknowledgement
 //! ```
 
 use crate::delta::Change;
@@ -21,6 +22,8 @@ use std::path::{Path, PathBuf};
 
 pub const PROJECT_FILE: &str = "project.eak.json";
 pub const JOURNAL_FILE: &str = "journal.jsonl";
+/// Durable write block: survives process exit until the user acknowledges recovery.
+pub const RECOVERY_BLOCK_FILE: &str = "recovery.blocked";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -86,10 +89,15 @@ pub fn acquire_lock(dir: &Path, take_over: bool) -> Result<ProjectLock, String> 
             let _ = write!(f, "{}", std::process::id());
             Ok(ProjectLock { path })
         }
-        Err(_) => {
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
             let holder = fs::read_to_string(&path).unwrap_or_default();
             Err(format!("project is locked by process {holder} (open elsewhere, or a previous session crashed — reopen with recovery to take over)"))
         }
+        // Missing folder, permissions, read-only media: report the real cause.
+        Err(e) => Err(format!(
+            "cannot create project lock {}: {e}",
+            path.display()
+        )),
     }
 }
 

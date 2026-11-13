@@ -10,6 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # macos-13 was retired by GitHub (Dec 2025); macos-15-intel is the current Intel (x86_64) image.
         os: [windows-latest, ubuntu-latest, macos-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:

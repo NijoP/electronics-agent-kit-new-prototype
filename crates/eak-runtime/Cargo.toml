@@ -15,3 +15,7 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 
 [lints]
 workspace = true
+
+# killpg(2) for process-tree termination; libc is already in the lock file (getrandom, cpufeatures).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
