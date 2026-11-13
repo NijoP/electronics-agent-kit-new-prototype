@@ -8,6 +8,8 @@ import type {
   CommandError,
   CommandResponse,
   EngineEvent,
+  ExportResult,
+  LibraryEntry,
   RecentProject,
   Snapshot,
 } from "./types";
@@ -25,6 +27,8 @@ export const IPC_COMMANDS = [
   "acknowledge_recovery",
   "run_check",
   "recent_projects",
+  "library_components",
+  "export_manufacturing",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
@@ -48,6 +52,8 @@ export const api = {
   acknowledgeRecovery: () => call<Snapshot>("acknowledge_recovery"),
   runCheck: (check: Check) => call<CheckResult>("run_check", { check }),
   recentProjects: (limit: number) => call<RecentProject[]>("recent_projects", { limit }),
+  libraryComponents: () => call<LibraryEntry[]>("library_components"),
+  exportManufacturing: () => call<ExportResult>("export_manufacturing"),
 };
 
 export function describeError(e: CommandError): string {

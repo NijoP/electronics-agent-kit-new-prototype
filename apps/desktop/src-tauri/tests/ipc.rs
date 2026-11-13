@@ -340,3 +340,83 @@ fn frontend_invokes_exactly_the_registered_commands() {
     rust.sort();
     assert_eq!(ts, rust);
 }
+
+#[test]
+fn library_lists_builtin_parts_with_pins() {
+    let lib = library_components();
+    assert!(lib.len() >= 4);
+    let r = lib.iter().find(|c| c.id == "R_0603").expect("R_0603");
+    assert_eq!(r.refdes_prefix, "R");
+    assert_eq!(r.pins.len(), 2);
+}
+
+/// The editor flow the UI drives: place, wire, outline, sync, route, check, export, reopen.
+#[test]
+fn editor_flow_places_wires_routes_and_exports_gerbers() {
+    let d = tmpdir("editor");
+    let s = session();
+    create_project(&s, &path(&d), "Editor flow").unwrap();
+    let mut rev = 0;
+    let mut run = |c: C| {
+        let r = execute_command(&s, rev, c).unwrap();
+        assert!(r.accepted, "{:?}", r.error);
+        rev = r.revision_after;
+        r
+    };
+    let place = |x: f64| C::PlaceSymbol {
+        sheet_id: None,
+        component_id: "R_0603".into(),
+        position: Point::mm(x, -50.0),
+        rotation: Rotation::default(),
+        refdes: None,
+        value: None,
+    };
+    let a = run(place(40.0)).created[0].clone();
+    let b = run(place(80.0)).created[0].clone();
+    run(C::ConnectPins {
+        a_symbol: a,
+        a_pin: "2".into(),
+        b_symbol: b,
+        b_pin: "1".into(),
+    });
+    run(outline());
+    run(C::SyncSchematicToPcb);
+    run(C::AutoPlace { grid: None });
+    run(C::AutoRoute { nets: None });
+    let snap = current_project(&s).unwrap();
+    assert_eq!(snap.geometry.footprints.len(), 2);
+
+    let erc = run_check(&s, Check::Erc).unwrap();
+    let drc = run_check(&s, Check::Drc).unwrap();
+    assert_eq!(erc.report.revision, snap.project.revision);
+    assert_eq!(drc.report.revision, snap.project.revision);
+
+    let out = export_manufacturing(&s).unwrap();
+    let names: Vec<&str> = out.manifest.files.iter().map(|f| f.name.as_str()).collect();
+    for ext in [".gtl", ".gbl", ".gm1", ".drl"] {
+        assert!(names.iter().any(|n| n.ends_with(ext)), "missing {ext}");
+    }
+    assert!(std::path::Path::new(&out.out_dir).join("manifest.json").exists());
+    assert!(eak_manufacturing::verify_package(std::path::Path::new(&out.out_dir))
+        .unwrap()
+        .is_empty());
+    assert!(!out.manifest.statement.to_lowercase().contains("manufacturing-ready claim: yes"));
+
+    close_project(&s).unwrap();
+    let again = open_project(&s, &path(&d), false).unwrap();
+    assert_eq!(again.project.revision, snap.project.revision);
+    assert_eq!(again.project.pcb.footprints.len(), 2);
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn export_without_outline_or_project_fails_loudly() {
+    let s = session();
+    assert!(export_manufacturing(&s).is_err());
+    let d = tmpdir("noexport");
+    create_project(&s, &path(&d), "No outline").unwrap();
+    assert!(export_manufacturing(&s).unwrap_err().contains("outline"));
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}

@@ -715,6 +715,7 @@ name = "eak-desktop"
 version = "0.1.0"
 dependencies = [
  "eak-core",
+ "eak-manufacturing",
  "eak-runtime",
  "eak-validation",
  "serde",
