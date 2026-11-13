@@ -13,6 +13,8 @@
 //! * ERC/DRC run in `eak-validation`, and their revision-bound reports are stored as
 //!   evidence by the engine.
 
+pub mod models;
+
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
 use eak_runtime::index::{Index, RecentProject};
 use eak_runtime::store::RecoveryReport;
@@ -388,7 +390,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 11] = [
+pub const IPC_COMMANDS: [&str; 18] = [
     "create_project",
     "open_project",
     "close_project",
@@ -400,6 +402,13 @@ pub const IPC_COMMANDS: [&str; 11] = [
     "acknowledge_recovery",
     "run_check",
     "recent_projects",
+    "model_providers",
+    "model_save_provider",
+    "model_remove_provider",
+    "model_set_key",
+    "model_clear_key",
+    "model_list_models",
+    "model_test_connection",
 ];
 
 /// Tauri command wrappers: argument decoding only, no logic.
@@ -498,6 +507,17 @@ pub fn run() {
                 eprintln!("eak-desktop: recent-project index unavailable: {e}");
             }
             app.manage(Session::new(index));
+            // Profiles are plain JSON in the config dir; keys go to the OS credential store.
+            let profiles = app.path().app_config_dir().ok().map(|d| d.join("model-providers.json"));
+            match models::ModelSettings::system(profiles) {
+                Ok(m) => {
+                    app.manage(m);
+                }
+                Err(e) => {
+                    eprintln!("eak-desktop: model settings unavailable: {e}");
+                    app.manage(models::ModelSettings::system(None).map_err(|e| e.to_string())?);
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -512,6 +532,13 @@ pub fn run() {
             cmd::acknowledge_recovery,
             cmd::run_check,
             cmd::recent_projects,
+            models::cmd::model_providers,
+            models::cmd::model_save_provider,
+            models::cmd::model_remove_provider,
+            models::cmd::model_set_key,
+            models::cmd::model_clear_key,
+            models::cmd::model_list_models,
+            models::cmd::model_test_connection,
         ])
         .run(tauri::generate_context!())
         .expect("EAK desktop failed to start");

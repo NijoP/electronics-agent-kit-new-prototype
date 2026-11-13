@@ -24,6 +24,8 @@ pub struct HttpResponse {
 pub trait HttpTransport: Send + Sync {
     /// Perform one POST. Must return `Err(Cancelled)` promptly once `cancel` fires.
     fn post(&self, req: HttpRequest, cancel: &CancelToken) -> Result<HttpResponse, ProviderError>;
+    /// Perform one GET (model listing). Same cancellation contract as `post`; `body` is ignored.
+    fn get(&self, req: HttpRequest, cancel: &CancelToken) -> Result<HttpResponse, ProviderError>;
 }
 
 const POLL: Duration = Duration::from_millis(25);
@@ -34,6 +36,9 @@ pub struct OfflineTransport;
 
 impl HttpTransport for OfflineTransport {
     fn post(&self, req: HttpRequest, _: &CancelToken) -> Result<HttpResponse, ProviderError> {
+        Err(ProviderError::TransportNotCompiledIn(req.url))
+    }
+    fn get(&self, req: HttpRequest, _: &CancelToken) -> Result<HttpResponse, ProviderError> {
         Err(ProviderError::TransportNotCompiledIn(req.url))
     }
 }
@@ -72,51 +77,75 @@ mod remote {
             req: HttpRequest,
             cancel: &CancelToken,
         ) -> Result<HttpResponse, ProviderError> {
-            if cancel.is_cancelled() {
-                return Err(ProviderError::Cancelled);
-            }
-            let (tx, rx) = mpsc::channel();
-            let timeout = req.timeout;
-            std::thread::spawn(move || {
-                let agent: ureq::Agent = ureq::Agent::config_builder()
-                    .timeout_global(Some(req.timeout))
-                    .http_status_as_error(false)
-                    .build()
-                    .into();
+            send(req, cancel, false)
+        }
+        fn get(
+            &self,
+            req: HttpRequest,
+            cancel: &CancelToken,
+        ) -> Result<HttpResponse, ProviderError> {
+            send(req, cancel, true)
+        }
+    }
+
+    fn read(mut resp: ureq::http::Response<ureq::Body>) -> Result<HttpResponse, ProviderError> {
+        let status = resp.status().as_u16();
+        resp.body_mut()
+            .with_config()
+            .limit(MAX_BODY_BYTES)
+            .read_to_string()
+            .map(|body| HttpResponse { status, body })
+            .map_err(map_ureq_error)
+    }
+
+    fn send(
+        req: HttpRequest,
+        cancel: &CancelToken,
+        is_get: bool,
+    ) -> Result<HttpResponse, ProviderError> {
+        if cancel.is_cancelled() {
+            return Err(ProviderError::Cancelled);
+        }
+        let (tx, rx) = mpsc::channel();
+        let timeout = req.timeout;
+        std::thread::spawn(move || {
+            let agent: ureq::Agent = ureq::Agent::config_builder()
+                .timeout_global(Some(req.timeout))
+                .http_status_as_error(false)
+                .build()
+                .into();
+            let result = if is_get {
+                let mut b = agent.get(&req.url);
+                for (k, v) in &req.headers {
+                    b = b.header(k.as_str(), v.as_str());
+                }
+                b.call().map_err(map_ureq_error).and_then(read)
+            } else {
                 let mut b = agent.post(&req.url);
                 for (k, v) in &req.headers {
                     b = b.header(k.as_str(), v.as_str());
                 }
-                let result = match b.send(req.body.as_bytes()) {
-                    Ok(mut resp) => {
-                        let status = resp.status().as_u16();
-                        resp.body_mut()
-                            .with_config()
-                            .limit(MAX_BODY_BYTES)
-                            .read_to_string()
-                            .map(|body| HttpResponse { status, body })
-                            .map_err(map_ureq_error)
-                    }
-                    Err(e) => Err(map_ureq_error(e)),
-                };
-                let _ = tx.send(result);
-            });
-            let deadline = Instant::now() + timeout + Duration::from_secs(5);
-            loop {
-                if cancel.is_cancelled() {
-                    return Err(ProviderError::Cancelled);
+                b.send(req.body.as_bytes())
+                    .map_err(map_ureq_error)
+                    .and_then(read)
+            };
+            let _ = tx.send(result);
+        });
+        let deadline = Instant::now() + timeout + Duration::from_secs(5);
+        loop {
+            if cancel.is_cancelled() {
+                return Err(ProviderError::Cancelled);
+            }
+            match rx.recv_timeout(POLL) {
+                Ok(r) => return r,
+                Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() > deadline => {
+                    return Err(ProviderError::Timeout)
                 }
-                match rx.recv_timeout(POLL) {
-                    Ok(r) => return r,
-                    Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() > deadline => {
-                        return Err(ProviderError::Timeout)
-                    }
-                    Err(mpsc::RecvTimeoutError::Timeout) => {}
-                    Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        return Err(ProviderError::Transport(
-                            "HTTP worker ended unexpectedly".into(),
-                        ))
-                    }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(ProviderError::Transport(
+                        "HTTP worker ended unexpectedly".into(),
+                    ))
                 }
             }
         }
@@ -192,9 +221,39 @@ impl Endpoint {
             body: body.to_string(),
             timeout: self.timeout,
         };
+        self.send_json(req, false, cancel)
+    }
+
+    /// GET `base_url + path` and parse the JSON body, with the same retry policy.
+    pub fn get_json(
+        &self,
+        path: &str,
+        headers: Vec<(String, String)>,
+        cancel: &CancelToken,
+    ) -> Result<Value, ProviderError> {
+        let req = HttpRequest {
+            url: format!("{}{}", self.base_url, path),
+            headers,
+            body: String::new(),
+            timeout: self.timeout,
+        };
+        self.send_json(req, true, cancel)
+    }
+
+    fn send_json(
+        &self,
+        req: HttpRequest,
+        is_get: bool,
+        cancel: &CancelToken,
+    ) -> Result<Value, ProviderError> {
         let mut attempt = 0;
         loop {
-            let result = self.transport.post(req.clone(), cancel).and_then(|r| {
+            let sent = if is_get {
+                self.transport.get(req.clone(), cancel)
+            } else {
+                self.transport.post(req.clone(), cancel)
+            };
+            let result = sent.and_then(|r| {
                 if (200..300).contains(&r.status) {
                     serde_json::from_str::<Value>(&r.body)
                         .map_err(|e| ProviderError::Malformed(format!("{e}: {}", snippet(&r.body))))
@@ -253,6 +312,13 @@ pub(crate) mod testing {
     }
 
     impl HttpTransport for RecordingTransport {
+        fn get(
+            &self,
+            req: HttpRequest,
+            cancel: &CancelToken,
+        ) -> Result<HttpResponse, ProviderError> {
+            self.post(req, cancel)
+        }
         fn post(
             &self,
             req: HttpRequest,

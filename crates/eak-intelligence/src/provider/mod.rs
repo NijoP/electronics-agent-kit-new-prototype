@@ -8,13 +8,14 @@
 //! API keys come only from the user's configuration value or an environment variable.
 //! [`ApiKey`] is never serialised and its `Debug` output is redacted.
 
+pub mod adaptor;
 pub mod anthropic;
 pub mod http;
 pub mod ollama;
 pub mod openai;
 
 use crate::message::{CancelToken, ChatRequest, ChatResponse};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -90,7 +91,7 @@ impl std::fmt::Debug for ApiKey {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderKind {
     /// Any server implementing the OpenAI `/chat/completions` API (OpenAI, vLLM, LM Studio…).

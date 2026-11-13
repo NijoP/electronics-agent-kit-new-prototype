@@ -217,3 +217,31 @@ export interface RecentProject {
   revision: number;
   last_opened_ms: number;
 }
+
+// Model settings (src-tauri/src/models.rs). The UI never receives an API key, only whether one
+// is stored in the OS credential store.
+export type ProviderKind = "anthropic" | "open_ai_compatible" | "ollama";
+export interface ProviderProfile {
+  id: string;
+  label: string;
+  kind: ProviderKind;
+  base_url: string | null;
+  model: string | null;
+}
+export interface ProviderView extends ProviderProfile {
+  has_key: boolean;
+  needs_key: boolean;
+  key_error: string | null;
+}
+export interface ProfileInput {
+  id: string | null;
+  label: string;
+  kind: ProviderKind;
+  base_url: string | null;
+  model: string | null;
+}
+export interface ConnectionReport {
+  ok: boolean;
+  latency_ms: number;
+  message: string;
+}

@@ -7,7 +7,10 @@ import type {
   Command,
   CommandError,
   CommandResponse,
+  ConnectionReport,
   EngineEvent,
+  ProfileInput,
+  ProviderView,
   RecentProject,
   Snapshot,
 } from "./types";
@@ -25,6 +28,13 @@ export const IPC_COMMANDS = [
   "acknowledge_recovery",
   "run_check",
   "recent_projects",
+  "model_providers",
+  "model_save_provider",
+  "model_remove_provider",
+  "model_set_key",
+  "model_clear_key",
+  "model_list_models",
+  "model_test_connection",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
@@ -48,6 +58,14 @@ export const api = {
   acknowledgeRecovery: () => call<Snapshot>("acknowledge_recovery"),
   runCheck: (check: Check) => call<CheckResult>("run_check", { check }),
   recentProjects: (limit: number) => call<RecentProject[]>("recent_projects", { limit }),
+  modelProviders: () => call<ProviderView[]>("model_providers"),
+  saveProvider: (profile: ProfileInput, apiKey: string | null) =>
+    call<ProviderView>("model_save_provider", { profile, api_key: apiKey }),
+  removeProvider: (id: string) => call<void>("model_remove_provider", { id }),
+  setKey: (id: string, apiKey: string) => call<ProviderView>("model_set_key", { id, api_key: apiKey }),
+  clearKey: (id: string) => call<ProviderView>("model_clear_key", { id }),
+  listModels: (id: string) => call<string[]>("model_list_models", { id }),
+  testConnection: (id: string) => call<ConnectionReport>("model_test_connection", { id }),
 };
 
 export function describeError(e: CommandError): string {
