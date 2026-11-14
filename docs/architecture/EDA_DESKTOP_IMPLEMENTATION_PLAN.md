@@ -225,3 +225,16 @@ run in parallel once Phase 1 starts:
 
 On the 8 GB host, more than two concurrent Rust build-and-test workers is likely to cause memory
 pressure; parallel workers should stagger full test runs.
+
+## Slice log: Phase 3.2 / Phase 4 UI items (2026-11-14, branch `fm/eak-o5-layers-findings-zones`)
+
+Delivered against the table in 3.2 and the Phase 4 UI items. Every control calls a real backend command or is display-only state (stated per row):
+
+| Item | What shipped | Backend contract |
+|---|---|---|
+| Layer manager panel | Side view "PCB Layers": active layer, show/hide, colour per layer (display state, persisted per project in localStorage), layer count, per-layer signal/plane type, stackup table (copper oz, dielectric gap, er, board thickness) | `SetLayerCount`, `SetStackup` (existing, from PR #22); read from `Board.stackup` |
+| Findings navigation | Click an ERC/DRC finding: opens the right document tab (DRC to PCB, ERC to the schematic), selects the owning part, **PCB only**: zooms to the bounding box of the named objects and location, highlights them, pulses a marker, and expands measured vs required and the suggested fix | none (reads `Finding.measured/required/suggested_fix/location`, already produced by eak-validation) |
+| Airwires / ratsnest | PCB draws the engine's unrouted connections as dashed lines; toggle and count in the layer manager; only drawn when the report's revision equals the project's | new read-only IPC `connectivity` (glue over `eak_engineering::copper::analyse`, the analysis DRC-004 uses); `tests/ipc.rs` covers airwires present before routing, gone after `AutoRoute` |
+| Zone drawing UI | PCB "Zone" tool (key 7): layer, net, optional clearance, corners then Enter/Finish; delete tool removes a zone | `AddZone`, `DeleteZone` (existing) |
+
+Not done in this slice (still Phase 3.2/4): ERC finding zoom/highlight in the schematic canvas (owned by the schematic worker), zone thermal/priority/island/refill controls (need `SetZoneProperties`, `RefillZones`), non-copper layers (mask/silk/paste are not in the engine stackup), copper-weight and dielectric editing (only layer count and type are edited), multi-select/align, track and via editing, safe-fix buttons on findings, a real-window (Tauri) test.

@@ -1,6 +1,6 @@
 // Bottom panel: ERC/DRC findings, a BOM derived from the schematic, and the engine log.
 import { EngineeringMonitor } from "../EngineeringMonitor";
-import type { Check, CheckResult, EngineEvent, Id, Snapshot } from "../types";
+import type { Check, CheckResult, EngineEvent, Finding, Id, Snapshot } from "../types";
 
 export type BottomTab = "findings" | "bom" | "log";
 
@@ -14,6 +14,8 @@ interface Props {
   onAsk: (text: string, target: Id | null) => void;
   onClose: () => void;
   height?: number;
+  onNavigate?: (f: Finding, check: Check) => void;
+  activeFinding?: string | null;
 }
 
 export interface BomLine {
@@ -43,7 +45,7 @@ const TABS: [BottomTab, string][] = [
   ["log", "Log"],
 ];
 
-export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onAsk, onClose, height }: Props) {
+export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onAsk, onClose, height, onNavigate, activeFinding }: Props) {
   const bom = bomLines(snapshot);
   return (
     <section className="bottom" aria-label="Bottom panel" style={height ? { height } : undefined}>
@@ -57,7 +59,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
         <button type="button" className="icon" aria-label="Hide bottom panel" title="Hide panel (Ctrl+J)" onClick={onClose}>×</button>
       </div>
       <div className="bottom-body">
-        {tab === "findings" && <EngineeringMonitor snapshot={snapshot} results={results} onProbe={onProbe} onAsk={onAsk} />}
+        {tab === "findings" && <EngineeringMonitor snapshot={snapshot} results={results} onProbe={onProbe} onAsk={onAsk} onNavigate={onNavigate} activeFinding={activeFinding} />}
         {tab === "bom" &&
           (bom.length === 0 ? (
             <p className="empty-state">The BOM is empty: place parts in the schematic first.</p>

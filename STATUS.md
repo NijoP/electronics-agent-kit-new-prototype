@@ -3,6 +3,10 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## Release packaging: Linux .deb and AppImage, v0.1.0 (2026-11-14)
+- `scripts/release-build.sh` builds the Linux bundles from a clean `npm ci` and `tauri build` and writes `SHA256SUMS`; `tauri.conf.json` now has `bundle.active: true` with package metadata (other platforms still build with `--no-bundle`; no Windows/macOS packaging script yet).
+- Verified on Linux only (see `TEST_RESULTS.md`): both packages build, and the packaged binary launches, shows its window and stays up. Not verified: system-wide `apt` install, other distributions, interactive use, Windows and macOS. Release notes: `docs/release/RELEASE_NOTES_v0.1.0.md`.
+
 ## EDA desktop directive, Phase 0: research and repository audit (2026-11-14)
 
 Documentation only; no code changed and no tests were run. Adds the EasyEDA ecosystem research
@@ -247,3 +251,17 @@ installed. Development is proceeding directly in this repository.
 - **Layout** (`shell/layout.ts`, `Splitter.tsx`): side/assistant widths and bottom height are drag- and keyboard-resizable (double-click resets), panels collapse/reopen, all persisted in localStorage with validation; "Reset panel layout" in View/Settings.
 - Verified: `npm run build`, `tsc`, vitest (65+ tests incl. `part4.test.tsx`); production bundle checked in headless Chrome against a stubbed IPC. **Not launched as the real Tauri window** (no display here).
 - Not done: drag-to-rearrange/re-dock panels to other edges, per-tab viewport/zoom preservation (a closed tab loses its viewport), library/symbol/footprint/simulation/manufacturing document kinds (no backend for them yet), the full main toolbar of the directive (tool buttons, zoom, grid), menu keyboard navigation beyond click/Escape.
+
+## PCB layer manager, finding navigation, airwires, zone tool (2026-11-14)
+- `shell/LayerManager.tsx`, `layerView.ts`: PCB Layers side view (active layer, visibility, colours as persisted display state; layer count and layer type through `SetLayerCount`/`SetStackup`; read-only stackup table from `Board.stackup`).
+- Finding click: opens the PCB (DRC) or schematic (ERC) tab, selects the part, and for PCB zooms to the objects' box, highlights them and shows measured vs required plus the suggested fix (`pcbFocus.ts`, `Canvas zoomTo`). Schematic zoom/highlight is not done (schematic canvas is owned by another worker).
+- Airwires: new read-only IPC command `connectivity` (22 commands) over `eak_engineering::copper::analyse`; drawn only for the current revision. `cargo test -p eak-desktop --test ipc`: 13 passed (incl. `connectivity_reports_the_ratsnest_for_the_current_revision`).
+- PCB "Zone" tool wired to `AddZone` (layer, net, clearance) and the delete tool to `DeleteZone`.
+- Verified: `tsc`, vitest 75/75, production bundle in headless Chrome with a stubbed IPC. Not launched as the real Tauri window.
+- Not done: zone thermal/priority/refill controls, non-copper layers, copper weight / dielectric editing, track and via editing, multi-select, safe-fix buttons, real-window tests.
+
+## Main toolbar and per-tab viewport (2026-11-14)
+- `shell/Toolbar.tsx`: data-driven main toolbar. Real: Open project (to Project Home), Save (asks the engine for its state and reports blocked writes; never claims more), Undo/Redo, Select tool and Move tool (arm the active editor's tool), Rotate/Delete selection (typed `RotateSymbol`/`MoveFootprint`/`DeleteSymbol`; delete asks first), Zoom out/in/Fit (drive the active canvas), Run ERC/DRC, Auto-route, Export Gerbers, Commands, Assistant, Close project. Disabled with the reason as tooltip: Save as, Grid (fixed grids), Design rules, Simulate.
+- `shell/viewState.ts`: per-document viewport (kept in memory and localStorage; a closed tab reopens at its last zoom/pan), plus imperative zoom/tool controls keyed by document id so the editors are not coupled to the toolbar. `SchematicView`/`PcbView` gained a 5-line tool registration each; `Canvas` restores and saves its viewport.
+- Verified: `tsc`, vitest 80/80 (new `toolbar.test.tsx`). Frontend-only jobs ran without the build lock per the lane rule. Not launched as the real Tauri window.
+- Not done: dock panels to other edges, configurable grid, rule editor, simulation.
