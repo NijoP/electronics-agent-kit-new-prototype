@@ -23,6 +23,7 @@ pub mod context;
 pub mod design;
 pub mod endpoint;
 pub mod engineering;
+pub mod knowledge;
 pub mod mcp;
 pub mod rework;
 pub mod route;

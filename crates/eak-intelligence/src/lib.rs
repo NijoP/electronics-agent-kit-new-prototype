@@ -12,10 +12,12 @@
 //!   (design summary, netlist, ERC/DRC reports, calculators).
 //! * `agent`    – bounded, cancellable agent loop with Manual/Assisted/Autonomous modes
 //!   and approvals.
+//! * `knowledge` – local BM25 retrieval with chunk provenance; advisory only, never validation.
 //! * `mock`     – scripted provider for tests (no network).
 
 pub mod agent;
 pub mod domain;
+pub mod knowledge;
 pub mod mental;
 pub mod message;
 pub mod mock;

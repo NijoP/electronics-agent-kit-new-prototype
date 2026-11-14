@@ -43,6 +43,8 @@ pub enum Category {
     Flow,
     /// Existing-project rework (ADR-0022): inspect, baseline, audit, protect, plan, apply, report.
     Rework,
+    /// Advisory knowledge retrieval (ADR-0024): never a validation result, never a design edit.
+    Knowledge,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -258,6 +260,38 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         Manufacturing,
         "Compile the manufacturing package (Gerber, drill, BOM, CPL, manifest) of the current revision into <project>/output/rev-N after re-running ERC/DRC/MECH/DFM. Failing gates mark the package draft. Never 'manufacturing-ready'.",
         empty(),
+    ));
+    // Advisory knowledge retrieval (ADR-0024, `knowledge` module).
+    v.push(spec(
+        "knowledge_search",
+        Category::Knowledge,
+        "Search local engineering knowledge (DESK-derived rules, EAK docs, text the user imported) with BM25. Hits carry source, page/section, revision and hashes. ADVISORY ONLY: never a validation result and never evidence for a gate.",
+        props(
+            json!({
+                "query": str_schema("keywords"),
+                "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+                "kind": {"type": "string", "enum": ["desk_rule", "eak_doc", "user_document"]},
+            }),
+            &["query"],
+        ),
+    ));
+    v.push(spec(
+        "knowledge_cite",
+        Category::Knowledge,
+        "Citation (quote plus source, locator, revision, source and chunk SHA-256) for a chunk id returned by knowledge_search. Advisory only.",
+        props(json!({"chunk_id": str_schema("id from knowledge_search")}), &["chunk_id"]),
+    ));
+    v.push(spec(
+        "knowledge_import",
+        Category::Knowledge,
+        "Index a UTF-8 text file inside the project folder (extracted datasheet text, notes) into <project>/knowledge/index.json. Form feed = page break, markdown headings = sections. Does not change the design or its revision.",
+        props(
+            json!({
+                "path": str_schema("file inside the project folder (absolute or relative to it)"),
+                "source": str_schema("optional source label; defaults to the project-relative path"),
+            }),
+            &["path"],
+        ),
     ));
     // Autonomous design flow (ADR-0020, `design` module).
     let flow = Category::Flow;
@@ -601,6 +635,7 @@ fn dispatch(
         Category::Read => read(engine, &spec.name, args),
         Category::Flow => crate::design::dispatch(engine, ctx, &spec.name, args),
         Category::Rework => crate::rework::dispatch(engine, ctx, &spec.name, args),
+        Category::Knowledge => crate::knowledge::dispatch(engine, &spec.name, args),
         Category::Project | Category::Discovery => Err(fail(
             ErrorCode::InvalidArguments,
             format!("{} does not run against an open project", spec.name),

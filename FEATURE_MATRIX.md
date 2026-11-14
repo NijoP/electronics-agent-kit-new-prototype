@@ -143,3 +143,4 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | 2026-11-14 | Noted PRs #21 and #22 merged after the baseline, not yet reflected | `gh pr view 21`, `gh pr view 22` |
 | 2026-11-15 | Phase 1 realignment: assistant row removed; terminal workspace and harness rows are tracked in `STATUS.md` (code-reviewed only). Rows above that predate the IDE shell, select/drag, grids and mirror work (e.g. Mirror, multi-select) are stale and need a re-audit | `STATUS.md`, `docs/development/TEST_EVIDENCE.md` |
 | 2026-11-15 | Autonomous design flow (`eak design`, `design_*` harness tools, ADR-0020): code-reviewed only, never compiled or run; tracked in `STATUS.md` | `docs/agents/AUTONOMOUS_DESIGN.md` |
+| 2026-11-15 | Knowledge retrieval (BM25, provenance, advisory; ADR-0024): code-reviewed only, unit tests written and unrun (`eak-intelligence/src/knowledge.rs`, `eak-harness/src/knowledge.rs`; code-reviewed only) |
