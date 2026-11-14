@@ -21,6 +21,10 @@ interface Props {
    * moved past the click slop; a press released in place is still a click (`onPoint`).
    */
   onDrag?: DragHandler;
+  /** Drawn under the design (the grid), given the current view box. */
+  underlay?: (vb: ViewBox) => ReactNode;
+  /** Drawn over the design (rulers), given the current view box. */
+  overlay?: (vb: ViewBox) => ReactNode;
 }
 
 export interface DragHandler {
@@ -32,7 +36,7 @@ export interface DragHandler {
 
 const CLICK_SLOP_PX = 4;
 
-export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag }: Props) {
+export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, underlay, overlay }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const docId = useDocId();
   // A restored viewport (this tab's last zoom/pan, kept across tab closes and sessions) wins over fit.
@@ -41,7 +45,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
   const vbRef = useRef(vb);
   vbRef.current = vb;
   const drag = useRef<{ x: number; y: number } | null>(null);
-  const down = useRef<{ x: number; y: number; moved: boolean; captured: boolean } | null>(null);
+  const down = useRef<{ x: number; y: number; moved: boolean; captured: boolean; middle: boolean } | null>(null);
   const key = `${bounds.minX},${bounds.minY},${bounds.maxX},${bounds.maxY}`;
 
   // Re-fit only when the drawing extents change, not on every re-render.
@@ -100,7 +104,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
         drag.current = { x: e.clientX, y: e.clientY };
         const p = e.button === 0 && onDrag ? toView(e) : null;
         const captured = !!p && !!onDrag?.start(p[0], p[1], e);
-        down.current = { x: e.clientX, y: e.clientY, moved: false, captured };
+        down.current = { x: e.clientX, y: e.clientY, moved: false, captured, middle: e.button === 1 };
       }}
       onPointerMove={(e) => {
         const p = toView(e);
@@ -114,7 +118,8 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
           if (g.moved && p) onDrag?.move(p[0], p[1]);
           return;
         }
-        if (tool && !g?.moved) return;
+        // Middle-button drag always pans; a left drag pans only when no tool or drag claimed it.
+        if (tool && !g?.moved && !g?.middle) return;
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) return;
         setVb((v) => pan(v, r, e.clientX - d.x, e.clientY - d.y));
@@ -140,11 +145,17 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
         drag.current = null;
         down.current = null;
       }}
+      onMouseDown={(e) => {
+        // Middle button: no browser auto-scroll, the drag pans the view instead.
+        if (e.button === 1) e.preventDefault();
+      }}
       onDoubleClick={() => {
         if (!tool) setVb(fit(bounds));
       }}
     >
+      {underlay?.(vb)}
       {children}
+      {overlay?.(vb)}
     </svg>
   );
 }

@@ -65,6 +65,12 @@ pub enum Command {
         symbol_id: Id,
         rotation: Rotation,
     },
+    /// Mirror a symbol about a sheet axis through its origin (ADR-0016). Pins move with the body;
+    /// attached wires are not dragged (send a Batch with MoveWire steps first, as for a move).
+    FlipSymbol {
+        symbol_id: Id,
+        axis: FlipAxis,
+    },
     SetSymbolValue {
         symbol_id: Id,
         value: String,
@@ -276,6 +282,7 @@ impl Command {
             | PlaceSymbol { .. }
             | MoveSymbol { .. }
             | RotateSymbol { .. }
+            | FlipSymbol { .. }
             | AddNetLabel { .. }
             | MoveFootprint { .. }
             | SetFootprintLocked { .. }
@@ -451,7 +458,7 @@ fn connection_points(p: &Project, sheet: &str) -> Vec<Point> {
     for s in p.schematic.symbols.values().filter(|s| s.sheet_id == sheet) {
         if let Some(def) = p.library.get(&s.component_id) {
             for pin in &def.symbol.pins {
-                v.push(s.position.plus(s.rotation.apply(pin.position)));
+                v.push(s.place(pin.position));
             }
         }
     }
@@ -466,7 +473,7 @@ fn connection_points_of(p: &Project, s: &SymbolInstance) -> Vec<Point> {
             def.symbol
                 .pins
                 .iter()
-                .map(|pin| s.position.plus(s.rotation.apply(pin.position)))
+                .map(|pin| s.place(pin.position))
                 .collect()
         })
         .unwrap_or_default()
@@ -628,6 +635,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     value,
                     position: *position,
                     rotation: *rotation,
+                    mirror: false,
                 },
             );
             created.push(id);
@@ -673,6 +681,21 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 .get_mut(symbol_id)
                 .expect("checked")
                 .rotation = *rotation;
+        }
+        FlipSymbol { symbol_id, axis } => {
+            // Sheet transform T = R(rotation) . M^mirror. A horizontal flip H = M gives
+            // M . R(t) . M^m = R(-t) . M^(m+1); a vertical flip is R180 . H.
+            let s = p
+                .schematic
+                .symbols
+                .get_mut(symbol_id)
+                .ok_or_else(|| CommandError::NotFound(format!("symbol {symbol_id}")))?;
+            let r = s.rotation.inverse();
+            s.rotation = match axis {
+                FlipAxis::Horizontal => r,
+                FlipAxis::Vertical => r.next().next(),
+            };
+            s.mirror = !s.mirror;
         }
         SetSymbolValue { symbol_id, value } => {
             symbol(p, symbol_id)?;

@@ -30,6 +30,7 @@ impl Circuit {
                 value: value.into(),
                 position: Point::mm(x, 20.0),
                 rotation: Rotation::R0,
+                mirror: false,
             },
         );
         self.label(net1, x - 5.08);

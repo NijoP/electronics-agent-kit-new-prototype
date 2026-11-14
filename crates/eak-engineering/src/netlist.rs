@@ -81,7 +81,7 @@ pub fn build(p: &Project) -> Netlist {
             continue;
         };
         for pin in &def.symbol.pins {
-            let pos = s.position.plus(s.rotation.apply(pin.position));
+            let pos = s.place(pin.position);
             nodes.push((
                 s.sheet_id.clone(),
                 pos,
