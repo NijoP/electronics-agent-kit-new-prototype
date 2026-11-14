@@ -4,6 +4,7 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IPC_COMMANDS } from "./api";
 import { App } from "./App";
+import { shellCmd } from "./shell.test-data";
 import { fixture } from "./fixture.test-data";
 import { availableDocs, closeDoc, defaultDocState, loadDocState, openDoc, saveDocState, visibleDocs } from "./shell/documents";
 import { clampSize, DEFAULT_LAYOUT, LIMITS, sanitizeLayout } from "./shell/layout";
@@ -41,7 +42,7 @@ describe("layout", () => {
     expect(clampSize("sideWidth", 5000)).toBe(LIMITS.sideWidth[1]);
     expect(clampSize("bottomHeight", -1)).toBe(LIMITS.bottomHeight[0]);
     expect(sanitizeLayout("junk")).toEqual(DEFAULT_LAYOUT);
-    expect(sanitizeLayout({ sideWidth: "x", aiOpen: false, bottomHeight: 300 })).toEqual({ ...DEFAULT_LAYOUT, aiOpen: false, bottomHeight: 300 });
+    expect(sanitizeLayout({ sideWidth: "x", bottomOpen: false, bottomHeight: 300, aiOpen: true })).toEqual({ ...DEFAULT_LAYOUT, bottomOpen: false, bottomHeight: 300 });
   });
 });
 
@@ -95,7 +96,7 @@ beforeEach(() => {
       case "model_providers":
         return [];
       default:
-        throw new Error(`unmocked ${cmd}`);
+        { const h = shellCmd(cmd, null); if (h.handled) return h.value; { const h = shellCmd(cmd, null); if (h.handled) return h.value; throw new Error(`unmocked ${cmd}`); } }
     }
   });
 });

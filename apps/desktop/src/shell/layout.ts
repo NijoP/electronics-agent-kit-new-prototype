@@ -3,14 +3,12 @@
 export interface Layout {
   sideOpen: boolean;
   bottomOpen: boolean;
-  aiOpen: boolean;
   sideWidth: number;
-  aiWidth: number;
   bottomHeight: number;
 }
 
-export const DEFAULT_LAYOUT: Layout = { sideOpen: true, bottomOpen: true, aiOpen: true, sideWidth: 272, aiWidth: 336, bottomHeight: 240 };
-export const LIMITS = { sideWidth: [160, 560], aiWidth: [240, 640], bottomHeight: [96, 640] } as const;
+export const DEFAULT_LAYOUT: Layout = { sideOpen: true, bottomOpen: true, sideWidth: 272, bottomHeight: 240 };
+export const LIMITS = { sideWidth: [160, 560], bottomHeight: [96, 640] } as const;
 const KEY = "eak.layout.v1";
 
 const clamp = (v: unknown, [lo, hi]: readonly [number, number], fallback: number) =>
@@ -23,9 +21,7 @@ export function sanitizeLayout(raw: unknown): Layout {
   return {
     sideOpen: flag("sideOpen"),
     bottomOpen: flag("bottomOpen"),
-    aiOpen: flag("aiOpen"),
     sideWidth: clamp(r.sideWidth, LIMITS.sideWidth, DEFAULT_LAYOUT.sideWidth),
-    aiWidth: clamp(r.aiWidth, LIMITS.aiWidth, DEFAULT_LAYOUT.aiWidth),
     bottomHeight: clamp(r.bottomHeight, LIMITS.bottomHeight, DEFAULT_LAYOUT.bottomHeight),
   };
 }
@@ -46,4 +42,4 @@ export function saveLayout(l: Layout): void {
   }
 }
 
-export const clampSize = (k: "sideWidth" | "aiWidth" | "bottomHeight", v: number) => clamp(v, LIMITS[k], DEFAULT_LAYOUT[k]);
+export const clampSize = (k: "sideWidth" | "bottomHeight", v: number) => clamp(v, LIMITS[k], DEFAULT_LAYOUT[k]);

@@ -13,8 +13,6 @@ import { SchematicView } from "./SchematicView";
 import { formatShortcut, matches, SHORTCUTS } from "./design/shortcuts";
 import type { Theme } from "./design/theme";
 import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
-import { AiPanel, type ChatMsg } from "./shell/AiPanel";
-import { interpret, readyProvider } from "./shell/ai";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
 import { ManufacturingPanel, netNames, ProjectPanel } from "./shell/panels";
 import { LibraryPanel } from "./shell/LibraryPanel";
@@ -29,27 +27,42 @@ import { useLayerView } from "./layerView";
 import type { Focus } from "./pcbFocus";
 import { findingKey, probeTarget } from "./EngineeringMonitor";
 import { DocTabs } from "./shell/DocTabs";
-import { availableDocs, closeDoc, loadDocState, openDoc, saveDocState, visibleDocs } from "./shell/documents";
+import { FileExplorer } from "./shell/FileExplorer";
+import { FileViewer } from "./shell/FileViewer";
+import { ProjectTabs } from "./shell/ProjectTabs";
+import { SyncReportDialog } from "./shell/SyncReportDialog";
+import { buildSyncReport, summarizeSyncReport, type SyncReport } from "./shell/syncReport";
+import { useTasks } from "./shell/tasks";
+import { fileDocId, type FileEntry } from "./shell/files";
+import { listWorkspaces, useRegistryVersion, type WorkspaceContext } from "./shell/registry";
+import "./shell/workspaces";
+import { filterToolbar } from "./shell/Toolbar";
+import { availableDocs, closeDoc, fileDocs, loadDocState, openDoc, remapFileDocs, saveDocState, visibleDocs } from "./shell/documents";
 import { clampSize, DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "./shell/layout";
 import { MenuBar, type Menu } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
 import { nextRotation } from "./editing";
-import type { RecentProject, Check, CheckResult, Command, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
+import type { OpenProject, RecentProject, Check, CheckResult, Command, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
   initial: Snapshot;
+  /** False while another top-level workspace (the terminal) is shown: global shortcuts and editor keys are then off. */
+  visible: boolean;
   onClosed: () => void;
   /** A different project was created or opened from inside the workspace. */
   onOpened: (s: Snapshot) => void;
   onSettings: () => void;
   theme: Theme;
   onTheme: () => void;
+  /** Every project open in the window (the engine keeps them all; one is active). */
+  projects: OpenProject[];
+  onProjectsChanged: () => void;
 }
 
 
 const MAX_EVENTS = 200;
 
-export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTheme }: Props) {
+export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged }: Props) {
   const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules">(null);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [snapshot, setSnapshot] = useState(initial);
@@ -63,30 +76,55 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   const [baseLibrary, setLibrary] = useState<LibraryEntry[]>([]);
   const [exported, setExported] = useState<ExportResult | null>(null);
   const [docState, setDocState] = useState(() => loadDocState(initial));
-  const [split, setSplit] = useState(true);
+  // One view at a time by default: Schematic and PCB are separate documents; split is opt-in.
+  const [split, setSplit] = useState(false);
+  const [workspace, setWorkspace] = useState<string>(() => {
+    try {
+      return localStorage.getItem(`eak.workspace.${initial.project.id}`) ?? "editor";
+    } catch {
+      return "editor";
+    }
+  });
+  const [visitedViews, setVisitedViews] = useState<ReadonlySet<string>>(new Set());
+  const [syncDialog, setSyncDialog] = useState<null | { report: SyncReport | null; error: string | null; revision: number }>(null);
+  const { tasks, track, clearFinished } = useTasks();
+  useRegistryVersion();
+  const edaViews = listWorkspaces("eda").map((w, i) => ({ ...w, shortcut: w.shortcut ?? (i < 7 ? `Mod+${3 + i}` : undefined) }));
+  const wsId = workspace !== "editor" && edaViews.some((w) => w.id === workspace) ? workspace : "editor";
+  useEffect(() => {
+    try {
+      localStorage.setItem(`eak.workspace.${initial.project.id}`, workspace);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [initial.project.id, workspace]);
   const [layout, setLayout] = useState<Layout>(loadLayout);
   const [help, setHelp] = useState(false);
   const [conn, setConn] = useState<ConnectivityReport | null>(null);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [activeFinding, setActiveFinding] = useState<string | null>(null);
   const layerView = useLayerView(initial.project.id);
-  const flag = (k: "sideOpen" | "bottomOpen" | "aiOpen") => (f: boolean | ((o: boolean) => boolean)) =>
+  const flag = (k: "sideOpen" | "bottomOpen") => (f: boolean | ((o: boolean) => boolean)) =>
     setLayout((l) => ({ ...l, [k]: typeof f === "function" ? f(l[k]) : f }));
-  const { sideOpen, bottomOpen, aiOpen } = layout;
+  const { sideOpen, bottomOpen } = layout;
   const setSideOpen = flag("sideOpen");
   const setBottomOpen = flag("bottomOpen");
-  const setAiOpen = flag("aiOpen");
   useEffect(() => saveLayout(layout), [layout]);
   const [sideView, setSideView] = useState<SideView>("project");
   const [bottomTab, setBottomTab] = useState<BottomTab>("log");
   const [quickOpen, setQuickOpen] = useState(false);
   const [armPart, setArmPart] = useState<{ id: string; n: number } | null>(null);
-  const [chat, setChat] = useState<ChatMsg[]>([]);
-  const [aiFocus, setAiFocus] = useState(0);
   const [status, setStatus] = useState<{ layer: CopperLayer; gridMm: number }>({ layer: "top", gridMm: 0.5 });
-  const [model, setModel] = useState<{ id: string; label: string } | null>(null);
-  const msgId = useRef(1);
   const revision = snapshot.project.revision;
+  const rank = (k: string) => (k === "schematic" ? 0 : k === "pcb" ? 1 : 2);
+  const wsCtx = (active: boolean): WorkspaceContext => ({
+    projectId: snapshot.project.id,
+    projectName: snapshot.project.name,
+    projectDir: snapshot.dir,
+    revision,
+    openProjects: projects,
+    active,
+  });
   // Built-in parts plus parts imported into this project (e.g. from LCSC), so an imported
   // part can be placed from the part picker.
   const library = useMemo(() => {
@@ -103,7 +141,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       }));
     return [...baseLibrary, ...imported];
   }, [baseLibrary, snapshot.project.library]);
-  const docs = availableDocs(snapshot);
+  const docs = [...availableDocs(snapshot), ...fileDocs(docState.open)];
   // Only documents the engine still has stay open (the snapshot is authoritative).
   const liveIds = new Set(docs.map((d) => d.id));
   const openIds = docState.open.filter((id) => liveIds.has(id));
@@ -111,7 +149,8 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   const effective = { open: openIds, active: activeId };
   useEffect(() => saveDocState(snapshot.project.id, effective), [snapshot.project.id, openIds.join("|"), activeId]);
   const shown = visibleDocs(effective, docs, split);
-  setActiveEditor(activeId);
+  // Editors listen on window: while this workspace (or its editor area) is hidden none may act.
+  setActiveEditor(visible && wsId === "editor" ? activeId : "__hidden__");
   const openDocs = openIds.map((id) => docs.find((d) => d.id === id)!);
   const dirty = busy || !!snapshot.blocked;
   const [domain, setDomain] = useState<DomainReport | null>(null);
@@ -134,15 +173,6 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       .libraryComponents()
       .then(setLibrary)
       .catch((e) => setMessage(`Library unavailable: ${String(e)}`));
-  }, []);
-
-  useEffect(() => {
-    api
-      .modelProviders()
-      .then((ps) => {
-        setModel(readyProvider(ps));
-      })
-      .catch(() => setModel(null));
   }, []);
 
   useEffect(() => {
@@ -187,7 +217,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       try {
         await f();
       } catch (e) {
-        setMessage(String(e));
+        setMessage(String(e).replace(/^Error: /, ""));
       } finally {
         setBusy(false);
       }
@@ -227,21 +257,44 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       await refresh();
     });
   const edit: EditCtx = { execute: executeAll, busy, library, notify: setMessage };
-  // "Update PCB from schematic": the typed SyncSchematicToPcb command, then show the PCB where the
-  // new footprints (staged beside the board) and the ratsnest airwires appear.
+  // "Update PCB from schematic": the typed SyncSchematicToPcb command, then a report built from the
+  // engine's own journalled change list for that operation (added / removed / modified components
+  // and connections), so the report cannot disagree with what was applied.
   const syncPcb = () =>
     guarded(async () => {
-      const r = await api.execute(revision, { type: "SyncSchematicToPcb" });
-      setMessage(
-        r.accepted
-          ? `Update PCB → revision ${r.revision_after}. Footprints are staged beside the board: use Auto-place or the Move tool; airwires show the unrouted connections.`
-          : `Update PCB rejected: ${r.error ? describeError(r.error) : "unknown error"}`,
+      const pid = snapshot.project.id;
+      await track(
+        "Update PCB",
+        async () => {
+          const r = await api.execute(revision, { type: "SyncSchematicToPcb" });
+          if (!r.accepted) {
+            if (r.error?.code === "NothingTo") {
+              const report = buildSyncReport([], snapshot.project.pcb);
+              setSyncDialog({ report, error: null, revision });
+              setMessage(summarizeSyncReport(report));
+              return summarizeSyncReport(report);
+            }
+            const why = `Update PCB rejected: ${r.error ? describeError(r.error) : "unknown error"}`;
+            setSyncDialog({ report: null, error: why, revision });
+            throw new Error(why);
+          }
+          const fresh = await api.currentProject();
+          setSnapshot(fresh);
+          await pullEvents();
+          try {
+            const report = buildSyncReport(await api.operationChanges(pid, r.op_id), fresh.project.pcb);
+            setSyncDialog({ report, error: null, revision: r.revision_after });
+            setMessage(summarizeSyncReport(report));
+            return summarizeSyncReport(report);
+          } catch (e) {
+            const why = `Update PCB applied (revision ${r.revision_after}), but the engine's change list could not be read: ${String(e)}`;
+            setSyncDialog({ report: null, error: why, revision: r.revision_after });
+            setMessage(why);
+            return why;
+          }
+        },
+        (d) => d,
       );
-      await refresh();
-      if (r.accepted) {
-        const d = availableDocs(snapshot).find((x) => x.kind === "pcb");
-        if (d) setDocState((st) => openDoc({ open: st.open.includes(d.id) ? st.open : [...st.open, d.id], active: st.active }, d.id));
-      }
     });
   // Reopen a recent project: the backend drops the current one before opening the next, so a
   // failure that leaves no project open returns to Project Home instead of a stale workspace.
@@ -260,7 +313,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     });
   const exportGerbers = () =>
     guarded(async () => {
-      const r = await api.exportManufacturing();
+      const r = await track("Export manufacturing files", () => api.exportManufacturing(), (x) => `${x.manifest.files.length} files, status ${x.manifest.status}`);
       setExported(r);
       setMessage(`Exported ${r.manifest.files.length} files to ${r.out_dir} (${r.manifest.status})`);
       await pullEvents();
@@ -269,18 +322,27 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   const redo = () => submit(() => api.redo(revision));
   const check = (c: Check) =>
     guarded(async () => {
-      const result = await api.runCheck(c);
+      const result = await track(`Run ${c.toUpperCase()}`, () => api.runCheck(c), (r) => `${r.report.findings.length} finding(s) at revision ${r.report.revision}`);
       setResults((old) => ({ ...old, [c]: result }));
       setBottomTab("findings");
       setBottomOpen(true);
       setMessage(`${result.report.check} ran on revision ${result.report.revision}`);
       await pullEvents();
     });
-  const close = () =>
+  // Switch to or close one of the projects open in this window. Closing the active one activates
+  // the previous one (or returns to Project Home when none is left).
+  const switchTo = (id: string) =>
     guarded(async () => {
-      await api.closeProject();
-      onClosed();
+      onOpened(await api.switchProject(id));
     });
+  const closeProjectTab = (id: string) =>
+    guarded(async () => {
+      const next = await api.closeProjectById(id);
+      if (id !== snapshot.project.id) return onProjectsChanged();
+      if (next) onOpened(next);
+      else onClosed();
+    });
+  const close = () => closeProjectTab(snapshot.project.id);
   const acknowledge = () =>
     guarded(async () => {
       setSnapshot(await api.acknowledgeRecovery());
@@ -289,8 +351,6 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
 
   const selectedSymbol = selected ? snapshot.project.schematic.symbols[selected] : undefined;
   const selLabel = selectedSymbol ? `${selectedSymbol.refdes} (${selectedSymbol.value})` : null;
-  const pending = chat.find((m) => m.status === "pending")?.proposal;
-  const previewIds = pending?.targets ?? [];
 
   const showSide = (v: SideView) => {
     if (sideOpen && sideView === v) setSideOpen(false);
@@ -300,120 +360,42 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     }
   };
 
-  const say = (m: Omit<ChatMsg, "id">) => setChat((old) => [...old, { ...m, id: msgId.current++ }]);
-  // Ask the assistant. With a ready model provider the request goes to the agent loop
-  // (ai_propose) with the selection as context; without one, the offline interpreter answers
-  // and every reply is labelled as an offline command.
-  const ask = (text: string, opts: { select?: Id | null; reply?: string } = {}) => {
-    const sel = opts.select ?? selected;
-    if (opts.select) setSelected(opts.select);
-    setAiOpen(true);
-    setAiFocus((n) => n + 1);
-    setChat((old) => [
-      ...old.map((m): ChatMsg => (m.proposal && m.status === "pending" ? { ...m, status: "rejected" } : m)),
-      { id: msgId.current++, role: "user", text },
-    ]);
-    guarded(async () => {
-      const provider = readyProvider(await api.modelProviders().catch(() => []));
-      setModel(provider);
-      if (!provider) {
-        const reply = opts.reply !== undefined ? { text: opts.reply } : interpret(text, { snapshot, selected: sel, library });
-        say({ role: "assistant", source: "offline", text: reply.text, proposal: reply.proposal, status: reply.proposal ? "pending" : undefined });
-        return;
-      }
-      const symbol = sel ? snapshot.project.schematic.symbols[sel] : undefined;
-      const context = symbol ? `\n\n(Selected in the editor: ${symbol.refdes} ${symbol.value}, symbol id ${symbol.id}.)` : "";
-      try {
-        const p = await api.aiPropose(provider.id, text + context);
-        const o = p.outcome;
-        const note =
-          o.outcome === "provider_failed"
-            ? `AI request failed: ${o.detail}`
-            : o.outcome === "refused"
-              ? "The model declined this request."
-              : o.outcome === "turn_limit_reached"
-                ? "The agent stopped at its turn limit; the plan may be incomplete."
-                : o.outcome === "cancelled"
-                  ? "Cancelled."
-                  : "";
-        const body = [p.text, note].filter(Boolean).join("\n\n") || (p.steps.length ? "" : "The model proposed no change.");
-        say({ role: "assistant", source: "ai", text: body, error: o.outcome === "provider_failed" });
-        for (const step of p.steps) say({ role: "assistant", source: "ai", text: "", step, status: "pending" });
-      } catch (e) {
-        say({ role: "assistant", source: "ai", text: String(e), error: true });
-      }
-    });
-  };
-  const setStatus_ = (m: ChatMsg, patch: Partial<ChatMsg>) => setChat((old) => old.map((x) => (x.id === m.id ? { ...x, ...patch } : x)));
-  // Accept = Engine::execute as the agent actor with this user's approval (ai_accept).
-  const acceptStep = async (m: ChatMsg) => {
-    const s = m.step!;
-    if (s.class === "destructive" && !window.confirm(`${s.command.type}: this is a destructive change. Continue?`)) return;
-    const r = await api.aiAccept(s.id);
-    setStatus_(m, r.accepted ? { status: "accepted", opId: r.op_id } : { status: "rejected" });
-    setMessage(r.accepted ? `AI step ${s.command.type} applied → revision ${r.revision_after}` : `AI step ${s.command.type} refused by the engine: ${r.error ? describeError(r.error) : "unknown error"}`);
-    await refresh();
-  };
-  const rollbackStep = (m: ChatMsg) =>
-    guarded(async () => {
-      if (!m.opId) return;
-      const r = await api.aiRollback(m.opId);
-      if (r.accepted) setStatus_(m, { status: "rolled_back" });
-      setMessage(r.accepted ? `AI step rolled back → revision ${r.revision_after}` : `Rollback refused: ${r.error ? describeError(r.error) : "unknown error"}`);
-      await refresh();
-    });
-  const askSelection = () =>
-    selectedSymbol &&
-    ask(`About ${selLabel}`, {
-      reply: `${selectedSymbol.refdes} (${selectedSymbol.value}, ${selectedSymbol.component_id}) is selected. I can rotate it, set its value, or delete it — say which, and you will see a preview first.`,
-    });
-  const askFinding = (text: string, target: Id | null) =>
-    ask(`Finding: ${text}`, {
-      select: target,
-      reply: `Finding noted: ${text}. I have no automatic fix for this rule. ${target ? "The related part is selected; ask me to rotate it, set its value or delete it, or edit it on the canvas." : "No part is attached to this finding."}`,
-    });
-  const askNet = (name: string) => {
-    const fps = snapshot.geometry.footprints;
-    const pads = fps.flatMap((f) => f.pads.filter((p) => p.net === name).map(() => 1)).length;
+  // Net summary from the geometry the engine derived (no model involved).
+  const showNet = (name: string) => {
+    const pads = snapshot.geometry.footprints.reduce((n, f) => n + f.pads.filter((p) => p.net === name).length, 0);
     const tracks = Object.values(snapshot.project.pcb.tracks).filter((t) => t.net === name).length;
-    ask(`About net ${name}`, { reply: `Net ${name}: ${pads} pad(s) and ${tracks} track segment(s) on the PCB. Ask me to auto-route all nets, or route it by hand with the Route tool.` });
+    setMessage(`Net ${name}: ${pads} pad(s) and ${tracks} track segment(s) on the PCB.`);
   };
-  const acceptProposal = (m: ChatMsg) =>
-    guarded(async () => {
-      if (m.step) return acceptStep(m);
-      const p = m.proposal;
-      if (!p) return;
-      if (p.destructive && !window.confirm(`${p.title}: this is a destructive change. Continue?`)) return;
-      let rev = revision;
-      let last: CommandResponse | null = null;
-      for (const c of p.commands) {
-        last = await api.execute(rev, c);
-        if (!last.accepted) break;
-        rev = last.revision_after;
-      }
-      const ok = !!last?.accepted;
-      setChat((old) => old.map((x) => (x.id === m.id ? { ...x, status: ok ? "accepted" : "rejected" } : x)));
-      setMessage(
-        ok
-          ? `${p.title} applied → revision ${last!.revision_after}`
-          : `${p.title} rejected by the engine: ${last?.error ? describeError(last.error) : "unknown error"}`,
-      );
-      await refresh();
-    });
-  const rejectProposal = (m: ChatMsg) =>
-    m.step
-      ? guarded(async () => {
-          await api.aiReject(m.step!.id);
-          setStatus_(m, { status: "rejected" });
-        })
-      : setStatus_(m, { status: "rejected" });
 
-  const open = (id: string) => setDocState((st) => openDoc({ open: openIds, active: st.active }, id));
+  const open = (id: string) => {
+    setWorkspace("editor");
+    setDocState((st) => openDoc({ open: openIds, active: st.active }, id));
+  };
   const showKind = (kind: "schematic" | "pcb") => {
+    setWorkspace("editor");
     if (shown.some((d) => d.kind === kind)) return;
     const d = docs.find((x) => x.kind === kind);
     if (d) open(d.id);
   };
+  // Activity-bar / shortcut navigation: "schematic" and "pcb" open that editor on its own;
+  // anything else is a registered EDA view (e.g. 3D) that fills the editor area.
+  const showWorkspace = (id: string) => {
+    if (id === "schematic" || id === "pcb") {
+      const active = docs.find((d) => d.id === activeId);
+      if (wsId === "editor" && active?.kind === id) return;
+      const same = openIds.map((i) => docs.find((d) => d.id === i)).find((d) => d?.kind === id) ?? docs.find((d) => d.kind === id);
+      if (same) open(same.id);
+      else setWorkspace("editor");
+    } else {
+      setWorkspace(id);
+      setVisitedViews((v) => new Set(v).add(id));
+    }
+  };
+  const openFile = (entry: FileEntry) => open(fileDocId(entry.rel));
+  const fileRemoved = (rel: string, isDir: boolean) =>
+    setDocState((st) => remapFileDocs({ open: openIds, active: st.active }, (r) => (r === rel || (isDir && r.startsWith(`${rel}/`)) ? null : r)));
+  const fileRenamed = (from: string, to: string) =>
+    setDocState((st) => remapFileDocs({ open: openIds, active: st.active }, (r) => (r === from ? to : r.startsWith(`${from}/`) ? to + r.slice(from.length) : r)));
   const closeOne = (id: string) => {
     const d = docs.find((x) => x.id === id);
     // The engine writes every accepted command before it returns, so "unsaved" only means a
@@ -466,21 +448,24 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       group: "Design",
     },
     { id: "deselect", label: "Clear selection", run: () => setSelected(null), group: "Edit" },
+    { id: "ws-schematic", label: "Go to Schematic editor", run: () => showWorkspace("schematic"), shortcut: SHORTCUTS.showSchematic, group: "Navigate" },
+    { id: "ws-pcb", label: "Go to PCB editor", run: () => showWorkspace("pcb"), shortcut: SHORTCUTS.showPcb, group: "Navigate" },
+    ...edaViews.map((w) => ({ id: `ws-${w.id}`, label: `Go to ${w.label}`, run: () => showWorkspace(w.id), shortcut: w.shortcut, group: "Navigate" })),
+    { id: "open-project", label: "Open another project…", run: () => setDialog("open"), group: "Project" },
+    ...projects.filter((p) => !p.active).map((p) => ({ id: `proj-${p.id}`, label: `Switch to project ${p.name}`, run: () => switchTo(p.id), group: "Project" })),
+    { id: "toggle-split", label: "View: Show schematic and PCB side by side", run: () => setSplit((v) => !v), group: "View" },
     { id: "quick-open", label: "Go to part, net or sheet…", run: () => setQuickOpen(true), shortcut: SHORTCUTS.quickOpen, group: "Navigate" },
     { id: "rules", label: "Design rules and net classes…", run: () => setDialog("rules"), group: "Design" },
-    { id: "tab-split", label: "View: Toggle split (schematic + PCB)", run: () => setSplit((v) => !v), group: "View" },
     ...docs.map((d) => ({ id: `open-${d.id}`, label: `Open ${d.kind === "pcb" ? "PCB" : `schematic ${d.title}`}`, run: () => open(d.id), group: "Documents" })),
     { id: "close-all", label: "Close all documents", run: closeAll, disabled: openIds.length === 0, group: "Documents" },
     { id: "reset-layout", label: "Reset panel layout", run: resetLayout, group: "View" },
     { id: "help", label: "Keyboard shortcuts", run: () => setHelp(true), group: "Help" },
     { id: "toggle-side", label: "Toggle side panel", run: () => setSideOpen((o) => !o), shortcut: SHORTCUTS.toggleSide, group: "View" },
     { id: "toggle-bottom", label: "Toggle bottom panel", run: () => setBottomOpen((o) => !o), shortcut: SHORTCUTS.toggleBottom, group: "View" },
-    { id: "toggle-ai", label: "Toggle AI assistant", run: () => setAiOpen((o) => !o), shortcut: SHORTCUTS.toggleAi, group: "View" },
     ...SIDE_VIEWS.map((v) => ({ id: `show-${v.id}`, label: `Show ${v.label}`, run: () => showSide(v.id), group: "View" })),
     { id: "bom", label: "Show BOM", run: () => (setBottomTab("bom"), setBottomOpen(true)), group: "View" },
     { id: "sim", label: "Show simulation", run: () => (setBottomTab("sim"), setBottomOpen(true)), group: "View" },
     { id: "log", label: "Show log", run: () => (setBottomTab("log"), setBottomOpen(true)), group: "View" },
-    { id: "ask", label: selLabel ? `Ask AI about ${selLabel}` : "Ask AI", run: () => (selectedSymbol ? askSelection() : (setAiOpen(true), setAiFocus((n) => n + 1))), group: "AI" },
     { id: "theme", label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", run: onTheme, group: "Appearance" },
     { id: "settings", label: "Model settings", run: onSettings, group: "Settings" },
     { id: "close", label: "Close project", run: close, group: "Project" },
@@ -494,7 +479,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       group: "Symbol",
       run: () => setSelected(sy.id),
     })),
-    ...netNames(snapshot).map((n) => ({ id: `net-${n}`, label: n, group: "Net", run: () => askNet(n) })),
+    ...netNames(snapshot).map((n) => ({ id: `net-${n}`, label: n, group: "Net", run: () => showNet(n) })),
     ...Object.values(snapshot.project.schematic.sheets).map((sh) => ({
       id: `sheet-${sh.id}`,
       label: sh.name,
@@ -504,11 +489,19 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   ];
 
   // Keep the latest handlers reachable from the single global key listener.
-  const keys = useRef({ undo, redo });
-  keys.current = { undo, redo };
+  const viewKey = (e: KeyboardEvent) => {
+    const w = edaViews.find((v) => v.shortcut && matches(e, v.shortcut));
+    if (w) showWorkspace(w.id);
+    return !!w;
+  };
+  const keys = useRef({ undo, redo, showWorkspace, showSide, viewKey });
+  keys.current = { undo, redo, showWorkspace, showSide, viewKey };
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
   const saveRef = useRef<() => void>(() => {});
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!visibleRef.current) return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
       const mod = e.ctrlKey || e.metaKey;
       if (matches(e, SHORTCUTS.palette) || matches(e, SHORTCUTS.paletteAlt)) {
@@ -525,10 +518,17 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       } else if (matches(e, SHORTCUTS.toggleBottom)) {
         e.preventDefault();
         setBottomOpen((o) => !o);
-      } else if (matches(e, SHORTCUTS.toggleAi)) {
+      } else if (matches(e, SHORTCUTS.showSchematic)) {
         e.preventDefault();
-        setAiOpen((o) => !o);
-        setAiFocus((n) => n + 1);
+        keys.current.showWorkspace("schematic");
+      } else if (matches(e, SHORTCUTS.showPcb)) {
+        e.preventDefault();
+        keys.current.showWorkspace("pcb");
+      } else if (matches(e, SHORTCUTS.showExplorer)) {
+        e.preventDefault();
+        keys.current.showSide("project");
+      } else if (keys.current.viewKey(e)) {
+        e.preventDefault();
       } else if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
         saveRef.current();
@@ -615,7 +615,6 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     ],
     [
       { id: "cmd", label: "Commands", shortcut: SHORTCUTS.palette, run: () => setPalette(true) },
-      { id: "ai", label: "Assistant", shortcut: SHORTCUTS.toggleAi, run: () => setAiOpen((o) => !o), pressed: aiOpen },
       { id: "close", label: "Close project", run: close, disabled: busy ? "An engine command is running" : undefined },
     ],
   ];
@@ -639,7 +638,6 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     { label: "View", items: [
       { label: "Side panel", shortcut: SHORTCUTS.toggleSide, checked: sideOpen, run: () => setSideOpen((o) => !o) },
       { label: "Bottom panel", shortcut: SHORTCUTS.toggleBottom, checked: bottomOpen, run: () => setBottomOpen((o) => !o) },
-      { label: "AI assistant", shortcut: SHORTCUTS.toggleAi, checked: aiOpen, run: () => setAiOpen((o) => !o) },
       { label: "Split schematic and PCB", checked: split, run: () => setSplit((v) => !v) },
       ...SIDE_VIEWS.map((v, i) => ({ label: `Show ${v.label}`, run: () => showSide(v.id), sep: i === 0 })),
       { label: "Light theme", checked: theme === "light", run: onTheme, sep: true },
@@ -678,11 +676,6 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       { label: "Show manufacturing panel", run: () => showSide("manufacturing") },
       { label: "Release check…", disabled: "Not implemented: exports are always DRAFT" },
     ] },
-    { label: "AI Assistant", items: [
-      { label: "Show assistant", shortcut: SHORTCUTS.toggleAi, run: () => { setAiOpen(true); setAiFocus((n) => n + 1); } },
-      { label: "Ask about selection", run: askSelection, disabled: needSel },
-      { label: "Clear conversation", run: () => setChat([]), disabled: chat.length === 0 ? "The conversation is empty" : undefined },
-    ] },
     { label: "Settings", items: [
       { label: "Model settings", run: onSettings },
       { label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", run: onTheme },
@@ -693,13 +686,15 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       { label: "About EAK", run: () => setMessage("EAK: Rust engineering core, typed commands, independent validation. The assistant never certifies engineering numbers.") },
     ] },
   ];
+  const ctxKind = wsId !== "editor" ? "view" : (docs.find((d) => d.id === activeId)?.kind ?? "none");
+  const shownToolbar = filterToolbar(toolbarGroups, ctxKind);
   const noParts = Object.keys(snapshot.project.schematic.symbols).length === 0;
 
   return (
     <div className="workspace">
       <MenuBar menus={menus} />
       <Toolbar
-        groups={toolbarGroups}
+        groups={shownToolbar}
         left={
           <div className="tb-title">
             <strong>{snapshot.project.name}</strong>
@@ -718,20 +713,29 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
           </button>
         </div>
       )}
-      <div className="main" style={{ gridTemplateColumns: `48px ${sideOpen ? layout.sideWidth : 0}px ${sideOpen ? 4 : 0}px minmax(0, 1fr) ${aiOpen ? 4 : 0}px ${aiOpen ? layout.aiWidth : 0}px` }}>
-        <ActivityBar view={sideView} open={sideOpen} onSelect={showSide} onSettings={onSettings} theme={theme} onTheme={onTheme} />
+      <div className="main" style={{ gridTemplateColumns: `48px ${sideOpen ? layout.sideWidth : 0}px ${sideOpen ? 4 : 0}px minmax(0, 1fr)` }}>
+        <ActivityBar
+          sideView={sideView}
+          sideOpen={sideOpen}
+          onSide={showSide}
+          workspace={wsId !== "editor" ? wsId : (docs.find((d) => d.id === activeId)?.kind === "schematic" || docs.find((d) => d.id === activeId)?.kind === "pcb" ? (docs.find((d) => d.id === activeId)!.kind as string) : "")}
+          onWorkspace={showWorkspace}
+          registered={edaViews}
+          onSettings={onSettings}
+          theme={theme}
+          onTheme={onTheme}
+        />
         <aside className={sideOpen ? "side open" : "side"} aria-label="Side panel" aria-hidden={!sideOpen}>
           <header className="panel-head">
             <span className="title">{SIDE_VIEWS.find((v) => v.id === sideView)?.label}</span>
           </header>
           {sideView === "project" && (
-            <ProjectPanel
-              snapshot={snapshot}
-              selected={selected}
-              onSelect={setSelected}
-              onNet={askNet}
-              onSheet={(id) => open(`sch:${id}`)}
-            />
+            <div className="side-scroll">
+              <h3 className="side-h">Files</h3>
+              <FileExplorer projectId={snapshot.project.id} revision={revision} onOpen={openFile} onRemoved={fileRemoved} onRenamed={fileRenamed} notify={setMessage} />
+              <h3 className="side-h">Design</h3>
+              <ProjectPanel snapshot={snapshot} selected={selected} onSelect={setSelected} onNet={showNet} onSheet={(id) => open(`sch:${id}`)} />
+            </div>
           )}
           {sideView === "layers" && (
             <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
@@ -766,32 +770,52 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
           <div />
         )}
         <div className="center">
-          <DocTabs docs={openDocs} active={activeId} dirty={dirty} onSelect={open} onClose={closeOne} onCloseAll={closeAll} split={split} onSplit={() => setSplit((v) => !v)} askLabel={selectedSymbol?.refdes ?? null} onAsk={askSelection} />
-          <div className={`views ${shown.length > 1 ? "split" : "single"}`}>
-            {openDocs.length === 0 && (
-              <div className="canvas-empty static" aria-label="No documents open">
-                <strong>No documents open</strong>
-                <span>Open the schematic or the PCB from the Project panel or the Project menu.</span>
-              </div>
-            )}
-            {shown.map((d) => (
-              <DocIdContext.Provider key={d.id} value={d.id}>
-              <div className="view-slot" onPointerDownCapture={() => d.id !== activeId && open(d.id)}>
-              {d.kind === "schematic" ? (
-                <SchematicView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} armPart={armPart} sheetId={d.ref} />
-              ) : (
-                <PcbView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} onStatus={setStatus} layerView={layerView} focus={focus} airwires={conn && conn.revision === revision ? conn.ratsnest : null} />
+          {projects.length > 1 && (
+            <ProjectTabs projects={projects} onSwitch={switchTo} onClose={closeProjectTab} onOpen={() => setDialog("open")} disabled={busy ? "An engine command is running" : undefined} />
+          )}
+          <div className="editor-area" hidden={wsId !== "editor"}>
+            <DocTabs docs={openDocs} active={activeId} dirty={dirty} onSelect={open} onClose={closeOne} onCloseAll={closeAll} split={split} onSplit={() => setSplit((v) => !v)} />
+            <div className={`views ${shown.length > 1 ? "split" : "single"}`}>
+              {openDocs.length === 0 && (
+                <div className="canvas-empty static" aria-label="No documents open">
+                  <strong>No documents open</strong>
+                  <span>Open the schematic or the PCB from the activity bar, the Explorer or the Project menu.</span>
+                </div>
               )}
-              </div>
-              </DocIdContext.Provider>
-            ))}
-            {noParts && (
-              <div className="canvas-empty" aria-label="Empty design">
-                <strong>An empty design</strong>
-                <span>Open Library / Parts to place a part, press {formatShortcut(SHORTCUTS.quickOpen)} to go anywhere, or ask the assistant.</span>
-              </div>
-            )}
+              {[...openDocs].sort((a, b) => rank(a.kind) - rank(b.kind)).map((d) => {
+                const visible = shown.some((x) => x.id === d.id);
+                // Editors stay mounted while another view is shown, so their tool, selection and
+                // viewport survive switching. File viewers are cheap and only mounted when shown.
+                if (d.kind === "file" && !visible) return null;
+                return (
+                  <DocIdContext.Provider key={d.id} value={d.id}>
+                    <div className={visible ? "view-slot" : "view-slot off"} onPointerDownCapture={() => d.id !== activeId && open(d.id)}>
+                      {d.kind === "schematic" ? (
+                        <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} armPart={armPart} sheetId={d.ref} />
+                      ) : d.kind === "pcb" ? (
+                        <PcbView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} onStatus={setStatus} layerView={layerView} focus={focus} airwires={conn && conn.revision === revision ? conn.ratsnest : null} />
+                      ) : (
+                        <FileViewer projectId={snapshot.project.id} rel={d.ref} revision={revision} />
+                      )}
+                    </div>
+                  </DocIdContext.Provider>
+                );
+              })}
+              {noParts && wsId === "editor" && (
+                <div className="canvas-empty" aria-label="Empty design">
+                  <strong>An empty design</strong>
+                  <span>Open Library / Parts to place a part, or press {formatShortcut(SHORTCUTS.quickOpen)} to go anywhere.</span>
+                </div>
+              )}
+            </div>
           </div>
+          {edaViews
+            .filter((w) => w.id === wsId || visitedViews.has(w.id))
+            .map((w) => (
+              <div key={w.id} className="ws-host" hidden={wsId !== w.id}>
+                {w.render(wsCtx(wsId === w.id))}
+              </div>
+            ))}
           {bottomOpen && (
             <Splitter orientation="horizontal" label="Resize bottom panel" value={layout.bottomHeight} onResize={(d) => setLayout((l) => ({ ...l, bottomHeight: clampSize("bottomHeight", l.bottomHeight - d) }))} onReset={() => setLayout((l) => ({ ...l, bottomHeight: DEFAULT_LAYOUT.bottomHeight }))} />
           )}
@@ -804,35 +828,14 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
               results={results}
               events={events}
               onProbe={setSelected}
-              onAsk={askFinding}
+              tasks={tasks}
+              onClearTasks={clearFinished}
               onNavigate={navigateFinding}
               activeFinding={activeFinding}
               onClose={() => setBottomOpen(false)}
             />
           )}
         </div>
-        {aiOpen ? (
-          <Splitter orientation="vertical" label="Resize assistant panel" value={layout.aiWidth} onResize={(d) => setLayout((l) => ({ ...l, aiWidth: clampSize("aiWidth", l.aiWidth - d) }))} onReset={() => setLayout((l) => ({ ...l, aiWidth: DEFAULT_LAYOUT.aiWidth }))} />
-        ) : (
-          <div />
-        )}
-        {aiOpen && (
-          <AiPanel
-            messages={chat}
-            snapshot={snapshot}
-            library={library}
-            contextLabel={selLabel}
-            busy={busy}
-            modelLabel={model?.label ?? null}
-            focusNonce={aiFocus}
-            onSend={(t) => ask(t)}
-            onAccept={acceptProposal}
-            onReject={rejectProposal}
-            onRollback={rollbackStep}
-            onOpenSettings={onSettings}
-            onClose={() => setAiOpen(false)}
-          />
-        )}
       </div>
       <StatusBar
         project={snapshot.project.name}
@@ -840,7 +843,6 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
         layer={status.layer === "top" ? "Top" : "Bottom"}
         gridMm={status.gridMm}
         drc={results.drc}
-        model={model?.label ?? null}
         selection={selLabel ? `Selected ${selLabel}` : null}
         busy={busy}
         message={message}
@@ -872,6 +874,18 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
             <button type="button" onClick={() => setHelp(false)}>Close</button>
           </div>
         </div>
+      )}
+      {syncDialog && (
+        <SyncReportDialog
+          report={syncDialog.report}
+          error={syncDialog.error}
+          revision={syncDialog.revision}
+          onOpenPcb={() => {
+            setSyncDialog(null);
+            showWorkspace("pcb");
+          }}
+          onClose={() => setSyncDialog(null)}
+        />
       )}
       {palette && <CommandPalette actions={actions} onClose={() => setPalette(false)} />}
       {quickOpen && (

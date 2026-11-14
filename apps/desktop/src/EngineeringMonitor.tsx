@@ -7,7 +7,6 @@ interface Props {
   results: Partial<Record<Check, CheckResult>>;
   onProbe: (symbolId: Id) => void;
   /** Inline "Ask AI" on a finding: the message and the part it points at, if any. */
-  onAsk?: (text: string, target: Id | null) => void;
   /** Click a finding: open the right editor, zoom to it, highlight it (preferred over onProbe). */
   onNavigate?: (finding: Finding, check: Check) => void;
   /** Id of the finding last navigated to; its measured/required detail is expanded. */
@@ -55,7 +54,6 @@ function ReportSection({
   result,
   snapshot,
   onProbe,
-  onAsk,
   onNavigate,
   activeFinding,
 }: {
@@ -63,7 +61,6 @@ function ReportSection({
   result: CheckResult | undefined;
   snapshot: Snapshot;
   onProbe: (id: Id) => void;
-  onAsk?: (text: string, target: Id | null) => void;
   onNavigate?: (finding: Finding, check: Check) => void;
   activeFinding?: string | null;
 }) {
@@ -100,11 +97,6 @@ function ReportSection({
               >
                 <span className="sev">{f.severity}</span> <code>{f.rule_id}</code> {f.message}
               </button>
-              {onAsk && (
-                <button type="button" className="ask" title="Ask the assistant about this finding" onClick={() => onAsk(`${title} ${f.rule_id}: ${f.message}`, target)}>
-                  Ask AI
-                </button>
-              )}
               {activeFinding !== undefined && activeFinding === findingKey(f) && <FindingDetail f={f} />}
             </li>
           );
@@ -134,13 +126,13 @@ function ReportSection({
   );
 }
 
-export function EngineeringMonitor({ snapshot, results, onProbe, onAsk, onNavigate, activeFinding }: Props) {
+export function EngineeringMonitor({ snapshot, results, onProbe, onNavigate, activeFinding }: Props) {
   return (
     <div className="monitor" aria-label="Engineering Monitor">
       <h2>Engineering Monitor</h2>
-      <ReportSection title="ERC" result={results.erc} snapshot={snapshot} onProbe={onProbe} onAsk={onAsk} onNavigate={onNavigate} activeFinding={activeFinding} />
-      <ReportSection title="DRC" result={results.drc} snapshot={snapshot} onProbe={onProbe} onAsk={onAsk} onNavigate={onNavigate} activeFinding={activeFinding} />
-      <ReportSection title="DFM" result={results.dfm} snapshot={snapshot} onProbe={onProbe} onAsk={onAsk} onNavigate={onNavigate} activeFinding={activeFinding} />
+      <ReportSection title="ERC" result={results.erc} snapshot={snapshot} onProbe={onProbe} onNavigate={onNavigate} activeFinding={activeFinding} />
+      <ReportSection title="DRC" result={results.drc} snapshot={snapshot} onProbe={onProbe} onNavigate={onNavigate} activeFinding={activeFinding} />
+      <ReportSection title="DFM" result={results.dfm} snapshot={snapshot} onProbe={onProbe} onNavigate={onNavigate} activeFinding={activeFinding} />
     </div>
   );
 }

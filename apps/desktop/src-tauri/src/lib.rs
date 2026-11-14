@@ -16,6 +16,7 @@
 pub mod ai;
 pub mod models;
 pub mod parts;
+pub mod workspace;
 
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
 use eak_runtime::index::{Index, RecentProject};
@@ -26,9 +27,24 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
-/// Process-wide desktop state: at most one open project engine and the metadata index.
+/// Every project open in this window plus which one is active. All IPC commands act on the
+/// active engine only, so contexts never mix; switching changes which engine that is.
+#[derive(Default)]
+pub struct Open {
+    engines: Vec<Engine>,
+    active: Option<usize>,
+}
+
+impl Open {
+    fn active_engine(&mut self) -> Option<&mut Engine> {
+        let i = self.active?;
+        self.engines.get_mut(i)
+    }
+}
+
+/// Process-wide desktop state: the open project engines (one active) and the metadata index.
 pub struct Session {
-    engine: Mutex<Option<Engine>>,
+    engine: Mutex<Open>,
     /// SQLite recent-project index. It is a rebuildable cache, so failing to open it
     /// disables the recent list but never blocks project work.
     index: Result<Mutex<Index>, String>,
@@ -37,12 +53,12 @@ pub struct Session {
 impl Session {
     pub fn new(index: Result<Index, String>) -> Session {
         Session {
-            engine: Mutex::new(None),
+            engine: Mutex::new(Open::default()),
             index: index.map(Mutex::new),
         }
     }
 
-    fn engine(&self) -> Result<MutexGuard<'_, Option<Engine>>, String> {
+    fn engine(&self) -> Result<MutexGuard<'_, Open>, String> {
         self.engine
             .lock()
             .map_err(|_| "engine state is poisoned; restart EAK".to_string())
@@ -50,7 +66,7 @@ impl Session {
 
     fn with_engine<T>(&self, f: impl FnOnce(&mut Engine) -> T) -> Result<T, String> {
         let mut guard = self.engine()?;
-        let engine = guard.as_mut().ok_or("no project is open")?;
+        let engine = guard.active_engine().ok_or("no project is open")?;
         Ok(f(engine))
     }
 
@@ -286,13 +302,27 @@ fn project_dir(path: &str) -> Result<PathBuf, String> {
 
 /// Replace the open project. The previous engine is dropped first so its project lock
 /// is released (reopening the same folder must not collide with our own lock).
-fn install(s: &Session, open: impl FnOnce() -> Result<Engine, String>) -> Result<Snapshot, String> {
+fn install(
+    s: &Session,
+    dir: &Path,
+    open: impl FnOnce() -> Result<Engine, String>,
+) -> Result<Snapshot, String> {
     let mut guard = s.engine()?;
-    *guard = None;
+    // Opening a folder that is already open here re-reads it from disk (its lock is ours, so it
+    // is dropped first). Other open projects stay open and untouched.
+    if let Some(i) = guard
+        .engines
+        .iter()
+        .position(|e| e.dir().is_some_and(|d| d == dir))
+    {
+        guard.engines.remove(i);
+        guard.active = guard.engines.len().checked_sub(1);
+    }
     let engine = open()?;
     s.touch_recent(&engine);
     let snap = snapshot(&engine);
-    *guard = Some(engine);
+    guard.engines.push(engine);
+    guard.active = Some(guard.engines.len() - 1);
     Ok(snap)
 }
 
@@ -302,16 +332,21 @@ pub fn create_project(s: &Session, path: &str, name: &str) -> Result<Snapshot, S
     if name.is_empty() {
         return Err("enter a project name".into());
     }
-    install(s, || Engine::create(&dir, name))
+    install(s, &dir, || Engine::create(&dir, name))
 }
 
 pub fn open_project(s: &Session, path: &str, take_over_lock: bool) -> Result<Snapshot, String> {
     let dir = project_dir(path)?;
-    install(s, || Engine::open(&dir, take_over_lock))
+    install(s, &dir, || Engine::open(&dir, take_over_lock))
 }
 
+/// Close the active project; the most recently opened remaining one (if any) becomes active.
 pub fn close_project(s: &Session) -> Result<(), String> {
-    *s.engine()? = None;
+    let mut guard = s.engine()?;
+    if let Some(i) = guard.active {
+        guard.engines.remove(i);
+    }
+    guard.active = guard.engines.len().checked_sub(1);
     Ok(())
 }
 
@@ -655,7 +690,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 35] = [
+pub const IPC_COMMANDS: [&str; 45] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -691,6 +726,16 @@ pub const IPC_COMMANDS: [&str; 35] = [
     "model_clear_key",
     "model_list_models",
     "model_test_connection",
+    "open_projects",
+    "switch_project",
+    "close_project_by_id",
+    "operation_changes",
+    "project_files",
+    "project_file_read",
+    "project_file_create",
+    "project_file_rename",
+    "project_file_delete",
+    "project_git_status",
 ];
 
 /// Tauri command wrappers: argument decoding only, no logic.
@@ -838,6 +883,8 @@ pub mod cmd {
 pub fn run() {
     use tauri::Manager;
     tauri::Builder::default()
+        // Native folder pickers for Project Home (open a project folder, choose a parent directory).
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let index = app
                 .path()
@@ -902,6 +949,16 @@ pub fn run() {
             parts::cmd::parts_import,
             parts::cmd::manufacturing_preview,
             parts::cmd::jlcpcb_prepare,
+            workspace::cmd::open_projects,
+            workspace::cmd::switch_project,
+            workspace::cmd::close_project_by_id,
+            workspace::cmd::operation_changes,
+            workspace::cmd::project_files,
+            workspace::cmd::project_file_read,
+            workspace::cmd::project_file_create,
+            workspace::cmd::project_file_rename,
+            workspace::cmd::project_file_delete,
+            workspace::cmd::project_git_status,
         ])
         .run(tauri::generate_context!())
         .expect("EAK desktop failed to start");

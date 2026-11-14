@@ -1,9 +1,11 @@
-// Bottom panel: ERC/DRC findings, a BOM derived from the schematic, and the engine log.
+// Bottom panel: ERC/DRC/DFM findings (diagnostics), a BOM derived from the schematic, simulation,
+// the engine log and this session's tasks.
 import { EngineeringMonitor } from "../EngineeringMonitor";
 import { SimulationPanel } from "../SimulationPanel";
 import type { Check, CheckResult, EngineEvent, Finding, Id, Snapshot } from "../types";
+import type { Task } from "./tasks";
 
-export type BottomTab = "findings" | "bom" | "sim" | "log";
+export type BottomTab = "findings" | "bom" | "sim" | "log" | "tasks" | (string & {});
 
 interface Props {
   tab: BottomTab;
@@ -12,11 +14,12 @@ interface Props {
   results: Partial<Record<Check, CheckResult>>;
   events: EngineEvent[];
   onProbe: (id: Id) => void;
-  onAsk: (text: string, target: Id | null) => void;
   onClose: () => void;
   height?: number;
   onNavigate?: (f: Finding, check: Check) => void;
   activeFinding?: string | null;
+  tasks?: Task[];
+  onClearTasks?: () => void;
 }
 
 export interface BomLine {
@@ -45,23 +48,47 @@ const TABS: [BottomTab, string][] = [
   ["bom", "BOM"],
   ["sim", "Simulation"],
   ["log", "Log"],
+  ["tasks", "Tasks"],
 ];
 
-export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onAsk, onClose, height, onNavigate, activeFinding }: Props) {
+function TasksList({ tasks, onClear }: { tasks: Task[]; onClear?: () => void }) {
+  if (tasks.length === 0) return <p className="empty-state">No tasks yet: checks, Update PCB and exports you run appear here with their outcome.</p>;
+  const secs = (t: Task) => (t.endedAt ? `${((t.endedAt - t.startedAt) / 1000).toFixed(1)} s` : "running");
+  return (
+    <section className="tasks" aria-label="Tasks">
+      <ol>
+        {tasks.slice().reverse().map((t) => (
+          <li key={t.id} className={`task ${t.status}`}>
+            <span className="task-state" aria-label={t.status}>{t.status === "running" ? "…" : t.status === "done" ? "✓" : "✗"}</span> <strong>{t.label}</strong>{" "}
+            <span className="muted">{secs(t)}</span>
+            {t.detail && <div className="muted">{t.detail}</div>}
+          </li>
+        ))}
+      </ol>
+      {onClear && tasks.some((t) => t.status !== "running") && (
+        <button type="button" onClick={onClear} title="Remove finished tasks from the list">Clear finished</button>
+      )}
+    </section>
+  );
+}
+
+export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, activeFinding, tasks = [], onClearTasks }: Props) {
   const bom = bomLines(snapshot);
+  const running = tasks.filter((t) => t.status === "running").length;
   return (
     <section className="bottom" aria-label="Bottom panel" style={height ? { height } : undefined}>
       <div className="tabs" role="tablist">
         {TABS.map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "tab on" : "tab"} onClick={() => onTab(id)}>
             {label}
+            {id === "tasks" && running > 0 && <span className="count">{running}</span>}
           </button>
         ))}
         <span className="spacer" />
         <button type="button" className="icon" aria-label="Hide bottom panel" title="Hide panel (Ctrl+J)" onClick={onClose}>×</button>
       </div>
       <div className="bottom-body">
-        {tab === "findings" && <EngineeringMonitor snapshot={snapshot} results={results} onProbe={onProbe} onAsk={onAsk} onNavigate={onNavigate} activeFinding={activeFinding} />}
+        {tab === "findings" && <EngineeringMonitor snapshot={snapshot} results={results} onProbe={onProbe} onNavigate={onNavigate} activeFinding={activeFinding} />}
         {tab === "bom" &&
           (bom.length === 0 ? (
             <p className="empty-state">The BOM is empty: place parts in the schematic first.</p>
@@ -83,6 +110,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
               <p className="muted hint">Derived from schematic symbols at revision {snapshot.project.revision}. Supplier part numbers and pricing are not included here.</p>
             </>
           ))}
+        {tab === "tasks" && <TasksList tasks={tasks} onClear={onClearTasks} />}
         {tab === "sim" && <SimulationPanel revision={snapshot.project.revision} />}
         {tab === "log" && (
           <section className="activity" aria-label="Activity">

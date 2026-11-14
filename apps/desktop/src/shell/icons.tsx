@@ -16,5 +16,7 @@ export const Icons = {
   layers: svg(<><path d="M12 4l8 4-8 4-8-4z" /><path d="M4 12l8 4 8-4M4 16l8 4 8-4" /></>),
   sparkle: svg(<><path d="M12 4l1.8 4.7L18.5 10.5 13.8 12.3 12 17l-1.8-4.7L5.5 10.5l4.7-1.8z" /><path d="M18 16l.7 1.8L20.5 18.5 18.7 19.2 18 21l-.7-1.8-1.8-.7 1.8-.7z" /></>),
   sun: svg(<><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2" /></>),
+  schematic: svg(<><path d="M3 12h4l1.5-4 3 8 3-8 1.5 4h4" /><circle cx="3" cy="12" r="1" /><circle cx="21" cy="12" r="1" /></>),
+  pcb: svg(<><rect x="4" y="4" width="16" height="16" rx="2" /><circle cx="8.5" cy="8.5" r="1.3" /><circle cx="15.5" cy="15.5" r="1.3" /><path d="M9.8 8.5H13v7h1.2" /></>),
   moon: svg(<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" />),
 };
