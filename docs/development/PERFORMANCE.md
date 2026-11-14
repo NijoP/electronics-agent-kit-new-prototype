@@ -10,5 +10,12 @@ Source inspection only. Nothing here is built, run or measured; no improvement i
 - **Modules:** `install.sh`, `install.ps1`, `scripts/install.sh`, `scripts/install.ps1`, `docs/INSTALL.md`, `docs/PLATFORM_SUPPORT.md`.
 - **Needs real-machine verification:** all of it.
 
+## 2. Terminal lifecycle commands off the UI thread (P1, code-reviewed only)
+- **Problem:** the terminal Tauri commands were plain `#[tauri::command]`, which Tauri runs on the main thread. PTY spawn (create/restart/run), process-tree kill (close, space close; `taskkill /T` on Windows) and shell probing could freeze the window.
+- **Change:** `terminal_shells/create/run/restart/close/space_close` are now `#[tauri::command(async)]` (thread pool, like the model/workspace/library commands). `terminal_write`/`terminal_resize` deliberately stay synchronous: async tasks may run out of order and keystrokes must stay ordered.
+- **Benefit:** UI thread stays free during session start/stop. Not measured.
+- **Correctness:** the JS side awaits each lifecycle call, so ordering is unchanged. Startup was inspected: every optional subsystem (index, harness, terminal API, model settings) already logs and continues; no change needed.
+- **Modules:** `apps/desktop/src-tauri/src/terminal.rs`.
+
 ## Remaining (not started)
-P1/P2 startup-path and lifecycle review, execution profile setting, P3 revision-keyed caching.
+Execution profile setting (low/balanced/high), PTY leak review, cache bounds, P3 revision-keyed caching.

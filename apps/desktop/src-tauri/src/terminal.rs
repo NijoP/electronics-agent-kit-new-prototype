@@ -140,7 +140,7 @@ pub mod cmd {
     pub fn terminal_overview(state: State<'_, TerminalState>) -> Overview {
         state.manager.overview()
     }
-    #[tauri::command]
+    #[tauri::command(async)]
     pub fn terminal_shells() -> Vec<String> {
         eak_terminal::available_shells()
     }
@@ -175,7 +175,7 @@ pub mod cmd {
             .manager
             .set_context(dir.map(PathBuf::from), project, project_id);
     }
-    #[tauri::command]
+    #[tauri::command(async)]
     pub fn terminal_create(state: State<'_, TerminalState>, opts: CreateOptions) -> R<SessionInfo> {
         state.manager.create(opts)
     }
@@ -183,7 +183,7 @@ pub mod cmd {
     pub fn terminal_write(state: State<'_, TerminalState>, id: SessionId, data: String) -> R<()> {
         state.manager.write(id, data.as_bytes())
     }
-    #[tauri::command]
+    #[tauri::command(async)]
     pub fn terminal_run(state: State<'_, TerminalState>, id: SessionId, command: String) -> R<u64> {
         state.manager.run(id, &command)
     }
@@ -214,11 +214,11 @@ pub mod cmd {
     pub fn terminal_focus(state: State<'_, TerminalState>, id: SessionId) -> R<()> {
         state.manager.focus(id)
     }
-    #[tauri::command]
+    #[tauri::command(async)]
     pub fn terminal_restart(state: State<'_, TerminalState>, id: SessionId) -> R<SessionInfo> {
         state.manager.restart(id)
     }
-    #[tauri::command]
+    #[tauri::command(async)]
     pub fn terminal_close(state: State<'_, TerminalState>, id: SessionId) -> R<()> {
         state.manager.close(id)
     }
@@ -238,7 +238,7 @@ pub mod cmd {
     ) -> R<()> {
         state.manager.rename_space(id, &name)
     }
-    #[tauri::command]
+    #[tauri::command(async)]
     pub fn terminal_space_close(state: State<'_, TerminalState>, id: SpaceId) -> R<()> {
         state.manager.close_space(id)
     }
