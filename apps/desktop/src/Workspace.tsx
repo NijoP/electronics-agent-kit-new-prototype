@@ -16,6 +16,12 @@ import { interpret, type Proposal } from "./shell/ai";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
 import { ManufacturingPanel, netNames, PartsPanel, ProjectPanel } from "./shell/panels";
 import { StatusBar } from "./shell/StatusBar";
+import { DocTabs } from "./shell/DocTabs";
+import { availableDocs, closeDoc, loadDocState, openDoc, saveDocState, visibleDocs } from "./shell/documents";
+import { clampSize, DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "./shell/layout";
+import { MenuBar, type Menu } from "./shell/MenuBar";
+import { Splitter } from "./shell/Splitter";
+import { nextRotation } from "./editing";
 import type { Check, CheckResult, Command, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
@@ -26,7 +32,6 @@ interface Props {
   onTheme: () => void;
 }
 
-type EditorTab = "split" | "schematic" | "pcb";
 
 const MAX_EVENTS = 200;
 
@@ -41,12 +46,19 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
   const [busy, setBusy] = useState(false);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const [exported, setExported] = useState<ExportResult | null>(null);
-  const [tab, setTab] = useState<EditorTab>("split");
-  const [sideOpen, setSideOpen] = useState(true);
+  const [docState, setDocState] = useState(() => loadDocState(initial));
+  const [split, setSplit] = useState(true);
+  const [layout, setLayout] = useState<Layout>(loadLayout);
+  const [help, setHelp] = useState(false);
+  const flag = (k: "sideOpen" | "bottomOpen" | "aiOpen") => (f: boolean | ((o: boolean) => boolean)) =>
+    setLayout((l) => ({ ...l, [k]: typeof f === "function" ? f(l[k]) : f }));
+  const { sideOpen, bottomOpen, aiOpen } = layout;
+  const setSideOpen = flag("sideOpen");
+  const setBottomOpen = flag("bottomOpen");
+  const setAiOpen = flag("aiOpen");
+  useEffect(() => saveLayout(layout), [layout]);
   const [sideView, setSideView] = useState<SideView>("project");
-  const [bottomOpen, setBottomOpen] = useState(true);
   const [bottomTab, setBottomTab] = useState<BottomTab>("log");
-  const [aiOpen, setAiOpen] = useState(true);
   const [partQuery, setPartQuery] = useState("");
   const [quickOpen, setQuickOpen] = useState(false);
   const [armPart, setArmPart] = useState<{ id: string; n: number } | null>(null);
@@ -56,6 +68,16 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
   const [model, setModel] = useState<string | null>(null);
   const msgId = useRef(1);
   const revision = snapshot.project.revision;
+  const docs = availableDocs(snapshot);
+  // Only documents the engine still has stay open (the snapshot is authoritative).
+  const liveIds = new Set(docs.map((d) => d.id));
+  const openIds = docState.open.filter((id) => liveIds.has(id));
+  const activeId = docState.active && liveIds.has(docState.active) ? docState.active : (openIds[0] ?? null);
+  const effective = { open: openIds, active: activeId };
+  useEffect(() => saveDocState(snapshot.project.id, effective), [snapshot.project.id, openIds.join("|"), activeId]);
+  const shown = visibleDocs(effective, docs, split);
+  const openDocs = openIds.map((id) => docs.find((d) => d.id === id)!);
+  const dirty = busy || !!snapshot.blocked;
   const [domain, setDomain] = useState<DomainReport | null>(null);
   const [domainError, setDomainError] = useState<string | null>(null);
 
@@ -245,8 +267,26 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     });
   const rejectProposal = (m: ChatMsg) => setChat((old) => old.map((x) => (x.id === m.id ? { ...x, status: "rejected" } : x)));
 
+  const open = (id: string) => setDocState((st) => openDoc({ open: openIds, active: st.active }, id));
+  const showKind = (kind: "schematic" | "pcb") => {
+    if (shown.some((d) => d.kind === kind)) return;
+    const d = docs.find((x) => x.kind === kind);
+    if (d) open(d.id);
+  };
+  const closeOne = (id: string) => {
+    const d = docs.find((x) => x.id === id);
+    // The engine writes every accepted command before it returns, so "unsaved" only means a
+    // command is in flight or writes are blocked; closing then needs an explicit yes.
+    if (dirty && !window.confirm(`${d?.title ?? "Document"} has changes the engine has not confirmed (command in flight or writes blocked). Close anyway?`)) return;
+    setDocState(closeDoc({ open: openIds, active: activeId }, id));
+  };
+  const closeAll = () => {
+    if (dirty && !window.confirm("The engine has not confirmed the latest change. Close all documents anyway?")) return;
+    setDocState({ open: [], active: null });
+  };
+  const resetLayout = () => setLayout(DEFAULT_LAYOUT);
   const placePart = (c: LibraryEntry) => {
-    setTab((t) => (t === "pcb" ? "schematic" : t));
+    showKind("schematic");
     setArmPart({ id: c.id, n: Date.now() });
     setMessage(`Place tool armed with ${c.name}: click the schematic to place it.`);
   };
@@ -270,9 +310,11 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     },
     { id: "deselect", label: "Clear selection", run: () => setSelected(null), group: "Edit" },
     { id: "quick-open", label: "Go to part, net or sheet…", run: () => setQuickOpen(true), shortcut: SHORTCUTS.quickOpen, group: "Navigate" },
-    { id: "tab-split", label: "View: Schematic + PCB", run: () => setTab("split"), group: "View" },
-    { id: "tab-sch", label: "View: Schematic", run: () => setTab("schematic"), group: "View" },
-    { id: "tab-pcb", label: "View: PCB", run: () => setTab("pcb"), group: "View" },
+    { id: "tab-split", label: "View: Toggle split (schematic + PCB)", run: () => setSplit((v) => !v), group: "View" },
+    ...docs.map((d) => ({ id: `open-${d.id}`, label: `Open ${d.kind === "pcb" ? "PCB" : `schematic ${d.title}`}`, run: () => open(d.id), group: "Documents" })),
+    { id: "close-all", label: "Close all documents", run: closeAll, disabled: openIds.length === 0, group: "Documents" },
+    { id: "reset-layout", label: "Reset panel layout", run: resetLayout, group: "View" },
+    { id: "help", label: "Keyboard shortcuts", run: () => setHelp(true), group: "Help" },
     { id: "toggle-side", label: "Toggle side panel", run: () => setSideOpen((o) => !o), shortcut: SHORTCUTS.toggleSide, group: "View" },
     { id: "toggle-bottom", label: "Toggle bottom panel", run: () => setBottomOpen((o) => !o), shortcut: SHORTCUTS.toggleBottom, group: "View" },
     { id: "toggle-ai", label: "Toggle AI assistant", run: () => setAiOpen((o) => !o), shortcut: SHORTCUTS.toggleAi, group: "View" },
@@ -298,7 +340,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
       id: `sheet-${sh.id}`,
       label: sh.name,
       group: "Sheet",
-      run: () => setTab((t) => (t === "pcb" ? "schematic" : t)),
+      run: () => showKind("schematic"),
     })),
   ];
 
@@ -346,15 +388,83 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     return () => window.removeEventListener("keydown", onKey);
   }, [revision]);
 
-  const TABS: [EditorTab, string][] = [
-    ["split", "Schematic + PCB"],
-    ["schematic", "Schematic"],
-    ["pcb", "PCB"],
+  const needSel = selectedSymbol ? undefined : "Select a part first";
+  const noProject = busy ? "An engine command is running" : undefined;
+  const menus: Menu[] = [
+    { label: "File", items: [
+      { label: "New or open project…", run: close, disabled: noProject },
+      { label: "Save", shortcut: SHORTCUTS.save, run: () => setMessage(`Saved: every accepted command is already on disk (revision ${revision}).`) },
+      { label: "Save as…", disabled: "Not implemented: the engine saves the project in place" },
+      { label: "Close project", run: close, disabled: noProject, sep: true },
+    ] },
+    { label: "Edit", items: [
+      { label: "Undo", shortcut: SHORTCUTS.undo, run: undo, disabled: !snapshot.can_undo ? "Nothing to undo" : noProject },
+      { label: "Redo", shortcut: SHORTCUTS.redo, run: redo, disabled: !snapshot.can_redo ? "Nothing to redo" : noProject },
+      { label: "Rotate selection", run: () => selectedSymbol && execute({ type: "RotateSymbol", symbol_id: selectedSymbol.id, rotation: nextRotation(selectedSymbol.rotation) }), disabled: needSel ?? noProject, sep: true },
+      { label: "Delete selection", run: () => selectedSymbol && execute({ type: "DeleteSymbol", symbol_id: selectedSymbol.id }), disabled: needSel ?? noProject, destructive: true },
+      { label: "Clear selection", run: () => setSelected(null), disabled: selected ? undefined : "Nothing is selected" },
+    ] },
+    { label: "View", items: [
+      { label: "Side panel", shortcut: SHORTCUTS.toggleSide, checked: sideOpen, run: () => setSideOpen((o) => !o) },
+      { label: "Bottom panel", shortcut: SHORTCUTS.toggleBottom, checked: bottomOpen, run: () => setBottomOpen((o) => !o) },
+      { label: "AI assistant", shortcut: SHORTCUTS.toggleAi, checked: aiOpen, run: () => setAiOpen((o) => !o) },
+      { label: "Split schematic and PCB", checked: split, run: () => setSplit((v) => !v) },
+      ...SIDE_VIEWS.map((v, i) => ({ label: `Show ${v.label}`, run: () => showSide(v.id), sep: i === 0 })),
+      { label: "Light theme", checked: theme === "light", run: onTheme, sep: true },
+      { label: "Reset panel layout", run: resetLayout },
+    ] },
+    { label: "Project", items: [
+      { label: "Annotate schematic", run: () => execute({ type: "Annotate" }), disabled: noProject },
+      { label: "Sync schematic to PCB", run: () => execute({ type: "SyncSchematicToPcb" }), disabled: noProject },
+      ...docs.map((d, i) => ({ label: `Open ${d.kind === "pcb" ? "PCB" : `sheet ${d.title}`}`, run: () => open(d.id), sep: i === 0 })),
+      { label: "Close all documents", run: closeAll, disabled: openIds.length === 0 ? "No documents are open" : undefined },
+    ] },
+    { label: "Place", items: [
+      ...(library.length === 0 ? [{ label: "Part…", disabled: "The part library is unavailable" }] : library.map((c) => ({ label: `Part: ${c.name}`, run: () => placePart(c) }))),
+      { label: "Wire, label, junction…", disabled: "Use the schematic toolbar (keys 1-7); not available from the menu", sep: true },
+    ] },
+    { label: "Design", items: [
+      { label: "Run ERC", run: () => check("erc"), disabled: noProject },
+      { label: "Run DRC", run: () => check("drc"), disabled: noProject },
+      { label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), disabled: noProject, sep: true },
+      { label: "Design rules…", disabled: "Not implemented: no rule editor yet" },
+    ] },
+    { label: "Tools", items: [
+      { label: "Command palette", shortcut: SHORTCUTS.palette, run: () => setPalette(true) },
+      { label: "Go to part, net or sheet", shortcut: SHORTCUTS.quickOpen, run: () => setQuickOpen(true) },
+      { label: "Model settings", run: onSettings },
+    ] },
+    { label: "Route", items: [
+      { label: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), disabled: noProject },
+      { label: "Clear all routing", run: () => execute({ type: "ClearRouting", net: null }), disabled: noProject, destructive: true },
+      { label: "Interactive routing…", disabled: "Use the Route tool in the PCB editor (key 4); not available from the menu", sep: true },
+    ] },
+    { label: "Simulation", items: [{ label: "Run simulation…", disabled: "Not implemented: no SPICE integration yet" }] },
+    { label: "Manufacturing", items: [
+      { label: "Export Gerbers + drill", run: exportGerbers, disabled: noProject },
+      { label: "Show manufacturing panel", run: () => showSide("manufacturing") },
+      { label: "Release check…", disabled: "Not implemented: exports are always DRAFT" },
+    ] },
+    { label: "AI Assistant", items: [
+      { label: "Show assistant", shortcut: SHORTCUTS.toggleAi, run: () => { setAiOpen(true); setAiFocus((n) => n + 1); } },
+      { label: "Ask about selection", run: askSelection, disabled: needSel },
+      { label: "Clear conversation", run: () => setChat([]), disabled: chat.length === 0 ? "The conversation is empty" : undefined },
+    ] },
+    { label: "Settings", items: [
+      { label: "Model settings", run: onSettings },
+      { label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", run: onTheme },
+      { label: "Reset panel layout", run: resetLayout },
+    ] },
+    { label: "Help", items: [
+      { label: "Keyboard shortcuts", run: () => setHelp(true) },
+      { label: "About EAK", run: () => setMessage("EAK: Rust engineering core, typed commands, independent validation. The assistant never certifies engineering numbers.") },
+    ] },
   ];
   const noParts = Object.keys(snapshot.project.schematic.symbols).length === 0;
 
   return (
     <div className="workspace">
+      <MenuBar menus={menus} />
       <header className="toolbar">
         <strong>{snapshot.project.name}</strong>
         <span className="muted">revision {revision}</span>
@@ -395,7 +505,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
           </button>
         </div>
       )}
-      <div className="main" style={{ gridTemplateColumns: `48px ${sideOpen ? "272px" : "0px"} minmax(0, 1fr) ${aiOpen ? "336px" : "0px"}` }}>
+      <div className="main" style={{ gridTemplateColumns: `48px ${sideOpen ? layout.sideWidth : 0}px ${sideOpen ? 4 : 0}px minmax(0, 1fr) ${aiOpen ? 4 : 0}px ${aiOpen ? layout.aiWidth : 0}px` }}>
         <ActivityBar view={sideView} open={sideOpen} onSelect={showSide} onSettings={onSettings} theme={theme} onTheme={onTheme} />
         <aside className={sideOpen ? "side open" : "side"} aria-label="Side panel" aria-hidden={!sideOpen}>
           <header className="panel-head">
@@ -407,7 +517,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
               selected={selected}
               onSelect={setSelected}
               onNet={askNet}
-              onSheet={() => setTab((t) => (t === "pcb" ? "schematic" : t))}
+              onSheet={(id) => open(`sch:${id}`)}
             />
           )}
           {sideView === "parts" && <PartsPanel library={library} query={partQuery} onQuery={setPartQuery} onPlace={placePart} />}
@@ -418,26 +528,26 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
           )}
           {sideView === "manufacturing" && <ManufacturingPanel result={exported} busy={busy} onExport={exportGerbers} />}
         </aside>
+        {sideOpen ? (
+          <Splitter orientation="vertical" label="Resize side panel" value={layout.sideWidth} onResize={(d) => setLayout((l) => ({ ...l, sideWidth: clampSize("sideWidth", l.sideWidth + d) }))} onReset={() => setLayout((l) => ({ ...l, sideWidth: DEFAULT_LAYOUT.sideWidth }))} />
+        ) : (
+          <div />
+        )}
         <div className="center">
-          <div className="tabs editor-tabs" role="tablist" aria-label="Editors">
-            {TABS.map(([id, label]) => (
-              <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "tab on" : "tab"} onClick={() => setTab(id)}>
-                {label}
-              </button>
-            ))}
-            <span className="spacer" />
-            {selectedSymbol && (
-              <button type="button" className="ask-chip" onClick={askSelection} title="Ask the assistant about the selected part">
-                Ask AI about {selectedSymbol.refdes}
-              </button>
+          <DocTabs docs={openDocs} active={activeId} dirty={dirty} onSelect={open} onClose={closeOne} onCloseAll={closeAll} split={split} onSplit={() => setSplit((v) => !v)} askLabel={selectedSymbol?.refdes ?? null} onAsk={askSelection} />
+          <div className={`views ${shown.length > 1 ? "split" : "single"}`}>
+            {openDocs.length === 0 && (
+              <div className="canvas-empty static" aria-label="No documents open">
+                <strong>No documents open</strong>
+                <span>Open the schematic or the PCB from the Project panel or the Project menu.</span>
+              </div>
             )}
-          </div>
-          <div className={`views ${tab}`}>
-            {tab !== "pcb" && (
-              <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} armPart={armPart} />
-            )}
-            {tab !== "schematic" && (
-              <PcbView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} onStatus={setStatus} />
+            {shown.map((d) =>
+              d.kind === "schematic" ? (
+                <SchematicView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} armPart={armPart} sheetId={d.ref} />
+              ) : (
+                <PcbView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} onStatus={setStatus} />
+              ),
             )}
             {noParts && (
               <div className="canvas-empty" aria-label="Empty design">
@@ -447,7 +557,11 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
             )}
           </div>
           {bottomOpen && (
+            <Splitter orientation="horizontal" label="Resize bottom panel" value={layout.bottomHeight} onResize={(d) => setLayout((l) => ({ ...l, bottomHeight: clampSize("bottomHeight", l.bottomHeight - d) }))} onReset={() => setLayout((l) => ({ ...l, bottomHeight: DEFAULT_LAYOUT.bottomHeight }))} />
+          )}
+          {bottomOpen && (
             <BottomPanel
+              height={layout.bottomHeight}
               tab={bottomTab}
               onTab={setBottomTab}
               snapshot={snapshot}
@@ -459,6 +573,11 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
             />
           )}
         </div>
+        {aiOpen ? (
+          <Splitter orientation="vertical" label="Resize assistant panel" value={layout.aiWidth} onResize={(d) => setLayout((l) => ({ ...l, aiWidth: clampSize("aiWidth", l.aiWidth - d) }))} onReset={() => setLayout((l) => ({ ...l, aiWidth: DEFAULT_LAYOUT.aiWidth }))} />
+        ) : (
+          <div />
+        )}
         {aiOpen && (
           <AiPanel
             messages={chat}
@@ -486,6 +605,21 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
         busy={busy}
         message={message}
       />
+      {help && (
+        <div className="palette-backdrop" onClick={() => setHelp(false)}>
+          <div className="palette help" role="dialog" aria-label="Keyboard shortcuts" onClick={(e) => e.stopPropagation()}>
+            <h3>Keyboard shortcuts</h3>
+            <ul>
+              {(Object.entries(SHORTCUTS) as [string, string][]).filter(([k]) => k !== "paletteAlt").map(([k, v]) => (
+                <li key={k}><span className="grow">{k.replace(/([A-Z])/g, " $1").toLowerCase()}</span><kbd>{formatShortcut(v)}</kbd></li>
+              ))}
+              <li><span className="grow">select editor tool</span><kbd>1–7</kbd></li>
+              <li><span className="grow">rotate / flip selection</span><kbd>R / F</kbd></li>
+            </ul>
+            <button type="button" onClick={() => setHelp(false)}>Close</button>
+          </div>
+        </div>
+      )}
       {palette && <CommandPalette actions={actions} onClose={() => setPalette(false)} />}
       {quickOpen && (
         <CommandPalette
