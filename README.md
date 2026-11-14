@@ -1,90 +1,148 @@
 # Electronics Agent Kit (EAK)
 
-**Intent in. Professionally engineered, verified electronics design out.**
+**Intent in. Engineered, verified electronics design out.**
 
-EAK is a standalone, Rust-first, AI-native electronics design automation (EDA) desktop
-application by Tusk Innovations Global Pvt Ltd. It owns its own engineering model and does not
-wrap EasyEDA, KiCad or any other ECAD tool, and it has no mandatory Freerouting dependency.
+EAK is a standalone, Rust-first, AI-native desktop application for electronics design, built by
+Tusk Innovations Global Pvt Ltd.
 
-> **Status: early development.** See [STATUS.md](STATUS.md) for what is implemented and what has
-> actually been verified. Nothing in this repository is a manufacturing-ready claim.
+> **Early development.** EAK is a prototype. It is not production-ready and nothing it produces
+> should be treated as manufacturing-ready. See [Project status](#project-status).
 
-## Development handoff (continue on Linux)
+## What is EAK
 
-Development moved from a Windows laptop to a Linux laptop on 2026-11-13. **Start here:**
-[docs/handoff/LINUX_HANDOFF.md](docs/handoff/LINUX_HANDOFF.md). It contains the state at handoff, Linux
-setup, and the **master prompt** for the Linux Firstmate that recreates the secondmate crew.
-The governing delivery directive is [docs/handoff/FINAL_DIRECTIVE_2026-11-14.md](docs/handoff/FINAL_DIRECTIVE_2026-11-14.md).
+EAK is an electronics design automation (EDA) platform that treats AI as a first-class user of
+the same tools a human engineer uses, without letting it grade its own work.
 
-**Unfinished work at handoff** (details, owners and next actions in the handoff file):
+- **One canonical design model.** Every schematic, PCB, library and manufacturing setting lives in
+  a single representation, **EAK-IR** (`crates/eak-core`). There is no second copy to drift out
+  of sync.
+- **One typed command engine.** Every design change is a typed `Command` executed through
+  `eak_runtime::Engine::execute`. The desktop UI and the AI agent submit the same commands
+  (a CLI is planned). Changes are revision-checked, transactional, undoable and journalled.
+- **Independent verification.** Engineering numbers are recomputed by deterministic Rust engines
+  (`eak-engineering`), and checks run in a separate engine (`eak-validation`). A check that is
+  not implemented is reported as not implemented, never as passing.
+- **Standalone.** EAK owns its engineering model. It does not wrap EasyEDA or KiCad and has no
+  mandatory Freerouting dependency.
+- **Cross-platform.** Windows, Linux and macOS are equal targets, from a Rust core with a
+  Tauri 2 + React/TypeScript desktop shell.
 
-- Open, unmerged pull requests:
-  - green: #12 desktop shell (awaits desktop dependency approval), #11 CLI + CI, #9 ESP32 acceptance
-    project, #3 intelligence core;
-  - red, needs rebase or re-run: #10 power acceptance project, #1, #4, #5, #6, #7, #8.
-- GitHub Actions currently refuses to start jobs: the account's billing or spending limit must be fixed
-  before any check can pass.
-- Not started yet:
-  - design system and interaction architecture;
-  - editor-enabling typed commands;
-  - interactive schematic editor and 2-layer PCB editor;
-  - actionable ERC/DRC findings;
-  - full LCSC integration and JLCPCB preparation;
-  - universal AI providers and the assistant dock;
-  - Windows/Linux/macOS installer packaging;
-  - both acceptance projects built through the app.
-- Deferred by the directive: 3D workspace, Terminal Center, Model Provider Center UI.
+## Features
 
-## Source of truth
+What exists on `main` today. [STATUS.md](STATUS.md) records exactly what has been tested and what
+has not.
 
-The product is governed by the three documents in [`docs/source-of-truth/`](docs/source-of-truth/):
+| Area | What it does | Maturity |
+|---|---|---|
+| **Schematic editor** | Place library parts, wire with pin snapping, connect pins, net and power labels, move, rotate, delete, edit reference and value | Tested headless (vitest + Rust IPC). Not yet exercised in a real window |
+| **2-layer PCB editor** | Board outline (rectangle or polygon), place, move, rotate and flip footprints, route tracks on top or bottom, vias | Same as above. No zone, text or multi-select editing yet |
+| **Undo, save, reopen** | Undo/redo for every command; each command is durably saved with a crash-safe journal; projects reopen with their history | Covered by engine contract tests |
+| **ERC and DRC** | Electrical rules (13) and design rules (13), plus 3 mechanical checks. Findings carry a stable id, affected objects, location, suggested fix and measured vs required values | Reports are bound to a revision and an input hash and list unimplemented checks and limitations |
+| **Manufacturing export** | Gerber (RS-274X), Excellon drill, BOM and CPL with a SHA-256 manifest and package re-verification | Output is marked DRAFT unless ERC, DRC and mechanical checks pass for that exact revision. Never called manufacturing-ready. Not yet viewed in an external viewer or sent to a fabricator |
+| **Engineering engines** | IPC-2221 trace width, clearance, creepage and via current; circuit calculators; netlist resolution; a native two-layer router; a constructive placer | IPC tables are **not** verified against the standard text |
+| **Universal model adaptor** | Configure Anthropic, OpenAI-compatible (OpenAI, OpenRouter, Groq, Together, local servers) or Ollama providers. API keys are stored in the OS keyring, never in project or profile files. List models and test the connection | Never run against a live provider. Windows and macOS keyrings not exercised |
+| **AI agent core** | Typed tool per command, read-only design and calculator tools, bounded agent loop with Manual, Assisted and Autonomous modes, sandbox preview and approval policy | Tested with a scripted provider. Not yet wired into the desktop UI |
 
-1. `EAK_Development_Intelligence_and_Interface_Research_Specification.pdf`: what EAK must be.
-2. `EAK_Claude_Code_Execution_Instructions.pdf`: how development is conducted.
-3. `EAK_GitHub_Reference_Repository_Development_Guide.pdf`: how reference projects may be used.
+## Architecture
 
-Every other document in this repository is subordinate to them.
-
-## Architecture in one paragraph
-
-There is one canonical engineering representation (**EAK-IR**, `crates/eak-core`). It is
-mutated only by one typed **command engine** (`crates/eak-runtime`). That engine checks
-revisions, enforces the approval policy, applies transactions, keeps a crash-safe journal and
-supports undo/redo. Humans (desktop UI, CLI) and the AI agent submit the same command values.
-Deterministic engineering engines (`crates/eak-engineering`) and an independent verification
-engine (`crates/eak-validation`) operate on that one model. The manufacturing compiler
-(`crates/eak-manufacturing`) emits revision-bound Gerber, drill, BOM and CPL packages.
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Platforms
-
-Windows 10/11, Linux (Ubuntu and other major distributions) and macOS (Apple Silicon and
-Intel) are first-class targets from one shared codebase. CI builds and tests all three.
-Platform notes: [docs/PLATFORMS.md](docs/PLATFORMS.md).
-
-## Build and test
-
-Prerequisites: stable Rust (1.80+). On Windows with the GNU Rust toolchain, a MinGW-w64 GCC is
-also needed (the bundled SQLite and, later, Tauri resources are compiled with it). No Python is
-required or permitted.
-
-```bash
-# Windows Git Bash only: put cargo + MinGW GCC on PATH
-source scripts/env.sh
-
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace --release
-scripts/check-no-python.sh
 ```
-
-## Repository map
+                 ┌────────────┐   ┌──────────────┐
+                 │ Desktop UI │   │  AI agent    │      same typed Command values
+                 │ Tauri 2 +  │   │ (eak-        │
+                 │ React / TS │   │ intelligence)│
+                 └─────┬──────┘   └──────┬───────┘
+                       └────────┬────────┘
+                         ┌──────▼───────┐
+                         │ eak-runtime  │  Engine::execute: revisions, approval policy,
+                         │              │  transactions, undo/redo, journal, recovery
+                         └──────┬───────┘
+                         ┌──────▼───────┐
+                         │   eak-core   │  EAK-IR: the one canonical design model
+                         └──────────────┘
+      eak-engineering · eak-validation · eak-manufacturing operate on that one model
+```
 
 | Path | Purpose |
 |---|---|
-| `crates/eak-core` | EAK-IR, geometry, library model, schema/migration, integrity, built-in parts |
-| `crates/eak-engineering` | IPC calculations, circuit calcs, netlist, copper/zone model, router, placer, 3D scene |
+| `crates/eak-core` | EAK-IR, geometry, library model, schema and migration, integrity, built-in parts |
+| `crates/eak-engineering` | IPC calculations, circuit calcs, netlist, copper model, router, placer, 3D scene data |
 | `crates/eak-validation` | ERC, DRC, mechanical checks, revision-bound evidence |
-| `crates/eak-runtime` | Command engine, deltas/undo, journal & recovery, process supervisor, tasks, SQLite index |
-| `crates/eak-manufacturing` | Gerber/Excellon/BOM/CPL compiler, manifest, package re-verification |
-| `docs/` | Architecture, requirements traceability, research register, ADRs, engineering rules |
+| `crates/eak-runtime` | Command engine, undo, journal and recovery, process supervisor, tasks, SQLite index |
+| `crates/eak-manufacturing` | Gerber, Excellon, BOM, CPL compiler, manifest, package re-verification |
+| `crates/eak-intelligence` | Provider adaptors, typed tools, agent loop |
+| `apps/desktop` | Tauri 2 shell and React/TypeScript UI |
+| `docs/` | Architecture, requirements traceability, ADRs, engineering rules |
+
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PLATFORMS.md](docs/PLATFORMS.md).
+
+## Getting started
+
+### Prerequisites
+
+- Stable Rust (1.80 or newer) and Node.js 22 or newer with npm.
+- **Linux:** `sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev`
+- **macOS:** Xcode command-line tools (`xcode-select --install`).
+- **Windows:** the WebView2 runtime, plus either the MSVC build tools or a MinGW-w64 GCC
+  (`source scripts/env.sh` in Git Bash).
+
+No Python is required or permitted anywhere in this repository.
+
+### Build and run the desktop app
+
+```bash
+cd apps/desktop
+npm ci
+npm run tauri dev
+```
+
+A release binary with the embedded frontend: `npm run tauri -- build --no-bundle`. Installers are
+not produced yet.
+
+### Test
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --release
+bash scripts/check-no-python.sh
+(cd apps/desktop && npm test)
+```
+
+### Command line
+
+A standalone `eak` CLI is not on `main` yet. The engine is also usable as a Rust library
+(`eak-runtime`), as the integration tests demonstrate.
+
+## Project status
+
+EAK is in early development. "Implemented" means code exists and its listed tests pass, not that
+it has been professionally validated. In particular:
+
+- No independent engineering review or fabricator DFM check has been performed.
+- Output is **not production-ready and not manufacturing-ready**.
+- Multi-layer boards, differential pairs, impedance control and thermal reliefs are not implemented.
+
+See [STATUS.md](STATUS.md) for the verified record and [ROADMAP.md](ROADMAP.md) for what is next.
+
+## Contributing
+
+Read [AGENTS.md](AGENTS.md) for the working rules (one canonical IR, every mutation through the
+command engine, no Python, no unverified claims) and [TESTING.md](TESTING.md) for the test
+levels. Every bug fix needs a regression test, and changes to shared contracts need an ADR in
+[docs/decisions](docs/decisions).
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in
+this work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without
+any additional terms or conditions.
+
+Copyright 2026 Tusk Innovations Global Pvt Ltd. Third-party dependency licences are listed in
+[LICENSING.md](LICENSING.md).
