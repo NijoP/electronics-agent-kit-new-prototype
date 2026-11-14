@@ -18,6 +18,7 @@ pub mod ipc;
 pub mod netlist;
 pub mod placement_intel;
 pub mod placer;
+pub mod priority;
 pub mod router;
 pub mod scene3d;
 pub mod silk;

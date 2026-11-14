@@ -68,7 +68,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Layer manager | unit | layer panel and `SetLayerCount` control in the PCB view; `layers.test.ts` (jsdom). Per-layer stackup editing UI is limited |
 | Interactive routing (walkaround, push-and-shove, live clearance) | code-reviewed only | walkaround and live clearance in `eak_engineering::interactive`; manual workflow in `routeTool.ts`/`PcbView.tsx` (pad hit, width, via+layer, track edit/delete, next-connection priority); push-and-shove not implemented; new tests in `routeTool.test.ts` are unrun |
 | Airwires | unit | unrouted-connection airwires from the `connectivity` IPC drawn in the PCB view (`Workspace.tsx`); no dedicated test of the drawing found |
-| Auto-route (two layers) | integ | `eak-manufacturing/tests/end_to_end.rs::reference_design_end_to_end` (20/20 connections) |
+| Auto-route (two layers) | integ | `eak-manufacturing/tests/end_to_end.rs::reference_design_end_to_end` (20/20 connections); connection order is now net priority (power/ground, high current, terminal count; DESK model in `eak_engineering::priority`) then length - code-reviewed only, unrun |
 | Copper zones (engine, raster fill) | integ | reference design GND pour; DRC-013 zone islands |
 | Copper zone editing UI, thermal reliefs | - | thermal reliefs are in unmerged PR #5 |
 | Text, dimensions, keepouts, rule regions | - | |
