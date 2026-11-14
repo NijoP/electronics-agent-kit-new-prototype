@@ -1,7 +1,7 @@
 //! Command engine contract tests: shared path, revisions, approvals, undo/redo,
 //! persistence, crash reconciliation, project isolation.
 
-use eak_core::{LabelKind, Point, Project};
+use eak_core::{LabelKind, Point, Project, Stackup};
 use eak_runtime::command::Command as C;
 use eak_runtime::engine::*;
 use eak_runtime::store;
@@ -126,6 +126,26 @@ fn failed_precondition_leaves_project_untouched() {
 }
 
 #[test]
+fn invalid_stackup_is_rejected_and_leaves_project_untouched() {
+    let mut e = Engine::in_memory(Project::new("x"));
+    let before = e.project().clone();
+    let mut bad = Stackup::default();
+    bad.layers.pop();
+    let mut thin = Stackup::default();
+    thin.layers[0].dielectric_after_um = 100;
+    for stackup in [bad, thin] {
+        let r = run(&mut e, Actor::human(), C::SetStackup { stackup });
+        assert!(!r.accepted);
+        assert!(
+            matches!(r.error, Some(CommandError::Invalid(_))),
+            "{:?}",
+            r.error
+        );
+        assert_eq!(&before, e.project());
+    }
+}
+
+#[test]
 fn undo_redo_round_trips_every_command_kind() {
     let mut e = Engine::in_memory(Project::new("x"));
     let mut snapshots = vec![e.project().clone()];
@@ -153,6 +173,9 @@ fn undo_redo_round_trips_every_command_kind() {
                 Point::mm(30.0, 20.0),
                 Point::mm(0.0, 20.0),
             ],
+        },
+        C::SetStackup {
+            stackup: Stackup::two_layer(1_600_000, 2.0, "FR-4", 4.5),
         },
         C::SyncSchematicToPcb,
         C::SetNetCurrent {

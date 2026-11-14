@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 pub type Id = String;
 
@@ -109,19 +109,29 @@ pub struct NoConnect {
     pub pin: String,
 }
 
+/// One copper layer. `Inner(n)` is the n-th inner layer counted from the top (1-based), so a
+/// 4-layer board has `Top, Inner(1), Inner(2), Bottom`. Stack order is defined by the position
+/// in [`Stackup::layers`], not by the derived `Ord`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CopperLayer {
     Top,
+    Inner(u8),
     Bottom,
 }
 
 impl CopperLayer {
-    pub const ALL: [CopperLayer; 2] = [CopperLayer::Top, CopperLayer::Bottom];
-    pub fn other(self) -> CopperLayer {
+    /// The two outer layers (a 2-layer board's whole stack).
+    pub const OUTER: [CopperLayer; 2] = [CopperLayer::Top, CopperLayer::Bottom];
+    pub fn is_outer(self) -> bool {
+        !matches!(self, CopperLayer::Inner(_))
+    }
+    /// KiCad-style display name: `F.Cu`, `In1.Cu`, `B.Cu`.
+    pub fn name(self) -> String {
         match self {
-            CopperLayer::Top => CopperLayer::Bottom,
-            CopperLayer::Bottom => CopperLayer::Top,
+            CopperLayer::Top => "F.Cu".into(),
+            CopperLayer::Inner(n) => format!("In{n}.Cu"),
+            CopperLayer::Bottom => "B.Cu".into(),
         }
     }
 }
@@ -143,23 +153,241 @@ impl Side {
     }
 }
 
+/// Copper foil thickness per ounce of weight (1 oz/ft² ≈ 34.8 µm).
+pub const COPPER_UM_PER_OZ: f64 = 34.8;
+/// Nominal relative permittivity assumed for FR-4 when none is given (v1 files, default).
+pub const FR4_ER: f64 = 4.5;
+/// Allowed mismatch between the per-layer build-up and the declared finished thickness
+/// (the usual ±10 % fabrication tolerance).
+pub const STACKUP_THICKNESS_TOLERANCE: f64 = 0.10;
+
+/// What a copper layer is used for. A plane layer is a (mostly) solid power or ground pour;
+/// a signal layer carries routing. Both can hold tracks, vias and zones, but DRC treats a
+/// plane without a zone as a finding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LayerKind {
+    #[default]
+    Signal,
+    Plane,
+}
+
+/// One copper layer of the build-up and the dielectric beneath it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StackupLayer {
+    pub layer: CopperLayer,
+    /// Signal or plane (absent in older files = signal).
+    #[serde(default)]
+    pub kind: LayerKind,
+    /// Copper weight in ounces per square foot (drives IPC trace-width sizing).
+    pub copper_oz: f64,
+    /// Dielectric thickness between this copper layer and the next one, in µm.
+    /// Zero for the last (bottom) layer.
+    pub dielectric_after_um: u32,
+    /// Relative permittivity of that dielectric.
+    pub er: f64,
+}
+
+/// Most copper layers the editor and the Gerber writer support.
+pub const MAX_COPPER_LAYERS: usize = 16;
+
+/// Board build-up, ordered top to bottom: one entry per copper layer. The layer count and
+/// every copper weight come from `layers`; there is no separate summary field.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Stackup {
-    pub copper_layers: u8,
+    pub layers: Vec<StackupLayer>,
+    /// Declared finished board thickness (what is ordered from the fab).
     pub board_thickness: Nm,
-    /// Outer copper weight in ounces per square foot.
-    pub outer_copper_oz: f64,
+    /// Dielectric material name.
     pub dielectric: String,
 }
 
-impl Default for Stackup {
-    fn default() -> Self {
+impl Stackup {
+    /// A two-layer board of `board_thickness` with `copper_oz` on both sides; the core
+    /// thickness is whatever the copper leaves of the finished thickness.
+    pub fn two_layer(board_thickness: Nm, copper_oz: f64, dielectric: &str, er: f64) -> Stackup {
+        Stackup::multilayer(2, board_thickness, copper_oz, copper_oz, dielectric, er)
+    }
+
+    /// An `n`-layer board (`n` even, 2..=[`MAX_COPPER_LAYERS`]). Copper is `outer_oz` on the two
+    /// outer layers and `inner_oz` inside; the dielectric between adjacent copper layers is the
+    /// same everywhere (whatever the copper leaves of `board_thickness`, split evenly). The
+    /// first and last inner layers are planes (ground and power), any others are signal; edit
+    /// the result for another arrangement. Callers pass it to `SetStackup`, which validates it.
+    pub fn multilayer(
+        n: usize,
+        board_thickness: Nm,
+        outer_oz: f64,
+        inner_oz: f64,
+        dielectric: &str,
+        er: f64,
+    ) -> Stackup {
+        let n = n.max(2);
+        let copper_um: f64 = (0..n)
+            .map(|i| {
+                let oz = if i == 0 || i == n - 1 {
+                    outer_oz
+                } else {
+                    inner_oz
+                };
+                oz * COPPER_UM_PER_OZ
+            })
+            .sum();
+        let gaps = (n - 1) as f64;
+        let gap_um = ((board_thickness as f64 / 1000.0 - copper_um) / gaps)
+            .round()
+            .max(0.0) as u32;
+        let layers = (0..n)
+            .map(|i| {
+                let (layer, oz, kind) = if i == 0 {
+                    (CopperLayer::Top, outer_oz, LayerKind::Signal)
+                } else if i == n - 1 {
+                    (CopperLayer::Bottom, outer_oz, LayerKind::Signal)
+                } else {
+                    let kind = if i == 1 || i == n - 2 {
+                        LayerKind::Plane
+                    } else {
+                        LayerKind::Signal
+                    };
+                    (CopperLayer::Inner(i as u8), inner_oz, kind)
+                };
+                StackupLayer {
+                    layer,
+                    kind,
+                    copper_oz: oz,
+                    dielectric_after_um: if i == n - 1 { 0 } else { gap_um },
+                    er,
+                }
+            })
+            .collect();
         Stackup {
-            copper_layers: 2,
-            board_thickness: 1_600_000,
-            outer_copper_oz: 1.0,
-            dielectric: "FR-4".into(),
+            layers,
+            board_thickness,
+            dielectric: dielectric.into(),
         }
+    }
+
+    pub fn copper_layers(&self) -> usize {
+        self.layers.len()
+    }
+
+    /// The copper layers, top to bottom.
+    pub fn layer_ids(&self) -> Vec<CopperLayer> {
+        self.layers.iter().map(|l| l.layer).collect()
+    }
+
+    /// Position of `layer` in the stack (0 = top), or `None` if the stackup lacks it.
+    pub fn index_of(&self, layer: CopperLayer) -> Option<usize> {
+        self.layers.iter().position(|l| l.layer == layer)
+    }
+
+    pub fn contains(&self, layer: CopperLayer) -> bool {
+        self.index_of(layer).is_some()
+    }
+
+    /// Signal or plane, or `None` if the stackup lacks the layer.
+    pub fn kind_of(&self, layer: CopperLayer) -> Option<LayerKind> {
+        self.layers
+            .iter()
+            .find(|l| l.layer == layer)
+            .map(|l| l.kind)
+    }
+
+    /// Every copper layer from `a` to `b` inclusive, in stack order (`a`/`b` in either order);
+    /// empty if either is not in the stackup.
+    pub fn layers_between(&self, a: CopperLayer, b: CopperLayer) -> Vec<CopperLayer> {
+        match (self.index_of(a), self.index_of(b)) {
+            (Some(i), Some(j)) => self.layers[i.min(j)..=i.max(j)]
+                .iter()
+                .map(|l| l.layer)
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Copper weight of `layer`, or `None` if the stackup does not contain it.
+    pub fn copper_oz(&self, layer: CopperLayer) -> Option<f64> {
+        self.layers
+            .iter()
+            .find(|l| l.layer == layer)
+            .map(|l| l.copper_oz)
+    }
+
+    /// Problems that make this stackup unusable; empty when it is valid.
+    pub fn validate(&self) -> Vec<String> {
+        let mut e = Vec::new();
+        let n = self.layers.len();
+        if !(2..=MAX_COPPER_LAYERS).contains(&n) || !n.is_multiple_of(2) {
+            e.push(format!(
+                "copper layer count must be even and between 2 and {MAX_COPPER_LAYERS}, got {n}"
+            ));
+        } else {
+            let want: Vec<CopperLayer> = (0..n)
+                .map(|i| match i {
+                    0 => CopperLayer::Top,
+                    i if i == n - 1 => CopperLayer::Bottom,
+                    i => CopperLayer::Inner(i as u8),
+                })
+                .collect();
+            if self.layer_ids() != want {
+                e.push(format!(
+                    "layers must be listed top to bottom as F.Cu, In1.Cu … In{}.Cu, B.Cu, got {:?}",
+                    n.saturating_sub(2),
+                    self.layer_ids()
+                ));
+            }
+        }
+        if self
+            .layers
+            .first()
+            .is_some_and(|l| l.kind == LayerKind::Plane)
+            || self
+                .layers
+                .last()
+                .is_some_and(|l| l.kind == LayerKind::Plane)
+        {
+            e.push("the outer layers carry components and cannot be plane layers".into());
+        }
+        if self.board_thickness <= 0 {
+            e.push("board thickness must be positive".into());
+        }
+        let last = self.layers.len().saturating_sub(1);
+        let mut total_um = 0.0;
+        for (i, l) in self.layers.iter().enumerate() {
+            if !(l.copper_oz.is_finite() && l.copper_oz > 0.0) {
+                e.push(format!("{} copper weight must be positive", l.layer.name()));
+            }
+            if !(l.er.is_finite() && l.er >= 1.0) {
+                e.push(format!("{} dielectric er must be ≥ 1", l.layer.name()));
+            }
+            if i == last && l.dielectric_after_um != 0 {
+                e.push("the last copper layer has no dielectric after it".into());
+            }
+            if i < last && l.dielectric_after_um == 0 {
+                e.push(format!(
+                    "{} dielectric thickness must be positive",
+                    l.layer.name()
+                ));
+            }
+            total_um += l.copper_oz * COPPER_UM_PER_OZ + f64::from(l.dielectric_after_um);
+        }
+        let declared_um = self.board_thickness as f64 / 1000.0;
+        if self.board_thickness > 0
+            && ((total_um - declared_um).abs() > declared_um * STACKUP_THICKNESS_TOLERANCE)
+        {
+            e.push(format!(
+                "layer build-up totals {total_um:.0} µm but the declared board thickness is {declared_um:.0} µm (more than ±{:.0} % apart)",
+                STACKUP_THICKNESS_TOLERANCE * 100.0
+            ));
+        }
+        e
+    }
+}
+
+impl Default for Stackup {
+    /// 2-layer, 1.6 mm FR-4, 1 oz copper on both sides.
+    fn default() -> Self {
+        Stackup::two_layer(1_600_000, 1.0, "FR-4", FR4_ER)
     }
 }
 
@@ -197,6 +425,25 @@ pub struct Track {
     pub net: String,
 }
 
+fn via_top() -> CopperLayer {
+    CopperLayer::Top
+}
+fn via_bottom() -> CopperLayer {
+    CopperLayer::Bottom
+}
+
+/// How far a via reaches through the stack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ViaKind {
+    /// Top to bottom.
+    Through,
+    /// From one outer layer to an inner layer.
+    Blind,
+    /// Between two inner layers; not visible from outside the board.
+    Buried,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Via {
     pub id: Id,
@@ -204,6 +451,27 @@ pub struct Via {
     pub drill: Nm,
     pub diameter: Nm,
     pub net: String,
+    /// First copper layer of the barrel (absent in older files = top).
+    #[serde(default = "via_top")]
+    pub from: CopperLayer,
+    /// Last copper layer of the barrel (absent in older files = bottom).
+    #[serde(default = "via_bottom")]
+    pub to: CopperLayer,
+}
+
+impl Via {
+    pub fn kind(&self) -> ViaKind {
+        match (self.from.is_outer(), self.to.is_outer()) {
+            (true, true) => ViaKind::Through,
+            (false, false) => ViaKind::Buried,
+            _ => ViaKind::Blind,
+        }
+    }
+
+    /// Copper layers the barrel touches in `stackup` (pads and connections exist on each).
+    pub fn layers(&self, stackup: &Stackup) -> Vec<CopperLayer> {
+        stackup.layers_between(self.from, self.to)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -362,5 +630,99 @@ impl Project {
             local.x = -local.x;
         }
         fp.position.plus(fp.rotation.apply(local))
+    }
+}
+
+#[cfg(test)]
+mod multilayer_tests {
+    use super::*;
+
+    #[test]
+    fn copper_layer_json_shape_is_stable() {
+        assert_eq!(serde_json::to_string(&CopperLayer::Top).unwrap(), "\"top\"");
+        assert_eq!(
+            serde_json::to_string(&CopperLayer::Inner(2)).unwrap(),
+            "{\"inner\":2}"
+        );
+        let l: CopperLayer = serde_json::from_str("{\"inner\":3}").unwrap();
+        assert_eq!(l, CopperLayer::Inner(3));
+    }
+
+    #[test]
+    fn multilayer_builder_makes_valid_stackups() {
+        for n in [2usize, 4, 6, 8, 16] {
+            let s = Stackup::multilayer(n, 1_600_000, 1.0, 0.5, "FR-4", FR4_ER);
+            assert_eq!(s.copper_layers(), n);
+            assert!(s.validate().is_empty(), "{n}: {:?}", s.validate());
+        }
+        let s = Stackup::multilayer(4, 1_600_000, 1.0, 0.5, "FR-4", FR4_ER);
+        assert_eq!(s.kind_of(CopperLayer::Inner(1)), Some(LayerKind::Plane));
+        assert_eq!(s.kind_of(CopperLayer::Top), Some(LayerKind::Signal));
+        assert_eq!(
+            s.layers_between(CopperLayer::Inner(2), CopperLayer::Top)
+                .len(),
+            3
+        );
+    }
+
+    #[test]
+    fn invalid_stackups_are_rejected() {
+        let ok = Stackup::multilayer(4, 1_600_000, 1.0, 0.5, "FR-4", FR4_ER);
+        let mut odd = ok.clone();
+        odd.layers.remove(1);
+        assert!(!odd.validate().is_empty(), "3 layers");
+        let mut swapped = ok.clone();
+        swapped.layers.swap(1, 2);
+        assert!(!swapped.validate().is_empty(), "inner order");
+        let mut plane_outer = ok.clone();
+        plane_outer.layers[0].kind = LayerKind::Plane;
+        assert!(!plane_outer.validate().is_empty(), "outer plane");
+        assert!(Stackup::multilayer(18, 1_600_000, 1.0, 0.5, "FR-4", FR4_ER)
+            .validate()
+            .iter()
+            .any(|m| m.contains("count")));
+    }
+
+    #[test]
+    fn older_via_and_layer_json_defaults_to_through_signal() {
+        let v: Via = serde_json::from_str(
+            r#"{"id":"v","position":{"x":0,"y":0},"drill":300000,"diameter":600000,"net":"N"}"#,
+        )
+        .unwrap();
+        assert_eq!(v.kind(), ViaKind::Through);
+        let l: StackupLayer = serde_json::from_str(
+            r#"{"layer":"top","copper_oz":1.0,"dielectric_after_um":100,"er":4.5}"#,
+        )
+        .unwrap();
+        assert_eq!(l.kind, LayerKind::Signal);
+    }
+
+    #[test]
+    fn via_kinds_follow_the_span() {
+        let mk = |from, to| Via {
+            id: "v".into(),
+            position: Point::default(),
+            drill: 1,
+            diameter: 2,
+            net: String::new(),
+            from,
+            to,
+        };
+        assert_eq!(
+            mk(CopperLayer::Top, CopperLayer::Bottom).kind(),
+            ViaKind::Through
+        );
+        assert_eq!(
+            mk(CopperLayer::Top, CopperLayer::Inner(1)).kind(),
+            ViaKind::Blind
+        );
+        assert_eq!(
+            mk(CopperLayer::Inner(2), CopperLayer::Bottom).kind(),
+            ViaKind::Blind
+        );
+        assert_eq!(
+            mk(CopperLayer::Inner(1), CopperLayer::Inner(2)).kind(),
+            ViaKind::Buried
+        );
     }
 }

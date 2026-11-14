@@ -1,12 +1,21 @@
-//! Excellon drill file (plated holes: vias and through-hole pads), metric, decimal coords.
+//! Excellon drill files (plated holes), metric, decimal coords: one file for the through
+//! holes (through vias and through-hole pads) and one per blind or buried via span.
 
-use eak_core::{Nm, PadKind, Point, Project};
+use eak_core::{CopperLayer, Nm, PadKind, Point, Project, ViaKind};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
+/// The layer pair one drill file covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Span {
+    pub from: CopperLayer,
+    pub to: CopperLayer,
+}
+
+/// Drill diameter → positions for the through holes: through vias and THT pad holes.
 pub fn holes(p: &Project) -> BTreeMap<Nm, Vec<Point>> {
     let mut h: BTreeMap<Nm, Vec<Point>> = BTreeMap::new();
-    for v in p.pcb.vias.values() {
+    for v in p.pcb.vias.values().filter(|v| v.kind() == ViaKind::Through) {
         h.entry(v.drill).or_default().push(v.position);
     }
     for fp in p.pcb.footprints.values() {
@@ -22,8 +31,45 @@ pub fn holes(p: &Project) -> BTreeMap<Nm, Vec<Point>> {
     h
 }
 
+/// Blind and buried via holes, grouped by layer span (one drill file each), top-most span first.
+pub fn span_holes(p: &Project) -> BTreeMap<Span, BTreeMap<Nm, Vec<Point>>> {
+    let mut out: BTreeMap<Span, BTreeMap<Nm, Vec<Point>>> = BTreeMap::new();
+    for v in p.pcb.vias.values().filter(|v| v.kind() != ViaKind::Through) {
+        out.entry(Span {
+            from: v.from,
+            to: v.to,
+        })
+        .or_default()
+        .entry(v.drill)
+        .or_default()
+        .push(v.position);
+    }
+    out
+}
+
+/// Excellon file of the through holes (`Plated,1,N,PTH`).
 pub fn excellon(p: &Project) -> String {
-    let h = holes(p);
+    let n = p.pcb.board.stackup.copper_layers();
+    render(p, &holes(p), &format!("Plated,1,{n},PTH"))
+}
+
+/// Excellon file of the blind or buried vias of one span.
+pub fn excellon_span(p: &Project, span: Span) -> String {
+    let st = &p.pcb.board.stackup;
+    let holes = span_holes(p).remove(&span).unwrap_or_default();
+    let (i, j) = (
+        st.index_of(span.from).map_or(0, |i| i + 1),
+        st.index_of(span.to).map_or(0, |i| i + 1),
+    );
+    let kind = if span.from.is_outer() || span.to.is_outer() {
+        "Blind"
+    } else {
+        "Buried"
+    };
+    render(p, &holes, &format!("Plated,{i},{j},{kind}"))
+}
+
+fn render(p: &Project, h: &BTreeMap<Nm, Vec<Point>>, function: &str) -> String {
     let mut s = String::from("M48\n");
     let _ = writeln!(
         s,
@@ -32,7 +78,8 @@ pub fn excellon(p: &Project) -> String {
         p.id,
         p.revision
     );
-    s.push_str("; #@! TF.FileFunction,Plated,1,2,PTH\nFMAT,2\nMETRIC,TZ\n");
+    let _ = writeln!(s, "; #@! TF.FileFunction,{function}");
+    s.push_str("FMAT,2\nMETRIC,TZ\n");
     for (i, d) in h.keys().enumerate() {
         let _ = writeln!(s, "T{}C{:.3}", i + 1, *d as f64 / 1e6);
     }

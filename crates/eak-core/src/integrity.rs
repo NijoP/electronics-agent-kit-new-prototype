@@ -113,5 +113,6 @@ pub fn check(p: &Project) -> Vec<String> {
     if !o.is_empty() && (o.len() < 3 || polygon_self_intersects(o)) {
         e.push("board outline is not a simple polygon".into());
     }
+    e.extend(p.pcb.board.stackup.validate());
     e
 }

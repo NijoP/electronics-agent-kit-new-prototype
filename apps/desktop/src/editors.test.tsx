@@ -172,7 +172,7 @@ describe("PCB editor", () => {
     const { container } = render(<PcbView snapshot={fixture()} selected={null} onSelect={() => {}} edit={edit()} />);
     tool("Via");
     clickAt(container.querySelector("svg.canvas")!, pcbVb(), 20.1, -10);
-    expect(sent[0]).toEqual([{ type: "AddVia", position: { x: 20_000_000, y: 10_000_000 }, net: "GND", drill: null, diameter: null }]);
+    expect(sent[0]).toEqual([{ type: "AddVia", position: { x: 20_000_000, y: 10_000_000 }, net: "GND", drill: null, diameter: null, from: "top", to: "bottom" }]);
     tool("Delete");
     const via = container.querySelector("[data-via-id] circle")!;
     fireEvent.pointerDown(via, { clientX: 1, clientY: 1, button: 0, buttons: 1 });

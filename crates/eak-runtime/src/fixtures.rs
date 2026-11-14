@@ -131,7 +131,16 @@ pub fn build_schematic(engine: &mut Engine) -> Result<(), String> {
 }
 
 /// Board outline, constraints, placement, routing and ground pour.
+/// Build the 2-layer reference board.
 pub fn build_pcb(engine: &mut Engine) -> Result<Vec<String>, String> {
+    build_pcb_layers(engine, 2)
+}
+
+/// Build the reference board on `copper_layers` layers (even, 2..=16). With 4 or more layers the
+/// first inner layer is a GND plane and the last a +5V plane (both with thermal reliefs on their
+/// pads), and one blind (top to In1) and one buried (In1 to the last inner layer) GND via are added.
+/// Everything goes through typed commands.
+pub fn build_pcb_layers(engine: &mut Engine, copper_layers: u8) -> Result<Vec<String>, String> {
     let mut b = Builder {
         engine,
         actor: Actor {
@@ -139,6 +148,12 @@ pub fn build_pcb(engine: &mut Engine) -> Result<Vec<String>, String> {
             name: "fixture".into(),
         },
     };
+    if copper_layers != 2 {
+        b.run(C::SetLayerCount {
+            count: copper_layers,
+            board_thickness: Some(1_600_000),
+        })?;
+    }
     b.run(C::SetBoardOutline {
         points: vec![
             Point::mm(0.0, 0.0),
@@ -179,6 +194,39 @@ pub fn build_pcb(engine: &mut Engine) -> Result<Vec<String>, String> {
         ],
         clearance: Some(300_000),
     })?;
+    if copper_layers >= 4 {
+        let last_inner = CopperLayer::Inner(copper_layers - 2);
+        let board = vec![
+            Point::mm(0.5, 0.5),
+            Point::mm(39.5, 0.5),
+            Point::mm(39.5, 29.5),
+            Point::mm(0.5, 29.5),
+        ];
+        for (layer, net) in [(CopperLayer::Inner(1), "GND"), (last_inner, "+5V")] {
+            b.run(C::AddZone {
+                layer,
+                net: net.into(),
+                outline: board.clone(),
+                clearance: Some(300_000),
+            })?;
+        }
+        b.run(C::AddVia {
+            position: Point::mm(2.0, 28.0),
+            net: "GND".into(),
+            drill: None,
+            diameter: None,
+            from: Some(CopperLayer::Top),
+            to: Some(CopperLayer::Inner(1)),
+        })?;
+        b.run(C::AddVia {
+            position: Point::mm(4.0, 28.0),
+            net: "GND".into(),
+            drill: None,
+            diameter: None,
+            from: Some(CopperLayer::Inner(1)),
+            to: Some(last_inner),
+        })?;
+    }
     warnings.push(format!("revision {}", b.engine.project().revision));
     Ok(warnings)
 }
