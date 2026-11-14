@@ -141,6 +141,25 @@ pub fn hole_to_hole(p: &Project, min: Nm, rule_id: &str, basis: &str) -> Vec<Fin
     let mut f = Vec::new();
     for (i, a) in hs.iter().enumerate() {
         for b in &hs[i + 1..] {
+            // Two holes of one net drilled at the same point (stacked vias left by routing) are
+            // one physical hole: reported as a duplicate drill, not a spacing violation.
+            if a.center == b.center && !a.net.is_empty() && a.net == b.net {
+                f.push(
+                    finding(
+                        rule_id,
+                        Warning,
+                        format!(
+                            "holes of {} and {} ({}) are drilled at the same point (duplicate drill)",
+                            a.label, b.label, a.net
+                        ),
+                        vec![a.object_id.clone(), b.object_id.clone()],
+                        Some(a.center),
+                    )
+                    .key(&format!("dup|{}|{}", a.label, b.label))
+                    .fix(format!("Delete one of {} and {}.", a.label, b.label)),
+                );
+                continue;
+            }
             let d = distance(&a.shape(), &b.shape());
             if d < min as f64 - 1.0 {
                 f.push(
