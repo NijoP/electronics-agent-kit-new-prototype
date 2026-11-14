@@ -15,6 +15,7 @@
 
 pub mod ai;
 pub mod models;
+pub mod parts;
 
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
 use eak_runtime::index::{Index, RecentProject};
@@ -654,7 +655,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 31] = [
+pub const IPC_COMMANDS: [&str; 35] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -665,6 +666,10 @@ pub const IPC_COMMANDS: [&str; 31] = [
     "run_simulation",
     "connectivity",
     "route_step",
+    "parts_search",
+    "parts_import",
+    "manufacturing_preview",
+    "jlcpcb_prepare",
     "library_components",
     "domain_classification",
     "export_manufacturing",
@@ -893,6 +898,10 @@ pub fn run() {
             ai::cmd::ai_accept,
             ai::cmd::ai_reject,
             ai::cmd::ai_rollback,
+            parts::cmd::parts_search,
+            parts::cmd::parts_import,
+            parts::cmd::manufacturing_preview,
+            parts::cmd::jlcpcb_prepare,
         ])
         .run(tauri::generate_context!())
         .expect("EAK desktop failed to start");

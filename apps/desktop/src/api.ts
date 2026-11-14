@@ -16,9 +16,13 @@ import type {
   ProfileInput,
   ProviderView,
   ExportResult,
+  ImportResult,
   LibraryEntry,
   LibraryPart,
   FootprintCandidate,
+  ManufacturingPreview,
+  PartsSearch,
+  PrepareResult,
   RecentProject,
   DomainReport,
   SimRequest,
@@ -60,6 +64,10 @@ export const IPC_COMMANDS = [
   "simulation_status",
   "run_simulation",
   "route_step",
+  "parts_search",
+  "parts_import",
+  "manufacturing_preview",
+  "jlcpcb_prepare",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
@@ -104,6 +112,11 @@ export const api = {
   simulationStatus: () => call<SimulationStatus>("simulation_status"),
   runSimulation: (request: SimRequest) => call<SimResult>("run_simulation", { request }),
   routeStep: (request: RouteStepRequest) => call<RouteStepReport>("route_step", { request }),
+  partsSearch: (query: string) => call<PartsSearch>("parts_search", { query }),
+  partsImport: (expectedRevision: number, lcsc: string) =>
+    call<ImportResult>("parts_import", { expected_revision: expectedRevision, lcsc }),
+  manufacturingPreview: () => call<ManufacturingPreview>("manufacturing_preview"),
+  jlcpcbPrepare: (outDir: string) => call<PrepareResult>("jlcpcb_prepare", { out_dir: outDir }),
 };
 
 export function describeError(e: CommandError): string {

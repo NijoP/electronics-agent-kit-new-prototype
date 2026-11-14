@@ -1,9 +1,11 @@
 // Project workspace: toolbar, schematic + PCB views with cross-probing, Engineering
 // Monitor, activity log, status bar and command palette. State shown here is always the
 // latest engine snapshot; edits are engine calls carrying the rendered revision.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, describeError } from "./api";
 import { DomainPanel } from "./DomainPanel";
+import { ManufacturingPanel as JlcpcbPrepPanel } from "./ManufacturingPanel";
+import { PartsPanel as LcscPartsPanel } from "./PartsPanel";
 import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
 import { PcbView } from "./PcbView";
@@ -58,7 +60,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   const [message, setMessage] = useState<string | null>(null);
   const [palette, setPalette] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [library, setLibrary] = useState<LibraryEntry[]>([]);
+  const [baseLibrary, setLibrary] = useState<LibraryEntry[]>([]);
   const [exported, setExported] = useState<ExportResult | null>(null);
   const [docState, setDocState] = useState(() => loadDocState(initial));
   const [split, setSplit] = useState(true);
@@ -85,6 +87,22 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   const [model, setModel] = useState<{ id: string; label: string } | null>(null);
   const msgId = useRef(1);
   const revision = snapshot.project.revision;
+  // Built-in parts plus parts imported into this project (e.g. from LCSC), so an imported
+  // part can be placed from the part picker.
+  const library = useMemo(() => {
+    const known = new Set(baseLibrary.map((l) => l.id));
+    const imported = Object.values(snapshot.project.library ?? {})
+      .filter((d) => !known.has(d.id))
+      .map<LibraryEntry>((d) => ({
+        id: d.id,
+        name: d.name,
+        category: d.category,
+        refdes_prefix: d.refdes_prefix,
+        default_value: d.default_value,
+        pins: d.symbol.pins.map((p) => [p.number, p.name]),
+      }));
+    return [...baseLibrary, ...imported];
+  }, [baseLibrary, snapshot.project.library]);
   const docs = availableDocs(snapshot);
   // Only documents the engine still has stay open (the snapshot is authoritative).
   const liveIds = new Set(docs.map((d) => d.id));
@@ -718,13 +736,29 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
           {sideView === "layers" && (
             <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
           )}
-          {sideView === "parts" && <LibraryPanel revision={revision} busy={busy} execute={edit.execute} onPlace={placePart} />}
+          {sideView === "parts" && (
+            <>
+              <LibraryPanel revision={revision} busy={busy} execute={edit.execute} onPlace={placePart} />
+              <LcscPartsPanel
+                revision={revision}
+                onImported={async (m) => {
+                  setMessage(m);
+                  await refresh();
+                }}
+              />
+            </>
+          )}
           {sideView === "domain" && (
             <div className="panel-body">
               <DomainPanel report={domain} revision={revision} error={domainError} />
             </div>
           )}
-          {sideView === "manufacturing" && <ManufacturingPanel result={exported} busy={busy} onExport={() => setDialog("export")} />}
+          {sideView === "manufacturing" && (
+            <>
+              <ManufacturingPanel result={exported} busy={busy} onExport={() => setDialog("export")} />
+              <JlcpcbPrepPanel revision={revision} onPrepared={setMessage} />
+            </>
+          )}
         </aside>
         {sideOpen ? (
           <Splitter orientation="vertical" label="Resize side panel" value={layout.sideWidth} onResize={(d) => setLayout((l) => ({ ...l, sideWidth: clampSize("sideWidth", l.sideWidth + d) }))} onReset={() => setLayout((l) => ({ ...l, sideWidth: DEFAULT_LAYOUT.sideWidth }))} />

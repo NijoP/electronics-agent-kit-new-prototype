@@ -3,6 +3,41 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## LCSC parts search, BOM and JLCPCB preparation (2026-11-14, branch fm/eak-o2-lcsc-jlcpcb)
+
+**Platform tested:** Linux, Rust stable, Node. No window was opened: the panels are verified by vitest (jsdom, mocked
+IPC) and by headless Rust IPC tests only. Not verified in a real WebView. Exact command results are in the PR body.
+
+- **Implemented and tested:**
+  - `eak-manufacturing::lcsc`: read-only product lookup by LCSC part number (`/ftps/wm/product/detail`) over ureq + rustls,
+    ingested through the audited `ingest_product_detail` boundary (state stays `SearchHit`). Tests run over real HTTP against a
+    local test server, never the live site.
+  - Import into the library: `import_plan` reuses the symbol, footprint and pin map of an existing library template
+    (chip resistor, MLCC capacitor or LED in a package the library holds, or an exact MPN match) and the desktop submits
+    `Command::UpsertComponentDefinition` as the Human actor with the rendered revision. LCSC supplies identity only
+    (manufacturer, MPN, LCSC number, datasheet URL); ratings stay unverified. The record is stored in `<project>/sourcing/`.
+  - `eak-manufacturing::bom`: BOM view joined with stored records (stock and price shown as a snapshot with its retrieval time),
+    JLCPCB-format BOM (`Comment, Designator, Footprint, LCSC Part #`) and a review BOM.
+  - `eak-manufacturing::jlcpcb`: JLCPCB CPL (`Designator, Mid X, Mid Y, Layer, Rotation`, surface-mount only), Gerber + Excellon
+    `.zip` (dependency-free store-only writer, CRC-checked in tests), a DFM check against the 2-layer 1 oz limits read from
+    JLCPCB's published capability page on 2026-11-14 (14 evaluated rules, 6 listed as `not_checked`), and a manifest labelled
+    "PREPARED FOR REVIEW". Nothing is uploaded, quoted or ordered.
+  - Desktop: Parts panel (search, results with stock/price/package/datasheet link, import) and Manufacturing panel (BOM view,
+    DFM results, bundle written to a folder the user types; foreign non-empty folders and relative paths are refused).
+    Imported parts appear in the editors' part picker.
+- **Observed on 2026-11-14 (read-only requests, no credentials):** the product-detail endpoint answers HTTP 200 JSON to an
+  unauthenticated request; the keyword search endpoint (`/ftps/wm/search/global`) answers **HTTP 403 "Access Denied"**.
+  Keyword search is therefore **not working against the live site**: the app reports the refusal in the panel and shows no
+  results. Part-number search works. The shape of a successful keyword-search response has never been observed; the code only
+  reads product codes from it and then fetches each through the verified detail path, and the one test of that path uses an
+  assumed shape.
+- **Limitations (unsupported / unverified):** no EasyEDA footprint import, so a part with no template in the library is refused
+  with the reason rather than guessed; CPL rotation/polarity is not corrected per package (JLC-051 `not_checked`); basic vs
+  extended assembly classification and fees are not known (JLC-050); silkscreen, soldermask, slot and pour rules are not
+  evaluated; pad shapes are measured as their bounding rectangle; JLCPCB's limits can change and its own DFM is authoritative;
+  no real JLCPCB upload of the bundle was attempted; the Gerber zip has not been opened by a fabricator's viewer.
+
+
 ## AI panel on the real agent loop (2026-11-14)
 - `apps/desktop/src-tauri/src/ai.rs`: IPC `ai_propose` runs the `eak-intelligence` agent (Manual mode) with the user's configured provider profile (key from the OS credential store) on a copy of the open project; each typed `Command` it proposes is dry-run on a sandbox and returned as a pending step. `ai_accept` applies one step through `Engine::execute` with `Actor::agent("assistant")` and an approval recorded as `human:user` for exactly that step's class (resolves evaluator finding C5: AI edits no longer enter as the human actor); it is submitted at the plan's revision, so an edit made in between makes it stale and refused. `ai_reject` drops the step (nothing recorded). `ai_rollback` undoes an accepted agent step only while it is the latest change.
 - Panel (`shell/AiPanel.tsx`): with a ready provider (model set, key stored when needed) requests go to the model; provider failures and refusals are shown as such. With none, it says "No AI model is configured" and offers Model settings; the old keyword interpreter remains only as replies labelled "Offline command (no AI)".
@@ -141,7 +176,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
 ### Implemented and tested
 - EAK-IR (`eak-core`, schema v1 at M1, now v2): project, library, schematic, PCB, constraints, manufacturing config;
   integer-nanometre geometry; byte-stable JSON; schema version gate (newer/corrupt files are
-  rejected safely); integrity checker; 7 built-in generic components.
+  rejected safely); integrity checker; built-in library of 48 components (see below).
 - EAK-IR schema v2 (ADR-0008): per-layer stackup (copper weight, dielectric thickness and er per
   copper layer) with a tested v1 → v2 migration; DRC-008 sizes each track with its own layer's
   copper weight (`crates/eak-validation/tests/stackup.rs`).
@@ -186,9 +221,41 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Release gate that requires revision-bound ERC/DRC/MECH with zero errors, otherwise the package is marked DRAFT.
   - Package re-verification that detects tampering.
 
+### Built-in component library (`eak-core/src/builtin.rs`, 48 parts)
+- Generic parts (IPC-7351 nominal land patterns, approximate; every rating `verified: false`,
+  source "unverified"):
+  - R, C (MLCC) and L in 0402, 0603, 0805, 1206 and 1210.
+  - LEDs in 0603 and 0805; diodes in SOD-123 and SMA.
+  - NPN, PNP, N-MOSFET and P-MOSFET in SOT-23; a SOT-23-5 LDO (VIN/GND/EN/NC/VOUT).
+  - 1x02 to 1x10 2.54 mm pin headers; crystals in HC-49/US and 3225; a 6x6 mm tactile switch.
+- Parts for the two validation boards. Pinouts and land patterns come from the named manufacturer
+  datasheets, and each part's provenance names its source. Ratings carry the datasheet as their
+  source but stay `verified: false`, because EAK has not independently reviewed them.
+  - Espressif ESP32-C3-MINI-1.
+  - TI LMR33630 3 A synchronous buck (HSOIC-8 PowerPAD).
+  - Sensirion SHT40.
+  - AOS AO4406A SO-8 N-MOSFET.
+  - Power inductors: Bourns SRP1038A (Isat 12 A), Würth WE-PD 7345 and WE-LQS 5040 (both saturate
+    below 3 A).
+  - Panasonic-land SMD electrolytics (6.3 mm and 8 mm).
+  - Phoenix MKDS 5.08 mm 2-pin screw terminal.
+  - The 8 M1 parts are pinned to a golden fixture, so their definitions cannot change silently.
+- Tests check, for every part:
+  - unique ids;
+  - every symbol pin maps to a pad and every pad is mapped;
+  - no overlapping pads;
+  - pads lie inside the courtyard;
+  - no rating claims verification.
+- Known limits:
+  - **No USB-C receptacle yet.** Its shell tabs and locating pegs need slotted and non-plated holes,
+    which `FootprintDef` cannot express. This needs an IR type change.
+  - Antenna and sensor copper keep-outs, and paste-window sizes, are noted in provenance only; they
+    are not modelled.
+  - AO4406A pin numbers follow the standard SO-8 assignment; they were not read from the drawing.
+  - Generic part ratings are typical class values, not datasheet facts.
+
 ### Tests executed (exact results)
-`cargo test --workspace --release`: **41 passed, 0 failed** (eak-core 11, eak-engineering 11,
-eak-runtime 11 engine + 4 process, eak-validation 1 stackup, eak-manufacturing 3 end-to-end).
+Test counts: see the PR body for the latest run (per-suite counts recorded here earlier are historical).
 `cargo clippy --workspace --all-targets -- -D warnings`: clean. `cargo fmt --check`: clean.
 
 The key end-to-end test (`reference_design_end_to_end`) runs a 10-component ATtiny85 + AMS1117 board through
@@ -202,10 +269,37 @@ the command API:
 4. Package status: InternallyVerifiedReleaseCandidate; the package re-verifies and tampering is detected.
 Injected short and clearance violations are detected (`drc_detects_injected_short_and_clearance_violation`).
 
+### LCSC sourcing, offline only (2026-11-13)
+Implemented and tested on Windows 11 only. Details: `docs/engineering/sourcing.md`; test
+matrix: `docs/engineering/INTEGRATION_TEST_MATRIX.md`.
+- Sourcing records (`eak-manufacturing/src/sourcing.rs`): built from raw response bytes, a source
+  URL and a retrieval time. Each record keeps the SHA-256 of the raw bytes, the fields exactly
+  as parsed, and lists of missing and rejected fields.
+- Verification states: search hit, datasheet-matched (hashed PDF that names the MPN), verified
+  (named human reviewer against that datasheet hash). A search hit is never a verified part.
+- `SOURCING` report (`eak-validation/src/sourcing.rs`): 12 rules covering missing MPN, LCSC number,
+  datasheet and ratings, BOM-to-LCSC mapping, record state, and symbol, footprint and package
+  consistency. It is not part of the manufacturing release gate.
+- Tests: 9 offline fixture tests and 6 unit tests, all passing. Fixtures are synthetic.
+  Full run with these added, `cargo test --workspace --release`: **50 passed, 0 failed**
+  (eak-core 7, eak-engineering 11, eak-validation 6, eak-runtime 10 engine + 4 process,
+  eak-manufacturing 3 end-to-end + 9 sourcing). Clippy with `-D warnings` and `cargo fmt --check`: clean.
+
+Not done, and not to be read as done:
+- **No network access exists.** No live LCSC search, stock, price or datasheet retrieval, and no
+  network-dependent test. Neither LCSC nor JLCPCB offers documented machine access without
+  private credentials; the choice of access route is an open product-owner decision.
+- **The LCSC field mapping is unverified.** LCSC's site refused the automated browser, so its
+  API documentation could not be read; the mapping follows third-party reports.
+- Datasheet matching reads uncompressed PDF bytes only. Ratings, pinouts and land patterns are
+  not extracted from datasheets.
+- No real part has been sourced or verified with this module.
+
 ### Not yet implemented (acceptance gaps)
 - Desktop application: superseded. See "Desktop shell" above (read-only views; editors not started).
-- Intelligence Engine: core crate exists (see below); no UI, no live-provider run, no context engine/skills.
-- Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser, LCSC/JLCPCB integrations.
+- Intelligence Engine: core crate exists (see below); no live-provider run, no context engine/skills.
+- Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser.
+- Live LCSC keyword search (HTTP 403 observed), basic/extended assembly classification, EasyEDA footprint import; JLCPCB multilayer checks (see the LCSC section above).
 - Differential pairs, impedance, inner-layer autorouting.
 - Per-zone / per-pad thermal-relief settings (needs an IR change and an ADR); silkscreen
   legibility, overlap and board-edge checks; user-placed silkscreen text and graphics.

@@ -10,5 +10,6 @@ pub mod erc;
 pub mod holes;
 pub mod mech;
 pub mod report;
+pub mod sourcing;
 
 pub use report::{Bound, Finding, Limit, Outcome, Quantity, Report, Severity};
