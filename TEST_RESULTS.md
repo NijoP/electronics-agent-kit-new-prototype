@@ -5,6 +5,21 @@ what was run, where, on which commit, and the exact outcome. A result copied fro
 so. Level 1 = Rust engineering tests, Level 2 = frontend tests (vitest + jsdom), Level 3 = real desktop
 tests in a Tauri WebView (directive Part 13).
 
+## 2026-11-14 - Low-memory tooling, light batches (PARTIAL)
+
+**Run:** `scripts/test-batches.sh --no-lock --only light` on a branch from `ea1efeb`, Linux, 8 GB host
+shared with other jobs. Full numbers and method: `docs/dev/LOW_MEMORY_DEVELOPMENT.md`.
+
+| Batch | Result | Duration | Peak tree RSS |
+|---|---|---|---|
+| light:fmt | PASS | 7.4 s | 45 MB |
+| light:no-python | PASS | 1.2 s | - |
+| light:tsc | PASS | 52.1 s | 367 MB |
+| light:vitest | PASS, 10 files / 65 tests | 118.2 s | 552 MB |
+
+**Not run yet:** per-crate Rust tests (all 7 crates), clippy, packaging. They are pending a run on the
+frozen main commit; nothing here claims they pass.
+
 ## 2026-11-14 - Phase 0 baseline (copied, not re-run)
 
 **Source:** the merged pull request bodies of #12-#19
