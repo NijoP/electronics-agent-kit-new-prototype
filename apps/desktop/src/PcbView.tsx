@@ -7,6 +7,8 @@ import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, outlineFrom, samePoint, snapPoint } from "./editing";
 import { Coords, GridControls, GridLayer, Rulers, useGridConfig } from "./grid";
 import * as P from "./tools/pcb/selection";
+import * as O from "./tools/pcb/outline";
+import { OutlinePanel } from "./tools/pcb/OutlinePanel";
 import { layerKey, layerName, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
 import { useLayerView, type LayerView } from "./layerView";
 import { focusBounds, type Focus } from "./pcbFocus";
@@ -98,6 +100,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const zoomTo = focus ? { bounds: focusBounds(snapshot, focus.objects, focus.location), n: focus.n } : null;
   const [net, setNet] = useState("");
   const [corners, setCorners] = useState<Point[]>([]);
+  // Board-outline vertex handle being dragged (index + current snapped position).
+  const [vdrag, setVdrag] = useState<{ i: number; to: Point } | null>(null);
   const docId = useDocId();
   const [picked, setPicked] = useState<Id | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -268,6 +272,12 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     start: (x, y, e) => {
       if (!edit || edit.busy) return false;
       const at = fromView(x, y);
+      if (tool === "outline") {
+        const vi = hit(e, "data-outline-vertex");
+        if (vi === null) return false;
+        setVdrag({ i: Number(vi), to: snapPoint(at, GRID, [], CAPTURE).point });
+        return true;
+      }
       const id = hit(e, "data-footprint-id");
       pressed.current = null;
       if (!id && tool !== "select") return false;
@@ -280,8 +290,21 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       setDrag({ mode: id ? "move" : "marquee", from: at, to: at, additive: P.pickMode(e) !== "replace" });
       return true;
     },
-    move: (x, y) => setDrag((d) => d && { ...d, to: fromView(x, y) }),
+    move: (x, y) => {
+      if (vdrag) return setVdrag({ ...vdrag, to: snapPoint(fromView(x, y), GRID, [], CAPTURE).point });
+      setDrag((d) => d && { ...d, to: fromView(x, y) });
+    },
     end: (x, y) => {
+      if (vdrag) {
+        const v = vdrag;
+        setVdrag(null);
+        const to = snapPoint(fromView(x, y), GRID, [], CAPTURE).point;
+        const next = O.moveVertex(outline, v.i, to);
+        const bad = O.validateOutline(next);
+        if (bad.length) edit?.notify(`Vertex move rejected: ${bad[0]}.`);
+        else if (!samePoint(to, outline[v.i])) void edit?.execute({ type: "SetBoardOutline", points: next });
+        return;
+      }
       const d = drag;
       setDrag(null);
       if (!d) return;
@@ -295,8 +318,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       lockedNote();
       submit(P.moveCommands(snapshot, sel, snapDelta(d.from, to)), `Move ${fps(sel.length)}`);
     },
-    cancel: () => setDrag(null),
+    cancel: () => (setDrag(null), setVdrag(null)),
   };
+  const shownOutline = vdrag && outline[vdrag.i] ? O.moveVertex(outline, vdrag.i, vdrag.to) : outline;
   const movingIds = drag?.mode === "move" ? new Set(P.movable(snapshot, sel).ids) : null;
   const dragDelta = drag?.mode === "move" ? snapDelta(drag.from, drag.to) : null;
 
@@ -422,7 +446,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           </span>
         )}
         <GridControls kind="pcb" cfg={grid} onChange={setGrid} />
-        <Coords at={hover} />
+        <Coords at={vdrag?.to ?? hover} />
       </header>
       {edit && (
         <div className="tool-options">
@@ -503,10 +527,13 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               </button>
             </>
           )}
-          {tool === "outline" && (
-            <button type="button" onClick={finishOutline} disabled={corners.length < 2}>
-              Finish outline ({corners.length} pts)
-            </button>
+          {tool === "outline" && edit && (
+            <>
+              <button type="button" onClick={finishOutline} disabled={corners.length < 2}>
+                Finish outline ({corners.length} pts)
+              </button>
+              <OutlinePanel edit={edit} outline={outline} corners={corners} setCorners={setCorners} />
+            </>
           )}
           {sel.length > 0 && (
             <span className="selection-bar" role="group" aria-label="Footprint selection">
@@ -533,7 +560,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           )}
           <span className="muted hint">
             {outline.length === 0 && tool !== "outline" && "No board outline yet — use Board outline. "}
-            {tool === "outline" && "Click two opposite corners (or 3+ points), then Enter"}
+            {tool === "outline" && "Pick a shape and type exact sizes, or click two opposite corners (3+ points = polygon) then Enter · drag a vertex handle to edit"}
             {tool === "select" && (sel.length ? `${fps(sel.length)} selected · drag to move · R rotate · F flip · Esc clear` : "Click a footprint (Shift adds, Ctrl toggles) or drag a box · middle-drag pans")}
             {tool === "move" && (picked ? "Click the new position" : "Drag a footprint, or click one then its destination")}
             {tool === "route" &&
@@ -585,16 +612,21 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         tool={!!edit && tool !== "select"}
         onPoint={edit ? onPoint : undefined}
         onHover={(x, y) => setHover(fromView(x, y))}
-        onDrag={edit && MOVE_TOOLS.includes(tool) ? dragHandler : undefined}
+        onDrag={edit && (MOVE_TOOLS.includes(tool) || tool === "outline") ? dragHandler : undefined}
         underlay={(vb) => (
           <>
-            {outline.length > 0 && <polygon className="board" points={poly(outline)} />}
+            {outline.length > 0 && <polygon className="board" points={poly(shownOutline)} />}
             <GridLayer vb={vb} kind="pcb" cfg={grid} />
           </>
         )}
         overlay={(vb) => <Rulers vb={vb} kind="pcb" cfg={grid} />}
       >
-        {outline.length > 0 && <polygon className="board-edge" points={poly(outline)} />}
+        {outline.length > 0 && <polygon className="board-edge" points={poly(shownOutline)} />}
+        {edit && tool === "outline" &&
+          shownOutline.map((p, i) => {
+            const [cx, cy] = toView(p);
+            return <circle key={i} className="outline-handle" data-outline-vertex={i} cx={cx} cy={cy} r={0.9}><title>{`vertex ${i + 1}: drag to move`}</title></circle>;
+          })}
         {Object.values(pcb.zones)
           .filter((z) => shown(z.layer))
           .map((z) => (

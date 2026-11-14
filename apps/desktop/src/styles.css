@@ -395,3 +395,9 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .term-menu { position: fixed; z-index: 20; list-style: none; margin: 0; padding: 4px 0; background: var(--bg-panel, #1b1b1b); border: 1px solid var(--line, #333); }
 .term-menu button { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; }
 .term-confirm { position: fixed; left: 50%; top: 80px; transform: translateX(-50%); z-index: 20; background: var(--bg-panel, #1b1b1b); border: 1px solid var(--line, #333); padding: 8px 12px; }
+.outline-panel { display: flex; gap: var(--s-1); align-items: center; flex-wrap: wrap; }
+.outline-panel input { width: auto; }
+.outline-panel .warn { color: var(--warn); }
+.vertex-table { flex-basis: 100%; }
+.vertex-row { display: flex; gap: var(--s-half); align-items: center; }
+.outline-handle { fill: var(--accent); stroke: #fff; stroke-width: 0.2; cursor: grab; }

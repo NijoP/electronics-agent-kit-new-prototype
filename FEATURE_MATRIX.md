@@ -57,7 +57,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 
 | Feature | Status | Evidence / note |
 |---|---|---|
-| Board outline (rectangle, polygon) | integ | editor flow test |
+| Board outline (rectangle, rounded rect, circle, polygon; mm/mil numeric entry, vertex table, drag handles, closure validation; arcs/circles stored as chord polylines — IR has no arc) | code-reviewed only | outline.test.ts (unrun) |
 | Footprints from schematic sync | integ | `SyncSchematicToPcb` in the editor flow test |
 | Move, rotate, flip footprint | unit | `editors.test.tsx` ("moves a footprint with two clicks and flips the selected one") |
 | Lock/unlock | partial | engine command only, no UI |
