@@ -408,3 +408,19 @@ installed. Development is proceeding directly in this repository.
 - Select tool: click / Shift-click / marquee (Shift adds) / Ctrl+A selection of symbols, wires and labels; drag-move with live preview submits ONE `Batch` (`MoveWire` rubber-bands attached wire ends, `MoveNetLabel` drags pin labels, then `MoveSymbol`); R rotates the selection (wires follow), Del deletes it, Ctrl+C / Ctrl+V pastes at the cursor with fresh designators, W wire tool, Esc clears; Ctrl+Z / Ctrl+Shift+Z undo the whole edit in one step. New commands `MoveWire`, `MoveNetLabel` (42 commands). Verified by vitest (`selection.test.ts`, `SchematicSelect.test.tsx`) and `eak-runtime/tests/schematic_edit.rs`; not yet driven in a real Tauri window.
 - Evaluator C3 (ERC-001 remedy in the UI): schematic **No connect** tool (click a pin, `SetNoConnect`) and **Pin label** tool (click a pin, `LabelPin` with the typed net name and kind). Verified by vitest (`SchematicSelect.test.tsx`); no UI yet to remove a no-connect marker (no `DeleteNoConnect` command).
 - Not done yet: mirror (X/Y), junctions, ports, text, inspector, net highlighting; rubber-banded wires can go diagonal (no corner insertion).
+
+## IDE shell (branch `fm/eak-ide-shell`)
+
+Done and tested (vitest with mocked IPC; Rust headless IPC tests in `apps/desktop/src-tauri/tests/workspace.rs`):
+- App bar `[Project / EDA] [registered workspaces…] [+]`; registered workspaces and EDA stay mounted
+  when hidden; EDA shortcuts/editors are disabled while another workspace is shown (registry:
+  `src/shell/registry.ts`, drop-in modules `src/workspaces/*.workspace.tsx`).
+- Inside EDA, Schematic and PCB are separate views (split is opt-in); registered `eda` views (3D) appear in the activity bar.
+- AI assistant UI and its state removed. Backend `ai.rs`, `ai_*` IPC commands and `ModelSettings` are kept as optional infrastructure; EDA needs no provider.
+- Explorer: real project files via sandboxed IPC (open/expand/create/rename/delete, git status, cwd marker); engine-owned files are view-only. Reusable for any `dir:<path>` root.
+- Several projects open at once (engine keeps them; one active), tab strip, per-project doc/layout state.
+- Update PCB report built from the engine's journalled change list (`operation_changes`).
+- Project Home: native folder dialogs (tauri-plugin-dialog), create flow, recent metadata, reopen last session.
+
+Not done / not verified: no real-window (Tauri) run was performed for this slice; native dialog behaviour
+is only covered with a mocked IPC answer. Terminal and 3D workspaces are other workers' scope (nothing registered here).

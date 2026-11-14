@@ -4,6 +4,7 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IPC_COMMANDS } from "./api";
 import { App } from "./App";
+import { shellCmd } from "./shell.test-data";
 import { fixture } from "./fixture.test-data";
 import { forgetViewports, loadViewport, sanitizeViewBox, saveViewport } from "./shell/viewState";
 import type { CommandResponse } from "./types";
@@ -56,7 +57,7 @@ beforeEach(() => {
       case "model_providers":
         return [];
       default:
-        throw new Error(`unmocked ${cmd}`);
+        { const h = shellCmd(cmd, null); if (h.handled) return h.value; { const h = shellCmd(cmd, null); if (h.handled) return h.value; throw new Error(`unmocked ${cmd}`); } }
     }
   });
 });
@@ -88,8 +89,10 @@ describe("main toolbar", () => {
 
   it("every enabled toolbar button does something: engine command, IPC call or UI state", async () => {
     await open();
+    fireEvent.click(screen.getByRole("button", { name: "PCB" })); // Auto-route is a PCB-view button
     fireEvent.click(tb().getByRole("button", { name: "Auto-route" }));
     await waitFor(() => expect(executed).toEqual([{ type: "AutoRoute", nets: null }]));
+    fireEvent.click(screen.getByRole("button", { name: "Schematic" }));
     calls.length = 0;
     fireEvent.click(tb().getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls).toContain("current_project"));

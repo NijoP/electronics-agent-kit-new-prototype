@@ -703,3 +703,11 @@ export interface Constraints {
   temp_rise_c: number;
   max_component_height?: Nm | null;
 }
+
+/** A project open in this window (the engine keeps several; one is active). */
+export interface OpenProject {
+  id: string;
+  name: string;
+  dir: string | null;
+  active: boolean;
+}

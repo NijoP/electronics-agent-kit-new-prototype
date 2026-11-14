@@ -1,3 +1,4 @@
+import { shellCmd } from "./shell.test-data";
 // End-to-end flow through the real UI against a small stateful fake backend:
 // new project -> schematic -> Update PCB from schematic -> PCB -> ERC/DRC -> export dialog ->
 // save / close / reopen. One test per step; each asserts the typed backend call it makes.
@@ -14,6 +15,9 @@ configure({ asyncUtilTimeout: 6000 }); // the shared laptop is slow; these are f
 let calls: { cmd: string; args: Record<string, unknown> }[];
 let proj: Snapshot | null;
 let failOpen = false;
+let lastClosed: Snapshot | null = null;
+/** What the fake engine journalled for the last SyncSchematicToPcb (read by operation_changes). */
+let syncChanges: unknown[] = [];
 const LIB = [{ id: "R_0603", name: "Resistor 0603", category: "passive", refdes_prefix: "R", default_value: "10k", pins: [["1", "1"], ["2", "2"]] }];
 
 function blank(name: string, withOutline: boolean): Snapshot {
@@ -45,13 +49,17 @@ beforeEach(() => {
   calls = [];
   proj = null;
   failOpen = false;
+  lastClosed = null;
+  syncChanges = [];
+  Element.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, toJSON: () => ({}) }) as DOMRect;
   mockIPC((cmd, payload) => {
     const args = (payload ?? {}) as Record<string, unknown>;
     calls.push({ cmd, args });
+    if (cmd === "plugin:dialog|open") return "/p";
     if (!(IPC_COMMANDS as readonly string[]).includes(cmd)) throw new Error(`unknown ${cmd}`);
     switch (cmd) {
       case "recent_projects":
-        return proj ? [{ path: "/p/demo.eak", project_id: proj.project.id, name: proj.project.name, revision: proj.project.revision, last_opened_ms: 1 }] : [];
+        return (proj ?? lastClosed) ? [{ path: "/p/demo.eak", project_id: (proj ?? lastClosed)!.project.id, name: (proj ?? lastClosed)!.project.name, revision: (proj ?? lastClosed)!.project.revision, last_opened_ms: 1 }] : [];
       case "create_project":
         proj = blank(String(args.name), false);
         return proj;
@@ -60,12 +68,18 @@ beforeEach(() => {
           proj = null;
           throw new Error("project is locked by another process");
         }
-        return proj ?? blank("Reopened", true);
+        proj = lastClosed ?? blank("Reopened", true);
+        return proj;
       case "current_project":
         if (!proj) throw new Error("no project is open");
         return proj;
       case "close_project":
+      case "close_project_by_id":
+        lastClosed = proj;
+        proj = null;
         return null;
+      case "operation_changes":
+        return syncChanges;
       case "events_since":
       case "model_providers":
         return [];
@@ -98,6 +112,7 @@ beforeEach(() => {
         if (c.type === "SyncSchematicToPcb")
           for (const sy of Object.values(p.project.schematic.symbols)) {
             const fid = `fp_${sy.id}`;
+            syncChanges.push({ path: ["pcb", "footprints"], key: fid, before: null, after: { id: fid, symbol_id: sy.id, component_id: sy.component_id, refdes: sy.refdes, side: "top", locked: false, pad_nets: { "1": "N1" } } });
             p.project.pcb.footprints[fid] = { id: fid, symbol_id: sy.id, component_id: sy.component_id, refdes: sy.refdes, position: { x: 50_000_000, y: 0 }, rotation: "R0", side: "top", locked: false };
             p.geometry.footprints.push({ id: fid, symbol_id: sy.id, refdes: sy.refdes, side: "top", position: { x: 50_000_000, y: 0 }, half_w: 1_500_000, half_h: 800_000, pads: [] });
           }
@@ -108,7 +123,7 @@ beforeEach(() => {
       case "export_manufacturing":
         return exportResult(proj!.project.revision);
       default:
-        throw new Error(`unmocked ${cmd}`);
+        { const h = shellCmd(cmd, null); if (h.handled) return h.value; throw new Error(`unmocked ${cmd}`); }
     }
   });
 });
@@ -125,21 +140,23 @@ const executed = () => execCalls().map((c) => (c.args.command as { type: string 
 
 async function createFromHome(name = "Flow") {
   render(<App />);
-  fireEvent.change(await screen.findByLabelText(/New project folder/), { target: { value: "/p/demo.eak" } });
-  fireEvent.change(screen.getByLabelText("Name"), { target: { value: name } });
+  // Project Home uses the native folder dialog (mocked IPC answer), not a pasted path.
+  fireEvent.change(await screen.findByLabelText("Name"), { target: { value: name } });
+  fireEvent.click(screen.getByRole("button", { name: "Choose parent folder…" }));
+  await screen.findByText("/p");
   fireEvent.click(screen.getByRole("button", { name: "Create" }));
   await screen.findByRole("img", { name: "Schematic canvas" });
 }
 async function placeResistor() {
-  // the assistant resolves part names against the loaded library: wait until it is there
   fireEvent.click(screen.getByRole("button", { name: "Library / Parts" }));
-  await screen.findByText("Resistor 0603");
-  const box = screen.getByRole("textbox", { name: "Ask the assistant" });
-  fireEvent.change(box, { target: { value: "add resistor" } });
-  fireEvent.keyDown(box, { key: "Enter" });
-  fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
+  fireEvent.click(await screen.findByText("Resistor 0603"));
+  fireEvent.click(await screen.findByRole("button", { name: "Place on schematic" }));
+  const svg = screen.getByRole("img", { name: "Schematic canvas" });
+  fireEvent.pointerDown(svg, { clientX: 500, clientY: 500, button: 0, buttons: 1 });
+  fireEvent.pointerUp(svg, { clientX: 500, clientY: 500, button: 0 });
   await waitFor(() => expect(executed()).toContain("PlaceSymbol"));
 }
+const activity = () => within(screen.getByRole("navigation", { name: "Activity bar" }));
 
 describe("end-to-end flow", () => {
   it("1. new project dialog replaces the open project and lands in its schematic tab", async () => {
@@ -162,25 +179,33 @@ describe("end-to-end flow", () => {
     await waitFor(() => expect(screen.getAllByText(/R1/).length).toBeGreaterThan(0));
   });
 
-  it("3. Update PCB from schematic runs SyncSchematicToPcb and shows the PCB with the footprints", async () => {
+  it("3. Update PCB runs SyncSchematicToPcb and reports what the engine added; the PCB opens only on request", async () => {
     await createFromHome();
     await placeResistor();
-    fireEvent.click(screen.getByRole("button", { name: "Close PCB" }));
-    await waitFor(() => expect(screen.queryByRole("img", { name: "PCB canvas" })).toBeNull());
-    ran("connectivity").length = 0;
     calls.length = 0;
     fireEvent.click(toolbar().getByRole("button", { name: "Update PCB" }));
     await waitFor(() => expect(executed()).toEqual(["SyncSchematicToPcb"]));
-    await screen.findByRole("img", { name: "PCB canvas" }); // tab reopened and shown
+    const dlg = await screen.findByRole("dialog", { name: "Update PCB report" });
+    // the report comes from the engine's own change list for that operation
+    expect(ran("operation_changes")).toHaveLength(1);
+    expect(ran("operation_changes")[0].args).toMatchObject({ op_id: "o" });
+    expect(within(dlg).getByRole("region", { name: "Components added" }).textContent).toContain("R1");
+    expect(within(dlg).getByRole("region", { name: "Connections added" }).textContent).toContain("R1.1 → N1");
+    expect(within(dlg).getByRole("region", { name: "Components removed" }).textContent).toContain("None");
+    // still in the schematic until the user asks for the PCB
+    expect(screen.getByRole("img", { name: "PCB canvas" }).closest(".view-slot")!.className).toContain("off");
+    fireEvent.click(within(dlg).getByRole("button", { name: "Open PCB editor" }));
+    expect(screen.queryByRole("dialog", { name: "Update PCB report" })).toBeNull();
+    await waitFor(() => expect(screen.getByRole("img", { name: "PCB canvas" }).closest(".view-slot")!.className).not.toContain("off"));
     await waitFor(() => expect(document.querySelector("[data-footprint-id]")).toBeTruthy());
-    expect(screen.getByRole("status").textContent).toContain("Footprints are staged");
-    await waitFor(() => expect(ran("connectivity").length).toBeGreaterThan(0)); // airwires re-read for the new revision
   });
 
   it("4. ERC and DRC run from the toolbar and show in the Findings tab", async () => {
     await createFromHome();
     fireEvent.click(toolbar().getByRole("button", { name: "Run ERC" }));
     await waitFor(() => expect(ran("run_check")).toHaveLength(1));
+    expect(toolbar().queryByRole("button", { name: "Run DRC" })).toBeNull(); // DRC belongs to the PCB view
+    fireEvent.click(activity().getByRole("button", { name: "PCB" }));
     await waitFor(() => expect((toolbar().getByRole("button", { name: "Run DRC" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(toolbar().getByRole("button", { name: "Run DRC" }));
     await waitFor(() => expect(ran("run_check").map((c) => c.args.check)).toEqual(["erc", "drc"]));
@@ -190,6 +215,7 @@ describe("end-to-end flow", () => {
 
   it("5a. the export dialog refuses to run until the board has an outline, and says so", async () => {
     await createFromHome();
+    fireEvent.click(activity().getByRole("button", { name: "PCB" }));
     fireEvent.click(toolbar().getByRole("button", { name: "Export manufacturing files" }));
     const dlg = await screen.findByRole("dialog", { name: "Export manufacturing files" });
     expect(within(dlg).getByRole("alert").textContent).toContain("no outline");
@@ -202,6 +228,7 @@ describe("end-to-end flow", () => {
     render(<App />);
     fireEvent.click(await screen.findByText("Outlined"));
     await screen.findByRole("img", { name: "Schematic canvas" });
+    fireEvent.click(activity().getByRole("button", { name: "PCB" }));
     fireEvent.click(toolbar().getByRole("button", { name: "Export manufacturing files" }));
     const dlg = await screen.findByRole("dialog", { name: "Export manufacturing files" });
     fireEvent.click(within(dlg).getByRole("button", { name: "Export" }));
@@ -225,6 +252,18 @@ describe("end-to-end flow", () => {
     await screen.findByRole("img", { name: "Schematic canvas" });
     expect(ran("open_project").at(-1)!.args).toEqual({ path: "/p/demo.eak", take_over_lock: false });
     expect(Object.keys(proj!.project.schematic.symbols)).toHaveLength(1); // unchanged after reopen
+  });
+
+  it("1b. Project Home creates in <parent>/<name> and cancelling the dialog changes nothing", async () => {
+    render(<App />);
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Board A" } });
+    expect((screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(true); // no parent chosen yet
+    fireEvent.click(screen.getByRole("button", { name: "Choose parent folder…" }));
+    await screen.findByText("/p");
+    expect(screen.getByText("/p/Board A")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("img", { name: "Schematic canvas" });
+    expect(ran("create_project").at(-1)!.args).toEqual({ path: "/p/Board A", name: "Board A" });
   });
 
   it("7. a failed replace that drops the old project returns to Project Home, not a stale workspace", async () => {

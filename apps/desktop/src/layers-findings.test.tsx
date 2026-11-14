@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IPC_COMMANDS } from "./api";
 import { App } from "./App";
 import type { EditCtx } from "./EditContext";
+import { shellCmd } from "./shell.test-data";
 import { fixture } from "./fixture.test-data";
 import { useLayerView, sanitizePrefs } from "./layerView";
 import { focusBounds } from "./pcbFocus";
@@ -171,7 +172,7 @@ beforeEach(() => {
       case "library_components": return [];
       case "model_providers": return [];
       case "execute_command": return resp();
-      default: throw new Error(`unmocked ${cmd}`);
+      default: { const h = shellCmd(cmd, null); if (h.handled) return h.value; throw new Error(`unmocked ${cmd}`); }
     }
   });
 });
@@ -191,6 +192,7 @@ describe("finding navigation", () => {
     // close the PCB tab so navigation has to reopen it
     fireEvent.click(screen.getByRole("button", { name: "Close PCB" }));
     await waitFor(() => expect(screen.queryByRole("img", { name: "PCB canvas" })).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "PCB" })); // DRC lives in the PCB view
     fireEvent.click(screen.getByRole("button", { name: "Run DRC" }));
     fireEvent.click(await screen.findByRole("button", { name: /DRC-001 clearance violation on N1/ }));
     await screen.findByRole("img", { name: "PCB canvas" });

@@ -1,3 +1,4 @@
+import { shellCmd } from "./shell.test-data";
 // End-to-end UI flow against a mocked Tauri IPC: verifies command names and argument
 // shapes the Rust layer expects, and that the UI re-renders engine state only.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -27,8 +28,10 @@ const response = (command: string, accepted: boolean): CommandResponse => ({
   validation_note: "command accepted is not engineering validation; run ERC/DRC for evidence",
 });
 
+let closed = false;
 beforeEach(() => {
   calls = [];
+  closed = false;
   revision = 7;
   mockIPC((cmd, payload) => {
     const args = (payload ?? {}) as Record<string, unknown>;
@@ -39,7 +42,10 @@ beforeEach(() => {
         return [{ path: "/projects/fixture.eak", project_id: "prj_1", name: "Fixture board", revision: 7, last_opened_ms: 1 }];
       case "open_project":
       case "create_project":
+        closed = false;
+        return fixture(revision);
       case "current_project":
+        if (closed) throw new Error("no project is open");
         return fixture(revision);
       case "events_since":
         return args.seq === 0
@@ -58,9 +64,11 @@ beforeEach(() => {
       case "run_check":
         return ercResult(revision);
       case "close_project":
+      case "close_project_by_id":
+        closed = true;
         return null;
       default:
-        throw new Error(`unexpected ${cmd}`);
+        { const h = shellCmd(cmd, null); if (h.handled) return h.value; throw new Error(`unexpected ${cmd}`); }
     }
   });
 });

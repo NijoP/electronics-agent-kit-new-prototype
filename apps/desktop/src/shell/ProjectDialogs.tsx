@@ -4,7 +4,7 @@
 // would show a project the backend no longer holds, so a failure checks the session and
 // returns to Project Home when the old project is gone.
 import { useEffect, useRef, useState } from "react";
-import { api } from "../api";
+import { api, pickFolder } from "../api";
 import type { RecentProject, Snapshot } from "../types";
 
 interface Common {
@@ -69,6 +69,7 @@ export function NewProjectDialog(c: Common) {
         <label>
           Project folder (absolute path)
           <input ref={first} value={path} onChange={(e) => setPath(e.target.value)} />
+          <button type="button" onClick={() => void pickFolder("Choose the new project folder").then((d) => d && setPath(d)).catch((e) => setError(String(e)))}>Browse…</button>
         </label>
         <label>
           Name
@@ -115,6 +116,7 @@ export function OpenProjectDialog(c: Common & { recent: RecentProject[] }) {
         <label>
           Project folder (absolute path)
           <input value={path} onChange={(e) => setPath(e.target.value)} />
+          <button type="button" onClick={() => void pickFolder("Open an EAK project folder").then((d) => d && setPath(d)).catch((e) => setError(String(e)))}>Browse…</button>
         </label>
         <label className="inline">
           <input type="checkbox" checked={takeOver} onChange={(e) => setTakeOver(e.target.checked)} />

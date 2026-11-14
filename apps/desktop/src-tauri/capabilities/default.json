@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Main window: core defaults only. Project access goes through the EAK IPC commands.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-open"]
 }

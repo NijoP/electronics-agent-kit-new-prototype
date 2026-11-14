@@ -1,6 +1,7 @@
 // Typed client for the Tauri IPC commands in src-tauri/src/lib.rs. This is the only
 // module that talks to Rust; every project change is an engine call made here.
 import { invoke } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type {
   AiProposal,
   RouteStepReport,
@@ -29,7 +30,10 @@ import type {
   SimResult,
   SimulationStatus,
   Snapshot,
+  OpenProject,
 } from "./types";
+import type { FileContent, FileEntry, GitStatus } from "./shell/files";
+import type { EngineChange } from "./shell/syncReport";
 
 // Must match `IPC_COMMANDS` in src-tauri/src/lib.rs (checked by tests/ipc.rs).
 export const IPC_COMMANDS = [
@@ -68,11 +72,27 @@ export const IPC_COMMANDS = [
   "parts_import",
   "manufacturing_preview",
   "jlcpcb_prepare",
+  "open_projects",
+  "switch_project",
+  "close_project_by_id",
+  "operation_changes",
+  "project_files",
+  "project_file_read",
+  "project_file_create",
+  "project_file_rename",
+  "project_file_delete",
+  "project_git_status",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
 function call<T>(cmd: IpcCommand, args?: Record<string, unknown>): Promise<T> {
   return invoke<T>(cmd, args);
+}
+
+/** Native folder picker (OS dialog). Resolves to the chosen absolute path, or null when cancelled. */
+export async function pickFolder(title: string): Promise<string | null> {
+  const r = await openDialog({ directory: true, multiple: false, title });
+  return typeof r === "string" ? r : null;
 }
 
 export const api = {
@@ -117,6 +137,20 @@ export const api = {
     call<ImportResult>("parts_import", { expected_revision: expectedRevision, lcsc }),
   manufacturingPreview: () => call<ManufacturingPreview>("manufacturing_preview"),
   jlcpcbPrepare: (outDir: string) => call<PrepareResult>("jlcpcb_prepare", { out_dir: outDir }),
+  // IDE shell: several open projects (one active) and the sandboxed project file explorer. Every
+  // file call names its project, so a late call from one project can never act on another.
+  openProjects: () => call<OpenProject[]>("open_projects"),
+  switchProject: (projectId: string) => call<Snapshot>("switch_project", { project_id: projectId }),
+  closeProjectById: (projectId: string) => call<Snapshot | null>("close_project_by_id", { project_id: projectId }),
+  operationChanges: (projectId: string, opId: string) => call<EngineChange[]>("operation_changes", { project_id: projectId, op_id: opId }),
+  projectFiles: (projectId: string, rel: string) => call<FileEntry[]>("project_files", { project_id: projectId, rel }),
+  projectFileRead: (projectId: string, rel: string) => call<FileContent>("project_file_read", { project_id: projectId, rel }),
+  projectFileCreate: (projectId: string, rel: string, isDir: boolean) =>
+    call<FileEntry>("project_file_create", { project_id: projectId, rel, is_dir: isDir }),
+  projectFileRename: (projectId: string, from: string, to: string) => call<void>("project_file_rename", { project_id: projectId, from, to }),
+  projectGitStatus: (projectId: string) => call<GitStatus>("project_git_status", { project_id: projectId }),
+  projectFileDelete: (projectId: string, rel: string, recursive: boolean) =>
+    call<void>("project_file_delete", { project_id: projectId, rel, recursive }),
 };
 
 export function describeError(e: CommandError): string {

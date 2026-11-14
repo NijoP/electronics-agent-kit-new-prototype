@@ -11,16 +11,14 @@ interface Props {
   onCloseAll: () => void;
   split: boolean;
   onSplit: () => void;
-  askLabel: string | null;
-  onAsk: () => void;
 }
 
-export function DocTabs({ docs, active, dirty, onSelect, onClose, onCloseAll, split, onSplit, askLabel, onAsk }: Props) {
+export function DocTabs({ docs, active, dirty, onSelect, onClose, onCloseAll, split, onSplit }: Props) {
   return (
     <div className="tabs editor-tabs" role="tablist" aria-label="Documents">
       {docs.map((d) => (
         <span key={d.id} className={d.id === active ? "doc-tab on" : "doc-tab"}>
-          <button type="button" role="tab" aria-selected={d.id === active} className="tab-label" onClick={() => onSelect(d.id)} title={`${d.kind === "pcb" ? "PCB board" : "Schematic sheet"} ${d.ref}`}>
+          <button type="button" role="tab" aria-selected={d.id === active} className="tab-label" onClick={() => onSelect(d.id)} title={`${d.kind === "pcb" ? "PCB board" : d.kind === "file" ? "File" : "Schematic sheet"} ${d.ref}`}>
             {d.title}
             {dirty && <span className="dirty" role="img" aria-label="unsaved changes">●</span>}
           </button>
@@ -30,12 +28,7 @@ export function DocTabs({ docs, active, dirty, onSelect, onClose, onCloseAll, sp
         </span>
       ))}
       <span className="spacer" />
-      {askLabel && (
-        <button type="button" className="ask-chip" onClick={onAsk} title="Ask the assistant about the selected part">
-          Ask AI about {askLabel}
-        </button>
-      )}
-      <button type="button" className="icon" aria-pressed={split} title="Show schematic and PCB side by side" onClick={onSplit}>
+      <button type="button" className="icon" aria-pressed={split} title="Show the schematic and the PCB side by side (off by default: each is its own view)" onClick={onSplit}>
         Split
       </button>
       {docs.length > 1 && (

@@ -1,13 +1,13 @@
-// Shell behaviour: shortcut formatting, assistant interpreter, BOM, and the shell flows
-// (quick open, assistant Accept/Reject, panel toggles) against a mocked Tauri IPC.
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+// Shell behaviour: shortcut formatting, BOM, and the shell flows
+// (quick open, panel toggles) against a mocked Tauri IPC.
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { IPC_COMMANDS } from "./api";
 import { App } from "./App";
 import { formatShortcut, matches } from "./design/shortcuts";
+import { shellCmd } from "./shell.test-data";
 import { fixture } from "./fixture.test-data";
-import { interpret } from "./shell/ai";
 import { bomLines } from "./shell/BottomPanel";
 import type { CommandResponse } from "./types";
 
@@ -17,21 +17,6 @@ describe("shortcuts", () => {
     expect(formatShortcut("Mod+K", true)).toBe("⌘K");
     expect(matches(new KeyboardEvent("keydown", { key: "p", ctrlKey: true, shiftKey: true }), "Mod+Shift+P")).toBe(true);
     expect(matches(new KeyboardEvent("keydown", { key: "p", ctrlKey: true }), "Mod+Shift+P")).toBe(false);
-  });
-});
-
-describe("assistant interpreter", () => {
-  const snapshot = fixture(7);
-  const sym = Object.values(snapshot.project.schematic.symbols)[0];
-  it("proposes typed commands, never applies them", () => {
-    const r = interpret("rotate", { snapshot, selected: sym.id, library: [] });
-    expect(r.proposal?.commands[0]).toMatchObject({ type: "RotateSymbol", symbol_id: sym.id });
-    expect(r.proposal?.destructive).toBe(false);
-  });
-  it("flags destructive proposals and needs a selection", () => {
-    expect(interpret("delete", { snapshot, selected: sym.id, library: [] }).proposal?.destructive).toBe(true);
-    expect(interpret("rotate", { snapshot, selected: null, library: [] }).proposal).toBeUndefined();
-    expect(interpret("make it blue", { snapshot, selected: null, library: [] }).proposal).toBeUndefined();
   });
 });
 
@@ -72,7 +57,7 @@ beforeEach(() => {
       case "model_providers":
         return [];
       default:
-        throw new Error(`unmocked ${cmd}`);
+        { const h = shellCmd(cmd, null); if (h.handled) return h.value; { const h = shellCmd(cmd, null); if (h.handled) return h.value; throw new Error(`unmocked ${cmd}`); } }
     }
   });
 });
@@ -88,27 +73,6 @@ async function open() {
 }
 
 describe("shell flows", () => {
-  it("assistant preview applies only on Accept, through execute_command", async () => {
-    await open();
-    const box = screen.getByRole("textbox", { name: "Ask the assistant" });
-    fireEvent.change(box, { target: { value: "annotate" } });
-    fireEvent.keyDown(box, { key: "Enter" });
-    await screen.findByRole("group", { name: /Proposal: Annotate/ });
-    expect(executed).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
-    await waitFor(() => expect(executed).toEqual([{ type: "Annotate" }]));
-    await screen.findByText(/Applied through the engine/);
-  });
-
-  it("Reject changes nothing", async () => {
-    await open();
-    fireEvent.click(screen.getByRole("button", { name: "annotate" }));
-    await screen.findByRole("group", { name: /Proposal: Annotate/ });
-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
-    await screen.findByText(/Rejected — nothing changed/);
-    expect(executed).toHaveLength(0);
-  });
-
   it("quick open (Ctrl+P) lists parts and the palette shows shortcuts", async () => {
     await open();
     fireEvent.keyDown(window, { key: "p", ctrlKey: true });
@@ -130,13 +94,3 @@ describe("shell flows", () => {
   });
 });
 
-describe("assistant with a selection", () => {
-  it("rotate on a selected part previews, then Accept sends RotateSymbol", async () => {
-    await open();
-    fireEvent.click(screen.getByRole("button", { name: /R1 330/ }));
-    fireEvent.click(screen.getByRole("button", { name: "rotate" }));
-    await screen.findByRole("group", { name: /Proposal: Rotate R1/ });
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
-    await waitFor(() => expect(executed).toEqual([{ type: "RotateSymbol", symbol_id: "sym_r1", rotation: "R90" }]));
-  });
-});
