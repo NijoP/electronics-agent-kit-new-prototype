@@ -2,6 +2,8 @@
 // module that talks to Rust; every project change is an engine call made here.
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  RouteStepReport,
+  RouteStepRequest,
   Check,
   CheckResult,
   Command,
@@ -48,6 +50,7 @@ export const IPC_COMMANDS = [
   "connectivity",
   "simulation_status",
   "run_simulation",
+  "route_step",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
@@ -85,6 +88,7 @@ export const api = {
   connectivity: () => call<ConnectivityReport>("connectivity"),
   simulationStatus: () => call<SimulationStatus>("simulation_status"),
   runSimulation: (request: SimRequest) => call<SimResult>("run_simulation", { request }),
+  routeStep: (request: RouteStepRequest) => call<RouteStepReport>("route_step", { request }),
 };
 
 export function describeError(e: CommandError): string {

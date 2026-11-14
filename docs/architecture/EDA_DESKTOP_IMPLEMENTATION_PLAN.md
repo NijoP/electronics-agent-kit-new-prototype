@@ -238,3 +238,15 @@ Delivered against the table in 3.2 and the Phase 4 UI items. Every control calls
 | Zone drawing UI | PCB "Zone" tool (key 7): layer, net, optional clearance, corners then Enter/Finish; delete tool removes a zone | `AddZone`, `DeleteZone` (existing) |
 
 Not done in this slice (still Phase 3.2/4): ERC finding zoom/highlight in the schematic canvas (owned by the schematic worker), zone thermal/priority/island/refill controls (need `SetZoneProperties`, `RefillZones`), non-copper layers (mask/silk/paste are not in the engine stackup), copper-weight and dielectric editing (only layer count and type are edited), multi-select/align, track and via editing, safe-fix buttons on findings, a real-window (Tauri) test.
+
+## Slice log: Phase 4 interactive routing (2026-11-14, branch `fm/eak-p4-routing`)
+
+| Item | What shipped | Backend contract |
+|---|---|---|
+| Route-step API | `crates/eak-engineering/src/interactive.rs`: direct 45/90 paths, grid walkaround with exact re-check, net-class width/clearance, layer switch via, blocking objects and minimum gap (measured vs required), legal prefix when blocked | pure function over `Project`; no IR change |
+| IPC | `route_step` (read-only) | new IPC command, no `Command` change |
+| Route tool | `routeTool.ts` reducer + `PcbView.tsx`: proposal follows the cursor, click fixes a step, L layer/via, `/` 45/90, Backspace, Esc, Enter commits | one `Batch` (ADR-0013) of `AddVia`/`AddTrack` per route |
+| Rip-up and re-route | "Rip up & re-route net" | one `Batch` of `ClearRouting` + `AutoRoute` (router.rs) |
+| Zone refill | fill is derived on every analysis, so geometry changes refill it; test added | none |
+
+Not done: push-and-shove, jobs module, diff pairs/length tuning, blind/buried vias from the route tool, `RefillZones` parameters.

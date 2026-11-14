@@ -147,7 +147,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
   - Every finding carries a stable id, the affected objects and location, and a suggested fix; quantitative rules also report measured vs required values with units (ADR-0009). Desktop and AI display of the new fields is not yet wired.
 - Runtime (`eak-runtime`):
-  - Typed command set (39 commands).
+  - Typed command set (40 commands, including the atomic `Batch`; ADR-0013).
   - Revision checks and the agent approval policy.
   - Transactional apply with integrity gate, diff-based undo/redo and an fsync'd journal with crash reconciliation (UNKNOWN_OUTCOME blocks writes).
   - Checkpoints, project lock, evidence store.
@@ -260,8 +260,25 @@ installed. Development is proceeding directly in this repository.
 - Verified: `tsc`, vitest 75/75, production bundle in headless Chrome with a stubbed IPC. Not launched as the real Tauri window.
 - Not done: zone thermal/priority/refill controls, non-copper layers, copper weight / dielectric editing, track and via editing, multi-select, safe-fix buttons, real-window tests.
 
+## Schematic editor, Phase 2 (2026-11-14, in progress)
+- `Command::Batch { commands, label }`: several commands applied in order as one transaction, so one revision and one undo/redo step; a failing step rejects the whole batch with `batch step i (Name): ...`; no nesting; at most 1000 steps; class = riskiest step. AI tool `Batch` (domain `Mixed`: ERC, DRC, MECH afterwards); `types.ts` mirror. See ADR-0013.
+- Not done yet: multi-select and drag-move, wire rubber-banding, mirror, junctions, ports, text, inspector, net highlighting.
+
+## Interactive routing, Phase 4 slice (2026-11-14, branch `fm/eak-p4-routing`)
+- `eak-engineering::interactive::route_step`: legal path for a net from the last fixed point to the cursor against the exact copper geometry (pads, tracks, vias of other nets on the layer) and the board-edge clearance. Width from the net class (or an override), clearance = max(net class, board minimum). Direct 45-degree or 90-degree two-segment paths first; otherwise an A* walkaround on a local grid whose cells are only passable with a 0.75-pitch safety margin; every segment is re-checked exactly; if nothing reaches the cursor, the longest legal prefix is returned with `reached = false`. Layer switch: `via_at_start` places a through via at the anchor, checked on every copper layer. Live feedback: objects blocking the direct path and the smallest gap kept, both measured vs required.
+- IPC `route_step` (read-only, 23 IPC commands). Desktop route tool (`routeTool.ts` reducer, `PcbView.tsx`): click on a pad or track end starts on its net, the engine proposal follows the cursor (debounced), click fixes a step, L switches layer (via), `/` toggles 45/90, Backspace removes a step, Esc cancels, Enter / "Finish route" / clicking copper of the same net commits the whole route as ONE `Batch` of `AddVia`/`AddTrack` (one revision, one undo step). "Rip up & re-route net" = one `Batch` of `ClearRouting` + `AutoRoute` for the chosen net (reuses `router.rs`).
+- Zone refill: fills stay derived (`copper::fill_zone` recomputes from the current geometry for DRC, connectivity and Gerber), so every geometry change refills; tested by `zone_fill_is_derived_and_retreats_from_a_routed_track`.
+- Tests: `interactive.rs` unit tests incl. a 24-case property test (never a clearance violation, bend mode obeyed); `src-tauri/tests/ipc.rs` `route_step_result_commits_as_one_batch_and_undoes_in_one_step` (DRC has no DRC-002/003 after the routed batch; one undo removes it); vitest `routeTool.test.ts`.
+- Not done: push-and-shove, routing in a job with progress/cancel (Phase 4 jobs module), differential pairs and length tuning, blind/buried vias from the route tool (always through vias), arc corners, a stored `RefillZones` parameter set, a real-window test.
 ## Main toolbar and per-tab viewport (2026-11-14)
 - `shell/Toolbar.tsx`: data-driven main toolbar. Real: Open project (to Project Home), Save (asks the engine for its state and reports blocked writes; never claims more), Undo/Redo, Select tool and Move tool (arm the active editor's tool), Rotate/Delete selection (typed `RotateSymbol`/`MoveFootprint`/`DeleteSymbol`; delete asks first), Zoom out/in/Fit (drive the active canvas), Run ERC/DRC, Auto-route, Export Gerbers, Commands, Assistant, Close project. Disabled with the reason as tooltip: Save as, Grid (fixed grids), Design rules, Simulate.
 - `shell/viewState.ts`: per-document viewport (kept in memory and localStorage; a closed tab reopens at its last zoom/pan), plus imperative zoom/tool controls keyed by document id so the editors are not coupled to the toolbar. `SchematicView`/`PcbView` gained a 5-line tool registration each; `Canvas` restores and saves its viewport.
 - Verified: `tsc`, vitest 80/80 (new `toolbar.test.tsx`). Frontend-only jobs ran without the build lock per the lane rule. Not launched as the real Tauri window.
 - Not done: dock panels to other edges, configurable grid, rule editor, simulation.
+
+## End-to-end workflow, keyboard scope, design rules dialog (2026-11-14)
+- Verified by vitest against a stateful fake backend (`flow.test.tsx`, one test per step): New project dialog (replaces the open project, returns Home if the backend lost it) -> schematic tab -> part placed via the assistant (typed `PlaceSymbol`) -> **Update PCB from schematic** (`SyncSchematicToPcb`, then the PCB tab opens with the footprints and airwires re-read) -> ERC/DRC from the toolbar -> **Export manufacturing files** dialog (refuses without a board outline; shows the DRAFT manifest) -> File menu Save / Close / reopen from Recent. File-menu Save and Ctrl+S now ask the engine (they previously only set a message).
+- Evaluator C4: keyboard shortcuts are scoped to the active editor (clicking an editor or its tab makes it active), so a key no longer acts in both editors in split view (`shell/viewState.ts`, tested).
+- Evaluator C1 support: **Design rules** dialog (toolbar, Design menu, palette) with `SetDesignRules`, `UpsertNetClass`, `SetNetCurrent`, `SetNetVoltage`; engine validation errors surface in the status bar; values come from `Project.constraints` (`rules.test.tsx`).
+- Evaluator C5 (AI actor) was reassigned to `eak-p6-ai` and is NOT in this change.
+- Not done: panel docking to other edges; real Tauri window run; DRC/ERC re-run is manual after rule changes.

@@ -251,6 +251,8 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .stackup { font-size: 12px; }
 .stackup th { text-transform: none; letter-spacing: 0; }
 .layer-manager { overflow-x: auto; }
+.route-blocked { stroke: var(--danger, #d33); stroke-width: 0.15; stroke-dasharray: 0.3 0.3; pointer-events: none; }
+.track.preview.fixed { opacity: 0.8; stroke-dasharray: none; }
 
 .tb-title { display: flex; gap: var(--s-1); align-items: baseline; margin-right: var(--s-1); }
 .tb-group { display: flex; gap: var(--s-half); padding-right: var(--s-1); border-right: 1px solid var(--line); }
@@ -263,3 +265,6 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .sim-source { display: flex; align-items: center; gap: var(--s-1); margin: 2px 0; }
 .sim-plot { margin: var(--s-1) 0; max-width: 640px; }
 .sim pre { overflow: auto; max-height: 160px; }
+.view-slot { display: contents; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-1); margin: var(--s-1) 0; }
+.modal.rules { max-height: 88vh; overflow: auto; }
