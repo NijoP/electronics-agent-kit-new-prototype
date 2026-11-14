@@ -10,7 +10,49 @@ Tusk Innovations Global Pvt Ltd.
 
 ## Install and run the EAK desktop app
 
-EAK is built from source; there are no prebuilt releases yet. The installer checks prerequisites,
+There are two ways to install EAK: a prebuilt Linux package from GitHub Releases (A), or a
+build from source with the installer script (B), which also covers macOS and Windows.
+
+### A. Prebuilt Linux package (.deb or AppImage)
+
+Starting with v0.1.0, prebuilt Linux x86_64 packages, a `SHA256SUMS` file and release notes are
+attached to each release on the
+[GitHub Releases page](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases).
+They are **prerelease prototypes**: read the release notes and known limitations first. If no
+release is listed yet, use option B.
+
+**System requirements**
+
+- Linux x86_64 with glibc 2.39 or newer (built and tested on Ubuntu 24.04). Other distributions
+  may work but are untested.
+- WebKitGTK 4.1 and GTK 3 (pulled in automatically by the `.deb`; the AppImage expects them on the
+  host, as most current desktops have).
+- A Secret Service keyring (GNOME Keyring or KWallet) to store model API keys.
+- No prebuilt packages for Windows or macOS yet: use option B.
+
+**Debian / Ubuntu (.deb)**
+
+```bash
+sudo apt install ./EAK_0.1.0_amd64.deb
+eak-desktop
+```
+
+EAK also appears in the applications menu. Remove it with `sudo apt remove eak`.
+
+**AppImage**
+
+```bash
+chmod +x EAK_0.1.0_amd64.AppImage
+./EAK_0.1.0_amd64.AppImage
+```
+
+If FUSE is not available, run it with `--appimage-extract-and-run`.
+
+**Verify the download** (in the download folder): `sha256sum -c SHA256SUMS --ignore-missing`
+
+### B. Build from source with the installer
+
+The installer checks prerequisites,
 clones (or reuses) this repository, builds the desktop app, installs a launcher and starts it. It
 never runs `sudo`: if a system package is missing it stops and prints the exact command to run.
 The first build takes several minutes.
@@ -54,7 +96,7 @@ OpenAI-compatible or Ollama), enter the key and click **Save**, then **Test conn
 stored in the OS keyring, never in a project or profile file. The AI agent is not yet wired into
 the desktop UI (see [Features](#features)).
 
-**Platform status:** Linux verified (2026-11-14), Windows UNVERIFIED, macOS UNVERIFIED.
+**Platform status (option B):** Linux verified (2026-11-14), Windows UNVERIFIED, macOS UNVERIFIED.
 "Verified" means `scripts/install.sh` was run from a fresh clone on one Linux machine and the app
 process stayed up; it is not a claim about every distribution.
 
@@ -124,49 +166,6 @@ has not.
 | `docs/` | Architecture, requirements traceability, ADRs, engineering rules |
 
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PLATFORMS.md](docs/PLATFORMS.md).
-
-## Install
-
-Prebuilt packages are published on the
-[GitHub Releases page](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases).
-They are **prerelease prototypes**: read the release notes and known limitations first.
-
-### System requirements
-
-- **Linux x86_64** with glibc 2.39 or newer (built and tested on Ubuntu 24.04). Other
-  distributions may work but are untested.
-- WebKitGTK 4.1 and GTK 3 (installed automatically by the `.deb`; the AppImage expects them on the
-  host, as most current desktops have).
-- A Secret Service keyring (GNOME Keyring or KWallet) if you want to store model API keys.
-- About 100 MB of disk space and 4 GB of RAM.
-- **Windows and macOS:** no packages yet. Build from source (below); these platforms have not been
-  verified since commit 599bf91.
-
-### Debian / Ubuntu (.deb)
-
-```bash
-sudo apt install ./EAK_0.1.0_amd64.deb
-eak-desktop
-```
-
-EAK also appears in the application menu. Remove it with `sudo apt remove eak`.
-
-### AppImage (any recent x86_64 distribution)
-
-```bash
-chmod +x EAK_0.1.0_amd64.AppImage
-./EAK_0.1.0_amd64.AppImage
-```
-
-If FUSE is not available, run it with `--appimage-extract-and-run`.
-
-### Verify the download
-
-Each release includes a `SHA256SUMS` file. In the download folder:
-
-```bash
-sha256sum -c SHA256SUMS --ignore-missing
-```
 
 ## Getting started
 
