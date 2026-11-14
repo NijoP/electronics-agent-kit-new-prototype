@@ -217,11 +217,6 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
     }
     // Most constrained nets first (power/ground, high current, many terminals), then shortest.
     crate::priority::order_connections(p, &mut todo);
-|a, b| {
-        a.1.dist(a.2)
-            .partial_cmp(&b.1.dist(b.2))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
 
     // SMD pad layer lookup for terminals.
     let pad_layers = |pt: Point, net: &str| -> Vec<usize> {
