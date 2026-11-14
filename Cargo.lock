@@ -928,6 +928,7 @@ name = "eak-desktop"
 version = "0.1.0"
 dependencies = [
  "eak-core",
+ "eak-engineering",
  "eak-intelligence",
  "eak-manufacturing",
  "eak-runtime",

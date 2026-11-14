@@ -248,6 +248,20 @@ installed. Development is proceeding directly in this repository.
 - Verified: `npm run build`, `tsc`, vitest (65+ tests incl. `part4.test.tsx`); production bundle checked in headless Chrome against a stubbed IPC. **Not launched as the real Tauri window** (no display here).
 - Not done: drag-to-rearrange/re-dock panels to other edges, per-tab viewport/zoom preservation (a closed tab loses its viewport), library/symbol/footprint/simulation/manufacturing document kinds (no backend for them yet), the full main toolbar of the directive (tool buttons, zoom, grid), menu keyboard navigation beyond click/Escape.
 
+## PCB layer manager, finding navigation, airwires, zone tool (2026-11-14)
+- `shell/LayerManager.tsx`, `layerView.ts`: PCB Layers side view (active layer, visibility, colours as persisted display state; layer count and layer type through `SetLayerCount`/`SetStackup`; read-only stackup table from `Board.stackup`).
+- Finding click: opens the PCB (DRC) or schematic (ERC) tab, selects the part, and for PCB zooms to the objects' box, highlights them and shows measured vs required plus the suggested fix (`pcbFocus.ts`, `Canvas zoomTo`). Schematic zoom/highlight is not done (schematic canvas is owned by another worker).
+- Airwires: new read-only IPC command `connectivity` (22 commands) over `eak_engineering::copper::analyse`; drawn only for the current revision. `cargo test -p eak-desktop --test ipc`: 13 passed (incl. `connectivity_reports_the_ratsnest_for_the_current_revision`).
+- PCB "Zone" tool wired to `AddZone` (layer, net, clearance) and the delete tool to `DeleteZone`.
+- Verified: `tsc`, vitest 75/75, production bundle in headless Chrome with a stubbed IPC. Not launched as the real Tauri window.
+- Not done: zone thermal/priority/refill controls, non-copper layers, copper weight / dielectric editing, track and via editing, multi-select, safe-fix buttons, real-window tests.
+
+## Main toolbar and per-tab viewport (2026-11-14)
+- `shell/Toolbar.tsx`: data-driven main toolbar. Real: Open project (to Project Home), Save (asks the engine for its state and reports blocked writes; never claims more), Undo/Redo, Select tool and Move tool (arm the active editor's tool), Rotate/Delete selection (typed `RotateSymbol`/`MoveFootprint`/`DeleteSymbol`; delete asks first), Zoom out/in/Fit (drive the active canvas), Run ERC/DRC, Auto-route, Export Gerbers, Commands, Assistant, Close project. Disabled with the reason as tooltip: Save as, Grid (fixed grids), Design rules, Simulate.
+- `shell/viewState.ts`: per-document viewport (kept in memory and localStorage; a closed tab reopens at its last zoom/pan), plus imperative zoom/tool controls keyed by document id so the editors are not coupled to the toolbar. `SchematicView`/`PcbView` gained a 5-line tool registration each; `Canvas` restores and saves its viewport.
+- Verified: `tsc`, vitest 80/80 (new `toolbar.test.tsx`). Frontend-only jobs ran without the build lock per the lane rule. Not launched as the real Tauri window.
+- Not done: dock panels to other edges, configurable grid, rule editor, simulation.
+
 ## Schematic editor, Phase 2 (2026-11-14, in progress)
 - `Command::Batch { commands, label }`: several commands applied in order as one transaction, so one revision and one undo/redo step; a failing step rejects the whole batch with `batch step i (Name): ...`; no nesting; at most 1000 steps; class = riskiest step. AI tool `Batch` (domain `Mixed`: ERC, DRC, MECH afterwards); `types.ts` mirror. See ADR-0013.
 - Not done yet: multi-select and drag-move, wire rubber-banding, mirror, junctions, ports, text, inspector, net highlighting.

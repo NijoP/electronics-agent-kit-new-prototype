@@ -222,12 +222,24 @@ export interface EngineEvent {
 }
 
 export type Severity = "info" | "warning" | "error";
+export interface Quantity {
+  value: number;
+  unit: string;
+}
+export interface Limit extends Quantity {
+  bound: "min" | "max";
+}
 export interface Finding {
+  id?: string;
   rule_id: string;
   severity: Severity;
   message: string;
   objects: Id[];
   location: Point | null;
+  /** Quantitative rules only. */
+  measured?: Quantity | null;
+  required?: Limit | null;
+  suggested_fix?: string | null;
 }
 export interface Report {
   check: string;
@@ -379,4 +391,13 @@ export interface DomainClassification {
 export interface DomainReport {
   revision: number;
   classification: DomainClassification;
+}
+
+/** Physical connectivity from eak-engineering (same analysis DRC uses). Points are board nm. */
+export interface ConnectivityReport {
+  revision: number;
+  net_groups: Record<string, number>;
+  shorts: [string, string, string, string][];
+  /** Unrouted connections: [net, from, to]. */
+  ratsnest: [string, Point, Point][];
 }

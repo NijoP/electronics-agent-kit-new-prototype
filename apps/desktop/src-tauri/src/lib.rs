@@ -394,6 +394,23 @@ pub fn domain_classification(s: &Session) -> Result<DomainReport, String> {
     })
 }
 
+/// Physical connectivity of the current revision: per-net copper groups, shorts and the
+/// ratsnest (unrouted pad-to-pad connections). Read-only; computed by eak-engineering, the same
+/// analysis DRC uses, so the airwires the UI draws are the ones DRC-004 reports.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConnectivityReport {
+    pub revision: u64,
+    #[serde(flatten)]
+    pub connectivity: eak_engineering::copper::Connectivity,
+}
+
+pub fn connectivity(s: &Session) -> Result<ConnectivityReport, String> {
+    s.with_engine(|e| ConnectivityReport {
+        revision: e.project().revision,
+        connectivity: eak_engineering::copper::analyse(e.project()),
+    })
+}
+
 /// A built-in library part the UI can place (read-only catalogue; placing it is a `PlaceSymbol` command).
 #[derive(Debug, Clone, Serialize)]
 pub struct LibraryEntry {
@@ -477,7 +494,8 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 21] = [
+pub const IPC_COMMANDS: [&str; 22] = [
+    "connectivity",
     "library_components",
     "domain_classification",
     "export_manufacturing",
@@ -580,6 +598,11 @@ pub mod cmd {
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
+    pub fn connectivity(state: State<'_, Session>) -> Result<ConnectivityReport, String> {
+        super::connectivity(&state)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
     pub fn library_components() -> Vec<LibraryEntry> {
         super::library_components()
     }
@@ -650,6 +673,7 @@ pub fn run() {
             models::cmd::model_test_connection,
             cmd::domain_classification,
             cmd::library_components,
+            cmd::connectivity,
             cmd::export_manufacturing,
         ])
         .run(tauri::generate_context!())
