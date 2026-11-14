@@ -13,6 +13,7 @@ the listed tests pass; it does not mean professionally validated.
 - DFM (`eak-validation/src/dfm.rs`, DFM-001..010) against `data/fab-jlcpcb-standard.json` (JLCPCB standard 1-2 layer; source URL recorded; `verified: false`). DFM is now a release gate (ADR-0014).
 - Manufacturing: BOM grouped by value/footprint/MPN, CPL (pick-and-place), `<stem>-fab-pack.zip` (Gerber + drill + README of layers, CRC-checked by `verify_package`) and the README beside it.
 - Desktop: `run_check("dfm")` (palette "Run DFM", Design menu), DFM section in the Engineering Monitor, export runs and lists ERC/DRC/MECH/DFM in the export panel.
+- Evaluator C1: DRC lists, per net, the nets for which DRC-008/014 current capacity and DRC-002 voltage clearance were NOT EVALUATED (no declared current/voltage) in `limitations`. Evaluator C2: the release gate stays DRAFT when no component height limit is declared (MECH-001 not evaluated) or any part lacks 3D body data (MECH-003); MECH lists the unevaluated height rule.
 
 ### Not verified / not implemented
 - Keepouts: the IR has no keepout objects (reported `not_implemented` in DRC); needs a schema change and ADR.

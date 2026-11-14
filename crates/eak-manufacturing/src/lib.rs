@@ -165,6 +165,26 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
             }
         }
     }
+    // Unknown mechanical fit is not a pass: without a height limit MECH-001 checks nothing, and
+    // parts without body data (MECH-003) cannot be checked at all.
+    if p.constraints.max_component_height.is_none() {
+        blocking.push(
+            "no component height limit declared: MECH-001 was not evaluated (mechanical fit unknown)"
+                .into(),
+        );
+    }
+    if let Some(m) = reports.iter().find(|r| r.check == "MECH") {
+        let unknown = m
+            .findings
+            .iter()
+            .filter(|f| f.rule_id == "MECH-003")
+            .count();
+        if unknown > 0 {
+            blocking.push(format!(
+                "{unknown} part(s) have no 3D body data (MECH-003): mechanical fit unknown"
+            ));
+        }
+    }
     let stem = p
         .name
         .chars()

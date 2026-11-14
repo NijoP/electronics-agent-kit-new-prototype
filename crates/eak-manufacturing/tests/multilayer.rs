@@ -12,6 +12,25 @@ fn board(layers: u8) -> Engine {
     let mut e = Engine::in_memory(Project::new("ml"));
     fixtures::build_schematic(&mut e).expect("schematic");
     fixtures::build_pcb_layers(&mut e, layers).expect("pcb");
+    // Declare a height limit so MECH-001 is evaluated (unknown mechanical fit blocks release).
+    let rev = e.project().revision;
+    let r = e.execute(eak_runtime::CommandRequest {
+        expected_revision: rev,
+        actor: eak_runtime::Actor::human(),
+        command: eak_runtime::Command::SetDesignRules {
+            min_track_width: None,
+            min_clearance: None,
+            min_drill: None,
+            min_annular_ring: None,
+            board_edge_clearance: None,
+            default_track_width: None,
+            default_clearance: None,
+            temp_rise_c: None,
+            max_component_height: Some(25_000_000),
+        },
+        approval: None,
+    });
+    assert!(r.accepted, "{r:?}");
     e
 }
 

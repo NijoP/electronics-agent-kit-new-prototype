@@ -33,3 +33,9 @@ rather than constants, and they are unverified transcriptions of a public page.
   until a matching profile is supplied (DFM-008 reports this rather than passing).
 - Keepouts are reported as `not_implemented` in DRC: the IR has no keepout objects; adding them
   needs a schema change and its own ADR.
+
+## Addendum: unknown is not pass in the gate (evaluator findings C1, C2)
+- The gate also blocks (DRAFT) when `max_component_height` is not declared, because MECH-001 then
+  evaluates nothing, and when any MECH-003 (no 3D body data) finding exists.
+- DRC lists in `limitations`, per net, the nets without a declared current (DRC-008/014 not
+  evaluated) or voltage (IPC voltage clearance in DRC-002 not evaluated).

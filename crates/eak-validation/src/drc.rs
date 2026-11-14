@@ -742,13 +742,50 @@ pub fn run(p: &Project) -> Report {
         "Keepout areas: EAK-IR has no keepout objects yet (needs a schema change and ADR)".into(),
         "Acid traps and copper slivers".into(),
     ];
-    let limitations = vec![
+    let mut limitations: Vec<String> = vec![
         "Zone fill connectivity is evaluated on a 0.1 mm raster; necks narrower than the raster may be misjudged".into(),
         "Thermal reliefs: relief gap and spoke width are derived from the zone clearance and net class (no per-zone/per-pad relief settings in the IR yet); vias and tracks connect solidly".into(),
         "The autorouter works on the two outer layers with through vias; inner-layer routing, blind and buried vias are placed by hand. Via aspect ratio and drill-to-layer-span limits are not checked".into(),
         "Pad shapes: rectangle, circle, oval (no rounded-rectangle or custom polygons)".into(),
     ];
+    limitations.extend(undeclared_nets_not_evaluated(p));
     Report::new("DRC", p, rules, f, not_implemented, limitations)
+}
+
+/// Nets on the board with no declared current or voltage: DRC-008 / DRC-014 current capacity and
+/// the voltage part of DRC-002 evaluate nothing for them. Listed per net so a clean report is
+/// never read as "current and voltage rules passed".
+pub fn undeclared_nets_not_evaluated(p: &Project) -> Vec<String> {
+    let c = &p.constraints;
+    let nets: BTreeSet<String> = copper::items(p)
+        .into_iter()
+        .map(|i| i.net)
+        .filter(|n| !n.is_empty())
+        .collect();
+    let no_current: Vec<&str> = nets
+        .iter()
+        .filter(|n| !c.net_currents_a.contains_key(*n))
+        .map(String::as_str)
+        .collect();
+    let no_voltage: Vec<&str> = nets
+        .iter()
+        .filter(|n| !c.net_voltages_v.contains_key(*n))
+        .map(String::as_str)
+        .collect();
+    let mut out = Vec::new();
+    if !no_current.is_empty() {
+        out.push(format!(
+            "NOT EVALUATED: DRC-008 track current capacity and DRC-014 relief current for nets without a declared current: {}",
+            no_current.join(", ")
+        ));
+    }
+    if !no_voltage.is_empty() {
+        out.push(format!(
+            "NOT EVALUATED: DRC-002 voltage-based clearance (IPC-2221B) for nets without a declared voltage (net-class clearance still applies): {}",
+            no_voltage.join(", ")
+        ));
+    }
+    out
 }
 
 /// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, unverified).

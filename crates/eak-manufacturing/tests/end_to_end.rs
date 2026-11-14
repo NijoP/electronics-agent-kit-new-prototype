@@ -9,6 +9,28 @@ use eak_runtime::{fixtures, Engine};
 use eak_validation::drc::silk_over_openings;
 use eak_validation::{dfm, drc, erc, mech, Severity};
 
+/// Declares a 25 mm component height limit so MECH-001 is evaluated (unknown fit blocks release).
+pub fn set_height_limit(e: &mut Engine) {
+    let rev = e.project().revision;
+    let r = e.execute(eak_runtime::CommandRequest {
+        expected_revision: rev,
+        actor: eak_runtime::Actor::human(),
+        command: eak_runtime::Command::SetDesignRules {
+            min_track_width: None,
+            min_clearance: None,
+            min_drill: None,
+            min_annular_ring: None,
+            board_edge_clearance: None,
+            default_track_width: None,
+            default_clearance: None,
+            temp_rise_c: None,
+            max_component_height: Some(25_000_000),
+        },
+        approval: None,
+    });
+    assert!(r.accepted, "{r:?}");
+}
+
 fn print(r: &eak_validation::Report) {
     for f in &r.findings {
         eprintln!("{} {:?} {}", f.rule_id, f.severity, f.message);
@@ -24,6 +46,7 @@ fn reference_design_end_to_end() {
     assert_eq!(erc_r.errors, 0, "ERC errors on reference schematic");
 
     let notes = fixtures::build_pcb(&mut e).expect("pcb");
+    set_height_limit(&mut e);
     eprintln!("{notes:#?}");
     let erc_r = erc::run(e.project());
     assert_eq!(erc_r.errors, 0);
@@ -224,4 +247,62 @@ fn bom_groups_by_value_footprint_and_mpn_and_cpl_lists_every_part() {
     let cpl = eak_manufacturing::cpl_csv(p);
     assert!(cpl.starts_with("Designator,Mid X,Mid Y,Layer,Rotation\n"));
     assert_eq!(cpl.lines().count(), 1 + p.pcb.footprints.len());
+}
+
+#[test]
+fn unknown_mechanical_fit_keeps_the_package_draft() {
+    let mut e = Engine::in_memory(Project::new("ref"));
+    fixtures::build_schematic(&mut e).unwrap();
+    fixtures::build_pcb(&mut e).unwrap();
+    let run = |p: &Project| {
+        (
+            erc::run(p),
+            drc::run(p),
+            mech::run(p),
+            dfm::run(p, &dfm::jlcpcb_standard()),
+        )
+    };
+    // No height limit: MECH-001 checked nothing, so the package stays DRAFT.
+    let (a, b, m, d) = run(e.project());
+    assert!(m.limitations.iter().any(|l| l.contains("MECH-001")));
+    let dir = std::env::temp_dir().join(format!("eak-mfg-mech-{}", std::process::id()));
+    let out = compile(e.project(), &[&a, &b, &m, &d], &dir).unwrap();
+    assert_eq!(out.status, PackageStatus::Draft);
+    assert!(
+        out.blocking_reasons.iter().any(|r| r.contains("MECH-001")),
+        "{:?}",
+        out.blocking_reasons
+    );
+    // A part without body data (MECH-003) also blocks, even with a limit declared.
+    set_height_limit(&mut e);
+    let (a, b, mut m, d) = run(e.project());
+    assert!(!m.limitations.iter().any(|l| l.contains("MECH-001")));
+    let fp = e
+        .project()
+        .pcb
+        .footprints
+        .values()
+        .next()
+        .unwrap()
+        .id
+        .clone();
+    m.findings.push(eak_validation::Finding {
+        id: "MECH-003-test".into(),
+        rule_id: "MECH-003".into(),
+        severity: Severity::Warning,
+        message: "no 3D body height".into(),
+        objects: vec![fp],
+        location: None,
+        measured: None,
+        required: None,
+        suggested_fix: None,
+    });
+    let out = compile(e.project(), &[&a, &b, &m, &d], &dir).unwrap();
+    assert_eq!(out.status, PackageStatus::Draft);
+    assert!(
+        out.blocking_reasons.iter().any(|r| r.contains("MECH-003")),
+        "{:?}",
+        out.blocking_reasons
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

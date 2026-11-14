@@ -284,3 +284,42 @@ fn dfm_rules_fire_on_failing_fixtures() {
     wide.min_silk_line_mm = 0.2;
     assert!(!fired(&dfm::run(&p, &wide), "DFM-010").is_empty());
 }
+
+/// Evaluator C1: current and voltage rules evaluate nothing for nets without declarations;
+/// the report must say so per net instead of reading as a pass.
+#[test]
+fn undeclared_current_and_voltage_are_listed_as_not_evaluated() {
+    let mut p = reference();
+    p.constraints.net_currents_a.clear();
+    p.constraints.net_voltages_v.clear();
+    let r = drc::run(&p);
+    let cur = r
+        .limitations
+        .iter()
+        .find(|l| l.contains("DRC-008") && l.contains("NOT EVALUATED"))
+        .expect("current limitation");
+    let volt = r
+        .limitations
+        .iter()
+        .find(|l| l.contains("DRC-002") && l.contains("NOT EVALUATED"))
+        .expect("voltage limitation");
+    assert!(
+        cur.contains("GND") && volt.contains("GND"),
+        "{cur} / {volt}"
+    );
+    // Declaring every board net clears both lines.
+    for n in drc::undeclared_nets_not_evaluated(&p)
+        .iter()
+        .flat_map(|l| l.rsplit(": ").next().unwrap().split(", "))
+        .map(str::to_string)
+        .collect::<Vec<_>>()
+    {
+        p.constraints.net_currents_a.insert(n.clone(), 0.1);
+        p.constraints.net_voltages_v.insert(n, 3.3);
+    }
+    assert!(drc::undeclared_nets_not_evaluated(&p).is_empty());
+    assert!(!drc::run(&p)
+        .limitations
+        .iter()
+        .any(|l| l.contains("NOT EVALUATED")));
+}
