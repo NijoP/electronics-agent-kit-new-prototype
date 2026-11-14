@@ -609,7 +609,7 @@ fn report_json(r: &eak_validation::Report, evidence: Option<&Path>) -> Value {
     v
 }
 
-fn all_reports(p: &Project) -> Vec<eak_validation::Report> {
+pub(crate) fn all_reports(p: &Project) -> Vec<eak_validation::Report> {
     vec![
         eak_validation::erc::run(p),
         eak_validation::drc::run(p),

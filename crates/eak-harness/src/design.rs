@@ -738,11 +738,11 @@ fn flow_root(engine: &Engine) -> Result<PathBuf, Fail> {
     })
 }
 
-fn storage(e: impl std::fmt::Display) -> Fail {
+pub(crate) fn storage(e: impl std::fmt::Display) -> Fail {
     Fail(ErrorCode::Storage, e.to_string(), Value::Null)
 }
 
-fn write_json(path: &Path, v: &Value) -> Result<(), Fail> {
+pub(crate) fn write_json(path: &Path, v: &Value) -> Result<(), Fail> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(storage)?;
     }
@@ -750,7 +750,7 @@ fn write_json(path: &Path, v: &Value) -> Result<(), Fail> {
     store::atomic_write(path, text.as_bytes()).map_err(storage)
 }
 
-fn append_jsonl(path: &Path, v: &Value) -> Result<(), Fail> {
+pub(crate) fn append_jsonl(path: &Path, v: &Value) -> Result<(), Fail> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(storage)?;
     }
@@ -762,7 +762,7 @@ fn append_jsonl(path: &Path, v: &Value) -> Result<(), Fail> {
     writeln!(f, "{v}").map_err(storage)
 }
 
-fn read_jsonl(path: &Path) -> Vec<Value> {
+pub(crate) fn read_jsonl(path: &Path) -> Vec<Value> {
     std::fs::read_to_string(path)
         .unwrap_or_default()
         .lines()
@@ -816,11 +816,11 @@ fn simulated_at(project_dir: &Path, revision: u64) -> bool {
     })
 }
 
-fn invalid(msg: impl Into<String>) -> Fail {
+pub(crate) fn invalid(msg: impl Into<String>) -> Fail {
     Fail(ErrorCode::InvalidArguments, msg.into(), Value::Null)
 }
 
-fn arg_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, Fail> {
+pub(crate) fn arg_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, Fail> {
     args.get(key)
         .and_then(Value::as_str)
         .filter(|s| !s.trim().is_empty())
@@ -1142,7 +1142,7 @@ fn spec_set(engine: &Engine, ctx: &CallContext, root: &Path, args: &Value) -> Re
     Ok(stored)
 }
 
-fn decode_step(step: &Value) -> Result<(Command, Option<OperationClass>), String> {
+pub(crate) fn decode_step(step: &Value) -> Result<(Command, Option<OperationClass>), String> {
     let mut obj = step
         .as_object()
         .cloned()
