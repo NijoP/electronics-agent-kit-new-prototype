@@ -528,3 +528,93 @@ fn connectivity_reports_the_ratsnest_for_the_current_revision() {
     close_project(&s).unwrap();
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Interactive routing end to end: `route_step` proposes a legal path for an airwire, the tool
+/// commits it as one `Batch`, DRC finds no clearance or short violation, and one undo removes
+/// the whole route.
+#[test]
+fn route_step_result_commits_as_one_batch_and_undoes_in_one_step() {
+    use eak_engineering::interactive::{BendMode, RouteStepRequest};
+    let s = session();
+    let req = |net: &str, from: Point, to: Point| RouteStepRequest {
+        net: net.into(),
+        layer: eak_core::CopperLayer::Top,
+        from,
+        to,
+        mode: BendMode::Diagonal45,
+        width: None,
+        via_at_start: false,
+    };
+    assert!(route_step(&s, &req("N", Point::default(), Point::mm(1.0, 0.0))).is_err());
+    let d = tmpdir("route-step");
+    create_project(&s, &path(&d), "Route step").unwrap();
+    let mut rev = 0;
+    let mut run = |c: C| {
+        let r = execute_command(&s, rev, c).unwrap();
+        assert!(r.accepted, "{:?}", r.error);
+        rev = r.revision_after;
+        r
+    };
+    let place = |x: f64| C::PlaceSymbol {
+        sheet_id: None,
+        component_id: "R_0603".into(),
+        position: Point::mm(x, -50.0),
+        rotation: Rotation::default(),
+        refdes: None,
+        value: None,
+    };
+    let a = run(place(40.0)).created[0].clone();
+    let b = run(place(80.0)).created[0].clone();
+    run(C::ConnectPins {
+        a_symbol: a,
+        a_pin: "2".into(),
+        b_symbol: b,
+        b_pin: "1".into(),
+    });
+    run(outline());
+    run(C::SyncSchematicToPcb);
+    run(C::AutoPlace { grid: None });
+    let before = connectivity(&s).unwrap();
+    let (net, from, to) = before.connectivity.ratsnest[0].clone();
+
+    let step = route_step(&s, &req(&net, from, to)).unwrap();
+    assert_eq!(step.revision, before.revision);
+    assert!(step.step.reached, "{:?}", step.step);
+    assert!(!step.step.segments.is_empty());
+    let commands: Vec<C> = step
+        .step
+        .segments
+        .iter()
+        .map(|sg| C::AddTrack {
+            layer: step.step.layer,
+            a: sg.a,
+            b: sg.b,
+            width: Some(step.step.width),
+            net: net.clone(),
+        })
+        .collect();
+    let n = commands.len();
+    let r = run(C::Batch {
+        commands,
+        label: Some(format!("Route {net}")),
+    });
+    assert_eq!(r.revision_after, before.revision + 1, "one revision");
+    assert_eq!(current_project(&s).unwrap().project.pcb.tracks.len(), n);
+    assert!(connectivity(&s).unwrap().connectivity.ratsnest.is_empty());
+    let drc = run_check(&s, Check::Drc).unwrap();
+    assert!(
+        !drc.report
+            .findings
+            .iter()
+            .any(|f| f.rule_id == "DRC-002" || f.rule_id == "DRC-003"),
+        "route step produced a clearance violation: {:?}",
+        drc.report.findings
+    );
+
+    let u = undo(&s, r.revision_after).unwrap();
+    assert!(u.accepted);
+    assert!(current_project(&s).unwrap().project.pcb.tracks.is_empty());
+    assert!(!connectivity(&s).unwrap().connectivity.ratsnest.is_empty());
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}

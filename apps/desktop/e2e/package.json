@@ -1,0 +1,14 @@
+{
+  "name": "eak-desktop-e2e",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Real desktop end-to-end workflow test: tauri-driver + WebdriverIO against a debug build of apps/desktop",
+  "scripts": {
+    "e2e": "node run.mjs"
+  },
+  "devDependencies": {
+    "webdriverio": "^9.0.0"
+  }
+}

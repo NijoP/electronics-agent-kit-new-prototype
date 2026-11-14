@@ -7,5 +7,20 @@ export default defineConfig({
   plugins: [react()],
   clearScreen: false,
   server: { port: 1420, strictPort: true, watch: { ignored: ["**/src-tauri/**"] } },
-  test: { environment: "jsdom", include: ["src/**/*.test.{ts,tsx}"] },
+  build: {
+    // Low-memory development (docs/dev/LOW_MEMORY_DEVELOPMENT.md): no source maps in the packaged
+    // app and no gzip-size pass over every chunk.
+    sourcemap: false,
+    reportCompressedSize: false,
+  },
+  test: {
+    environment: "jsdom",
+    include: ["src/**/*.test.{ts,tsx}"],
+    // Async test utilities get extra room on the slow shared laptop (src/test-setup.ts).
+    setupFiles: ["./src/test-setup.ts"],
+    testTimeout: 15000,
+    // Forked processes, at most 2 at once (override: `vitest run --maxWorkers=N`).
+    pool: "forks",
+    maxWorkers: 2,
+  },
 });

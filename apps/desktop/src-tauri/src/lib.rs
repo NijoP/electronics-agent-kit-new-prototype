@@ -416,6 +416,27 @@ pub fn connectivity(s: &Session) -> Result<ConnectivityReport, String> {
     })
 }
 
+/// One interactive route step (read-only): a legal path for `net` on `layer` from the last
+/// committed point to the cursor, computed by `eak_engineering::interactive::route_step` against
+/// the current revision's exact copper geometry and net-class rules. The route tool commits the
+/// accepted segments and via as one `Batch` of `AddTrack`/`AddVia` commands.
+#[derive(Debug, Clone, Serialize)]
+pub struct RouteStepReport {
+    pub revision: u64,
+    #[serde(flatten)]
+    pub step: eak_engineering::interactive::RouteStepResult,
+}
+
+pub fn route_step(
+    s: &Session,
+    request: &eak_engineering::interactive::RouteStepRequest,
+) -> Result<RouteStepReport, String> {
+    s.with_engine(|e| RouteStepReport {
+        revision: e.project().revision,
+        step: eak_engineering::interactive::route_step(e.project(), request),
+    })
+}
+
 /// A built-in library part the UI can place (read-only catalogue; placing it is a `PlaceSymbol` command).
 #[derive(Debug, Clone, Serialize)]
 pub struct LibraryEntry {
@@ -500,8 +521,9 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 22] = [
+pub const IPC_COMMANDS: [&str; 23] = [
     "connectivity",
+    "route_step",
     "library_components",
     "domain_classification",
     "export_manufacturing",
@@ -609,6 +631,14 @@ pub mod cmd {
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
+    pub fn route_step(
+        state: State<'_, Session>,
+        request: eak_engineering::interactive::RouteStepRequest,
+    ) -> Result<RouteStepReport, String> {
+        super::route_step(&state, &request)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
     pub fn library_components() -> Vec<LibraryEntry> {
         super::library_components()
     }
@@ -680,6 +710,7 @@ pub fn run() {
             cmd::domain_classification,
             cmd::library_components,
             cmd::connectivity,
+            cmd::route_step,
             cmd::export_manufacturing,
         ])
         .run(tauri::generate_context!())

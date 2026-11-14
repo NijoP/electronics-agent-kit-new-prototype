@@ -77,3 +77,12 @@ export function useRegisterTools(docId: string | null, set: (tool: string) => bo
     };
   });
 }
+
+// Which editor owns the keyboard. Both editors listen on `window`, so in split view every
+// keypress would act in both; each editor ignores keys unless it is the active one. Clicking an
+// editor (or its tab) makes it active. No active editor recorded = no restriction (single view).
+let activeEditor: string | null = null;
+export const setActiveEditor = (id: string | null) => {
+  activeEditor = id;
+};
+export const isActiveEditor = (id: string | null) => id === null || activeEditor === null || activeEditor === id;
