@@ -71,6 +71,16 @@ beforeEach(() => {
         return [];
       case "library_components":
         return LIB;
+      case "library_search":
+        return LIB.map((c) => ({
+          id: c.id,
+          source: "builtin",
+          in_project: false,
+          unverified_ratings: 0,
+          def: { ...c, manufacturer: null, mpn: null, lcsc: null, datasheet: null, symbol: { pins: [], body_half_w: 1_000_000, body_half_h: 1_000_000 }, footprint: { name: "R_0603", pads: [], courtyard_half_w: 1_000_000, courtyard_half_h: 1_000_000, body_height: null }, pin_map: {}, ratings: [], provenance: "test" },
+        }));
+      case "library_footprint_candidates":
+        return [];
       case "connectivity":
         return { revision: proj?.project.revision ?? 0, net_groups: {}, shorts: [], ratsnest: [] };
       case "execute_command": {
