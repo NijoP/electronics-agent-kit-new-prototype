@@ -73,6 +73,32 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Add or replace a project component definition (symbol, footprint, pin map). Existing instances must keep their pins.",
             obj(&[("definition", component_def())], &["definition"]),
         ),
+        SetComponentProperties { .. } => (
+            D::Library,
+            "Set manufacturer, MPN, LCSC number and datasheet URL of a project library component (null or blank clears a field). Provenance and ratings are unchanged.",
+            obj(
+                &[
+                    ("component_id", id("project library component id")),
+                    ("manufacturer", nullable(string("manufacturer"))),
+                    ("mpn", nullable(string("manufacturer part number"))),
+                    ("lcsc", nullable(string("LCSC part number"))),
+                    ("datasheet", nullable(string("datasheet URL"))),
+                ],
+                &["component_id", "manufacturer", "mpn", "lcsc", "datasheet"],
+            ),
+        ),
+        AssignComponentFootprint { .. } => (
+            D::Library,
+            "Assign a footprint and symbol-pin -> pad map to a project library component. Refused while PCB footprints of the component exist; the result must pass library validation.",
+            obj(
+                &[
+                    ("component_id", id("project library component id")),
+                    ("footprint", footprint_def()),
+                    ("pin_map", pin_map()),
+                ],
+                &["component_id", "footprint", "pin_map"],
+            ),
+        ),
         AddSheet { .. } => (
             D::Schematic,
             "Add a schematic sheet.",
@@ -383,6 +409,18 @@ pub fn command_samples() -> Vec<Command> {
         AddRequirement { text: "t".into() },
         ImportLibraryComponent {
             component_id: "c".into(),
+        },
+        SetComponentProperties {
+            component_id: "c".into(),
+            manufacturer: Some("m".into()),
+            mpn: None,
+            lcsc: Some("C1".into()),
+            datasheet: None,
+        },
+        AssignComponentFootprint {
+            component_id: "c".into(),
+            footprint: def.footprint.clone(),
+            pin_map: def.pin_map.clone(),
         },
         UpsertComponentDefinition {
             definition: Box::new(def),

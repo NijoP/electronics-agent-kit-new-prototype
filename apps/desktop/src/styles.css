@@ -251,3 +251,14 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .stackup { font-size: 12px; }
 .stackup th { text-transform: none; letter-spacing: 0; }
 .layer-manager { overflow-x: auto; }
+
+/* Library panel (Phase 5) */
+.library-panel .row { display: flex; gap: var(--s-1); }
+.library-panel .row > * { min-width: 0; flex: 1; }
+.lib-detail { display: grid; gap: var(--s-1); border-top: 1px solid var(--border); padding-top: var(--s-1); }
+.lib-previews { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-1); }
+.lib-preview { width: 100%; aspect-ratio: 1; background: var(--bg-hover); border-radius: 4px; color: var(--fg); }
+.lib-facts { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--s-1); margin: 0; font-size: 12px; }
+.lib-facts dt { color: var(--fg-dim); }
+.lib-facts dd { margin: 0; overflow-wrap: anywhere; }
+.library-panel .field { display: grid; gap: 2px; font-size: 12px; }

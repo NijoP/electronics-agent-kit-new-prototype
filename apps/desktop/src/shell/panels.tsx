@@ -1,5 +1,5 @@
 // Side-panel views. All read the latest engine snapshot; none keeps its own project model.
-import type { Id, LibraryEntry, Snapshot, ExportResult } from "../types";
+import type { Id, Snapshot, ExportResult } from "../types";
 import { ExportPanel } from "../ExportPanel";
 
 export function netNames(s: Snapshot): string[] {
@@ -57,29 +57,6 @@ export function ProjectPanel({
         <ul className="tree">
           {nets.map((n) => (
             <li key={n}><button type="button" onClick={() => onNet(n)}>{n}</button></li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-export function PartsPanel({ library, query, onQuery, onPlace }: { library: LibraryEntry[]; query: string; onQuery: (q: string) => void; onPlace: (c: LibraryEntry) => void }) {
-  const q = query.trim().toLowerCase();
-  const shown = library.filter((c) => `${c.name} ${c.id} ${c.category}`.toLowerCase().includes(q));
-  return (
-    <div className="panel-body">
-      <input aria-label="Filter parts" placeholder="Filter parts…" value={query} onChange={(e) => onQuery(e.target.value)} />
-      {shown.length === 0 ? (
-        <p className="empty-state">{library.length === 0 ? "The part library is empty or unavailable." : "No part matches the filter."}</p>
-      ) : (
-        <ul className="tree">
-          {shown.map((c) => (
-            <li key={c.id}>
-              <button type="button" title={`Place ${c.name}`} onClick={() => onPlace(c)}>
-                <strong>{c.name}</strong> <span className="muted">{c.category} · {c.pins.length} pins</span>
-              </button>
-            </li>
           ))}
         </ul>
       )}

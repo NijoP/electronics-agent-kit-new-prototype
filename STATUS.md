@@ -21,6 +21,8 @@ files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The te
 - Maturity ceiling (`Maturity::ceiling`): guidance for a class is shown as "Review prompts (unverified)" unless its DESK label is VERIFIED_AGAINST_SOURCE or LIVE_VERIFIED; BLOCKED shows nothing. EAK adds no evidence of its own.
 - Tests: `tests/domain.rs` (11: registry counts and consistency against DESK, every one of the 100 classes ranks first for a design naming its own keywords, ESP32 dashboard, buck power supply, brushed motor driver, mains-plus-controller needs review, empty design unclassified, determinism, maturity ceilings, not-implemented lists), unit tests in `domain/features.rs`, `ipc.rs::domain_classification_is_revision_bound_and_needs_no_model`, vitest `DomainPanel.test.tsx` (5).
 
+- **Library panel (Phase 5 slice, ADR-0014):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
+
 ### Not verified / not implemented
 - DESK's rule engine is not ported: per-class rule ids are listed, **no DESK rule is evaluated**, and required component roles are not checked against the design. Every result says so (`not_implemented`, `limitations`).
 - Classification quality depends on the design text; keyword weights are DESK's, not tuned or validated against real projects. A sparse design is UNCLASSIFIED.
@@ -35,6 +37,8 @@ files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The te
 - `eak-intelligence`: `HttpTransport::get`; `provider::adaptor::{list_models, test_connection}` for Anthropic, OpenAI-compatible (any base URL: OpenAI, OpenRouter, Groq, Together, local servers) and Ollama. Provider error text is returned with the key redacted. Unit tests (canned JSON) plus `tests/adaptor_http.rs`: the real `ureq` transport against a real loopback HTTP server (list, test, 401 text, unreachable endpoint).
 - `apps/desktop/src-tauri/src/models.rs`: profile store (JSON, no secrets), `KeyStore` with `OsKeyStore` (keyring v3), IPC commands `model_*` (7). The environment is never a key source in the desktop. `tests/models.rs` (9 tests): profiles/UI view/disk contain no key, remove deletes the key, corrupt file is not overwritten, list/test over real HTTP using the stored key, redaction, env not used, Ollama keyless, and a **real OS credential store round trip** (ran and passed on Linux).
 - UI: `ModelSettings.tsx` (add/edit/remove provider, presets, write-only key field, fetch models into a picker with free-text fallback, test connection), opened from a button in `App.tsx`. 5 vitest tests added.
+
+- **Library panel (Phase 5 slice, ADR-0014):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
 
 ### Not verified / not implemented
 - Never run against a live provider endpoint (no key was available); wire formats are checked against canned and loopback responses only.
@@ -96,9 +100,11 @@ all 8 jobs passed: `rust` (policy script, fmt, clippy, `cargo test --workspace -
 - `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check`: clean.
 - `npm run tauri -- build --no-bundle`: succeeds and produces `eak-desktop.exe` with the embedded frontend. A 6-second launch smoke check stayed running and created the SQLite index in the app data folder; no interactive use.
 
+- **Library panel (Phase 5 slice, ADR-0014):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
+
 ### Not verified / not implemented
 - The app has not been exercised interactively in a real WebView in this change. Rendering, focus and layout are covered only by jsdom tests.
-- No editing tools, 3D viewport, library browser, Terminal Center, Manufacturing Center or Agent Studio yet.
+- 3D viewport, Terminal Center, Manufacturing Center or Agent Studio yet.
 - No dockable, resizable or persisted panels (UI-01 is PARTIAL).
 - Project folders are typed as absolute paths; there is no native folder picker.
 - Installers are not produced (`bundle.active: false`).

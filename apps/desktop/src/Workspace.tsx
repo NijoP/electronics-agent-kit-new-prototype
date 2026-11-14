@@ -14,7 +14,8 @@ import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
 import { AiPanel, type ChatMsg } from "./shell/AiPanel";
 import { interpret, type Proposal } from "./shell/ai";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
-import { ManufacturingPanel, netNames, PartsPanel, ProjectPanel } from "./shell/panels";
+import { ManufacturingPanel, netNames, ProjectPanel } from "./shell/panels";
+import { LibraryPanel } from "./shell/LibraryPanel";
 import { StatusBar } from "./shell/StatusBar";
 import { LayerManager } from "./shell/LayerManager";
 import { useLayerView } from "./layerView";
@@ -67,7 +68,6 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
   useEffect(() => saveLayout(layout), [layout]);
   const [sideView, setSideView] = useState<SideView>("project");
   const [bottomTab, setBottomTab] = useState<BottomTab>("log");
-  const [partQuery, setPartQuery] = useState("");
   const [quickOpen, setQuickOpen] = useState(false);
   const [armPart, setArmPart] = useState<{ id: string; n: number } | null>(null);
   const [chat, setChat] = useState<ChatMsg[]>([]);
@@ -320,7 +320,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     setBottomTab("findings");
     setBottomOpen(true);
   };
-  const placePart = (c: LibraryEntry) => {
+  const placePart = (c: Pick<LibraryEntry, "id" | "name">) => {
     showKind("schematic");
     setArmPart({ id: c.id, n: Date.now() });
     setMessage(`Place tool armed with ${c.name}: click the schematic to place it.`);
@@ -558,7 +558,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
           {sideView === "layers" && (
             <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
           )}
-          {sideView === "parts" && <PartsPanel library={library} query={partQuery} onQuery={setPartQuery} onPlace={placePart} />}
+          {sideView === "parts" && <LibraryPanel revision={revision} busy={busy} execute={edit.execute} onPlace={placePart} />}
           {sideView === "domain" && (
             <div className="panel-body">
               <DomainPanel report={domain} revision={revision} error={domainError} />
