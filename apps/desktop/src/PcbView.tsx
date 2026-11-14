@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Canvas } from "./Canvas";
 import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, nextRotation, outlineFrom, segments, snapPoint } from "./editing";
+import { layerColour, layerKey, layerName, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
 import type { CopperLayer, Id, PadGeom, Point, Snapshot } from "./types";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 
@@ -61,6 +62,18 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
   const outline = pcb.board.outline;
   const [tool, setTool] = useState<Tool>("select");
   const [layer, setLayer] = useState<CopperLayer>("top");
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [viaFrom, setViaFrom] = useState<CopperLayer>("top");
+  const [viaTo, setViaTo] = useState<CopperLayer>("bottom");
+  const stack = stackLayers(pcb.board.stackup);
+  const order = stack.map((s) => s.layer);
+  const shown = (l: CopperLayer) => !hidden.has(layerKey(l));
+  const toggle = (l: CopperLayer) =>
+    setHidden((h) => {
+      const n = new Set(h);
+      if (!n.delete(layerKey(l))) n.add(layerKey(l));
+      return n;
+    });
   const [net, setNet] = useState("");
   const [start, setStart] = useState<Point | null>(null);
   const [corners, setCorners] = useState<Point[]>([]);
@@ -78,6 +91,16 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
     .sort();
   const footprint = snapshot.geometry.footprints.find((f) => f.symbol_id === selected);
   const fpInstance = footprint ? pcb.footprints[footprint.id] : undefined;
+
+  const hasZone = (l: CopperLayer) => Object.values(pcb.zones).some((z) => sameLayer(z.layer, l));
+  // One zone over the board outline for every plane layer that has none, on the chosen net.
+  const fillPlanes = () => {
+    if (!edit || !outline.length || !net) return;
+    const cmds = stack
+      .filter((s) => s.kind === "plane" && !hasZone(s.layer))
+      .map((s) => ({ type: "AddZone" as const, layer: s.layer, net, outline, clearance: null }));
+    if (cmds.length) void edit.execute(cmds);
+  };
 
   const reset = () => {
     setStart(null);
@@ -119,7 +142,13 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
         rotation: null,
         side: fpInstance.side === "top" ? "bottom" : "top",
       });
-    } else if (k === "l" && tool === "route") setLayer((l) => (l === "top" ? "bottom" : "top"));
+    } else if (k === "l" && tool === "route") {
+      const i = order.findIndex((o) => sameLayer(o, layer));
+      const next = order[(i + 1) % order.length];
+      setLayer(next);
+      // Switching layer in the middle of a track needs a via where the track stops.
+      if (start && net) void edit.execute({ type: "AddVia", position: start, net, drill: null, diameter: null, from: layer, to: next });
+    }
   };
   useEffect(() => {
     const h = (e: KeyboardEvent) => keys.current(e);
@@ -170,7 +199,7 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
       case "via": {
         const n = snapped?.net ?? net;
         if (!n) return edit.notify("Pick the net for the via first.");
-        void edit.execute({ type: "AddVia", position: snap.point, net: n, drill: null, diameter: null });
+        void edit.execute({ type: "AddVia", position: snap.point, net: n, drill: null, diameter: null, from: viaFrom, to: viaTo });
         return;
       }
       case "delete": {
@@ -214,9 +243,17 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
         <div className="tool-options">
           {(tool === "route" || tool === "via") && (
             <>
-              <select aria-label="Layer" value={layer} onChange={(e) => setLayer(e.target.value as CopperLayer)}>
-                <option value="top">Top copper</option>
-                <option value="bottom">Bottom copper</option>
+              <select
+                aria-label="Layer"
+                value={layerKey(layer)}
+                onChange={(e) => setLayer(order.find((o) => layerKey(o) === e.target.value) ?? "top")}
+              >
+                {stack.map((s) => (
+                  <option key={layerKey(s.layer)} value={layerKey(s.layer)}>
+                    {layerName(s.layer)}
+                    {s.kind === "plane" ? " (plane)" : ""}
+                  </option>
+                ))}
               </select>
               <select aria-label="Net" value={net} onChange={(e) => setNet(e.target.value)}>
                 <option value="">net…</option>
@@ -226,6 +263,33 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
                   </option>
                 ))}
               </select>
+            </>
+          )}
+          {tool === "via" && (
+            <>
+              <select
+                aria-label="Via from"
+                value={layerKey(viaFrom)}
+                onChange={(e) => setViaFrom(order.find((o) => layerKey(o) === e.target.value) ?? "top")}
+              >
+                {order.map((o) => (
+                  <option key={layerKey(o)} value={layerKey(o)}>
+                    {layerName(o)}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Via to"
+                value={layerKey(viaTo)}
+                onChange={(e) => setViaTo(order.find((o) => layerKey(o) === e.target.value) ?? "bottom")}
+              >
+                {order.map((o) => (
+                  <option key={layerKey(o)} value={layerKey(o)}>
+                    {layerName(o)}
+                  </option>
+                ))}
+              </select>
+              <span className="muted">{viaKind(viaFrom, viaTo)} via</span>
             </>
           )}
           {tool === "outline" && (
@@ -248,6 +312,38 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
           </span>
         </div>
       )}
+      <div className="tool-options layer-panel" role="group" aria-label="Layers">
+        {edit && (
+          <select
+            aria-label="Copper layers"
+            value={stack.length}
+            onChange={(e) => void edit.execute({ type: "SetLayerCount", count: Number(e.target.value), board_thickness: null })}
+          >
+            {[2, 4, 6, 8].map((n) => (
+              <option key={n} value={n}>
+                {n} copper layers
+              </option>
+            ))}
+          </select>
+        )}
+        {stack.map((s) => (
+          <label key={layerKey(s.layer)} style={{ color: layerColour(s.layer) }}>
+            <input
+              type="checkbox"
+              checked={shown(s.layer)}
+              onChange={() => toggle(s.layer)}
+              aria-label={`Show ${layerName(s.layer)}`}
+            />{" "}
+            {layerName(s.layer)}
+            {s.kind === "plane" ? " ▭" : ""}
+          </label>
+        ))}
+        {edit && !stack.every((s) => s.kind !== "plane" || hasZone(s.layer)) && (
+          <button type="button" onClick={fillPlanes} disabled={!outline.length || !net}>
+            Fill planes with net
+          </button>
+        )}
+      </div>
       <Canvas
         label="PCB canvas"
         bounds={pcbBounds(snapshot)}
@@ -256,18 +352,27 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
         onHover={edit ? (x, y) => setHover(fromView(x, y)) : undefined}
       >
         {outline.length > 0 && <polygon className="board" points={poly(outline)} />}
-        {Object.values(pcb.zones).map((z) => (
-          <polygon key={z.id} className={`zone ${z.layer}`} points={poly(z.outline)}>
-            <title>{`zone ${z.net} (${z.layer})`}</title>
-          </polygon>
-        ))}
-        {Object.values(pcb.tracks).map((t) => {
+        {Object.values(pcb.zones)
+          .filter((z) => shown(z.layer))
+          .map((z) => (
+            <polygon
+              key={z.id}
+              className={`zone ${layerKey(z.layer)}`}
+              style={{ fill: layerColour(z.layer), stroke: layerColour(z.layer) }}
+              points={poly(z.outline)}
+            >
+              <title>{`zone ${z.net} (${layerName(z.layer)})`}</title>
+            </polygon>
+          ))}
+        {Object.values(pcb.tracks)
+          .filter((t) => shown(t.layer))
+          .map((t) => {
           const [x1, y1] = toView(t.a);
           const [x2, y2] = toView(t.b);
           return (
             <g key={t.id} data-track-id={t.id}>
-              <line className={`track ${t.layer}`} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={mm(t.width)}>
-                <title>{`${t.net} (${t.layer})`}</title>
+              <line className={`track ${layerKey(t.layer)}`} style={{ stroke: layerColour(t.layer) }} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={mm(t.width)}>
+                <title>{`${t.net} (${layerName(t.layer)})`}</title>
               </line>
               <line className="hit" x1={x1} y1={y1} x2={x2} y2={y2} />
             </g>
@@ -276,7 +381,7 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
         {preview.map(([a, b], i) => {
           const [x1, y1] = toView(a);
           const [x2, y2] = toView(b);
-          return <line key={i} className={`track ${layer} preview`} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={0.25} />;
+          return <line key={i} className={`track ${layerKey(layer)} preview`} style={{ stroke: layerColour(layer) }} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={0.25} />;
         })}
         {corners.length > 0 && <polyline className="outline-draft" points={poly([...corners, ...(hoverSnap ? [hoverSnap] : [])])} />}
         {snapshot.geometry.footprints.map((f) => {
@@ -301,11 +406,13 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
             </g>
           );
         })}
-        {Object.values(pcb.vias).map((v) => {
+        {Object.values(pcb.vias)
+          .filter((v) => viaLayers(order, v.from ?? "top", v.to ?? "bottom").some(shown))
+          .map((v) => {
           const [x, y] = toView(v.position);
           return (
             <g key={v.id} className="via" data-via-id={v.id}>
-              <title>{`via ${v.net}`}</title>
+              <title>{`${viaKind(v.from ?? "top", v.to ?? "bottom")} via ${v.net} (${layerName(v.from ?? "top")}→${layerName(v.to ?? "bottom")})`}</title>
               <circle cx={x} cy={y} r={mm(v.diameter) / 2} />
               <circle className="drill" cx={x} cy={y} r={mm(v.drill) / 2} />
             </g>

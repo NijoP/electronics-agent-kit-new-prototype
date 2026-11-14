@@ -95,10 +95,13 @@ impl Grid {
     }
 }
 
-fn layer_index(l: CopperLayer) -> usize {
+/// Router grid layer for a copper layer; the autorouter works on the two outer layers only,
+/// so inner-layer copper is not part of its grid (`None`).
+fn layer_index(l: CopperLayer) -> Option<usize> {
     match l {
-        CopperLayer::Top => 0,
-        CopperLayer::Bottom => 1,
+        CopperLayer::Top => Some(0),
+        CopperLayer::Bottom => Some(1),
+        CopperLayer::Inner(_) => None,
     }
 }
 
@@ -201,7 +204,9 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
     // Existing copper. Unassigned-net pads block everyone.
     for it in &copper {
         let id = net_ids.get(&it.net).copied().unwrap_or(MULTI);
-        grid.mark(layer_index(it.layer), &it.shape, inflate, id);
+        if let Some(l) = layer_index(it.layer) {
+            grid.mark(l, &it.shape, inflate, id);
+        }
     }
 
     // Gather pad terminals per net, plus existing connectivity groups.
@@ -221,7 +226,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         let mut ls: Vec<usize> = copper
             .iter()
             .filter(|i| i.kind == ItemKind::Pad && i.net == net && i.shape.contains(pt))
-            .map(|i| layer_index(i.layer))
+            .filter_map(|i| layer_index(i.layer))
             .collect();
         ls.sort();
         ls.dedup();
@@ -305,7 +310,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
                 'check: for (l, s) in &new_shapes {
                     for it in copper
                         .iter()
-                        .filter(|i| layer_index(i.layer) == *l && i.net != net)
+                        .filter(|i| layer_index(i.layer) == Some(*l) && i.net != net)
                     {
                         if distance(s, &it.shape) < clearance - 1.0 {
                             violation =

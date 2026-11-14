@@ -268,7 +268,13 @@ pub fn run(name: &str, args: &Value, p: &Project) -> Option<Result<Value, String
         "calc_trace_width" => (|| {
             let current = req_num(args, "current_a")?;
             let rise = arg_num(args, "temp_rise_c")?.unwrap_or(p.constraints.temp_rise_c);
-            let oz = arg_num(args, "copper_oz")?.unwrap_or(p.pcb.board.stackup.outer_copper_oz);
+            let oz = arg_num(args, "copper_oz")?.unwrap_or(
+                p.pcb
+                    .board
+                    .stackup
+                    .copper_oz(eak_core::CopperLayer::Top)
+                    .unwrap_or(1.0),
+            );
             let internal = args
                 .get("internal")
                 .and_then(Value::as_bool)
