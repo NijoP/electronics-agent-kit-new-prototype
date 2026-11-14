@@ -197,6 +197,8 @@ fn via_drill_and_ring_are_separate_findings_with_values() {
             drill: mm(0.2),
             diameter: mm(0.4),
             net: "N_VIA".into(),
+            from: eak_core::CopperLayer::Top,
+            to: eak_core::CopperLayer::Bottom,
         },
     );
     let r = drc::run(&p);

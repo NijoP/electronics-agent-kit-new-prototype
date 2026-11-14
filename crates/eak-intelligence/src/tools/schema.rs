@@ -61,29 +61,51 @@ pub fn label_kind() -> Value {
     )
 }
 pub fn copper_layer() -> Value {
-    enumeration(&["top", "bottom"], "copper layer")
+    json!({
+        "description": "copper layer: \"top\", \"bottom\", or {\"inner\": n} for the n-th inner layer from the top (1-based)",
+        "anyOf": [
+            {"type": "string", "enum": ["top", "bottom"]},
+            obj(&[("inner", integer("inner layer number, 1 = just below the top layer"))], &["inner"]),
+        ],
+    })
 }
 pub fn side() -> Value {
     enumeration(&["top", "bottom"], "board side")
 }
 
 pub fn stackup() -> Value {
+    let layer = obj(
+        &[
+            ("layer", copper_layer()),
+            (
+                "kind",
+                enumeration(
+                    &["signal", "plane"],
+                    "signal routing layer or power/ground plane",
+                ),
+            ),
+            ("copper_oz", number("copper weight, oz/ft²")),
+            (
+                "dielectric_after_um",
+                integer("dielectric thickness below this layer, µm (0 for the bottom layer)"),
+            ),
+            ("er", number("relative permittivity of that dielectric")),
+        ],
+        &["layer", "copper_oz", "dielectric_after_um", "er"],
+    );
     obj(
         &[
             (
-                "copper_layers",
-                integer("number of copper layers (this build supports 2)"),
+                "layers",
+                array(
+                    layer,
+                    "copper layers top to bottom: top, inner 1..n, bottom; an even count from 2 to 16",
+                ),
             ),
             ("board_thickness", nm("finished board thickness")),
-            ("outer_copper_oz", number("outer copper weight, oz/ft²")),
             ("dielectric", string("dielectric material, e.g. FR-4")),
         ],
-        &[
-            "copper_layers",
-            "board_thickness",
-            "outer_copper_oz",
-            "dielectric",
-        ],
+        &["layers", "board_thickness", "dielectric"],
     )
 }
 

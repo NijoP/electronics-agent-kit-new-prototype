@@ -11,7 +11,20 @@ export interface Point {
 }
 export type Rotation = "R0" | "R90" | "R180" | "R270";
 export type Side = "top" | "bottom";
-export type CopperLayer = "top" | "bottom";
+/** "top", "bottom", or the n-th inner layer from the top (1-based). */
+export type CopperLayer = "top" | "bottom" | { inner: number };
+export interface StackupLayer {
+  layer: CopperLayer;
+  kind?: "signal" | "plane";
+  copper_oz: number;
+  dielectric_after_um: number;
+  er: number;
+}
+export interface Stackup {
+  layers: StackupLayer[];
+  board_thickness: Nm;
+  dielectric: string;
+}
 
 export interface Sheet {
   id: Id;
@@ -70,6 +83,9 @@ export interface Via {
   drill: Nm;
   diameter: Nm;
   net: string;
+  /** Barrel span; absent in older projects = through (top to bottom). */
+  from?: CopperLayer;
+  to?: CopperLayer;
 }
 export interface Zone {
   id: Id;
@@ -93,7 +109,7 @@ export interface Project {
     no_connects: Record<Id, NoConnect>;
   };
   pcb: {
-    board: { outline: Point[] };
+    board: { outline: Point[]; stackup?: Stackup };
     footprints: Record<Id, FootprintInstance>;
     tracks: Record<Id, Track>;
     vias: Record<Id, Via>;
@@ -164,7 +180,11 @@ export type Command =
   | { type: "MoveFootprint"; footprint_id: Id; position: Point; rotation: Rotation | null; side: Side | null }
   | { type: "AddTrack"; layer: CopperLayer; a: Point; b: Point; width: Nm | null; net: string }
   | { type: "DeleteTrack"; track_id: Id }
-  | { type: "AddVia"; position: Point; net: string; drill: Nm | null; diameter: Nm | null }
+  | { type: "AddVia"; position: Point; net: string; drill: Nm | null; diameter: Nm | null; from?: CopperLayer | null; to?: CopperLayer | null }
+  | { type: "AddZone"; layer: CopperLayer; net: string; outline: Point[]; clearance: Nm | null }
+  | { type: "DeleteZone"; zone_id: Id }
+  | { type: "SetLayerCount"; count: number; board_thickness?: Nm | null }
+  | { type: "SetStackup"; stackup: Stackup }
   | { type: "DeleteVia"; via_id: Id }
   | { type: "Annotate" }
   | { type: "SyncSchematicToPcb" }
