@@ -915,7 +915,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eak-core"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -925,7 +925,7 @@ dependencies = [
 
 [[package]]
 name = "eak-desktop"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "eak-core",
  "eak-engineering",
@@ -943,7 +943,7 @@ dependencies = [
 
 [[package]]
 name = "eak-engineering"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "eak-core",
  "serde",
@@ -952,7 +952,7 @@ dependencies = [
 
 [[package]]
 name = "eak-intelligence"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "eak-core",
  "eak-engineering",
@@ -966,7 +966,7 @@ dependencies = [
 
 [[package]]
 name = "eak-manufacturing"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "eak-core",
  "eak-engineering",
@@ -979,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "eak-runtime"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "eak-core",
  "eak-engineering",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "eak-simulation"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "eak-core",
  "eak-engineering",
@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "eak-validation"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "eak-core",
  "eak-engineering",
