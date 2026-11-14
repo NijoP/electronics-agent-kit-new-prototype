@@ -1,0 +1,22 @@
+# Low-memory defaults for an 8 GB development machine (see docs/dev/LOW_MEMORY_DEVELOPMENT.md).
+# Every value here can be overridden per run, e.g. `CARGO_BUILD_JOBS=4 cargo build` on a big box.
+
+[build]
+# At most two rustc/linker processes at once: on a 4-core/8 GB host each rustc plus the linker can
+# need from several hundred MB to over 1 GB, and the default (one job per core) risks swapping.
+jobs = 2
+
+[profile.dev]
+# Keep line tables (backtraces, panics) but drop variable/type debug info: smaller objects,
+# less linker memory, faster rebuilds. Tests here run with --release anyway (AGENTS.md).
+debug = "line-tables-only"
+incremental = true
+
+[profile.test]
+debug = "line-tables-only"
+
+# Dependencies are never edited during development: strip their debug info entirely (smaller
+# objects, less linker memory). Optimisation level is left at the default on purpose: it was not
+# shown to reduce rebuild cost, and the standard test loop uses --release, which ignores this.
+[profile.dev.package."*"]
+debug = false
