@@ -93,12 +93,19 @@ pub fn run(p: &Project) -> Report {
         ),
         rule("MECH-003", "Missing 3D model data", "", "EAK"),
     ];
+    let mut limitations: Vec<String> = vec!["Bodies are parametric boxes derived from library height and courtyard; real package shapes may differ".into()];
+    if p.constraints.max_component_height.is_none() {
+        limitations.push("NOT EVALUATED: MECH-001 height limit (no limit declared); mechanical fit is unknown and blocks release above DRAFT".into());
+    }
     Report::new(
         "MECH",
         p,
         rules,
         f,
-        vec!["Enclosure fit (no enclosure model)".into(), "STEP model import and exact-solid collision".into()],
-        vec!["Bodies are parametric boxes derived from library height and courtyard; real package shapes may differ".into()],
+        vec![
+            "Enclosure fit (no enclosure model)".into(),
+            "STEP model import and exact-solid collision".into(),
+        ],
+        limitations,
     )
 }

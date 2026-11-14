@@ -140,6 +140,7 @@ export function EngineeringMonitor({ snapshot, results, onProbe, onAsk, onNaviga
       <h2>Engineering Monitor</h2>
       <ReportSection title="ERC" result={results.erc} snapshot={snapshot} onProbe={onProbe} onAsk={onAsk} onNavigate={onNavigate} activeFinding={activeFinding} />
       <ReportSection title="DRC" result={results.drc} snapshot={snapshot} onProbe={onProbe} onAsk={onAsk} onNavigate={onNavigate} activeFinding={activeFinding} />
+      <ReportSection title="DFM" result={results.dfm} snapshot={snapshot} onProbe={onProbe} onAsk={onAsk} onNavigate={onNavigate} activeFinding={activeFinding} />
     </div>
   );
 }

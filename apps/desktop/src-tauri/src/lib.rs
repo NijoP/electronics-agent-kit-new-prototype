@@ -141,6 +141,8 @@ pub struct Snapshot {
 pub enum Check {
     Erc,
     Drc,
+    /// Design-for-manufacture against the built-in JLCPCB standard profile.
+    Dfm,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -351,12 +353,15 @@ pub fn acknowledge_recovery(s: &Session) -> Result<Snapshot, String> {
     })
 }
 
-/// Run ERC or DRC on the current revision and record the report as evidence.
+/// Run ERC, DRC or DFM on the current revision and record the report as evidence.
 pub fn run_check(s: &Session, check: Check) -> Result<CheckResult, String> {
     s.with_engine(|e| {
         let report = match check {
             Check::Erc => erc::run(e.project()),
             Check::Drc => drc::run(e.project()),
+            Check::Dfm => {
+                eak_validation::dfm::run(e.project(), &eak_validation::dfm::jlcpcb_standard())
+            }
         };
         let json = serde_json::to_string_pretty(&report).map_err(|err| err.to_string())?;
         let evidence_path = match e.dir() {
@@ -500,8 +505,8 @@ pub struct ExportResult {
     pub reports: Vec<Report>,
 }
 
-/// Run ERC, DRC and MECH on the current revision (saving each as evidence), then write
-/// Gerber, Excellon, BOM and CPL into `<project>/output/rev-<N>`. The package status is
+/// Run ERC, DRC, MECH and DFM on the current revision (saving each as evidence), then write
+/// Gerber, Excellon, BOM, CPL and the zipped fab pack with its README into `<project>/output/rev-<N>`. The package status is
 /// DRAFT unless every gate passes; it is never called manufacturing-ready.
 pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
     s.with_engine(|e| {
@@ -513,6 +518,7 @@ pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
             erc::run(e.project()),
             drc::run(e.project()),
             eak_validation::mech::run(e.project()),
+            eak_validation::dfm::run(e.project(), &eak_validation::dfm::jlcpcb_standard()),
         ];
         for r in &reports {
             let json = serde_json::to_string_pretty(r).map_err(|err| err.to_string())?;

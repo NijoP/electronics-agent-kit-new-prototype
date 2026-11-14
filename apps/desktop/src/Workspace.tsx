@@ -354,10 +354,10 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   };
   const resetLayout = () => setLayout(DEFAULT_LAYOUT);
   // Click a finding: open the right editor, select the object, zoom to it, highlight it.
-  // DRC findings live in the PCB editor (zoom + highlight); ERC findings select the symbol in
+  // DRC and DFM findings live in the PCB editor (zoom + highlight); ERC findings select the symbol in
   // the schematic (no zoom there yet).
   const navigateFinding = (f: Finding, checkName: Check) => {
-    const kind = checkName === "drc" ? "pcb" : "schematic";
+    const kind = checkName === "erc" ? "schematic" : "pcb";
     const d = docs.find((x) => x.kind === kind);
     if (d) open(d.id);
     const target = probeTarget(snapshot, f.objects);
@@ -380,6 +380,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     { id: "export", label: "Export manufacturing files", run: () => setDialog("export"), group: "Manufacturing" },
     { id: "erc", label: "Run ERC", run: () => check("erc"), group: "Verify" },
     { id: "drc", label: "Run DRC", run: () => check("drc"), group: "Verify" },
+    { id: "dfm", label: "Run DFM (JLCPCB standard profile)", run: () => check("dfm"), group: "Verify" },
     { id: "annotate", label: "Annotate schematic", run: () => execute({ type: "Annotate" }), group: "Design" },
     { id: "sync", label: "Update PCB from schematic (sync)", run: syncPcb, group: "Design" },
     { id: "place", label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), group: "Design" },
@@ -534,9 +535,10 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       { id: "sync", label: "Update PCB", title: "Update PCB from schematic", run: syncPcb, disabled: busy ? "An engine command is running" : undefined },
       { id: "erc", label: "Run ERC", run: () => check("erc"), disabled: busy ? "An engine command is running" : undefined },
       { id: "drc", label: "Run DRC", run: () => check("drc"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "dfm", label: "Run DFM", title: "Design for manufacture against the JLCPCB standard profile", run: () => check("dfm"), disabled: busy ? "An engine command is running" : undefined },
       { id: "route", label: "Auto-route", title: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), disabled: busy ? "An engine command is running" : undefined },
       { id: "sim", label: "Simulate", disabled: "Not implemented: no SPICE integration yet" },
-      { id: "export", label: "Export manufacturing files", title: "Gerber, Excellon, BOM, CPL", run: () => setDialog("export"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "export", label: "Export manufacturing files", title: "Gerber, Excellon, BOM, CPL, fab-pack ZIP; runs ERC/DRC/MECH/DFM", run: () => setDialog("export"), disabled: busy ? "An engine command is running" : undefined },
     ],
     [
       { id: "cmd", label: "Commands", shortcut: SHORTCUTS.palette, run: () => setPalette(true) },
@@ -583,6 +585,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     { label: "Design", items: [
       { label: "Run ERC", run: () => check("erc"), disabled: noProject },
       { label: "Run DRC", run: () => check("drc"), disabled: noProject },
+      { label: "Run DFM (JLCPCB standard)", run: () => check("dfm"), disabled: noProject },
       { label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), disabled: noProject, sep: true },
       { label: "Design rules…", run: () => setDialog("rules") },
     ] },
