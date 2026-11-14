@@ -16,6 +16,8 @@ interface Props {
   aiPreview?: Id[];
   /** Arms the Place tool with a library part (Parts panel, quick open). */
   armPart?: { id: string; n: number } | null;
+  /** Engine sheet id this document shows (from the document tab). */
+  sheetId?: Id;
 }
 
 type Tool = "select" | "place" | "wire" | "connect" | "label" | "move" | "delete";
@@ -34,10 +36,13 @@ const CAPTURE = mmToNm(1.5);
 const hit = (e: { target: EventTarget }, attr: string): string | null =>
   e.target instanceof Element ? (e.target.closest(`[${attr}]`)?.getAttribute(attr) ?? null) : null;
 
-export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = [], armPart }: Props) {
+export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = [], armPart, sheetId: docSheet }: Props) {
   const { schematic } = snapshot.project;
   const sheets = Object.values(schematic.sheets);
-  const [sheetId, setSheetId] = useState<Id | undefined>(sheets[0]?.id);
+  const [sheetId, setSheetId] = useState<Id | undefined>(docSheet ?? sheets[0]?.id);
+  useEffect(() => {
+    if (docSheet) setSheetId(docSheet);
+  }, [docSheet]);
   const [tool, setTool] = useState<Tool>("select");
   const [partId, setPartId] = useState("");
   const [labelName, setLabelName] = useState("NET1");
