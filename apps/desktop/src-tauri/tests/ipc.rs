@@ -529,6 +529,75 @@ fn connectivity_reports_the_ratsnest_for_the_current_revision() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+#[test]
+fn library_search_merges_builtin_and_project_and_keeps_provenance() {
+    let d = tmpdir("libsearch");
+    let s = session();
+    create_project(&s, &path(&d), "Lib").unwrap();
+    let all = library_search(&s, "", "", "all").unwrap();
+    assert!(all.iter().all(|p| p.source == "builtin" && !p.in_project));
+    // Search is AND-over-terms across fields and filterable by category / source.
+    let r = library_search(&s, "resistor 0603", "", "all").unwrap();
+    assert!(r.iter().any(|p| p.id == "R_0603"));
+    assert!(library_search(&s, "resistor", "LED", "all")
+        .unwrap()
+        .is_empty());
+    assert!(library_search(&s, "", "", "project").unwrap().is_empty());
+    // Place + edit through typed commands; the project copy shadows the built-in and the
+    // original provenance text is preserved.
+    let builtin_prov = eak_core::builtin::get("R_0603").unwrap().provenance;
+    let r = execute_command(
+        &s,
+        0,
+        C::PlaceSymbol {
+            sheet_id: None,
+            component_id: "R_0603".into(),
+            position: Point::mm(0.0, 0.0),
+            rotation: Rotation::default(),
+            refdes: None,
+            value: None,
+        },
+    )
+    .unwrap();
+    assert!(r.accepted, "{:?}", r.error);
+    let r = execute_command(
+        &s,
+        r.revision_after,
+        C::SetComponentProperties {
+            component_id: "R_0603".into(),
+            manufacturer: Some("Yageo".into()),
+            mpn: Some("RC0603FR-0710KL".into()),
+            lcsc: Some("C25804".into()),
+            datasheet: None,
+        },
+    )
+    .unwrap();
+    assert!(r.accepted, "{:?}", r.error);
+    let hit = library_search(&s, "C25804", "", "all").unwrap();
+    assert_eq!(hit.len(), 1);
+    assert_eq!(hit[0].source, "project");
+    assert!(hit[0].in_project);
+    assert_eq!(hit[0].def.provenance, builtin_prov);
+    assert_eq!(hit[0].def.mpn.as_deref(), Some("RC0603FR-0710KL"));
+}
+
+#[test]
+fn footprint_candidates_only_offer_assignable_footprints() {
+    let d = tmpdir("fpcand");
+    let s = session();
+    create_project(&s, &path(&d), "Lib").unwrap();
+    let c = footprint_candidates(&s, "R_0603").unwrap();
+    let target = eak_core::builtin::get("R_0603").unwrap();
+    for cand in &c {
+        assert_ne!(cand.footprint.name, target.footprint.name);
+        let mut t = target.clone();
+        t.footprint = cand.footprint.clone();
+        t.pin_map = cand.pin_map.clone();
+        assert!(t.validate().is_empty(), "{}: {:?}", cand.name, t.validate());
+    }
+    assert!(footprint_candidates(&s, "NOPE").is_err());
+}
+
 /// Interactive routing end to end: `route_step` proposes a legal path for an airwire, the tool
 /// commits it as one `Batch`, DRC finds no clearance or short violation, and one undo removes
 /// the whole route.

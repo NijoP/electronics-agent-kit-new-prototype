@@ -149,6 +149,47 @@ pub fn manufacturing() -> Value {
     )
 }
 
+/// Schema of a `FootprintDef`.
+pub fn footprint_def() -> Value {
+    let pad = obj(
+        &[
+            ("number", string("pad number")),
+            ("kind", enumeration(&["smd", "tht"], "pad kind")),
+            (
+                "shape",
+                enumeration(&["rect", "circle", "oval"], "pad shape"),
+            ),
+            ("position", point("pad centre relative to footprint origin")),
+            ("size_x", nm("pad width")),
+            ("size_y", nm("pad height")),
+            ("drill", nullable(nm("finished hole diameter for THT pads"))),
+        ],
+        &["number", "kind", "shape", "position", "size_x", "size_y"],
+    );
+    obj(
+        &[
+            ("name", string("footprint name")),
+            ("pads", array(pad, "pads")),
+            ("courtyard_half_w", nm("courtyard half width")),
+            ("courtyard_half_h", nm("courtyard half height")),
+            (
+                "body_height",
+                nullable(nm("body height above board; null = unknown")),
+            ),
+        ],
+        &["name", "pads", "courtyard_half_w", "courtyard_half_h"],
+    )
+}
+
+/// Schema of a symbol-pin -> footprint-pad map.
+pub fn pin_map() -> Value {
+    json!({
+        "type": "object",
+        "additionalProperties": array(string("pad number"), "pads"),
+        "description": "symbol pin number -> footprint pad numbers",
+    })
+}
+
 pub fn component_def() -> Value {
     let pin = obj(
         &[
@@ -185,34 +226,7 @@ pub fn component_def() -> Value {
         ],
         &["pins", "body_half_w", "body_half_h"],
     );
-    let pad = obj(
-        &[
-            ("number", string("pad number")),
-            ("kind", enumeration(&["smd", "tht"], "pad kind")),
-            (
-                "shape",
-                enumeration(&["rect", "circle", "oval"], "pad shape"),
-            ),
-            ("position", point("pad centre relative to footprint origin")),
-            ("size_x", nm("pad width")),
-            ("size_y", nm("pad height")),
-            ("drill", nullable(nm("finished hole diameter for THT pads"))),
-        ],
-        &["number", "kind", "shape", "position", "size_x", "size_y"],
-    );
-    let footprint = obj(
-        &[
-            ("name", string("footprint name")),
-            ("pads", array(pad, "pads")),
-            ("courtyard_half_w", nm("courtyard half width")),
-            ("courtyard_half_h", nm("courtyard half height")),
-            (
-                "body_height",
-                nullable(nm("body height above board; null = unknown")),
-            ),
-        ],
-        &["name", "pads", "courtyard_half_w", "courtyard_half_h"],
-    );
+    let footprint = footprint_def();
     let rating = obj(
         &[
             ("name", string("rating name")),

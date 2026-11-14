@@ -254,6 +254,17 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .route-blocked { stroke: var(--danger, #d33); stroke-width: 0.15; stroke-dasharray: 0.3 0.3; pointer-events: none; }
 .track.preview.fixed { opacity: 0.8; stroke-dasharray: none; }
 
+/* Library panel (Phase 5) */
+.library-panel .row { display: flex; gap: var(--s-1); }
+.library-panel .row > * { min-width: 0; flex: 1; }
+.lib-detail { display: grid; gap: var(--s-1); border-top: 1px solid var(--border); padding-top: var(--s-1); }
+.lib-previews { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-1); }
+.lib-preview { width: 100%; aspect-ratio: 1; background: var(--bg-hover); border-radius: 4px; color: var(--fg); }
+.lib-facts { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--s-1); margin: 0; font-size: 12px; }
+.lib-facts dt { color: var(--fg-dim); }
+.lib-facts dd { margin: 0; overflow-wrap: anywhere; }
+.library-panel .field { display: grid; gap: 2px; font-size: 12px; }
+
 .tb-title { display: flex; gap: var(--s-1); align-items: baseline; margin-right: var(--s-1); }
 .tb-group { display: flex; gap: var(--s-half); padding-right: var(--s-1); border-right: 1px solid var(--line); }
 .tb-group:last-child { border-right: 0; }
