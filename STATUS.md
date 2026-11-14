@@ -31,6 +31,7 @@ assistant panel was removed in the IDE shell (#49); model providers remain as op
 | Provider catalog, streaming, Gemini, staged connection test | code-reviewed only | |
 | Integration of all of the above (this commit) | code-reviewed only | conflicts resolved by reading; `Cargo.lock` hand-merged |
 | Phase 2 wiring: harness env in terminal sessions, space-project binding, editor resync after checks/exports | code-reviewed only | `git diff --check` and grep only; never compiled or run |
+| Engineering gates (PASS/FAIL/UNKNOWN/NOT_RUN), copper/power engineering, physical quantities, harness `run_gates` | code-reviewed only | ADR-0021; never compiled or run |
 | Autonomous design flow (`eak design`, `design_*` tools, evidence labels, TTY-only human approval; ADR-0020) | code-reviewed only | DESK mental models / 12-step procedure / derating (`eak-intelligence::mental`), domain gates blocking apply, intent read-back, component evidence; never compiled or run; unit tests in `design.rs` and `calc.rs` written, unrun; worked example in `docs/agents/AUTONOMOUS_DESIGN.md` not run |
 
 ## Known gaps
@@ -40,3 +41,4 @@ assistant panel was removed in the IDE shell (#49); model providers remain as op
 - No agent (Claude Code, OpenCode, Pi) has been tested end to end through the harness.
 - 3D board viewer (three.js, registered EDA view, read-only: extruded outline, copper, pads, tracks, vias, courtyard outlines, bodies from library body height, orbit/presets/layer toggles): written, **code-reviewed only** (never built or run). Differential pairs, impedance control, requirements capture: not implemented.
 - `FEATURE_MATRIX.md` rows for older features need a re-audit.
+- Fail-closed engineering gates, unit-aware copper/power calculations, typed physical quantities (ADR-0021): **code-reviewed only**. IPC tables remain unverified against the standard text; reference nets are recognised by name.

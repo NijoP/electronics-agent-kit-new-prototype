@@ -5,3 +5,5 @@
 3. Needs a compiler to settle: Tauri 2 argument casing for the remaining terminal commands (all single-word args today, so unaffected); whether `app.state::<Session>()` inside `terminal_state` resolves before `setup` returns (it is managed earlier in the same closure); `Cargo.lock`/`package-lock.json` hand-merge.
 4. Trial Claude Code, OpenCode and Pi through `eak mcp` / `eak` before listing any as supported.
 5. Cut a release built from this tree; publish Windows/macOS packages or keep them labelled unavailable.
+6. Existing-project rework (directive §3H, from DESK `desk/rework/*`): read-only inspection, project identity check, immutable baseline (checkpoint), protected vs modifiable objects, dependency-aware repair plan as one typed `Batch`, explicit approval, readback and post-mutation gates. Not started.
+7. When builds resume: run the new gate/power/units tests (`eak-validation/src/gates.rs`, `eak-engineering/src/power.rs`, `eak-core/src/units.rs`, `eak-terminal/tests/pty.rs::session_environment_is_not_persisted`) and confirm `end_to_end.rs`/`multilayer.rs` still reach the release-candidate label under ADR-0021.

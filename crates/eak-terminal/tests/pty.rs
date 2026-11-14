@@ -728,3 +728,25 @@ fn spaces_on_the_project_folder_are_bound_to_the_project_id() {
     let get = |id| spaces.iter().find(|s| s.id == id).unwrap().project_id.clone();
     assert_eq!(get(early.id).as_deref(), Some("p-1"), "existing space bound by set_context");
 }
+
+/// Regression (security review): per-session environment can hold credentials and must never
+/// be written to the layout file. Written during the testing freeze; never run.
+#[test]
+fn session_environment_is_not_persisted() {
+    let dir = tmp("env-secret");
+    let manifest = dir.join("terminal-sessions.json");
+    {
+        let m = Manager::with_manifest(Arc::new(|_| {}), manifest.clone());
+        m.create(CreateOptions {
+            cwd: Some(dir.clone()),
+            shell: Some("/bin/sh".into()),
+            env: vec![("SECRET_TOKEN".into(), "do-not-persist-4f2a".into())],
+            ..Default::default()
+        })
+        .unwrap();
+        m.shutdown();
+    }
+    let saved = std::fs::read_to_string(&manifest).unwrap();
+    assert!(!saved.contains("do-not-persist-4f2a"), "{saved}");
+    assert!(!saved.contains("SECRET_TOKEN"), "{saved}");
+}

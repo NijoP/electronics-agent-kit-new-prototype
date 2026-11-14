@@ -745,7 +745,12 @@ impl Manager {
                                 .filter_map(|p| g.sessions.get(p))
                                 .map(|s| SavedPane {
                                     name: s.name.clone(),
-                                    spec: s.spec.clone(),
+                                    // Per-session environment can carry credentials; it is
+                                    // never written to the layout file on disk.
+                                    spec: Spec {
+                                        env: Vec::new(),
+                                        ..s.spec.clone()
+                                    },
                                 })
                                 .collect(),
                         })

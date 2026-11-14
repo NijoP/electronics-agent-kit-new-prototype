@@ -56,10 +56,10 @@ Lengths are **integer nanometres** (1 mm = 1 000 000). Rotations are `R0|R90|R18
 
 | Category | Effect | Tools |
 |---|---|---|
-| `read` | none | `project_info`, `list_symbols`, `get_component`, `list_footprints`, `get_board`, `get_connectivity`, `get_history`, `get_design_summary`, `get_netlist`, `list_library_components`, `classify_domain`, `calc_*` |
+| `read` | none | `project_info`, `list_symbols`, `get_component`, `list_footprints`, `get_board`, `get_connectivity`, `get_history`, `get_design_summary`, `get_netlist`, `list_library_components`, `classify_domain`, `calc_*` (incl. `calc_copper_trace_width`, `calc_copper_voltage_drop`: every input explicit), `power_analysis` |
 | `design` | one new revision (needs `expected_revision`) | one tool per EAK command (`PlaceSymbol`, `ConnectPins`, `SyncSchematicToPcb`, `SetBoardOutline`, `MoveFootprint`, `AddTrack`, `AddVia`, `AddZone`, `AutoRoute`, `Batch`, ...), `Undo`, `Redo` |
 | `simulation` | none (ngspice on a snapshot) | `simulation_status`, `run_simulation` |
-| `validation` | stores evidence only | `run_check` (`erc`, `drc`, `mech`, `dfm`, `all`) |
+| `validation` | stores evidence only | `run_check` (`erc`, `drc`, `mech`, `dfm`, `all`), `run_gates` (fail-closed gates, ADR-0021; only PASS passes) |
 | `manufacturing` | writes `output/rev-N/` only | `export_manufacturing` |
 | `flow` | spec/plan/claim/report records in `design-flow/`; `design_apply` = one new revision | `design_spec_set`, `design_spec_get`, `design_plan`, `design_apply`, `design_validate`, `design_claim`, `design_iteration_log`, `design_report` (ADR-0020; loop in `docs/agents/AUTONOMOUS_DESIGN.md`) |
 | `project` / `discovery` | creates a folder / none | `create_project`, `list_tools`, `guide`, `design_spec_schema` |
