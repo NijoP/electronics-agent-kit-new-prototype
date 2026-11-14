@@ -92,6 +92,32 @@ files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The te
 - Nothing in the registry is verified against the cited standards or on hardware (DESK's own labels say the same).
 - Component-level intelligence (`desk/component_intelligence`: catalog, suppliers, specifications) is out of scope here.
 
+## Model providers: catalog, streaming, staged connection test (2026-11-15, branch fm/eak-ide-providers, ADR-0016)
+
+Optional infrastructure for EAK-native integrations, configured only in Settings ("Model providers (optional)"). Not needed for the EDA tools or the terminal; no chat UI. EAK never reads or changes external CLI credentials (`~/.pi`, opencode, claude, …).
+
+**Platform tested:** Linux, Rust stable, Node. No live provider: no paid key, Ollama not installed (about 3 GB of RAM free on the build host).
+
+### Implemented and tested
+- Backend provider catalog (`provider::catalog`). It covers 16 implemented providers: OpenAI (with org/project headers), Anthropic, Google Gemini (new wire format), OpenRouter, Mistral, Groq, xAI, DeepSeek, Cerebras, Together, Fireworks, NVIDIA, Ollama, LM Studio, and custom OpenAI- and Anthropic-compatible endpoints.
+  - Cloud endpoints are fixed; only local and custom endpoints take a URL.
+  - Vertex AI, Bedrock and Azure OpenAI are listed as **not implemented**, and saving one is refused.
+- Streaming for every protocol family: SSE for OpenAI-compatible, Anthropic and Gemini; NDJSON for Ollama.
+  - Covers text, thinking, tool calls with arguments split across chunks, usage, stop reasons, and Anthropic/Gemini signature replay.
+  - A loopback test proves chunks reach the caller incrementally over a real socket.
+- Error classes include invalid key, missing key, authentication failed, unsupported model, invalid base URL, network error, timeout, rate limit, provider unavailable, invalid response and not implemented.
+- Staged connection test: configuration → authentication → model → real streamed invocation.
+  - A provider shows **Connected** only after a streamed reply. Saving alone shows Untested, and any change to endpoint, model or key resets the status.
+- Model discovery with metadata (context window, max output, tools, vision) where the API reports it; unknown values show as unknown.
+- Default provider; settings file v2 (v1 still loads); export/import without keys; `ModelSettings::resolve` runtime API for integrations.
+- Tests: `eak-intelligence` unit and loopback tests; `apps/desktop/src-tauri/tests/models.rs` (status lifecycle, fixed endpoints, unimplemented providers refused, org/project headers, legacy file, export/import, resolve); vitest `ModelSettings.test.tsx`.
+
+### Not verified / not implemented
+- Never run against a live provider (no key available). Wire formats are checked against recorded-shape fixtures only.
+- Vertex AI, Bedrock and Azure OpenAI auth are not implemented. DeepSeek `reasoning_content` is not replayed.
+- Streaming is not shown in any UI, by design: no chat UI. Per-workflow model choice is limited to the default provider plus a model override through `resolve`.
+- Windows and macOS keyrings are unexercised.
+
 ## Model adaptor: providers, OS-keyring keys, model list, connection test (2026-11-14)
 
 **Platform tested:** Linux (Ubuntu, GNOME Secret Service running), Rust stable. Windows and macOS credential stores: **not run** (the code uses `keyring`'s `windows-native`/`apple-native` backends; unverified there). No real provider account was used.

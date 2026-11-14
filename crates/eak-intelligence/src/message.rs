@@ -114,6 +114,19 @@ impl ChatResponse {
     }
 }
 
+/// Incremental output while a provider streams its reply. The final [`ChatResponse`] is
+/// still returned at the end; these events only let a UI show progress as it arrives.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum StreamEvent {
+    /// Visible answer text.
+    TextDelta { text: String },
+    /// Reasoning/thinking text (shown only as progress, never as the answer).
+    ThinkingDelta { text: String },
+    /// The model started a tool call.
+    ToolCallStarted { id: String, name: String },
+}
+
 /// Cooperative cancellation shared between the caller (UI "Cancel" button) and the agent
 /// loop, provider transport and tool dispatch.
 #[derive(Debug, Clone, Default)]

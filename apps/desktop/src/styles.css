@@ -175,6 +175,13 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .modal label { display: grid; gap: var(--s-half); }
 .providers { list-style: none; padding: 0; margin: 0 0 var(--s-1); display: grid; gap: var(--s-1); }
 .providers li { display: flex; justify-content: space-between; gap: var(--s-1); align-items: center; padding: var(--s-1); border: 1px solid var(--line); border-radius: var(--r-1); }
+.providers .badge { font-size: 0.8em; padding: 0 var(--s-half); border: 1px solid var(--line-strong); border-radius: var(--r-1); }
+.model-table { width: 100%; border-collapse: collapse; font-size: 0.9em; display: block; max-height: 240px; overflow: auto; }
+.model-table th, .model-table td { text-align: left; padding: 2px var(--s-half); border-bottom: 1px solid var(--line); white-space: nowrap; }
+.model-table tr.selected { background: var(--bg-hover, var(--line)); }
+.modal label.inline { display: inline-flex; gap: var(--s-half); align-items: center; }
+.modal textarea { width: 100%; min-width: 0; font-family: monospace; }
+.stages { margin: var(--s-half) 0 0; padding-left: var(--s-2); }
 
 /* Editors */
 .tools { display: flex; gap: var(--s-half); flex-wrap: wrap; }

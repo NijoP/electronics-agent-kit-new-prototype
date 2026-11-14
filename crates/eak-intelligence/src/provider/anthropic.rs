@@ -141,6 +141,137 @@ pub fn parse_response(v: &Value) -> Result<ChatResponse, ProviderError> {
     })
 }
 
+/// Accumulates Messages-API stream events (`message_start`, `content_block_*`,
+/// `message_delta`, `error`) into the same content blocks a non-streaming reply has, so the
+/// result (including signed thinking blocks) replays verbatim on the next turn.
+#[derive(Debug, Default)]
+pub struct StreamState {
+    blocks: Vec<Value>,
+    /// Partial `input_json_delta` text per tool_use block index.
+    json: Vec<String>,
+    stop_reason: Option<String>,
+    usage: Usage,
+    started: bool,
+}
+
+impl StreamState {
+    pub fn on_data(
+        &mut self,
+        data: &str,
+        sink: &mut dyn FnMut(StreamEvent),
+    ) -> Result<(), ProviderError> {
+        let v: Value = serde_json::from_str(data.trim())
+            .map_err(|e| ProviderError::Malformed(format!("stream event: {e}")))?;
+        match v["type"].as_str().unwrap_or_default() {
+            "message_start" => {
+                self.started = true;
+                self.usage.input_tokens = v
+                    .pointer("/message/usage/input_tokens")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+            }
+            "content_block_start" => {
+                let i = v["index"].as_u64().unwrap_or(self.blocks.len() as u64) as usize;
+                let block = v["content_block"].clone();
+                while self.blocks.len() <= i {
+                    self.blocks.push(Value::Null);
+                    self.json.push(String::new());
+                }
+                if block["type"] == "tool_use" {
+                    sink(StreamEvent::ToolCallStarted {
+                        id: block["id"].as_str().unwrap_or_default().into(),
+                        name: block["name"].as_str().unwrap_or_default().into(),
+                    });
+                }
+                self.blocks[i] = block;
+            }
+            "content_block_delta" => {
+                let i = v["index"].as_u64().unwrap_or(0) as usize;
+                let d = &v["delta"];
+                let Some(block) = self.blocks.get_mut(i) else {
+                    return Err(ProviderError::Malformed(
+                        "delta for a block that was never started".into(),
+                    ));
+                };
+                let append = |b: &mut Value, field: &str, s: &str| {
+                    let cur = b[field].as_str().unwrap_or_default().to_string();
+                    b[field] = Value::String(cur + s);
+                };
+                match d["type"].as_str().unwrap_or_default() {
+                    "text_delta" => {
+                        let t = d["text"].as_str().unwrap_or_default();
+                        append(block, "text", t);
+                        sink(StreamEvent::TextDelta { text: t.into() });
+                    }
+                    "thinking_delta" => {
+                        let t = d["thinking"].as_str().unwrap_or_default();
+                        append(block, "thinking", t);
+                        sink(StreamEvent::ThinkingDelta { text: t.into() });
+                    }
+                    "signature_delta" => {
+                        block["signature"] = d["signature"].clone();
+                    }
+                    "input_json_delta" => {
+                        self.json[i].push_str(d["partial_json"].as_str().unwrap_or_default());
+                    }
+                    _ => {}
+                }
+            }
+            "content_block_stop" => {
+                let i = v["index"].as_u64().unwrap_or(0) as usize;
+                if let Some(block) = self.blocks.get_mut(i) {
+                    if block["type"] == "tool_use" {
+                        let raw = self.json[i].trim();
+                        block["input"] = if raw.is_empty() {
+                            json!({})
+                        } else {
+                            super::parse_arguments(raw)
+                        };
+                    }
+                }
+            }
+            "message_delta" => {
+                if let Some(r) = v.pointer("/delta/stop_reason").and_then(Value::as_str) {
+                    self.stop_reason = Some(r.into());
+                }
+                if let Some(o) = v.pointer("/usage/output_tokens").and_then(Value::as_u64) {
+                    self.usage.output_tokens = o;
+                }
+            }
+            "error" => return Err(super::openai::stream_error(&v["error"])),
+            _ => {} // ping, message_stop
+        }
+        Ok(())
+    }
+
+    pub fn finish(self) -> Result<ChatResponse, ProviderError> {
+        if !self.started {
+            return Err(ProviderError::Malformed(
+                "the stream ended before message_start".into(),
+            ));
+        }
+        let blocks: Vec<Value> = self.blocks.into_iter().filter(|b| !b.is_null()).collect();
+        parse_response(&json!({
+            "content": blocks,
+            "stop_reason": self.stop_reason,
+            "usage": {"input_tokens": self.usage.input_tokens, "output_tokens": self.usage.output_tokens},
+        }))
+    }
+}
+
+impl AnthropicProvider {
+    fn headers(&self) -> Result<Vec<(String, String)>, ProviderError> {
+        let key =
+            self.ep.api_key.as_ref().ok_or_else(|| {
+                ProviderError::MissingApiKey("Anthropic requires an API key".into())
+            })?;
+        Ok(super::auth_headers(
+            super::ProviderKind::Anthropic,
+            Some(key),
+        ))
+    }
+}
+
 impl Provider for AnthropicProvider {
     fn label(&self) -> String {
         format!("anthropic:{}", self.ep.model)
@@ -150,21 +281,38 @@ impl Provider for AnthropicProvider {
         request: &ChatRequest,
         cancel: &CancelToken,
     ) -> Result<ChatResponse, ProviderError> {
-        let key =
-            self.ep.api_key.as_ref().ok_or_else(|| {
-                ProviderError::MissingApiKey("Anthropic requires an API key".into())
-            })?;
-        let headers = vec![
-            ("x-api-key".to_string(), key.expose().to_string()),
-            ("anthropic-version".to_string(), API_VERSION.to_string()),
-        ];
         let v = self.ep.post_json(
             "/v1/messages",
-            headers,
+            self.headers()?,
             &build_body(&self.ep.model, request),
             cancel,
         )?;
         parse_response(&v)
+    }
+    fn stream(
+        &self,
+        request: &ChatRequest,
+        cancel: &CancelToken,
+        sink: &mut dyn FnMut(StreamEvent),
+    ) -> Result<ChatResponse, ProviderError> {
+        let mut body = build_body(&self.ep.model, request);
+        body["stream"] = json!(true);
+        let mut state = StreamState::default();
+        let mut sse = super::sse::SseParser::new();
+        self.ep.post_stream(
+            "/v1/messages",
+            self.headers()?,
+            &body,
+            cancel,
+            &mut |line| match sse.push_line(line) {
+                Some(ev) => state.on_data(&ev.data, sink),
+                None => Ok(()),
+            },
+        )?;
+        if let Some(ev) = sse.flush() {
+            state.on_data(&ev.data, sink)?;
+        }
+        state.finish()
     }
 }
 
@@ -263,5 +411,109 @@ mod tests {
             build_provider_with(&cfg, RecordingTransport::with(vec![])),
             Err(ProviderError::MissingApiKey(_))
         ));
+    }
+}
+
+#[cfg(test)]
+mod stream_tests {
+    use super::*;
+    use crate::provider::http::testing::RecordingTransport;
+    use crate::provider::{build_provider_with, ApiKey, ProviderConfig, ProviderKind};
+
+    /// Recorded shape of a Messages API stream: signed thinking, text, a tool_use whose
+    /// input arrives as partial JSON, and the final stop reason / usage.
+    const FIXTURE: &str = r#"event: message_start
+data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"usage":{"input_tokens":21,"output_tokens":1}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Need ERC."}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-abc"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: ping
+data: {"type":"ping"}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Checking"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" now."}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: content_block_start
+data: {"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"toolu_1","name":"run_erc","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"sheet\":"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":" 2}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":2}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":40}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+"#;
+
+    #[test]
+    fn streams_thinking_text_and_tool_use_and_keeps_signed_blocks() {
+        let t = RecordingTransport::with(vec![(200, FIXTURE)]);
+        let mut cfg = ProviderConfig::new(ProviderKind::Anthropic);
+        cfg.api_key = Some(ApiKey::new("ak"));
+        let p = build_provider_with(&cfg, t.clone()).unwrap();
+        let mut events = vec![];
+        let r = p
+            .stream(
+                &ChatRequest {
+                    system: "s".into(),
+                    messages: vec![ChatMessage::User { text: "u".into() }],
+                    tools: vec![],
+                    max_tokens: 100,
+                },
+                &CancelToken::new(),
+                &mut |e| events.push(e),
+            )
+            .unwrap();
+        assert_eq!(r.text, "Checking now.");
+        assert_eq!(r.stop_reason, StopReason::ToolUse);
+        assert_eq!(r.tool_calls[0].arguments, json!({"sheet": 2}));
+        assert_eq!((r.usage.input_tokens, r.usage.output_tokens), (21, 40));
+        let raw = r.raw.unwrap();
+        assert_eq!(raw[0]["type"], "thinking");
+        assert_eq!(raw[0]["thinking"], "Need ERC.");
+        assert_eq!(raw[0]["signature"], "sig-abc");
+        assert_eq!(raw[2]["input"], json!({"sheet": 2}));
+        assert_eq!(events.len(), 4, "{events:?}");
+        assert_eq!(t.bodies()[0]["stream"], true);
+    }
+
+    #[test]
+    fn overloaded_error_event_is_provider_unavailable() {
+        let mut s = StreamState::default();
+        let e = s
+            .on_data(
+                r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#,
+                &mut |_| {},
+            )
+            .unwrap_err();
+        assert_eq!(e.class(), crate::provider::ErrorClass::ProviderUnavailable);
+        assert!(StreamState::default().finish().is_err());
     }
 }
