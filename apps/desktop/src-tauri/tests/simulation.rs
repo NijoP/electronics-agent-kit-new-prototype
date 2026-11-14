@@ -31,9 +31,20 @@ fn simulation_status_needs_an_open_project_and_reports_nets() {
 fn run_simulation_on_an_empty_design_is_a_clear_error_and_changes_nothing() {
     let (s, d) = open_session("simrun");
     let before = current_project(&s).unwrap().project.revision;
-    let err = run_simulation(&s, &SimRequest { analysis: Analysis::Op, sources: vec![], timeout_secs: None }).unwrap_err();
+    let err = run_simulation(
+        &s,
+        &SimRequest {
+            analysis: Analysis::Op,
+            sources: vec![],
+            timeout_secs: None,
+        },
+    )
+    .unwrap_err();
     // Either ngspice is absent (clear install hint) or the circuit is empty; both are errors.
-    assert!(err.contains("not installed") || err.contains("nothing to simulate"), "{err}");
+    assert!(
+        err.contains("not installed") || err.contains("nothing to simulate"),
+        "{err}"
+    );
     assert_eq!(current_project(&s).unwrap().project.revision, before);
     close_project(&s).unwrap();
     let _ = std::fs::remove_dir_all(&d);
@@ -46,5 +57,11 @@ fn fixture_schematic_describes_simulatable_parts_and_skips_the_rest() {
     let d = eak_simulation::describe(e.project());
     assert!(!d.nets.is_empty());
     assert!(d.elements.iter().any(|x| x.refdes.starts_with('R')));
-    assert!(d.skipped.iter().any(|x| x.refdes.starts_with('U') || x.refdes.starts_with('J')), "{:?}", d.skipped);
+    assert!(
+        d.skipped
+            .iter()
+            .any(|x| x.refdes.starts_with('U') || x.refdes.starts_with('J')),
+        "{:?}",
+        d.skipped
+    );
 }

@@ -55,7 +55,10 @@ pub fn parse(text: &str) -> Result<RawPlot, SimError> {
                 let mut it = l.split_whitespace();
                 let (_, name, kind) = (it.next(), it.next(), it.next());
                 match (name, kind) {
-                    (Some(n), Some(k)) => variables.push(Variable { name: n.to_string(), kind: k.to_string() }),
+                    (Some(n), Some(k)) => variables.push(Variable {
+                        name: n.to_string(),
+                        kind: k.to_string(),
+                    }),
                     _ => return Err(bad(format!("bad variable line '{l}'"))),
                 }
             }
@@ -75,10 +78,17 @@ pub fn parse(text: &str) -> Result<RawPlot, SimError> {
         toks.next().ok_or_else(|| bad("truncated values"))?; // point index
         for col in columns.iter_mut() {
             let t = toks.next().ok_or_else(|| bad("truncated values"))?;
-            col.push(t.parse::<f64>().map_err(|_| bad(format!("bad number '{t}'")))?);
+            col.push(
+                t.parse::<f64>()
+                    .map_err(|_| bad(format!("bad number '{t}'")))?,
+            );
         }
     }
-    Ok(RawPlot { plotname, variables, columns })
+    Ok(RawPlot {
+        plotname,
+        variables,
+        columns,
+    })
 }
 
 #[cfg(test)]

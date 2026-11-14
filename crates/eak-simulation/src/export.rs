@@ -110,7 +110,9 @@ pub fn source_spec(spec: &str) -> Result<String, SimError> {
     let s = spec.trim();
     let bad = || SimError::InvalidRequest(format!("unsupported source specification '{spec}'"));
     let up = s.to_ascii_uppercase();
-    let structured = ["PULSE(", "SIN(", "PWL(", "DC "].iter().any(|p| up.starts_with(p));
+    let structured = ["PULSE(", "SIN(", "PWL(", "DC "]
+        .iter()
+        .any(|p| up.starts_with(p));
     if structured {
         let ok = s.chars().all(|c| {
             c.is_ascii_alphanumeric() || matches!(c, ' ' | '.' | '+' | '-' | '(' | ')' | ',')
@@ -148,7 +150,9 @@ fn two_pins(def: &ComponentDef, diode: bool) -> Option<(String, String)> {
     if diode {
         let is = |n: &str, names: &[&str]| names.contains(&n.to_ascii_uppercase().as_str());
         for (i, j) in [(0, 1), (1, 0)] {
-            if is(&pins[i].name, &["A", "ANODE", "+"]) && is(&pins[j].name, &["K", "C", "CATHODE", "-"]) {
+            if is(&pins[i].name, &["A", "ANODE", "+"])
+                && is(&pins[j].name, &["K", "C", "CATHODE", "-"])
+            {
                 return Some((pins[i].number.clone(), pins[j].number.clone()));
             }
         }
@@ -198,7 +202,10 @@ fn build_export(p: &Project, extra: &[ExtraSource]) -> Result<Export, SimError> 
             })
         };
         let Some(def) = p.library.get(&sym.component_id) else {
-            skip("component definition missing from the project library", &mut skipped);
+            skip(
+                "component definition missing from the project library",
+                &mut skipped,
+            );
             continue;
         };
         let letter = prefix_of(def, sym);
@@ -211,11 +218,16 @@ fn build_export(p: &Project, extra: &[ExtraSource]) -> Result<Export, SimError> 
             'V' => ElementKind::VoltageSource,
             'I' => ElementKind::CurrentSource,
             _ => {
-                skip("no SPICE model for this part (only R, C, L, D/LED, V, I are simulated)", &mut skipped);
+                skip(
+                    "no SPICE model for this part (only R, C, L, D/LED, V, I are simulated)",
+                    &mut skipped,
+                );
                 continue;
             }
         };
-        let Some((first, second)) = two_pins(def, matches!(kind, ElementKind::Diode | ElementKind::Led)) else {
+        let Some((first, second)) =
+            two_pins(def, matches!(kind, ElementKind::Diode | ElementKind::Led))
+        else {
             skip("expected a two-terminal symbol", &mut skipped);
             continue;
         };
@@ -230,13 +242,23 @@ fn build_export(p: &Project, extra: &[ExtraSource]) -> Result<Export, SimError> 
             continue;
         }
         let (a, b) = (node(&n1, &mut nodes), node(&n2, &mut nodes));
-        let id = format!("{}{}", letter, name.trim_start_matches(|c: char| c.eq_ignore_ascii_case(&letter)));
+        let id = format!(
+            "{}{}",
+            letter,
+            name.trim_start_matches(|c: char| c.eq_ignore_ascii_case(&letter))
+        );
         let line = match kind {
             ElementKind::Resistor | ElementKind::Capacitor | ElementKind::Inductor => {
                 match parse_value(&sym.value).filter(|v| v.is_finite() && *v > 0.0) {
                     Some(v) => format!("{id} {a} {b} {v:e}"),
                     None => {
-                        skip(&format!("value '{}' is not a positive engineering value (e.g. 10k, 100n)", sym.value), &mut skipped);
+                        skip(
+                            &format!(
+                                "value '{}' is not a positive engineering value (e.g. 10k, 100n)",
+                                sym.value
+                            ),
+                            &mut skipped,
+                        );
                         continue;
                     }
                 }
@@ -249,13 +271,21 @@ fn build_export(p: &Project, extra: &[ExtraSource]) -> Result<Export, SimError> 
                 need_led = true;
                 format!("{id} {a} {b} EAK_LED")
             }
-            ElementKind::VoltageSource | ElementKind::CurrentSource => match source_spec(&sym.value) {
-                Ok(s) => format!("{id} {a} {b} {s}"),
-                Err(_) => {
-                    skip(&format!("source value '{}' is not a supported specification", sym.value), &mut skipped);
-                    continue;
+            ElementKind::VoltageSource | ElementKind::CurrentSource => {
+                match source_spec(&sym.value) {
+                    Ok(s) => format!("{id} {a} {b} {s}"),
+                    Err(_) => {
+                        skip(
+                            &format!(
+                                "source value '{}' is not a supported specification",
+                                sym.value
+                            ),
+                            &mut skipped,
+                        );
+                        continue;
+                    }
                 }
-            },
+            }
         };
         elements.push(Element {
             refdes: sym.refdes.clone(),
@@ -269,12 +299,22 @@ fn build_export(p: &Project, extra: &[ExtraSource]) -> Result<Export, SimError> 
     for s in extra {
         let name = alnum(&s.name);
         if name.is_empty() || !used_refs.insert(name.to_ascii_uppercase()) {
-            return Err(SimError::InvalidRequest(format!("source name '{}' is empty or already used", s.name)));
+            return Err(SimError::InvalidRequest(format!(
+                "source name '{}' is empty or already used",
+                s.name
+            )));
         }
-        let neg = if s.negative_net.trim().is_empty() { "GND" } else { s.negative_net.trim() };
+        let neg = if s.negative_net.trim().is_empty() {
+            "GND"
+        } else {
+            s.negative_net.trim()
+        };
         for n in [s.positive_net.as_str(), neg] {
             if !is_ground_net(n) && !all_nets.contains(&n.to_string()) {
-                return Err(SimError::InvalidRequest(format!("source {} references unknown net '{n}'", s.name)));
+                return Err(SimError::InvalidRequest(format!(
+                    "source {} references unknown net '{n}'",
+                    s.name
+                )));
             }
         }
         let (letter, kind) = match s.kind {
@@ -283,9 +323,15 @@ fn build_export(p: &Project, extra: &[ExtraSource]) -> Result<Export, SimError> 
         };
         let (a, b) = (node(&s.positive_net, &mut nodes), node(neg, &mut nodes));
         if a == b {
-            return Err(SimError::InvalidRequest(format!("source {} has both terminals on the same node", s.name)));
+            return Err(SimError::InvalidRequest(format!(
+                "source {} has both terminals on the same node",
+                s.name
+            )));
         }
-        let id = format!("{letter}{}", name.trim_start_matches(|c: char| c.eq_ignore_ascii_case(&letter)));
+        let id = format!(
+            "{letter}{}",
+            name.trim_start_matches(|c: char| c.eq_ignore_ascii_case(&letter))
+        );
         elements.push(Element {
             refdes: s.name.clone(),
             kind,
@@ -297,7 +343,14 @@ fn build_export(p: &Project, extra: &[ExtraSource]) -> Result<Export, SimError> 
     for s in &skipped {
         warnings.push(format!("{} not simulated: {}", s.refdes, s.reason));
     }
-    if !elements.is_empty() && !elements.iter().any(|e| matches!(e.kind, ElementKind::VoltageSource | ElementKind::CurrentSource)) {
+    if !elements.is_empty()
+        && !elements.iter().any(|e| {
+            matches!(
+                e.kind,
+                ElementKind::VoltageSource | ElementKind::CurrentSource
+            )
+        })
+    {
         warnings.push("no voltage or current source: all node voltages will be 0 V".into());
     }
     let mut text = String::from("* EAK-IR schematic export (generated; do not edit)\n");
@@ -313,7 +366,13 @@ fn build_export(p: &Project, extra: &[ExtraSource]) -> Result<Export, SimError> 
         text.push_str(GENERIC_LED);
         text.push('\n');
     }
-    Ok(Export { text, nodes, elements, skipped, warnings })
+    Ok(Export {
+        text,
+        nodes,
+        elements,
+        skipped,
+        warnings,
+    })
 }
 
 pub fn describe(p: &Project) -> Describe {

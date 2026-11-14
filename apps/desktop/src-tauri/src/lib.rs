@@ -422,13 +422,21 @@ pub struct SimulationStatus {
 }
 
 pub fn simulation_status(s: &Session) -> Result<SimulationStatus, String> {
-    let (revision, circuit) = s.with_engine(|e| (e.project().revision, eak_simulation::describe(e.project())))?;
-    Ok(SimulationStatus { ngspice: eak_simulation::probe(), revision, circuit })
+    let (revision, circuit) =
+        s.with_engine(|e| (e.project().revision, eak_simulation::describe(e.project())))?;
+    Ok(SimulationStatus {
+        ngspice: eak_simulation::probe(),
+        revision,
+        circuit,
+    })
 }
 
 /// Runs ngspice on a snapshot of the current revision. The engine lock is released before the
 /// subprocess starts, and nothing is written to the project (simulation is not a design edit).
-pub fn run_simulation(s: &Session, req: &eak_simulation::SimRequest) -> Result<eak_simulation::SimResult, String> {
+pub fn run_simulation(
+    s: &Session,
+    req: &eak_simulation::SimRequest,
+) -> Result<eak_simulation::SimResult, String> {
     let project = s.with_engine(|e| e.project().clone())?;
     eak_simulation::run(&project, req).map_err(|e| e.to_string())
 }

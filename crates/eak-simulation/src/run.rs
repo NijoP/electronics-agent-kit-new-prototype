@@ -79,17 +79,30 @@ pub struct NgspiceStatus {
 
 fn which(name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
-    let exts: &[&str] = if cfg!(windows) { &[".exe", ".cmd", ""] } else { &[""] };
+    let exts: &[&str] = if cfg!(windows) {
+        &[".exe", ".cmd", ""]
+    } else {
+        &[""]
+    };
     std::env::split_paths(&path).find_map(|d| {
-        exts.iter().map(|e| d.join(format!("{name}{e}"))).find(|p| p.is_file())
+        exts.iter()
+            .map(|e| d.join(format!("{name}{e}")))
+            .find(|p| p.is_file())
     })
 }
 
 fn find_ngspice() -> Result<PathBuf, SimError> {
     if let Some(p) = std::env::var_os("EAK_NGSPICE").map(PathBuf::from) {
-        return if p.is_file() { Ok(p) } else { Err(SimError::NotInstalled) };
+        return if p.is_file() {
+            Ok(p)
+        } else {
+            Err(SimError::NotInstalled)
+        };
     }
-    ["ngspice", "ngspice_con"].iter().find_map(|n| which(n)).ok_or(SimError::NotInstalled)
+    ["ngspice", "ngspice_con"]
+        .iter()
+        .find_map(|n| which(n))
+        .ok_or(SimError::NotInstalled)
 }
 
 struct Scratch(PathBuf);
@@ -107,7 +120,12 @@ impl Drop for Scratch {
 }
 
 /// Run `exe args` in `dir`, output redirected to files (no pipe deadlock), kill on timeout.
-fn run_child(exe: &Path, args: &[&str], dir: &Path, timeout: Duration) -> Result<(std::process::ExitStatus, String), SimError> {
+fn run_child(
+    exe: &Path,
+    args: &[&str],
+    dir: &Path,
+    timeout: Duration,
+) -> Result<(std::process::ExitStatus, String), SimError> {
     let out = dir.join("stdout.txt");
     let f = |p: &Path| std::fs::File::create(p).map_err(|e| SimError::Io(e.to_string()));
     let mut child = Command::new(exe)
@@ -146,7 +164,12 @@ fn tail(s: &str, n: usize) -> String {
 
 /// Detect ngspice and its version. Never fails: absence is reported in the status.
 pub fn probe() -> NgspiceStatus {
-    let missing = |m: String| NgspiceStatus { available: false, path: None, version: None, message: Some(m) };
+    let missing = |m: String| NgspiceStatus {
+        available: false,
+        path: None,
+        version: None,
+        message: Some(m),
+    };
     let exe = match find_ngspice() {
         Ok(e) => e,
         Err(e) => return missing(e.to_string()),
@@ -157,8 +180,16 @@ pub fn probe() -> NgspiceStatus {
     };
     match run_child(&exe, &["-v"], &scratch.0, Duration::from_secs(10)) {
         Ok((_, text)) => match version_of(&text) {
-            Some(v) => NgspiceStatus { available: true, path: Some(exe.display().to_string()), version: Some(v), message: None },
-            None => missing(format!("{} did not identify itself as ngspice", exe.display())),
+            Some(v) => NgspiceStatus {
+                available: true,
+                path: Some(exe.display().to_string()),
+                version: Some(v),
+                message: None,
+            },
+            None => missing(format!(
+                "{} did not identify itself as ngspice",
+                exe.display()
+            )),
         },
         Err(e) => missing(e.to_string()),
     }
@@ -167,7 +198,10 @@ pub fn probe() -> NgspiceStatus {
 fn version_of(text: &str) -> Option<String> {
     text.lines().find_map(|l| {
         let i = l.find("ngspice-")?;
-        let v: String = l[i + 8..].chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+        let v: String = l[i + 8..]
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect();
         (!v.is_empty()).then_some(v)
     })
 }
@@ -176,10 +210,14 @@ fn validate(a: &Analysis) -> Result<(), SimError> {
     if let Analysis::Tran { stop, step } = *a {
         let ok = stop.is_finite() && step.is_finite() && stop > 0.0 && step > 0.0 && step <= stop;
         if !ok {
-            return Err(SimError::InvalidRequest("transient needs 0 < step <= stop".into()));
+            return Err(SimError::InvalidRequest(
+                "transient needs 0 < step <= stop".into(),
+            ));
         }
         if stop / step > MAX_TRAN_POINTS {
-            return Err(SimError::InvalidRequest(format!("stop/step exceeds {MAX_TRAN_POINTS:.0} points")));
+            return Err(SimError::InvalidRequest(format!(
+                "stop/step exceeds {MAX_TRAN_POINTS:.0} points"
+            )));
         }
     }
     Ok(())
@@ -188,10 +226,15 @@ fn validate(a: &Analysis) -> Result<(), SimError> {
 fn decimate(time: &[f64], cols: &[&[f64]]) -> (Vec<f64>, Vec<Vec<f64>>, bool) {
     let n = time.len();
     let stride = n.div_ceil(MAX_RETURNED_POINTS).max(1);
-    let idx: Vec<usize> = (0..n).step_by(stride).chain((n > 0 && (n - 1) % stride != 0).then_some(n - 1)).collect();
+    let mut idx: Vec<usize> = (0..n).step_by(stride).collect();
+    if n > 0 && idx.last() != Some(&(n - 1)) {
+        idx.push(n - 1);
+    }
     (
         idx.iter().map(|&i| time[i]).collect(),
-        cols.iter().map(|c| idx.iter().map(|&i| c[i]).collect()).collect(),
+        cols.iter()
+            .map(|c| idx.iter().map(|&i| c[i]).collect())
+            .collect(),
         stride > 1,
     )
 }
@@ -204,22 +247,36 @@ pub fn run(p: &Project, req: &SimRequest) -> Result<SimResult, SimError> {
         Analysis::Op => "op".to_string(),
         Analysis::Tran { stop, step } => format!("tran {step:e} {stop:e}"),
     };
-    let deck = format!("{}.control\nset filetype=ascii\n{control}\nwrite out.raw\nquit\n.endc\n.end\n", export.text);
+    let deck = format!(
+        "{}.control\nset filetype=ascii\n{control}\nwrite out.raw\nquit\n.endc\n.end\n",
+        export.text
+    );
     let scratch = Scratch::new()?;
     std::fs::write(scratch.0.join("deck.cir"), &deck).map_err(|e| SimError::Io(e.to_string()))?;
-    let timeout = Duration::from_secs(req.timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS).clamp(1, 600));
+    let timeout = Duration::from_secs(
+        req.timeout_secs
+            .unwrap_or(DEFAULT_TIMEOUT_SECS)
+            .clamp(1, 600),
+    );
     let start = Instant::now();
     let (status, log) = run_child(&exe, &["-b", "deck.cir"], &scratch.0, timeout)?;
     let rawtext = std::fs::read_to_string(scratch.0.join("out.raw"));
     let Ok(rawtext) = rawtext else {
-        return Err(SimError::NgspiceFailed { status: status.to_string(), log: tail(&log, 1500) });
+        return Err(SimError::NgspiceFailed {
+            status: status.to_string(),
+            log: tail(&log, 1500),
+        });
     };
     let plot = raw::parse(&rawtext)?;
     let elapsed_ms = start.elapsed().as_millis() as u64;
 
     let net_of = |name: &str| -> Option<&String> {
         let n = name.to_ascii_lowercase();
-        let n = n.strip_prefix("v(").and_then(|s| s.strip_suffix(')')).unwrap_or(&n).to_string();
+        let n = n
+            .strip_prefix("v(")
+            .and_then(|s| s.strip_suffix(')'))
+            .unwrap_or(&n)
+            .to_string();
         export.nodes.get(&n)
     };
     let last = |c: &[f64]| c.last().copied().unwrap_or(f64::NAN);
@@ -228,14 +285,28 @@ pub fn run(p: &Project, req: &SimRequest) -> Result<SimResult, SimError> {
         match v.kind.as_str() {
             "voltage" => {
                 if let Some(net) = net_of(&v.name) {
-                    nodes.push(NodeVoltage { net: net.clone(), volts: last(col) });
+                    nodes.push(NodeVoltage {
+                        net: net.clone(),
+                        volts: last(col),
+                    });
                 }
             }
             "current" => {
                 let base = v.name.trim_end_matches("#branch");
-                let base = base.strip_prefix("i(").and_then(|s| s.strip_suffix(')')).unwrap_or(base);
-                if let Some(e) = export.elements.iter().find(|e| e.line.split(' ').next().is_some_and(|id| id.eq_ignore_ascii_case(base))) {
-                    currents.push(BranchCurrent { element: e.refdes.clone(), amps: last(col) });
+                let base = base
+                    .strip_prefix("i(")
+                    .and_then(|s| s.strip_suffix(')'))
+                    .unwrap_or(base);
+                if let Some(e) = export.elements.iter().find(|e| {
+                    e.line
+                        .split(' ')
+                        .next()
+                        .is_some_and(|id| id.eq_ignore_ascii_case(base))
+                }) {
+                    currents.push(BranchCurrent {
+                        element: e.refdes.clone(),
+                        amps: last(col),
+                    });
                 }
             }
             _ => {}
@@ -243,12 +314,16 @@ pub fn run(p: &Project, req: &SimRequest) -> Result<SimResult, SimError> {
     }
     nodes.sort_by(|a, b| a.net.cmp(&b.net));
     if nodes.is_empty() && currents.is_empty() {
-        return Err(SimError::BadOutput("ngspice produced no node voltages".into()));
+        return Err(SimError::BadOutput(
+            "ngspice produced no node voltages".into(),
+        ));
     }
     let tran = match req.analysis {
         Analysis::Op => None,
         Analysis::Tran { .. } => {
-            let time = plot.column("time").ok_or_else(|| SimError::BadOutput("transient rawfile has no time vector".into()))?;
+            let time = plot.column("time").ok_or_else(|| {
+                SimError::BadOutput("transient rawfile has no time vector".into())
+            })?;
             let named: Vec<(String, &[f64])> = plot
                 .variables
                 .iter()
@@ -260,7 +335,14 @@ pub fn run(p: &Project, req: &SimRequest) -> Result<SimResult, SimError> {
             let (t, cs, decimated) = decimate(time, &cols);
             Some(Transient {
                 time: t,
-                traces: named.iter().zip(cs).map(|((n, _), volts)| Trace { net: n.clone(), volts }).collect(),
+                traces: named
+                    .iter()
+                    .zip(cs)
+                    .map(|((n, _), volts)| Trace {
+                        net: n.clone(),
+                        volts,
+                    })
+                    .collect(),
                 points_total: time.len(),
                 decimated,
             })
@@ -274,7 +356,8 @@ pub fn run(p: &Project, req: &SimRequest) -> Result<SimResult, SimError> {
         tran,
         warnings: export.warnings,
         limitations: vec![
-            "Computed by an external ngspice from the exported schematic; EAK does not verify it.".into(),
+            "Computed by an external ngspice from the exported schematic; EAK does not verify it."
+                .into(),
             "Diodes/LEDs use generic EAK models, not manufacturer SPICE models.".into(),
             "Parasitics, tolerances, temperature and PCB effects are not modelled.".into(),
         ],

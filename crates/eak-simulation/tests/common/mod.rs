@@ -40,11 +40,21 @@ impl Circuit {
         let id = new_id("lbl");
         self.p.schematic.labels.insert(
             id.clone(),
-            NetLabel { id, sheet_id: self.sheet.clone(), name: name.into(), position: Point::mm(x, 20.0), kind: Default::default() },
+            NetLabel {
+                id,
+                sheet_id: self.sheet.clone(),
+                name: name.into(),
+                position: Point::mm(x, 20.0),
+                kind: Default::default(),
+            },
         );
     }
 }
 
 pub fn volts(r: &eak_simulation::SimResult, net: &str) -> f64 {
-    r.nodes.iter().find(|n| n.net == net).unwrap_or_else(|| panic!("no node {net}: {:?}", r.nodes)).volts
+    r.nodes
+        .iter()
+        .find(|n| n.net == net)
+        .unwrap_or_else(|| panic!("no node {net}: {:?}", r.nodes))
+        .volts
 }
