@@ -20,6 +20,13 @@ shared with other jobs. Full numbers and method: `docs/dev/LOW_MEMORY_DEVELOPMEN
 **Not run yet:** per-crate Rust tests (all 7 crates), clippy, packaging. They are pending a run on the
 frozen main commit; nothing here claims they pass.
 
+**Note (evaluator finding C6):** results for PRs #21-#26 (shell, multilayer, menus/tabs, installers,
+batch command) were recorded only in `STATUS.md` (for example vitest 52 then 65+ tests, build and tsc
+OK, production bundle checked in headless Chrome against a stubbed IPC, never launched as a real Tauri
+window). They are not re-run or copied here; see the `STATUS.md` sections of those PRs. `FEATURE_MATRIX.md`
+was corrected from the code: DRC declares 17 rules (`DRC-001`..`DRC-017`), ERC 13, MECH 3, and there is
+no MECH toolbar button.
+
 ## 2026-11-14 - Phase 0 baseline (copied, not re-run)
 
 **Source:** the merged pull request bodies of #12-#19
