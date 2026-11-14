@@ -41,6 +41,8 @@ pub enum Category {
     Discovery,
     /// Autonomous design flow (ADR-0020): spec, plan, apply, validate, claim, report.
     Flow,
+    /// Existing-project rework (ADR-0022): inspect, baseline, audit, protect, plan, apply, report.
+    Rework,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -123,7 +125,7 @@ fn spec(name: &str, category: Category, description: &str, schema: Value) -> Too
         input_schema: with_common(
             schema,
             category == Category::Design,
-            category == Category::Manufacturing,
+            category == Category::Manufacturing || category == Category::Rework,
         ),
         class: None,
         rerun_checks: vec![],
@@ -336,6 +338,54 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         flow,
         "The final evidence report at the current revision: every criterion and claim labelled verified / passed_deterministic_checks / simulation_supported / datasheet_supported / assumed / unverified, a fingerprint, and the human-approval state. Only a human can approve (eak design approve, interactive terminal). Never 'manufacturing-ready'.",
         empty(),
+    ));
+    // Existing-project rework (ADR-0022, `rework` module). Approval is a human CLI step, not a tool.
+    let rework = Category::Rework;
+    v.push(spec(
+        "rework_inspect",
+        rework,
+        "Read-only inspection of an existing project: identity (optionally confirm expect_project_id / expect_name), object counts, domain fingerprints, check totals, unrouted connections, rework sessions. Writes nothing.",
+        props(json!({"expect_project_id": str_schema("fail unless the folder holds this project id"), "expect_name": str_schema("fail unless the project has this name")}), &[]),
+    ));
+    v.push(spec(
+        "rework_baseline",
+        rework,
+        "Capture the immutable baseline of the project (project copy, per-object hashes, domain fingerprints) and open a rework session rw-NNNN. Requires confirm_project_id equal to the project's id. Never rewritten; every later rework tool verifies it.",
+        props(json!({"confirm_project_id": str_schema("the project id read from rework_inspect")}), &["confirm_project_id"]),
+    ));
+    v.push(spec(
+        "rework_audit",
+        rework,
+        "Classify the design's issues (schematic, placement, power_thermal, routing, copper, drc) from eak-validation findings and an eak-engineering current-sizing recompute: severity, affected objects, suggested fix. Never edits the design.",
+        props(json!({"session_id": str_schema("rework session (default: latest)")}), &[]),
+    ));
+    v.push(spec(
+        "rework_protect",
+        rework,
+        "Add objects (by id) to the PROTECTED set so no repair may change them. Add-only: no tool releases protection; locked footprints are always protected. Everything outside an issue's scope is ACCEPTED and verified unchanged after each repair.",
+        props(json!({"session_id": str_schema("rework session (default: latest)"), "ids": {"type": "array", "items": {"type": "string"}, "description": "object ids"}, "reason": str_schema("why these objects are protected")}), &["ids", "reason"]),
+    ));
+    v.push(spec(
+        "rework_plan",
+        rework,
+        "Record a dependency-ordered repair plan: one repair per audit issue, each a list of typed commands ({\"type\":\"MoveFootprint\",...}). Refused (nothing stored) if a step changes a PROTECTED or out-of-scope object, or is not surgical (AutoPlace, unscoped ClearRouting/AutoRoute). Nothing runs: a human must approve with `eak rework approve` (interactive terminal).",
+        props(json!({
+            "session_id": str_schema("rework session (default: latest)"),
+            "title": str_schema("plan title"),
+            "repairs": {"type": "array", "description": "repairs: {issue_id, description, steps:[typed commands]}", "items": {"type": "object"}},
+        }), &["title", "repairs"]),
+    ));
+    v.push(spec(
+        "rework_apply",
+        rework,
+        "Execute a human-approved plan: each repair is one Engine::execute (a Batch); after each, the revision is read back and every PROTECTED/ACCEPTED object is re-hashed; a violation undoes that repair and stops. Then runs ERC/DRC/MECH/DFM. Needs expected_revision equal to the plan's base revision.",
+        props(json!({"plan_id": str_schema("id from rework_plan"), "expected_revision": {"type": "integer", "minimum": 0}}), &["plan_id", "expected_revision"]),
+    ));
+    v.push(spec(
+        "rework_report",
+        rework,
+        "Readiness report at the current revision: diff against the baseline, PROTECTED integrity, issues resolved/remaining/new, revisions made outside rework, checks with not_implemented and limitations, human approvals. Labelled (integrity_violation, changes_outside_rework, repairs_incomplete, passed_deterministic_checks); never 'manufacturing-ready'.",
+        props(json!({"session_id": str_schema("rework session (default: latest)")}), &[]),
     ));
     for t in command_tools() {
         let mut s = spec(
@@ -550,6 +600,7 @@ fn dispatch(
         Category::Simulation => simulation(engine.project(), &spec.name, args),
         Category::Read => read(engine, &spec.name, args),
         Category::Flow => crate::design::dispatch(engine, ctx, &spec.name, args),
+        Category::Rework => crate::rework::dispatch(engine, ctx, &spec.name, args),
         Category::Project | Category::Discovery => Err(fail(
             ErrorCode::InvalidArguments,
             format!("{} does not run against an open project", spec.name),

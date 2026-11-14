@@ -62,6 +62,7 @@ Lengths are **integer nanometres** (1 mm = 1 000 000). Rotations are `R0|R90|R18
 | `validation` | stores evidence only | `run_check` (`erc`, `drc`, `mech`, `dfm`, `all`), `run_gates` (fail-closed gates, ADR-0021; only PASS passes) |
 | `manufacturing` | writes `output/rev-N/` only | `export_manufacturing` |
 | `flow` | spec/plan/claim/report records in `design-flow/`; `design_apply` = one new revision | `design_spec_set`, `design_spec_get`, `design_plan`, `design_apply`, `design_validate`, `design_claim`, `design_iteration_log`, `design_report` (ADR-0020; loop in `docs/agents/AUTONOMOUS_DESIGN.md`) |
+| `rework` | evidence in `rework/<session>/`; `rework_apply` = one revision per repair after human approval (`eak rework approve`) | `rework_inspect`, `rework_baseline`, `rework_audit`, `rework_protect`, `rework_plan`, `rework_apply`, `rework_report` (ADR-0022; loop in `docs/agents/REWORK.md`) |
 | `project` / `discovery` | creates a folder / none | `create_project`, `list_tools`, `guide`, `design_spec_schema` |
 
 ## Errors

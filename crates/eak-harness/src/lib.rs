@@ -24,6 +24,7 @@ pub mod design;
 pub mod endpoint;
 pub mod engineering;
 pub mod mcp;
+pub mod rework;
 pub mod route;
 pub mod tools;
 

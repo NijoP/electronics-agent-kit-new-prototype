@@ -40,6 +40,14 @@ COMMANDS:
   design log                    iteration record
   design report                 evidence report with labels and approval state
   design approve <REV> <FP>     human approval of a report (interactive terminal only)
+  rework inspect [PROJECT_ID]   read-only inspection of an existing project
+  rework baseline <PROJECT_ID> immutable baseline; opens a rework session
+  rework audit                  classify issues (category, severity, affected objects)
+  rework protect <FILE|JSON|-> {\"ids\":[..],\"reason\":\"..\"}: protect objects
+  rework plan <FILE|JSON|->     repair plan of typed commands (nothing runs)
+  rework apply <PLAN_ID> <REV>  execute a human-approved plan with readback
+  rework report                 baseline diff, integrity, issues, labelled readiness
+  rework approve <PLAN_ID> <FP> human approval of a plan (interactive terminal only)
   mcp                           serve MCP over stdio";
 
 fn read_arg(s: &str) -> Result<Value, String> {
@@ -244,6 +252,42 @@ pub fn main_with(args: Vec<String>) -> i32 {
                         "design <schema|spec|plan|apply|validate|claim|log|report|approve>",
                     )
                 }
+            }
+        }
+        "rework" => {
+            let json_arg = |i: usize| -> Result<Value, String> {
+                a(i).ok_or_else(|| "missing JSON argument".to_string())
+                    .and_then(|s| read_json_or_file(&s))
+            };
+            match a(1).as_deref() {
+                Some("inspect") => (
+                    "rework_inspect".into(),
+                    a(2).map_or(json!({}), |id| json!({"expect_project_id": id})),
+                ),
+                Some("baseline") => match a(2) {
+                    Some(id) => ("rework_baseline".into(), json!({"confirm_project_id": id})),
+                    None => return usage("rework baseline <PROJECT_ID>"),
+                },
+                Some("audit") => ("rework_audit".into(), json!({})),
+                Some(sub @ ("protect" | "plan")) => match json_arg(2) {
+                    Ok(v) => (format!("rework_{sub}"), v),
+                    Err(e) => return usage(&e),
+                },
+                Some("apply") => match (a(2), a(3).and_then(|s| s.parse::<u64>().ok())) {
+                    (Some(id), Some(rev)) => (
+                        "rework_apply".into(),
+                        json!({"plan_id": id, "expected_revision": rev}),
+                    ),
+                    _ => return usage("rework apply <PLAN_ID> <REV>"),
+                },
+                Some("report") => ("rework_report".into(), json!({})),
+                Some("approve") => {
+                    return match (a(2), a(3)) {
+                        (Some(plan), Some(fp)) => crate::rework::approve_cli(&ctx, &plan, &fp),
+                        _ => usage("rework approve <PLAN_ID> <FINGERPRINT>"),
+                    };
+                }
+                _ => return usage("rework <inspect|baseline|audit|protect|plan|apply|report|approve>"),
             }
         }
         other => return usage(&format!("unknown command {other}")),
