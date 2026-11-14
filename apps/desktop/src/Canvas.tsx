@@ -12,11 +12,13 @@ interface Props {
   onHover?: (x: number, y: number) => void;
   /** Pointer cursor while an editing tool is active. */
   tool?: boolean;
+  /** Zoom to these view-space bounds whenever `n` changes (finding navigation). */
+  zoomTo?: { bounds: Bounds; n: number } | null;
 }
 
 const CLICK_SLOP_PX = 4;
 
-export function Canvas({ label, bounds, children, onPoint, onHover, tool }: Props) {
+export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const [vb, setVb] = useState<ViewBox>(() => fit(bounds));
   const vbRef = useRef(vb);
@@ -27,6 +29,9 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool }: Prop
 
   // Re-fit only when the drawing extents change, not on every re-render.
   useEffect(() => setVb(fit(bounds)), [key]);
+  useEffect(() => {
+    if (zoomTo) setVb(fit(zoomTo.bounds, 0.4));
+  }, [zoomTo?.n]);
 
   useEffect(() => {
     const el = ref.current;

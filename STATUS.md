@@ -247,3 +247,11 @@ installed. Development is proceeding directly in this repository.
 - **Layout** (`shell/layout.ts`, `Splitter.tsx`): side/assistant widths and bottom height are drag- and keyboard-resizable (double-click resets), panels collapse/reopen, all persisted in localStorage with validation; "Reset panel layout" in View/Settings.
 - Verified: `npm run build`, `tsc`, vitest (65+ tests incl. `part4.test.tsx`); production bundle checked in headless Chrome against a stubbed IPC. **Not launched as the real Tauri window** (no display here).
 - Not done: drag-to-rearrange/re-dock panels to other edges, per-tab viewport/zoom preservation (a closed tab loses its viewport), library/symbol/footprint/simulation/manufacturing document kinds (no backend for them yet), the full main toolbar of the directive (tool buttons, zoom, grid), menu keyboard navigation beyond click/Escape.
+
+## PCB layer manager, finding navigation, airwires, zone tool (2026-11-14)
+- `shell/LayerManager.tsx`, `layerView.ts`: PCB Layers side view (active layer, visibility, colours as persisted display state; layer count and layer type through `SetLayerCount`/`SetStackup`; read-only stackup table from `Board.stackup`).
+- Finding click: opens the PCB (DRC) or schematic (ERC) tab, selects the part, and for PCB zooms to the objects' box, highlights them and shows measured vs required plus the suggested fix (`pcbFocus.ts`, `Canvas zoomTo`). Schematic zoom/highlight is not done (schematic canvas is owned by another worker).
+- Airwires: new read-only IPC command `connectivity` (22 commands) over `eak_engineering::copper::analyse`; drawn only for the current revision. `cargo test -p eak-desktop --test ipc`: 13 passed (incl. `connectivity_reports_the_ratsnest_for_the_current_revision`).
+- PCB "Zone" tool wired to `AddZone` (layer, net, clearance) and the delete tool to `DeleteZone`.
+- Verified: `tsc`, vitest 75/75, production bundle in headless Chrome with a stubbed IPC. Not launched as the real Tauri window.
+- Not done: zone thermal/priority/refill controls, non-copper layers, copper weight / dielectric editing, track and via editing, multi-select, safe-fix buttons, real-window tests.

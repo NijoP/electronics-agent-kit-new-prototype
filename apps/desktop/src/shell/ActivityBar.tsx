@@ -3,11 +3,12 @@
 import { tip } from "../design/shortcuts";
 import { Icons } from "./icons";
 
-export type SideView = "project" | "parts" | "domain" | "manufacturing";
+export type SideView = "project" | "parts" | "layers" | "domain" | "manufacturing";
 
 export const SIDE_VIEWS: { id: SideView; label: string }[] = [
   { id: "project", label: "Project" },
   { id: "parts", label: "Library / Parts" },
+  { id: "layers", label: "PCB Layers" },
   { id: "domain", label: "Domain" },
   { id: "manufacturing", label: "Manufacturing" },
 ];

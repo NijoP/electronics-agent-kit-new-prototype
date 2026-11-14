@@ -16,13 +16,17 @@ import { interpret, type Proposal } from "./shell/ai";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
 import { ManufacturingPanel, netNames, PartsPanel, ProjectPanel } from "./shell/panels";
 import { StatusBar } from "./shell/StatusBar";
+import { LayerManager } from "./shell/LayerManager";
+import { useLayerView } from "./layerView";
+import type { Focus } from "./pcbFocus";
+import { findingKey, probeTarget } from "./EngineeringMonitor";
 import { DocTabs } from "./shell/DocTabs";
 import { availableDocs, closeDoc, loadDocState, openDoc, saveDocState, visibleDocs } from "./shell/documents";
 import { clampSize, DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "./shell/layout";
 import { MenuBar, type Menu } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
 import { nextRotation } from "./editing";
-import type { Check, CheckResult, Command, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
+import type { Check, CheckResult, Command, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
   initial: Snapshot;
@@ -50,6 +54,10 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
   const [split, setSplit] = useState(true);
   const [layout, setLayout] = useState<Layout>(loadLayout);
   const [help, setHelp] = useState(false);
+  const [conn, setConn] = useState<ConnectivityReport | null>(null);
+  const [focus, setFocus] = useState<Focus | null>(null);
+  const [activeFinding, setActiveFinding] = useState<string | null>(null);
+  const layerView = useLayerView(initial.project.id);
   const flag = (k: "sideOpen" | "bottomOpen" | "aiOpen") => (f: boolean | ((o: boolean) => boolean)) =>
     setLayout((l) => ({ ...l, [k]: typeof f === "function" ? f(l[k]) : f }));
   const { sideOpen, bottomOpen, aiOpen } = layout;
@@ -109,6 +117,18 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
       })
       .catch(() => setModel(null));
   }, []);
+
+  // Airwires come from the engine's connectivity analysis (the one DRC-004 uses), per revision.
+  useEffect(() => {
+    let live = true;
+    api
+      .connectivity()
+      .then((r) => live && setConn(r))
+      .catch(() => live && setConn(null));
+    return () => {
+      live = false;
+    };
+  }, [revision]);
 
   // Deterministic and local: re-run whenever the design revision changes.
   useEffect(() => {
@@ -285,6 +305,21 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     setDocState({ open: [], active: null });
   };
   const resetLayout = () => setLayout(DEFAULT_LAYOUT);
+  // Click a finding: open the right editor, select the object, zoom to it, highlight it.
+  // DRC findings live in the PCB editor (zoom + highlight); ERC findings select the symbol in
+  // the schematic (no zoom there yet).
+  const navigateFinding = (f: Finding, checkName: Check) => {
+    const kind = checkName === "drc" ? "pcb" : "schematic";
+    const d = docs.find((x) => x.kind === kind);
+    if (d) open(d.id);
+    const target = probeTarget(snapshot, f.objects);
+    if (target) setSelected(target);
+    setActiveFinding(findingKey(f));
+    if (kind === "pcb") setFocus({ n: Date.now(), objects: f.objects, location: f.location });
+    else setFocus(null);
+    setBottomTab("findings");
+    setBottomOpen(true);
+  };
   const placePart = (c: LibraryEntry) => {
     showKind("schematic");
     setArmPart({ id: c.id, n: Date.now() });
@@ -520,6 +555,9 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
               onSheet={(id) => open(`sch:${id}`)}
             />
           )}
+          {sideView === "layers" && (
+            <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
+          )}
           {sideView === "parts" && <PartsPanel library={library} query={partQuery} onQuery={setPartQuery} onPlace={placePart} />}
           {sideView === "domain" && (
             <div className="panel-body">
@@ -546,7 +584,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
               d.kind === "schematic" ? (
                 <SchematicView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} armPart={armPart} sheetId={d.ref} />
               ) : (
-                <PcbView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} onStatus={setStatus} />
+                <PcbView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} onStatus={setStatus} layerView={layerView} focus={focus} airwires={conn && conn.revision === revision ? conn.ratsnest : null} />
               ),
             )}
             {noParts && (
@@ -569,6 +607,8 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
               events={events}
               onProbe={setSelected}
               onAsk={askFinding}
+              onNavigate={navigateFinding}
+              activeFinding={activeFinding}
               onClose={() => setBottomOpen(false)}
             />
           )}

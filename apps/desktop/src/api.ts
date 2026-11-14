@@ -7,6 +7,7 @@ import type {
   Command,
   CommandError,
   CommandResponse,
+  ConnectivityReport,
   ConnectionReport,
   EngineEvent,
   ProfileInput,
@@ -41,6 +42,7 @@ export const IPC_COMMANDS = [
   "library_components",
   "domain_classification",
   "export_manufacturing",
+  "connectivity",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
@@ -75,6 +77,7 @@ export const api = {
   libraryComponents: () => call<LibraryEntry[]>("library_components"),
   domainClassification: () => call<DomainReport>("domain_classification"),
   exportManufacturing: () => call<ExportResult>("export_manufacturing"),
+  connectivity: () => call<ConnectivityReport>("connectivity"),
 };
 
 export function describeError(e: CommandError): string {
