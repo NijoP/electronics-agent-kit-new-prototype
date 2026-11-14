@@ -1,0 +1,33 @@
+[package]
+name = "eak-harness"
+description = "EAK engineering harness: typed JSON tool API, `eak` CLI and MCP stdio server over the shared command engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "eak_harness"
+path = "src/lib.rs"
+
+[[bin]]
+name = "eak"
+path = "src/bin/eak.rs"
+
+[[bin]]
+name = "eak-mcp"
+path = "src/bin/eak-mcp.rs"
+
+[dependencies]
+eak-core.workspace = true
+eak-engineering.workspace = true
+eak-validation.workspace = true
+eak-runtime.workspace = true
+eak-intelligence.workspace = true
+eak-manufacturing.workspace = true
+eak-simulation.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

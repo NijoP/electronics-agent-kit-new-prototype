@@ -288,10 +288,12 @@ fn datasheet_hash_matching_and_human_verification() {
         Actor {
             kind: eak_runtime::ActorKind::Cli,
             name: "cli".into(),
+            session: None,
         },
         Actor {
             kind: eak_runtime::ActorKind::Human,
             name: " ".into(),
+            session: None,
         },
     ] {
         assert!(matches!(

@@ -3,6 +3,23 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## Engineering harness for terminal agents (2026-11-15, branch fm/eak-harness)
+
+**Verification: code-reviewed only.** No build, test or runtime run completed: two local `cargo` builds were
+terminated before compiling the crate, then local building/testing was stopped by the captain's no-local-testing
+override. Only `rustfmt` (syntax) ran. Treat everything below as unverified until CI or a local run passes.
+
+- **Written:** `crates/eak-harness` (ADR-0016) — `eak` CLI (`--json`) and `eak-mcp` / `eak mcp` (MCP stdio) over one
+  tool dispatcher; categories read / design / simulation / validation / manufacturing; design tools = every
+  `Command` variant + Undo/Redo with required `expected_revision` (`stale_revision` error); explicit project dir/id
+  (`EAK_PROJECT_DIR`, `EAK_PROJECT_ID`, `EAK_SESSION_ID`, `EAK_AGENT_NAME`); agent+session journal actor
+  (`Actor.session`); call log `harness-calls.jsonl`; `get_history`. Desktop serves the same tools on a token-authenticated
+  local endpoint (Unix socket / loopback TCP on Windows) advertised in `<project>/.harness.json`; the editor polls engine
+  events and re-renders on agent edits. Docs: `docs/AGENT_HARNESS.md`, `docs/ENGINEERING_API.md`.
+- **Tests written, not run:** `crates/eak-harness/tests/e2e.rs` (CLI create→place→connect→outline→sync→place→route→checks,
+  stale revision, project mismatch, approval; MCP stdio round trip; routing through the app endpoint + token rejection).
+- **Not done:** autonomous design loop; per-call human approval UI for agent edits; Windows named pipes.
+
 ## LCSC parts search, BOM and JLCPCB preparation (2026-11-14, branch fm/eak-o2-lcsc-jlcpcb)
 
 **Platform tested:** Linux, Rust stable, Node. No window was opened: the panels are verified by vitest (jsdom, mocked

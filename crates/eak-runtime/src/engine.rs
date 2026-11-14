@@ -25,6 +25,10 @@ pub enum ActorKind {
 pub struct Actor {
     pub kind: ActorKind,
     pub name: String,
+    /// Session the actor works in (e.g. the EAK terminal session an external coding agent
+    /// runs in, ADR-0016). Recorded in the journal label so agent edits stay attributable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
 }
 
 impl Actor {
@@ -32,16 +36,30 @@ impl Actor {
         Actor {
             kind: ActorKind::Human,
             name: "user".into(),
+            session: None,
         }
     }
     pub fn agent(name: &str) -> Actor {
         Actor {
             kind: ActorKind::Agent,
             name: name.into(),
+            session: None,
         }
     }
+    /// An agent acting inside an identified session (harness calls).
+    pub fn agent_in_session(name: &str, session: &str) -> Actor {
+        Actor {
+            session: Some(session.into()),
+            ..Actor::agent(name)
+        }
+    }
+    /// Journal label: `kind:name`, plus `@session` when the actor has one.
     pub fn label(&self) -> String {
-        format!("{:?}:{}", self.kind, self.name).to_lowercase()
+        let base = format!("{:?}:{}", self.kind, self.name).to_lowercase();
+        match &self.session {
+            Some(s) => format!("{base}@{s}"),
+            None => base,
+        }
     }
 }
 

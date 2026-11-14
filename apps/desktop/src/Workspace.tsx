@@ -119,9 +119,10 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
 
   const pullEvents = useCallback(async () => {
     const fresh = await api.eventsSince(lastSeq.current);
-    if (fresh.length === 0) return;
+    if (fresh.length === 0) return fresh;
     lastSeq.current = fresh[fresh.length - 1].seq;
     setEvents((old) => [...old, ...fresh].slice(-MAX_EVENTS));
+    return fresh;
   }, []);
 
   const refresh = useCallback(async () => {
@@ -179,6 +180,19 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   useEffect(() => {
     pullEvents().catch((e) => setMessage(String(e)));
   }, [pullEvents]);
+
+  // Edits made by terminal agents through the harness endpoint run on this same engine; poll its
+  // events and re-render when one moved the project past the revision on screen (ADR-0016).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      pullEvents()
+        .then(async (fresh) => {
+          if (fresh.some((e) => e.revision !== revision)) setSnapshot(await api.currentProject());
+        })
+        .catch(() => undefined);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [pullEvents, revision]);
 
   const guarded = useCallback(
     async (f: () => Promise<void>) => {

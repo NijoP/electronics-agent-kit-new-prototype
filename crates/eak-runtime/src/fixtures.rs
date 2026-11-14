@@ -60,6 +60,7 @@ pub fn build_schematic(engine: &mut Engine) -> Result<(), String> {
         actor: Actor {
             kind: crate::engine::ActorKind::Cli,
             name: "fixture".into(),
+            session: None,
         },
     };
     b.run(C::SetProjectName {
@@ -146,6 +147,7 @@ pub fn build_pcb_layers(engine: &mut Engine, copper_layers: u8) -> Result<Vec<St
         actor: Actor {
             kind: crate::engine::ActorKind::Cli,
             name: "fixture".into(),
+            session: None,
         },
     };
     if copper_layers != 2 {
