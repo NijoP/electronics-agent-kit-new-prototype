@@ -31,7 +31,7 @@ assistant panel was removed in the IDE shell (#49); model providers remain as op
 | Provider catalog, streaming, Gemini, staged connection test | code-reviewed only | |
 | Integration of all of the above (this commit) | code-reviewed only | conflicts resolved by reading; `Cargo.lock` hand-merged |
 | Phase 2 wiring: harness env in terminal sessions, space-project binding, editor resync after checks/exports | code-reviewed only | `git diff --check` and grep only; never compiled or run |
-| Autonomous design flow (`eak design`, `design_*` tools, evidence labels, TTY-only human approval; ADR-0020) | code-reviewed only | never compiled or run; unit tests in `design.rs` and `calc.rs` written, unrun; worked example in `docs/agents/AUTONOMOUS_DESIGN.md` not run |
+| Autonomous design flow (`eak design`, `design_*` tools, evidence labels, TTY-only human approval; ADR-0020) | code-reviewed only | DESK mental models / 12-step procedure / derating (`eak-intelligence::mental`), domain gates blocking apply, intent read-back, component evidence; never compiled or run; unit tests in `design.rs` and `calc.rs` written, unrun; worked example in `docs/agents/AUTONOMOUS_DESIGN.md` not run |
 
 ## Known gaps
 - No cargo, npm, vitest, tsc or tauri run has happened on the integrated tree.

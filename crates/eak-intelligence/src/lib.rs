@@ -16,6 +16,7 @@
 
 pub mod agent;
 pub mod domain;
+pub mod mental;
 pub mod message;
 pub mod mock;
 pub mod provider;

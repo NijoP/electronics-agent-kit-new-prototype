@@ -239,7 +239,11 @@ pub fn main_with(args: Vec<String>) -> i32 {
                         _ => usage("design approve <REV> <FINGERPRINT>"),
                     };
                 }
-                _ => return usage("design <schema|spec|plan|apply|validate|claim|log|report|approve>"),
+                _ => {
+                    return usage(
+                        "design <schema|spec|plan|apply|validate|claim|log|report|approve>",
+                    )
+                }
             }
         }
         other => return usage(&format!("unknown command {other}")),

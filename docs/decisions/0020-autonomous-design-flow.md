@@ -39,3 +39,23 @@ self-certify (AGENTS.md), and nothing may be called manufacturing-ready.
   real PTY and types the phrase. A desktop approval UI bound to the user's session is future work.
 * No model calls inside EAK: the external agent supplies the reasoning.
 * Labels describe the evidence EAK holds; they are not engineering sign-off.
+
+## Addendum (same date): DESK intelligence in the flow
+* `eak-intelligence/src/mental.rs`: DESK mental models M1-M6, the 12-step schematic procedure and
+  derating facts as typed data, with facts / constraints / procedures / guidance kept separate.
+  Every constraint names its EAK evaluator or `null` (never reported as passing). Served by the
+  discovery tool `design_procedure`.
+* Spec gains optional `safety` (isolation, pollution degree, overvoltage category). `design_spec_set`
+  classifies the spec with the existing DESK-derived domain classifier and derives blocking
+  **gates** (`hv-isolation-undefined` above 60 V DC or for mains classes without `safety`;
+  `domain-unresolved` when the class is uncertain and `design_class` is unset).
+  `design_apply` refuses while a gate is open.
+* `design_plan` accepts `intent.connections` (`{net, pins: ["U1.2"]}`), refuses pins that do not
+  exist on an existing symbol's component, and merges intent into `design-flow/intent.json`.
+  `design_validate` rebuilds the netlist from EAK-IR and reports `intent-mismatch`,
+  `intent-part-missing`, `pin-not-on-component` (schematic steps S11-S12).
+* Component intelligence: per placed part, MPN/datasheet evidence and derated voltage/current
+  ratings against the spec rails on its nets (`derating:*`, `component-unresolved-mpn`,
+  `component-no-datasheet`); reported as `components` in validate and report.
+* The requirement model will move to the multi-domain worker's requirement compiler; this spec is
+  the interim contract it builds on.

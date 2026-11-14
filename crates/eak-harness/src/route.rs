@@ -29,6 +29,7 @@ pub fn invoke(base: &CallContext, tool: &str, args: &Value) -> Value {
             let result = match tool {
                 "guide" => json!({"markdown": crate::GUIDE}),
                 "design_spec_schema" => crate::design::spec_schema(),
+                "design_procedure" => crate::design::procedure(),
                 _ => tools::list_tools_json(),
             };
             return json!({"ok": true, "tool": tool, "category": spec.category, "result": result});

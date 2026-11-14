@@ -27,6 +27,8 @@ use crate::context::CallContext;
 use crate::tools::{command_error, run_checks, ErrorCode, Fail, CALL_LOG};
 use eak_core::Project;
 use eak_engineering::{calc, ipc, netlist};
+use eak_intelligence::domain::{classify_text, Status};
+use eak_intelligence::mental;
 use eak_intelligence::tools::{command_tools, decode_command};
 use eak_runtime::command::MAX_BATCH;
 use eak_runtime::store;
@@ -153,6 +155,21 @@ pub struct Criterion {
     pub params: BTreeMap<String, f64>,
 }
 
+/// Electrical-safety inputs. Required (a blocking gate) above the 60 V DC SELV limit or for a
+/// mains / high-voltage design class; EAK never guesses them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Safety {
+    /// none | functional | basic | reinforced
+    pub isolation: String,
+    #[serde(default)]
+    pub pollution_degree: Option<u8>,
+    #[serde(default)]
+    pub overvoltage_category: Option<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
+}
+
 /// The structured requirement spec.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -165,6 +182,8 @@ pub struct DesignSpec {
     pub rails: Vec<Rail>,
     #[serde(default)]
     pub conditions: Conditions,
+    #[serde(default)]
+    pub safety: Option<Safety>,
     #[serde(default)]
     pub interfaces: Vec<Interface>,
     #[serde(default)]
@@ -220,6 +239,14 @@ pub fn check_spec(s: &DesignSpec) -> (Vec<String>, Vec<String>) {
     if s.conditions.ambient_min_c > s.conditions.ambient_max_c {
         errors.push("conditions: ambient_min_c > ambient_max_c".into());
     }
+    if let Some(sf) = &s.safety {
+        if !["none", "functional", "basic", "reinforced"].contains(&sf.isolation.as_str()) {
+            errors.push("safety.isolation must be none, functional, basic or reinforced".into());
+        }
+        if sf.pollution_degree.is_some_and(|d| !(1..=4).contains(&d)) {
+            errors.push("safety.pollution_degree must be 1..4".into());
+        }
+    }
     if s.acceptance.is_empty() {
         errors.push("at least one acceptance criterion is required".into());
     }
@@ -239,6 +266,65 @@ pub fn check_spec(s: &DesignSpec) -> (Vec<String>, Vec<String>) {
         }
     }
     (errors, warnings)
+}
+
+/// SELV limit used by the high-voltage gate (V DC, IEC 62368-1 ES1 order of magnitude).
+pub const SELV_DC_V: f64 = 60.0;
+
+/// The text a spec is classified from (eak-intelligence domain classifier, DESK-derived).
+fn spec_text(s: &DesignSpec) -> String {
+    let mut t = vec![s.title.clone()];
+    t.extend(s.design_class.iter().map(|c| c.replace('_', " ")));
+    for i in &s.interfaces {
+        t.push(format!("{} {}", i.name, i.kind.replace('_', " ")));
+    }
+    for p in &s.protection {
+        t.push(p.kind.replace('_', " "));
+    }
+    for r in &s.rails {
+        t.push(format!("{} {} V {} A", r.net, r.v_max, r.i_max_a));
+    }
+    t.extend(s.conditions.notes.iter().cloned());
+    t.extend(s.assumptions.iter().cloned());
+    t.join(". ")
+}
+
+/// Classify the spec and derive the blocking gates: missing critical electrical information
+/// that makes automatic design changes unsafe. `design_apply` refuses while any gate is open;
+/// the cure is more spec information (from the human), never an assumption.
+pub fn classify_and_gate(s: &DesignSpec) -> (Value, Vec<Value>) {
+    let c = classify_text(&spec_text(s));
+    let domain = c.candidates.first().map(|k| k.domain.clone());
+    let mains = domain.as_deref() == Some("ac_mains_hv")
+        || c.overlays.iter().any(|o| o == "mains_safety_isolation");
+    let mut gates = vec![];
+    let v_peak = s.rails.iter().map(|r| r.v_max.abs()).fold(0.0, f64::max);
+    if (v_peak > SELV_DC_V || mains) && s.safety.is_none() {
+        gates.push(json!({
+            "id": "hv-isolation-undefined",
+            "message": format!("peak rail {v_peak} V{} needs `safety` (isolation, pollution degree): clearances and creepage are not chosen automatically", if mains { " / mains-class design" } else { "" }),
+        }));
+    }
+    if c.status != Status::Classified && s.design_class.is_none() {
+        gates.push(json!({
+            "id": "domain-unresolved",
+            "message": "the design class is unresolved (status review-required/unclassified): set `design_class` after reviewing the candidates",
+            "candidates": c.candidates.iter().take(3).map(|k| json!({"archetype_id": k.archetype_id, "domain": k.domain, "score": k.score})).collect::<Vec<_>>(),
+        }));
+    }
+    let summary = json!({
+        "status": c.status,
+        "primary": c.primary,
+        "domain": domain,
+        "confidence": c.confidence,
+        "overlays": c.overlays,
+        "required_component_families": c.required_component_families,
+        "missing_information": c.missing_information,
+        "conflicts": c.conflicts,
+        "guidance": c.guidance,
+        "source": "eak-intelligence domain classifier (DESK-derived registry)",
+    });
+    (summary, gates)
 }
 
 /// JSON schema of the spec (for `design_spec_schema`).
@@ -282,11 +368,29 @@ pub fn spec_schema() -> Value {
                         "min": num, "max": num, "unit": {"type": "string"},
                         "params": {"type": "object", "additionalProperties": {"type": "number"}},
                     }}},
+                "safety": {"type": "object", "additionalProperties": false, "required": ["isolation"], "properties": {
+                    "isolation": {"type": "string", "enum": ["none", "functional", "basic", "reinforced"]},
+                    "pollution_degree": {"type": "integer", "minimum": 1, "maximum": 4},
+                    "overvoltage_category": {"type": "string"}, "notes": {"type": "string"}}},
                 "assumptions": strs,
             }
         },
         "metrics": METRICS.iter().map(|(m, d)| json!({"metric": m, "evaluates": d})).collect::<Vec<_>>(),
         "labels": LABELS,
+        "gates": [
+            {"id": "hv-isolation-undefined", "when": format!("any rail above {SELV_DC_V} V or a mains-class design without `safety`")},
+            {"id": "domain-unresolved", "when": "classifier not confident and no `design_class`"},
+        ],
+    })
+}
+
+/// Agent-readable procedures and models (DESK-derived, `eak_intelligence::mental`).
+pub fn procedure() -> Value {
+    json!({
+        "schematic_procedure": mental::schematic_procedure(),
+        "models": mental::models(),
+        "derating": mental::DERATING,
+        "note": "facts, constraints, procedures and guidance are kept separate; a constraint with evaluated_by = null is not checked by EAK and is never reported as passing",
     })
 }
 
@@ -311,11 +415,26 @@ pub enum Label {
 }
 
 const LABELS: &[(&str, &str)] = &[
-    ("verified", "recomputed by eak-engineering from the design data and the spec, within bounds"),
-    ("passed_deterministic_checks", "implemented ERC/DRC/MECH/DFM rules report no errors (not a proof of correctness)"),
-    ("simulation_supported", "a successful ngspice run is logged at this revision (models/stimuli chosen by the agent)"),
-    ("datasheet_supported", "a library rating marked verified with a datasheet source"),
-    ("assumed", "rests on agent-supplied inputs or stated assumptions"),
+    (
+        "verified",
+        "recomputed by eak-engineering from the design data and the spec, within bounds",
+    ),
+    (
+        "passed_deterministic_checks",
+        "implemented ERC/DRC/MECH/DFM rules report no errors (not a proof of correctness)",
+    ),
+    (
+        "simulation_supported",
+        "a successful ngspice run is logged at this revision (models/stimuli chosen by the agent)",
+    ),
+    (
+        "datasheet_supported",
+        "a library rating marked verified with a datasheet source",
+    ),
+    (
+        "assumed",
+        "rests on agent-supplied inputs or stated assumptions",
+    ),
     ("unverified", "failed, not evaluable, or no evidence"),
 ];
 
@@ -400,12 +519,10 @@ fn symbol_value(p: &Project, refdes: &str) -> Option<f64> {
 }
 
 fn rating(p: &Project, component_id: &str, name: &str) -> Option<eak_core::Rating> {
-    let def = p.library.get(component_id).cloned().or_else(|| {
-        eak_core::builtin::components()
-            .into_iter()
-            .find(|d| d.id == component_id)
-    })?;
-    def.ratings.into_iter().find(|r| r.name == name)
+    component_def(p, component_id)?
+        .ratings
+        .into_iter()
+        .find(|r| r.name == name)
 }
 
 /// Check totals (errors per check, lower-case name) from a `run_checks` result.
@@ -710,6 +827,255 @@ fn arg_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, Fail> {
         .ok_or_else(|| invalid(format!("{key} is required")))
 }
 
+// ---------------------------------------------------------------- schematic intent, components
+
+const INTENT_FILE: &str = "intent.json";
+
+fn component_def(p: &Project, id: &str) -> Option<eak_core::ComponentDef> {
+    p.library.get(id).cloned().or_else(|| {
+        eak_core::builtin::components()
+            .into_iter()
+            .find(|d| d.id == id)
+    })
+}
+
+/// `Some(false)` when the symbol exists but its component has no such pin.
+fn symbol_pin_ok(p: &Project, symbol_id: &str, pin: &str) -> Option<bool> {
+    let s = p.schematic.symbols.get(symbol_id)?;
+    Some(component_def(p, &s.component_id).is_some_and(|d| d.pin(pin).is_some()))
+}
+
+/// `"U1.2"` -> `("U1", "2")`.
+fn split_pin(s: &str) -> Option<(&str, &str)> {
+    s.rsplit_once('.')
+        .filter(|(r, n)| !r.is_empty() && !n.is_empty())
+}
+
+/// Parse a plan's `intent.connections` (`[{net, pins: ["U1.2", ...]}]`) into pin -> net.
+/// Pins of parts that already exist are checked against their component definition.
+fn parse_intent(
+    p: &Project,
+    v: Option<&Value>,
+    problems: &mut Vec<Value>,
+) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    let Some(v) = v.filter(|v| !v.is_null()) else {
+        return out;
+    };
+    let Some(conns) = v.get("connections").and_then(Value::as_array) else {
+        problems.push(json!({"intent": "intent.connections must be an array of {net, pins}"}));
+        return out;
+    };
+    for c in conns {
+        let net = c
+            .get("net")
+            .and_then(Value::as_str)
+            .filter(|n| !n.trim().is_empty());
+        let (Some(net), Some(pins)) = (net, c.get("pins").and_then(Value::as_array)) else {
+            problems.push(json!({"intent": "each connection needs a net name and a pins array"}));
+            continue;
+        };
+        for pin in pins {
+            let Some((r, n)) = pin.as_str().and_then(split_pin) else {
+                problems.push(json!({"intent": format!("pin {pin} must be \"REFDES.PIN\"")}));
+                continue;
+            };
+            if let Some(s) = p.schematic.symbols.values().find(|s| s.refdes == r) {
+                if !component_def(p, &s.component_id).is_some_and(|d| d.pin(n).is_some()) {
+                    problems.push(json!({"intent": format!("pin-not-on-component: {r} ({}) has no pin {n:?}", s.component_id)}));
+                }
+            }
+            let key = format!("{r}.{n}");
+            if let Some(prev) = out.insert(key.clone(), net.to_string()) {
+                if prev != net {
+                    problems.push(
+                        json!({"intent": format!("{key} is intended on both {prev} and {net}")}),
+                    );
+                }
+            }
+        }
+    }
+    out
+}
+
+fn load_intent(root: &Path) -> BTreeMap<String, String> {
+    std::fs::read_to_string(root.join(INTENT_FILE))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// Merge a plan's intent into the design intent; returns pins whose intended net changed.
+fn merge_intent(root: &Path, new: &BTreeMap<String, String>) -> Result<Vec<Value>, Fail> {
+    if new.is_empty() {
+        return Ok(vec![]);
+    }
+    let mut all = load_intent(root);
+    let mut replaced = vec![];
+    for (pin, net) in new {
+        if let Some(was) = all.insert(pin.clone(), net.clone()) {
+            if &was != net {
+                replaced.push(json!({"pin": pin, "was": was, "now": net}));
+            }
+        }
+    }
+    write_json(&root.join(INTENT_FILE), &json!(all))?;
+    Ok(replaced)
+}
+
+/// Steps S11-S12: rebuild the netlist from EAK-IR and compare every intended pin with it.
+fn intent_readback(
+    p: &Project,
+    nl: &netlist::Netlist,
+    intent: &BTreeMap<String, String>,
+) -> Vec<Finding> {
+    let mut out = vec![];
+    for (key, net) in intent {
+        let Some((r, n)) = split_pin(key) else {
+            continue;
+        };
+        let Some(s) = p.schematic.symbols.values().find(|s| s.refdes == r) else {
+            let mut f = finding(
+                format!("intent-part-missing:{r}"),
+                "error",
+                format!("intent names {key} on {net} but no symbol {r} exists"),
+            );
+            f.source = "intent".into();
+            out.push(f);
+            continue;
+        };
+        if !component_def(p, &s.component_id).is_some_and(|d| d.pin(n).is_some()) {
+            let mut f = finding(
+                format!("pin-not-on-component:{key}"),
+                "error",
+                format!("{r} ({}) has no pin {n}", s.component_id),
+            );
+            f.source = "intent".into();
+            out.push(f);
+            continue;
+        }
+        let actual = nl.pin_net.get(&(s.id.clone(), n.to_string()));
+        if actual.map(String::as_str) != Some(net.as_str()) {
+            let mut f = finding(
+                format!("intent-mismatch:{key}"),
+                "error",
+                format!(
+                    "{key} is on {} in the read-back netlist; intended {net}",
+                    actual.map(String::as_str).unwrap_or("no net")
+                ),
+            );
+            f.source = "intent".into();
+            f.suggested_fix = Some(format!(
+                "LabelPin {{symbol_id: {:?}, pin: {n:?}, name: {net:?}}}",
+                s.id
+            ));
+            out.push(f);
+        }
+    }
+    out
+}
+
+/// Component intelligence (DESK component-selection model): MPN/datasheet evidence and
+/// derated voltage/current ratings against the spec rails on the part's nets.
+fn component_evidence(
+    p: &Project,
+    nl: &netlist::Netlist,
+    spec: &DesignSpec,
+) -> (Vec<Value>, Vec<Finding>) {
+    let rails: BTreeMap<&str, &Rail> = spec.rails.iter().map(|r| (r.net.as_str(), r)).collect();
+    let (mut parts, mut findings) = (vec![], vec![]);
+    for s in p.schematic.symbols.values() {
+        let Some(def) = component_def(p, &s.component_id) else {
+            continue;
+        };
+        let mut on_rails: Vec<&Rail> = nl
+            .pin_net
+            .iter()
+            .filter(|((sym, _), _)| *sym == s.id)
+            .filter_map(|(_, net)| rails.get(net.as_str()).copied())
+            .collect();
+        on_rails.sort_by(|a, b| a.net.cmp(&b.net));
+        on_rails.dedup_by(|a, b| a.net == b.net);
+        let v_applied = on_rails.iter().map(|r| r.v_max.abs()).fold(0.0, f64::max);
+        let i_applied = on_rails.iter().map(|r| r.i_max_a).fold(0.0, f64::max);
+        let mut checks = vec![];
+        for r in &def.ratings {
+            let (quantity, applied) = if mental::VOLTAGE_RATINGS.contains(&r.name.as_str()) {
+                ("voltage", v_applied)
+            } else if mental::CURRENT_RATINGS.contains(&r.name.as_str()) {
+                ("current", i_applied)
+            } else {
+                continue;
+            };
+            let Some(d) = mental::derating(&s.refdes, quantity) else {
+                continue;
+            };
+            if applied <= 0.0 || r.value <= 0.0 {
+                continue;
+            }
+            let limit = r.value * d.max_fraction;
+            let passed = applied <= limit;
+            let label = if !passed {
+                Label::Unverified
+            } else if r.verified {
+                Label::DatasheetSupported
+            } else {
+                Label::Assumed
+            };
+            checks.push(json!({
+                "rating": r.name, "value": r.value, "unit": r.unit, "rating_source": r.source,
+                "rating_verified": r.verified, "applied": applied, "max_fraction": d.max_fraction,
+                "derated_limit": limit, "passed": passed, "label": label, "derating_source": d.source,
+            }));
+            if !passed {
+                let mut f = finding(
+                    format!("derating:{}:{}", s.refdes, r.name),
+                    "error",
+                    format!("{} {} {} {} derated to {limit:.3} (x{}) < applied {applied} from the spec rails", s.refdes, r.name, r.value, r.unit, d.max_fraction),
+                );
+                f.source = "component-intelligence".into();
+                f.measured = Some(applied);
+                f.required = Some(limit);
+                f.suggested_fix = Some("choose a part with a higher rating (UpsertComponentDefinition / AssignComponentFootprint) or lower the rail in the spec".into());
+                findings.push(f);
+            }
+        }
+        let blank = |o: &Option<String>| o.as_deref().is_none_or(|x| x.trim().is_empty());
+        if blank(&def.mpn) {
+            let mut f = finding(
+                format!("component-unresolved-mpn:{}", s.refdes),
+                "warning",
+                format!("{} ({}) has no manufacturer part number", s.refdes, def.id),
+            );
+            f.source = "component-intelligence".into();
+            f.suggested_fix = Some(format!(
+                "SetComponentProperties {{component_id: {:?}, mpn: ...}}",
+                def.id
+            ));
+            findings.push(f);
+        }
+        if blank(&def.datasheet) {
+            let mut f = finding(
+                format!("component-no-datasheet:{}", s.refdes),
+                "warning",
+                format!(
+                    "{} ({}) has no datasheet reference; its ratings cannot be datasheet-supported",
+                    s.refdes, def.id
+                ),
+            );
+            f.source = "component-intelligence".into();
+            findings.push(f);
+        }
+        parts.push(json!({
+            "refdes": s.refdes, "component_id": def.id, "value": s.value,
+            "mpn": def.mpn, "manufacturer": def.manufacturer, "datasheet": def.datasheet,
+            "provenance": def.provenance, "rails": on_rails.iter().map(|r| r.net.clone()).collect::<Vec<_>>(),
+            "rating_checks": checks,
+        }));
+    }
+    (parts, findings)
+}
+
 // ---------------------------------------------------------------- tools
 
 /// Dispatch one `flow` tool against an open engine.
@@ -737,12 +1103,7 @@ pub(crate) fn dispatch(
     }
 }
 
-fn spec_set(
-    engine: &Engine,
-    ctx: &CallContext,
-    root: &Path,
-    args: &Value,
-) -> Result<Value, Fail> {
+fn spec_set(engine: &Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result<Value, Fail> {
     let raw = args
         .get("spec")
         .cloned()
@@ -759,12 +1120,16 @@ fn spec_set(
     }
     let spec_v = serde_json::to_value(&spec).map_err(storage)?;
     let revision = engine.project().revision;
+    let (classification, gates) = classify_and_gate(&spec);
     let stored = json!({
         "revision": revision,
         "fingerprint": fingerprint(&spec_v),
         "set_by": {"session": ctx.session_id, "agent": ctx.agent},
         "spec": spec_v,
         "warnings": warnings,
+        "classification": classification,
+        "gates": gates,
+        "gates_note": "design_apply is refused while any gate is open; supply the missing information in the spec",
     });
     write_json(&root.join(SPEC_FILE), &stored)?;
     record(
@@ -809,6 +1174,7 @@ fn plan(engine: &Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result
     }
     let mut problems = vec![];
     let mut max_class = OperationClass::ReadOnly;
+    let p = engine.project();
     for (i, s) in steps.iter().enumerate() {
         match decode_step(s) {
             Ok((_, class)) => {
@@ -816,7 +1182,20 @@ fn plan(engine: &Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result
             }
             Err(e) => problems.push(json!({"step": i, "error": e})),
         }
+        // Never invent a pin map: a pin on an existing symbol must exist on its component.
+        for (sym, pin) in [
+            ("symbol_id", "pin"),
+            ("a_symbol", "a_pin"),
+            ("b_symbol", "b_pin"),
+        ] {
+            if let (Some(sym), Some(pin)) = (s[sym].as_str(), s[pin].as_str()) {
+                if symbol_pin_ok(p, sym, pin) == Some(false) {
+                    problems.push(json!({"step": i, "error": format!("pin-not-on-component: symbol {sym} has no pin {pin:?} (read get_component)")}));
+                }
+            }
+        }
     }
+    let intent = parse_intent(p, args.get("intent"), &mut problems);
     if !problems.is_empty() {
         return Err(Fail(
             ErrorCode::InvalidArguments,
@@ -841,8 +1220,10 @@ fn plan(engine: &Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result
         "session": ctx.session_id,
         "agent": ctx.agent,
         "steps": steps,
+        "intent": intent.iter().map(|(pin, net)| json!({"pin": pin, "net": net})).collect::<Vec<_>>(),
     });
     write_json(&root.join(PLANS_DIR).join(format!("{plan_id}.json")), &plan)?;
+    let replaced = merge_intent(root, &intent)?;
     record(
         root,
         ctx,
@@ -855,17 +1236,14 @@ fn plan(engine: &Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result
         "base_revision": revision,
         "steps": steps.len(),
         "max_class": max_class,
+        "intent_pins": intent.len(),
+        "intent_replaced": replaced,
         "needs_destructive_opt_in": needs_opt_in,
         "next": format!("design_apply {{plan_id: {plan_id:?}, expected_revision: {revision}}}"),
     }))
 }
 
-fn apply(
-    engine: &mut Engine,
-    ctx: &CallContext,
-    root: &Path,
-    args: &Value,
-) -> Result<Value, Fail> {
+fn apply(engine: &mut Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result<Value, Fail> {
     let plan_id = arg_str(args, "plan_id")?;
     if !plan_id.starts_with("plan-") || plan_id.contains(['/', '\\', '.']) {
         return Err(invalid("plan_id must be an id returned by design_plan"));
@@ -881,7 +1259,13 @@ fn apply(
             )
         })?;
     let text = std::fs::read_to_string(root.join(PLANS_DIR).join(format!("{plan_id}.json")))
-        .map_err(|_| Fail(ErrorCode::NotFound, format!("no plan {plan_id}"), Value::Null))?;
+        .map_err(|_| {
+            Fail(
+                ErrorCode::NotFound,
+                format!("no plan {plan_id}"),
+                Value::Null,
+            )
+        })?;
     let plan: Value = serde_json::from_str(&text).map_err(storage)?;
     let base = plan["base_revision"].as_u64().unwrap_or(u64::MAX);
     if base != expected {
@@ -891,6 +1275,15 @@ fn apply(
                 "plan {plan_id} was made at revision {base}; re-plan against the current revision"
             ),
             json!({"plan_base_revision": base, "expected_revision": expected}),
+        ));
+    }
+    // Missing critical electrical information blocks automatic changes (domain gates).
+    let (_, stored) = load_spec(root)?;
+    if stored["gates"].as_array().is_some_and(|g| !g.is_empty()) {
+        return Err(Fail(
+            ErrorCode::Precondition,
+            "the spec has open gates (missing critical information); design_apply is blocked until the spec supplies it".into(),
+            json!({"gates": stored["gates"]}),
         ));
     }
     let mut commands = vec![];
@@ -938,7 +1331,7 @@ fn apply(
     Ok(v)
 }
 
-type Assessment = (Value, Vec<CriterionResult>, Vec<Finding>, Value);
+type Assessment = (Value, Vec<CriterionResult>, Vec<Finding>, Value, Vec<Value>);
 
 /// Run every check and evaluate the spec; shared by validate and report.
 fn assess(engine: &mut Engine, root: &Path) -> Result<Assessment, Fail> {
@@ -946,8 +1339,13 @@ fn assess(engine: &mut Engine, root: &Path) -> Result<Assessment, Fail> {
     let checks = run_checks(engine, "all")?;
     let p = engine.project();
     let simulated = engine.dir().is_some_and(|d| simulated_at(d, p.revision));
-    let (criteria, findings) = evaluate(p, &spec, &check_totals(&checks), simulated);
-    Ok((checks, criteria, findings, stored))
+    let (criteria, mut findings) = evaluate(p, &spec, &check_totals(&checks), simulated);
+    // Schematic mental model S11-S12 and component intelligence on the read-back netlist.
+    let nl = netlist::build(p);
+    findings.extend(intent_readback(p, &nl, &load_intent(root)));
+    let (components, component_findings) = component_evidence(p, &nl, &spec);
+    findings.extend(component_findings);
+    Ok((checks, criteria, findings, stored, components))
 }
 
 fn error_count(checks: &Value, criteria: &[CriterionResult], findings: &[Finding]) -> u64 {
@@ -957,7 +1355,7 @@ fn error_count(checks: &Value, criteria: &[CriterionResult], findings: &[Finding
 }
 
 fn validate(engine: &mut Engine, ctx: &CallContext, root: &Path) -> Result<Value, Fail> {
-    let (checks, criteria, findings, stored) = assess(engine, root)?;
+    let (checks, criteria, findings, stored, components) = assess(engine, root)?;
     let revision = engine.project().revision;
     let errors = error_count(&checks, &criteria, &findings);
     let mut out = json!({
@@ -966,6 +1364,7 @@ fn validate(engine: &mut Engine, ctx: &CallContext, root: &Path) -> Result<Value
         "errors": errors,
         "criteria": criteria,
         "findings": findings,
+        "components": components,
         "reports": checks["reports"],
         "note": "deterministic results only; a clean result does not prove the design correct (see each report's not_implemented and limitations)",
     });
@@ -1109,7 +1508,7 @@ fn label_name(l: Label) -> String {
 }
 
 fn report(engine: &mut Engine, root: &Path) -> Result<Value, Fail> {
-    let (checks, criteria, findings, stored) = assess(engine, root)?;
+    let (checks, criteria, findings, stored, components) = assess(engine, root)?;
     let p = engine.project();
     let revision = p.revision;
     let simulated = engine.dir().is_some_and(|d| simulated_at(d, revision));
@@ -1139,6 +1538,7 @@ fn report(engine: &mut Engine, root: &Path) -> Result<Value, Fail> {
         "label_counts": counts,
         "criteria": criteria,
         "findings": findings,
+        "components": components,
         "claims": claims,
         "checks": checks["reports"].as_array().map(|a| a.iter().map(|r| json!({
             "check": r["check"], "errors": r["errors"], "warnings": r["warnings"],
@@ -1146,9 +1546,13 @@ fn report(engine: &mut Engine, root: &Path) -> Result<Value, Fail> {
         })).collect::<Vec<_>>()),
     });
     let fp = fingerprint(&body);
-    let approval = read_jsonl(&root.join(APPROVALS)).into_iter().rev().find(|a| {
-        a["revision"].as_u64() == Some(revision) && a["fingerprint"].as_str() == Some(fp.as_str())
-    });
+    let approval = read_jsonl(&root.join(APPROVALS))
+        .into_iter()
+        .rev()
+        .find(|a| {
+            a["revision"].as_u64() == Some(revision)
+                && a["fingerprint"].as_str() == Some(fp.as_str())
+        });
     let iterations = read_jsonl(&root.join(ITERATIONS));
     let release_label = match (&approval, errors) {
         (Some(_), 0) => format!(
@@ -1164,7 +1568,12 @@ fn report(engine: &mut Engine, root: &Path) -> Result<Value, Fail> {
     } else {
         Value::Null
     };
-    let count = |ev: &str| iterations.iter().filter(|i| i["event"] == json!(ev)).count();
+    let count = |ev: &str| {
+        iterations
+            .iter()
+            .filter(|i| i["event"] == json!(ev))
+            .count()
+    };
     let out = json!({
         "fingerprint": fp,
         "release_label": release_label,
@@ -1302,6 +1711,42 @@ mod tests {
         assert_eq!(by("erc").label, Label::PassedDeterministicChecks);
         assert_eq!(by("sim").label, Label::Unverified);
         assert!(f.iter().any(|f| f.id == "rail-net-missing:+5V"));
+    }
+
+    #[test]
+    fn high_voltage_without_safety_is_gated() {
+        let s = spec();
+        assert!(
+            classify_and_gate(&s).1.is_empty(),
+            "24 V buck with a design_class: no gate"
+        );
+        let mut hv = s.clone();
+        hv.rails[0].v_max = 340.0;
+        hv.rails[0].v_nom = 325.0;
+        let gates = classify_and_gate(&hv).1;
+        assert!(gates.iter().any(|g| g["id"] == "hv-isolation-undefined"));
+        hv.safety = Some(Safety {
+            isolation: "reinforced".into(),
+            pollution_degree: Some(2),
+            overvoltage_category: Some("II".into()),
+            notes: None,
+        });
+        assert!(!classify_and_gate(&hv)
+            .1
+            .iter()
+            .any(|g| g["id"] == "hv-isolation-undefined"));
+    }
+
+    #[test]
+    fn intent_readback_flags_missing_parts() {
+        let p = Project::new("t");
+        let nl = netlist::build(&p);
+        let mut intent = BTreeMap::new();
+        intent.insert("U1.2".to_string(), "VIN".to_string());
+        let f = intent_readback(&p, &nl, &intent);
+        assert_eq!(f[0].id, "intent-part-missing:U1");
+        assert_eq!(split_pin("U1.2"), Some(("U1", "2")));
+        assert_eq!(split_pin("U1"), None);
     }
 
     #[test]

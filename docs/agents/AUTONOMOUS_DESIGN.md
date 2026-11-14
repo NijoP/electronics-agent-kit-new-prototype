@@ -133,3 +133,25 @@ Continue with `SyncSchematicToPcb`, `SetBoardOutline`, `AutoPlace` / `MoveFootpr
 `verified` because L comes from the schematic value; `erc`/`drc` `passed_deterministic_checks`
 when clean; `isat` `datasheet_supported` only if the library marks the rating verified; protection
 `assumed`). Hand the human the `approve_with` line; you cannot approve.
+
+## Engineering mental models (DESK-derived)
+
+`eak call design_procedure` returns the 12-step schematic procedure and DESK models M1-M6 as
+typed data. Each step names the EAK gate that checks it; a constraint whose `evaluated_by` is
+`null` is your responsibility and is never reported as passing.
+
+* **S1 spec gates.** `design_spec_set` classifies the spec (domain classifier) and opens gates for
+  missing critical information: `hv-isolation-undefined` (any rail above 60 V DC or a mains class
+  without `safety`), `domain-unresolved` (uncertain class and no `design_class`). `design_apply`
+  is refused while a gate is open. Ask the human for the missing values; do not assume them.
+* **S7-S8 pins and intent.** Read pins with `get_component`. Give each plan an intent:
+  `"intent": {"connections": [{"net": "VIN", "pins": ["U1.2", "J1.1"]}]}`. Plans that name a pin
+  that does not exist on an existing symbol are refused.
+* **S11-S12 read-back.** `design_validate` rebuilds the netlist from EAK-IR and reports
+  `intent-mismatch:U1.2` (with the `LabelPin` fix), `intent-part-missing:U1`,
+  `pin-not-on-component:U1.9`.
+* **S5-S6 components.** Validate lists every placed part's MPN, datasheet and derated ratings
+  against the spec rails on its nets: capacitors at most 50 % of rated voltage (assumes MLCC),
+  inductors/MOSFETs/diodes at most 75 % of rated current, other parts at most 80 % of rated voltage.
+  Findings: `derating:L1:saturation_current`, `component-unresolved-mpn:U1`,
+  `component-no-datasheet:J1`.

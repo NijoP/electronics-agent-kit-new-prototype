@@ -222,13 +222,24 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         "JSON schema of the design requirement spec, the acceptance metrics EAK can evaluate deterministically, and the evidence labels.",
         empty(),
     ));
+    v.push(plain(
+        "design_procedure",
+        Discovery,
+        "Engineering mental models recovered from DESK as typed data: the 12-step schematic procedure (each step with the EAK gate that checks it), M1-M6 hard constraints (with their evaluator or none), derating facts and trade-off guidance.",
+        empty(),
+    ));
     v.push(spec(
         "design_spec_set",
         flow,
         "Store the structured requirement spec (rails with voltage/current, conditions, interfaces, protection, acceptance criteria, assumptions). Structural errors refuse it. Never edits the design.",
         props(json!({"spec": {"type": "object", "description": "see design_spec_schema"}}), &["spec"]),
     ));
-    v.push(spec("design_spec_get", flow, "The stored spec with its fingerprint and the revision it was set at.", empty()));
+    v.push(spec(
+        "design_spec_get",
+        flow,
+        "The stored spec with its fingerprint and the revision it was set at.",
+        empty(),
+    ));
     v.push(spec(
         "design_plan",
         flow,
