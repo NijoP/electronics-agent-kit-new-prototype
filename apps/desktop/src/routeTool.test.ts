@@ -1,6 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { feedbackText, ripUpAndReroute, routeBatch, routeReducer, stepRequest, type RouteDraft } from "./routeTool";
-import type { Point, RouteStepReport } from "./types";
+import {
+  deleteTracks,
+  feedbackText,
+  finishOn,
+  netPriority,
+  nextConnections,
+  onBoard,
+  padAt,
+  ripUpAndReroute,
+  routeBatch,
+  routeReducer,
+  startProblem,
+  stepRequest,
+  trackEdit,
+  widthFromMm,
+  type RouteDraft,
+} from "./routeTool";
+import type { FootprintGeom, Point, RouteStepReport, Track } from "./types";
 
 const P = (x: number, y: number): Point => ({ x, y });
 
@@ -128,5 +144,76 @@ describe("route tool reducer", () => {
     expect(t).toContain("min gap 0.210 mm to pad U1.3");
     expect(t).toContain("blocked by track trk_1");
     expect(feedbackText(null)).toBe("");
+  });
+});
+
+// Written without running (no local builds/tests in this phase): unrun.
+const fp = (id: string, refdes: string, pads: [string, number, number, string | null][]): FootprintGeom => ({
+  id,
+  symbol_id: `s_${id}`,
+  refdes,
+  side: "top",
+  position: P(0, 0),
+  half_w: 2_000_000,
+  half_h: 2_000_000,
+  pads: pads.map(([number, x, y, net]) => ({ number, kind: "smd", shape: "rect", position: P(x, y), size_x: 1_000_000, size_y: 1_000_000, drill: null, net })),
+});
+const board = [P(0, 0), P(50_000_000, 0), P(50_000_000, 40_000_000), P(0, 40_000_000)];
+const fps = [fp("fp1", "R1", [["1", 10_000_000, 10_000_000, "SIG"], ["2", 12_000_000, 10_000_000, "GND"]]), fp("fp2", "R2", [["1", 30_000_000, 10_000_000, "SIG"], ["2", 32_000_000, 10_000_000, null]])];
+
+describe("manual routing helpers", () => {
+  it("hits a pad anywhere on its copper and resolves its centre", () => {
+    const h = padAt(fps, P(10_400_000, 9_700_000), 0);
+    expect(h?.refdes).toBe("R1");
+    expect(h?.at).toEqual(P(10_000_000, 10_000_000));
+    expect(padAt(fps, P(20_000_000, 20_000_000), 0)).toBeNull();
+  });
+
+  it("refuses to start off the board or on a pad without a net", () => {
+    expect(startProblem(padAt(fps, P(10_000_000, 10_000_000), 0)!, board)).toBeNull();
+    expect(startProblem(padAt(fps, P(32_000_000, 10_000_000), 0)!, board)).toMatch(/no net/);
+    expect(startProblem({ footprint: "x", refdes: "U9", number: "1", net: "SIG", at: P(60_000_000, 1) }, board)).toMatch(/outside the board/);
+    expect(onBoard([], P(-1, -1))).toBe(true);
+  });
+
+  it("finishes on a same-net pad and refuses a pad of another net", () => {
+    const d = started();
+    expect(finishOn(d, padAt(fps, P(30_000_000, 10_000_000), 0)).kind).toBe("finish");
+    expect(finishOn(d, padAt(fps, P(12_000_000, 10_000_000), 0)).kind).toBe("refuse");
+    expect(finishOn(d, null).kind).toBe("point");
+  });
+
+  it("carries the chosen track width into route_step", () => {
+    const d = routeReducer(started(), { type: "setWidth", width: widthFromMm("0.5") })!;
+    expect(stepRequest(d, P(5, 5)).width).toBe(500_000);
+    expect(widthFromMm("")).toBeNull();
+    expect(widthFromMm("-1")).toBeNull();
+  });
+
+  it("edits a track as one Batch and deletes tracks", () => {
+    const t: Track = { id: "trk1", layer: "top", width: 250_000, a: P(0, 0), b: P(5, 0), net: "SIG" };
+    expect(trackEdit(t, { width: 250_000 })).toBeNull();
+    expect(trackEdit(t, { width: 400_000 })).toEqual({
+      type: "Batch",
+      commands: [
+        { type: "DeleteTrack", track_id: "trk1" },
+        { type: "AddTrack", layer: "top", a: P(0, 0), b: P(5, 0), width: 400_000, net: "SIG" },
+      ],
+      label: "Edit track SIG",
+    });
+    expect(deleteTracks(["trk1"])).toEqual({ type: "DeleteTrack", track_id: "trk1" });
+  });
+
+  it("orders unrouted connections most constrained first (DESK priority model)", () => {
+    expect(netPriority("VCC", 2, undefined)).toBeGreaterThan(netPriority("SIG", 2, undefined));
+    const q = nextConnections(
+      [
+        ["SIG", P(0, 0), P(1, 0)],
+        ["VCC", P(0, 0), P(9, 0)],
+      ],
+      fps,
+      undefined,
+    );
+    expect(q[0][0]).toBe("VCC");
   });
 });

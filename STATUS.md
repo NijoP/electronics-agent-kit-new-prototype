@@ -1,3 +1,4 @@
+| Manual PCB routing workflow (pad start/finish, width, 45/90, via + layer switch, track edit/delete, active net, next-connection priority, DRC check) | code-reviewed only | 2026-11-15 `fm/eak-pcb-routing`; not compiled, tests written but unrun; not exercised in a real window |
 # EAK status
 
 Current, short record. Per-milestone history with exact test counts: `docs/development/STATUS_LOG.md`.

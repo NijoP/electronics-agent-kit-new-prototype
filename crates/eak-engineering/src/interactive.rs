@@ -256,6 +256,20 @@ pub fn route_step(p: &Project, req: &RouteStepRequest) -> RouteStepResult {
     let copper = items(p);
     let outline = &p.pcb.board.outline;
     let edge_clearance = p.constraints.board_edge_clearance as f64;
+    // Update PCB stages new footprints beside the board: every segment from there fails the
+    // board-edge rule, so say why instead of returning an unexplained empty proposal.
+    if outline.len() >= 3 && !point_in_polygon(req.from, outline) {
+        res.blocking.push(ClearanceFeedback {
+            object: "board edge".into(),
+            measured: 0.0,
+            required: p.constraints.board_edge_clearance,
+        });
+        res.message = Some(
+            "the route starts outside the board outline; move the footprints onto the board first"
+                .into(),
+        );
+        return res;
+    }
 
     if req.via_at_start {
         let via_rules = Rules {
@@ -589,6 +603,17 @@ mod tests {
                 }
             }
         }
+    }
+
+    // Written without running (no local builds in this phase): label "unrun".
+    #[test]
+    fn start_outside_the_board_is_explained_not_silently_empty() {
+        let p = board();
+        let from = Point::mm(60.0, 5.0);
+        let r = route_step(&p, &req(from, Point::mm(20.0, 5.0), BendMode::Diagonal45));
+        assert!(r.segments.is_empty() && !r.reached);
+        assert!(r.message.as_deref().unwrap_or("").contains("outside the board outline"));
+        assert!(r.blocking.iter().any(|b| b.object == "board edge"));
     }
 
     #[test]

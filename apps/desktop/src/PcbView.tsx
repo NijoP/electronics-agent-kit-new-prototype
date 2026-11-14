@@ -1,3 +1,24 @@
+              <label title="Track width for this route; empty uses the net-class width">
+                Width (mm)
+                <input aria-label="Track width" inputMode="decimal" placeholder="net class" size={6} value={widthText} onChange={(e) => changeWidth(e.target.value)} />
+              </label>
+              <button type="button" aria-label="Bend mode" title="45° or 90° corners (/)" onClick={toggleMode}>
+                {mode === "diagonal45" ? "45°" : "90°"}
+              </button>
+              {draft && (
+                <>
+                  <span className="route-net" aria-label="Active net">Routing {draft.net} · {layerName(draft.layer)}{draft.viaPending ? " · via next" : ""}</span>
+                  <button type="button" title="Place a via here and continue on the next copper layer (L)" onClick={() => changeLayer(order[(order.findIndex((o) => sameLayer(o, layer)) + 1) % order.length])}>
+                    Via + switch layer
+                  </button>
+                  <button type="button" title="Remove the last fixed step (Backspace)" disabled={!draft.steps.length} onClick={() => dispatch({ type: "back" })}>
+                    Undo step
+                  </button>
+                  <button type="button" title="Discard this route (Esc)" onClick={reset}>
+                    Cancel
+                  </button>
+                </>
+              )}
 // PCB editor: board outline, zones, tracks, vias and footprints from the snapshot, with
 // tools that turn clicks into typed engine commands (outline, move, route, via, delete).
 import { useEffect, useReducer, useRef, useState } from "react";
@@ -12,8 +33,21 @@ import { OutlinePanel } from "./tools/pcb/OutlinePanel";
 import { layerKey, layerName, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
 import { useLayerView, type LayerView } from "./layerView";
 import { focusBounds, type Focus } from "./pcbFocus";
-import { feedbackText, ripUpAndReroute, routeBatch, routeReducer, stepRequest } from "./routeTool";
-import type { Command, CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
+import {
+  deleteTracks,
+  feedbackText,
+  finishOn,
+  nextConnections,
+  padAt,
+  ripUpAndReroute,
+  routeBatch,
+  routeReducer,
+  startProblem,
+  stepRequest,
+  trackEdit,
+  widthFromMm,
+} from "./routeTool";
+import type { BendMode, Command, CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 
@@ -53,13 +87,13 @@ const poly = (pts: Point[]) => pts.map((p) => toView(p).join(",")).join(" ");
 const hit = (e: { target: EventTarget }, attr: string): string | null =>
   e.target instanceof Element ? (e.target.closest(`[${attr}]`)?.getAttribute(attr) ?? null) : null;
 
-function Pad({ pad }: { pad: PadGeom }) {
+function Pad({ pad, active }: { pad: PadGeom; active?: boolean }) {
   const [x, y] = toView(pad.position);
   const w = mm(pad.size_x);
   const h = mm(pad.size_y);
   const r = pad.shape === "circle" ? Math.min(w, h) / 2 : pad.shape === "oval" ? Math.min(w, h) / 2 : 0;
   return (
-    <g className={`pad ${pad.kind}`}>
+    <g className={`pad ${pad.kind}${active ? " net-active" : ""}`}>
       <title>{`pad ${pad.number}${pad.net ? ` · ${pad.net}` : ""}`}</title>
       <rect x={x - w / 2} y={y - h / 2} width={w} height={h} rx={r} ry={r} />
       {pad.drill !== null && <circle className="drill" cx={x} cy={y} r={mm(pad.drill) / 2} />}
@@ -109,6 +143,14 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const [draft, dispatch] = useReducer(routeReducer, null);
   const [proposal, setProposal] = useState<RouteStepReport | null>(null);
   const stepSeq = useRef(0);
+  const [mode, setMode] = useState<BendMode>("diagonal45");
+  // Track width for new routes (mm text; empty = net-class width).
+  const [widthText, setWidthText] = useState("");
+  // Select tool: one committed track picked for editing (width, layer, delete).
+  const [trackSel, setTrackSel] = useState<Id | null>(null);
+  const [trackWidthText, setTrackWidthText] = useState("");
+  const selTrack = trackSel ? pcb.tracks[trackSel] : undefined;
+  const routeNet = draft?.net ?? null;
 
   const pads = snapshot.geometry.footprints.flatMap((f) => f.pads.map((p) => ({ at: p.position, net: p.net })));
   const trackEnds = Object.values(pcb.tracks).flatMap((t) => [
@@ -150,6 +192,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
 
   const reset = () => {
     dispatch({ type: "cancel" });
+    setTrackSel(null);
     setProposal(null);
     setCorners([]);
     setPicked(null);
@@ -214,6 +257,51 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     if (cmd && edit) void edit.execute(cmd);
   };
 
+  const toggleMode = () => {
+    setMode((m) => (m === "diagonal45" ? "orthogonal90" : "diagonal45"));
+    dispatch({ type: "toggleMode" });
+  };
+  // Mid-route a layer change means "via here, continue on that layer" (the engine checks the via).
+  const changeLayer = (next: CopperLayer) => {
+    setLayer(next);
+    if (draft) dispatch({ type: "switchLayer", layer: next });
+  };
+  const changeWidth = (text: string) => {
+    setWidthText(text);
+    dispatch({ type: "setWidth", width: widthFromMm(text) });
+  };
+  const startRoute = (n: string, at: Point) => {
+    setNet(n);
+    setTrackSel(null);
+    dispatch({ type: "start", net: n, layer, at, mode, width: widthFromMm(widthText) });
+  };
+  const deleteSelectedTrack = () => {
+    const cmd = selTrack ? deleteTracks([selTrack.id]) : null;
+    setTrackSel(null);
+    if (cmd && edit) void edit.execute(cmd);
+  };
+  const applyTrackEdit = (change: { width?: number; layer?: CopperLayer }) => {
+    const cmd = selTrack ? trackEdit(selTrack, change) : null;
+    setTrackSel(null);
+    if (cmd && edit) void edit.execute(cmd);
+  };
+  // Clearance and connectivity validation is eak-validation's DRC, never the route tool's guess.
+  const checkRouting = () => {
+    if (!edit) return;
+    api
+      .runCheck("drc")
+      .then(({ report: r }) =>
+        edit.notify(
+          `DRC: ${r.errors} error(s), ${r.warnings} warning(s)` +
+            `${r.not_implemented.length ? ` · ${r.not_implemented.length} check(s) not implemented` : ""}` +
+            ` · ${(airwires ?? []).length} unrouted connection(s)`,
+        ),
+      )
+      .catch((err) => edit.notify(`DRC failed: ${String(err)}`));
+  };
+  const unrouted = airwires ?? [];
+  const queue = nextConnections(unrouted, snapshot.geometry.footprints, snapshot.project.constraints);
+
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
     if (!edit || isTyping(e.target) || !isActiveEditor(docId)) return;
@@ -234,17 +322,15 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     }
     else if (e.key === "Enter" && tool === "route") finishRoute();
     else if (e.key === "Backspace" && tool === "route") dispatch({ type: "back" });
-    else if (e.key === "/" && tool === "route") dispatch({ type: "toggleMode" });
+    else if (e.key === "/" && tool === "route") toggleMode();
+    else if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selTrack) deleteSelectedTrack();
     else if (e.key === "Enter" && tool === "outline") finishOutline();
     else if (e.key === "Enter" && tool === "zone") finishZone();
     else if (k === "r" && sel.length) actions.rotate();
     else if (k === "f" && sel.length) actions.flip();
     else if (k === "l" && tool === "route") {
       const i = order.findIndex((o) => sameLayer(o, layer));
-      const next = order[(i + 1) % order.length];
-      setLayer(next);
-      // Mid-route the next step starts with a via; the engine checks it before proposing it.
-      dispatch({ type: "switchLayer", layer: next });
+      changeLayer(order[(i + 1) % order.length]);
     }
   };
   useEffect(() => {
@@ -262,6 +348,13 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     const justPicked = pressed.current;
     pressed.current = null;
     const mode = P.pickMode(e);
+    const trackId = id ? null : hit(e, "data-track-id");
+    setTrackSel(trackId);
+    if (trackId) {
+      const t = pcb.tracks[trackId];
+      if (t) setTrackWidthText((t.width / 1_000_000).toString());
+      return setSel([]);
+    }
     if (!id) return setSel(mode === "replace" ? [] : sel);
     if (justPicked === id) return;
     setSel(P.pick(sel, id, mode));
@@ -354,17 +447,26 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         return;
       }
       case "route": {
+        // A click anywhere on a pad's copper means that pad (its centre), not only near the centre.
+        const pad = padAt(snapshot.geometry.footprints, fromView(x, y), 0);
         if (!draft) {
+          if (pad) {
+            const why = startProblem(pad, outline);
+            return why ? edit.notify(why) : startRoute(pad.net as string, pad.at);
+          }
           const n = snapped?.net || net;
-          if (!n) return edit.notify("Start on a pad or track of a net, or pick the net first.");
-          setNet(n);
-          return dispatch({ type: "start", net: n, layer, at: snap.point, mode: "diagonal45" });
+          if (!n) return edit.notify("Start on a pad or track end of a net, or pick the net first.");
+          return startRoute(n, snap.point);
         }
-        // Fix the engine's legal path to the clicked point; ending on copper of the net finishes.
+        // Fix the engine's legal path to the clicked point; ending on copper of the net finishes,
+        // a pad of another net is refused (it would short two nets).
         const d = draft;
-        const ends = !!snapped && snapped.net === d.net && !samePoint(snap.point, d.anchor);
+        const verdict = finishOn(d, pad);
+        if (verdict.kind === "refuse") return edit.notify(verdict.why);
+        const to = verdict.kind === "finish" && pad ? pad.at : snap.point;
+        const ends = verdict.kind === "finish" || (!pad && !!snapped && snapped.net === d.net && !samePoint(snap.point, d.anchor));
         void api
-          .routeStep(stepRequest(d, snap.point))
+          .routeStep(stepRequest(d, to))
           .then((s) => {
             dispatch({ type: "fix", step: s });
             if (!s.reached) edit.notify(feedbackText(s));
@@ -397,7 +499,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     }
   };
 
-  const hoverSnap = hover ? snapPoint(hover, GRID, targets.map((t) => t.at), CAPTURE).point : null;
+  // While routing, hovering a pad aims the live preview at the pad centre.
+  const hoverPad = hover && tool === "route" && draft ? padAt(snapshot.geometry.footprints, hover, 0) : null;
+  const hoverSnap = hover ? (hoverPad?.at ?? snapPoint(hover, GRID, targets.map((t) => t.at), CAPTURE).point) : null;
   // Live route proposal from the engine, debounced at pointer rate; stale replies are dropped.
   const hx = hoverSnap?.x;
   const hy = hoverSnap?.y;
@@ -455,7 +559,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               <select
                 aria-label="Layer"
                 value={layerKey(layer)}
-                onChange={(e) => setLayer(order.find((o) => layerKey(o) === e.target.value) ?? "top")}
+                onChange={(e) => changeLayer(order.find((o) => layerKey(o) === e.target.value) ?? "top")}
               >
                 {stack.map((s) => (
                   <option key={layerKey(s.layer)} value={layerKey(s.layer)}>
@@ -486,6 +590,17 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
                 disabled={!net || !Object.values(pcb.tracks).some((t) => t.net === net)}
               >
                 Rip up &amp; re-route net
+              </button>
+              <button
+                type="button"
+                title="Start routing the most constrained unrouted connection (power and high-current first, then shortest)"
+                disabled={!!draft || !queue.length}
+                onClick={() => queue[0] && startRoute(queue[0][0], queue[0][1])}
+              >
+                Route next ({unrouted.length} unrouted)
+              </button>
+              <button type="button" title="Run DRC (clearance and connectivity) in eak-validation" onClick={checkRouting}>
+                Check routing
               </button>
             </>
           )}
@@ -535,6 +650,28 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               <OutlinePanel edit={edit} outline={outline} corners={corners} setCorners={setCorners} />
             </>
           )}
+          {tool === "select" && selTrack && (
+            <span className="selection-bar" role="group" aria-label="Track selection">
+              <span className="muted">{`track ${selTrack.net} · ${layerName(selTrack.layer)}`}</span>
+              <label>
+                Width (mm)
+                <input aria-label="Selected track width" inputMode="decimal" size={6} value={trackWidthText} onChange={(e) => setTrackWidthText(e.target.value)} />
+              </label>
+              <button type="button" disabled={widthFromMm(trackWidthText) === null} onClick={() => applyTrackEdit({ width: widthFromMm(trackWidthText) ?? undefined })}>
+                Apply width
+              </button>
+              <select aria-label="Selected track layer" value={layerKey(selTrack.layer)} onChange={(e) => { const l = order.find((o) => layerKey(o) === e.target.value); if (l) applyTrackEdit({ layer: l }); }}>
+                {order.map((o) => (
+                  <option key={layerKey(o)} value={layerKey(o)}>
+                    {layerName(o)}
+                  </option>
+                ))}
+              </select>
+              <button type="button" title="Delete this track (Delete)" onClick={deleteSelectedTrack}>
+                Delete track
+              </button>
+            </span>
+          )}
           {sel.length > 0 && (
             <span className="selection-bar" role="group" aria-label="Footprint selection">
               <span className="muted">
@@ -566,7 +703,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             {tool === "route" &&
               (draft
                 ? `${feedbackText(live) || "Move to the target"} · click fixes · Enter commits · L layer (via) · / 45°/90° · Backspace undoes a step · Esc cancels`
-                : "Click a pad or track end to start routing its net")}
+                : "Click a pad (or track end) to start routing its net; airwires show what is still unrouted")}
+            {tool === "select" && selTrack && ` · track ${selTrack.net} selected · Delete removes it`}
             {tool === "via" && "Click a pad, track end or point"}
             {tool === "delete" && "Click a track, via or zone"}
             {tool === "zone" && "Pick layer and net, click two opposite corners (or 3+ points), then Enter"}
@@ -646,7 +784,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           const [x1, y1] = toView(t.a);
           const [x2, y2] = toView(t.b);
           return (
-            <g key={t.id} data-track-id={t.id} className={highlighted.has(t.id) ? "finding-hit" : undefined}>
+            <g key={t.id} data-track-id={t.id} className={`${highlighted.has(t.id) ? "finding-hit" : ""}${t.id === trackSel ? " selected-track" : ""}` || undefined}>
               <line className={`track ${layerKey(t.layer)}`} style={{ stroke: layerColour(t.layer) }} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={mm(t.width)}>
                 <title>{`${t.net} (${layerName(t.layer)})`}</title>
               </line>
@@ -684,7 +822,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             const [x1, y1] = toView(a);
             const [x2, y2] = toView(b);
             return (
-              <line key={i} className="airwire" x1={x1} y1={y1} x2={x2} y2={y2}>
+              <line key={i} className={n === routeNet ? "airwire active" : "airwire"} x1={x1} y1={y1} x2={x2} y2={y2}>
                 <title>{`unrouted: ${n}`}</title>
               </line>
             );
@@ -709,7 +847,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               <rect className="courtyard" x={x - hw} y={y - hh} width={2 * hw} height={2 * hh} />
               {sel.includes(f.id) && <rect className="sel-box" x={x - hw - 0.3} y={y - hh - 0.3} width={2 * hw + 0.6} height={2 * hh + 0.6} />}
               {f.pads.map((p) => (
-                <Pad key={p.number} pad={p} />
+                <Pad key={p.number} pad={p} active={!!routeNet && p.net === routeNet} />
               ))}
               <text className="refdes" x={x} y={y - hh - 0.5}>
                 {f.refdes}
