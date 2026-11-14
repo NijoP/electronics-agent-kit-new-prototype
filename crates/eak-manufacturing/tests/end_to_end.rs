@@ -82,7 +82,7 @@ fn reference_design_end_to_end() {
         "{:?}",
         m.blocking_reasons
     );
-    assert_eq!(m.files.len(), 12);
+    assert_eq!(m.files.len(), 13); // 2 copper, 4 mask/paste, 2 legend, edge, drill, BOM, CPL, stackup
     assert!(verify_package(&dir).unwrap().is_empty());
     // The written legend is exactly the clipped model: one draw per line, one flash per dot.
     let gto = m.files.iter().find(|f| f.name.ends_with(".gto")).unwrap();

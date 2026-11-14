@@ -314,18 +314,18 @@ pub fn run(p: &Project) -> Report {
                             "DRC-003",
                             Error,
                             format!(
-                                "short: {} ({}) touches {} ({}) on {:?}",
-                                la, a.net, lb, b.net, a.layer
+                                "short: {} ({}) touches {} ({}) on {}",
+                                la, a.net, lb, b.net, a.layer.name()
                             ),
                             vec![a.object_id.clone(), b.object_id.clone()],
                             Some(gap_point(&boxes[i], &boxes[j], 0.0)),
                         )
                         .key(&id_key)
                         .fix(format!(
-                            "Move or reroute {la} or {lb} so that {} and {} no longer touch on {:?}, keeping at least {} between them; if they are meant to be one net, join them in the schematic.",
+                            "Move or reroute {la} or {lb} so that {} and {} no longer touch on {}, keeping at least {} between them; if they are meant to be one net, join them in the schematic.",
                             a.net,
                             b.net,
-                            a.layer,
+                            a.layer.name(),
                             mm(req)
                         )),
                     );
@@ -336,13 +336,13 @@ pub fn run(p: &Project) -> Report {
                         "DRC-002",
                         Error,
                         format!(
-                            "clearance {} between {} ({}) and {} ({}) on {:?} is below {} [{basis}]",
+                            "clearance {} between {} ({}) and {} ({}) on {} is below {} [{basis}]",
                             mm(d.max(0.0)),
                             la,
                             a.net,
                             lb,
                             b.net,
-                            a.layer,
+                            a.layer.name(),
                             mm(req)
                         ),
                         vec![a.object_id.clone(), b.object_id.clone()],
@@ -628,6 +628,77 @@ pub fn run(p: &Project) -> Report {
         }
     }
 
+    // DRC-016: copper on a layer the stackup does not have (tracks, zones, via barrels).
+    // DRC-017: an inner plane layer that has no zone.
+    {
+        let st = &p.pcb.board.stackup;
+        for t in p.pcb.tracks.values().filter(|t| !st.contains(t.layer)) {
+            f.push(
+                finding(
+                    "DRC-016",
+                    Error,
+                    format!("track {} is on {}, which the {}-layer stackup does not have", t.id, t.layer.name(), st.copper_layers()),
+                    vec![t.id.clone()],
+                    Some(t.a),
+                )
+                .fix(format!("Move track {} to a layer in the stackup, or add the layer with SetStackup/SetLayerCount.", t.id)),
+            );
+        }
+        for z in p.pcb.zones.values().filter(|z| !st.contains(z.layer)) {
+            f.push(
+                finding(
+                    "DRC-016",
+                    Error,
+                    format!(
+                        "zone {} is on {}, which the {}-layer stackup does not have",
+                        z.id,
+                        z.layer.name(),
+                        st.copper_layers()
+                    ),
+                    vec![z.id.clone()],
+                    z.outline.first().copied(),
+                )
+                .fix(format!(
+                    "Move zone {} to a layer in the stackup, or add the layer.",
+                    z.id
+                )),
+            );
+        }
+        for v in p.pcb.vias.values() {
+            let reach = v.layers(st);
+            if !st.contains(v.from) || !st.contains(v.to) || v.from == v.to || reach.len() < 2 {
+                f.push(
+                    finding(
+                        "DRC-016",
+                        Error,
+                        format!("via {} spans {}→{}, which is not a valid span of at least two layers in this stackup", v.id, v.from.name(), v.to.name()),
+                        vec![v.id.clone()],
+                        Some(v.position),
+                    )
+                    .fix(format!("Replace via {} with one whose start and end are different layers of the stackup.", v.id)),
+                );
+            }
+        }
+        for l in st
+            .layers
+            .iter()
+            .filter(|l| l.kind == eak_core::LayerKind::Plane)
+        {
+            if !p.pcb.zones.values().any(|z| z.layer == l.layer) {
+                f.push(
+                    finding(
+                        "DRC-017",
+                        Warning,
+                        format!("plane layer {} has no zone, so it carries no copper", l.layer.name()),
+                        vec![],
+                        None,
+                    )
+                    .fix(format!("Add a zone over the board outline on {} for the plane net (for example GND), or set the layer to signal.", l.layer.name())),
+                );
+            }
+        }
+    }
+
     let rules = vec![
         rule("DRC-001", "Minimum / net-class track width", format!("min {}", mm(c.min_track_width as f64)), "Project constraints"),
         rule("DRC-002", "Copper clearance", format!("min {}, net classes, declared net voltages", mm(c.min_clearance as f64)), "Project constraints; IPC-2221B Table 6-1 B2 for declared voltages (table unverified against standard text)"),
@@ -636,7 +707,7 @@ pub fn run(p: &Project) -> Report {
         rule("DRC-005", "Board edge clearance", mm(c.board_edge_clearance as f64), "Project constraints"),
         rule("DRC-006", "Drill size / annular ring", format!("drill ≥ {}, ring ≥ {}", mm(c.min_drill as f64), mm(c.min_annular_ring as f64)), "Project constraints"),
         rule("DRC-007", "Courtyard overlap", "", "EAK"),
-        rule("DRC-008", "Track current capacity", format!("ΔT {} °C, copper weight of each track's own layer ({})", c.temp_rise_c, p.pcb.board.stackup.layers.iter().map(|l| format!("{:?} {} oz", l.layer, l.copper_oz)).collect::<Vec<_>>().join(", ")), "IPC-2221 (via DESK audit; verified_against_standard = false)"),
+        rule("DRC-008", "Track current capacity", format!("ΔT {} °C, copper weight of each track's own layer ({})", c.temp_rise_c, p.pcb.board.stackup.layers.iter().map(|l| format!("{} {} oz", l.layer.name(), l.copper_oz)).collect::<Vec<_>>().join(", ")), "IPC-2221 (via DESK audit; verified_against_standard = false)"),
         rule("DRC-009", "Board outline", "closed simple polygon", "EAK"),
         rule("DRC-010", "Schematic/PCB net consistency", "", "EAK"),
         rule("DRC-011", "Missing footprints", "", "EAK"),
@@ -644,6 +715,8 @@ pub fn run(p: &Project) -> Report {
         rule("DRC-013", "Zone islands", "", "EAK"),
         rule("DRC-014", "Thermal-relief spokes", format!("4 axis spokes per same-net pad; gap = zone clearance; spoke = net-class track width (≥ {}); ≥ {MIN_SPOKES} must land in fill; spoke raster width ≥ min track width; connected spoke width vs declared net current", mm(c.min_track_width as f64)), "EAK relief geometry; current sizing IPC-2221 (via DESK audit; verified_against_standard = false)"),
         rule("DRC-015", "Silkscreen over soldermask openings", format!("legend ink ≥ {} from pad openings (mask expansion {})", mm(silk::MASK_CLEARANCE as f64), mm(p.manufacturing.mask_expansion as f64)), "EAK default (common fabricator practice, not an IPC value; unverified)"),
+        rule("DRC-016", "Copper on layers of the stackup", "tracks, zones and via spans must use layers the stackup has", "EAK"),
+        rule("DRC-017", "Plane layers carry a zone", "every plane layer needs at least one zone", "EAK"),
     ];
     let not_implemented = vec![
         "Controlled impedance and signal integrity".into(),
@@ -658,7 +731,7 @@ pub fn run(p: &Project) -> Report {
     let limitations = vec![
         "Zone fill connectivity is evaluated on a 0.1 mm raster; necks narrower than the raster may be misjudged".into(),
         "Thermal reliefs: relief gap and spoke width are derived from the zone clearance and net class (no per-zone/per-pad relief settings in the IR yet); vias and tracks connect solidly".into(),
-        "Two copper layers only".into(),
+        "The autorouter works on the two outer layers with through vias; inner-layer routing, blind and buried vias are placed by hand. Via aspect ratio and drill-to-layer-span limits are not checked".into(),
         "Pad shapes: rectangle, circle, oval (no rounded-rectangle or custom polygons)".into(),
     ];
     Report::new("DRC", p, rules, f, not_implemented, limitations)
@@ -718,7 +791,7 @@ fn thermal_reliefs(p: &Project, fill: &copper::ZoneFill) -> Vec<Finding> {
         match ipc::trace_width_mm(
             amps,
             false,
-            p.pcb.board.stackup.outer_copper_oz,
+            p.pcb.board.stackup.copper_oz(fill.layer).unwrap_or(0.0),
             c.temp_rise_c,
         ) {
             Ok(req) => {

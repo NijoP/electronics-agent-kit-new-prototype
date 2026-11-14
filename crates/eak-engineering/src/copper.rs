@@ -186,7 +186,7 @@ pub fn items(p: &Project) -> Vec<CopperItem> {
             let shape = pad_shape(c, fp.rotation, pad.shape, pad.size_x, pad.size_y);
             let net = fp.pad_nets.get(&pad.number).cloned().unwrap_or_default();
             let layers: Vec<CopperLayer> = match pad.kind {
-                PadKind::Tht => CopperLayer::ALL.to_vec(),
+                PadKind::Tht => p.pcb.board.stackup.layer_ids(),
                 PadKind::Smd => vec![if fp.side == Side::Top {
                     CopperLayer::Top
                 } else {
@@ -219,7 +219,7 @@ pub fn items(p: &Project) -> Vec<CopperItem> {
         });
     }
     for v in p.pcb.vias.values() {
-        for layer in CopperLayer::ALL {
+        for layer in v.layers(&p.pcb.board.stackup) {
             out.push(CopperItem {
                 kind: ItemKind::Via,
                 object_id: v.id.clone(),

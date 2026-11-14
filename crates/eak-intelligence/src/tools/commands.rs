@@ -210,6 +210,17 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Set the board stackup.",
             obj(&[("stackup", stackup())], &["stackup"]),
         ),
+        SetLayerCount { .. } => (
+            D::Pcb,
+            "Rebuild the stackup as a default multilayer board (even count 2-16; inner layers 1 and n are planes). Refused while tracks, vias or zones use a layer that would disappear.",
+            obj(
+                &[
+                    ("count", integer("number of copper layers")),
+                    ("board_thickness", nullable(nm("finished thickness; omit to keep the current one"))),
+                ],
+                &["count"],
+            ),
+        ),
         SyncSchematicToPcb => (
             D::Pcb,
             "Forward-annotate: create/update/remove footprints and pad nets from the schematic.",
@@ -257,13 +268,15 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
         ),
         AddVia { .. } => (
             D::Pcb,
-            "Add a through via on a net.",
+            "Add a via on a net: through by default, or blind/buried by giving from and to layers.",
             obj(
                 &[
                     ("position", point("via centre")),
                     ("net", string("net name")),
                     ("drill", nullable(nm("drill; omit for the net class value"))),
                     ("diameter", nullable(nm("pad diameter; omit for the net class value"))),
+                    ("from", nullable(copper_layer())),
+                    ("to", nullable(copper_layer())),
                 ],
                 &["position", "net"],
             ),
@@ -442,6 +455,10 @@ pub fn command_samples() -> Vec<Command> {
         SetStackup {
             stackup: Stackup::default(),
         },
+        SetLayerCount {
+            count: 4,
+            board_thickness: None,
+        },
         SyncSchematicToPcb,
         MoveFootprint {
             footprint_id: "f".into(),
@@ -468,6 +485,8 @@ pub fn command_samples() -> Vec<Command> {
             net: "N".into(),
             drill: Some(300_000),
             diameter: None,
+            from: Some(CopperLayer::Top),
+            to: Some(CopperLayer::Inner(1)),
         },
         DeleteVia { via_id: "v".into() },
         AddZone {

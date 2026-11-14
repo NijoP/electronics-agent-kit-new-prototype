@@ -169,14 +169,14 @@ pub fn copper_layer(p: &Project, layer: CopperLayer) -> String {
     for t in p.pcb.tracks.values().filter(|t| t.layer == layer) {
         w.line(t.width, t.a, t.b);
     }
+    // A via has copper only on the layers its barrel spans (a blind or buried via leaves the
+    // others free).
     for v in p.pcb.vias.values() {
-        w.flash(Ap::Circle(v.diameter), v.position);
+        if v.layers(&p.pcb.board.stackup).contains(&layer) {
+            w.flash(Ap::Circle(v.diameter), v.position);
+        }
     }
-    let f = match layer {
-        CopperLayer::Top => "Copper,L1,Top",
-        CopperLayer::Bottom => "Copper,L2,Bot",
-    };
-    w.finish(f, "Positive", p)
+    w.finish(&copper_function(p, layer), "Positive", p)
 }
 
 pub fn soldermask(p: &Project, layer: CopperLayer) -> String {
@@ -312,4 +312,16 @@ pub fn validate(text: &str) -> GerberCheck {
     }
     c.ok = c.problems.is_empty();
     c
+}
+
+/// Gerber X2 `FileFunction` value for a copper layer: `Copper,L<n>,Top|Inr|Bot`.
+pub fn copper_function(p: &Project, layer: CopperLayer) -> String {
+    let st = &p.pcb.board.stackup;
+    let n = st.index_of(layer).map_or(0, |i| i + 1);
+    let pos = match layer {
+        CopperLayer::Top => "Top",
+        CopperLayer::Inner(_) => "Inr",
+        CopperLayer::Bottom => "Bot",
+    };
+    format!("Copper,L{n},{pos}")
 }

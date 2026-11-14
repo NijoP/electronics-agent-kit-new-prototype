@@ -106,6 +106,15 @@ pub enum Command {
     SetStackup {
         stackup: Stackup,
     },
+    /// Rebuild the stackup as a default `count`-layer board (even, 2..=16): outer copper 1 oz,
+    /// inner 0.5 oz, first and last inner layers planes. Keeps the declared board thickness
+    /// unless `board_thickness` is given. Refused if existing tracks, vias or zones would be left
+    /// on a layer that no longer exists.
+    SetLayerCount {
+        count: u8,
+        #[serde(default)]
+        board_thickness: Option<Nm>,
+    },
     /// Forward-annotate: create/update/remove footprints and pad nets from the schematic.
     SyncSchematicToPcb,
     MoveFootprint {
@@ -138,6 +147,12 @@ pub enum Command {
         drill: Option<Nm>,
         #[serde(default)]
         diameter: Option<Nm>,
+        /// First layer of the barrel; omit for a through via (top to bottom).
+        #[serde(default)]
+        from: Option<CopperLayer>,
+        /// Last layer of the barrel; omit for a through via.
+        #[serde(default)]
+        to: Option<CopperLayer>,
     },
     DeleteVia {
         via_id: Id,
@@ -236,6 +251,7 @@ impl Command {
             | UpsertComponentDefinition { .. }
             | SetBoardOutline { .. }
             | SetStackup { .. }
+            | SetLayerCount { .. }
             | SyncSchematicToPcb
             | AddTrack { .. }
             | DeleteTrack { .. }
@@ -279,6 +295,56 @@ pub enum CommandError {
 pub struct Applied {
     pub created: Vec<Id>,
     pub warnings: Vec<String>,
+}
+
+/// Refuse a layer the board's stackup does not have.
+fn require_layer(p: &Project, layer: CopperLayer, what: &str) -> Result<(), CommandError> {
+    if p.pcb.board.stackup.contains(layer) {
+        Ok(())
+    } else {
+        Err(CommandError::Invalid(format!(
+            "{what} is on {}, which this board's stackup ({} copper layers) does not have",
+            layer.name(),
+            p.pcb.board.stackup.copper_layers()
+        )))
+    }
+}
+
+/// Objects (tracks, vias, zones) that sit on a copper layer `stackup` does not contain.
+fn orphaned_by(p: &Project, stackup: &Stackup) -> Vec<String> {
+    let mut out = Vec::new();
+    for t in p.pcb.tracks.values() {
+        if !stackup.contains(t.layer) {
+            out.push(format!("track {} on {}", t.id, t.layer.name()));
+        }
+    }
+    for z in p.pcb.zones.values() {
+        if !stackup.contains(z.layer) {
+            out.push(format!("zone {} on {}", z.id, z.layer.name()));
+        }
+    }
+    for v in p.pcb.vias.values() {
+        if !stackup.contains(v.from) || !stackup.contains(v.to) {
+            out.push(format!("via {} ({}→{})", v.id, v.from.name(), v.to.name()));
+        }
+    }
+    out
+}
+
+fn set_stackup(p: &mut Project, stackup: &Stackup) -> Result<(), CommandError> {
+    let problems = stackup.validate();
+    if !problems.is_empty() {
+        return Err(CommandError::Invalid(problems.join("; ")));
+    }
+    let orphans = orphaned_by(p, stackup);
+    if !orphans.is_empty() {
+        return Err(CommandError::Precondition(format!(
+            "the new stackup removes layers still in use: {}; delete or move them first",
+            orphans.join(", ")
+        )));
+    }
+    p.pcb.board.stackup = stackup.clone();
+    Ok(())
 }
 
 fn sheet_or_first(p: &Project, s: &Option<Id>) -> Result<Id, CommandError> {
@@ -718,12 +784,19 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             }
             p.pcb.board.outline = points.clone();
         }
-        SetStackup { stackup } => {
-            let problems = stackup.validate();
-            if !problems.is_empty() {
-                return Err(CommandError::Invalid(problems.join("; ")));
-            }
-            p.pcb.board.stackup = stackup.clone();
+        SetStackup { stackup } => set_stackup(p, stackup)?,
+        SetLayerCount {
+            count,
+            board_thickness,
+        } => {
+            let cur = &p.pcb.board.stackup;
+            let thickness = board_thickness.unwrap_or(cur.board_thickness);
+            let (dielectric, er) = (
+                cur.dielectric.clone(),
+                cur.layers.first().map_or(eak_core::FR4_ER, |l| l.er),
+            );
+            let s = Stackup::multilayer(usize::from(*count), thickness, 1.0, 0.5, &dielectric, er);
+            set_stackup(p, &s)?;
         }
         SyncSchematicToPcb => {
             let nl = netlist::build(p);
@@ -839,6 +912,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             if a == b {
                 return Err(CommandError::Invalid("track has zero length".into()));
             }
+            require_layer(p, *layer, "track")?;
             let w = width.unwrap_or(p.constraints.class_for(net).track_width);
             if w <= 0 {
                 return Err(CommandError::Invalid("track width must be positive".into()));
@@ -873,7 +947,27 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             net,
             drill,
             diameter,
+            from,
+            to,
         } => {
+            let (from, to) = (
+                from.unwrap_or(CopperLayer::Top),
+                to.unwrap_or(CopperLayer::Bottom),
+            );
+            require_layer(p, from, "via start")?;
+            require_layer(p, to, "via end")?;
+            if from == to {
+                return Err(CommandError::Invalid(
+                    "a via must span at least two copper layers".into(),
+                ));
+            }
+            // Store the span top to bottom whichever way round it was given.
+            let (from, to) =
+                if p.pcb.board.stackup.index_of(from) <= p.pcb.board.stackup.index_of(to) {
+                    (from, to)
+                } else {
+                    (to, from)
+                };
             let class = p.constraints.class_for(net).clone();
             let (d, dia) = (
                 drill.unwrap_or(class.via_drill),
@@ -893,6 +987,8 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     drill: d,
                     diameter: dia,
                     net: net.clone(),
+                    from,
+                    to,
                 },
             );
             created.push(id);
@@ -914,6 +1010,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     "zone outline must be a simple polygon".into(),
                 ));
             }
+            require_layer(p, *layer, "zone")?;
             let id = new_id("zon");
             let cl = clearance.unwrap_or(
                 p.constraints
@@ -1005,6 +1102,8 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                         drill: v.drill,
                         diameter: v.diameter,
                         net: v.net,
+                        from: CopperLayer::Top,
+                        to: CopperLayer::Bottom,
                     },
                 );
                 created.push(id);

@@ -9,6 +9,7 @@
 
 pub mod drill;
 pub mod gerber;
+pub mod stackup;
 
 use eak_core::{geom::to_mm, CopperLayer, Project, Side};
 use eak_validation::{report::project_hash, Outcome, Report};
@@ -157,17 +158,25 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect::<String>();
-    let files: Vec<(String, String, String)> = vec![
-        (
-            format!("{stem}-F_Cu.gtl"),
-            "gerber".into(),
-            gerber::copper_layer(p, CopperLayer::Top),
-        ),
-        (
-            format!("{stem}-B_Cu.gbl"),
-            "gerber".into(),
-            gerber::copper_layer(p, CopperLayer::Bottom),
-        ),
+    // One copper Gerber per layer in the stackup (top, inner layers, bottom).
+    let st = &p.pcb.board.stackup;
+    let mut files: Vec<(String, String, String)> = st
+        .layer_ids()
+        .into_iter()
+        .map(|layer| {
+            let (tag, ext) = match layer {
+                CopperLayer::Top => ("F_Cu".to_string(), "gtl".to_string()),
+                CopperLayer::Inner(n) => (format!("In{n}_Cu"), format!("g{}", n + 1)),
+                CopperLayer::Bottom => ("B_Cu".to_string(), "gbl".to_string()),
+            };
+            (
+                format!("{stem}-{tag}.{ext}"),
+                "gerber".to_string(),
+                gerber::copper_layer(p, layer),
+            )
+        })
+        .collect();
+    files.extend(vec![
         (
             format!("{stem}-F_Mask.gts"),
             "gerber".into(),
@@ -210,12 +219,30 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
         ),
         (format!("{stem}-BOM.csv"), "bom".into(), bom_csv(p)),
         (format!("{stem}-CPL.csv"), "cpl".into(), cpl_csv(p)),
-    ];
+        (
+            format!("{stem}-stackup.json"),
+            "stackup".into(),
+            stackup::stackup_json(p),
+        ),
+    ]);
+    // Blind and buried vias are drilled in their own files, one per layer span.
+    for span in drill::span_holes(p).into_keys() {
+        files.push((
+            format!(
+                "{stem}-{}-{}.drl",
+                span.from.name().replace('.', "_"),
+                span.to.name().replace('.', "_")
+            ),
+            "drill".into(),
+            drill::excellon_span(p, span),
+        ));
+    }
     let mut entries = vec![];
     for (name, kind, content) in &files {
         let problems = match kind.as_str() {
             "gerber" => gerber::validate(content).problems,
             "drill" => drill::validate(content).problems,
+            "stackup" => stackup::validate(content),
             _ => vec![],
         };
         if !problems.is_empty() {
@@ -289,6 +316,7 @@ pub fn verify_package(dir: &Path) -> Result<Vec<String>, String> {
                 let syn = match f.kind.as_str() {
                     "gerber" => gerber::validate(&text).problems,
                     "drill" => drill::validate(&text).problems,
+                    "stackup" => stackup::validate(&text),
                     _ => vec![],
                 };
                 problems.extend(syn.into_iter().map(|s| format!("{}: {s}", f.name)));
