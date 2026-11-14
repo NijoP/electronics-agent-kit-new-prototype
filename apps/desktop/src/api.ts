@@ -2,6 +2,7 @@
 // module that talks to Rust; every project change is an engine call made here.
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AiProposal,
   RouteStepReport,
   RouteStepRequest,
   Check,
@@ -56,6 +57,10 @@ export const IPC_COMMANDS = [
   "domain_classification",
   "export_manufacturing",
   "connectivity",
+  "ai_propose",
+  "ai_accept",
+  "ai_reject",
+  "ai_rollback",
   "simulation_status",
   "run_simulation",
   "route_step",
@@ -100,6 +105,10 @@ export const api = {
   domainClassification: () => call<DomainReport>("domain_classification"),
   exportManufacturing: () => call<ExportResult>("export_manufacturing"),
   connectivity: () => call<ConnectivityReport>("connectivity"),
+  aiPropose: (providerId: string, prompt: string) => call<AiProposal>("ai_propose", { provider_id: providerId, prompt }),
+  aiAccept: (stepId: number) => call<CommandResponse>("ai_accept", { step_id: stepId }),
+  aiReject: (stepId: number) => call<void>("ai_reject", { step_id: stepId }),
+  aiRollback: (opId: string) => call<CommandResponse>("ai_rollback", { op_id: opId }),
   simulationStatus: () => call<SimulationStatus>("simulation_status"),
   runSimulation: (request: SimRequest) => call<SimResult>("run_simulation", { request }),
   routeStep: (request: RouteStepRequest) => call<RouteStepReport>("route_step", { request }),

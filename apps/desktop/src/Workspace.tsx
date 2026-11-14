@@ -14,7 +14,7 @@ import { formatShortcut, matches, SHORTCUTS } from "./design/shortcuts";
 import type { Theme } from "./design/theme";
 import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
 import { AiPanel, type ChatMsg } from "./shell/AiPanel";
-import { interpret, type Proposal } from "./shell/ai";
+import { interpret, readyProvider } from "./shell/ai";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
 import { ManufacturingPanel, netNames, ProjectPanel } from "./shell/panels";
 import { LibraryPanel } from "./shell/LibraryPanel";
@@ -84,7 +84,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [aiFocus, setAiFocus] = useState(0);
   const [status, setStatus] = useState<{ layer: CopperLayer; gridMm: number }>({ layer: "top", gridMm: 0.5 });
-  const [model, setModel] = useState<string | null>(null);
+  const [model, setModel] = useState<{ id: string; label: string } | null>(null);
   const msgId = useRef(1);
   const revision = snapshot.project.revision;
   // Built-in parts plus parts imported into this project (e.g. from LCSC), so an imported
@@ -140,8 +140,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     api
       .modelProviders()
       .then((ps) => {
-        const p = ps.find((x) => x.model);
-        setModel(p ? `${p.label} · ${p.model}` : null);
+        setModel(readyProvider(ps));
       })
       .catch(() => setModel(null));
   }, []);
@@ -301,19 +300,68 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     }
   };
 
-  // Ask the assistant: a user line, then either a custom reply or the local interpreter's answer.
+  const say = (m: Omit<ChatMsg, "id">) => setChat((old) => [...old, { ...m, id: msgId.current++ }]);
+  // Ask the assistant. With a ready model provider the request goes to the agent loop
+  // (ai_propose) with the selection as context; without one, the offline interpreter answers
+  // and every reply is labelled as an offline command.
   const ask = (text: string, opts: { select?: Id | null; reply?: string } = {}) => {
     const sel = opts.select ?? selected;
     if (opts.select) setSelected(opts.select);
     setAiOpen(true);
     setAiFocus((n) => n + 1);
-    const reply = opts.reply !== undefined ? { text: opts.reply } : interpret(text, { snapshot, selected: sel, library });
     setChat((old) => [
-      ...old.map((m): ChatMsg => (m.status === "pending" ? { ...m, status: "rejected" } : m)),
+      ...old.map((m): ChatMsg => (m.proposal && m.status === "pending" ? { ...m, status: "rejected" } : m)),
       { id: msgId.current++, role: "user", text },
-      { id: msgId.current++, role: "assistant", text: reply.text, proposal: (reply as { proposal?: Proposal }).proposal, status: (reply as { proposal?: Proposal }).proposal ? "pending" : undefined },
     ]);
+    guarded(async () => {
+      const provider = readyProvider(await api.modelProviders().catch(() => []));
+      setModel(provider);
+      if (!provider) {
+        const reply = opts.reply !== undefined ? { text: opts.reply } : interpret(text, { snapshot, selected: sel, library });
+        say({ role: "assistant", source: "offline", text: reply.text, proposal: reply.proposal, status: reply.proposal ? "pending" : undefined });
+        return;
+      }
+      const symbol = sel ? snapshot.project.schematic.symbols[sel] : undefined;
+      const context = symbol ? `\n\n(Selected in the editor: ${symbol.refdes} ${symbol.value}, symbol id ${symbol.id}.)` : "";
+      try {
+        const p = await api.aiPropose(provider.id, text + context);
+        const o = p.outcome;
+        const note =
+          o.outcome === "provider_failed"
+            ? `AI request failed: ${o.detail}`
+            : o.outcome === "refused"
+              ? "The model declined this request."
+              : o.outcome === "turn_limit_reached"
+                ? "The agent stopped at its turn limit; the plan may be incomplete."
+                : o.outcome === "cancelled"
+                  ? "Cancelled."
+                  : "";
+        const body = [p.text, note].filter(Boolean).join("\n\n") || (p.steps.length ? "" : "The model proposed no change.");
+        say({ role: "assistant", source: "ai", text: body, error: o.outcome === "provider_failed" });
+        for (const step of p.steps) say({ role: "assistant", source: "ai", text: "", step, status: "pending" });
+      } catch (e) {
+        say({ role: "assistant", source: "ai", text: String(e), error: true });
+      }
+    });
   };
+  const setStatus_ = (m: ChatMsg, patch: Partial<ChatMsg>) => setChat((old) => old.map((x) => (x.id === m.id ? { ...x, ...patch } : x)));
+  // Accept = Engine::execute as the agent actor with this user's approval (ai_accept).
+  const acceptStep = async (m: ChatMsg) => {
+    const s = m.step!;
+    if (s.class === "destructive" && !window.confirm(`${s.command.type}: this is a destructive change. Continue?`)) return;
+    const r = await api.aiAccept(s.id);
+    setStatus_(m, r.accepted ? { status: "accepted", opId: r.op_id } : { status: "rejected" });
+    setMessage(r.accepted ? `AI step ${s.command.type} applied → revision ${r.revision_after}` : `AI step ${s.command.type} refused by the engine: ${r.error ? describeError(r.error) : "unknown error"}`);
+    await refresh();
+  };
+  const rollbackStep = (m: ChatMsg) =>
+    guarded(async () => {
+      if (!m.opId) return;
+      const r = await api.aiRollback(m.opId);
+      if (r.accepted) setStatus_(m, { status: "rolled_back" });
+      setMessage(r.accepted ? `AI step rolled back → revision ${r.revision_after}` : `Rollback refused: ${r.error ? describeError(r.error) : "unknown error"}`);
+      await refresh();
+    });
   const askSelection = () =>
     selectedSymbol &&
     ask(`About ${selLabel}`, {
@@ -332,6 +380,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   };
   const acceptProposal = (m: ChatMsg) =>
     guarded(async () => {
+      if (m.step) return acceptStep(m);
       const p = m.proposal;
       if (!p) return;
       if (p.destructive && !window.confirm(`${p.title}: this is a destructive change. Continue?`)) return;
@@ -351,7 +400,13 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       );
       await refresh();
     });
-  const rejectProposal = (m: ChatMsg) => setChat((old) => old.map((x) => (x.id === m.id ? { ...x, status: "rejected" } : x)));
+  const rejectProposal = (m: ChatMsg) =>
+    m.step
+      ? guarded(async () => {
+          await api.aiReject(m.step!.id);
+          setStatus_(m, { status: "rejected" });
+        })
+      : setStatus_(m, { status: "rejected" });
 
   const open = (id: string) => setDocState((st) => openDoc({ open: openIds, active: st.active }, id));
   const showKind = (kind: "schematic" | "pcb") => {
@@ -768,11 +823,13 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
             library={library}
             contextLabel={selLabel}
             busy={busy}
-            modelLabel={model}
+            modelLabel={model?.label ?? null}
             focusNonce={aiFocus}
             onSend={(t) => ask(t)}
             onAccept={acceptProposal}
             onReject={rejectProposal}
+            onRollback={rollbackStep}
+            onOpenSettings={onSettings}
             onClose={() => setAiOpen(false)}
           />
         )}
@@ -783,7 +840,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
         layer={status.layer === "top" ? "Top" : "Bottom"}
         gridMm={status.gridMm}
         drc={results.drc}
-        model={model}
+        model={model?.label ?? null}
         selection={selLabel ? `Selected ${selLabel}` : null}
         busy={busy}
         message={message}

@@ -524,6 +524,31 @@ export interface ConnectivityReport {
   ratsnest: [string, Point, Point][];
 }
 
+// AI panel (src-tauri/src/ai.rs): agent-loop proposals awaiting Accept/Reject.
+export type AgentOutcome =
+  | { outcome: "completed" }
+  | { outcome: "turn_limit_reached" }
+  | { outcome: "cancelled" }
+  | { outcome: "refused" }
+  | { outcome: "provider_failed"; detail: string };
+
+export interface AiStep {
+  id: number;
+  proposal_id: number;
+  command: Command;
+  class: "read_only" | "reversible_local" | "engineering_impacting" | "destructive";
+  checks_to_run: string[];
+  preview: CommandResponse;
+}
+
+export interface AiProposal {
+  id: number;
+  provider: string;
+  outcome: AgentOutcome;
+  text: string;
+  revision: number;
+  steps: AiStep[];
+}
 // ---- Phase 5: component library (mirrors eak-core `library.rs`)
 export type PinType = "input" | "output" | "bidirectional" | "passive" | "power_in" | "power_out" | "open_collector" | "no_connect";
 export interface SymbolPin { number: string; name: string; electrical_type: PinType; position: Point }
