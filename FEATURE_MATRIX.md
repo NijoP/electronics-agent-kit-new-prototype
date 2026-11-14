@@ -108,6 +108,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Click a finding -> navigate, zoom, highlight, safe correction | - | |
 | DFM report | - | |
 | Fail-closed engineering gates (`run_gates`, release blocking) | code-reviewed only | `eak-validation/src/gates.rs`, ADR-0021; tests written, never run |
+| Multi-domain engineering model (`intel_*`, `intelligence_summary`) | code-reviewed only | `eak-intelligence/src/systems/`, ADR-0027; tests written, never run |
 | Copper/power engineering (explicit-input trace width, voltage drop, rail drop, return path) | code-reviewed only | `eak-engineering/src/power.rs`; tests written, never run |
 
 ## Part 10: optional AI infrastructure (no assistant UI)
