@@ -3,6 +3,11 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## AI panel on the real agent loop (2026-11-14)
+- `apps/desktop/src-tauri/src/ai.rs`: IPC `ai_propose` runs the `eak-intelligence` agent (Manual mode) with the user's configured provider profile (key from the OS credential store) on a copy of the open project; each typed `Command` it proposes is dry-run on a sandbox and returned as a pending step. `ai_accept` applies one step through `Engine::execute` with `Actor::agent("assistant")` and an approval recorded as `human:user` for exactly that step's class (resolves evaluator finding C5: AI edits no longer enter as the human actor); it is submitted at the plan's revision, so an edit made in between makes it stale and refused. `ai_reject` drops the step (nothing recorded). `ai_rollback` undoes an accepted agent step only while it is the latest change.
+- Panel (`shell/AiPanel.tsx`): with a ready provider (model set, key stored when needed) requests go to the model; provider failures and refusals are shown as such. With none, it says "No AI model is configured" and offers Model settings; the old keyword interpreter remains only as replies labelled "Offline command (no AI)".
+- Classification: **partially working.** Verified: `tests/ai.rs` (scripted mock provider, no network: propose → accept → journal actor `agent:assistant` → rollback; reject records nothing; stale step refused; provider failure and missing key reported) and `src/aiPanel.test.tsx` (panel states). Not verified: a live run against a real provider from the desktop window; one request runs at a time with no Cancel button; Batch commands are not used (each step is its own engine operation).
+
 ## Verification additions and manufacturing outputs: ERC/DRC/DFM, fab pack (2026-11-14, branch fm/eak-p4-validation-mfg)
 
 **Platform tested:** Linux only. Plan Phase 4 (verification additions) and Phase 7 (manufacturing outputs).
@@ -258,7 +263,7 @@ installed. Development is proceeding directly in this repository.
 
 ## Desktop workspace shell (outcome 5 / master directive Phase 1, first slice, 2026-11-14)
 - `apps/desktop/src/shell/` and `src/design/`: activity bar, collapsible side panel (Project, Library/Parts, Domain, Manufacturing), tabbed editors (Schematic + PCB / Schematic / PCB), bottom panel (Findings, BOM derived from schematic symbols, Log), right assistant panel, status bar (project, layer, grid, DRC count, model), command palette (Ctrl/Cmd+K, Ctrl/Cmd+Shift+P) with shortcuts, quick open (Ctrl/Cmd+P), Ctrl+B/J/L panel toggles, tool digit shortcuts, dark + light tokens (8px grid, 120-200 ms motion).
-- The assistant is a **local deterministic command interpreter, not a model call**: proposals are typed `Command`s shown as a diff with a dashed canvas preview; Accept goes through `execute_command`, Reject changes nothing.
+- (Superseded 2026-11-14 by "AI panel on the real agent loop" above; the interpreter now only answers when no model is configured, labelled offline.) The assistant was a **local deterministic command interpreter, not a model call**: proposals are typed `Command`s shown as a diff with a dashed canvas preview; Accept goes through `execute_command`, Reject changes nothing.
 - Verified: `npm run build`, `npm test` (52 tests incl. `shell.test.tsx`), and the production bundle driven in headless Chrome against a **stubbed IPC** (screenshots kept outside the repo). **Not launched as the real Tauri window** (no display/X authorization in the build session). A browser-only crash (effect returning a non-function) was found this way and fixed; jsdom had not caught it.
 - Not done: top menus, document tabs bound to backend document identity (dirty/save-before-close), dockable/resizable/persisted panel layout, per-net highlight, 60 fps pan/zoom measurement, real-window tests.
 

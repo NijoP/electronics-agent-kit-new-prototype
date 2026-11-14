@@ -13,6 +13,7 @@
 //! * ERC/DRC run in `eak-validation`, and their revision-bound reports are stored as
 //!   evidence by the engine.
 
+pub mod ai;
 pub mod models;
 
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
@@ -653,7 +654,11 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 27] = [
+pub const IPC_COMMANDS: [&str; 31] = [
+    "ai_propose",
+    "ai_accept",
+    "ai_reject",
+    "ai_rollback",
     "library_search",
     "library_footprint_candidates",
     "simulation_status",
@@ -838,6 +843,7 @@ pub fn run() {
                 eprintln!("eak-desktop: recent-project index unavailable: {e}");
             }
             app.manage(Session::new(index));
+            app.manage(ai::AiState::default());
             // Profiles are plain JSON in the config dir; keys go to the OS credential store.
             let profiles = app
                 .path()
@@ -883,6 +889,10 @@ pub fn run() {
             cmd::run_simulation,
             cmd::route_step,
             cmd::export_manufacturing,
+            ai::cmd::ai_propose,
+            ai::cmd::ai_accept,
+            ai::cmd::ai_reject,
+            ai::cmd::ai_rollback,
         ])
         .run(tauri::generate_context!())
         .expect("EAK desktop failed to start");

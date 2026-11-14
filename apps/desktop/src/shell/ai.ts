@@ -1,10 +1,12 @@
-// Assistant proposals. IMPORTANT: this is a deterministic local interpreter, not a model call.
+// Offline commands. IMPORTANT: this is a deterministic local interpreter, not a model call;
+// the panel labels its replies "Offline command (no AI)" and uses it only when no model
+// provider is ready (real AI requests go through ai_propose in src-tauri/src/ai.rs).
 // It turns a request into typed engine commands (the same `Command` values the UI and CLI
 // use); nothing is applied until the user accepts the preview, and acceptance goes through
 // Engine::execute like every other mutation. No model request is made from here, so no
 // engineering number is ever produced or self-certified by it.
 import { nextRotation } from "../editing";
-import type { Command, Id, LibraryEntry, Snapshot } from "../types";
+import type { Command, Id, LibraryEntry, ProviderView, Snapshot } from "../types";
 
 export interface Proposal {
   id: number;
@@ -142,4 +144,11 @@ export function diffLines(p: Proposal, snapshot: Snapshot, library: LibraryEntry
         return [`~ ${c.type}`];
     }
   });
+}
+
+/** The first provider profile that can actually be called: it has a model and, when the
+ * endpoint needs one, a stored key. `null` means the panel must say no model is configured. */
+export function readyProvider(ps: ProviderView[]): { id: string; label: string } | null {
+  const p = ps.find((x) => x.model && (x.has_key || !x.needs_key));
+  return p ? { id: p.id, label: `${p.label} · ${p.model}` } : null;
 }

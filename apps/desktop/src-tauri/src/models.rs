@@ -305,6 +305,14 @@ impl ModelSettings {
             .map_err(|e| e.to_string())
     }
 
+    /// A ready provider for the agent loop, or a plain reason why there is none (no
+    /// profile, no model, or no key in the credential store).
+    pub fn provider(&self, id: &str) -> Result<Box<dyn eak_intelligence::Provider>, String> {
+        let cfg = self.config(id)?;
+        eak_intelligence::provider::build_provider_with(&cfg, self.transport.clone())
+            .map_err(|e| e.to_string())
+    }
+
     /// One minimal real request. Always returns a report (failure is data, not an `Err`),
     /// except for an unknown provider id.
     pub fn test_connection(&self, id: &str) -> Result<ConnectionReport, String> {
