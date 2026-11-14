@@ -296,9 +296,9 @@ try {
     return `Connect pins ${a.refdes}.${aInner.number}–${b.refdes}.${bInner.number} + 3-segment Wire ${a.refdes}.${aOuter.number}–${b.refdes}.${bOuter.number} → r${s.project.revision}; ${count(s.project.schematic.wires)} wire(s) in IR`;
   });
 
-  await step("S06", "Sync schematic to PCB (Project menu)", "UI", async () => {
+  await step("S06", "Update PCB from schematic (Project menu)", "UI", async () => {
     const before = (await snap()).project.revision;
-    await menu("Project", "Sync schematic to PCB");
+    await menu("Project", "Update PCB from schematic");
     const s = await waitRevisionAbove(before, "SyncSchematicToPcb not accepted");
     const fps = count(s.project.pcb.footprints);
     ok(fps === 2, `expected 2 footprints, got ${fps}`);
@@ -429,8 +429,109 @@ try {
     });
   }
 
-  await step("S15", "Generate outputs + manufacturing checks (toolbar Export Gerbers)", "UI", async () => {
-    await clickButton("header.toolbar", "Export Gerbers");
+  // ---- Extended panels (v0.1.3): Library, LCSC, JLCPCB/DFM, Simulation, AI assistant ----
+  const sideView = async (label) => {
+    const b = await browser.$(`nav[aria-label="Activity bar"] button[aria-label="${label}"]`);
+    await b.waitForClickable({ timeout: 10000 });
+    // The activity bar toggles: only click when the panel is not already the open one.
+    const open = await browser.execute(() => document.querySelector("aside.side.open .panel-head .title")?.textContent ?? "");
+    if (open !== label) await b.click();
+  };
+
+  await step("X1", "Library panel: open, search, previews", "UI", async () => {
+    await sideView("Library / Parts");
+    const q = await browser.$('input[aria-label="Search library"]');
+    await q.waitForDisplayed({ timeout: 10000 });
+    await q.setValue("0603");
+    await browser.pause(400);
+    const text = await browser.$("aside.side").getText();
+    const previews = (await browser.$$('aside.side svg[aria-label^="Symbol preview"], aside.side svg[aria-label^="Footprint preview"]')).length;
+    ok(/0603/.test(text), "no 0603 entry listed for the query");
+    return `Library / Parts panel open; query "0603" lists matching entries; ${previews} symbol/footprint preview(s) rendered`;
+  });
+
+  await step("X2", "LCSC part search (Parts panel, live public catalogue)", "UI", async () => {
+    const form = await browser.$('section[aria-label="Parts search"] form');
+    await form.$("input").setValue("C25804");
+    await form.$("button=Search").click();
+    let state = "";
+    await waitFor(
+      async () => {
+        state = await browser.execute(() => {
+          const s = document.querySelector('section[aria-label="Parts search"]');
+          const rows = s?.querySelectorAll('table[aria-label="LCSC results"] tbody tr').length ?? 0;
+          const alert = s?.querySelector('[role="alert"]')?.textContent ?? "";
+          return rows ? `results:${rows}` : alert ? `alert:${alert}` : "";
+        });
+        return state !== "";
+      },
+      "LCSC search showed neither results nor an error",
+      30000,
+    );
+    // Either outcome is honest UI; a refusal is reported, never replaced by invented rows.
+    return state.startsWith("results:")
+      ? `LCSC returned ${state.slice(8)} row(s) for C25804`
+      : `LCSC answered with an explicit error shown to the user: "${state.slice(6).trim()}" (no rows invented)`;
+  });
+
+  await step("X3", "JLCPCB prep: DFM check + BOM/DFM tables + bundle", "UI", async () => {
+    await clickButton("header.toolbar", "Run DFM");
+    await waitFor(async () => /ran on revision/i.test(await statusMessage()), "DFM did not report in the status bar");
+    const dfm = (await ipc("run_check", { check: "dfm" })).report;
+    await sideView("Manufacturing");
+    const sec = await browser.$('section[aria-label="Manufacturing prep"]');
+    await sec.waitForDisplayed({ timeout: 10000 });
+    await sec.$('table[aria-label="Bill of materials"]').waitForDisplayed({ timeout: 15000 });
+    const bomRows = (await sec.$$('table[aria-label="Bill of materials"] tbody tr')).length;
+    const dfmRows = (await sec.$$('table[aria-label="DFM checks"] tbody tr')).length;
+    await sec.$("button=Generate JLCPCB bundle").click();
+    let msg = "";
+    await waitFor(async () => /JLCPCB bundle prepared for review in/.test((msg = await statusMessage())) || (await sec.$('[role="alert"]').isExisting()), "bundle step did not report", 60000);
+    const m = msg.match(/prepared for review in (\S+)/);
+    if (!m) throw new Error(`bundle failed: ${await sec.$('[role="alert"]').getText()}`);
+    const dir = m[1].replace(/[|]$/, "");
+    ok(fs.existsSync(dir), `bundle folder ${dir} not on disk`);
+    return `DFM outcome ${dfm.outcome} (${dfm.errors} err, ${dfm.warnings} warn, ${dfm.not_implemented.length} not_implemented); panel BOM ${bomRows} row(s), DFM table ${dfmRows} row(s); bundle on disk: ${fs.readdirSync(dir).join(", ")}`;
+  });
+
+  await step("X4", "Simulation panel (Simulation menu → Run simulation…)", "UI", async () => {
+    const tb = await browser.$('header.toolbar button[aria-label="Simulate"]');
+    const tbDisabled = (await tb.isExisting()) ? !(await tb.isEnabled()) : null;
+    await menu("Simulation", "Run simulation");
+    const sim = await browser.$('section[aria-label="Simulation"]');
+    await sim.waitForDisplayed({ timeout: 10000 });
+    const head = await sim.$("p").getText();
+    const note = tbDisabled ? ` Toolbar "Simulate" is disabled ("Not implemented: no SPICE integration yet") while the menu opens a working panel: inconsistent.` : "";
+    if (/not installed/i.test(head)) return `panel open; reports honestly: "${head}"; Run disabled.${note}`;
+    // ngspice present: one 5 V source on the first net, operating point.
+    await sim.$("button=+ Add").click();
+    await sim.$('input[aria-label="Source 1 value"]').setValue("5");
+    await sim.$("button=Run simulation").click();
+    await waitFor(async () => (await sim.$('table[aria-label="Node voltages"]').isExisting()) || (await sim.$('[role="alert"]').isExisting()), "simulation produced neither result nor error", 60000);
+    if (!(await sim.$('table[aria-label="Node voltages"]').isExisting())) throw new Error(`simulation error: ${await sim.$('[role="alert"]').getText()}`);
+    const rows = (await sim.$$('table[aria-label="Node voltages"] tbody tr')).length;
+    return `${head}; operating point with V1=5 V → ${rows} node voltage row(s).${note}`;
+  });
+
+  await step("X5", "AI assistant with no model configured", "UI", async () => {
+    if (!(await browser.$('[role="log"][aria-label="Assistant conversation"]').isExisting())) await clickButton("header.toolbar", "Assistant");
+    const panel = await browser.$('[role="log"][aria-label="Assistant conversation"]');
+    await panel.waitForExist({ timeout: 10000 });
+    const body = await browser.execute(() => document.body.innerText);
+    ok(/No AI model is configured/.test(body), "panel does not state that no model is configured");
+    const box = await browser.$('aside textarea, textarea[placeholder^="Offline command"]');
+    await box.setValue("annotate");
+    await browser.keys(["Enter"]);
+    await waitFor(async () => (await panel.getText()).split("\n").length > 1, "no offline reply after sending");
+    const reply = (await panel.getText()).replace(/\s+/g, " ").slice(0, 160);
+    return `panel states "No AI model is configured"; offline interpreter answered "annotate": ${reply}`;
+  });
+
+  await step("S15", "Generate outputs + manufacturing checks (Export dialog)", "UI", async () => {
+    await clickButton("header.toolbar", "Export manufacturing files");
+    const dlg = await browser.$('[role="dialog"][aria-label="Export manufacturing files"]');
+    await dlg.waitForDisplayed({ timeout: 10000 });
+    await dlg.$("button=Export").click();
     let msg = "";
     await waitFor(async () => /Exported \d+ files to/.test((msg = await statusMessage())), "export did not report", 60000);
     const m = msg.match(/Exported (\d+) files to (.+?) \((DRAFT|INTERNALLY_VERIFIED_RELEASE_CANDIDATE)\)/);
@@ -443,13 +544,15 @@ try {
   });
 
   await step("S16", "Save (Ctrl+S); engine persists every command", "UI", async () => {
+    const dlg = await browser.$('[role="dialog"][aria-label="Export manufacturing files"]');
+    if (await dlg.isExisting()) await dlg.$("button=Close").click();
     const s = await snap();
     pre.rev = s.project.revision;
     pre.counts = [count(s.project.schematic.symbols), count(s.project.pcb.footprints), count(s.project.pcb.tracks), count(s.project.pcb.zones)];
     await browser.$("header.toolbar strong").click();
     await browser.keys(["Control", "s"]);
-    await waitFor(async () => (await statusMessage()).includes("Saved:"), "no save confirmation in the status bar");
-    return `status: "${(await statusMessage()).match(/Saved:[^|]*/)?.[0]?.trim()}"; project folder: ${fs.readdirSync(PROJECT_DIR).join(", ")}`;
+    await waitFor(async () => /Saved:|already written/.test(await statusMessage()), "no save confirmation in the status bar");
+    return `status: "${(await statusMessage()).match(/(Saved:|Revision \d+: every)[^|]*/)?.[0]?.trim()}"; project folder: ${fs.readdirSync(PROJECT_DIR).join(", ")}`;
   });
 
   await step("S17", "Close project (toolbar Close project)", "UI", async () => {
