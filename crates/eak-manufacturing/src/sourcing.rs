@@ -492,7 +492,7 @@ impl SourcingRecord {
         Ok(())
     }
 
-    /// This record's commercial side as a [`SupplierOffer`] (ADR-0027): LCSC number, stock,
+    /// This record's commercial side as a [`SupplierOffer`] (ADR-0028): LCSC number, stock,
     /// price breaks and fetch time, none of it identity. `None` without an LCSC number. The
     /// record carries no lifecycle field, so the offer's `lifecycle` stays `None` (not reported).
     pub fn offer(&self) -> Option<SupplierOffer> {

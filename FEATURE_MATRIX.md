@@ -85,7 +85,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Symbol and footprint editors | - | |
 | User library | - | |
 | Component 3D model reference (STEP/WRL/GLB, transform, quality, licence), viewer loading, missing-model state | impl | code-reviewed only, unrun (ADR-0025); no model-vs-footprint verification or collision checks |
-| Supplier offers separate from component identity (`SupplierOffer`, legacy `lcsc` migration), resilient LCSC search/import (cache, retry, stale label, typed errors) | impl | code-reviewed only, unrun (ADR-0027); no lifecycle parsing, cache not persisted, offer data never used as suitability evidence |
+| Supplier offers separate from component identity (`SupplierOffer`, legacy `lcsc` migration), resilient LCSC search/import (cache, retry, stale label, typed errors) | impl | code-reviewed only, unrun (ADR-0028); no lifecycle parsing, cache not persisted, offer data never used as suitability evidence |
 | AI datasheet-to-library workflow | - | |
 
 ## Part 8: design manager and cross-probing
@@ -109,7 +109,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Click a finding -> navigate, zoom, highlight, safe correction | - | |
 | DFM report | - | |
 | Fail-closed engineering gates (`run_gates`, release blocking) | code-reviewed only | `eak-validation/src/gates.rs`, ADR-0021; tests written, never run |
-| Multi-domain engineering model (`intel_*`, `intelligence_summary`) | code-reviewed only | `eak-intelligence/src/systems/`, ADR-0027; tests written, never run |
+| Multi-domain engineering model (`intel_*`, `intelligence_summary`) | code-reviewed only | `eak-intelligence/src/systems/`, ADR-0028; tests written, never run |
 | Copper/power engineering (explicit-input trace width, voltage drop, rail drop, return path) | code-reviewed only | `eak-engineering/src/power.rs`; tests written, never run |
 
 ## Part 10: optional AI infrastructure (no assistant UI)

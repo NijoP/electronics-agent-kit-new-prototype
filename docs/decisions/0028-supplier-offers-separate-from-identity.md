@@ -1,4 +1,4 @@
-# ADR-0027: Supplier offers are separate from component identity; supplier lookups are resilient
+# ADR-0028: Supplier offers are separate from component identity; supplier lookups are resilient
 
 Status: accepted (code-reviewed only; nothing built or run)
 

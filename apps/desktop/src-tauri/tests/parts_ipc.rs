@@ -131,7 +131,7 @@ fn import_is_one_engine_command_with_a_revision_check_and_stores_the_record() {
     let snap = current_project(&s).unwrap();
     let def = &snap.project.library["LCSC_C25804"];
     assert_eq!(def.lcsc.as_deref(), Some("C25804"));
-    // Commercial data is a supplier offer, separate from identity (ADR-0027).
+    // Commercial data is a supplier offer, separate from identity (ADR-0028).
     assert_eq!(def.supplier_part("lcsc"), Some("C25804"));
     assert_eq!(def.supplier_offers.len(), 1);
     assert!(def.supplier_offers[0].fetched_at_unix_s.is_some());

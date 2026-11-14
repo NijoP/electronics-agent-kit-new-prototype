@@ -111,7 +111,7 @@ fn live_status(k: ErrorKind) -> &'static str {
 }
 
 /// Supplier lookups shared by every `parts_*` command: one cache, rate limit and retry policy
-/// per process (ADR-0027). The wrapper never holds a lock while waiting on the network, so a
+/// per process (ADR-0028). The wrapper never holds a lock while waiting on the network, so a
 /// slow or dead supplier cannot freeze other commands.
 pub type LcscResilient = Resilient<LcscProvider<UreqFetch>>;
 

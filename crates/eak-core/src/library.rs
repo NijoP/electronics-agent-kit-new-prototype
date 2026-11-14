@@ -294,7 +294,7 @@ pub struct ComponentDef {
     /// [`ComponentDef::supplier_part`], which prefers the offer and falls back to this field.
     #[serde(default)]
     pub lcsc: Option<String>,
-    /// Supplier-specific offers, separate from the component's identity (ADR-0027).
+    /// Supplier-specific offers, separate from the component's identity (ADR-0028).
     /// Absent in older files (loads as empty).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supplier_offers: Vec<SupplierOffer>,
