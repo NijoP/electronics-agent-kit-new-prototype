@@ -221,7 +221,19 @@ pub enum Command {
     SetManufacturing {
         config: ManufacturingConfig,
     },
+    // ---- compound
+    /// Apply several commands in order as one transaction: all succeed or nothing changes,
+    /// and the result is one revision and one undo step (ADR-0013). Batches do not nest.
+    Batch {
+        commands: Vec<Command>,
+        /// Human-readable description for the history (e.g. "Move 3 objects").
+        #[serde(default)]
+        label: Option<String>,
+    },
 }
+
+/// Most commands a single `Batch` may carry.
+pub const MAX_BATCH: usize = 1000;
 
 /// Risk class driving the approval policy (Spec §6.1; Execution Instructions §11).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -285,6 +297,12 @@ impl Command {
             | SetNetVoltage { .. }
             | SetManufacturing { .. } => EngineeringImpacting,
             DeleteSymbol { .. } | ClearRouting { .. } => Destructive,
+            // A batch carries the risk of its riskiest step, so approval covers every step.
+            Batch { commands, .. } => commands
+                .iter()
+                .map(Command::class)
+                .max()
+                .unwrap_or(ReversibleLocal),
         }
     }
 }
@@ -1315,6 +1333,47 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 return Err(CommandError::Invalid("mask expansion must be ≥ 0".into()));
             }
             p.manufacturing = config.clone();
+        }
+        Batch { commands, label } => {
+            if commands.is_empty() {
+                return Err(CommandError::Invalid("batch has no commands".into()));
+            }
+            if commands.len() > MAX_BATCH {
+                return Err(CommandError::Invalid(format!(
+                    "batch has {} commands; the limit is {MAX_BATCH}",
+                    commands.len()
+                )));
+            }
+            if label.as_deref().is_some_and(|l| l.chars().count() > 200) {
+                return Err(CommandError::Invalid(
+                    "batch label is longer than 200 characters".into(),
+                ));
+            }
+            // Steps run in order on the same working copy; the engine applies the whole
+            // batch to a clone, so a failing step leaves the project untouched.
+            for (i, c) in commands.iter().enumerate() {
+                if matches!(c, Batch { .. }) {
+                    return Err(CommandError::Invalid(format!(
+                        "batch step {}: batches do not nest",
+                        i + 1
+                    )));
+                }
+                let step = apply(p, c).map_err(|e| {
+                    let msg = format!("batch step {} ({}): {e}", i + 1, c.name());
+                    match e {
+                        CommandError::NotFound(_) => CommandError::NotFound(msg),
+                        CommandError::Precondition(_) => CommandError::Precondition(msg),
+                        CommandError::NothingTo(_) => CommandError::NothingTo(msg),
+                        _ => CommandError::Invalid(msg),
+                    }
+                })?;
+                created.extend(step.created);
+                warnings.extend(
+                    step.warnings
+                        .into_iter()
+                        .map(|w| format!("step {} ({}): {w}", i + 1, c.name())),
+                );
+            }
         }
     }
     Ok(Applied { created, warnings })

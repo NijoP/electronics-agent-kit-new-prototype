@@ -199,7 +199,8 @@ export type Command =
   | { type: "SyncSchematicToPcb" }
   | { type: "AutoPlace"; grid: Nm | null }
   | { type: "AutoRoute"; nets: string[] | null }
-  | { type: "ClearRouting"; net: string | null };
+  | { type: "ClearRouting"; net: string | null }
+  | { type: "Batch"; commands: Command[]; label?: string | null };
 
 export interface CommandError {
   code: string;
@@ -462,6 +463,44 @@ export interface FootprintCandidate {
   pin_map: Record<string, string[]>;
 }
 
+
+/** Interactive routing (eak_engineering::interactive). Points are board nm. */
+export type BendMode = "diagonal45" | "orthogonal90";
+export interface RouteStepRequest {
+  net: string;
+  layer: CopperLayer;
+  from: Point;
+  to: Point;
+  mode: BendMode;
+  width: Nm | null;
+  via_at_start: boolean;
+}
+export interface RouteSegment {
+  a: Point;
+  b: Point;
+}
+export interface ClearanceFeedback {
+  object: string;
+  /** Copper-to-copper gap in nm (negative = overlap). */
+  measured: number;
+  required: Nm;
+}
+export interface RouteStepReport {
+  revision: number;
+  net: string;
+  layer: CopperLayer;
+  width: Nm;
+  clearance: Nm;
+  mode: BendMode;
+  segments: RouteSegment[];
+  via: { position: Point; drill: Nm; diameter: Nm } | null;
+  end: Point;
+  reached: boolean;
+  walkaround: boolean;
+  blocking: ClearanceFeedback[];
+  min_gap: ClearanceFeedback | null;
+  message: string | null;
+}
 /** Net class (EAK-IR); lengths in nm. */
 export interface NetClass {
   name: string;

@@ -23,6 +23,8 @@ pub enum Domain {
     Pcb,
     Constraints,
     Manufacturing,
+    /// A `Batch` may touch any part of the design.
+    Mixed,
 }
 
 impl Domain {
@@ -36,6 +38,7 @@ impl Domain {
             Domain::Pcb => &["DRC", "MECH"],
             Domain::Constraints => &["DRC"],
             Domain::Manufacturing => &["DRC"],
+            Domain::Mixed => &["ERC", "DRC", "MECH"],
         }
     }
 }
@@ -45,6 +48,24 @@ fn sheet() -> Value {
 }
 fn id(desc: &str) -> Value {
     string(desc)
+}
+
+/// One `Batch` step: `type` names any non-batch command tool and the remaining properties
+/// are that tool's arguments (decoded and checked by serde, like a direct tool call).
+fn batch_step() -> Value {
+    let names: Vec<String> = command_samples()
+        .iter()
+        .filter(|c| !matches!(c, Command::Batch { .. }))
+        .map(Command::name)
+        .collect();
+    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+    json!({
+        "type": "object",
+        "properties": {"type": enumeration(&names, "command tool name")},
+        "required": ["type"],
+        "additionalProperties": true,
+        "description": "a command: its tool name in `type` plus that tool's arguments",
+    })
 }
 
 /// Domain, description and input schema of a command variant. The values inside `c` are
@@ -392,6 +413,17 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Set the manufacturing configuration.",
             obj(&[("config", manufacturing())], &["config"]),
         ),
+        Batch { .. } => (
+            D::Mixed,
+            "Apply several EAK commands in order as ONE atomic edit: all succeed or nothing changes; one revision and one undo step. Each step is {\"type\": <command tool name>, ...that tool's arguments}. Batches do not nest; at most 1000 steps; the batch needs approval for its riskiest step.",
+            obj(
+                &[
+                    ("commands", array(batch_step(), "steps, applied in order")),
+                    ("label", nullable(string("short history label, e.g. 'Move 3 parts'"))),
+                ],
+                &["commands"],
+            ),
+        ),
     }
 }
 
@@ -568,6 +600,16 @@ pub fn command_samples() -> Vec<Command> {
         SetManufacturing {
             config: ManufacturingConfig::default(),
         },
+        Batch {
+            commands: vec![
+                MoveSymbol {
+                    symbol_id: "s".into(),
+                    position: p,
+                },
+                Annotate,
+            ],
+            label: Some("Move".into()),
+        },
     ]
 }
 
@@ -640,8 +682,8 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // STATUS.md records 39 commands in the runtime.
-        assert_eq!(tools.len(), 39);
+        // STATUS.md records 40 commands in the runtime.
+        assert_eq!(tools.len(), 40);
         for t in &tools {
             assert!(t
                 .spec
@@ -684,5 +726,46 @@ mod tests {
         // A model cannot smuggle in a different variant through "type".
         let c = decode("Annotate", &json!({"type": "ClearRouting"})).unwrap();
         assert_eq!(c, Command::Annotate);
+    }
+
+    #[test]
+    fn batch_tool_decodes_typed_steps_and_lists_every_other_command() {
+        let c = decode(
+            "Batch",
+            &json!({"commands": [
+                {"type": "MoveSymbol", "symbol_id": "s", "position": {"x": 1, "y": 2}},
+                {"type": "Annotate"}
+            ]}),
+        )
+        .unwrap();
+        assert_eq!(
+            c,
+            Command::Batch {
+                commands: vec![
+                    Command::MoveSymbol {
+                        symbol_id: "s".into(),
+                        position: Point::new(1, 2)
+                    },
+                    Command::Annotate
+                ],
+                label: None
+            }
+        );
+        // A malformed step is reported, not dropped.
+        let e = decode("Batch", &json!({"commands": [{"type": "MoveSymbol"}]})).unwrap_err();
+        assert!(e.contains("Batch"), "{e}");
+        // The step enum names every command tool except Batch itself.
+        let step = batch_step();
+        let names = step["properties"]["type"]["enum"].as_array().unwrap();
+        assert_eq!(names.len(), command_tools().len() - 1);
+        assert!(!names.contains(&json!("Batch")));
+        assert_eq!(
+            command_tools()
+                .iter()
+                .find(|t| t.spec.name == "Batch")
+                .unwrap()
+                .domain,
+            Domain::Mixed
+        );
     }
 }

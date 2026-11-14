@@ -251,6 +251,8 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .stackup { font-size: 12px; }
 .stackup th { text-transform: none; letter-spacing: 0; }
 .layer-manager { overflow-x: auto; }
+.route-blocked { stroke: var(--danger, #d33); stroke-width: 0.15; stroke-dasharray: 0.3 0.3; pointer-events: none; }
+.track.preview.fixed { opacity: 0.8; stroke-dasharray: none; }
 
 /* Library panel (Phase 5) */
 .library-panel .row { display: flex; gap: var(--s-1); }
