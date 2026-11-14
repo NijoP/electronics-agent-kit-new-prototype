@@ -483,9 +483,10 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
       { id: "rules", label: "Design rules", disabled: "Not implemented: no rule editor yet" },
       { id: "erc", label: "Run ERC", run: () => check("erc"), disabled: busy ? "An engine command is running" : undefined },
       { id: "drc", label: "Run DRC", run: () => check("drc"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "dfm", label: "Run DFM", title: "Design for manufacture against the JLCPCB standard profile", run: () => check("dfm"), disabled: busy ? "An engine command is running" : undefined },
       { id: "route", label: "Auto-route", title: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), disabled: busy ? "An engine command is running" : undefined },
       { id: "sim", label: "Simulate", disabled: "Not implemented: no SPICE integration yet" },
-      { id: "export", label: "Export Gerbers", title: "Gerber, Excellon, BOM, CPL", run: exportGerbers, disabled: busy ? "An engine command is running" : undefined },
+      { id: "export", label: "Export Gerbers", title: "Gerber, Excellon, BOM, CPL, fab-pack ZIP; runs ERC/DRC/MECH/DFM", run: exportGerbers, disabled: busy ? "An engine command is running" : undefined },
     ],
     [
       { id: "cmd", label: "Commands", shortcut: SHORTCUTS.palette, run: () => setPalette(true) },
