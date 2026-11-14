@@ -7,3 +7,5 @@
 5. Cut a release built from this tree; publish Windows/macOS packages or keep them labelled unavailable.
 6. Existing-project rework (directive §3H, from DESK `desk/rework/*`): read-only inspection, project identity check, immutable baseline (checkpoint), protected vs modifiable objects, dependency-aware repair plan as one typed `Batch`, explicit approval, readback and post-mutation gates. Not started.
 7. When builds resume: run the new gate/power/units tests (`eak-validation/src/gates.rs`, `eak-engineering/src/power.rs`, `eak-core/src/units.rs`, `eak-terminal/tests/pty.rs::session_environment_is_not_persisted`) and confirm `end_to_end.rs`/`multilayer.rs` still reach the release-candidate label under ADR-0021.
+
+8. Performance work (code-reviewed only): run the `resources.rs` tests and `canvasFrame.test.tsx`, then `docs/development/PERFORMANCE_VERIFICATION_PLAN.md` (not performed). Settle by compiling: Tauri 2 `async fn` commands taking `AppHandle`, `tauri::async_runtime::spawn_blocking` result type, `tokio` "sync" edge added to `Cargo.lock` by hand.
