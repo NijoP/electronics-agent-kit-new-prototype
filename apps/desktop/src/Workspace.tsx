@@ -16,7 +16,8 @@ import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
 import { AiPanel, type ChatMsg } from "./shell/AiPanel";
 import { interpret, type Proposal } from "./shell/ai";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
-import { ManufacturingPanel, netNames, PartsPanel, ProjectPanel } from "./shell/panels";
+import { ManufacturingPanel, netNames, ProjectPanel } from "./shell/panels";
+import { LibraryPanel } from "./shell/LibraryPanel";
 import { StatusBar } from "./shell/StatusBar";
 import { ExportDialog } from "./shell/ExportDialog";
 import { RulesDialog } from "./shell/RulesDialog";
@@ -78,7 +79,6 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   useEffect(() => saveLayout(layout), [layout]);
   const [sideView, setSideView] = useState<SideView>("project");
   const [bottomTab, setBottomTab] = useState<BottomTab>("log");
-  const [partQuery, setPartQuery] = useState("");
   const [quickOpen, setQuickOpen] = useState(false);
   const [armPart, setArmPart] = useState<{ id: string; n: number } | null>(null);
   const [chat, setChat] = useState<ChatMsg[]>([]);
@@ -386,7 +386,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     setBottomTab("findings");
     setBottomOpen(true);
   };
-  const placePart = (c: LibraryEntry) => {
+  const placePart = (c: Pick<LibraryEntry, "id" | "name">) => {
     showKind("schematic");
     setArmPart({ id: c.id, n: Date.now() });
     setMessage(`Place tool armed with ${c.name}: click the schematic to place it.`);
@@ -683,7 +683,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
           )}
           {sideView === "parts" && (
             <>
-              <PartsPanel library={library} query={partQuery} onQuery={setPartQuery} onPlace={placePart} />
+              <LibraryPanel revision={revision} busy={busy} execute={edit.execute} onPlace={placePart} />
               <LcscPartsPanel
                 revision={revision}
                 onImported={async (m) => {
