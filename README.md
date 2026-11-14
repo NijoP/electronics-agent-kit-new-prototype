@@ -23,10 +23,9 @@ release is listed yet, use option B.
 
 **System requirements**
 
-- Linux x86_64 with glibc 2.39 or newer (built and tested on Ubuntu 24.04). Other distributions
-  may work but are untested.
-- WebKitGTK 4.1 and GTK 3 (pulled in automatically by the `.deb`; the AppImage expects them on the
-  host, as most current desktops have).
+- Linux x86_64 with glibc 2.39 or newer (Ubuntu 24.04 or a derivative). Built and launch-checked on
+  Zorin OS 18.1 (Ubuntu 24.04 base) only; other distributions may work but are untested.
+- The `.deb` depends on WebKitGTK 4.1 and GTK 3 (apt installs them). The AppImage bundles WebKitGTK.
 - A Secret Service keyring (GNOME Keyring or KWallet) to store model API keys.
 - No prebuilt packages for Windows or macOS yet: use option B.
 
