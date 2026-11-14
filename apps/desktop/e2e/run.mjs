@@ -113,7 +113,12 @@ async function waitFor(pred, msg, timeout = 15000) {
 }
 async function waitRevisionAbove(rev, msg) {
   let s;
-  await waitFor(async () => (s = await snap()).project.revision > rev, msg);
+  try {
+    await waitFor(async () => (s = await snap()).project.revision > rev, msg);
+  } catch (e) {
+    // Carry the app's own status line (it names the engine's rejection reason).
+    throw new Error(`${msg}; status bar: ${(await statusMessage()).replace(/\s+/g, " ").slice(-200)}`);
+  }
   return s;
 }
 /** Text of the status bar (the workspace's message line). */
@@ -165,6 +170,26 @@ const viewToClient = (svgSel, vx, vy) =>
     vy,
   );
 const NM_PER_MM = 1_000_000;
+/** Client point of an EAK-IR point ({x, y} nm, Y up). */
+const irToClient = (svgSel, p) => viewToClient(svgSel, p.x / NM_PER_MM, -p.y / NM_PER_MM);
+const inside = (r, p) => p && p.x > r.x + 2 && p.x < r.x + r.w - 2 && p.y > r.y + 2 && p.y < r.y + r.h - 2;
+/**
+ * Zoom a canvas with real mouse-wheel input (the Canvas zooms about the cursor) until `done`
+ * holds. deltaY < 0 zooms in, > 0 zooms out. Returns whether `done` was reached.
+ */
+async function zoomUntil(svgSel, at, deltaY, done, maxSteps = 40) {
+  for (let i = 0; i < maxSteps; i++) {
+    if (await done()) return true;
+    const c = at ? await irToClient(svgSel, at) : null;
+    const r = await rectOf(svgSel);
+    const x = Math.round(c && inside(r, c) ? c.x : r.x + r.w / 2);
+    const y = Math.round(c && inside(r, c) ? c.y : r.y + r.h / 2);
+    await browser.action("wheel").scroll({ x, y, deltaX: 0, deltaY, origin: "viewport" }).perform();
+    await browser.pause(60);
+  }
+  return done();
+}
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 const pre = {};
 try {
@@ -214,7 +239,8 @@ try {
     // View space is mm with y pointing down; the sheet spans x 0..w, y -h..0.
     const w = sheet.width / NM_PER_MM;
     const h = sheet.height / NM_PER_MM;
-    for (const fx of [0.3, 0.6]) {
+    // Close together so both parts stay in view once zoomed in far enough to hit pins.
+    for (const fx of [0.45, 0.55]) {
       const before = (await snap()).project.revision;
       const p = await viewToClient(schSvg, fx * w, -0.6 * h);
       ok(p, "schematic canvas not found");
@@ -229,37 +255,48 @@ try {
     return `placed ${syms.map((x) => `${x.refdes}=${x.component_id}`).join(", ")} → r${s.project.revision}; canvas draws ${drawn}`;
   });
 
-  await step("S05", "Connect pins (Connect pins tool, two pin pairs)", "UI", async () => {
+  await step("S05", "Connect parts (Connect pins tool + Wire tool)", "UI", async () => {
     const s0 = await snap();
     const syms = s0.geometry.symbols;
     ok(syms.length >= 2, "need two placed symbols");
     await clickButton('[aria-label="Schematic tools"]', "Connect pins");
-    const [a, b] = syms;
-    const pairs = [
-      [a.pins[a.pins.length - 1], b.pins[0]],
-      [a.pins[0], b.pins[b.pins.length - 1]],
-    ];
+    // Left/right part by x; inner pins face each other, outer pins face away.
+    const [a, b] = [...syms].sort((p, q) => p.position.x - q.position.x);
+    const byX = (s) => [...s.pins].sort((p, q) => p.position.x - q.position.x);
+    const [aOuter, aInner] = [byX(a)[0], byX(a)[a.pins.length - 1]];
+    const [bInner, bOuter] = [byX(b)[0], byX(b)[b.pins.length - 1]];
+    // At fit-to-sheet zoom a part's pins are ~2 px apart; zoom in (real wheel input) about the
+    // midpoint until 1 mm ≥ 6 px, so a click lands well inside the 1.5 mm pin-snap radius.
+    const mid = { x: (a.position.x + b.position.x) / 2, y: (a.position.y + b.position.y) / 2 };
+    const pxPerMm = async () =>
+      dist(await irToClient(schSvg, mid), await irToClient(schSvg, { x: mid.x + 10 * NM_PER_MM, y: mid.y })) / 10;
+    ok(await zoomUntil(schSvg, mid, -120, async () => (await pxPerMm()) >= 6), "could not zoom the schematic in");
+    const r = await rectOf(schSvg);
+    const click = async (p, what) => {
+      const at = await irToClient(schSvg, p);
+      ok(inside(r, at), `${what} at ${JSON.stringify(at)} is outside the zoomed canvas`);
+      await clickAt(at.x, at.y);
+    };
     let rev = s0.project.revision;
-    for (const pair of pairs) {
-      for (const pin of pair) {
-        const at = await viewToClient(schSvg, pin.position[0] / NM_PER_MM, -pin.position[1] / NM_PER_MM);
-        ok(at, `no client point for pin ${pin.number}`);
-        await clickAt(at.x, at.y);
-      }
-      rev = (await waitRevisionAbove(rev, "ConnectPins was not accepted")).project.revision;
+    // Inner pins: Connect pins tool (engine draws the wire).
+    await click(aInner.position, `${a.refdes}.${aInner.number}`);
+    await click(bInner.position, `${b.refdes}.${bInner.number}`);
+    rev = (await waitRevisionAbove(rev, "ConnectPins was not accepted")).project.revision;
+    // Outer pins: Wire tool, three segments routed 7.62 mm above both parts.
+    await clickButton('[aria-label="Schematic tools"]', "Wire");
+    const up = 7.62 * NM_PER_MM;
+    const path = [aOuter.position, { x: aOuter.position.x, y: aOuter.position.y + up }, { x: bOuter.position.x, y: bOuter.position.y + up }, bOuter.position];
+    await click(path[0], "wire start");
+    for (const [i, p] of path.slice(1).entries()) {
+      await click(p, `wire point ${i + 1}`);
+      rev = (await waitRevisionAbove(rev, `AddWire segment ${i + 1} not accepted`)).project.revision;
     }
+    await browser.keys(["Escape"]);
     const s = await snap();
-    return `2 pin-to-pin connections → r${s.project.revision}; ${count(s.project.schematic.wires)} wire(s) in IR`;
+    return `Connect pins ${a.refdes}.${aInner.number}–${b.refdes}.${bInner.number} + 3-segment Wire ${a.refdes}.${aOuter.number}–${b.refdes}.${bOuter.number} → r${s.project.revision}; ${count(s.project.schematic.wires)} wire(s) in IR`;
   });
 
-  await step("S06", "Connectivity / netlist", "IPC (no UI)", async () => {
-    const c = await ipc("connectivity");
-    const nets = Object.keys(c.net_groups);
-    ok(nets.length >= 2, `expected ≥2 nets, got ${nets.length}`);
-    return `connectivity IPC: ${nets.length} nets (${nets.slice(0, 4).join(", ")}), ${c.shorts.length} shorts, ${c.ratsnest.length} unrouted; no connectivity/netlist view in UI (Project panel lists net names; PCB draws airwires)`;
-  });
-
-  await step("S07", "Sync schematic to PCB (Project menu)", "UI", async () => {
+  await step("S06", "Sync schematic to PCB (Project menu)", "UI", async () => {
     const before = (await snap()).project.revision;
     await menu("Project", "Sync schematic to PCB");
     const s = await waitRevisionAbove(before, "SyncSchematicToPcb not accepted");
@@ -270,18 +307,47 @@ try {
     return `${fps} footprints on PCB → r${s.project.revision}`;
   });
 
+  // The engine's connectivity analysis is PCB copper connectivity (the one DRC-004 uses); the
+  // UI shows it only as airwires. There is no netlist / connectivity view, so the numbers are
+  // read through the same IPC the PCB view calls.
+  await step("S07", "Connectivity: nets + airwires after sync", "IPC (no UI) + UI airwires", async () => {
+    const s = await snap();
+    const c = await ipc("connectivity");
+    ok(c.revision === s.project.revision, `connectivity is for r${c.revision}, project is r${s.project.revision}`);
+    const nets = [...new Set(c.ratsnest.map(([n]) => n))];
+    ok(nets.length >= 2, `expected unrouted connections on ≥2 nets, got ${nets.length}`);
+    let drawn = 0;
+    await waitFor(async () => (drawn = (await browser.$$('section[aria-label="PCB view"] line.airwire')).length) >= c.ratsnest.length, "airwires not drawn");
+    return `${nets.length} nets (${nets.join(", ")}), ${c.ratsnest.length} unrouted, ${c.shorts.length} shorts; PCB draws ${drawn} airwires. No netlist/connectivity view in the UI`;
+  });
+
   const pcbSvg = 'section[aria-label="PCB view"] svg[aria-label="PCB canvas"]';
   await step("S08", "Board outline (Board outline tool, 2 corners, Finish)", "UI", async () => {
     await clickButton('[aria-label="PCB tools"]', "Board outline");
-    const r = await rectOf(pcbSvg);
-    ok(r && r.w > 0, "PCB canvas has no size");
-    const before = (await snap()).project.revision;
-    await clickAt(r.x + r.w * 0.15, r.y + r.h * 0.15);
-    await clickAt(r.x + r.w * 0.85, r.y + r.h * 0.85);
+    const s0 = await snap();
+    // A 50 × 36 mm board centred on the synced footprints, drawn in board millimetres.
+    const fps = Object.values(s0.project.pcb.footprints).map((f) => f.position);
+    const c = { x: fps.reduce((t, p) => t + p.x, 0) / fps.length, y: fps.reduce((t, p) => t + p.y, 0) / fps.length };
+    const c1 = { x: c.x - 25 * NM_PER_MM, y: c.y + 18 * NM_PER_MM };
+    const c2 = { x: c.x + 25 * NM_PER_MM, y: c.y - 18 * NM_PER_MM };
+    const bothIn = async () => {
+      const r = await rectOf(pcbSvg);
+      return inside(r, await irToClient(pcbSvg, c1)) && inside(r, await irToClient(pcbSvg, c2));
+    };
+    ok(await zoomUntil(pcbSvg, c, 120, bothIn), "could not zoom the PCB out to fit a 50 mm board");
+    const before = s0.project.revision;
+    for (const p of [c1, c2]) {
+      const at = await irToClient(pcbSvg, p);
+      await clickAt(at.x, at.y);
+    }
     await clickButton('section[aria-label="PCB view"]', "Finish outline (2 pts)");
     const s = await waitRevisionAbove(before, "SetBoardOutline not accepted");
-    ok(s.project.pcb.board.outline.length >= 3, "outline not stored");
-    return `outline with ${s.project.pcb.board.outline.length} points → r${s.project.revision}`;
+    const o = s.project.pcb.board.outline;
+    ok(o.length >= 3, "outline not stored");
+    const xs = o.map((p) => p.x / NM_PER_MM);
+    const ys = o.map((p) => p.y / NM_PER_MM);
+    await clickButton('[aria-label="PCB tools"]', "Select");
+    return `outline ${o.length} points, ${(Math.max(...xs) - Math.min(...xs)).toFixed(1)} × ${(Math.max(...ys) - Math.min(...ys)).toFixed(1)} mm → r${s.project.revision}`;
   });
 
   await step("S09", "Footprint placement (Design → Auto-place footprints)", "UI", async () => {
@@ -289,7 +355,7 @@ try {
     await menu("Design", "Auto-place footprints");
     const s = await waitRevisionAbove(before, "AutoPlace not accepted");
     const pos = Object.values(s.project.pcb.footprints).map(
-      (f) => `${(f.position[0] / NM_PER_MM).toFixed(1)},${(f.position[1] / NM_PER_MM).toFixed(1)}`,
+      (f) => `${(f.position.x / NM_PER_MM).toFixed(1)},${(f.position.y / NM_PER_MM).toFixed(1)}`,
     );
     return `footprints at ${pos.join(" / ")} mm → r${s.project.revision}`;
   });
@@ -325,10 +391,22 @@ try {
     const layers = await opts(layerSel);
     const zl = layers[layers.length - 1];
     await browser.$(layerSel).selectByAttribute("value", zl);
-    const r = await rectOf(pcbSvg);
-    const before = (await snap()).project.revision;
-    await clickAt(r.x + r.w * 0.2, r.y + r.h * 0.2);
-    await clickAt(r.x + r.w * 0.8, r.y + r.h * 0.8);
+    const s0 = await snap();
+    // Zone inset 3 mm inside the board outline's bounding box, in board millimetres.
+    const o = s0.project.pcb.board.outline;
+    const z1 = { x: Math.min(...o.map((p) => p.x)) + 3 * NM_PER_MM, y: Math.max(...o.map((p) => p.y)) - 3 * NM_PER_MM };
+    const z2 = { x: Math.max(...o.map((p) => p.x)) - 3 * NM_PER_MM, y: Math.min(...o.map((p) => p.y)) + 3 * NM_PER_MM };
+    const zc = { x: (z1.x + z2.x) / 2, y: (z1.y + z2.y) / 2 };
+    const bothIn = async () => {
+      const r = await rectOf(pcbSvg);
+      return inside(r, await irToClient(pcbSvg, z1)) && inside(r, await irToClient(pcbSvg, z2));
+    };
+    ok(await zoomUntil(pcbSvg, zc, 120, bothIn), "could not fit the zone corners in the PCB canvas");
+    const before = s0.project.revision;
+    for (const p of [z1, z2]) {
+      const at = await irToClient(pcbSvg, p);
+      await clickAt(at.x, at.y);
+    }
     await clickButton('section[aria-label="PCB view"]', "Finish zone (2 pts)");
     const s = await waitRevisionAbove(before, "AddZone not accepted");
     ok(count(s.project.pcb.zones) === 1, "zone not stored");
