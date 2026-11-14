@@ -92,7 +92,7 @@ function Install-Eak {
     Step 'Downloading and verifying (SHA-256)'
     foreach ($n in @('SHA256SUMS', $asset)) {
       if ($env:EAK_ASSET_DIR) { Copy-Item (Join-Path $src $n) (Join-Path $tmp $n) }
-      else { Invoke-WebRequest -UseBasicParsing -Uri "$src/$n" -OutFile (Join-Path $tmp $n) -Headers @{ 'User-Agent' = 'eak-installer' } }
+      else { try { Invoke-WebRequest -UseBasicParsing -Uri "$src/$n" -OutFile (Join-Path $tmp $n) -Headers @{ "User-Agent" = "eak-installer" } } catch { throw "release $tag has no artifact named $n (missing: $src/$n). Nothing was installed. See docs/PLATFORM_SUPPORT.md" } }
     }
     $line = Get-Content (Join-Path $tmp 'SHA256SUMS') | Where-Object { $_ -match "\s\*?$([regex]::Escape($asset))$" } | Select-Object -First 1
     if (-not $line) { throw "$asset is not listed in SHA256SUMS" }

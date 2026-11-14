@@ -129,10 +129,10 @@ fetch() {
   if [ -n "${EAK_ASSET_DIR:-}" ]; then cp "$SRC/$1" "$TMP/$1"
   else curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$TMP/$1" "$SRC/$1"; fi
 }
-fetch SHA256SUMS || fail "could not get SHA256SUMS from $SRC"
-fetch "$ASSET" || fail "could not download $ASSET from $SRC" "That release may not include a $OS-$ARCH package; see docs/PLATFORM_SUPPORT.md."
+fetch SHA256SUMS || fail "release $TAG has no SHA256SUMS ($SRC/SHA256SUMS is missing)" "Nothing was installed; the release may be incomplete."
+fetch "$ASSET" || fail "release $TAG has no asset named $ASSET for $OS-$ARCH" "Missing artifact: $SRC/$ASSET" "See docs/PLATFORM_SUPPORT.md; nothing was installed."
 WANT="$(grep -E "[ *]$ASSET\$" "$TMP/SHA256SUMS" | head -n1 | awk '{print $1}')"
-[ -n "$WANT" ] || fail "$ASSET is not listed in SHA256SUMS"
+[ -n "$WANT" ] || fail "release $TAG has no checksum entry for $ASSET" "Missing artifact: $ASSET"
 GOT="$("${SHA[@]}" "$TMP/$ASSET" | awk '{print $1}')"
 [ "$GOT" = "$WANT" ] || fail "SHA-256 mismatch for $ASSET" "expected $WANT" "got      $GOT" "The download is corrupt or tampered with; nothing was installed."
 info "sha256 OK: $GOT"
