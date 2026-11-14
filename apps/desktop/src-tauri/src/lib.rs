@@ -411,6 +411,28 @@ pub fn connectivity(s: &Session) -> Result<ConnectivityReport, String> {
     })
 }
 
+/// Simulation panel data: whether ngspice is installed plus the nets and elements an
+/// `eak-simulation` export would use. Read-only; ngspice is optional.
+#[derive(Debug, Clone, Serialize)]
+pub struct SimulationStatus {
+    pub ngspice: eak_simulation::NgspiceStatus,
+    pub revision: u64,
+    #[serde(flatten)]
+    pub circuit: eak_simulation::Describe,
+}
+
+pub fn simulation_status(s: &Session) -> Result<SimulationStatus, String> {
+    let (revision, circuit) = s.with_engine(|e| (e.project().revision, eak_simulation::describe(e.project())))?;
+    Ok(SimulationStatus { ngspice: eak_simulation::probe(), revision, circuit })
+}
+
+/// Runs ngspice on a snapshot of the current revision. The engine lock is released before the
+/// subprocess starts, and nothing is written to the project (simulation is not a design edit).
+pub fn run_simulation(s: &Session, req: &eak_simulation::SimRequest) -> Result<eak_simulation::SimResult, String> {
+    let project = s.with_engine(|e| e.project().clone())?;
+    eak_simulation::run(&project, req).map_err(|e| e.to_string())
+}
+
 /// A built-in library part the UI can place (read-only catalogue; placing it is a `PlaceSymbol` command).
 #[derive(Debug, Clone, Serialize)]
 pub struct LibraryEntry {
@@ -494,7 +516,9 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 22] = [
+pub const IPC_COMMANDS: [&str; 24] = [
+    "simulation_status",
+    "run_simulation",
     "connectivity",
     "library_components",
     "domain_classification",
@@ -603,6 +627,19 @@ pub mod cmd {
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
+    pub fn simulation_status(state: State<'_, Session>) -> Result<SimulationStatus, String> {
+        super::simulation_status(&state)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
+    pub fn run_simulation(
+        state: State<'_, Session>,
+        request: eak_simulation::SimRequest,
+    ) -> Result<eak_simulation::SimResult, String> {
+        super::run_simulation(&state, &request)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
     pub fn library_components() -> Vec<LibraryEntry> {
         super::library_components()
     }
@@ -674,6 +711,8 @@ pub fn run() {
             cmd::domain_classification,
             cmd::library_components,
             cmd::connectivity,
+            cmd::simulation_status,
+            cmd::run_simulation,
             cmd::export_manufacturing,
         ])
         .run(tauri::generate_context!())

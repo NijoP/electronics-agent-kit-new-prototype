@@ -357,6 +357,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     { id: "toggle-ai", label: "Toggle AI assistant", run: () => setAiOpen((o) => !o), shortcut: SHORTCUTS.toggleAi, group: "View" },
     ...SIDE_VIEWS.map((v) => ({ id: `show-${v.id}`, label: `Show ${v.label}`, run: () => showSide(v.id), group: "View" })),
     { id: "bom", label: "Show BOM", run: () => (setBottomTab("bom"), setBottomOpen(true)), group: "View" },
+    { id: "sim", label: "Show simulation", run: () => (setBottomTab("sim"), setBottomOpen(true)), group: "View" },
     { id: "log", label: "Show log", run: () => (setBottomTab("log"), setBottomOpen(true)), group: "View" },
     { id: "ask", label: selLabel ? `Ask AI about ${selLabel}` : "Ask AI", run: () => (selectedSymbol ? askSelection() : (setAiOpen(true), setAiFocus((n) => n + 1))), group: "AI" },
     { id: "theme", label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", run: onTheme, group: "Appearance" },
@@ -542,7 +543,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
       { label: "Clear all routing", run: () => execute({ type: "ClearRouting", net: null }), disabled: noProject, destructive: true },
       { label: "Interactive routing…", disabled: "Use the Route tool in the PCB editor (key 4); not available from the menu", sep: true },
     ] },
-    { label: "Simulation", items: [{ label: "Run simulation…", disabled: "Not implemented: no SPICE integration yet" }] },
+    { label: "Simulation", items: [{ label: "Run simulation…", run: () => (setBottomTab("sim"), setBottomOpen(true)) }] },
     { label: "Manufacturing", items: [
       { label: "Export Gerbers + drill", run: exportGerbers, disabled: noProject },
       { label: "Show manufacturing panel", run: () => showSide("manufacturing") },
