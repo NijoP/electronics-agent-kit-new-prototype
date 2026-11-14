@@ -610,7 +610,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       { id: "drc", label: "Run DRC", run: () => check("drc"), disabled: busy ? "An engine command is running" : undefined },
       { id: "dfm", label: "Run DFM", title: "Design for manufacture against the JLCPCB standard profile", run: () => check("dfm"), disabled: busy ? "An engine command is running" : undefined },
       { id: "route", label: "Auto-route", title: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), disabled: busy ? "An engine command is running" : undefined },
-      { id: "sim", label: "Simulate", disabled: "Not implemented: no SPICE integration yet" },
+      { id: "sim", label: "Simulate", title: "Open the Simulation panel (ngspice)", run: () => (setBottomTab("sim"), setBottomOpen(true)) },
       { id: "export", label: "Export manufacturing files", title: "Gerber, Excellon, BOM, CPL, fab-pack ZIP; runs ERC/DRC/MECH/DFM", run: () => setDialog("export"), disabled: busy ? "An engine command is running" : undefined },
     ],
     [
@@ -754,10 +754,10 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
             </div>
           )}
           {sideView === "manufacturing" && (
-            <>
+            <div className="side-scroll">
               <ManufacturingPanel result={exported} busy={busy} onExport={() => setDialog("export")} />
               <JlcpcbPrepPanel revision={revision} onPrepared={setMessage} />
-            </>
+            </div>
           )}
         </aside>
         {sideOpen ? (

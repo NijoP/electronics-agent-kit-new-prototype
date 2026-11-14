@@ -43,7 +43,7 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .workspace { height: 100%; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; background: var(--bg-app); }
 .toolbar { display: flex; gap: var(--s-1); align-items: center; padding: var(--s-half) var(--s-2); min-height: 40px; flex-wrap: wrap; border-bottom: 1px solid var(--line); background: var(--bg-panel); }
 .banner { background: color-mix(in srgb, var(--warn) 22%, var(--bg-panel)); padding: var(--s-1) var(--s-2); display: flex; gap: var(--s-2); align-items: center; }
-.main { min-height: 0; display: grid; transition: grid-template-columns var(--t-slow) var(--ease); }
+.main { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); transition: grid-template-columns var(--t-slow) var(--ease); }
 .activity-bar { display: flex; flex-direction: column; align-items: center; gap: var(--s-half); padding: var(--s-1) 0; background: var(--bg-panel); border-right: 1px solid var(--line); }
 .ab { width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--fg-dim); border-radius: var(--r-2); position: relative; }
 .ab:hover:not(:disabled) { color: var(--fg); background: var(--bg-hover); }
@@ -60,15 +60,15 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .tree button { width: 100%; text-align: left; border-color: transparent; background: transparent; padding: var(--s-half) var(--s-1); }
 .tree button:hover:not(:disabled) { background: var(--bg-hover); }
 .tree button.on { background: var(--accent-soft); border-color: transparent; color: var(--fg); }
-.center { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg-canvas); }
+.center { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--bg-canvas); }
 .tabs { display: flex; align-items: center; gap: 2px; height: 32px; padding: 0 var(--s-1); background: var(--bg-panel); border-bottom: 1px solid var(--line); flex: none; }
 .tab { border: 0; background: transparent; color: var(--fg-dim); border-radius: var(--r-1) var(--r-1) 0 0; padding: 0 var(--s-2); height: 32px; border-bottom: 2px solid transparent; }
 .tab:hover:not(:disabled) { color: var(--fg); background: var(--bg-hover); }
 .tab.on { color: var(--fg); border-bottom-color: var(--accent); background: var(--bg-canvas); }
 .ask-chip { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); height: 24px; padding: 0 var(--s-1); border-radius: 12px; }
-.views { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; position: relative; }
+.views { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr); position: relative; overflow: hidden; }
 .views.single { grid-template-columns: 1fr; }
-.view { min-height: 0; min-width: 0; display: grid; grid-template-rows: auto auto 1fr; border-right: 1px solid var(--line); }
+.view { min-height: 0; min-width: 0; overflow: hidden; display: grid; grid-template-rows: auto auto minmax(0, 1fr); border-right: 1px solid var(--line); }
 .view:last-of-type { border-right: 0; }
 .view-header { display: flex; gap: var(--s-1); align-items: center; padding: var(--s-half) var(--s-1); flex-wrap: wrap; }
 .view-header > span:first-child { font-weight: 600; margin-right: var(--s-1); }
@@ -279,3 +279,6 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .view-slot { display: contents; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-1); margin: var(--s-1) 0; }
 .modal.rules { max-height: 88vh; overflow: auto; }
+
+/* Side panels that stack several sections scroll inside the panel, never past the window. */
+.side-scroll { flex: 1; min-height: 0; overflow: auto; }
