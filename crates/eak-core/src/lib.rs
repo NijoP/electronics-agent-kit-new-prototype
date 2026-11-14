@@ -9,6 +9,7 @@
 //! * `integrity`– structural validation of a whole project (dangling references etc.).
 //! * `migrate`  – schema version handling; unknown/newer schemas fail safely.
 //! * `builtin`  – the built-in, provenance-tagged starter component library.
+//! * `units`    – typed physical quantities (from the earlier EAK prototype; not IR fields).
 
 pub mod builtin;
 pub mod geom;
@@ -16,6 +17,7 @@ pub mod integrity;
 pub mod ir;
 pub mod library;
 pub mod migrate;
+pub mod units;
 
 pub use geom::{Nm, Point, Rect, Rotation};
 pub use ir::*;
