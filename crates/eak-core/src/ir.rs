@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 pub type Id = String;
 
@@ -143,23 +143,129 @@ impl Side {
     }
 }
 
+/// Copper foil thickness per ounce of weight (1 oz/ft² ≈ 34.8 µm).
+pub const COPPER_UM_PER_OZ: f64 = 34.8;
+/// Nominal relative permittivity assumed for FR-4 when none is given (v1 files, default).
+pub const FR4_ER: f64 = 4.5;
+/// Allowed mismatch between the per-layer build-up and the declared finished thickness
+/// (the usual ±10 % fabrication tolerance).
+pub const STACKUP_THICKNESS_TOLERANCE: f64 = 0.10;
+
+/// One copper layer of the build-up and the dielectric beneath it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StackupLayer {
+    pub layer: CopperLayer,
+    /// Copper weight in ounces per square foot (drives IPC trace-width sizing).
+    pub copper_oz: f64,
+    /// Dielectric thickness between this copper layer and the next one, in µm.
+    /// Zero for the last (bottom) layer.
+    pub dielectric_after_um: u32,
+    /// Relative permittivity of that dielectric.
+    pub er: f64,
+}
+
+/// Board build-up, ordered top to bottom: one entry per copper layer. The layer count and
+/// every copper weight come from `layers`; there is no separate summary field.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Stackup {
-    pub copper_layers: u8,
+    pub layers: Vec<StackupLayer>,
+    /// Declared finished board thickness (what is ordered from the fab).
     pub board_thickness: Nm,
-    /// Outer copper weight in ounces per square foot.
-    pub outer_copper_oz: f64,
+    /// Dielectric material name.
     pub dielectric: String,
 }
 
-impl Default for Stackup {
-    fn default() -> Self {
+impl Stackup {
+    /// A two-layer board of `board_thickness` with `copper_oz` on both sides; the core
+    /// thickness is whatever the copper leaves of the finished thickness.
+    pub fn two_layer(board_thickness: Nm, copper_oz: f64, dielectric: &str, er: f64) -> Stackup {
+        let copper_um = 2.0 * copper_oz * COPPER_UM_PER_OZ;
+        let core_um = (board_thickness as f64 / 1000.0 - copper_um)
+            .round()
+            .max(0.0) as u32;
         Stackup {
-            copper_layers: 2,
-            board_thickness: 1_600_000,
-            outer_copper_oz: 1.0,
-            dielectric: "FR-4".into(),
+            layers: vec![
+                StackupLayer {
+                    layer: CopperLayer::Top,
+                    copper_oz,
+                    dielectric_after_um: core_um,
+                    er,
+                },
+                StackupLayer {
+                    layer: CopperLayer::Bottom,
+                    copper_oz,
+                    dielectric_after_um: 0,
+                    er,
+                },
+            ],
+            board_thickness,
+            dielectric: dielectric.into(),
         }
+    }
+
+    pub fn copper_layers(&self) -> usize {
+        self.layers.len()
+    }
+
+    /// Copper weight of `layer`, or `None` if the stackup does not contain it.
+    pub fn copper_oz(&self, layer: CopperLayer) -> Option<f64> {
+        self.layers
+            .iter()
+            .find(|l| l.layer == layer)
+            .map(|l| l.copper_oz)
+    }
+
+    /// Problems that make this stackup unusable; empty when it is valid.
+    pub fn validate(&self) -> Vec<String> {
+        let mut e = Vec::new();
+        // shortcut: only the two outer layers exist (CopperLayer has no inner variant);
+        // upgrade together with CopperLayer::Inner and via layer spans.
+        let order: Vec<CopperLayer> = self.layers.iter().map(|l| l.layer).collect();
+        if order != CopperLayer::ALL {
+            e.push(format!(
+                "stackup must list exactly the top then bottom copper layer (this build supports 2 copper layers), got {order:?}"
+            ));
+        }
+        if self.board_thickness <= 0 {
+            e.push("board thickness must be positive".into());
+        }
+        let last = self.layers.len().saturating_sub(1);
+        let mut total_um = 0.0;
+        for (i, l) in self.layers.iter().enumerate() {
+            if !(l.copper_oz.is_finite() && l.copper_oz > 0.0) {
+                e.push(format!("{:?} copper weight must be positive", l.layer));
+            }
+            if !(l.er.is_finite() && l.er >= 1.0) {
+                e.push(format!("{:?} dielectric er must be ≥ 1", l.layer));
+            }
+            if i == last && l.dielectric_after_um != 0 {
+                e.push("the last copper layer has no dielectric after it".into());
+            }
+            if i < last && l.dielectric_after_um == 0 {
+                e.push(format!(
+                    "{:?} dielectric thickness must be positive",
+                    l.layer
+                ));
+            }
+            total_um += l.copper_oz * COPPER_UM_PER_OZ + f64::from(l.dielectric_after_um);
+        }
+        let declared_um = self.board_thickness as f64 / 1000.0;
+        if self.board_thickness > 0
+            && ((total_um - declared_um).abs() > declared_um * STACKUP_THICKNESS_TOLERANCE)
+        {
+            e.push(format!(
+                "layer build-up totals {total_um:.0} µm but the declared board thickness is {declared_um:.0} µm (more than ±{:.0} % apart)",
+                STACKUP_THICKNESS_TOLERANCE * 100.0
+            ));
+        }
+        e
+    }
+}
+
+impl Default for Stackup {
+    /// 2-layer, 1.6 mm FR-4, 1 oz copper on both sides.
+    fn default() -> Self {
+        Stackup::two_layer(1_600_000, 1.0, "FR-4", FR4_ER)
     }
 }
 

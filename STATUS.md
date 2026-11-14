@@ -101,9 +101,12 @@ all 8 jobs passed: `rust` (policy script, fmt, clippy, `cargo test --workspace -
 AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI run is recorded under "Desktop shell" above.
 
 ### Implemented and tested
-- EAK-IR v1 (`eak-core`): project, library, schematic, PCB, constraints, manufacturing config;
+- EAK-IR (`eak-core`, schema v1 at M1, now v2): project, library, schematic, PCB, constraints, manufacturing config;
   integer-nanometre geometry; byte-stable JSON; schema version gate (newer/corrupt files are
   rejected safely); integrity checker; 7 built-in generic components.
+- EAK-IR schema v2 (ADR-0008): per-layer stackup (copper weight, dielectric thickness and er per
+  copper layer) with a tested v1 → v2 migration; DRC-008 sizes each track with its own layer's
+  copper weight (`crates/eak-validation/tests/stackup.rs`).
 - Engineering core (`eak-engineering`):
   - IPC-2221 trace width, clearance, creepage and via current, re-implemented from the DESK
     audit, with DESK reference vectors as tests (tables **not verified against the standard text**).
@@ -133,8 +136,8 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Package re-verification that detects tampering.
 
 ### Tests executed (exact results)
-`cargo test --workspace --release`: **35 passed, 0 failed** (eak-core 7, eak-engineering 11,
-eak-runtime 10 engine + 4 process, eak-manufacturing 3 end-to-end).
+`cargo test --workspace --release`: **41 passed, 0 failed** (eak-core 11, eak-engineering 11,
+eak-runtime 11 engine + 4 process, eak-validation 1 stackup, eak-manufacturing 3 end-to-end).
 `cargo clippy --workspace --all-targets -- -D warnings`: clean. `cargo fmt --check`: clean.
 
 The key end-to-end test (`reference_design_end_to_end`) runs a 10-component ATtiny85 + AMS1117 board through
@@ -149,7 +152,8 @@ Injected short and clearance violations are detected (`drc_detects_injected_shor
 - Desktop application: superseded. See "Desktop shell" above (read-only views; editors not started).
 - Intelligence Engine: core crate exists (see below); no UI, no live-provider run, no context engine/skills.
 - Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser, LCSC/JLCPCB integrations.
-- Multi-layer (>2) boards, differential pairs, impedance, thermal reliefs, silkscreen text.
+- Multi-layer (>2) boards (the stackup is per-layer, but only top and bottom copper exist; no inner
+  layers or via layer spans), differential pairs, impedance, thermal reliefs, silkscreen text.
 - Linux/macOS builds have not been executed yet; packaging and installers do not exist yet.
 - Independent engineering review and fabricator DFM: not performed (required before any manufacturing claim).
 
