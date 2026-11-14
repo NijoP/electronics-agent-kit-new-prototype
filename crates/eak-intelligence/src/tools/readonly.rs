@@ -40,6 +40,12 @@ pub fn read_tools() -> Vec<ReadTool> {
             true,
         ),
         tool(
+            "classify_domain",
+            "Classify the current design against the 100 DESK domain classes (deterministic, no model). Returns ranked classes with reasons, DESK maturity labels and ceilings, overlays, missing information and the list of checks not implemented. A classification is a hypothesis, never a certification.",
+            obj(&[], &[]),
+            true,
+        ),
+        tool(
             "list_library_components",
             "Components available for placement (built-in and project library) with their pins.",
             obj(&[], &[]),
@@ -252,6 +258,9 @@ fn nets(p: &Project, only: Option<&str>) -> Value {
 pub fn run(name: &str, args: &Value, p: &Project) -> Option<Result<Value, String>> {
     let r = match name {
         "get_design_summary" => Ok(summary(p)),
+        "classify_domain" => {
+            serde_json::to_value(crate::domain::classify_project(p)).map_err(|e| e.to_string())
+        }
         "list_library_components" => Ok(json!({"revision": p.revision, "components": library(p)})),
         "get_netlist" => Ok(nets(p, args.get("net").and_then(Value::as_str))),
         "run_erc" => serde_json::to_value(eak_validation::erc::run(p)).map_err(|e| e.to_string()),

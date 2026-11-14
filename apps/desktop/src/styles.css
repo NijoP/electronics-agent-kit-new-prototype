@@ -112,3 +112,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, li:focus-visibl
 .saved { color: #8fd694; font-size: 12px; }
 .export h2 { font-size: 14px; margin: 12px 0 4px; }
 .export .files { list-style: none; padding: 0; margin: 0; font-size: 12px; }
+.domain h2 { font-size: 14px; margin: 12px 0 4px; }
+.domain-list { padding-left: 18px; margin: 4px 0; font-size: 12px; }
+.domain-list ul { margin: 2px 0 6px; padding-left: 16px; }
+.domain .badge { border: 1px solid #6b7280; border-radius: 3px; padding: 0 4px; font-size: 11px; white-space: nowrap; }

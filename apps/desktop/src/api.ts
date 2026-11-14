@@ -14,6 +14,7 @@ import type {
   ExportResult,
   LibraryEntry,
   RecentProject,
+  DomainReport,
   Snapshot,
 } from "./types";
 
@@ -38,6 +39,7 @@ export const IPC_COMMANDS = [
   "model_list_models",
   "model_test_connection",
   "library_components",
+  "domain_classification",
   "export_manufacturing",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
@@ -71,6 +73,7 @@ export const api = {
   listModels: (id: string) => call<string[]>("model_list_models", { id }),
   testConnection: (id: string) => call<ConnectionReport>("model_test_connection", { id }),
   libraryComponents: () => call<LibraryEntry[]>("library_components"),
+  domainClassification: () => call<DomainReport>("domain_classification"),
   exportManufacturing: () => call<ExportResult>("export_manufacturing"),
 };
 

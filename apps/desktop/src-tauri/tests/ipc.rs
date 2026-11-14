@@ -428,3 +428,31 @@ fn export_without_outline_or_project_fails_loudly() {
     close_project(&s).unwrap();
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn domain_classification_is_revision_bound_and_needs_no_model() {
+    let s = session();
+    assert!(domain_classification(&s).is_err(), "no project open");
+    let d = tmpdir("domain");
+    create_project(&s, &path(&d), "ESP32 dashboard").unwrap();
+    let before = domain_classification(&s).unwrap();
+    assert_eq!(before.revision, 0);
+    let r = execute_command(
+        &s,
+        0,
+        C::AddRequirement {
+            text: "ESP32-S3 with Wi-Fi and BLE, USB-C powered, 3.3 V logic".into(),
+        },
+    )
+    .unwrap();
+    assert!(r.accepted);
+    let after = domain_classification(&s).unwrap();
+    assert_eq!(after.revision, 1);
+    assert_eq!(
+        after.classification.primary.as_deref(),
+        Some("esp32_dev_board")
+    );
+    assert_eq!(after.classification.registry_classes, 100);
+    assert!(!after.classification.not_implemented.is_empty());
+    let _ = std::fs::remove_dir_all(&d);
+}
