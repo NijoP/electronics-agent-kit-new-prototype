@@ -16,6 +16,7 @@
 pub mod ai;
 pub mod models;
 pub mod parts;
+pub mod terminal;
 
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
 use eak_runtime::index::{Index, RecentProject};
@@ -849,6 +850,7 @@ pub fn run() {
             }
             app.manage(Session::new(index));
             app.manage(ai::AiState::default());
+            app.manage(terminal_state(app));
             // Profiles are plain JSON in the config dir; keys go to the OS credential store.
             let profiles = app
                 .path()
@@ -902,7 +904,86 @@ pub fn run() {
             parts::cmd::parts_import,
             parts::cmd::manufacturing_preview,
             parts::cmd::jlcpcb_prepare,
+            terminal::cmd::terminal_overview,
+            terminal::cmd::terminal_shells,
+            terminal::cmd::terminal_launchers,
+            terminal::cmd::terminal_api,
+            terminal::cmd::terminal_set_context,
+            terminal::cmd::terminal_create,
+            terminal::cmd::terminal_write,
+            terminal::cmd::terminal_run,
+            terminal::cmd::terminal_resize,
+            terminal::cmd::terminal_scrollback,
+            terminal::cmd::terminal_rename,
+            terminal::cmd::terminal_focus,
+            terminal::cmd::terminal_restart,
+            terminal::cmd::terminal_close,
+            terminal::cmd::terminal_space_create,
+            terminal::cmd::terminal_space_rename,
+            terminal::cmd::terminal_space_close,
+            terminal::cmd::terminal_move_tab,
+            terminal::herdr_cmd::terminal_herdr_status,
+            terminal::herdr_cmd::terminal_herdr_start,
+            terminal::herdr_cmd::terminal_herdr_open_project,
+            terminal::herdr_cmd::terminal_herdr_agents,
         ])
-        .run(tauri::generate_context!())
-        .expect("EAK desktop failed to start");
+        .build(tauri::generate_context!())
+        .expect("EAK desktop failed to start")
+        .run(|app, event| {
+            // Hang up every terminal session on exit; the saved layout lists them as ended
+            // next time, because processes cannot outlive the app.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(t) = app.try_state::<terminal::TerminalState>() {
+                    t.manager.shutdown();
+                }
+            }
+        });
+}
+
+/// Build the terminal workspace state: the session manager (layout saved in the app data
+/// dir), output streamed as events, the authenticated control API, and agent launchers.
+fn terminal_state(app: &tauri::App) -> terminal::TerminalState {
+    use std::sync::Arc;
+    use tauri::{Emitter, Manager};
+    let handle = app.handle().clone();
+    let sink: eak_terminal::OutputSink = Arc::new(move |e| {
+        let _ = handle.emit(terminal::OUTPUT_EVENT, e);
+    });
+    let data = app.path().app_data_dir().ok();
+    let manager = match &data {
+        Some(d) => eak_terminal::Manager::with_manifest(sink, d.join("terminal-sessions.json")),
+        None => eak_terminal::Manager::new(sink),
+    };
+    let agents_file = app
+        .path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("terminal-agents.json"));
+    let (launchers, extra) = terminal::discover_launchers(agents_file.as_deref());
+    manager.add_agents(extra);
+    let api = match &data {
+        Some(d) => {
+            let file = d.join("terminal-api.json");
+            eak_terminal::api::serve(Arc::clone(&manager), &file)
+                .map(|info| (file, info))
+                .map_err(|e| format!("terminal control API not started: {e}"))
+        }
+        None => Err("terminal control API not started: no app data directory".into()),
+    };
+    match &api {
+        Ok((file, _)) => manager.set_base_env(vec![(
+            "EAK_TERMINAL_API_FILE".into(),
+            file.display().to_string(),
+        )]),
+        Err(e) => eprintln!("eak-desktop: {e}"),
+    }
+    let herdr = eak_terminal::herdr::Herdr::from_env(terminal::locate)
+        .map(|r| r.map(eak_terminal::herdr::Supervisor::new));
+    terminal::TerminalState {
+        manager,
+        api,
+        launchers,
+        herdr,
+        herdr_watching: Default::default(),
+    }
 }

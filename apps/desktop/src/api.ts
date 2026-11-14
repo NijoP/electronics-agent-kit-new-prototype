@@ -31,6 +31,32 @@ import type {
   Snapshot,
 } from "./types";
 
+// Terminal workspace commands: must match `TERMINAL_COMMANDS` in src-tauri/src/terminal.rs.
+export const TERMINAL_IPC = [
+  "terminal_herdr_status",
+  "terminal_herdr_start",
+  "terminal_herdr_open_project",
+  "terminal_herdr_agents",
+  "terminal_overview",
+  "terminal_shells",
+  "terminal_launchers",
+  "terminal_api",
+  "terminal_set_context",
+  "terminal_create",
+  "terminal_write",
+  "terminal_run",
+  "terminal_resize",
+  "terminal_scrollback",
+  "terminal_rename",
+  "terminal_focus",
+  "terminal_restart",
+  "terminal_close",
+  "terminal_space_create",
+  "terminal_space_rename",
+  "terminal_space_close",
+  "terminal_move_tab",
+] as const;
+
 // Must match `IPC_COMMANDS` in src-tauri/src/lib.rs (checked by tests/ipc.rs).
 export const IPC_COMMANDS = [
   "create_project",
@@ -68,6 +94,7 @@ export const IPC_COMMANDS = [
   "parts_import",
   "manufacturing_preview",
   "jlcpcb_prepare",
+  ...TERMINAL_IPC,
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
