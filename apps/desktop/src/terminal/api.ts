@@ -28,19 +28,19 @@ export interface SessionInfo {
 export interface Space { id: number; name: string; root: string; project_id: string | null }
 export interface Tab { id: number; space: number; direction: "row" | "column"; panes: number[] }
 export interface Overview { spaces: Space[]; tabs: Tab[]; sessions: SessionInfo[]; focused: number | null; layout_seq: number }
-export interface HerdrHealth { session: string; bin: string; running: boolean; version: string | null; started_by_eak: boolean; restarts: number; error: string | null }
-export interface HerdrView { installed: boolean; error: string | null; health: HerdrHealth | null; client: string[] | null }
 export interface CreateOptions { space?: number; name?: string; cwd?: string; shell?: string; command?: string[]; split_of?: number; direction?: "row" | "column"; cols?: number; rows?: number }
 export interface OutputEvent { id: number; data: string; seq: number }
 
 export const term = {
-  herdrStatus: () => call<HerdrView>("terminal_herdr_status"),
-  herdrStart: () => call<HerdrView>("terminal_herdr_start"),
-  herdrOpenProject: (dir: string, name: string, projectId: string | null) =>
-    call<string>("terminal_herdr_open_project", { dir, name, project_id: projectId }),
-  herdrAgents: () => call<{ agents: { agent?: string; status?: string; agent_status?: string; pane_id?: string }[] }>("terminal_herdr_agents"),
   overview: () => call<Overview>("terminal_overview"),
   shells: () => call<string[]>("terminal_shells"),
+  launchers: () => call<{ name: string; command: string; path: string | null }[]>("terminal_launchers"),
+  rename: (id: number, name: string) => call<void>("terminal_rename", { id, name }),
+  run: (id: number, command: string) => call<number>("terminal_run", { id, command }),
+  spaceCreate: (name: string, root: string) => call<Space>("terminal_space_create", { name, root }),
+  spaceRename: (id: number, name: string) => call<void>("terminal_space_rename", { id, name }),
+  spaceClose: (id: number) => call<void>("terminal_space_close", { id }),
+  moveTab: (tab: number, index: number) => call<void>("terminal_move_tab", { tab, index }),
   setContext: (dir: string | null, project: string | null, projectId: string | null) =>
     call<void>("terminal_set_context", { dir, project, project_id: projectId }),
   create: (opts: CreateOptions) => call<SessionInfo>("terminal_create", { opts }),

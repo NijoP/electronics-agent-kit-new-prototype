@@ -33,10 +33,6 @@ import type {
 
 // Terminal workspace commands: must match `TERMINAL_COMMANDS` in src-tauri/src/terminal.rs.
 export const TERMINAL_IPC = [
-  "terminal_herdr_status",
-  "terminal_herdr_start",
-  "terminal_herdr_open_project",
-  "terminal_herdr_agents",
   "terminal_overview",
   "terminal_shells",
   "terminal_launchers",

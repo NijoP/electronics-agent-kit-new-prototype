@@ -922,10 +922,6 @@ pub fn run() {
             terminal::cmd::terminal_space_rename,
             terminal::cmd::terminal_space_close,
             terminal::cmd::terminal_move_tab,
-            terminal::herdr_cmd::terminal_herdr_status,
-            terminal::herdr_cmd::terminal_herdr_start,
-            terminal::herdr_cmd::terminal_herdr_open_project,
-            terminal::herdr_cmd::terminal_herdr_agents,
         ])
         .build(tauri::generate_context!())
         .expect("EAK desktop failed to start")
@@ -977,13 +973,9 @@ fn terminal_state(app: &tauri::App) -> terminal::TerminalState {
         )]),
         Err(e) => eprintln!("eak-desktop: {e}"),
     }
-    let herdr = eak_terminal::herdr::Herdr::from_env(terminal::locate)
-        .map(|r| r.map(eak_terminal::herdr::Supervisor::new));
     terminal::TerminalState {
         manager,
         api,
         launchers,
-        herdr,
-        herdr_watching: Default::default(),
     }
 }

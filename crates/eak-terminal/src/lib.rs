@@ -15,7 +15,6 @@
 //! can restart them deliberately; their old processes are gone.
 
 pub mod api;
-pub mod herdr;
 mod proc_info;
 mod text;
 
@@ -1490,9 +1489,6 @@ fn spawn(
     cmd.env("EAK_TERMINAL", "1");
     cmd.env("EAK_TERMINAL_SESSION_ID", id.to_string());
     cmd.env("EAK_SESSION_ID", id.to_string());
-    for v in herdr::INHERITED_VARS {
-        cmd.env_remove(v);
-    }
     for (k, v) in base_env.iter().chain(&spec.env) {
         cmd.env(k, v);
     }

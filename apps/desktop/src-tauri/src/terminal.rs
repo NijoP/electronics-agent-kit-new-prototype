@@ -17,9 +17,6 @@ use std::sync::Arc;
 pub const OUTPUT_EVENT: &str = "terminal-output";
 
 pub struct TerminalState {
-    /// The Herdr sidecar, when installed (`None`), or why it cannot be used.
-    pub herdr: Option<Result<Arc<eak_terminal::herdr::Supervisor>, String>>,
-    pub herdr_watching: std::sync::atomic::AtomicBool,
     pub manager: Arc<Manager>,
     pub api: Result<(PathBuf, ApiInfo), String>,
     pub launchers: Vec<Launcher>,
@@ -251,11 +248,7 @@ pub mod cmd {
 }
 
 /// IPC command names this module registers (kept in sync with `api.ts`).
-pub const TERMINAL_COMMANDS: [&str; 22] = [
-    "terminal_herdr_status",
-    "terminal_herdr_start",
-    "terminal_herdr_open_project",
-    "terminal_herdr_agents",
+pub const TERMINAL_COMMANDS: [&str; 18] = [
     "terminal_overview",
     "terminal_shells",
     "terminal_launchers",
@@ -294,108 +287,5 @@ mod tests {
             "no button for a missing program"
         );
         assert_eq!(names, vec!["my-agent", "ghost"]);
-    }
-}
-
-/// What the Terminal workspace shows about Herdr.
-#[derive(Debug, Clone, Serialize)]
-pub struct HerdrView {
-    pub installed: bool,
-    pub error: Option<String>,
-    pub health: Option<eak_terminal::herdr::Health>,
-    /// argv of the Herdr client to run in a PTY session.
-    pub client: Option<Vec<String>>,
-}
-
-fn supervisor(state: &TerminalState) -> Result<Arc<eak_terminal::herdr::Supervisor>, String> {
-    match &state.herdr {
-        Some(Ok(s)) => Ok(Arc::clone(s)),
-        Some(Err(e)) => Err(e.clone()),
-        None => Err("Herdr is not installed".into()),
-    }
-}
-
-pub mod herdr_cmd {
-    use super::*;
-    use std::sync::atomic::Ordering;
-    use std::time::Duration;
-    use tauri::State;
-
-    #[tauri::command]
-    pub fn terminal_herdr_status(state: State<'_, TerminalState>) -> HerdrView {
-        match &state.herdr {
-            None => HerdrView {
-                installed: false,
-                error: None,
-                health: None,
-                client: None,
-            },
-            Some(Err(e)) => HerdrView {
-                installed: true,
-                error: Some(e.clone()),
-                health: None,
-                client: None,
-            },
-            Some(Ok(s)) => HerdrView {
-                installed: true,
-                error: None,
-                health: Some(s.health()),
-                client: Some(s.herdr.client_argv()),
-            },
-        }
-    }
-
-    /// Start (or find) EAK's Herdr server and keep supervising it. Runs off the UI thread.
-    #[tauri::command]
-    pub async fn terminal_herdr_start(
-        state: State<'_, TerminalState>,
-    ) -> Result<HerdrView, String> {
-        let s = supervisor(&state)?;
-        let h = tauri::async_runtime::spawn_blocking({
-            let s = Arc::clone(&s);
-            move || s.wait_ready(Duration::from_secs(10))
-        })
-        .await
-        .map_err(|e| e.to_string())?;
-        if h.running && !state.herdr_watching.swap(true, Ordering::SeqCst) {
-            s.watch(Duration::from_secs(5));
-        }
-        Ok(HerdrView {
-            installed: true,
-            error: h.error.clone(),
-            health: Some(h),
-            client: Some(s.herdr.client_argv()),
-        })
-    }
-
-    /// Open (or focus) the Herdr workspace for a project, rooted at its folder.
-    #[tauri::command]
-    pub async fn terminal_herdr_open_project(
-        state: State<'_, TerminalState>,
-        dir: String,
-        name: String,
-        project_id: Option<String>,
-    ) -> Result<String, String> {
-        let s = supervisor(&state)?;
-        tauri::async_runtime::spawn_blocking(move || {
-            let mut env = vec![("EAK_PROJECT_DIR".to_string(), dir.clone())];
-            if let Some(id) = project_id {
-                env.push(("EAK_PROJECT_ID".to_string(), id));
-            }
-            s.herdr.ensure_workspace(&name, Path::new(&dir), &env)
-        })
-        .await
-        .map_err(|e| e.to_string())?
-    }
-
-    /// Herdr's own agent list (`agent list`): name, status, pane.
-    #[tauri::command]
-    pub async fn terminal_herdr_agents(
-        state: State<'_, TerminalState>,
-    ) -> Result<serde_json::Value, String> {
-        let s = supervisor(&state)?;
-        tauri::async_runtime::spawn_blocking(move || s.herdr.call(&["agent", "list"]))
-            .await
-            .map_err(|e| e.to_string())?
     }
 }

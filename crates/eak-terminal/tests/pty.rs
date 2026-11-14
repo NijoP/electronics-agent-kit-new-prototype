@@ -680,7 +680,7 @@ fn answer_queries(m: &Manager, id: u64, from: &mut usize) -> usize {
 }
 
 #[test]
-fn sessions_export_the_eak_context_and_never_inherit_a_parent_herdr() {
+fn sessions_export_the_eak_context() {
     let (m, _) = manager();
     let dir = tmp("ctx");
     m.set_context(
@@ -699,13 +699,13 @@ fn sessions_export_the_eak_context_and_never_inherit_a_parent_herdr() {
     wait_state(&m, id, State::Idle);
     m.run(
         id,
-        "echo ctx:$EAK_PROJECT_DIR:$EAK_PROJECT_ID:$EAK_SESSION_ID:${HERDR_SOCKET_PATH:-nosock}",
+        "echo ctx:$EAK_PROJECT_DIR:$EAK_PROJECT_ID:$EAK_SESSION_ID:end",
     )
     .unwrap();
     wait_output(
         &m,
         id,
-        &format!("ctx:{}:proj-123:{id}:nosock", dir.display()),
+        &format!("ctx:{}:proj-123:{id}:end", dir.display()),
     );
     m.close(id).unwrap();
 }

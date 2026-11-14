@@ -1,19 +1,14 @@
 # Terminal control API
 
-With Herdr installed (the normal case), use **Herdr's own CLI and socket API** inside any
-Terminal-workspace pane: `HERDR_SOCKET_PATH`, `HERDR_PANE_ID` and `HERDR_BIN_PATH` are set
-there, and `herdr pane run`, `pane read`, `pane split`, `agent list`, `agent wait`,
-`pane report-agent` etc. work as documented by Herdr. See `docs/HERDR_INTEGRATION.md`.
-
-The API below belongs to EAK's **built-in** terminal (used when Herdr is unavailable) and to
-the `eak-terminal` engine. It is separate from the engineering harness CLI.
+EAK's terminal sessions are controlled through this API (and the `eak-term` CLI). It is
+separate from the engineering harness CLI.
 
 ## Transport and authentication
 - Newline-delimited JSON over TCP on `127.0.0.1`, ephemeral port.
 - The desktop app writes `terminal-api.json` (`{protocol, port, token, pid}`) to its data
   directory (`dev.eak.desktop`), mode `0600` on Unix; on Windows it sits in the user's own
   profile. Every request carries the token.
-- Inside a built-in session `EAK_TERMINAL_API_FILE` points at that file.
+- Inside every EAK terminal session `EAK_TERMINAL_API_FILE` points at that file.
 
 Request `{"token": "...", "method": "session.run", "params": {"id": 1, "command": "ls"}}` ->
 `{"ok": true, "result": ...}` or `{"ok": false, "error": "..."}`.
@@ -49,14 +44,11 @@ Pass `since` from `session.run` to `session.wait` so output arriving before the 
 close | report | release` (`eak-term --help`). Exit code 2 when `wait` times out.
 
 ## Extending without core changes
-- Agents report their own state with `session.report_state` (built-in) or Herdr's
-  `pane report-agent` (Herdr).
+- Agents report their own state with `session.report_state` and hand back with `session.release`.
 - Extra agent CLIs: `terminal-agents.json` in the app config dir,
   `[{"name": "my-agent", "command": "my-agent --flag"}]`; installed ones are recognised in
   status and offered as launchers.
 
 ## Session context contract
-Every built-in session exports `EAK_SESSION_ID`, `EAK_PROJECT_DIR` (its space root) and, for
-project spaces, `EAK_PROJECT_ID`; inherited `HERDR_*` variables are removed. Herdr project
-workspaces get `EAK_PROJECT_DIR`/`EAK_PROJECT_ID` in their root shell. `EAK_HARNESS_SOCKET` /
-`EAK_HARNESS_TOKEN_FILE` are not set yet.
+Every session exports `EAK_SESSION_ID`, `EAK_PROJECT_DIR` (its space root) and, for project
+spaces, `EAK_PROJECT_ID`. `EAK_HARNESS_SOCKET` / `EAK_HARNESS_TOKEN_FILE` are not set yet.
