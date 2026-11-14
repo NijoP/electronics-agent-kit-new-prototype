@@ -29,6 +29,14 @@ export function ExportPanel({ result }: { result: ExportResult | null }) {
           </li>
         ))}
       </ul>
+      <ul aria-label="Verification reports" className="files">
+        {result.reports.map((r) => (
+          <li key={r.check}>
+            {r.check}: {r.errors} error(s), {r.warnings} warning(s), revision {r.revision}
+            {r.not_implemented.length > 0 && <span className="muted"> · not implemented: {r.not_implemented.join("; ")}</span>}
+          </li>
+        ))}
+      </ul>
       <p className="muted">Not verified: {m.not_verified.join("; ")}.</p>
     </section>
   );

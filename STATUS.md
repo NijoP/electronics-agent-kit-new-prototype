@@ -8,6 +8,25 @@ the listed tests pass; it does not mean professionally validated.
 - Panel (`shell/AiPanel.tsx`): with a ready provider (model set, key stored when needed) requests go to the model; provider failures and refusals are shown as such. With none, it says "No AI model is configured" and offers Model settings; the old keyword interpreter remains only as replies labelled "Offline command (no AI)".
 - Classification: **partially working.** Verified: `tests/ai.rs` (scripted mock provider, no network: propose → accept → journal actor `agent:assistant` → rollback; reject records nothing; stale step refused; provider failure and missing key reported) and `src/aiPanel.test.tsx` (panel states). Not verified: a live run against a real provider from the desktop window; one request runs at a time with no Cancel button; Batch commands are not used (each step is its own engine operation).
 
+## Verification additions and manufacturing outputs: ERC/DRC/DFM, fab pack (2026-11-14, branch fm/eak-p4-validation-mfg)
+
+**Platform tested:** Linux only. Plan Phase 4 (verification additions) and Phase 7 (manufacturing outputs).
+
+### Implemented and tested
+- ERC-014 pin-conflict matrix (Output/OpenCollector, PowerOut/OpenCollector errors; Bidirectional/PowerOut, Output/PowerIn warnings), ERC-015 undriven input nets, ERC-016 power-net checks (PowerOut on ground = error; power net without a declared voltage = warning).
+- DRC-018 copper-to-hole (other-net copper vs drill edge, project min clearance), DRC-019 hole-to-hole (0.5 mm EAK default, unverified), DRC-020 silkscreen-to-board-edge (0.2 mm EAK default, unverified).
+- DFM (`eak-validation/src/dfm.rs`, DFM-001..010) against `data/fab-jlcpcb-standard.json` (JLCPCB standard 1-2 layer; source URL recorded; `verified: false`). DFM is now a release gate (ADR-0014).
+- Manufacturing: BOM grouped by value/footprint/MPN, CPL (pick-and-place), `<stem>-fab-pack.zip` (Gerber + drill + README of layers, CRC-checked by `verify_package`) and the README beside it.
+- Desktop: `run_check("dfm")` (palette "Run DFM", Design menu), DFM section in the Engineering Monitor, export runs and lists ERC/DRC/MECH/DFM in the export panel.
+- Tests executed (Linux, debug): fmt and clippy clean for eak-validation, eak-manufacturing and eak-engineering; eak-validation lib 5, actionable_findings 15, phase4 8, stackup 1; eak-manufacturing lib 3, end_to_end 5, multilayer 4; eak-engineering lib 27; desktop tsc clean and vitest 102/102.
+- The new rules found real issues. The silkscreen stroke was raised from 0.150 to 0.16 mm to meet DFM-010. The autorouter places same-net vias 0-0.45 mm apart: same-net pairs are warnings (duplicate drill or drill breakout), different-net pairs are errors. The router itself is not fixed.
+- Evaluator C1: DRC lists, per net, the nets for which DRC-008/014 current capacity and DRC-002 voltage clearance were NOT EVALUATED (no declared current/voltage) in `limitations`. Evaluator C2: the release gate stays DRAFT when no component height limit is declared (MECH-001 not evaluated) or any part lacks 3D body data (MECH-003); MECH lists the unevaluated height rule.
+
+### Not verified / not implemented
+- Keepouts: the IR has no keepout objects (reported `not_implemented` in DRC); needs a schema change and ADR.
+- Only one fabrication profile (1-2 layer); 4+ layer boards are DRAFT on export (DFM-008) until a matching profile exists. Profile values are transcribed, not confirmed with a quotation.
+- DFM does not measure copper gaps against the fabricator minimum (only the project rule); acid traps, slivers, mask web, paste, panelisation, assembly DFM are `not_implemented`.
+- UI tested in jsdom only, not a real WebView.
 ## Release packaging: Linux .deb and AppImage, v0.1.0 (2026-11-14)
 - `scripts/release-build.sh` builds the Linux bundles from a clean `npm ci` and `tauri build` and writes `SHA256SUMS`; `tauri.conf.json` now has `bundle.active: true` with package metadata (other platforms still build with `--no-bundle`; no Windows/macOS packaging script yet).
 - Verified on Linux only (see `TEST_RESULTS.md`): both packages build, and the packaged binary launches, shows its window and stays up. Not verified: system-wide `apt` install, other distributions, interactive use, Windows and macOS. Release notes: `docs/release/RELEASE_NOTES_v0.1.0.md`.

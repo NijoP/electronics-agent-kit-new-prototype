@@ -409,10 +409,10 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
   };
   const resetLayout = () => setLayout(DEFAULT_LAYOUT);
   // Click a finding: open the right editor, select the object, zoom to it, highlight it.
-  // DRC findings live in the PCB editor (zoom + highlight); ERC findings select the symbol in
+  // DRC and DFM findings live in the PCB editor (zoom + highlight); ERC findings select the symbol in
   // the schematic (no zoom there yet).
   const navigateFinding = (f: Finding, checkName: Check) => {
-    const kind = checkName === "drc" ? "pcb" : "schematic";
+    const kind = checkName === "erc" ? "schematic" : "pcb";
     const d = docs.find((x) => x.kind === kind);
     if (d) open(d.id);
     const target = probeTarget(snapshot, f.objects);
@@ -435,6 +435,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     { id: "export", label: "Export manufacturing files", run: () => setDialog("export"), group: "Manufacturing" },
     { id: "erc", label: "Run ERC", run: () => check("erc"), group: "Verify" },
     { id: "drc", label: "Run DRC", run: () => check("drc"), group: "Verify" },
+    { id: "dfm", label: "Run DFM (JLCPCB standard profile)", run: () => check("dfm"), group: "Verify" },
     { id: "annotate", label: "Annotate schematic", run: () => execute({ type: "Annotate" }), group: "Design" },
     { id: "sync", label: "Update PCB from schematic (sync)", run: syncPcb, group: "Design" },
     { id: "place", label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), group: "Design" },
@@ -459,6 +460,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     { id: "toggle-ai", label: "Toggle AI assistant", run: () => setAiOpen((o) => !o), shortcut: SHORTCUTS.toggleAi, group: "View" },
     ...SIDE_VIEWS.map((v) => ({ id: `show-${v.id}`, label: `Show ${v.label}`, run: () => showSide(v.id), group: "View" })),
     { id: "bom", label: "Show BOM", run: () => (setBottomTab("bom"), setBottomOpen(true)), group: "View" },
+    { id: "sim", label: "Show simulation", run: () => (setBottomTab("sim"), setBottomOpen(true)), group: "View" },
     { id: "log", label: "Show log", run: () => (setBottomTab("log"), setBottomOpen(true)), group: "View" },
     { id: "ask", label: selLabel ? `Ask AI about ${selLabel}` : "Ask AI", run: () => (selectedSymbol ? askSelection() : (setAiOpen(true), setAiFocus((n) => n + 1))), group: "AI" },
     { id: "theme", label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", run: onTheme, group: "Appearance" },
@@ -588,9 +590,10 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       { id: "sync", label: "Update PCB", title: "Update PCB from schematic", run: syncPcb, disabled: busy ? "An engine command is running" : undefined },
       { id: "erc", label: "Run ERC", run: () => check("erc"), disabled: busy ? "An engine command is running" : undefined },
       { id: "drc", label: "Run DRC", run: () => check("drc"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "dfm", label: "Run DFM", title: "Design for manufacture against the JLCPCB standard profile", run: () => check("dfm"), disabled: busy ? "An engine command is running" : undefined },
       { id: "route", label: "Auto-route", title: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), disabled: busy ? "An engine command is running" : undefined },
       { id: "sim", label: "Simulate", disabled: "Not implemented: no SPICE integration yet" },
-      { id: "export", label: "Export manufacturing files", title: "Gerber, Excellon, BOM, CPL", run: () => setDialog("export"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "export", label: "Export manufacturing files", title: "Gerber, Excellon, BOM, CPL, fab-pack ZIP; runs ERC/DRC/MECH/DFM", run: () => setDialog("export"), disabled: busy ? "An engine command is running" : undefined },
     ],
     [
       { id: "cmd", label: "Commands", shortcut: SHORTCUTS.palette, run: () => setPalette(true) },
@@ -637,6 +640,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
     { label: "Design", items: [
       { label: "Run ERC", run: () => check("erc"), disabled: noProject },
       { label: "Run DRC", run: () => check("drc"), disabled: noProject },
+      { label: "Run DFM (JLCPCB standard)", run: () => check("dfm"), disabled: noProject },
       { label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), disabled: noProject, sep: true },
       { label: "Design rules…", run: () => setDialog("rules") },
     ] },
@@ -650,7 +654,7 @@ export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTh
       { label: "Clear all routing", run: () => execute({ type: "ClearRouting", net: null }), disabled: noProject, destructive: true },
       { label: "Interactive routing…", disabled: "Use the Route tool in the PCB editor (key 4); not available from the menu", sep: true },
     ] },
-    { label: "Simulation", items: [{ label: "Run simulation…", disabled: "Not implemented: no SPICE integration yet" }] },
+    { label: "Simulation", items: [{ label: "Run simulation…", run: () => (setBottomTab("sim"), setBottomOpen(true)) }] },
     { label: "Manufacturing", items: [
       { label: "Export manufacturing files…", run: () => setDialog("export"), disabled: noProject },
       { label: "Show manufacturing panel", run: () => showSide("manufacturing") },

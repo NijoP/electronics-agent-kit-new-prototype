@@ -120,9 +120,10 @@ describe("workspace Part 4", () => {
     await waitFor(() => expect(executed).toEqual([{ type: "Annotate" }]));
     menu("Simulation");
     const sim = screen.getByRole("menuitem", { name: /Run simulation/ });
-    expect(sim.getAttribute("aria-disabled")).toBe("true");
-    expect(sim.textContent).toContain("Not implemented");
+    // Simulation is read-only and opens the Simulation tab; it never issues an engine command.
+    expect(sim.getAttribute("aria-disabled")).not.toBe("true");
     fireEvent.click(sim);
+    expect(await screen.findByRole("tab", { name: "Simulation" })).toBeTruthy();
     expect(executed).toHaveLength(1);
   });
 

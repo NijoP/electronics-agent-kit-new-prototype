@@ -19,6 +19,9 @@ import type {
   LibraryEntry,
   RecentProject,
   DomainReport,
+  SimRequest,
+  SimResult,
+  SimulationStatus,
   Snapshot,
 } from "./types";
 
@@ -50,6 +53,8 @@ export const IPC_COMMANDS = [
   "ai_accept",
   "ai_reject",
   "ai_rollback",
+  "simulation_status",
+  "run_simulation",
   "route_step",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
@@ -90,6 +95,8 @@ export const api = {
   aiAccept: (stepId: number) => call<CommandResponse>("ai_accept", { step_id: stepId }),
   aiReject: (stepId: number) => call<void>("ai_reject", { step_id: stepId }),
   aiRollback: (opId: string) => call<CommandResponse>("ai_rollback", { op_id: opId }),
+  simulationStatus: () => call<SimulationStatus>("simulation_status"),
+  runSimulation: (request: SimRequest) => call<SimResult>("run_simulation", { request }),
   routeStep: (request: RouteStepRequest) => call<RouteStepReport>("route_step", { request }),
 };
 
