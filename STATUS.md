@@ -61,8 +61,6 @@ files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The te
 - `apps/desktop/src-tauri/src/models.rs`: profile store (JSON, no secrets), `KeyStore` with `OsKeyStore` (keyring v3), IPC commands `model_*` (7). The environment is never a key source in the desktop. `tests/models.rs` (9 tests): profiles/UI view/disk contain no key, remove deletes the key, corrupt file is not overwritten, list/test over real HTTP using the stored key, redaction, env not used, Ollama keyless, and a **real OS credential store round trip** (ran and passed on Linux).
 - UI: `ModelSettings.tsx` (add/edit/remove provider, presets, write-only key field, fetch models into a picker with free-text fallback, test connection), opened from a button in `App.tsx`. 5 vitest tests added.
 
-- **Library panel (Phase 5 slice, ADR-0015):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
-
 ### Not verified / not implemented
 - Never run against a live provider endpoint (no key was available); wire formats are checked against canned and loopback responses only.
 - Windows Credential Manager and macOS Keychain paths unexercised. If no Secret Service runs on Linux, saving a key fails visibly.
@@ -122,8 +120,6 @@ all 8 jobs passed: `rust` (policy script, fmt, clippy, `cargo test --workspace -
 - `cargo test --workspace --release`: **43 passed, 0 failed** (M1 suite 35 + eak-desktop 8).
 - `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check`: clean.
 - `npm run tauri -- build --no-bundle`: succeeds and produces `eak-desktop.exe` with the embedded frontend. A 6-second launch smoke check stayed running and created the SQLite index in the app data folder; no interactive use.
-
-- **Library panel (Phase 5 slice, ADR-0015):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
 
 ### Not verified / not implemented
 - The app has not been exercised interactively in a real WebView in this change. Rendering, focus and layout are covered only by jsdom tests.
