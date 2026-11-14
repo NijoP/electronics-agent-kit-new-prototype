@@ -110,15 +110,27 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
 - Engineering core (`eak-engineering`):
   - IPC-2221 trace width, clearance, creepage and via current, re-implemented from the DESK
     audit, with DESK reference vectors as tests (tables **not verified against the standard text**).
+    Every IPC/IEC value and EAK default is listed with its status in
+    `docs/engineering/IPC_RULE_VALUES.md`. None is marked verified.
   - Circuit calculations.
   - Schematic netlist resolution.
   - Exact copper geometry and connectivity, with zone fill on a 0.1 mm raster.
+  - Thermal reliefs: every same-net pad inside a zone gets a copper-free gap and four axis
+    spokes. A spoke that cannot land in fill is removed, so no stub is left. The fill, the
+    connectivity analysis and the Gerber all use the same relief geometry. The gap and spoke
+    width are derived from the zone clearance and the net class: the IR has no per-zone relief
+    settings yet.
+  - Silkscreen legend: courtyard outline, pin-1 dot, and the reference designator drawn in an
+    original built-in stroke font (mirrored on the bottom side). Ink is clipped to stay
+    ≥ 0.1 mm from soldermask openings.
   - A native two-layer A* router.
   - A constructive placer.
   - 3D scene data.
 - Verification (`eak-validation`):
   - ERC: 13 rules.
-  - DRC: 13 rules, including current capacity and voltage clearance.
+  - DRC: 15 rules, including current capacity, voltage clearance, thermal-relief spokes
+    (DRC-014: landed-spoke count, spoke width, spoke width vs declared current) and silkscreen
+    over soldermask openings (DRC-015).
   - Mechanical: 3 rules.
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
   - Every finding carries a stable id, the affected objects and location, and a suggested fix; quantitative rules also report measured vs required values with units (ADR-0009). Desktop and AI display of the new fields is not yet wired.
@@ -130,7 +142,8 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Project-scoped process supervisor (timeout, cancel, bounded output).
   - Task model and SQLite index.
 - Manufacturing (`eak-manufacturing`):
-  - Outputs: RS-274X Gerber (9 layers), Excellon, BOM, CPL.
+  - Outputs: RS-274X Gerber (9 layers; copper includes the relief spokes; the legend carries
+    stroke-font reference designators), Excellon, BOM, CPL.
   - SHA-256 manifest.
   - Release gate that requires revision-bound ERC/DRC/MECH with zero errors, otherwise the package is marked DRAFT.
   - Package re-verification that detects tampering.
@@ -144,7 +157,10 @@ The key end-to-end test (`reference_design_end_to_end`) runs a 10-component ATti
 the command API:
 1. Schematic, then ERC: 0 errors.
 2. Sync, place, auto-route (**20/20 connections**) and a GND pour.
-3. DRC: 0 errors; MECH: 0 errors.
+3. DRC: 0 errors (DRC-014 and DRC-015 declared and silent); MECH: 0 errors. The J1.2 and
+   J2.2 GND pads in the bottom pour are relieved, each with at least 2 landed spokes, and GND
+   is one copper group. The written top-legend Gerber matches the clipped legend model draw
+   for draw.
 4. Package status: InternallyVerifiedReleaseCandidate; the package re-verifies and tampering is detected.
 Injected short and clearance violations are detected (`drc_detects_injected_short_and_clearance_violation`).
 
@@ -152,8 +168,9 @@ Injected short and clearance violations are detected (`drc_detects_injected_shor
 - Desktop application: superseded. See "Desktop shell" above (read-only views; editors not started).
 - Intelligence Engine: core crate exists (see below); no UI, no live-provider run, no context engine/skills.
 - Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser, LCSC/JLCPCB integrations.
-- Multi-layer (>2) boards (the stackup is per-layer, but only top and bottom copper exist; no inner
-  layers or via layer spans), differential pairs, impedance, thermal reliefs, silkscreen text.
+- Multi-layer (>2) boards (work in progress on this branch), differential pairs, impedance.
+- Per-zone / per-pad thermal-relief settings (needs an IR change and an ADR); silkscreen
+  legibility, overlap and board-edge checks; user-placed silkscreen text and graphics.
 - Linux/macOS builds have not been executed yet; packaging and installers do not exist yet.
 - Independent engineering review and fabricator DFM: not performed (required before any manufacturing claim).
 
