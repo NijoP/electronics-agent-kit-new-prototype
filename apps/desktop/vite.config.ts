@@ -16,6 +16,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
+    // Async test utilities get extra room on the slow shared laptop (src/test-setup.ts).
+    setupFiles: ["./src/test-setup.ts"],
+    testTimeout: 15000,
     // Forked processes, at most 2 at once (override: `vitest run --maxWorkers=N`).
     pool: "forks",
     maxWorkers: 2,

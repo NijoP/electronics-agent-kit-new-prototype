@@ -7,7 +7,7 @@ import { mmToNm, nextRotation, outlineFrom, segments, snapPoint } from "./editin
 import { layerKey, layerName, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
 import { useLayerView, type LayerView } from "./layerView";
 import { focusBounds, type Focus } from "./pcbFocus";
-import { useDocId, useRegisterTools } from "./shell/viewState";
+import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import type { CopperLayer, Id, PadGeom, Point, Snapshot } from "./types";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 
@@ -158,7 +158,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
 
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey) return;
+    if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey || !isActiveEditor(docId)) return;
     const k = e.key.toLowerCase();
     const digit = Number(e.key);
     if (digit >= 1 && digit <= TOOLS.length) choose(TOOLS[digit - 1][0]);
