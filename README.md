@@ -32,7 +32,7 @@ release is listed yet, use option B.
 **Debian / Ubuntu (.deb)**
 
 ```bash
-sudo apt install ./EAK_0.1.3_amd64.deb
+sudo apt install ./EAK_0.1.4_amd64.deb
 eak-desktop
 ```
 
@@ -41,8 +41,8 @@ EAK also appears in the applications menu. Remove it with `sudo apt remove eak`.
 **AppImage**
 
 ```bash
-chmod +x EAK_0.1.3_amd64.AppImage
-./EAK_0.1.3_amd64.AppImage
+chmod +x EAK_0.1.4_amd64.AppImage
+./EAK_0.1.4_amd64.AppImage
 ```
 
 If FUSE is not available, run it with `--appimage-extract-and-run`.
