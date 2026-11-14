@@ -267,7 +267,7 @@ fn pads(p: &Project) -> Vec<PadRect> {
                 refdes: fp.refdes.clone(),
                 number: pad.number.clone(),
                 layers: if tht {
-                    CopperLayer::ALL.to_vec()
+                    p.pcb.board.stackup.layer_ids()
                 } else {
                     vec![fp.side.copper()]
                 },
@@ -378,11 +378,15 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
 
     // JLC-002 stackup
     let st = &p.pcb.board.stackup;
+    let layers = st.copper_layers();
+    let top_oz = st.copper_oz(CopperLayer::Top).unwrap_or(0.0);
+    let bottom_oz = st.copper_oz(CopperLayer::Bottom).unwrap_or(0.0);
     checks.push(DfmCheck {
         id: "JLC-002".into(),
         title: "Layer count and copper weight match the profile".into(),
-        status: if st.copper_layers == profile.copper_layers
-            && (st.outer_copper_oz - profile.outer_copper_oz).abs() < 1e-9
+        status: if layers == profile.copper_layers as usize
+            && (top_oz - profile.outer_copper_oz).abs() < 1e-9
+            && (bottom_oz - profile.outer_copper_oz).abs() < 1e-9
         {
             Status::Pass
         } else {
@@ -392,8 +396,15 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
             "{} layers, {} oz outer copper (the limits below are for this build-up)",
             profile.copper_layers, profile.outer_copper_oz
         ),
-        measured: format!("{} layers, {} oz", st.copper_layers, st.outer_copper_oz),
-        detail: vec![],
+        measured: format!("{layers} layers, {top_oz} oz top, {bottom_oz} oz bottom"),
+        detail: if layers == profile.copper_layers as usize {
+            vec![]
+        } else {
+            vec![format!(
+                "this profile holds JLCPCB limits for {} layers only; limits for a {layers}-layer build-up are not loaded, so the checks below are not valid for this board",
+                profile.copper_layers
+            )]
+        },
     });
 
     // JLC-010 track width

@@ -422,3 +422,20 @@ fn dfm_flags_violations_and_never_reports_unchecked_rules_as_passing() {
     assert_eq!(get(&r, "JLC-001"), Status::Fail);
     assert_eq!(get(&r, "JLC-030"), Status::NotChecked);
 }
+
+#[test]
+fn dfm_refuses_to_pass_a_multilayer_board_against_the_two_layer_profile() {
+    let mut e = Engine::in_memory(Project::new("ml"));
+    fixtures::build_schematic(&mut e).expect("schematic");
+    fixtures::build_pcb_layers(&mut e, 4).expect("pcb");
+    let profile = jlcpcb::Profile::two_layer_1oz();
+    let r = jlcpcb::dfm(e.project(), &bom::build(e.project(), &[]), &profile);
+    let c = r.checks.iter().find(|c| c.id == "JLC-002").unwrap();
+    assert_eq!(c.status, Status::Fail);
+    assert!(c.measured.starts_with("4 layers"), "{}", c.measured);
+    assert!(
+        c.detail.iter().any(|d| d.contains("limits for a 4-layer")),
+        "{:?}",
+        c.detail
+    );
+}
