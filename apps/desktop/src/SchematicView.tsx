@@ -6,12 +6,19 @@ import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, nextRotation, segments, snapPoint } from "./editing";
 import type { Id, Point, Snapshot, SymbolInstance } from "./types";
 import { boundsOf, fromView, mm, toView } from "./viewport";
+import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 
 interface Props {
   snapshot: Snapshot;
   selected: Id | null;
   onSelect: (symbolId: Id) => void;
   edit?: EditCtx;
+  /** Symbols an AI proposal would touch; drawn dashed until the proposal is accepted or rejected. */
+  aiPreview?: Id[];
+  /** Arms the Place tool with a library part (Parts panel, quick open). */
+  armPart?: { id: string; n: number } | null;
+  /** Engine sheet id this document shows (from the document tab). */
+  sheetId?: Id;
 }
 
 type Tool = "select" | "place" | "wire" | "connect" | "label" | "move" | "delete";
@@ -30,10 +37,13 @@ const CAPTURE = mmToNm(1.5);
 const hit = (e: { target: EventTarget }, attr: string): string | null =>
   e.target instanceof Element ? (e.target.closest(`[${attr}]`)?.getAttribute(attr) ?? null) : null;
 
-export function SchematicView({ snapshot, selected, onSelect, edit }: Props) {
+export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = [], armPart, sheetId: docSheet }: Props) {
   const { schematic } = snapshot.project;
   const sheets = Object.values(schematic.sheets);
-  const [sheetId, setSheetId] = useState<Id | undefined>(sheets[0]?.id);
+  const [sheetId, setSheetId] = useState<Id | undefined>(docSheet ?? sheets[0]?.id);
+  useEffect(() => {
+    if (docSheet) setSheetId(docSheet);
+  }, [docSheet]);
   const [tool, setTool] = useState<Tool>("select");
   const [partId, setPartId] = useState("");
   const [labelName, setLabelName] = useState("NET1");
@@ -57,12 +67,28 @@ export function SchematicView({ snapshot, selected, onSelect, edit }: Props) {
     reset();
     setTool(t);
   };
+  const docId = useDocId();
+  useRegisterTools(docId, (t) => {
+    const hit = TOOLS.find(([id]) => id === t);
+    if (hit) choose(hit[0]);
+    return !!hit;
+  });
+  useEffect(() => {
+    if (!armPart) return;
+    setPartId(armPart.id);
+    setStart(null);
+    setPin(null);
+    setPicked(null);
+    setTool("place");
+  }, [armPart]);
 
   // Keyboard shortcuts act on the current selection through the same commands.
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey) return;
-    if (e.key === "Escape") reset();
+    if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey || !isActiveEditor(docId)) return;
+    const digit = Number(e.key);
+    if (digit >= 1 && digit <= TOOLS.length) choose(TOOLS[digit - 1][0]);
+    else if (e.key === "Escape") reset();
     else if (e.key.toLowerCase() === "r" && sym) {
       void edit.execute({ type: "RotateSymbol", symbol_id: sym.id, rotation: nextRotation(sym.rotation) });
     } else if (e.key === "Delete" && sym) void edit.execute({ type: "DeleteSymbol", symbol_id: sym.id });
@@ -185,12 +211,13 @@ export function SchematicView({ snapshot, selected, onSelect, edit }: Props) {
         )}
         {edit ? (
           <div className="tools" role="toolbar" aria-label="Schematic tools">
-            {TOOLS.map(([t, label]) => (
+            {TOOLS.map(([t, label], i) => (
               <button
                 key={t}
                 type="button"
                 aria-pressed={tool === t}
                 className={tool === t ? "on" : ""}
+                title={`${label} (${i + 1})`}
                 onClick={() => choose(t)}
               >
                 {label}
@@ -268,7 +295,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit }: Props) {
             <g
               key={s.id}
               data-symbol-id={s.id}
-              className={s.id === selected ? "symbol selected" : "symbol"}
+              className={`symbol${s.id === selected ? " selected" : ""}${aiPreview.includes(s.id) ? " ai-preview" : ""}`}
               onClick={() => onSelect(s.id)}
             >
               <title>{`${s.refdes} ${s.value}`}</title>

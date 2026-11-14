@@ -7,6 +7,7 @@ import type {
   Command,
   CommandError,
   CommandResponse,
+  ConnectivityReport,
   ConnectionReport,
   EngineEvent,
   ProfileInput,
@@ -45,6 +46,7 @@ export const IPC_COMMANDS = [
   "library_components",
   "domain_classification",
   "export_manufacturing",
+  "connectivity",
   "parts_search",
   "parts_import",
   "manufacturing_preview",
@@ -83,6 +85,7 @@ export const api = {
   libraryComponents: () => call<LibraryEntry[]>("library_components"),
   domainClassification: () => call<DomainReport>("domain_classification"),
   exportManufacturing: () => call<ExportResult>("export_manufacturing"),
+  connectivity: () => call<ConnectivityReport>("connectivity"),
   partsSearch: (query: string) => call<PartsSearch>("parts_search", { query }),
   partsImport: (expectedRevision: number, lcsc: string) =>
     call<ImportResult>("parts_import", { expected_revision: expectedRevision, lcsc }),

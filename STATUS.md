@@ -37,6 +37,18 @@ IPC) and by headless Rust IPC tests only. Not verified in a real WebView. Exact 
   evaluated; pad shapes are measured as their bounding rectangle; JLCPCB's limits can change and its own DFM is authoritative;
   no real JLCPCB upload of the bundle was attempted; the Gerber zip has not been opened by a fabricator's viewer.
 
+## Release packaging: Linux .deb and AppImage, v0.1.0 (2026-11-14)
+- `scripts/release-build.sh` builds the Linux bundles from a clean `npm ci` and `tauri build` and writes `SHA256SUMS`; `tauri.conf.json` now has `bundle.active: true` with package metadata (other platforms still build with `--no-bundle`; no Windows/macOS packaging script yet).
+- Verified on Linux only (see `TEST_RESULTS.md`): both packages build, and the packaged binary launches, shows its window and stays up. Not verified: system-wide `apt` install, other distributions, interactive use, Windows and macOS. Release notes: `docs/release/RELEASE_NOTES_v0.1.0.md`.
+
+## EDA desktop directive, Phase 0: research and repository audit (2026-11-14)
+
+Documentation only; no code changed and no tests were run. Adds the EasyEDA ecosystem research
+(`docs/research/`: 37 repositories inspected, 104 listed, licence audit; nothing copied), the gap
+analysis, target architecture and phased implementation plan (`docs/architecture/`), and the tracking
+files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The test baseline in
+`TEST_RESULTS.md` is copied from the merged PR bodies #12-#19, not re-run.
+
 ## DESK domain intelligence: 100 domain classes, classifier, Domain panel (2026-11-14)
 
 **Platform tested:** Linux, Rust stable. Windows and macOS: not run. The Domain panel was tested in jsdom, not in a real WebView.
@@ -316,6 +328,40 @@ installed. Development is proceeding directly in this repository.
 2. PCB editor and 3D view; Manufacturing Center and installer bundles.
 3. Intelligence Engine: manufacturing-export and MECH tools, run-log evidence persistence, desktop approval UI.
 
+## Desktop workspace shell (outcome 5 / master directive Phase 1, first slice, 2026-11-14)
+- `apps/desktop/src/shell/` and `src/design/`: activity bar, collapsible side panel (Project, Library/Parts, Domain, Manufacturing), tabbed editors (Schematic + PCB / Schematic / PCB), bottom panel (Findings, BOM derived from schematic symbols, Log), right assistant panel, status bar (project, layer, grid, DRC count, model), command palette (Ctrl/Cmd+K, Ctrl/Cmd+Shift+P) with shortcuts, quick open (Ctrl/Cmd+P), Ctrl+B/J/L panel toggles, tool digit shortcuts, dark + light tokens (8px grid, 120-200 ms motion).
+- The assistant is a **local deterministic command interpreter, not a model call**: proposals are typed `Command`s shown as a diff with a dashed canvas preview; Accept goes through `execute_command`, Reject changes nothing.
+- Verified: `npm run build`, `npm test` (52 tests incl. `shell.test.tsx`), and the production bundle driven in headless Chrome against a **stubbed IPC** (screenshots kept outside the repo). **Not launched as the real Tauri window** (no display/X authorization in the build session). A browser-only crash (effect returning a non-function) was found this way and fixed; jsdom had not caught it.
+- Not done: top menus, document tabs bound to backend document identity (dirty/save-before-close), dockable/resizable/persisted panel layout, per-net highlight, 60 fps pan/zoom measurement, real-window tests.
+
 ## Multilayer boards (2026-11-14)
 - Stackup 2-16 copper layers (signal/plane, per-layer copper and dielectric), `SetLayerCount`, inner-layer tracks and zones, through/blind/buried vias, plane zones with thermal reliefs, DRC-016/017, one Gerber per copper layer, per-span drill files, `stackup.json`, JLCPCB stackup check (limits unverified). PCB editor: layer count, visibility, active layer, via span, plane fill. See ADR-0012.
 - Not done: autorouting on inner layers, per-via plane relief settings, impedance, fabricator-verified limits.
+
+## Desktop workspace, Part 4 slice: menus, document tabs, persisted layout (2026-11-14)
+- **Menu bar** (`shell/MenuBar.tsx`, menus defined in `Workspace.tsx`): File, Edit, View, Project, Place, Design, Tools, Route, Simulation, Manufacturing, AI Assistant, Settings, Help. Items call the same typed engine commands (Annotate, Sync, AutoPlace, AutoRoute, ClearRouting, RotateSymbol, DeleteSymbol, Undo/Redo, ERC/DRC, export) or are disabled with the reason shown (Save as, Design rules, Simulation, Release check, menu access to wire/route tools).
+- **Document tabs** (`shell/documents.ts`, `DocTabs.tsx`): one tab per engine document (each schematic sheet by sheet id, the PCB by project id), open/close/close-all, split view, per-project restore of the open set (documents the engine no longer has are dropped). "Dirty" means the engine has not confirmed a write (command in flight or writes blocked): the engine saves every accepted command, so there is no separate unsaved buffer; closing while dirty asks for confirmation. Revision and project state remain authoritative in Rust; React keeps no project model.
+- **Layout** (`shell/layout.ts`, `Splitter.tsx`): side/assistant widths and bottom height are drag- and keyboard-resizable (double-click resets), panels collapse/reopen, all persisted in localStorage with validation; "Reset panel layout" in View/Settings.
+- Verified: `npm run build`, `tsc`, vitest (65+ tests incl. `part4.test.tsx`); production bundle checked in headless Chrome against a stubbed IPC. **Not launched as the real Tauri window** (no display here).
+- Not done: drag-to-rearrange/re-dock panels to other edges, per-tab viewport/zoom preservation (a closed tab loses its viewport), library/symbol/footprint/simulation/manufacturing document kinds (no backend for them yet), the full main toolbar of the directive (tool buttons, zoom, grid), menu keyboard navigation beyond click/Escape.
+
+## PCB layer manager, finding navigation, airwires, zone tool (2026-11-14)
+- `shell/LayerManager.tsx`, `layerView.ts`: PCB Layers side view (active layer, visibility, colours as persisted display state; layer count and layer type through `SetLayerCount`/`SetStackup`; read-only stackup table from `Board.stackup`).
+- Finding click: opens the PCB (DRC) or schematic (ERC) tab, selects the part, and for PCB zooms to the objects' box, highlights them and shows measured vs required plus the suggested fix (`pcbFocus.ts`, `Canvas zoomTo`). Schematic zoom/highlight is not done (schematic canvas is owned by another worker).
+- Airwires: new read-only IPC command `connectivity` (22 commands) over `eak_engineering::copper::analyse`; drawn only for the current revision. `cargo test -p eak-desktop --test ipc`: 13 passed (incl. `connectivity_reports_the_ratsnest_for_the_current_revision`).
+- PCB "Zone" tool wired to `AddZone` (layer, net, clearance) and the delete tool to `DeleteZone`.
+- Verified: `tsc`, vitest 75/75, production bundle in headless Chrome with a stubbed IPC. Not launched as the real Tauri window.
+- Not done: zone thermal/priority/refill controls, non-copper layers, copper weight / dielectric editing, track and via editing, multi-select, safe-fix buttons, real-window tests.
+
+## Main toolbar and per-tab viewport (2026-11-14)
+- `shell/Toolbar.tsx`: data-driven main toolbar. Real: Open project (to Project Home), Save (asks the engine for its state and reports blocked writes; never claims more), Undo/Redo, Select tool and Move tool (arm the active editor's tool), Rotate/Delete selection (typed `RotateSymbol`/`MoveFootprint`/`DeleteSymbol`; delete asks first), Zoom out/in/Fit (drive the active canvas), Run ERC/DRC, Auto-route, Export Gerbers, Commands, Assistant, Close project. Disabled with the reason as tooltip: Save as, Grid (fixed grids), Design rules, Simulate.
+- `shell/viewState.ts`: per-document viewport (kept in memory and localStorage; a closed tab reopens at its last zoom/pan), plus imperative zoom/tool controls keyed by document id so the editors are not coupled to the toolbar. `SchematicView`/`PcbView` gained a 5-line tool registration each; `Canvas` restores and saves its viewport.
+- Verified: `tsc`, vitest 80/80 (new `toolbar.test.tsx`). Frontend-only jobs ran without the build lock per the lane rule. Not launched as the real Tauri window.
+- Not done: dock panels to other edges, configurable grid, rule editor, simulation.
+
+## End-to-end workflow, keyboard scope, design rules dialog (2026-11-14)
+- Verified by vitest against a stateful fake backend (`flow.test.tsx`, one test per step): New project dialog (replaces the open project, returns Home if the backend lost it) -> schematic tab -> part placed via the assistant (typed `PlaceSymbol`) -> **Update PCB from schematic** (`SyncSchematicToPcb`, then the PCB tab opens with the footprints and airwires re-read) -> ERC/DRC from the toolbar -> **Export manufacturing files** dialog (refuses without a board outline; shows the DRAFT manifest) -> File menu Save / Close / reopen from Recent. File-menu Save and Ctrl+S now ask the engine (they previously only set a message).
+- Evaluator C4: keyboard shortcuts are scoped to the active editor (clicking an editor or its tab makes it active), so a key no longer acts in both editors in split view (`shell/viewState.ts`, tested).
+- Evaluator C1 support: **Design rules** dialog (toolbar, Design menu, palette) with `SetDesignRules`, `UpsertNetClass`, `SetNetCurrent`, `SetNetVoltage`; engine validation errors surface in the status bar; values come from `Project.constraints` (`rules.test.tsx`).
+- Evaluator C5 (AI actor) was reassigned to `eak-p6-ai` and is NOT in this change.
+- Not done: panel docking to other edges; real Tauri window run; DRC/ERC re-run is manual after rule changes.
