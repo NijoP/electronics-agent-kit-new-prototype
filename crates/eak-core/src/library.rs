@@ -198,3 +198,47 @@ impl ComponentDef {
         out
     }
 }
+
+impl ComponentDef {
+    /// Case-insensitive AND-match of whitespace-separated terms against the fields a user
+    /// searches by (id, name, category, footprint, manufacturer, MPN, LCSC number, refdes
+    /// prefix). An empty query matches everything.
+    pub fn matches_query(&self, query: &str) -> bool {
+        let hay = format!(
+            "{} {} {} {} {} {} {} {}",
+            self.id,
+            self.name,
+            self.category,
+            self.footprint.name,
+            self.manufacturer.as_deref().unwrap_or(""),
+            self.mpn.as_deref().unwrap_or(""),
+            self.lcsc.as_deref().unwrap_or(""),
+            self.refdes_prefix
+        )
+        .to_lowercase();
+        query
+            .split_whitespace()
+            .all(|t| hay.contains(&t.to_lowercase()))
+    }
+}
+
+#[cfg(test)]
+mod search_tests {
+    use crate::builtin;
+
+    #[test]
+    fn search_matches_all_terms_across_fields() {
+        let all = builtin::components();
+        let hits = |q: &str| all.iter().filter(|c| c.matches_query(q)).count();
+        assert_eq!(hits(""), all.len());
+        assert!(hits("resistor") >= 1);
+        assert!(hits("RESISTOR 0603") >= 1);
+        assert_eq!(hits("resistor no-such-term"), 0);
+        // LCSC number and MPN are searchable.
+        let with_lcsc = all
+            .iter()
+            .find(|c| c.lcsc.is_some())
+            .expect("a part with LCSC");
+        assert!(with_lcsc.matches_query(with_lcsc.lcsc.as_deref().unwrap()));
+    }
+}

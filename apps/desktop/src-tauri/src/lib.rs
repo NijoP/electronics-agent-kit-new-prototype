@@ -498,6 +498,108 @@ pub fn library_components() -> Vec<LibraryEntry> {
         .collect()
 }
 
+/// One library part as shown by the library panel: built-in catalogue merged with the
+/// project library (a project definition shadows the built-in of the same id). Read-only;
+/// placing or editing goes through `PlaceSymbol` / `SetComponentProperties` /
+/// `AssignComponentFootprint`.
+#[derive(Debug, Clone, Serialize)]
+pub struct LibraryPart {
+    pub id: String,
+    /// `builtin` (shipped catalogue) or `project` (stored in this project's library).
+    pub source: String,
+    /// True when the project library already holds a copy (placing will not import).
+    pub in_project: bool,
+    pub def: eak_core::ComponentDef,
+    /// Ratings still lacking a verified source; never reported as verified.
+    pub unverified_ratings: usize,
+}
+
+/// Search the merged library. `source` is `all`, `builtin` or `project`; `category` an exact
+/// category or empty for any. Terms are AND-matched by `ComponentDef::matches_query`.
+pub fn library_search(
+    s: &Session,
+    query: &str,
+    category: &str,
+    source: &str,
+) -> Result<Vec<LibraryPart>, String> {
+    let project = s.with_engine(|e| e.project().library.clone())?;
+    Ok(merged_library(&project, query, category, source))
+}
+
+fn merged_library(
+    project: &std::collections::BTreeMap<String, eak_core::ComponentDef>,
+    query: &str,
+    category: &str,
+    source: &str,
+) -> Vec<LibraryPart> {
+    let mut parts: std::collections::BTreeMap<String, LibraryPart> = Default::default();
+    let mut add = |def: eak_core::ComponentDef, src: &str| {
+        parts.insert(
+            def.id.clone(),
+            LibraryPart {
+                id: def.id.clone(),
+                source: src.into(),
+                in_project: project.contains_key(&def.id),
+                unverified_ratings: def.ratings.iter().filter(|r| !r.verified).count(),
+                def,
+            },
+        );
+    };
+    for d in eak_core::builtin::components() {
+        add(d, "builtin");
+    }
+    for d in project.values() {
+        add(d.clone(), "project");
+    }
+    parts
+        .into_values()
+        .filter(|p| source == "all" || source.is_empty() || p.source == source)
+        .filter(|p| category.is_empty() || p.def.category == category)
+        .filter(|p| p.def.matches_query(query))
+        .collect()
+}
+
+/// A footprint (with a pin map) that can be assigned to a component without breaking the
+/// definition: assigning it passes `ComponentDef::validate`.
+#[derive(Debug, Clone, Serialize)]
+pub struct FootprintCandidate {
+    pub name: String,
+    pub donor: String,
+    pub footprint: eak_core::FootprintDef,
+    pub pin_map: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+/// Footprints of other library parts whose pin map fits `component_id`'s symbol pins.
+pub fn footprint_candidates(
+    s: &Session,
+    component_id: &str,
+) -> Result<Vec<FootprintCandidate>, String> {
+    let project = s.with_engine(|e| e.project().library.clone())?;
+    let target = project
+        .get(component_id)
+        .cloned()
+        .or_else(|| eak_core::builtin::get(component_id))
+        .ok_or_else(|| format!("unknown component {component_id}"))?;
+    let mut out = vec![];
+    let mut seen = std::collections::BTreeSet::new();
+    for p in merged_library(&project, "", "", "all") {
+        if p.id == target.id || !seen.insert(p.def.footprint.name.clone()) {
+            continue;
+        }
+        let mut t = target.clone();
+        t.footprint = p.def.footprint.clone();
+        t.pin_map = p.def.pin_map.clone();
+        if t.validate().is_empty() && p.def.footprint.name != target.footprint.name {
+            out.push(FootprintCandidate {
+                name: p.def.footprint.name.clone(),
+                donor: p.id.clone(),
+                footprint: t.footprint,
+                pin_map: t.pin_map,
+            });
+        }
+    }
+    Ok(out)
+}
 /// Result of a manufacturing export: the manifest plus the revision-bound check reports.
 #[derive(Debug, Clone, Serialize)]
 pub struct ExportResult {
@@ -552,11 +654,13 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 29] = [
+pub const IPC_COMMANDS: [&str; 31] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
     "ai_rollback",
+    "library_search",
+    "library_footprint_candidates",
     "simulation_status",
     "run_simulation",
     "connectivity",
@@ -668,6 +772,24 @@ pub mod cmd {
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
+    pub fn library_search(
+        state: State<'_, Session>,
+        query: String,
+        category: String,
+        source: String,
+    ) -> Result<Vec<LibraryPart>, String> {
+        super::library_search(&state, &query, &category, &source)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
+    pub fn library_footprint_candidates(
+        state: State<'_, Session>,
+        component_id: String,
+    ) -> Result<Vec<FootprintCandidate>, String> {
+        super::footprint_candidates(&state, &component_id)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
     pub fn simulation_status(state: State<'_, Session>) -> Result<SimulationStatus, String> {
         super::simulation_status(&state)
     }
@@ -760,6 +882,8 @@ pub fn run() {
             models::cmd::model_test_connection,
             cmd::domain_classification,
             cmd::library_components,
+            cmd::library_search,
+            cmd::library_footprint_candidates,
             cmd::connectivity,
             cmd::simulation_status,
             cmd::run_simulation,

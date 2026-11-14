@@ -167,6 +167,9 @@ export interface Snapshot {
 
 /** Argument-free engine commands offered by the command palette (eak-runtime `Command`). */
 export type Command =
+  | { type: "ImportLibraryComponent"; component_id: string }
+  | { type: "SetComponentProperties"; component_id: string; manufacturer: string | null; mpn: string | null; lcsc: string | null; datasheet: string | null }
+  | { type: "AssignComponentFootprint"; component_id: string; footprint: FootprintDef; pin_map: Record<string, string[]> }
   | { type: "PlaceSymbol"; sheet_id: Id | null; component_id: string; position: Point; rotation: Rotation; refdes: string | null; value: string | null }
   | { type: "MoveSymbol"; symbol_id: Id; position: Point }
   | { type: "RotateSymbol"; symbol_id: Id; rotation: Rotation }
@@ -433,6 +436,58 @@ export interface AiProposal {
   revision: number;
   steps: AiStep[];
 }
+// ---- Phase 5: component library (mirrors eak-core `library.rs`)
+export type PinType = "input" | "output" | "bidirectional" | "passive" | "power_in" | "power_out" | "open_collector" | "no_connect";
+export interface SymbolPin { number: string; name: string; electrical_type: PinType; position: Point }
+export interface PadDef {
+  number: string;
+  kind: "smd" | "tht";
+  shape: "rect" | "circle" | "oval";
+  position: Point;
+  size_x: number;
+  size_y: number;
+  drill: number | null;
+}
+export interface FootprintDef {
+  name: string;
+  pads: PadDef[];
+  courtyard_half_w: number;
+  courtyard_half_h: number;
+  body_height: number | null;
+}
+export interface Rating { name: string; value: number; unit: string; source: string; verified: boolean }
+export interface ComponentDef {
+  id: string;
+  name: string;
+  category: string;
+  refdes_prefix: string;
+  default_value: string;
+  manufacturer: string | null;
+  mpn: string | null;
+  lcsc: string | null;
+  datasheet: string | null;
+  symbol: { pins: SymbolPin[]; body_half_w: number; body_half_h: number };
+  footprint: FootprintDef;
+  pin_map: Record<string, string[]>;
+  ratings: Rating[];
+  provenance: string;
+}
+/** A part as listed by `library_search` (built-in catalogue merged with the project library). */
+export interface LibraryPart {
+  id: string;
+  source: "builtin" | "project";
+  in_project: boolean;
+  def: ComponentDef;
+  unverified_ratings: number;
+}
+/** A footprint that passes library validation when assigned (`library_footprint_candidates`). */
+export interface FootprintCandidate {
+  name: string;
+  donor: string;
+  footprint: FootprintDef;
+  pin_map: Record<string, string[]>;
+}
+
 
 /** Optional ngspice simulation (eak-simulation). Results are computed by ngspice, never verified by EAK. */
 export interface NgspiceStatus {

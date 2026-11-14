@@ -49,6 +49,8 @@ files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The te
 - Maturity ceiling (`Maturity::ceiling`): guidance for a class is shown as "Review prompts (unverified)" unless its DESK label is VERIFIED_AGAINST_SOURCE or LIVE_VERIFIED; BLOCKED shows nothing. EAK adds no evidence of its own.
 - Tests: `tests/domain.rs` (11: registry counts and consistency against DESK, every one of the 100 classes ranks first for a design naming its own keywords, ESP32 dashboard, buck power supply, brushed motor driver, mains-plus-controller needs review, empty design unclassified, determinism, maturity ceilings, not-implemented lists), unit tests in `domain/features.rs`, `ipc.rs::domain_classification_is_revision_bound_and_needs_no_model`, vitest `DomainPanel.test.tsx` (5).
 
+- **Library panel (Phase 5 slice, ADR-0015):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
+
 ### Not verified / not implemented
 - DESK's rule engine is not ported: per-class rule ids are listed, **no DESK rule is evaluated**, and required component roles are not checked against the design. Every result says so (`not_implemented`, `limitations`).
 - Classification quality depends on the design text; keyword weights are DESK's, not tuned or validated against real projects. A sparse design is UNCLASSIFIED.
@@ -126,7 +128,7 @@ all 8 jobs passed: `rust` (policy script, fmt, clippy, `cargo test --workspace -
 
 ### Not verified / not implemented
 - The app has not been exercised interactively in a real WebView in this change. Rendering, focus and layout are covered only by jsdom tests.
-- No editing tools, 3D viewport, library browser, Terminal Center, Manufacturing Center or Agent Studio yet.
+- 3D viewport, Terminal Center, Manufacturing Center or Agent Studio yet.
 - No dockable, resizable or persisted panels (UI-01 is PARTIAL).
 - Project folders are typed as absolute paths; there is no native folder picker.
 - Installers are not produced (`bundle.active: false`).
@@ -171,7 +173,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
   - Every finding carries a stable id, the affected objects and location, and a suggested fix; quantitative rules also report measured vs required values with units (ADR-0009). Desktop and AI display of the new fields is not yet wired.
 - Runtime (`eak-runtime`):
-  - Typed command set (40 commands, including the atomic `Batch`; ADR-0013).
+  - Typed command set (42 commands, including the atomic `Batch`, ADR-0013, and library `SetComponentProperties`/`AssignComponentFootprint`, ADR-0015).
   - Revision checks and the agent approval policy.
   - Transactional apply with integrity gate, diff-based undo/redo and an fsync'd journal with crash reconciliation (UNKNOWN_OUTCOME blocks writes).
   - Checkpoints, project lock, evidence store.
