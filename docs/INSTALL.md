@@ -1,6 +1,6 @@
 # Installing EAK
 
-EAK ships as prebuilt, **unsigned** packages with the Herdr terminal runtime bundled. You do not need Rust,
+EAK ships as prebuilt, **unsigned** packages. You do not need Rust,
 Node.js or any build tools. Installers always pick the newest release, including prereleases.
 
 | OS | One command |
@@ -10,18 +10,18 @@ Node.js or any build tools. Installers always pick the newest release, including
 | Windows (CMD) | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.ps1 \| iex"` |
 
 Each installer: detects OS and CPU, checks prerequisites, downloads over HTTPS, **verifies SHA-256 against the
-release `SHA256SUMS`**, installs (idempotent; re-running upgrades in place), checks that the bundled `herdr`
-runs, launches EAK and only reports success if it stays up. The log path is printed on failure.
+release `SHA256SUMS`**, installs (idempotent; re-running upgrades in place), then
+launches EAK and only reports success if it stays up. The log path is printed on failure.
 
 Options (environment variables): `EAK_VERSION=v0.2.0` pin a release, `EAK_FORMAT=deb` (Linux, system-wide
 `.deb` via sudo), `EAK_NO_LAUNCH=1`, `EAK_UNINSTALL=1`, `EAK_REPO=owner/name`.
 
 ## Where things go
-- **Linux** (default, no root): app in `~/.local/share/eak/app`, commands `~/.local/bin/eak` and `herdr`,
+- **Linux** (default, no root): app in `~/.local/share/eak/app`, commands `~/.local/bin/eak`,
   launcher `~/.local/share/applications/eak.desktop`, log `~/.local/state/eak/install.log`.
   Requires glibc 2.35+ (Ubuntu 22.04+, Debian 12+, Fedora 36+). `.deb` and `.AppImage` are also on the release page.
-- **macOS**: `/Applications/EAK.app` (or `~/Applications` if not writable); `herdr` symlinked in `~/.local/bin`.
-- **Windows**: per-user NSIS install in `%LOCALAPPDATA%\EAK`, registered in Settings > Apps, `herdr` on your user PATH,
+- **macOS**: `/Applications/EAK.app` (or `~/Applications` if not writable).
+- **Windows**: per-user NSIS install in `%LOCALAPPDATA%\EAK`, registered in Settings > Apps,
   log `%LOCALAPPDATA%\EAK-install\install.log`.
 
 ## Unsigned builds

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # EAK installer for Linux and macOS: downloads a prebuilt release, verifies SHA-256, installs it,
-# checks that the app and the bundled Herdr runtime start. No Rust/Node/build tools needed.
+# checks that the app starts. No Rust/Node/build tools needed.
 #
 #   curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- --uninstall
@@ -68,14 +68,14 @@ if [ "$UNINSTALL" = 1 ]; then
   step "Uninstalling EAK (your projects and settings are not touched)"
   if [ "$OS" = linux ]; then
     killapp "$APP_ROOT/app/"
-    rm -rf "$APP_ROOT/app" "$APP_ROOT/VERSION" "$BIN_DIR/eak" "$BIN_DIR/herdr" \
+    rm -rf "$APP_ROOT/app" "$APP_ROOT/VERSION" "$BIN_DIR/eak" \
       "$DATA/applications/eak.desktop" "$DATA/icons/hicolor/128x128/apps/eak.png"
     if dpkg -s eak >/dev/null 2>&1; then info "a system .deb is also installed: sudo apt-get remove eak"; fi
   else
     killapp "EAK.app/Contents/MacOS"
     rm -rf /Applications/EAK.app "$HOME/Applications/EAK.app" 2>/dev/null \
       || info "could not remove /Applications/EAK.app; run: sudo rm -rf /Applications/EAK.app"
-    rm -f "$BIN_DIR/herdr" "$APP_ROOT/VERSION"
+    rm -f "$APP_ROOT/VERSION"
   fi
   info "EAK removed. User project folders were left untouched."
   exit 0
@@ -146,7 +146,7 @@ if [ "$FORMAT" = deb ]; then
   cp "$TMP/$ASSET" /tmp/eak-install.deb
   "${SUDO[@]}" apt-get install -y /tmp/eak-install.deb || fail "apt-get install failed"
   rm -f /tmp/eak-install.deb
-  APP_BIN=/usr/bin/eak-desktop; HERDR_BIN=/usr/bin/herdr
+  APP_BIN=/usr/bin/eak-desktop
 elif [ "$OS" = linux ]; then
   chmod +x "$TMP/$ASSET"
   ( cd "$TMP" && "./$ASSET" --appimage-extract >/dev/null ) || fail "could not unpack the AppImage"
@@ -157,8 +157,6 @@ elif [ "$OS" = linux ]; then
   mv "$APP_ROOT/app.new" "$APP_ROOT/app"; rm -rf "$APP_ROOT/app.old"
   APP_BIN="$BIN_DIR/eak"
   printf '#!/bin/sh\nexec "%s/app/AppRun" "$@"\n' "$APP_ROOT" > "$APP_BIN"; chmod 755 "$APP_BIN"
-  HERDR_BIN="$APP_ROOT/app/usr/bin/herdr"
-  if [ -x "$HERDR_BIN" ]; then ln -sf "$HERDR_BIN" "$BIN_DIR/herdr"; fi
   ICON="$(find "$APP_ROOT/app" -maxdepth 6 -name '*.png' -path '*128x128*' 2>/dev/null | head -n1)"
   mkdir -p "$DATA/applications" "$DATA/icons/hicolor/128x128/apps"
   if [ -n "$ICON" ]; then cp "$ICON" "$DATA/icons/hicolor/128x128/apps/eak.png"; fi
@@ -185,17 +183,12 @@ else
   hdiutil detach -quiet "$MNT" || true
   rm -rf "$DEST/EAK.app"; mv "$DEST/EAK.app.new" "$DEST/EAK.app"
   xattr -dr com.apple.quarantine "$DEST/EAK.app" 2>/dev/null || true
-  APP_DIR="$DEST/EAK.app"; HERDR_BIN="$APP_DIR/Contents/MacOS/herdr"
-  if [ -x "$HERDR_BIN" ]; then ln -sf "$HERDR_BIN" "$BIN_DIR/herdr"; fi
+  APP_DIR="$DEST/EAK.app"
   info "installed: $APP_DIR (unsigned build: if macOS blocks it, right-click > Open once)"
 fi
 echo "$TAG" > "$APP_ROOT/VERSION"
 
 # ------------------------------------------------------------------ verify
-step "Verifying the bundled Herdr runtime"
-[ -x "$HERDR_BIN" ] || fail "Herdr runtime missing at $HERDR_BIN" "The package should bundle it; please report this."
-HV="$("$HERDR_BIN" --version 2>&1)" || fail "Herdr failed to run: $HV"
-info "herdr: $HV"
 
 if [ "${EAK_NO_LAUNCH:-0}" = 1 ]; then step "Skipping launch check"; else
   step "Launch check (app must stay up for 6 seconds)"
@@ -222,6 +215,5 @@ fi
 printf '\nEAK %s installed (%s).\n' "$TAG" "$OS-$ARCH"
 if [ "$OS" = linux ]; then printf 'Start it from your applications menu or run: %s\n' "$APP_BIN"
 else printf 'Open it from Applications or run: open -a EAK\n'; fi
-case ":$PATH:" in *":$BIN_DIR:"*) ;; *) printf 'Note: add %s to PATH to use the herdr command in your shell.\n' "$BIN_DIR" ;; esac
 printf 'Uninstall: curl -fsSL https://raw.githubusercontent.com/%s/main/scripts/install.sh | bash -s -- --uninstall\n' "$REPO"
 printf 'Log: %s\n' "$LOG"

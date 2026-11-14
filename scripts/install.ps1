@@ -1,6 +1,6 @@
 # EAK installer for Windows x64 (PowerShell 5.1+ or 7): downloads the prebuilt NSIS installer from the
 # newest GitHub release (prereleases included), verifies SHA-256, installs per-user, registers the app,
-# checks the bundled Herdr runtime and that the app starts. No Rust/Node/build tools needed.
+# and checks that the app starts. No Rust/Node/build tools needed.
 #
 #   irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.ps1 | iex
 #   $env:EAK_UNINSTALL=1; irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.ps1 | iex
@@ -53,7 +53,7 @@ function Install-Eak {
       Step 'Uninstalling EAK (your projects and settings are not touched)'
       $app = Find-Install
       $dir = if ($app -and $app.InstallLocation) { $app.InstallLocation.Trim('"') } else { Join-Path $env:LOCALAPPDATA 'EAK' }
-      Get-Process -Name 'eak-desktop', 'herdr' -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$dir*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+      Get-Process -Name 'eak-desktop' -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$dir*" } | Stop-Process -Force -ErrorAction SilentlyContinue
       $un = Join-Path $dir 'uninstall.exe'
       if (Test-Path $un) {
         $p = Start-Process -FilePath $un -ArgumentList '/S', "_?=$dir" -Wait -PassThru
@@ -112,18 +112,7 @@ function Install-Eak {
     $exe = Join-Path $dir 'eak-desktop.exe'
     if (-not (Test-Path $exe)) { throw "installed, but $exe was not found" }
     Info "installed: $dir (registered in Apps & features as EAK $($app.DisplayVersion))"
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    if (-not (($userPath -split ';') -contains $dir)) {
-      [Environment]::SetEnvironmentVariable('Path', ($(if ($userPath) { "$userPath;$dir" } else { $dir })), 'User')
-      Info "added $dir to your user PATH (new PowerShell/CMD windows can run: herdr)"
-    }
 
-    Step 'Verifying the bundled Herdr runtime'
-    $herdr = Join-Path $dir 'herdr.exe'
-    if (-not (Test-Path $herdr)) { throw "Herdr runtime missing at $herdr (the installer should bundle it)" }
-    $hv = (& $herdr --version 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0) { throw "Herdr failed to run: $hv" }
-    Info "herdr: $hv"
 
     if ($env:EAK_NO_LAUNCH -eq '1') { Step 'Skipping launch check' }
     else {
