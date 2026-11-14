@@ -143,7 +143,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
   - Every finding carries a stable id, the affected objects and location, and a suggested fix; quantitative rules also report measured vs required values with units (ADR-0009). Desktop and AI display of the new fields is not yet wired.
 - Runtime (`eak-runtime`):
-  - Typed command set (39 commands).
+  - Typed command set (40 commands, including the atomic `Batch`; ADR-0013).
   - Revision checks and the agent approval policy.
   - Transactional apply with integrity gate, diff-based undo/redo and an fsync'd journal with crash reconciliation (UNKNOWN_OUTCOME blocks writes).
   - Checkpoints, project lock, evidence store.
@@ -240,3 +240,7 @@ installed. Development is proceeding directly in this repository.
 ## Multilayer boards (2026-11-14)
 - Stackup 2-16 copper layers (signal/plane, per-layer copper and dielectric), `SetLayerCount`, inner-layer tracks and zones, through/blind/buried vias, plane zones with thermal reliefs, DRC-016/017, one Gerber per copper layer, per-span drill files, `stackup.json`, JLCPCB stackup check (limits unverified). PCB editor: layer count, visibility, active layer, via span, plane fill. See ADR-0012.
 - Not done: autorouting on inner layers, per-via plane relief settings, impedance, fabricator-verified limits.
+
+## Schematic editor, Phase 2 (2026-11-14, in progress)
+- `Command::Batch { commands, label }`: several commands applied in order as one transaction, so one revision and one undo/redo step; a failing step rejects the whole batch with `batch step i (Name): ...`; no nesting; at most 1000 steps; class = riskiest step. AI tool `Batch` (domain `Mixed`: ERC, DRC, MECH afterwards); `types.ts` mirror. See ADR-0013.
+- Not done yet: multi-select and drag-move, wire rubber-banding, mirror, junctions, ports, text, inspector, net highlighting.
