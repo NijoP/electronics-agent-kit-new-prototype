@@ -274,6 +274,13 @@ export interface Finding {
   required?: Limit | null;
   suggested_fix?: string | null;
 }
+export type CheckState = "PASS" | "FAIL" | "WARNING" | "UNKNOWN" | "NOT_APPLICABLE" | "REQUIRES_HUMAN_APPROVAL";
+export interface RuleResult {
+  rule_id: string;
+  state: CheckState;
+  reason: string;
+}
+
 export interface Report {
   check: string;
   project_id: Id;
@@ -286,6 +293,9 @@ export interface Report {
   warnings: number;
   not_implemented: string[];
   limitations: string[];
+  /** ADR-0026: one explicit state per rule; absent in reports saved before it (treat as UNKNOWN). */
+  rule_results?: RuleResult[];
+  overall?: CheckState;
 }
 export type Check = "erc" | "drc" | "dfm";
 export interface CheckResult {

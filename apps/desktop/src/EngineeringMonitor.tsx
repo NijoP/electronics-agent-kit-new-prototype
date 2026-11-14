@@ -83,6 +83,21 @@ function ReportSection({
       <p>
         {OUTCOME_TEXT[r.outcome]} · {r.errors} error(s), {r.warnings} warning(s)
       </p>
+      <p>
+        State: <span className={`tag ${r.overall === "PASS" ? "" : "warn"}`}>{stale ? "UNKNOWN (stale)" : (r.overall ?? "UNKNOWN")}</span>
+      </p>
+      {(r.rule_results ?? []).some((x) => x.state !== "PASS" && x.state !== "NOT_APPLICABLE") && (
+        <ul aria-label={`${title} rules not passing`}>
+          {(r.rule_results ?? [])
+            .filter((x) => x.state !== "PASS" && x.state !== "NOT_APPLICABLE")
+            .map((x) => (
+              <li key={x.rule_id}>
+                <code>{x.rule_id}</code> {x.state}
+                {x.reason && <span className="muted"> · {x.reason}</span>}
+              </li>
+            ))}
+        </ul>
+      )}
       {result.evidence_path && <p className="muted">Evidence: {result.evidence_path}</p>}
       <ul className="findings">
         {r.findings.map((f, i) => {
