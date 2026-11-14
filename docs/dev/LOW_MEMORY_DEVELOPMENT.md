@@ -40,23 +40,9 @@ through one lock file (`EAK_BUILD_LOCK`); per-batch locking on a busy host can q
 (the first batch of the first attempt waited 3199 s behind other workers), so prefer a private
 target dir (`CARGO_TARGET_DIR`) when the machine is shared.
 
-## Measured on this host (PARTIAL)
+## Measured on this host
 
-Host: 4 cores, 7.8 GB RAM, 12 GB swap (file + zram), shared with other build jobs, so swap figures are
-whole-host numbers and include other processes. Wrapped with `eak-res.sh`, 1 s sampling, commit
-based on `ea1efeb`, 2026-11-14.
-
-| Batch | Result | Duration | Peak tree RSS | Min MemAvailable | Peak swap used (host) |
-|---|---|---|---|---|---|
-| light:fmt | PASS | 7.4 s | 45 MB | 1766 MB | 4895 MB |
-| light:no-python | PASS | 1.2 s | 0 MB (finished between samples) | 1770 MB | 4895 MB |
-| light:tsc | PASS | 52.1 s | 367 MB | 1614 MB | 4913 MB |
-| light:vitest (10 files, 65 tests) | PASS | 118.2 s | 552 MB | 1311 MB | 4913 MB |
-| test:* (7 crates), clippy, package:tauri | **not measured yet** | | | | |
-
-The Rust test, clippy and packaging batches have not been run through the monitor yet: a first
-attempt queued for the shared build lock for more than 50 minutes. They are to be run on the frozen
-main commit with a private target dir and recorded in `TEST_RESULTS.md`.
+Full run on v0.1.3 (`2153054`), 4 cores / 7.8 GB RAM / 12 GB swap shared with other jobs: 12 of 12 batches passed. The per-batch table (duration, peak process-tree RSS, min MemAvailable, peak swap) is in `TEST_RESULTS.md` ("Full local batch run on v0.1.3"). Highest peaks: clippy 1437 MB, eak-desktop tests 1269 MB (1258 s, the longest batch), eak-manufacturing tests 760 MB. Packaging (`--package`) was not run. Swap and MemAvailable are whole-host values.
 
 ## Decisions and what was not measured
 

@@ -5,6 +5,36 @@ what was run, where, on which commit, and the exact outcome. A result copied fro
 so. Level 1 = Rust engineering tests, Level 2 = frontend tests (vitest + jsdom), Level 3 = real desktop
 tests in a Tauri WebView (directive Part 13).
 
+## 2026-11-15 - Full local batch run on v0.1.3 (`2153054`)
+
+**Run:** `scripts/test-batches.sh --lock-once` on `origin/main` `2153054` (v0.1.3), Linux, 4 cores / 7.8 GB RAM /
+12 GB swap, shared with other jobs. Private worktree `target/`, `CARGO_BUILD_JOBS=2`, one flock on the host
+build lock (no wait). Monitor: `scripts/eak-res.sh`, 1 s sampling. Result: **12 of 12 batches passed, 0
+failed.** Rust: 236 passed, 0 failed (sum of every cargo `test result` line, doctests included).
+Frontend: vitest 122 tests passed (an earlier run on the older base counted 65). Not run: `package:tauri`
+(opt-in `--package`), so packaging was not verified by this run.
+
+| Batch | Result | Duration | Peak tree RSS | Min MemAvailable | Peak swap used (host) |
+|---|---|---|---|---|---|
+| light:fmt | PASS | 9.6 s | 46 MB | 3530 MB | 3488 MB |
+| light:no-python | PASS | 1.2 s | 0 MB (ended between samples) | 3543 MB | 3488 MB |
+| light:tsc | PASS | 77.1 s | 383 MB | 2526 MB | 3488 MB |
+| light:vitest | PASS | 191.5 s | 581 MB | 1994 MB | 3471 MB |
+| test:eak-core | PASS | 161.0 s | 624 MB | 2722 MB | 3471 MB |
+| test:eak-engineering | PASS | 108.6 s | 559 MB | 2754 MB | 3463 MB |
+| test:eak-validation | PASS | 386.5 s | 631 MB | 2619 MB | 3466 MB |
+| test:eak-manufacturing | PASS | 536.2 s | 760 MB | 2075 MB | 3477 MB |
+| test:eak-intelligence | PASS | 259.5 s | 730 MB | 2511 MB | 3500 MB |
+| test:eak-runtime (`--test-threads=2`) | PASS | 250.1 s | 558 MB | 2338 MB | 3238 MB |
+| test:eak-desktop | PASS | 1258.4 s | 1269 MB | 2107 MB | 3962 MB |
+| clippy `--workspace --all-targets -D warnings` | PASS | 244.3 s | 1437 MB | 3598 MB | 3501 MB |
+
+Peak tree RSS is the command's own process tree; swap and MemAvailable are whole-host and include other
+jobs. The largest single batch peak was 1437 MB (clippy), well under the 2 GB / 2.5 GB figures that
+originally triggered this work, but those figures were for the LCSC tests and packaging, and packaging was
+not run here. An earlier attempt on `c1709ff` used a shared target dir that other worktrees also wrote to;
+it was discarded and nothing from it is reported as a result.
+
 ## 2026-11-14 - Low-memory tooling, light batches (PARTIAL)
 
 **Run:** `scripts/test-batches.sh --no-lock --only light` on a branch from `ea1efeb`, Linux, 8 GB host
