@@ -1,6 +1,6 @@
 // Editor interaction tests: pointer clicks on the canvases must become exactly the typed
 // engine commands (with snapped nanometre coordinates); the views never mutate anything.
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditCtx } from "./EditContext";
 import { fixture } from "./fixture.test-data";
@@ -8,6 +8,23 @@ import { PcbView, pcbBounds } from "./PcbView";
 import { SchematicView } from "./SchematicView";
 import type { Command, LibraryEntry } from "./types";
 import { boundsOf, fit, mm, type ViewBox } from "./viewport";
+
+// IPC stand-in for the route tool: answers `route_step` with the direct 90-degree path, the
+// shape eak-engineering returns in free space (the real computation is tested in Rust:
+// interactive.rs and src-tauri/tests/ipc.rs).
+const ipc = vi.hoisted(() => ({ calls: [] as { cmd: string; args: unknown }[] }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async (cmd: string, args: { request: { net: string; layer: unknown; from: { x: number; y: number }; to: { x: number; y: number }; mode: string } }) => {
+    ipc.calls.push({ cmd, args });
+    const { net, layer, from, to, mode } = args.request;
+    const corner = { x: to.x, y: from.y };
+    const segments = [
+      { a: from, b: corner },
+      { a: corner, b: to },
+    ].filter((g) => g.a.x !== g.b.x || g.a.y !== g.b.y);
+    return { revision: 1, net, layer, width: 250_000, clearance: 200_000, mode, segments, via: null, end: to, reached: true, walkaround: false, blocking: [], min_gap: null, message: null };
+  },
+}));
 
 const SIZE = 1000;
 const library: LibraryEntry[] = [
@@ -136,22 +153,31 @@ describe("PCB editor", () => {
     ]);
   });
 
-  it("routes a track on the chosen layer starting from a pad's net", () => {
+  it("routes from a pad's net with the engine's route step and commits ONE Batch", async () => {
+    ipc.calls = [];
     const { container } = render(<PcbView snapshot={fixture()} selected={null} onSelect={() => {}} edit={edit()} />);
     tool("Route");
     fireEvent.change(screen.getByLabelText("Layer"), { target: { value: "bottom" } });
     const svg = container.querySelector("svg.canvas")!;
     clickAt(svg, pcbVb(), 9.3, -10.1); // captures R1 pad 1 (net N1) at (9.2, 10)
-    clickAt(svg, pcbVb(), 15, -10); // axis-aligned → one segment
+    expect(sent).toEqual([]); // starting commits nothing
+    await act(async () => clickAt(svg, pcbVb(), 15, -10));
+    const step = ipc.calls.find((c) => c.cmd === "route_step")!;
+    expect(step.args).toEqual({
+      request: { net: "N1", layer: "bottom", from: { x: 9_200_000, y: 10_000_000 }, to: { x: 15_000_000, y: 10_000_000 }, mode: "diagonal45", width: null, via_at_start: false },
+    });
+    expect(sent).toEqual([]); // fixing a step commits nothing either
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "Enter" });
+    });
     expect(sent).toEqual([
       [
         {
-          type: "AddTrack",
-          layer: "bottom",
-          a: { x: 9_200_000, y: 10_000_000 },
-          b: { x: 15_000_000, y: 10_000_000 },
-          width: null,
-          net: "N1",
+          type: "Batch",
+          label: "Route N1",
+          commands: [
+            { type: "AddTrack", layer: "bottom", a: { x: 9_200_000, y: 10_000_000 }, b: { x: 15_000_000, y: 10_000_000 }, width: 250_000, net: "N1" },
+          ],
         },
       ],
     ]);
@@ -165,7 +191,7 @@ describe("PCB editor", () => {
     clickAt(svg, pcbVb(), 5, -5);
     clickAt(svg, pcbVb(), 8, -5);
     expect(sent).toEqual([]);
-    expect(ctx.notify).toHaveBeenCalledWith("Pick the net to route first.");
+    expect(ctx.notify).toHaveBeenCalledWith("Start on a pad or track of a net, or pick the net first.");
   });
 
   it("places a via on a pad's net and deletes tracks and vias", () => {

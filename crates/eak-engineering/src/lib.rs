@@ -6,11 +6,13 @@
 //! * `copper`  – PCB copper shapes, zone fill with thermal reliefs, physical connectivity.
 //! * `silk`    – silkscreen legend: stroke-font reference designators, mask-opening clip.
 //! * `router`  – EAK's native two-layer grid router.
+//! * `interactive` – route-step API for the interactive PCB route tool (walkaround, 45/90, vias).
 //! * `placer`  – constructive footprint placement.
 //! * `scene3d` – board/component geometry for the 3D workspace and mechanical checks.
 
 pub mod calc;
 pub mod copper;
+pub mod interactive;
 pub mod ipc;
 pub mod netlist;
 pub mod placer;

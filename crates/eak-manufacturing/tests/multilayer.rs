@@ -6,12 +6,31 @@
 use eak_core::{CopperLayer, Project, ViaKind};
 use eak_manufacturing::{compile, stackup, verify_package, PackageStatus};
 use eak_runtime::{fixtures, Engine};
-use eak_validation::{drc, erc, mech};
+use eak_validation::{dfm, drc, erc, mech};
 
 fn board(layers: u8) -> Engine {
     let mut e = Engine::in_memory(Project::new("ml"));
     fixtures::build_schematic(&mut e).expect("schematic");
     fixtures::build_pcb_layers(&mut e, layers).expect("pcb");
+    // Declare a height limit so MECH-001 is evaluated (unknown mechanical fit blocks release).
+    let rev = e.project().revision;
+    let r = e.execute(eak_runtime::CommandRequest {
+        expected_revision: rev,
+        actor: eak_runtime::Actor::human(),
+        command: eak_runtime::Command::SetDesignRules {
+            min_track_width: None,
+            min_clearance: None,
+            min_drill: None,
+            min_annular_ring: None,
+            board_edge_clearance: None,
+            default_track_width: None,
+            default_clearance: None,
+            temp_rise_c: None,
+            max_component_height: Some(25_000_000),
+        },
+        approval: None,
+    });
+    assert!(r.accepted, "{r:?}");
     e
 }
 
@@ -33,7 +52,16 @@ fn four_layer_board_passes_drc_and_exports_every_layer() {
 
     let dir = std::env::temp_dir().join(format!("eak-ml4-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let m = compile(p, &[&erc_r, &drc_r, &mech_r], &dir).expect("compile");
+    // The built-in JLCPCB profile is 1-2 layer; this board needs a 4-layer profile, else DFM-008.
+    assert!(dfm::run(p, &dfm::jlcpcb_standard())
+        .findings
+        .iter()
+        .any(|f| f.rule_id == "DFM-008"));
+    let mut fab4 = dfm::jlcpcb_standard();
+    fab4.max_layers = 4;
+    let dfm_r = dfm::run(p, &fab4);
+    assert_eq!(dfm_r.errors, 0, "{:?}", dfm_r.findings);
+    let m = compile(p, &[&erc_r, &drc_r, &mech_r, &dfm_r], &dir).expect("compile");
     assert_eq!(
         m.status,
         PackageStatus::InternallyVerifiedReleaseCandidate,

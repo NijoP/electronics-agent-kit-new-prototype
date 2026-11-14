@@ -1,8 +1,9 @@
 // Bottom panel: ERC/DRC findings, a BOM derived from the schematic, and the engine log.
 import { EngineeringMonitor } from "../EngineeringMonitor";
+import { SimulationPanel } from "../SimulationPanel";
 import type { Check, CheckResult, EngineEvent, Finding, Id, Snapshot } from "../types";
 
-export type BottomTab = "findings" | "bom" | "log";
+export type BottomTab = "findings" | "bom" | "sim" | "log";
 
 interface Props {
   tab: BottomTab;
@@ -42,6 +43,7 @@ export function bomLines(s: Snapshot): BomLine[] {
 const TABS: [BottomTab, string][] = [
   ["findings", "Findings"],
   ["bom", "BOM"],
+  ["sim", "Simulation"],
   ["log", "Log"],
 ];
 
@@ -81,6 +83,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
               <p className="muted hint">Derived from schematic symbols at revision {snapshot.project.revision}. Supplier part numbers and pricing are not included here.</p>
             </>
           ))}
+        {tab === "sim" && <SimulationPanel revision={snapshot.project.revision} />}
         {tab === "log" && (
           <section className="activity" aria-label="Activity">
             {events.length === 0 ? (
