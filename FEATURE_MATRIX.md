@@ -2,7 +2,7 @@
 
 Status of every feature area in the owner's 2026-11-14 directive ("Transform EAK into a professional,
 fully interactive EDA desktop application"), kept up to date as work lands. The design behind each row
-is in `docs/architecture/`; the EasyEDA comparison is in `docs/research/EASYEDA_FEATURE_MATRIX.md`.
+is in `docs/archive/eda-desktop-plan/`; the EasyEDA comparison is in `docs/research/EASYEDA_FEATURE_MATRIX.md`.
 
 **Status levels** (directive Part 17), cumulative from left to right:
 `-` not started · **impl** implemented, no dedicated test found · **unit** unit tested · **integ**
@@ -22,7 +22,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 |---|---|---|
 | Desktop app builds and starts (Tauri 2) | integ | `tauri build --no-bundle` plus a 6-second launch smoke check on Windows (PR #12); no interactive WebView test |
 | Application menu bar | unit | `shell/MenuBar.tsx` (13 menus, defined in `Workspace.tsx`); `part4.test.tsx` (jsdom) |
-| Main toolbar | partial (unit) | grouped toolbar in `Workspace.tsx`: open/save, undo/redo, tools, zoom, ERC, DRC, auto-route, export Gerbers, commands, assistant. There is no MECH button: `Check` is `Erc`/`Drc` only (`src-tauri/src/lib.rs`); MECH runs inside `export_manufacturing`. Save as, grid, rules and simulation are shown disabled with a reason |
+| Main toolbar | partial (unit) | grouped toolbar in `Workspace.tsx`: open/save, undo/redo, tools, zoom, ERC, DRC, auto-route, export Gerbers, commands. There is no MECH button: `Check` is `Erc`/`Drc` only (`src-tauri/src/lib.rs`); MECH runs inside `export_manufacturing`. Save as, grid, rules and simulation are shown disabled with a reason |
 | Command palette (Ctrl/Cmd+K) | unit | `App.test.tsx` |
 | Document tabs | unit | `shell/DocTabs.tsx`, `shell/documents.ts`: one tab per engine document, split view, per-project restore; `part4.test.tsx` (jsdom) |
 | Dirty indicator / save / save as | - | every command is durably saved; save/dirty semantics to be decided by ADR (plan Phase 1) |
@@ -105,14 +105,14 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Click a finding -> navigate, zoom, highlight, safe correction | - | |
 | DFM report | - | |
 
-## Part 10: AI-native workflow
+## Part 10: optional AI infrastructure (no assistant UI)
 
 | Feature | Status | Evidence / note |
 |---|---|---|
 | Agent loop with typed tools and approvals | integ | `eak-intelligence/tests/agent.rs` (scripted provider; no live model) |
 | Provider adaptor and OS-keyring keys | integ | `apps/desktop/src-tauri/tests/models.rs`, `eak-intelligence/tests/adaptor_http.rs` (loopback HTTP) |
 | Domain classification panel | unit | `DomainPanel.test.tsx`; `eak-intelligence/tests/domain.rs` |
-| Assistant panel, agent activity panel, proposal preview UI | partial (unit) | `shell/AiPanel.tsx`: a local deterministic command interpreter (not a model call); proposals shown as a diff, Accept goes through `execute_command`; `shell.test.tsx`. Journaled as a human actor (evaluator C5) |
+| Assistant panel (removed) | removed | The chat-style panel `shell/AiPanel.tsx` was removed in the IDE shell (#49); EAK is not an assistant UI. Agents work through the terminal workspace and the engineering harness (`docs/AGENT_HARNESS.md`). Model-provider settings, typed agent tools and approvals stay as optional infrastructure |
 
 ## Part 11: simulation and manufacturing
 
@@ -135,5 +135,6 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 
 | Date | Change | Source |
 |---|---|---|
-| 2026-11-14 | Initial baseline (Phase 0) | `docs/architecture/EDA_DESKTOP_GAP_ANALYSIS.md` |
+| 2026-11-14 | Initial baseline (Phase 0) | `docs/archive/eda-desktop-plan/EDA_DESKTOP_GAP_ANALYSIS.md` |
 | 2026-11-14 | Noted PRs #21 and #22 merged after the baseline, not yet reflected | `gh pr view 21`, `gh pr view 22` |
+| 2026-11-15 | Phase 1 realignment: assistant row removed; terminal workspace and harness rows are tracked in `STATUS.md` (code-reviewed only). Rows above that predate the IDE shell, select/drag, grids and mirror work (e.g. Mirror, multi-select) are stale and need a re-audit | `STATUS.md`, `docs/development/TEST_EVIDENCE.md` |

@@ -26,10 +26,13 @@ Update STATUS.md, the traceability table and ADRs when behaviour or decisions ch
 | Area | Crate / path |
 |---|---|
 | IR, schema, persistence contracts | `eak-core`, `eak-runtime/{command,delta,engine,store}.rs` |
-| Electronics engines | `eak-engineering`, `eak-validation`, `eak-manufacturing` |
-| Desktop app | `apps/desktop` (when added) |
-| Intelligence engine | `eak-intelligence` (when added) |
-Shared-contract changes (IR types, `Command`, `CommandResponse`, report types) need an ADR.
+| Electronics engines | `eak-engineering`, `eak-validation`, `eak-manufacturing`, `eak-simulation` |
+| Desktop app (IDE shell, EDA workspace, Terminal workspace UI) | `apps/desktop` |
+| Terminal engine (PTY sessions, status, control API) | `crates/eak-terminal` |
+| Agent harness (`eak` CLI, MCP server, app endpoint) | `crates/eak-harness` |
+| Optional model providers, typed tools, approvals | `eak-intelligence` |
+Shared-contract changes (IR types, `Command`, `CommandResponse`, report types, harness tool
+envelope) need an ADR. Third-party source goes only under `third_party/licenses/` with its notices.
 
 ## Safety
 Never push to anything other than `origin` (NijoP/electronics-agent-kit-new-prototype), never

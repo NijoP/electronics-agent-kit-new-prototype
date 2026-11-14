@@ -1,6 +1,6 @@
 # Licensing
 
-EAK is licensed under either of MIT or Apache-2.0 at your option (see LICENSE-MIT and LICENSE-APACHE); copyright 2026 Tusk Innovations Global Pvt Ltd. No third-party source code has been copied into this repository.
+EAK is licensed under either of MIT or Apache-2.0 at your option (see LICENSE-MIT and LICENSE-APACHE); copyright 2026 Tusk Innovations Global Pvt Ltd. One small piece of Apache-2.0 third-party source is included with its notices under `third_party/licenses/` (see `docs/LICENSES_AND_ATTRIBUTION.md`); everything else is EAK-original.
 
 ## Rust dependencies (direct)
 | Crate | Licence | Use |

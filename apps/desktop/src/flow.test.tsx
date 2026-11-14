@@ -135,7 +135,7 @@ afterEach(() => {
 const toolbar = () => within(screen.getByRole("toolbar", { name: "Main toolbar" }));
 const menubar = () => within(screen.getByRole("navigation", { name: "Application menu" }));
 const ran = (cmd: string) => calls.filter((c) => c.cmd === cmd);
-const execCalls = () => calls.filter((c) => c.cmd === "execute_command" || c.cmd === "execute_assistant_command");
+const execCalls = () => calls.filter((c) => c.cmd === "execute_command");
 const executed = () => execCalls().map((c) => (c.args.command as { type: string }).type);
 
 async function createFromHome(name = "Flow") {

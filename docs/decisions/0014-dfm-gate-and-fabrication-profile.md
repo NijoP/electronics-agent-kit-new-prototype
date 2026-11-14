@@ -1,7 +1,7 @@
 # ADR-0014: DFM check against a fabrication profile, and DFM as a release gate
 
 **Date:** 2026-11-14 · **Status:** accepted · **Source requirement:** product spec §9 (verification
-evidence, "unknown is never pass"); plan `docs/architecture/EDA_DESKTOP_IMPLEMENTATION_PLAN.md`
+evidence, "unknown is never pass"); plan `docs/archive/eda-desktop-plan/EDA_DESKTOP_IMPLEMENTATION_PLAN.md`
 Phase 4 (DFM report) and Phase 7 (manufacturing outputs).
 
 ## Decision

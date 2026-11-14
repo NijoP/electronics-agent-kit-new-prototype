@@ -4,7 +4,7 @@
   action to the user: drag-moving a selection (one `MoveSymbol` per symbol plus wire-end moves),
   paste, align, delete-selection, and AI proposals. Sent one by one they take N revisions and N
   undo steps, and a failure half-way leaves a half-moved selection. Phase 2 of
-  `docs/architecture/EDA_DESKTOP_IMPLEMENTATION_PLAN.md` puts this first because the other
+  `docs/archive/eda-desktop-plan/EDA_DESKTOP_IMPLEMENTATION_PLAN.md` puts this first because the other
   editor work depends on it.
 - **Options considered:**
   1. Client-side grouping: the UI sends N commands and an "undo group" id. Rejected: not

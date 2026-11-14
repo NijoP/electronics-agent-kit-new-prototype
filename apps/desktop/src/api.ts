@@ -14,7 +14,9 @@ import type {
   ConnectivityReport,
   ConnectionReport,
   EngineEvent,
+  ModelInfo,
   ProfileInput,
+  ProviderSpec,
   ProviderView,
   ExportResult,
   ImportResult,
@@ -34,6 +36,28 @@ import type {
 } from "./types";
 import type { FileContent, FileEntry, GitStatus } from "./shell/files";
 import type { EngineChange } from "./shell/syncReport";
+
+// Terminal workspace commands: must match `TERMINAL_COMMANDS` in src-tauri/src/terminal.rs.
+export const TERMINAL_IPC = [
+  "terminal_overview",
+  "terminal_shells",
+  "terminal_launchers",
+  "terminal_api",
+  "terminal_set_context",
+  "terminal_create",
+  "terminal_write",
+  "terminal_run",
+  "terminal_resize",
+  "terminal_scrollback",
+  "terminal_rename",
+  "terminal_focus",
+  "terminal_restart",
+  "terminal_close",
+  "terminal_space_create",
+  "terminal_space_rename",
+  "terminal_space_close",
+  "terminal_move_tab",
+] as const;
 
 // Must match `IPC_COMMANDS` in src-tauri/src/lib.rs (checked by tests/ipc.rs).
 export const IPC_COMMANDS = [
@@ -55,6 +79,10 @@ export const IPC_COMMANDS = [
   "model_clear_key",
   "model_list_models",
   "model_test_connection",
+  "model_catalog",
+  "model_set_default",
+  "model_export_config",
+  "model_import_config",
   "library_components",
   "library_search",
   "library_footprint_candidates",
@@ -82,6 +110,7 @@ export const IPC_COMMANDS = [
   "project_file_rename",
   "project_file_delete",
   "project_git_status",
+  ...TERMINAL_IPC,
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
@@ -117,8 +146,12 @@ export const api = {
   removeProvider: (id: string) => call<void>("model_remove_provider", { id }),
   setKey: (id: string, apiKey: string) => call<ProviderView>("model_set_key", { id, api_key: apiKey }),
   clearKey: (id: string) => call<ProviderView>("model_clear_key", { id }),
-  listModels: (id: string) => call<string[]>("model_list_models", { id }),
+  listModels: (id: string) => call<ModelInfo[]>("model_list_models", { id }),
   testConnection: (id: string) => call<ConnectionReport>("model_test_connection", { id }),
+  modelCatalog: () => call<ProviderSpec[]>("model_catalog"),
+  setDefaultProvider: (id: string) => call<ProviderView[]>("model_set_default", { id }),
+  exportProviders: () => call<string>("model_export_config"),
+  importProviders: (json: string) => call<ProviderView[]>("model_import_config", { json }),
   libraryComponents: () => call<LibraryEntry[]>("library_components"),
   librarySearch: (query: string, category: string, source: string) => call<LibraryPart[]>("library_search", { query, category, source }),
   libraryFootprintCandidates: (componentId: string) => call<FootprintCandidate[]>("library_footprint_candidates", { component_id: componentId }),

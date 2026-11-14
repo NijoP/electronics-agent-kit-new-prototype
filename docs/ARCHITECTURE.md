@@ -5,8 +5,8 @@ desktop process, one Rust runtime, a small set of crates with one-directional de
 
 ```
              +-------------------------+     +--------------------------+
- Desktop UI  | apps/desktop (Tauri 2 + |     | eak-intelligence (lead   |
-             | React/TS) — presentation|     | agent, typed tools)      |
+ Desktop UI  | apps/desktop (Tauri 2 + |     | eak-harness (CLI, MCP;   |
+             | React/TS) — presentation|     | agent actor, typed tools)|
              +-----------+-------------+     +------------+-------------+
                          | CommandRequest (typed)         | CommandRequest (Agent actor + approval)
                          v                                v
@@ -30,7 +30,14 @@ desktop process, one Rust runtime, a small set of crates with one-directional de
         +----------------------+   +--------------------+   +---------------------+
 ```
 
-`apps/desktop` exists (thin Tauri shell over `Engine`; see `apps/desktop/README.md`). `eak-intelligence` is planned.
+Other components (see `docs/PRODUCT_VISION.md`):
+- `apps/desktop`: Tauri 2 + React shell over `Engine`: IDE shell (workspaces, explorer, multi-project), EDA workspace, and the Terminal workspace UI (`docs/TERMINAL_ARCHITECTURE.md`).
+- `crates/eak-terminal`: PTY sessions, status, local control API. No design access.
+- `crates/eak-harness`: `eak` CLI, MCP server and the app endpoint. Agents call typed tools; the harness submits `Command`s through the engine (`docs/AGENT_HARNESS.md`, `docs/ENGINEERING_API.md`). Code-reviewed only.
+- `crates/eak-intelligence`: optional model providers, typed tools, approvals. There is no assistant UI.
+- `crates/eak-simulation`: ngspice runner.
+
+The diagram above shows the engine path; external agents reach `Engine::execute` through `eak-harness` (agent actor, approval policy) exactly as the desktop UI does.
 
 ## Key decisions (see `docs/decisions/`)
 - **ADR-0001 Project format:** a folder holding `project.eak.json` (canonical, pretty and

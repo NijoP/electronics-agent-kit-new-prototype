@@ -84,7 +84,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   // Object selected by the current press, so the click that ends it does not toggle it back.
   const pressed = useRef<Id | null>(null);
   const sheet = sheets.find((s) => s.id === sheetId) ?? sheets[0];
-  // The canvas selection, or the symbol selected elsewhere (explorer, findings, assistant).
+  // The canvas selection, or the symbol selected elsewhere (explorer, findings).
   const pruned = S.prune(selRaw, snapshot);
   const sel = S.isEmpty(pruned) && selected && schematic.symbols[selected] ? { ...S.EMPTY, symbols: [selected] } : pruned;
   const symbols = snapshot.geometry.symbols.filter((s) => s.sheet_id === sheet?.id);

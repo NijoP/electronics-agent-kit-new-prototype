@@ -25,5 +25,9 @@ pub use agent::{
     ActionRecord, Agent, AgentConfig, AgentEvent, AgentMode, AgentOutcome, AgentRun,
     ApprovalRequest, Approver, DenyAll, PlannedStep,
 };
-pub use message::{CancelToken, ChatMessage, ChatRequest, ChatResponse, ToolCall, ToolSpec};
-pub use provider::{build_provider, Provider, ProviderConfig, ProviderError, ProviderKind};
+pub use message::{
+    CancelToken, ChatMessage, ChatRequest, ChatResponse, StreamEvent, ToolCall, ToolSpec,
+};
+pub use provider::{
+    build_provider, ErrorClass, Provider, ProviderConfig, ProviderError, ProviderKind,
+};

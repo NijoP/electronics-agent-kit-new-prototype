@@ -26,6 +26,31 @@ pub trait HttpTransport: Send + Sync {
     fn post(&self, req: HttpRequest, cancel: &CancelToken) -> Result<HttpResponse, ProviderError>;
     /// Perform one GET (model listing). Same cancellation contract as `post`; `body` is ignored.
     fn get(&self, req: HttpRequest, cancel: &CancelToken) -> Result<HttpResponse, ProviderError>;
+    /// POST and deliver a 2xx body line by line as it arrives (SSE / NDJSON streams). A
+    /// non-2xx response is returned whole in `body` and no line is delivered; on 2xx the
+    /// returned `body` is empty. The default reads the whole body first (tests and
+    /// transports without incremental reads).
+    fn post_stream(
+        &self,
+        req: HttpRequest,
+        cancel: &CancelToken,
+        on_line: &mut dyn FnMut(&str) -> Result<(), ProviderError>,
+    ) -> Result<HttpResponse, ProviderError> {
+        let r = self.post(req, cancel)?;
+        if !(200..300).contains(&r.status) {
+            return Ok(r);
+        }
+        for line in r.body.lines() {
+            if cancel.is_cancelled() {
+                return Err(ProviderError::Cancelled);
+            }
+            on_line(line)?;
+        }
+        Ok(HttpResponse {
+            status: r.status,
+            body: String::new(),
+        })
+    }
 }
 
 const POLL: Duration = Duration::from_millis(25);
@@ -86,6 +111,121 @@ mod remote {
         ) -> Result<HttpResponse, ProviderError> {
             send(req, cancel, true)
         }
+        fn post_stream(
+            &self,
+            req: HttpRequest,
+            cancel: &CancelToken,
+            on_line: &mut dyn FnMut(&str) -> Result<(), ProviderError>,
+        ) -> Result<HttpResponse, ProviderError> {
+            stream(req, cancel, on_line)
+        }
+    }
+
+    enum Msg {
+        Line(String),
+        /// Final result: `Some(response)` for a non-2xx status, `None` after a 2xx stream.
+        End(Result<Option<HttpResponse>, ProviderError>),
+    }
+
+    fn agent(timeout: Duration) -> ureq::Agent {
+        ureq::Agent::config_builder()
+            .timeout_global(Some(timeout))
+            .http_status_as_error(false)
+            .build()
+            .into()
+    }
+
+    /// Streaming POST on a worker thread; lines cross a channel so cancellation and an idle
+    /// deadline (no data for `timeout`) are enforced here, between lines.
+    fn stream(
+        req: HttpRequest,
+        cancel: &CancelToken,
+        on_line: &mut dyn FnMut(&str) -> Result<(), ProviderError>,
+    ) -> Result<HttpResponse, ProviderError> {
+        use std::io::BufRead;
+        if cancel.is_cancelled() {
+            return Err(ProviderError::Cancelled);
+        }
+        let (tx, rx) = mpsc::channel();
+        let timeout = req.timeout;
+        let worker_cancel = cancel.clone();
+        std::thread::spawn(move || {
+            let mut b = agent(req.timeout).post(&req.url);
+            for (k, v) in &req.headers {
+                b = b.header(k.as_str(), v.as_str());
+            }
+            let resp = match b.send(req.body.as_bytes()) {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(Msg::End(Err(map_ureq_error(e))));
+                    return;
+                }
+            };
+            if !(200..300).contains(&resp.status().as_u16()) {
+                let _ = tx.send(Msg::End(read(resp).map(Some)));
+                return;
+            }
+            let reader = resp
+                .into_body()
+                .into_with_config()
+                .limit(MAX_BODY_BYTES)
+                .reader();
+            let mut lines = std::io::BufReader::new(reader);
+            let mut line = String::new();
+            loop {
+                if worker_cancel.is_cancelled() {
+                    return;
+                }
+                line.clear();
+                match lines.read_line(&mut line) {
+                    Ok(0) => {
+                        let _ = tx.send(Msg::End(Ok(None)));
+                        return;
+                    }
+                    Ok(_) => {
+                        let l = line.trim_end_matches(['\r', '\n']).to_string();
+                        if tx.send(Msg::Line(l)).is_err() {
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Msg::End(Err(ProviderError::Transport(format!(
+                            "stream interrupted: {e}"
+                        )))));
+                        return;
+                    }
+                }
+            }
+        });
+        let mut deadline = Instant::now() + timeout + Duration::from_secs(5);
+        loop {
+            if cancel.is_cancelled() {
+                return Err(ProviderError::Cancelled);
+            }
+            match rx.recv_timeout(POLL) {
+                Ok(Msg::Line(l)) => {
+                    deadline = Instant::now() + timeout + Duration::from_secs(5);
+                    on_line(&l)?;
+                }
+                Ok(Msg::End(Ok(Some(r)))) => return Ok(r),
+                Ok(Msg::End(Ok(None))) => {
+                    return Ok(HttpResponse {
+                        status: 200,
+                        body: String::new(),
+                    })
+                }
+                Ok(Msg::End(Err(e))) => return Err(e),
+                Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() > deadline => {
+                    return Err(ProviderError::Timeout)
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(ProviderError::Transport(
+                        "HTTP worker ended unexpectedly".into(),
+                    ))
+                }
+            }
+        }
     }
 
     fn read(mut resp: ureq::http::Response<ureq::Body>) -> Result<HttpResponse, ProviderError> {
@@ -109,11 +249,7 @@ mod remote {
         let (tx, rx) = mpsc::channel();
         let timeout = req.timeout;
         std::thread::spawn(move || {
-            let agent: ureq::Agent = ureq::Agent::config_builder()
-                .timeout_global(Some(req.timeout))
-                .http_status_as_error(false)
-                .build()
-                .into();
+            let agent = agent(req.timeout);
             let result = if is_get {
                 let mut b = agent.get(&req.url);
                 for (k, v) in &req.headers {
@@ -154,6 +290,14 @@ mod remote {
     fn map_ureq_error(e: ureq::Error) -> ProviderError {
         match e {
             ureq::Error::Timeout(_) => ProviderError::Timeout,
+            ureq::Error::BadUri(u) => ProviderError::InvalidBaseUrl(u),
+            ureq::Error::Http(e) => ProviderError::InvalidBaseUrl(e.to_string()),
+            ureq::Error::HostNotFound => ProviderError::Transport(
+                "host not found (check the base URL and your network connection)".into(),
+            ),
+            ureq::Error::ConnectionFailed => ProviderError::Transport(
+                "connection refused (is the server running and the base URL right?)".into(),
+            ),
             other => ProviderError::Transport(other.to_string()),
         }
     }
@@ -166,6 +310,8 @@ pub struct Endpoint {
     pub api_key: Option<ApiKey>,
     pub timeout: Duration,
     pub max_retries: u32,
+    /// Non-secret headers added to every request (organization / project ids).
+    pub extra_headers: Vec<(String, String)>,
     pub transport: Arc<dyn HttpTransport>,
 }
 
@@ -184,8 +330,15 @@ pub(crate) fn status_error(status: u16, body: &str) -> ProviderError {
                 .and_then(|m| m.as_str().map(String::from))
         })
         .unwrap_or_else(|| snippet(body));
+    let lower = message.to_ascii_lowercase();
     match status {
         401 | 403 => ProviderError::Auth { status, message },
+        // Gemini reports a bad key as 400 INVALID_ARGUMENT "API key not valid".
+        400 if lower.contains("api key") || lower.contains("api_key_invalid") => {
+            ProviderError::Auth { status, message }
+        }
+        // Anthropic "overloaded" and similar capacity errors.
+        529 => ProviderError::Server { status, message },
         429 => ProviderError::RateLimited(message),
         500..=599 => ProviderError::Server { status, message },
         _ => ProviderError::Http { status, message },
@@ -213,15 +366,62 @@ impl Endpoint {
         body: &Value,
         cancel: &CancelToken,
     ) -> Result<Value, ProviderError> {
+        let req = self.json_request(path, headers, body);
+        self.send_json(req, false, cancel)
+    }
+
+    fn json_request(
+        &self,
+        path: &str,
+        headers: Vec<(String, String)>,
+        body: &Value,
+    ) -> HttpRequest {
         let mut all = vec![("content-type".to_string(), "application/json".to_string())];
         all.extend(headers);
-        let req = HttpRequest {
+        all.extend(self.extra_headers.iter().cloned());
+        HttpRequest {
             url: format!("{}{}", self.base_url, path),
             headers: all,
             body: body.to_string(),
             timeout: self.timeout,
-        };
-        self.send_json(req, false, cancel)
+        }
+    }
+
+    /// POST `body` and feed each line of a 2xx streaming reply to `on_line`. Transient
+    /// failures are retried only while nothing has been received yet.
+    pub fn post_stream(
+        &self,
+        path: &str,
+        headers: Vec<(String, String)>,
+        body: &Value,
+        cancel: &CancelToken,
+        on_line: &mut dyn FnMut(&str) -> Result<(), ProviderError>,
+    ) -> Result<(), ProviderError> {
+        let req = self.json_request(path, headers, body);
+        let mut attempt = 0;
+        loop {
+            let mut started = false;
+            let result = self
+                .transport
+                .post_stream(req.clone(), cancel, &mut |l| {
+                    started = true;
+                    on_line(l)
+                })
+                .and_then(|r| {
+                    if (200..300).contains(&r.status) {
+                        Ok(())
+                    } else {
+                        Err(status_error(r.status, &r.body))
+                    }
+                });
+            match result {
+                Err(e) if e.is_retryable() && !started && attempt < self.max_retries => {
+                    attempt += 1;
+                    cancellable_sleep(Duration::from_millis(500 << attempt), cancel)?;
+                }
+                other => return other,
+            }
+        }
     }
 
     /// GET `base_url + path` and parse the JSON body, with the same retry policy.
@@ -231,9 +431,11 @@ impl Endpoint {
         headers: Vec<(String, String)>,
         cancel: &CancelToken,
     ) -> Result<Value, ProviderError> {
+        let mut all = headers;
+        all.extend(self.extra_headers.iter().cloned());
         let req = HttpRequest {
             url: format!("{}{}", self.base_url, path),
-            headers,
+            headers: all,
             body: String::new(),
             timeout: self.timeout,
         };
@@ -306,7 +508,7 @@ pub(crate) mod testing {
                 .lock()
                 .unwrap()
                 .iter()
-                .map(|r| serde_json::from_str(&r.body).unwrap())
+                .map(|r| serde_json::from_str(&r.body).unwrap_or(Value::Null))
                 .collect()
         }
     }
@@ -349,6 +551,7 @@ mod tests {
             api_key: None,
             timeout: Duration::from_secs(1),
             max_retries: retries,
+            extra_headers: vec![],
             transport: t,
         }
     }

@@ -330,13 +330,16 @@ fn frontend_invokes_exactly_the_registered_commands() {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/api.ts"),
     )
     .unwrap();
-    let start = api
-        .find("IPC_COMMANDS = [")
-        .expect("api.ts declares IPC_COMMANDS");
-    let list = &api[start..api[start..].find(']').unwrap() + start];
-    let mut ts: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
+    let names = |decl: &str| -> Vec<String> {
+        let start = api.find(decl).unwrap_or_else(|| panic!("api.ts declares {decl}"));
+        let list = &api[start..api[start..].find(']').unwrap() + start];
+        list.split('"').skip(1).step_by(2).map(String::from).collect()
+    };
+    let mut ts = names("IPC_COMMANDS = [");
+    ts.extend(names("TERMINAL_IPC = ["));
     ts.sort();
-    let mut rust = IPC_COMMANDS.to_vec();
+    let mut rust: Vec<String> = IPC_COMMANDS.iter().map(|s| s.to_string()).collect();
+    rust.extend(eak_desktop::terminal::TERMINAL_COMMANDS.iter().map(|s| s.to_string()));
     rust.sort();
     assert_eq!(ts, rust);
 }

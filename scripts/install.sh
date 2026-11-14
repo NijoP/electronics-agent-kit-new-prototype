@@ -130,6 +130,11 @@ fetch() {
   else curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$TMP/$1" "$SRC/$1"; fi
 }
 fetch SHA256SUMS || fail "release $TAG has no SHA256SUMS ($SRC/SHA256SUMS is missing)" "Nothing was installed; the release may be incomplete."
+# Releases up to v0.1.4 name Linux packages with the Tauri bundler's pattern (EAK_<version>_amd64.*).
+if [ "$OS" = linux ] && [ "$ARCH" = x86_64 ] && ! grep -qE "[ *]$ASSET\$" "$TMP/SHA256SUMS"; then
+  ALT="EAK_${TAG#v}_amd64.${ASSET##*.}"
+  if grep -qE "[ *]$ALT\$" "$TMP/SHA256SUMS"; then info "using legacy asset name $ALT"; ASSET="$ALT"; fi
+fi
 fetch "$ASSET" || fail "release $TAG has no asset named $ASSET for $OS-$ARCH" "Missing artifact: $SRC/$ASSET" "See docs/PLATFORM_SUPPORT.md; nothing was installed."
 WANT="$(grep -E "[ *]$ASSET\$" "$TMP/SHA256SUMS" | head -n1 | awk '{print $1}')"
 [ -n "$WANT" ] || fail "release $TAG has no checksum entry for $ASSET" "Missing artifact: $ASSET"

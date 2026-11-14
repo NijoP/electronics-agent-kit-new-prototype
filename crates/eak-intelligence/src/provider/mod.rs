@@ -10,11 +10,14 @@
 
 pub mod adaptor;
 pub mod anthropic;
+pub mod catalog;
+pub mod gemini;
 pub mod http;
 pub mod ollama;
 pub mod openai;
+pub mod sse;
 
-use crate::message::{CancelToken, ChatRequest, ChatResponse};
+use crate::message::{CancelToken, ChatRequest, ChatResponse, StreamEvent};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,6 +28,10 @@ pub enum ProviderError {
     MissingApiKey(String),
     #[error("invalid provider configuration: {0}")]
     Config(String),
+    #[error("invalid base URL: {0}")]
+    InvalidBaseUrl(String),
+    #[error("not implemented: {0}")]
+    NotImplemented(String),
     #[error("provider rejected the credentials (HTTP {status}): {message}")]
     Auth { status: u16, message: String },
     #[error("provider rate limit (HTTP 429): {0}")]
@@ -58,6 +65,102 @@ impl ProviderError {
                 | ProviderError::Timeout
         )
     }
+
+    /// The user-facing class of this failure (Spec 5.4: invalid key, authentication failed,
+    /// unsupported model, invalid base URL, network error, rate limit, provider unavailable).
+    pub fn class(&self) -> ErrorClass {
+        match self {
+            ProviderError::MissingApiKey(_) => ErrorClass::MissingApiKey,
+            ProviderError::Config(m) if m.contains("base URL") => ErrorClass::InvalidBaseUrl,
+            ProviderError::Config(_) => ErrorClass::InvalidConfiguration,
+            ProviderError::InvalidBaseUrl(_) => ErrorClass::InvalidBaseUrl,
+            ProviderError::NotImplemented(_) | ProviderError::TransportNotCompiledIn(_) => {
+                ErrorClass::NotImplemented
+            }
+            ProviderError::Auth { status: 403, .. } => ErrorClass::AuthenticationFailed,
+            ProviderError::Auth { .. } => ErrorClass::InvalidApiKey,
+            ProviderError::RateLimited(_) => ErrorClass::RateLimited,
+            ProviderError::Server { .. } => ErrorClass::ProviderUnavailable,
+            ProviderError::Http { status, message } => {
+                let m = message.to_ascii_lowercase();
+                let about_model = m.contains("model");
+                match status {
+                    404 if about_model => ErrorClass::UnsupportedModel,
+                    404 | 405 => ErrorClass::InvalidBaseUrl,
+                    400 | 422
+                        if about_model
+                            && [
+                                "not found",
+                                "does not exist",
+                                "invalid model",
+                                "not supported",
+                                "unknown model",
+                                "unsupported",
+                            ]
+                            .iter()
+                            .any(|p| m.contains(p)) =>
+                    {
+                        ErrorClass::UnsupportedModel
+                    }
+                    _ => ErrorClass::RequestRejected,
+                }
+            }
+            ProviderError::Transport(_) => ErrorClass::NetworkError,
+            ProviderError::Timeout => ErrorClass::Timeout,
+            ProviderError::Malformed(m) => {
+                let l = m.to_ascii_lowercase();
+                // A 2xx HTML page means the URL points at a website, not an API.
+                if l.contains("<html") || l.contains("<!doctype") {
+                    ErrorClass::InvalidBaseUrl
+                } else {
+                    ErrorClass::InvalidResponse
+                }
+            }
+            ProviderError::Cancelled => ErrorClass::Cancelled,
+            ProviderError::Exhausted(_) => ErrorClass::InvalidResponse,
+        }
+    }
+}
+
+/// User-facing failure classes shown in the provider settings (never "connected" on failure).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorClass {
+    MissingApiKey,
+    InvalidApiKey,
+    AuthenticationFailed,
+    UnsupportedModel,
+    InvalidBaseUrl,
+    NetworkError,
+    Timeout,
+    RateLimited,
+    ProviderUnavailable,
+    RequestRejected,
+    InvalidResponse,
+    InvalidConfiguration,
+    NotImplemented,
+    Cancelled,
+}
+
+impl ErrorClass {
+    pub fn title(self) -> &'static str {
+        match self {
+            ErrorClass::MissingApiKey => "API key required",
+            ErrorClass::InvalidApiKey => "Invalid API key",
+            ErrorClass::AuthenticationFailed => "Authentication failed",
+            ErrorClass::UnsupportedModel => "Unsupported model",
+            ErrorClass::InvalidBaseUrl => "Invalid base URL",
+            ErrorClass::NetworkError => "Network error",
+            ErrorClass::Timeout => "Request timed out",
+            ErrorClass::RateLimited => "Rate limit exceeded",
+            ErrorClass::ProviderUnavailable => "Provider unavailable",
+            ErrorClass::RequestRejected => "Request rejected",
+            ErrorClass::InvalidResponse => "Invalid response",
+            ErrorClass::InvalidConfiguration => "Invalid configuration",
+            ErrorClass::NotImplemented => "Not implemented",
+            ErrorClass::Cancelled => "Cancelled",
+        }
+    }
 }
 
 pub trait Provider: Send + Sync {
@@ -68,6 +171,29 @@ pub trait Provider: Send + Sync {
         request: &ChatRequest,
         cancel: &CancelToken,
     ) -> Result<ChatResponse, ProviderError>;
+
+    /// Like [`complete`](Self::complete), reporting output to `sink` as it arrives. Adapters
+    /// with a streaming wire format override this; the default emits the whole reply at once.
+    fn stream(
+        &self,
+        request: &ChatRequest,
+        cancel: &CancelToken,
+        sink: &mut dyn FnMut(StreamEvent),
+    ) -> Result<ChatResponse, ProviderError> {
+        let r = self.complete(request, cancel)?;
+        if !r.text.is_empty() {
+            sink(StreamEvent::TextDelta {
+                text: r.text.clone(),
+            });
+        }
+        for c in &r.tool_calls {
+            sink(StreamEvent::ToolCallStarted {
+                id: c.id.clone(),
+                name: c.name.clone(),
+            });
+        }
+        Ok(r)
+    }
 }
 
 /// Secret API key. Deserialisable from user configuration; never serialised; redacted in
@@ -100,6 +226,8 @@ pub enum ProviderKind {
     Anthropic,
     /// Ollama native `/api/chat` (local models).
     Ollama,
+    /// Google Gemini API (`generateContent` / `streamGenerateContent`).
+    Gemini,
 }
 
 impl ProviderKind {
@@ -108,6 +236,7 @@ impl ProviderKind {
             ProviderKind::OpenAiCompatible => openai::DEFAULT_BASE_URL,
             ProviderKind::Anthropic => anthropic::DEFAULT_BASE_URL,
             ProviderKind::Ollama => ollama::DEFAULT_BASE_URL,
+            ProviderKind::Gemini => gemini::DEFAULT_BASE_URL,
         }
     }
     pub fn default_key_env(self) -> Option<&'static str> {
@@ -115,6 +244,7 @@ impl ProviderKind {
             ProviderKind::OpenAiCompatible => Some("OPENAI_API_KEY"),
             ProviderKind::Anthropic => Some("ANTHROPIC_API_KEY"),
             ProviderKind::Ollama => None,
+            ProviderKind::Gemini => Some("GEMINI_API_KEY"),
         }
     }
     pub fn default_model(self) -> Option<&'static str> {
@@ -145,6 +275,13 @@ pub struct ProviderConfig {
     /// Bounded retries for rate limits, 5xx and transport errors.
     #[serde(default = "default_retries")]
     pub max_retries: u32,
+    /// Extra non-secret request headers, e.g. `OpenAI-Organization` / `OpenAI-Project`.
+    #[serde(default)]
+    pub extra_headers: Vec<(String, String)>,
+    /// Overrides [`requires_key`](Self::requires_key) (the provider catalog knows per
+    /// provider whether a key is mandatory).
+    #[serde(default)]
+    pub key_required: Option<bool>,
 }
 
 fn default_timeout_secs() -> u64 {
@@ -164,6 +301,8 @@ impl ProviderConfig {
             api_key_env: None,
             timeout_secs: default_timeout_secs(),
             max_retries: default_retries(),
+            extra_headers: Vec::new(),
+            key_required: None,
         }
     }
 
@@ -187,11 +326,31 @@ impl ProviderConfig {
     /// Whether this endpoint cannot work without a key. Local/self-hosted OpenAI-compatible
     /// servers and Ollama usually run unauthenticated.
     pub fn requires_key(&self) -> bool {
+        if let Some(r) = self.key_required {
+            return r;
+        }
         match self.kind {
-            ProviderKind::Anthropic => true,
+            ProviderKind::Anthropic | ProviderKind::Gemini => true,
             ProviderKind::OpenAiCompatible => self.base_url() == openai::DEFAULT_BASE_URL,
             ProviderKind::Ollama => false,
         }
+    }
+
+    /// Check the base URL is an http(s) address before any request is sent.
+    pub fn validate_base_url(&self) -> Result<(), ProviderError> {
+        let u = self.base_url();
+        let rest = u
+            .strip_prefix("https://")
+            .or_else(|| u.strip_prefix("http://"))
+            .ok_or_else(|| {
+                ProviderError::InvalidBaseUrl(format!("{u} must start with http:// or https://"))
+            })?;
+        if rest.is_empty() || rest.starts_with('/') || u.chars().any(char::is_whitespace) {
+            return Err(ProviderError::InvalidBaseUrl(format!(
+                "{u} is not a valid address"
+            )));
+        }
+        Ok(())
     }
 
     /// Resolve the key: explicit configuration first, then the environment variable.
@@ -240,19 +399,37 @@ pub fn build_provider_with(
     config: &ProviderConfig,
     transport: Arc<dyn http::HttpTransport>,
 ) -> Result<Box<dyn Provider>, ProviderError> {
+    config.validate_base_url()?;
     let ep = http::Endpoint {
         base_url: config.base_url(),
         model: config.model()?,
         api_key: config.resolve_api_key()?,
         timeout: config.timeout(),
         max_retries: config.max_retries,
+        extra_headers: config.extra_headers.clone(),
         transport,
     };
     Ok(match config.kind {
         ProviderKind::OpenAiCompatible => Box::new(openai::OpenAiProvider { ep }),
         ProviderKind::Anthropic => Box::new(anthropic::AnthropicProvider { ep }),
         ProviderKind::Ollama => Box::new(ollama::OllamaProvider { ep }),
+        ProviderKind::Gemini => Box::new(gemini::GeminiProvider { ep }),
     })
+}
+
+/// Authentication headers for `kind` (shared by chat requests and model listings).
+pub(crate) fn auth_headers(kind: ProviderKind, key: Option<&ApiKey>) -> Vec<(String, String)> {
+    let Some(key) = key else { return vec![] };
+    match kind {
+        ProviderKind::Anthropic => vec![
+            ("x-api-key".into(), key.expose().to_string()),
+            ("anthropic-version".into(), anthropic::API_VERSION.into()),
+        ],
+        ProviderKind::Gemini => vec![("x-goog-api-key".into(), key.expose().to_string())],
+        ProviderKind::OpenAiCompatible | ProviderKind::Ollama => {
+            vec![("authorization".into(), format!("Bearer {}", key.expose()))]
+        }
+    }
 }
 
 /// Parse a tool-call argument string; unparseable JSON is kept as a string so the tool

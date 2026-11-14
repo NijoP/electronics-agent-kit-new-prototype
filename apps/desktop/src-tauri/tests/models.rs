@@ -76,9 +76,12 @@ fn input(kind: ProviderKind, base: &str, model: Option<&str>) -> ProfileInput {
     ProfileInput {
         id: None,
         label: "Local test".into(),
+        provider: None,
         kind,
         base_url: Some(base.into()),
         model: model.map(String::from),
+        org_id: None,
+        project_id: None,
     }
 }
 
@@ -184,16 +187,18 @@ fn a_corrupt_settings_file_is_reported_not_overwritten() {
 
 #[test]
 fn list_and_test_use_the_stored_key_over_real_http() {
-    let (base, seen) = serve(|m, p| match (m, p) {
+    let (base, seen) = serve(|m, p| {
+        match (m, p) {
         ("GET", "/v1/models") => (
             200,
             r#"{"data":[{"id":"gpt-local"},{"id":"another"}]}"#.into(),
         ),
         ("POST", "/v1/chat/completions") => (
             200,
-            r#"{"choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}"#.into(),
+            "data: {\"choices\":[{\"delta\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n".into(),
         ),
         _ => (404, "{}".into()),
+    }
     });
     let s = settings(None, Arc::new(MemoryKeyStore::default()));
     let v = s
@@ -207,14 +212,14 @@ fn list_and_test_use_the_stored_key_over_real_http() {
         )
         .unwrap();
     assert_eq!(
-        s.list_models(&v.profile.id).unwrap(),
+        ids(s.list_models(&v.profile.id).unwrap()),
         ["another", "gpt-local"]
     );
     let r = s.test_connection(&v.profile.id).unwrap();
     assert!(r.ok, "{r:?}");
     assert!(!r.message.contains(SECRET));
     let seen = seen.lock().unwrap();
-    assert_eq!(seen.len(), 2);
+    assert_eq!(seen.len(), 3);
     assert!(
         seen.iter()
             .all(|l| l.contains(&format!("bearer {SECRET}").to_ascii_lowercase())),
@@ -258,10 +263,8 @@ fn the_environment_is_never_a_key_source() {
         .save(
             ProfileInput {
                 id: None,
-                label: "OpenAI".into(),
-                kind: ProviderKind::OpenAiCompatible,
-                base_url: None,
                 model: Some("m".into()),
+                ..ProfileInput::new("OpenAI", "openai")
             },
             None,
         )
@@ -285,7 +288,7 @@ fn ollama_works_without_a_key() {
         .save(input(ProviderKind::Ollama, &base, Some("llama3:8b")), None)
         .unwrap();
     assert!(!v.needs_key);
-    assert_eq!(s.list_models(&v.profile.id).unwrap(), ["llama3:8b"]);
+    assert_eq!(ids(s.list_models(&v.profile.id).unwrap()), ["llama3:8b"]);
     assert!(s.test_connection(&v.profile.id).unwrap().ok);
 }
 
@@ -304,4 +307,210 @@ fn os_credential_store_round_trip() {
     store.delete(&id).unwrap();
     assert_eq!(store.get(&id).unwrap(), None);
     store.delete(&id).unwrap(); // deleting a missing key is not an error
+}
+
+fn ids(models: Vec<eak_intelligence::provider::catalog::ModelInfo>) -> Vec<String> {
+    models.into_iter().map(|m| m.id).collect()
+}
+
+fn ok_server() -> String {
+    serve(|m, p| match (m, p) {
+        ("GET", "/v1/models") => (
+            200,
+            r#"{"data":[{"id":"gpt-local","context_length":32768}]}"#.into(),
+        ),
+        ("POST", "/v1/chat/completions") => (
+            200,
+            "data: {\"choices\":[{\"delta\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n".into(),
+        ),
+        _ => (404, "{}".into()),
+    })
+    .0
+}
+
+/// Regression (Spec 5.4): saving never marks a provider connected; only a streamed reply
+/// does, and editing the profile resets it.
+#[test]
+fn connected_only_after_a_real_test_and_reset_on_change() {
+    use eak_desktop::models::StatusState;
+    let base = ok_server();
+    let s = settings(None, Arc::new(MemoryKeyStore::default()));
+    let mut inp = input(
+        ProviderKind::OpenAiCompatible,
+        &format!("{base}/v1"),
+        Some("gpt-local"),
+    );
+    let v = s.save(inp.clone(), None).unwrap();
+    assert_eq!(v.profile.status.state, StatusState::Untested);
+    let r = s.test_connection(&v.profile.id).unwrap();
+    assert!(r.ok, "{r:?}");
+    let v = &s.list().unwrap()[0];
+    assert_eq!(v.profile.status.state, StatusState::Connected);
+    assert_eq!(v.profile.models[0].context_window, Some(32768));
+    // Same settings saved again: status kept. Model changed: back to untested.
+    inp.id = Some(v.profile.id.clone());
+    assert_eq!(
+        s.save(inp.clone(), None).unwrap().profile.status.state,
+        StatusState::Connected
+    );
+    inp.model = Some("other".into());
+    assert_eq!(
+        s.save(inp, None).unwrap().profile.status.state,
+        StatusState::Untested
+    );
+    // A failing test is recorded as failed with its class.
+    let r = s.test_connection(&v.profile.id).unwrap();
+    assert!(!r.ok);
+    let v = &s.list().unwrap()[0];
+    assert_eq!(v.profile.status.state, StatusState::Failed);
+    assert_eq!(
+        v.profile.status.error_class,
+        Some(eak_intelligence::ErrorClass::UnsupportedModel)
+    );
+}
+
+#[test]
+fn known_endpoints_are_fixed_and_unimplemented_providers_are_refused() {
+    let s = settings(None, Arc::new(MemoryKeyStore::default()));
+    // A base URL sent for a cloud provider is ignored: the catalog endpoint is used.
+    let v = s
+        .save(
+            ProfileInput {
+                base_url: Some("https://evil.example/v1".into()),
+                ..ProfileInput::new("Groq", "groq")
+            },
+            None,
+        )
+        .unwrap();
+    assert_eq!(v.profile.base_url, None);
+    assert_eq!(v.endpoint, "https://api.groq.com/openai/v1");
+    assert!(v.needs_key);
+    for id in ["amazon-bedrock", "google-vertex", "azure-openai"] {
+        let e = s.save(ProfileInput::new("x", id), None).unwrap_err();
+        assert!(e.contains("not implemented"), "{e}");
+    }
+    // A custom endpoint must have a URL.
+    let e = s
+        .save(ProfileInput::new("Mine", "openai-compatible"), None)
+        .unwrap_err();
+    assert!(e.contains("base URL"), "{e}");
+}
+
+#[test]
+fn openai_org_and_project_are_sent_as_headers() {
+    let s = settings(None, Arc::new(MemoryKeyStore::default()));
+    let v = s
+        .save(
+            ProfileInput {
+                org_id: Some("org-1".into()),
+                project_id: Some("proj-1".into()),
+                ..ProfileInput::new("OpenAI", "openai")
+            },
+            Some("sk-x".into()),
+        )
+        .unwrap();
+    assert_eq!(v.profile.org_id.as_deref(), Some("org-1"));
+    // Other providers have no such fields.
+    let g = s
+        .save(
+            ProfileInput {
+                org_id: Some("org-1".into()),
+                ..ProfileInput::new("Groq", "groq")
+            },
+            None,
+        )
+        .unwrap();
+    assert_eq!(g.profile.org_id, None);
+}
+
+#[test]
+fn legacy_v1_files_load_and_defaults_follow_the_profiles() {
+    let d = tmpdir("legacy");
+    let file = d.join("model-providers.json");
+    std::fs::write(
+        &file,
+        r#"[{"id":"prov-a","label":"Old OpenRouter","kind":"open_ai_compatible","base_url":"https://openrouter.ai/api/v1","model":"x/y"},
+            {"id":"prov-b","label":"Old Claude","kind":"anthropic","base_url":null,"model":null}]"#,
+    )
+    .unwrap();
+    let keys = Arc::new(MemoryKeyStore::default());
+    let s = settings(Some(file.clone()), keys);
+    let l = s.list().unwrap();
+    assert_eq!(l[0].profile.provider, "openrouter");
+    assert_eq!(l[1].profile.provider, "anthropic");
+    assert!(l.iter().all(|v| !v.is_default));
+    let l = s.set_default("prov-b").unwrap();
+    assert!(l[1].is_default && !l[0].is_default);
+    let disk: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(disk["version"], 2);
+    assert_eq!(disk["default_provider"], "prov-b");
+    s.remove("prov-b").unwrap();
+    assert!(
+        s.list().unwrap()[0].is_default,
+        "default moves to a remaining profile"
+    );
+    assert!(s.set_default("nope").is_err());
+}
+
+#[test]
+fn export_is_portable_and_secret_free_and_import_round_trips() {
+    let keys = Arc::new(MemoryKeyStore::default());
+    let s = settings(None, keys.clone());
+    let base = ok_server();
+    let v = s
+        .save(
+            input(
+                ProviderKind::OpenAiCompatible,
+                &format!("{base}/v1"),
+                Some("gpt-local"),
+            ),
+            Some(SECRET.into()),
+        )
+        .unwrap();
+    s.test_connection(&v.profile.id).unwrap();
+    let json = s.export_config().unwrap();
+    assert!(!json.contains(SECRET), "{json}");
+    assert!(
+        !json.contains("status") && !json.contains("connected"),
+        "{json}"
+    );
+
+    let other = settings(None, Arc::new(MemoryKeyStore::default()));
+    let l = other.import_config(&json).unwrap();
+    assert_eq!(l.len(), 1);
+    assert_eq!(l[0].profile.model.as_deref(), Some("gpt-local"));
+    assert_eq!(l[0].profile.provider, "openai-compatible");
+    assert!(!l[0].has_key, "keys never travel with an export");
+    assert!(l[0].is_default);
+    assert_eq!(
+        l[0].profile.status.state,
+        eak_desktop::models::StatusState::Untested
+    );
+    assert!(other.import_config("{}").is_err());
+    assert!(other
+        .import_config(r#"{"format":"eak-model-providers","version":1,"providers":[{"id":"a","label":"B","provider":"amazon-bedrock"}]}"#)
+        .unwrap_err()
+        .contains("not implemented"));
+    assert_eq!(other.list().unwrap().len(), 1, "a bad import adds nothing");
+}
+
+#[test]
+fn resolve_gives_integrations_the_default_provider_and_model_override() {
+    let s = settings(None, Arc::new(MemoryKeyStore::default()));
+    assert!(s.resolve(None, None).is_err());
+    let base = ok_server();
+    s.save(
+        input(
+            ProviderKind::OpenAiCompatible,
+            &format!("{base}/v1"),
+            Some("gpt-local"),
+        ),
+        None,
+    )
+    .unwrap();
+    let p = s.resolve(None, None).unwrap();
+    assert_eq!(p.label(), "openai-compatible:gpt-local");
+    let p = s.resolve(None, Some("other-model")).unwrap();
+    assert_eq!(p.label(), "openai-compatible:other-model");
 }

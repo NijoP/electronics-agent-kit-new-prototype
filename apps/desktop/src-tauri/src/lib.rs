@@ -17,6 +17,7 @@ pub mod ai;
 pub mod models;
 pub mod parts;
 pub mod workspace;
+pub mod terminal;
 
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
 use eak_runtime::index::{Index, RecentProject};
@@ -48,6 +49,8 @@ pub struct Session {
     /// SQLite recent-project index. It is a rebuildable cache, so failing to open it
     /// disables the recent list but never blocks project work.
     index: Result<Mutex<Index>, String>,
+    /// Harness endpoint for terminal agents (ADR-0018); advertised in the open project's folder.
+    harness: Mutex<Option<eak_harness::endpoint::Server>>,
 }
 
 impl Session {
@@ -55,6 +58,23 @@ impl Session {
         Session {
             engine: Mutex::new(Open::default()),
             index: index.map(Mutex::new),
+            harness: Mutex::new(None),
+        }
+    }
+
+    /// Advertise the harness endpoint in the open project's folder, withdrawing it from the
+    /// previously open one.
+    fn advertise(&self, engine: Option<&Engine>, previous: Option<PathBuf>) {
+        if let Some(dir) = previous {
+            eak_harness::endpoint::remove_record(&dir);
+        }
+        let (Some(e), Ok(guard)) = (engine, self.harness.lock()) else {
+            return;
+        };
+        if let (Some(server), Some(dir)) = (guard.as_ref(), e.dir()) {
+            if let Err(err) = server.write_record(dir, &e.project().id) {
+                eprintln!("eak-desktop: harness endpoint not advertised: {err}");
+            }
         }
     }
 
@@ -320,10 +340,93 @@ fn install(
     }
     let engine = open()?;
     s.touch_recent(&engine);
+    s.advertise(Some(&engine), None);
     let snap = snapshot(&engine);
     guard.engines.push(engine);
     guard.active = Some(guard.engines.len() - 1);
     Ok(snap)
+}
+
+/// Serve one harness request from a terminal agent on the open project's engine. The request
+/// must target the project the app has open; anything else is refused, never redirected.
+pub fn harness_call(s: &Session, req: &eak_harness::endpoint::Request) -> serde_json::Value {
+    use eak_harness::{envelope_error, ErrorCode};
+    let ctx = &req.context;
+    let mut guard = match s.engine() {
+        Ok(g) => g,
+        Err(e) => {
+            return envelope_error(
+                &req.tool,
+                ctx,
+                ErrorCode::Internal,
+                &e,
+                serde_json::Value::Null,
+            )
+        }
+    };
+    let same = |a: &Path, b: &Path| match (a.canonicalize(), b.canonicalize()) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => a == b,
+    };
+    if guard.engines.is_empty() {
+        return envelope_error(
+            &req.tool,
+            ctx,
+            ErrorCode::NoProject,
+            "the EAK app has no project open",
+            serde_json::Value::Null,
+        );
+    }
+    let wanted = ctx.project.dir.as_deref();
+    let found = guard.engines.iter_mut().find(|e| {
+        matches!((e.dir(), wanted), (Some(o), Some(w)) if same(o, w))
+    });
+    match found {
+        Some(engine) => eak_harness::handle(engine, ctx, "app", &req.tool, &req.args),
+        None => {
+            let open: Vec<PathBuf> = guard
+                .engines
+                .iter()
+                .filter_map(|e| e.dir().map(Path::to_path_buf))
+                .collect();
+            envelope_error(
+                &req.tool,
+                ctx,
+                ErrorCode::ProjectMismatch,
+                "the EAK app does not have the project this call targets open",
+                serde_json::json!({"app_project_dirs": open}),
+            )
+        }
+    }
+}
+
+/// Start the harness endpoint (state files under `state_dir`). The handler reaches the session
+/// through `session`, which must outlive the server (the app keeps both for its lifetime).
+pub fn start_harness(
+    s: &Session,
+    state_dir: &Path,
+    handler: eak_harness::endpoint::Handler,
+) -> Result<(), String> {
+    let server =
+        eak_harness::endpoint::Server::start(state_dir, handler).map_err(|e| e.to_string())?;
+    *s.harness.lock().map_err(|_| "harness lock poisoned")? = Some(server);
+    Ok(())
+}
+
+/// Endpoint and token-file path for the terminal workspace to export as `EAK_HARNESS_SOCKET` /
+/// `EAK_HARNESS_TOKEN_FILE`; `None` when the endpoint is not running.
+#[derive(Debug, Clone, Serialize)]
+pub struct HarnessEndpoint {
+    pub endpoint: String,
+    pub token_file: String,
+}
+
+pub fn harness_endpoint(s: &Session) -> Option<HarnessEndpoint> {
+    let guard = s.harness.lock().ok()?;
+    guard.as_ref().map(|srv| HarnessEndpoint {
+        endpoint: srv.endpoint.clone(),
+        token_file: srv.token_file.display().to_string(),
+    })
 }
 
 pub fn create_project(s: &Session, path: &str, name: &str) -> Result<Snapshot, String> {
@@ -344,7 +447,8 @@ pub fn open_project(s: &Session, path: &str, take_over_lock: bool) -> Result<Sna
 pub fn close_project(s: &Session) -> Result<(), String> {
     let mut guard = s.engine()?;
     if let Some(i) = guard.active {
-        guard.engines.remove(i);
+        let gone = guard.engines.remove(i);
+        s.advertise(None, gone.dir().map(Path::to_path_buf));
     }
     guard.active = guard.engines.len().checked_sub(1);
     Ok(())
@@ -690,7 +794,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 45] = [
+pub const IPC_COMMANDS: [&str; 49] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -736,6 +840,10 @@ pub const IPC_COMMANDS: [&str; 45] = [
     "project_file_rename",
     "project_file_delete",
     "project_git_status",
+    "model_catalog",
+    "model_set_default",
+    "model_export_config",
+    "model_import_config",
 ];
 
 /// Tauri command wrappers: argument decoding only, no logic.
@@ -877,6 +985,11 @@ pub mod cmd {
     ) -> Result<Vec<RecentProject>, String> {
         super::recent_projects(&state, limit)
     }
+
+    #[tauri::command]
+    pub fn harness_endpoint(state: State<'_, Session>) -> Option<super::HarnessEndpoint> {
+        super::harness_endpoint(&state)
+    }
 }
 
 /// Start the desktop application.
@@ -895,7 +1008,25 @@ pub fn run() {
                 eprintln!("eak-desktop: recent-project index unavailable: {e}");
             }
             app.manage(Session::new(index));
+            // Harness endpoint for terminal agents: they act through this app's engine while a
+            // project is open here (single writer; ADR-0018).
+            match app.path().app_data_dir() {
+                Ok(dir) => {
+                    let handle = app.handle().clone();
+                    let handler: eak_harness::endpoint::Handler =
+                        std::sync::Arc::new(move |req: &eak_harness::endpoint::Request| {
+                            harness_call(&handle.state::<Session>(), req)
+                        });
+                    if let Err(e) =
+                        start_harness(&app.state::<Session>(), &dir.join("harness"), handler)
+                    {
+                        eprintln!("eak-desktop: harness endpoint unavailable: {e}");
+                    }
+                }
+                Err(e) => eprintln!("eak-desktop: harness endpoint unavailable: {e}"),
+            }
             app.manage(ai::AiState::default());
+            app.manage(terminal_state(app));
             // Profiles are plain JSON in the config dir; keys go to the OS credential store.
             let profiles = app
                 .path()
@@ -925,6 +1056,7 @@ pub fn run() {
             cmd::acknowledge_recovery,
             cmd::run_check,
             cmd::recent_projects,
+            cmd::harness_endpoint,
             models::cmd::model_providers,
             models::cmd::model_save_provider,
             models::cmd::model_remove_provider,
@@ -932,6 +1064,10 @@ pub fn run() {
             models::cmd::model_clear_key,
             models::cmd::model_list_models,
             models::cmd::model_test_connection,
+            models::cmd::model_catalog,
+            models::cmd::model_set_default,
+            models::cmd::model_export_config,
+            models::cmd::model_import_config,
             cmd::domain_classification,
             cmd::library_components,
             cmd::library_search,
@@ -959,7 +1095,78 @@ pub fn run() {
             workspace::cmd::project_file_rename,
             workspace::cmd::project_file_delete,
             workspace::cmd::project_git_status,
+            terminal::cmd::terminal_overview,
+            terminal::cmd::terminal_shells,
+            terminal::cmd::terminal_launchers,
+            terminal::cmd::terminal_api,
+            terminal::cmd::terminal_set_context,
+            terminal::cmd::terminal_create,
+            terminal::cmd::terminal_write,
+            terminal::cmd::terminal_run,
+            terminal::cmd::terminal_resize,
+            terminal::cmd::terminal_scrollback,
+            terminal::cmd::terminal_rename,
+            terminal::cmd::terminal_focus,
+            terminal::cmd::terminal_restart,
+            terminal::cmd::terminal_close,
+            terminal::cmd::terminal_space_create,
+            terminal::cmd::terminal_space_rename,
+            terminal::cmd::terminal_space_close,
+            terminal::cmd::terminal_move_tab,
         ])
-        .run(tauri::generate_context!())
-        .expect("EAK desktop failed to start");
+        .build(tauri::generate_context!())
+        .expect("EAK desktop failed to start")
+        .run(|app, event| {
+            // Hang up every terminal session on exit; the saved layout lists them as ended
+            // next time, because processes cannot outlive the app.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(t) = app.try_state::<terminal::TerminalState>() {
+                    t.manager.shutdown();
+                }
+            }
+        });
+}
+
+/// Build the terminal workspace state: the session manager (layout saved in the app data
+/// dir), output streamed as events, the authenticated control API, and agent launchers.
+fn terminal_state(app: &tauri::App) -> terminal::TerminalState {
+    use std::sync::Arc;
+    use tauri::{Emitter, Manager};
+    let handle = app.handle().clone();
+    let sink: eak_terminal::OutputSink = Arc::new(move |e| {
+        let _ = handle.emit(terminal::OUTPUT_EVENT, e);
+    });
+    let data = app.path().app_data_dir().ok();
+    let manager = match &data {
+        Some(d) => eak_terminal::Manager::with_manifest(sink, d.join("terminal-sessions.json")),
+        None => eak_terminal::Manager::new(sink),
+    };
+    let agents_file = app
+        .path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("terminal-agents.json"));
+    let (launchers, extra) = terminal::discover_launchers(agents_file.as_deref());
+    manager.add_agents(extra);
+    let api = match &data {
+        Some(d) => {
+            let file = d.join("terminal-api.json");
+            eak_terminal::api::serve(Arc::clone(&manager), &file)
+                .map(|info| (file, info))
+                .map_err(|e| format!("terminal control API not started: {e}"))
+        }
+        None => Err("terminal control API not started: no app data directory".into()),
+    };
+    match &api {
+        Ok((file, _)) => manager.set_base_env(vec![(
+            "EAK_TERMINAL_API_FILE".into(),
+            file.display().to_string(),
+        )]),
+        Err(e) => eprintln!("eak-desktop: {e}"),
+    }
+    terminal::TerminalState {
+        manager,
+        api,
+        launchers,
+    }
 }

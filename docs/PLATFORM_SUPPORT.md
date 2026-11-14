@@ -1,16 +1,19 @@
-# Platform support matrix
+# Platform support
 
-Status: **nothing here has been built, run or tested yet** (workflows are disabled by the project owner's
-testing freeze). The installers and packaging config are code-reviewed only; the matrix below is the intended
-support, and an installer stops with a clear message when a release lacks the asset for your OS/CPU.
+Windows, Linux and macOS are equal targets by design (no platform assumptions outside `cfg` blocks).
+In practice, evidence is thin. Nothing has been built or run since the testing freeze.
 
-| Platform | Package | Built in CI | CI-smoke | Real hardware |
+| Platform | Published package | Core crates | Desktop app | Terminal workspace / harness |
 |---|---|---|---|---|
-| Linux x86_64 (Ubuntu 22.04 build) | AppImage, .deb | no | no | **no** (package never installed) |
-| Linux aarch64 | none | no | no | no |
-| Windows 10/11 x64 | NSIS setup.exe | no | no | **no** |
-| macOS 14+ Apple Silicon | .dmg / .app | no | no | **no** |
-| macOS Intel x86_64 | .dmg / .app | no | no | **no** |
+| Linux x86_64 | v0.1.4 `.deb` and AppImage (built before this refactor) | built and tested before the freeze | package never verified on real hardware | engine PTY tests passed on Linux before the freeze; UI and harness code-reviewed only |
+| Linux aarch64 | none | unverified | unverified | unverified |
+| Windows 10/11 x64 | **none yet** | built and tested locally earlier (GNU toolchain) | unverified | unverified (ConPTY path never run; harness uses loopback TCP) |
+| macOS arm64 / Intel | **none yet** | unverified | unverified | unverified |
 
-Signing/notarization: not done (no credentials).
-See `docs/INSTALL.md` for SmartScreen / Gatekeeper behaviour.
+Installers are unsigned; an installer stops with a clear message when a release lacks the asset for
+the OS/CPU. See `docs/INSTALL.md`.
+
+Portable by design: `std::path`; tree-kill via `taskkill /T` (Windows) or process-group kill (Unix)
+in `cfg` blocks; integer-nanometre geometry; bundled SQLite; `portable-pty` (Unix PTY / ConPTY).
+Per-OS build prerequisites: `docs/DEVELOPMENT.md`. Limitation: the optional research browser has
+no native Windows build.

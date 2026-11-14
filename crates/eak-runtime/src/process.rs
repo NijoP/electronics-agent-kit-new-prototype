@@ -1,4 +1,4 @@
-//! Minimal project-scoped process supervisor (concepts from Herdr; EAK-native code).
+//! Minimal project-scoped process supervisor (EAK-native code; design concepts credited in third_party/licenses/).
 //!
 //! Each process belongs to one project. It has a wall-clock timeout, bounded stdout/stderr
 //! capture, cancellation that terminates the whole process tree, and an explicit final

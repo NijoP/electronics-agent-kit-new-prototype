@@ -300,32 +300,101 @@ export interface RecentProject {
   last_opened_ms: number;
 }
 
-// Model settings (src-tauri/src/models.rs). The UI never receives an API key, only whether one
-// is stored in the OS credential store.
-export type ProviderKind = "anthropic" | "open_ai_compatible" | "ollama";
+// Model providers (src-tauri/src/models.rs, eak-intelligence provider catalog). Optional
+// infrastructure for EAK-native agent integrations. The UI never receives an API key, only
+// whether one is stored in the OS credential store.
+export type ProviderKind = "anthropic" | "open_ai_compatible" | "ollama" | "gemini";
+export type ErrorClass =
+  | "missing_api_key"
+  | "invalid_api_key"
+  | "authentication_failed"
+  | "unsupported_model"
+  | "invalid_base_url"
+  | "network_error"
+  | "timeout"
+  | "rate_limited"
+  | "provider_unavailable"
+  | "request_rejected"
+  | "invalid_response"
+  | "invalid_configuration"
+  | "not_implemented"
+  | "cancelled";
+export interface ModelInfo {
+  id: string;
+  name: string | null;
+  context_window: number | null;
+  max_output_tokens: number | null;
+  /** null = unknown, never "no". */
+  tools: boolean | null;
+  vision: boolean | null;
+  source: "catalog" | "discovered";
+}
+export interface ProviderSpec {
+  id: string;
+  name: string;
+  group: "cloud" | "local" | "custom";
+  kind: ProviderKind;
+  base_url: string | null;
+  base_url_editable: boolean;
+  auth: "api_key" | "optional_api_key";
+  org_project: boolean;
+  discovery: boolean;
+  implemented: boolean;
+  note: string | null;
+  models: ModelInfo[];
+}
+export type StatusState = "untested" | "connected" | "authenticated" | "failed";
+export interface ConnectionStatus {
+  state: StatusState;
+  error_class: ErrorClass | null;
+  message: string | null;
+  checked_at_ms: number | null;
+  model: string | null;
+}
 export interface ProviderProfile {
   id: string;
   label: string;
+  provider: string;
   kind: ProviderKind;
   base_url: string | null;
   model: string | null;
+  org_id: string | null;
+  project_id: string | null;
+  models: ModelInfo[];
+  status: ConnectionStatus;
 }
 export interface ProviderView extends ProviderProfile {
+  provider_name: string;
+  endpoint: string;
   has_key: boolean;
   needs_key: boolean;
   key_error: string | null;
+  is_default: boolean;
 }
 export interface ProfileInput {
   id: string | null;
   label: string;
+  provider: string;
   kind: ProviderKind;
   base_url: string | null;
   model: string | null;
+  org_id: string | null;
+  project_id: string | null;
+}
+export interface StageReport {
+  stage: "configuration" | "authentication" | "model" | "invocation";
+  /** null = skipped (reason in message). */
+  ok: boolean | null;
+  message: string;
 }
 export interface ConnectionReport {
+  state: "connected" | "authenticated" | "failed";
   ok: boolean;
   latency_ms: number;
   message: string;
+  error_class: ErrorClass | null;
+  stages: StageReport[];
+  models: ModelInfo[];
 }
 
 /** A built-in library part (`library_components` IPC). */

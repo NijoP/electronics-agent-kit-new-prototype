@@ -164,7 +164,7 @@ has not.
 | `apps/desktop` | Tauri 2 shell and React/TypeScript UI |
 | `docs/` | Architecture, requirements traceability, ADRs, engineering rules |
 
-More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PLATFORMS.md](docs/PLATFORMS.md).
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md).
 
 ## Getting started
 

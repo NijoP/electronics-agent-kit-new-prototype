@@ -51,9 +51,9 @@ shared with other jobs. Full numbers and method: `docs/dev/LOW_MEMORY_DEVELOPMEN
 frozen main commit; nothing here claims they pass.
 
 **Note (evaluator finding C6):** results for PRs #21-#26 (shell, multilayer, menus/tabs, installers,
-batch command) were recorded only in `STATUS.md` (for example vitest 52 then 65+ tests, build and tsc
+batch command) were recorded only in `docs/development/STATUS_LOG.md` (for example vitest 52 then 65+ tests, build and tsc
 OK, production bundle checked in headless Chrome against a stubbed IPC, never launched as a real Tauri
-window). They are not re-run or copied here; see the `STATUS.md` sections of those PRs. `FEATURE_MATRIX.md`
+window). They are not re-run or copied here; see the `docs/development/STATUS_LOG.md` sections of those PRs. `FEATURE_MATRIX.md`
 was corrected from the code: DRC declares 17 rules (`DRC-001`..`DRC-017`), ERC 13, MECH 3, and there is
 no MECH toolbar button.
 
@@ -74,7 +74,7 @@ no MECH toolbar button.
 ## 2026-11-14 - Phase 0 baseline (copied, not re-run)
 
 **Source:** the merged pull request bodies of #12-#19
-(`gh pr view <n> --repo NijoP/electronics-agent-kit-new-prototype`) and `STATUS.md` at `afd9351`.
+(`gh pr view <n> --repo NijoP/electronics-agent-kit-new-prototype`) and `docs/development/STATUS_LOG.md` at `afd9351`.
 **Not re-run** for Phase 0: this phase is documentation only and four other workers share the 8 GB host.
 
 | PR | Merge commit | Level 1 (Rust) | Level 2 (vitest) | Level 3 | Platform |

@@ -75,7 +75,8 @@ pub fn close_project_by_id(s: &Session, project_id: &str) -> Result<Option<Snaps
         .position(|e| e.project().id == project_id)
         .ok_or_else(|| format!("project {project_id} is not open"))?;
     let was_active = g.active == Some(i);
-    g.engines.remove(i);
+    let gone = g.engines.remove(i);
+    s.advertise(None, gone.dir().map(Path::to_path_buf));
     g.active = match g.active {
         _ if g.engines.is_empty() => None,
         Some(a) if !was_active && a > i => Some(a - 1),

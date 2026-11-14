@@ -10,6 +10,8 @@
 | Desktop production build | `apps/desktop` | `npm run tauri -- build --no-bundle` |
 | Policy | `scripts/check-no-python.sh` | `bash scripts/check-no-python.sh` |
 | LCSC provider, BOM, JLCPCB prep (local test HTTP server, never the live site) | `crates/eak-manufacturing/tests/lcsc_jlcpcb.rs`, `apps/desktop/src-tauri/tests/parts_ipc.rs`, `apps/desktop/src/parts.test.tsx` | `cargo test -p eak-manufacturing --release --test lcsc_jlcpcb`, `cargo test -p eak-desktop --release --test parts_ipc` |
+| Engineering harness (CLI, MCP, app endpoint) | `crates/eak-harness/tests/e2e.rs` | `cargo test -p eak-harness --release` (written, never run) |
+| Terminal engine | `crates/eak-terminal/tests/pty.rs` | `cargo test -p eak-terminal --release` (pending terminal merge; never run) |
 | Sourcing (offline fixtures) | `crates/eak-manufacturing/tests/sourcing.rs`, `crates/eak-validation/src/sourcing.rs` | `cargo test -p eak-manufacturing --test sourcing --release`, `cargo test -p eak-validation` |
 
 Rules: every bug fix gets a regression test; tests never depend on network, AI providers or
@@ -20,4 +22,4 @@ Supplier-facing coverage (research, LCSC sourcing, library integrity, JLCPCB pre
 handling, offline operation) is tracked in `docs/engineering/INTEGRATION_TEST_MATRIX.md`. Sourcing
 fixtures are synthetic; no network-dependent test exists.
 
-Reference results are recorded per milestone in STATUS.md.
+Reference results are recorded per milestone in docs/development/STATUS_LOG.md (current summary: STATUS.md).

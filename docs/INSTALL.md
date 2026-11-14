@@ -1,6 +1,6 @@
 # Installing EAK
 
-EAK ships as prebuilt, **unsigned** packages. You do not need Rust,
+EAK ships as prebuilt, **unsigned** packages. **Today the newest release is v0.1.4 (prerelease) with Linux `.deb` and AppImage only, built before the workspace/terminal/harness refactor. No Windows or macOS binaries are published yet; those installers will say so.** You do not need Rust,
 Node.js or any build tools. Installers always pick the newest release, including prereleases.
 
 | OS | One command |
@@ -36,5 +36,5 @@ Upgrade: run the same command again. Your projects and settings are never touche
 - Windows: `$env:EAK_UNINSTALL=1; irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.ps1 | iex`, or Settings > Apps > EAK.
 
 ## Manual download
-Assets on each release: `eak-linux-x86_64.{deb,AppImage}`, `eak-windows-x86_64-setup.exe`,
+Assets on v0.1.4: `EAK_0.1.4_amd64.deb`, `EAK_0.1.4_amd64.AppImage`, `SHA256SUMS`. Intended, not yet published: `eak-windows-x86_64-setup.exe`, `eak-macos-aarch64.dmg`, `eak-macos-x86_64.dmg`. Verify with `sha256sum -c SHA256SUMS --ignore-missing`.
 `eak-macos-aarch64.dmg`, `eak-macos-x86_64.dmg`, `SHA256SUMS`. Verify with `sha256sum -c SHA256SUMS --ignore-missing`.

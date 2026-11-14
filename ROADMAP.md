@@ -1,18 +1,16 @@
 # Roadmap
 
-States: DONE (implemented + tested), PARTIAL, TODO. Source: Execution Instructions §13–14.
+No dates. States: DONE (implemented and tested when last run), PARTIAL, CODE-REVIEWED (written, never run), TODO.
 
-| ID | Milestone | Depends on | State | Acceptance |
-|---|---|---|---|---|
-| P0 | Discovery, PDFs, research register, ADRs | - | DONE | docs/ present, traceability mapped |
-| P2 | EAK-IR, persistence, migration, recovery | P0 | DONE | round-trip, schema gate, crash tests |
-| P3 | Command engine, revisions, undo/redo, journal | P2 | DONE | engine contract tests |
-| P5 | Library, schematic connectivity, ERC | P3 | PARTIAL | engine done; editor UI TODO |
-| P6 | PCB: outline, place, tracks/vias, zones, router, DRC | P5 | PARTIAL | engine done; editor UI TODO |
-| P10 | Manufacturing compiler + release gate | P6 | PARTIAL | outputs + manifest done; external DFM TODO |
-| P1 | Tauri 2 + React desktop shell, packaging | P3 | TODO | app launches on Win/Linux/macOS |
-| P4 | Workspaces: Home, Schematic, PCB, Library, Monitor, Terminal, Manufacturing, Agent Studio | P1 | TODO | each drives real commands |
-| P7 | 3D workspace + cross-probing | P4 | PARTIAL | scene data + MECH checks done; viewport TODO |
-| P8 | Intelligence Engine (providers, typed tools, approvals, modes) | P3 | TODO | agent completes bounded task via commands |
-| P9 | Research browser, LCSC/JLCPCB integrations | P8 | TODO | optional, provenance-tagged |
-| P11 | Hardening, performance, cross-platform verification, review | all | TODO | acceptance report |
+| Stage | State | Notes |
+|---|---|---|
+| Core engineering foundation (EAK-IR, commands, journal, recovery) | DONE | |
+| Validation (ERC, DRC, MECH, sourcing) | DONE | more rules and external review TODO |
+| Manufacturing outputs (Gerber, drill, BOM, CPL, JLCPCB prep) | PARTIAL | no external viewer or fabricator check |
+| Integrated EDA workspace (schematic, PCB, explorer, projects) | PARTIAL | real-window testing TODO; 3D viewer, free-form zones TODO |
+| Terminal workspace | CODE-REVIEWED | engine PTY-tested on Linux; UI and Windows/macOS unverified |
+| Engineering harness (`eak` CLI, MCP, app endpoint) | CODE-REVIEWED | compile, run, agent trials TODO |
+| Agent context wiring (session env, approvals UI, activity view) | TODO | |
+| Requirements capture, component selection, autonomous loop | TODO | |
+| Cross-platform distribution | PARTIAL | Linux v0.1.4 only; Windows/macOS, signing TODO |
+| Ecosystem integrations (more suppliers, simulators) | TODO | |

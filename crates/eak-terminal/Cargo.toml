@@ -1,0 +1,19 @@
+[package]
+name = "eak-terminal"
+description = "EAK terminal workspace engine: real OS pseudo-terminal sessions, process-derived status and an authenticated local control API"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "eak-term"
+path = "src/bin/eak-term.rs"
+
+[dependencies]
+portable-pty = "0.9"
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

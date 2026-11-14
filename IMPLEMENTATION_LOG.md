@@ -3,7 +3,7 @@
 Chronological log of work on the owner's 2026-11-14 EDA desktop directive, newest first. Each entry
 names the phase (directive Part 14), what changed, the decisions taken, and where the evidence is.
 Test outcomes go in `TEST_RESULTS.md`; feature status in `FEATURE_MATRIX.md`; the per-milestone record
-stays in `STATUS.md`.
+stays in `docs/development/STATUS_LOG.md`.
 
 ## 2026-11-14 - Phase 0: repository audit and research
 
@@ -14,7 +14,7 @@ stays in `STATUS.md`.
   commits, paths, licences, classifications), `EASYEDA_FEATURE_MATRIX.md` (195 classified features),
   `EASYEDA_API_AND_FORMAT_ANALYSIS.md`, `EAK_COMPETITIVE_ARCHITECTURE.md`,
   `LICENCE_AND_ATTRIBUTION_AUDIT.md`. Nothing from EasyEDA was copied into EAK.
-- **Repository audit (directive Part 3):** `docs/architecture/EDA_DESKTOP_GAP_ANALYSIS.md` (state of
+- **Repository audit (directive Part 3):** `docs/archive/eda-desktop-plan/EDA_DESKTOP_GAP_ANALYSIS.md` (state of
   `origin/main` at `afd9351`, in-flight work named as pending),
   `EDA_DESKTOP_TARGET_ARCHITECTURE.md`, `EDA_DESKTOP_IMPLEMENTATION_PLAN.md` (Phases 0-8 with files,
   contract changes, ownership and effort).

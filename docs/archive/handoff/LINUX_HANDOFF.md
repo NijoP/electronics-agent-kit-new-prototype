@@ -67,7 +67,7 @@ fixed on `main`; a rebase is expected to turn them green.
 
 ## 4. Windows-only problems that do not carry over
 
-The Windows host needed local Firstmate workarounds: native symlinks, a Herdr working-directory patch,
+The Windows host needed local Firstmate workarounds: native symlinks, a terminal working-directory patch,
 path-form mismatches, and a Windows-only failure of the no-mistakes review step. Defender CPU load and
 about 1.5 GB of free RAM also limited the crew to one or two workers. Linux needs none of these
 workarounds, so the normal Firstmate delivery path (`no-mistakes-prod-only`) applies again. On Windows,
@@ -77,7 +77,7 @@ crew PRs used direct-PR as a temporary workaround.
 
 1. Install: git, `gh` (authenticated to the account that owns this repo), Rust stable, Node.js LTS
    (build-time only), the Tauri 2 Linux prerequisites (`libwebkit2gtk-4.1-dev build-essential curl wget
-   file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`), tmux or Herdr, and Claude Code.
+   file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`), tmux, and Claude Code.
 2. Clone Firstmate (`https://github.com/kunchenguid/firstmate`) to a home directory, e.g. `~/firstmate`,
    and follow its README to install its helpers (`treehouse`, `no-mistakes`, `gh-axi`, `tasks-axi`).
 3. Start Claude Code inside `~/firstmate` with model Opus 5.5 (`claude --model claude-opus-5-5`) and paste
@@ -97,10 +97,10 @@ to this Linux laptop on 2026-11-13. Take the helm and continue it.
    [no-mistakes-prod-only +yolo]: EAK merges are delegated to Firstmate, green only, never force-push,
    never bypass required checks, never delete branches, never change repo visibility or account settings.
 3. Read the handoff in the EAK repo, in this order: docs/handoff/LINUX_HANDOFF.md,
-   docs/handoff/FINAL_DIRECTIVE_2026-11-14.md, docs/handoff/OPERATING_RULES.md,
-   docs/handoff/CREW_CHARTERS.md, docs/handoff/BACKLOGS.md, docs/handoff/SCOPE_AUDIT_2026-11-13.md,
+   docs/handoff/FINAL_DIRECTIVE_2026-11-14.md, 
+    docs/handoff/SCOPE_AUDIT_2026-11-13.md,
    then the three source-of-truth PDFs in docs/source-of-truth/.
-4. Record OPERATING_RULES.md and the final directive as the owner's preferences in data/captain.md
+4. Record the final directive as the owner's preferences in data/captain.md
    (inspect then update). Model rule: agents use only Opus 5.5 (claude-opus-5-5) or Sonnet 5.5
    (claude-sonnet-5-5); write config/crew-dispatch.json routing routine, well-specified work to
    Sonnet 5.5 and everything else to Opus 5.5, and pin secondmates to Opus 5.5.
