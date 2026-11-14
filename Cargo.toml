@@ -7,6 +7,7 @@ members = [
     "crates/eak-runtime",
     "crates/eak-intelligence",
     "crates/eak-manufacturing",
+    "crates/eak-simulation",
 #    "apps/cli",
     "apps/desktop/src-tauri",
 ]
@@ -30,6 +31,7 @@ eak-validation = { path = "crates/eak-validation" }
 eak-runtime = { path = "crates/eak-runtime" }
 eak-intelligence = { path = "crates/eak-intelligence" }
 eak-manufacturing = { path = "crates/eak-manufacturing" }
+eak-simulation = { path = "crates/eak-simulation" }
 
 [profile.release]
 lto = "thin"

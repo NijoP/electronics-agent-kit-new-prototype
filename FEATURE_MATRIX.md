@@ -121,7 +121,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Gerber, Excellon, BOM, CPL, manifest | integ | `end_to_end.rs`; editor flow export test. Gerbers not opened in an external viewer; nothing fabricated |
 | Release gate (DRAFT unless the exact revision is verified) | integ | `end_to_end.rs` |
 | GenCAD, IPC-2581, ODB++ | - | |
-| SPICE netlist, simulator, waveform viewer | - | |
+| SPICE netlist export + ngspice `.op`/`.tran` + node table + transient plot | integ | `eak-simulation` tests (real ngspice 42; skipped with a printed reason only when absent), `simulation.test.tsx`; ADR-0013. R/C/L/D/LED/V/I only, generic diode models, no AC/sweep/manufacturer models; optional runtime dependency |
 
 ## Part 13: testing levels
 

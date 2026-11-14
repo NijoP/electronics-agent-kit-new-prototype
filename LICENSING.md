@@ -82,3 +82,9 @@ datasheets; no datasheet content is redistributed.
 (github.com/NijoP/DESK, `library/pcb_domains`, MIT licence). It is reference data (class names,
 keywords, constraint and verification prompts, standard identifiers) with no standard text.
 DESK's Python code is not used; the classifier is re-implemented in Rust.
+
+## ngspice (optional external tool, not bundled)
+`eak-simulation` runs a user-installed `ngspice` executable as a subprocess (ADR-0013). Nothing
+from ngspice is copied, linked or redistributed by EAK. The Debian package (ngspice 42,
+`/usr/share/doc/ngspice/copyright`) declares the upstream source as BSD-3-Clause (documentation
+BSD-3-Clause / CC-BY-SA-4.0 / public domain; some build-system files GPL-2+, not used by EAK).

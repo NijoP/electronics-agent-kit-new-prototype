@@ -932,6 +932,7 @@ dependencies = [
  "eak-intelligence",
  "eak-manufacturing",
  "eak-runtime",
+ "eak-simulation",
  "eak-validation",
  "keyring",
  "serde",
@@ -986,6 +987,19 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "eak-simulation"
+version = "0.1.0"
+dependencies = [
+ "eak-core",
+ "eak-engineering",
+ "eak-validation",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "uuid",
 ]
 
 [[package]]
