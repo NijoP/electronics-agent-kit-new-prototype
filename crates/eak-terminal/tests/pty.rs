@@ -709,3 +709,22 @@ fn sessions_export_the_eak_context() {
     );
     m.close(id).unwrap();
 }
+
+/// Spaces on the active project's folder carry its id, so their sessions export
+/// `EAK_PROJECT_ID` for the harness; spaces elsewhere stay unbound.
+#[test]
+fn spaces_on_the_project_folder_are_bound_to_the_project_id() {
+    let (m, _) = manager();
+    let proj = tmp("bind-proj");
+    let other = tmp("bind-other");
+    let early = m.create_space("early", proj.clone()).unwrap();
+    assert_eq!(early.project_id, None);
+    m.set_context(Some(proj.clone()), Some("Board".into()), Some("p-1".into()));
+    let late = m.create_space("late", proj.clone()).unwrap();
+    let elsewhere = m.create_space("other", other).unwrap();
+    assert_eq!(late.project_id.as_deref(), Some("p-1"));
+    assert_eq!(elsewhere.project_id, None);
+    let spaces = m.overview().spaces;
+    let get = |id| spaces.iter().find(|s| s.id == id).unwrap().project_id.clone();
+    assert_eq!(get(early.id).as_deref(), Some("p-1"), "existing space bound by set_context");
+}

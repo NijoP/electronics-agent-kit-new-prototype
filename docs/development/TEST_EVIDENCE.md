@@ -12,3 +12,5 @@ Labels: *runtime-verified* · *build/test-verified* · *code-reviewed only* (see
 | This integration | code-reviewed only | only `git diff --check`, `bash -n`, JSON syntax and grep checks ran |
 
 Known risk: `Cargo.lock` and `package-lock.json` were merged by hand; first compile may rewrite them.
+
+Phase 2 wiring (`fm/eak-p2-wiring`): code-reviewed only. New test `spaces_on_the_project_folder_are_bound_to_the_project_id` (`crates/eak-terminal/tests/pty.rs`) written, never run. Checks run: `git diff --check`, grep of IPC lists (frontend `IPC_COMMANDS`+`TERMINAL_IPC` = backend `IPC_COMMANDS`+`TERMINAL_COMMANDS` = `generate_handler!` registrations), Cargo deps vs crate `use` paths.

@@ -329,9 +329,15 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     guarded(async () => {
       const r = await track("Export manufacturing files", () => api.exportManufacturing(), (x) => `${x.manifest.files.length} files, status ${x.manifest.status}`);
       setExported(r);
-      setMessage(`Exported ${r.manifest.files.length} files to ${r.out_dir} (${r.manifest.status})`);
-      await pullEvents();
+      setMessage(`Exported ${r.manifest.files.length} files to ${r.out_dir} (${r.manifest.status}, revision ${r.manifest.revision})`);
+      await syncTo(r.manifest.revision);
     });
+  // Checks and exports run on the engine's current revision. If a terminal agent moved it past
+  // the one on screen, re-render so the editor shows exactly what was evaluated.
+  const syncTo = async (evaluated: number) => {
+    if (evaluated !== revision) await refresh();
+    else await pullEvents();
+  };
   const undo = () => submit(() => api.undo(revision));
   const redo = () => submit(() => api.redo(revision));
   const check = (c: Check) =>
@@ -341,7 +347,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       setBottomTab("findings");
       setBottomOpen(true);
       setMessage(`${result.report.check} ran on revision ${result.report.revision}`);
-      await pullEvents();
+      await syncTo(result.report.revision);
     });
   // Switch to or close one of the projects open in this window. Closing the active one activates
   // the previous one (or returns to Project Home when none is left).

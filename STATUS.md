@@ -28,10 +28,11 @@ assistant panel was removed in the IDE shell (#49); model providers remain as op
 | Engineering harness (`eak` CLI, MCP, app endpoint) | code-reviewed only | never compiled; e2e tests written, never run |
 | Provider catalog, streaming, Gemini, staged connection test | code-reviewed only | |
 | Integration of all of the above (this commit) | code-reviewed only | conflicts resolved by reading; `Cargo.lock` hand-merged |
+| Phase 2 wiring: harness env in terminal sessions, space-project binding, editor resync after checks/exports | code-reviewed only | `git diff --check` and grep only; never compiled or run |
 
 ## Known gaps
 - No cargo, npm, vitest, tsc or tauri run has happened on the integrated tree.
-- `EAK_HARNESS_SOCKET` / `EAK_HARNESS_TOKEN_FILE` are not yet exported to terminal sessions.
+- Harness env is exported to terminal sessions (code-reviewed only, never run).
 - No autonomous design loop; no per-call approval UI for agent edits; no Windows named pipes.
 - No agent (Claude Code, OpenCode, Pi) has been tested end to end through the harness.
 - 3D viewer, differential pairs, impedance control, requirements capture: not implemented.

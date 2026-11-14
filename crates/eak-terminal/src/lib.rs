@@ -783,17 +783,33 @@ impl Manager {
     }
 
     /// The active project: used to create a space on demand when a session is opened with
-    /// no space. Existing spaces and sessions are never moved.
+    /// no space, and to bind spaces whose root is the project folder to the project id (so
+    /// their sessions export `EAK_PROJECT_ID`). Existing sessions are never moved.
     pub fn set_context(
         &self,
         dir: Option<PathBuf>,
         project: Option<String>,
         project_id: Option<String>,
     ) {
-        self.lock().context = dir.map(|d| (d, project, project_id));
+        let mut g = self.lock();
+        let mut bound = false;
+        if let (Some(d), Some(pid)) = (&dir, &project_id) {
+            for sp in g.spaces.iter_mut().filter(|s| &s.root == d) {
+                if sp.project_id.as_ref() != Some(pid) {
+                    sp.project_id = Some(pid.clone());
+                    bound = true;
+                }
+            }
+        }
+        g.context = dir.map(|d| (d, project, project_id));
+        if bound {
+            self.bump(&mut g);
+            drop(g);
+            self.changed.notify_all();
+        }
     }
 
-    /// Create a space bound to `root`.
+    /// Create a space bound to `root` (and to the active project when `root` is its folder).
     pub fn create_space(&self, name: &str, root: PathBuf) -> Result<Space, String> {
         if !root.is_dir() {
             return Err(format!("space root is not a directory: {}", root.display()));
@@ -806,12 +822,16 @@ impl Manager {
                 .unwrap_or_else(|| root.display().to_string()),
             n => n.to_string(),
         };
+        let project_id = match &g.context {
+            Some((dir, _, pid)) if *dir == root => pid.clone(),
+            _ => None,
+        };
         let id = g.alloc();
         let sp = Space {
             id,
             name,
             root,
-            project_id: None,
+            project_id,
         };
         g.spaces.push(sp.clone());
         self.bump(&mut g);

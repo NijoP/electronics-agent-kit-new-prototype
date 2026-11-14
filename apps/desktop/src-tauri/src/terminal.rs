@@ -163,7 +163,8 @@ pub mod cmd {
             },
         }
     }
-    #[tauri::command]
+    // `project_id` arrives snake_case from `terminal/api.ts`, like every other EAK command.
+    #[tauri::command(rename_all = "snake_case")]
     pub fn terminal_set_context(
         state: State<'_, TerminalState>,
         dir: Option<String>,

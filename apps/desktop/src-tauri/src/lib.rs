@@ -985,11 +985,6 @@ pub mod cmd {
     ) -> Result<Vec<RecentProject>, String> {
         super::recent_projects(&state, limit)
     }
-
-    #[tauri::command]
-    pub fn harness_endpoint(state: State<'_, Session>) -> Option<super::HarnessEndpoint> {
-        super::harness_endpoint(&state)
-    }
 }
 
 /// Start the desktop application.
@@ -1056,7 +1051,6 @@ pub fn run() {
             cmd::acknowledge_recovery,
             cmd::run_check,
             cmd::recent_projects,
-            cmd::harness_endpoint,
             models::cmd::model_providers,
             models::cmd::model_save_provider,
             models::cmd::model_remove_provider,
@@ -1157,13 +1151,21 @@ fn terminal_state(app: &tauri::App) -> terminal::TerminalState {
         }
         None => Err("terminal control API not started: no app data directory".into()),
     };
+    // Every session gets the control-API file and the app's harness endpoint (started before
+    // this in `setup`); the project dir/id come from the session's space (docs/AGENT_HARNESS.md).
+    let mut base_env = Vec::new();
     match &api {
-        Ok((file, _)) => manager.set_base_env(vec![(
+        Ok((file, _)) => base_env.push((
             "EAK_TERMINAL_API_FILE".into(),
             file.display().to_string(),
-        )]),
+        )),
         Err(e) => eprintln!("eak-desktop: {e}"),
     }
+    if let Some(h) = harness_endpoint(&app.state::<Session>()) {
+        base_env.push(("EAK_HARNESS_SOCKET".into(), h.endpoint));
+        base_env.push(("EAK_HARNESS_TOKEN_FILE".into(), h.token_file));
+    }
+    manager.set_base_env(base_env);
     terminal::TerminalState {
         manager,
         api,

@@ -52,6 +52,12 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
     void term.shells().then(setShells).catch(() => {});
     void term.launchers().then(setLaunchers).catch(() => {});
   }, [refresh]);
+  // The backend binds spaces opened on the project folder to this project, so their sessions
+  // export EAK_PROJECT_DIR / EAK_PROJECT_ID for the harness (docs/AGENT_HARNESS.md).
+  const [pDir, pName, pId] = [project?.dir ?? null, project?.name ?? null, project?.id ?? null];
+  useEffect(() => {
+    void term.setContext(pDir, pName, pId).catch(() => {});
+  }, [pDir, pName, pId]);
   // Process states change without output (a job finishes, a prompt waits): poll while shown.
   useEffect(() => {
     if (!visible) return;
