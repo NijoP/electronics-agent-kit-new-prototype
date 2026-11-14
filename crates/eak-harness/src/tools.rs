@@ -236,6 +236,11 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         "Track-only DC drop upper bound per net with a declared current, declared currents with no copper, and return-path continuity (signal tracks over gaps in the adjacent ground plane, split ground zones). Unknown entries are reported with the reason.",
         empty(),
     ));
+    v.extend(
+        crate::intel::tool_specs()
+            .into_iter()
+            .map(|(name, description, schema)| spec(name, Read, description, schema)),
+    );
     v.push(spec(
         "simulation_status",
         Simulation,
@@ -942,6 +947,9 @@ fn read(engine: &Engine, name: &str, args: &Value) -> Result<Value, Fail> {
         }
         "power_analysis" => {
             crate::engineering::power_analysis(p).map_err(|e| fail(ErrorCode::Internal, e))
+        }
+        n if n.starts_with("intel_") => {
+            crate::intel::read(engine, n, args).map_err(|e| fail(ErrorCode::InvalidArguments, e))
         }
         other => match readonly::run(other, args, p) {
             Some(r) => r.map_err(|e| fail(ErrorCode::InvalidArguments, e)),

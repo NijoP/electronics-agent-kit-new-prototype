@@ -28,6 +28,7 @@ import type {
   PrepareResult,
   RecentProject,
   DomainReport,
+  IntelligenceSummary,
   SimRequest,
   SimResult,
   SimulationStatus,
@@ -88,6 +89,7 @@ export const IPC_COMMANDS = [
   "library_footprint_candidates",
   "library_model_read",
   "domain_classification",
+  "intelligence_summary",
   "export_manufacturing",
   "connectivity",
   "ai_propose",
@@ -165,6 +167,7 @@ export const api = {
   /** Raw bytes of a component 3D model file (absolute path; .step/.stp/.wrl/.glb only). */
   libraryModelRead: (path: string) => call<ArrayBuffer>("library_model_read", { path }),
   domainClassification: () => call<DomainReport>("domain_classification"),
+  intelligenceSummary: () => call<IntelligenceSummary>("intelligence_summary"),
   exportManufacturing: () => call<ExportResult>("export_manufacturing"),
   connectivity: () => call<ConnectivityReport>("connectivity"),
   aiPropose: (providerId: string, prompt: string) => call<AiProposal>("ai_propose", { provider_id: providerId, prompt }),

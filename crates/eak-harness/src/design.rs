@@ -795,6 +795,19 @@ fn record(
     append_jsonl(&root.join(ITERATIONS), &line)
 }
 
+/// The stored spec of a project folder, `None` when none is set. Read-only access for the
+/// multi-domain engineering model (ADR-0027, `crate::intel`); a corrupt spec is an error,
+/// never silently ignored.
+pub fn stored_spec(project_dir: &Path) -> Result<Option<DesignSpec>, String> {
+    let root = project_dir.join(FLOW_DIR);
+    if !root.join(SPEC_FILE).exists() {
+        return Ok(None);
+    }
+    load_spec(&root)
+        .map(|(s, _)| Some(s))
+        .map_err(|Fail(_, m, _)| format!("stored design spec unreadable: {m}"))
+}
+
 fn load_spec(root: &Path) -> Result<(DesignSpec, Value), Fail> {
     let text = std::fs::read_to_string(root.join(SPEC_FILE)).map_err(|_| {
         Fail(

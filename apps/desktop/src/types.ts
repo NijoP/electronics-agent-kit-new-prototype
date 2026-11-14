@@ -837,3 +837,97 @@ export interface OpenProject {
   dir: string | null;
   active: boolean;
 }
+
+// ---- Engineering intelligence summary (`intelligence_summary` IPC, ADR-0027;
+// crates/eak-intelligence/src/systems). Read-only, recomputed per call; only computed values.
+
+/** Shared check states (ADR-0026, `eak_validation::CheckState`). */
+export type IntelOutcome =
+  | "PASS"
+  | "FAIL"
+  | "WARNING"
+  | "UNKNOWN"
+  | "NOT_APPLICABLE"
+  | "REQUIRES_HUMAN_APPROVAL";
+
+export interface IntelDomain {
+  id: string;
+  name: string;
+  high_risk: boolean;
+  coverage: "mental_model" | "registry_only";
+  nodes: string[];
+  reasons: string[];
+}
+
+export interface IntelNode {
+  id: string;
+  level: "product" | "subsystem" | "board" | "functional_block" | "component" | "pcb_region";
+  name: string;
+  parent: string | null;
+  domains: string[];
+}
+
+export interface IntelMissing {
+  id: string;
+  domain: string | null;
+  what: string;
+  why: string;
+}
+
+export interface IntelConflict {
+  id: string;
+  constraints: [string, string];
+  quantity: string;
+  explanation: string;
+  tradeoffs: string[];
+}
+
+/** Shared risk record (ADR-0026) plus the multi-domain class, title and domains. */
+export interface IntelRisk {
+  id: string;
+  subsystem: string;
+  /** Separate axes; never combined into one score. */
+  severity: "low" | "medium" | "high" | "critical";
+  likelihood: "rare" | "possible" | "likely";
+  detectability: "detected" | "not_checked";
+  consequence: string;
+  evidence: string[];
+  mitigation: string | null;
+  approval_required: boolean;
+  class: string;
+  title: string;
+  detail: string;
+  domains: string[];
+  basis: string;
+}
+
+export interface IntelligenceSummary {
+  revision: number;
+  classification: {
+    status: "CLASSIFIED" | "REVIEW_REQUIRED" | "UNCLASSIFIED";
+    confidence: number;
+    primary: string | null;
+    secondary: string[];
+    overlays: string[];
+  };
+  domains: IntelDomain[];
+  architecture: IntelNode[];
+  requirement_coverage: {
+    total: number;
+    by_knowledge: Record<string, number>;
+    with_validation_method: number;
+    unknown_values: number;
+  };
+  missing_information: IntelMissing[];
+  assumptions: string[];
+  constraints: { hard: number; soft: number; derived: number; conditional: number; safety: number };
+  conflicts: IntelConflict[];
+  /** Per domain: [check id, outcome]. */
+  domain_checks: Record<string, [string, IntelOutcome][]>;
+  risks: IntelRisk[];
+  human_approval_required: boolean;
+  /** [dashboard item, the tool that computes it]. */
+  elsewhere: [string, string][];
+  not_implemented: string[];
+  limitations: string[];
+}

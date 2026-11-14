@@ -540,6 +540,16 @@ pub fn domain_classification(s: &Session) -> Result<DomainReport, String> {
     })
 }
 
+/// Engineering intelligence summary of the open project (ADR-0027): product classification,
+/// active domains, architecture, requirement coverage, missing information, conflicts, domain
+/// check outcomes and risks. Read-only and recomputed per call from the design and the stored
+/// spec; every value is computed (nothing is estimated for display). The revision is inside.
+pub fn intelligence_summary(
+    s: &Session,
+) -> Result<eak_intelligence::systems::IntelligenceSummary, String> {
+    s.with_engine(|e| eak_harness::intel::model(e).map(|m| m.summary()))?
+}
+
 /// Physical connectivity of the current revision: per-net copper groups, shorts and the
 /// ratsnest (unrouted pad-to-pad connections). Read-only; computed by eak-engineering, the same
 /// analysis DRC uses, so the airwires the UI draws are the ones DRC-004 reports.
@@ -846,6 +856,7 @@ pub const IPC_COMMANDS: [&str; 50] = [
     "jlcpcb_prepare",
     "library_components",
     "domain_classification",
+    "intelligence_summary",
     "export_manufacturing",
     "create_project",
     "open_project",
@@ -957,6 +968,13 @@ pub mod cmd {
     #[tauri::command(async, rename_all = "snake_case")]
     pub fn domain_classification(state: State<'_, Session>) -> Result<DomainReport, String> {
         super::domain_classification(&state)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
+    pub fn intelligence_summary(
+        state: State<'_, Session>,
+    ) -> Result<eak_intelligence::systems::IntelligenceSummary, String> {
+        super::intelligence_summary(&state)
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
@@ -1104,6 +1122,7 @@ pub fn run() {
             models::cmd::model_export_config,
             models::cmd::model_import_config,
             cmd::domain_classification,
+            cmd::intelligence_summary,
             cmd::library_components,
             cmd::library_search,
             cmd::library_footprint_candidates,
