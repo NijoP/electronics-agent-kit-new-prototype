@@ -26,6 +26,22 @@ pub enum Command {
     UpsertComponentDefinition {
         definition: Box<ComponentDef>,
     },
+    /// Edit the supplier-facing properties of a project library component. `None` (or a blank
+    /// string) clears a field. Provenance, ratings and geometry are never touched.
+    SetComponentProperties {
+        component_id: String,
+        manufacturer: Option<String>,
+        mpn: Option<String>,
+        lcsc: Option<String>,
+        datasheet: Option<String>,
+    },
+    /// Assign a different footprint (with its symbol-pin -> pad map) to a project library
+    /// component. Refused while PCB footprints of the component exist (re-sync first).
+    AssignComponentFootprint {
+        component_id: String,
+        footprint: FootprintDef,
+        pin_map: BTreeMap<String, Vec<String>>,
+    },
     // ---- schematic
     AddSheet {
         name: String,
@@ -257,6 +273,7 @@ impl Command {
             SetProjectName { .. }
             | AddRequirement { .. }
             | ImportLibraryComponent { .. }
+            | SetComponentProperties { .. }
             | AddSheet { .. }
             | PlaceSymbol { .. }
             | MoveSymbol { .. }
@@ -274,6 +291,7 @@ impl Command {
             | DeleteWire { .. }
             | DeleteNetLabel { .. }
             | UpsertComponentDefinition { .. }
+            | AssignComponentFootprint { .. }
             | SetBoardOutline { .. }
             | SetStackup { .. }
             | SetLayerCount { .. }
@@ -513,6 +531,57 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             }
             p.library
                 .insert(definition.id.clone(), (**definition).clone());
+        }
+        SetComponentProperties {
+            component_id,
+            manufacturer,
+            mpn,
+            lcsc,
+            datasheet,
+        } => {
+            let def = p.library.get_mut(component_id).ok_or_else(|| {
+                CommandError::NotFound(format!("component {component_id} in the project library"))
+            })?;
+            let clean = |v: &Option<String>| {
+                v.as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(String::from)
+            };
+            def.manufacturer = clean(manufacturer);
+            def.mpn = clean(mpn);
+            def.lcsc = clean(lcsc);
+            def.datasheet = clean(datasheet);
+        }
+        AssignComponentFootprint {
+            component_id,
+            footprint,
+            pin_map,
+        } => {
+            if p.pcb
+                .footprints
+                .values()
+                .any(|f| f.component_id == *component_id)
+            {
+                return Err(CommandError::Precondition(format!(
+                    "{component_id} has placed PCB footprints; remove them (and re-sync) before changing its footprint"
+                )));
+            }
+            let def = p.library.get_mut(component_id).ok_or_else(|| {
+                CommandError::NotFound(format!("component {component_id} in the project library"))
+            })?;
+            let mut next = def.clone();
+            next.footprint = footprint.clone();
+            next.pin_map = pin_map.clone();
+            let problems = next.validate();
+            if !problems.is_empty() {
+                return Err(CommandError::Invalid(problems.join("; ")));
+            }
+            next.provenance = format!(
+                "{}; footprint reassigned to {}",
+                def.provenance, footprint.name
+            );
+            *def = next;
         }
         AddSheet { name } => {
             let id = new_id("sht");

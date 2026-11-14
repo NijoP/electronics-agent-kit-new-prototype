@@ -6,7 +6,7 @@ import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, segments, snapPoint } from "./editing";
 import type { Command, Id, Point, Snapshot, SymbolInstance } from "./types";
 import { boundsOf, fromView, mm, toView } from "./viewport";
-import { useDocId, useRegisterTools } from "./shell/viewState";
+import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import * as S from "./tools/schematic/selection";
 import "./tools/schematic/schematic.css";
 
@@ -23,7 +23,7 @@ interface Props {
   sheetId?: Id;
 }
 
-type Tool = "select" | "place" | "wire" | "connect" | "label" | "move" | "delete";
+type Tool = "select" | "place" | "wire" | "connect" | "label" | "move" | "delete" | "noconnect" | "pinlabel";
 const TOOLS: [Tool, string][] = [
   ["select", "Select"],
   ["place", "Place"],
@@ -32,6 +32,8 @@ const TOOLS: [Tool, string][] = [
   ["label", "Label"],
   ["move", "Move"],
   ["delete", "Delete"],
+  ["noconnect", "No connect"],
+  ["pinlabel", "Pin label"],
 ];
 const GRID = mmToNm(1.27);
 const CAPTURE = mmToNm(1.5);
@@ -120,7 +122,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   // (Ctrl+Z, Ctrl+Shift+Z) are workspace-wide and handled by the workspace.
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (!edit || !sheet || isTyping(e.target) || e.altKey) return;
+    if (!edit || !sheet || isTyping(e.target) || e.altKey || !isActiveEditor(docId)) return;
     const k = e.key.toLowerCase();
     if (e.ctrlKey || e.metaKey) {
       if (e.shiftKey) return;
@@ -293,6 +295,18 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         void edit.execute({ type: "MoveSymbol", symbol_id: id, position: snap.point });
         return;
       }
+      case "noconnect": {
+        if (!pinHit) return edit.notify("Click a pin to mark it as intentionally unconnected.");
+        void edit.execute({ type: "SetNoConnect", symbol_id: pinHit.symbol, pin: pinHit.number });
+        return;
+      }
+      case "pinlabel": {
+        if (!pinHit) return edit.notify("Click a pin to label its net.");
+        const name = labelName.trim();
+        if (!name) return edit.notify("Enter a net name first.");
+        void edit.execute({ type: "LabelPin", symbol_id: pinHit.symbol, pin: pinHit.number, name, kind: labelKind });
+        return;
+      }
       case "delete": {
         if (symId) void edit.execute({ type: "DeleteSymbol", symbol_id: symId });
         else if (labelId) void edit.execute({ type: "DeleteNetLabel", label_id: labelId });
@@ -350,7 +364,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
               ))}
             </select>
           )}
-          {tool === "label" && (
+          {(tool === "label" || tool === "pinlabel") && (
             <>
               <input aria-label="Net name" value={labelName} onChange={(e) => setLabelName(e.target.value)} />
               <select aria-label="Label kind" value={labelKind} onChange={(e) => setLabelKind(e.target.value as "net" | "power")}>
@@ -373,6 +387,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
             {tool === "label" && "Click to drop the label"}
             {tool === "move" && (picked ? "Click the new position" : "Click a symbol, then its destination")}
             {tool === "delete" && "Click a symbol, wire or label"}
+            {tool === "noconnect" && "Click a pin to mark it intentionally unconnected (the ERC-001 remedy)"}
+            {tool === "pinlabel" && "Click a pin to put the net label on it"}
           </span>
         </div>
       )}

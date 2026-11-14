@@ -13,7 +13,9 @@
 //! * ERC/DRC run in `eak-validation`, and their revision-bound reports are stored as
 //!   evidence by the engine.
 
+pub mod ai;
 pub mod models;
+pub mod parts;
 
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
 use eak_runtime::index::{Index, RecentProject};
@@ -141,6 +143,8 @@ pub struct Snapshot {
 pub enum Check {
     Erc,
     Drc,
+    /// Design-for-manufacture against the built-in JLCPCB standard profile.
+    Dfm,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -351,12 +355,15 @@ pub fn acknowledge_recovery(s: &Session) -> Result<Snapshot, String> {
     })
 }
 
-/// Run ERC or DRC on the current revision and record the report as evidence.
+/// Run ERC, DRC or DFM on the current revision and record the report as evidence.
 pub fn run_check(s: &Session, check: Check) -> Result<CheckResult, String> {
     s.with_engine(|e| {
         let report = match check {
             Check::Erc => erc::run(e.project()),
             Check::Drc => drc::run(e.project()),
+            Check::Dfm => {
+                eak_validation::dfm::run(e.project(), &eak_validation::dfm::jlcpcb_standard())
+            }
         };
         let json = serde_json::to_string_pretty(&report).map_err(|err| err.to_string())?;
         let evidence_path = match e.dir() {
@@ -411,6 +418,57 @@ pub fn connectivity(s: &Session) -> Result<ConnectivityReport, String> {
     })
 }
 
+/// Simulation panel data: whether ngspice is installed plus the nets and elements an
+/// `eak-simulation` export would use. Read-only; ngspice is optional.
+#[derive(Debug, Clone, Serialize)]
+pub struct SimulationStatus {
+    pub ngspice: eak_simulation::NgspiceStatus,
+    pub revision: u64,
+    #[serde(flatten)]
+    pub circuit: eak_simulation::Describe,
+}
+
+pub fn simulation_status(s: &Session) -> Result<SimulationStatus, String> {
+    let (revision, circuit) =
+        s.with_engine(|e| (e.project().revision, eak_simulation::describe(e.project())))?;
+    Ok(SimulationStatus {
+        ngspice: eak_simulation::probe(),
+        revision,
+        circuit,
+    })
+}
+
+/// Runs ngspice on a snapshot of the current revision. The engine lock is released before the
+/// subprocess starts, and nothing is written to the project (simulation is not a design edit).
+pub fn run_simulation(
+    s: &Session,
+    req: &eak_simulation::SimRequest,
+) -> Result<eak_simulation::SimResult, String> {
+    let project = s.with_engine(|e| e.project().clone())?;
+    eak_simulation::run(&project, req).map_err(|e| e.to_string())
+}
+
+/// One interactive route step (read-only): a legal path for `net` on `layer` from the last
+/// committed point to the cursor, computed by `eak_engineering::interactive::route_step` against
+/// the current revision's exact copper geometry and net-class rules. The route tool commits the
+/// accepted segments and via as one `Batch` of `AddTrack`/`AddVia` commands.
+#[derive(Debug, Clone, Serialize)]
+pub struct RouteStepReport {
+    pub revision: u64,
+    #[serde(flatten)]
+    pub step: eak_engineering::interactive::RouteStepResult,
+}
+
+pub fn route_step(
+    s: &Session,
+    request: &eak_engineering::interactive::RouteStepRequest,
+) -> Result<RouteStepReport, String> {
+    s.with_engine(|e| RouteStepReport {
+        revision: e.project().revision,
+        step: eak_engineering::interactive::route_step(e.project(), request),
+    })
+}
+
 /// A built-in library part the UI can place (read-only catalogue; placing it is a `PlaceSymbol` command).
 #[derive(Debug, Clone, Serialize)]
 pub struct LibraryEntry {
@@ -441,6 +499,108 @@ pub fn library_components() -> Vec<LibraryEntry> {
         .collect()
 }
 
+/// One library part as shown by the library panel: built-in catalogue merged with the
+/// project library (a project definition shadows the built-in of the same id). Read-only;
+/// placing or editing goes through `PlaceSymbol` / `SetComponentProperties` /
+/// `AssignComponentFootprint`.
+#[derive(Debug, Clone, Serialize)]
+pub struct LibraryPart {
+    pub id: String,
+    /// `builtin` (shipped catalogue) or `project` (stored in this project's library).
+    pub source: String,
+    /// True when the project library already holds a copy (placing will not import).
+    pub in_project: bool,
+    pub def: eak_core::ComponentDef,
+    /// Ratings still lacking a verified source; never reported as verified.
+    pub unverified_ratings: usize,
+}
+
+/// Search the merged library. `source` is `all`, `builtin` or `project`; `category` an exact
+/// category or empty for any. Terms are AND-matched by `ComponentDef::matches_query`.
+pub fn library_search(
+    s: &Session,
+    query: &str,
+    category: &str,
+    source: &str,
+) -> Result<Vec<LibraryPart>, String> {
+    let project = s.with_engine(|e| e.project().library.clone())?;
+    Ok(merged_library(&project, query, category, source))
+}
+
+fn merged_library(
+    project: &std::collections::BTreeMap<String, eak_core::ComponentDef>,
+    query: &str,
+    category: &str,
+    source: &str,
+) -> Vec<LibraryPart> {
+    let mut parts: std::collections::BTreeMap<String, LibraryPart> = Default::default();
+    let mut add = |def: eak_core::ComponentDef, src: &str| {
+        parts.insert(
+            def.id.clone(),
+            LibraryPart {
+                id: def.id.clone(),
+                source: src.into(),
+                in_project: project.contains_key(&def.id),
+                unverified_ratings: def.ratings.iter().filter(|r| !r.verified).count(),
+                def,
+            },
+        );
+    };
+    for d in eak_core::builtin::components() {
+        add(d, "builtin");
+    }
+    for d in project.values() {
+        add(d.clone(), "project");
+    }
+    parts
+        .into_values()
+        .filter(|p| source == "all" || source.is_empty() || p.source == source)
+        .filter(|p| category.is_empty() || p.def.category == category)
+        .filter(|p| p.def.matches_query(query))
+        .collect()
+}
+
+/// A footprint (with a pin map) that can be assigned to a component without breaking the
+/// definition: assigning it passes `ComponentDef::validate`.
+#[derive(Debug, Clone, Serialize)]
+pub struct FootprintCandidate {
+    pub name: String,
+    pub donor: String,
+    pub footprint: eak_core::FootprintDef,
+    pub pin_map: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+/// Footprints of other library parts whose pin map fits `component_id`'s symbol pins.
+pub fn footprint_candidates(
+    s: &Session,
+    component_id: &str,
+) -> Result<Vec<FootprintCandidate>, String> {
+    let project = s.with_engine(|e| e.project().library.clone())?;
+    let target = project
+        .get(component_id)
+        .cloned()
+        .or_else(|| eak_core::builtin::get(component_id))
+        .ok_or_else(|| format!("unknown component {component_id}"))?;
+    let mut out = vec![];
+    let mut seen = std::collections::BTreeSet::new();
+    for p in merged_library(&project, "", "", "all") {
+        if p.id == target.id || !seen.insert(p.def.footprint.name.clone()) {
+            continue;
+        }
+        let mut t = target.clone();
+        t.footprint = p.def.footprint.clone();
+        t.pin_map = p.def.pin_map.clone();
+        if t.validate().is_empty() && p.def.footprint.name != target.footprint.name {
+            out.push(FootprintCandidate {
+                name: p.def.footprint.name.clone(),
+                donor: p.id.clone(),
+                footprint: t.footprint,
+                pin_map: t.pin_map,
+            });
+        }
+    }
+    Ok(out)
+}
 /// Result of a manufacturing export: the manifest plus the revision-bound check reports.
 #[derive(Debug, Clone, Serialize)]
 pub struct ExportResult {
@@ -449,8 +609,8 @@ pub struct ExportResult {
     pub reports: Vec<Report>,
 }
 
-/// Run ERC, DRC and MECH on the current revision (saving each as evidence), then write
-/// Gerber, Excellon, BOM and CPL into `<project>/output/rev-<N>`. The package status is
+/// Run ERC, DRC, MECH and DFM on the current revision (saving each as evidence), then write
+/// Gerber, Excellon, BOM, CPL and the zipped fab pack with its README into `<project>/output/rev-<N>`. The package status is
 /// DRAFT unless every gate passes; it is never called manufacturing-ready.
 pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
     s.with_engine(|e| {
@@ -462,6 +622,7 @@ pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
             erc::run(e.project()),
             drc::run(e.project()),
             eak_validation::mech::run(e.project()),
+            eak_validation::dfm::run(e.project(), &eak_validation::dfm::jlcpcb_standard()),
         ];
         for r in &reports {
             let json = serde_json::to_string_pretty(r).map_err(|err| err.to_string())?;
@@ -494,8 +655,21 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 22] = [
+pub const IPC_COMMANDS: [&str; 35] = [
+    "ai_propose",
+    "ai_accept",
+    "ai_reject",
+    "ai_rollback",
+    "library_search",
+    "library_footprint_candidates",
+    "simulation_status",
+    "run_simulation",
     "connectivity",
+    "route_step",
+    "parts_search",
+    "parts_import",
+    "manufacturing_preview",
+    "jlcpcb_prepare",
     "library_components",
     "domain_classification",
     "export_manufacturing",
@@ -603,6 +777,45 @@ pub mod cmd {
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
+    pub fn library_search(
+        state: State<'_, Session>,
+        query: String,
+        category: String,
+        source: String,
+    ) -> Result<Vec<LibraryPart>, String> {
+        super::library_search(&state, &query, &category, &source)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
+    pub fn library_footprint_candidates(
+        state: State<'_, Session>,
+        component_id: String,
+    ) -> Result<Vec<FootprintCandidate>, String> {
+        super::footprint_candidates(&state, &component_id)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
+    pub fn simulation_status(state: State<'_, Session>) -> Result<SimulationStatus, String> {
+        super::simulation_status(&state)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
+    pub fn run_simulation(
+        state: State<'_, Session>,
+        request: eak_simulation::SimRequest,
+    ) -> Result<eak_simulation::SimResult, String> {
+        super::run_simulation(&state, &request)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
+    pub fn route_step(
+        state: State<'_, Session>,
+        request: eak_engineering::interactive::RouteStepRequest,
+    ) -> Result<RouteStepReport, String> {
+        super::route_step(&state, &request)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
     pub fn library_components() -> Vec<LibraryEntry> {
         super::library_components()
     }
@@ -635,6 +848,7 @@ pub fn run() {
                 eprintln!("eak-desktop: recent-project index unavailable: {e}");
             }
             app.manage(Session::new(index));
+            app.manage(ai::AiState::default());
             // Profiles are plain JSON in the config dir; keys go to the OS credential store.
             let profiles = app
                 .path()
@@ -673,8 +887,21 @@ pub fn run() {
             models::cmd::model_test_connection,
             cmd::domain_classification,
             cmd::library_components,
+            cmd::library_search,
+            cmd::library_footprint_candidates,
             cmd::connectivity,
+            cmd::simulation_status,
+            cmd::run_simulation,
+            cmd::route_step,
             cmd::export_manufacturing,
+            ai::cmd::ai_propose,
+            ai::cmd::ai_accept,
+            ai::cmd::ai_reject,
+            ai::cmd::ai_rollback,
+            parts::cmd::parts_search,
+            parts::cmd::parts_import,
+            parts::cmd::manufacturing_preview,
+            parts::cmd::jlcpcb_prepare,
         ])
         .run(tauri::generate_context!())
         .expect("EAK desktop failed to start");

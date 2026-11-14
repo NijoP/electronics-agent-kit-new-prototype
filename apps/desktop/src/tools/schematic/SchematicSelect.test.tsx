@@ -187,3 +187,28 @@ describe("schematic select tool", () => {
     expect(sent).toEqual([]);
   });
 });
+
+describe("pin tools (evaluator C3: ERC-001 remedy)", () => {
+  it("No connect marks the clicked pin with SetNoConnect", () => {
+    const { svg } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "No connect" }));
+    clickOn(svg, [46.3, 50.2]); // captures R1 pin 1 at (46, 50)
+    expect(sent).toEqual([{ type: "SetNoConnect", symbol_id: "sym_r1", pin: "1" }]);
+    clickOn(svg, [150, 150]); // no pin: nothing sent, user told why
+    expect(sent).toHaveLength(1);
+    expect(notify).toHaveBeenCalledWith("Click a pin to mark it as intentionally unconnected.");
+  });
+
+  it("Pin label puts the typed net name on the clicked pin with LabelPin", () => {
+    const { svg } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Pin label" }));
+    fireEvent.change(screen.getByLabelText("Net name"), { target: { value: "VCC" } });
+    fireEvent.change(screen.getByLabelText("Label kind"), { target: { value: "power" } });
+    clickOn(svg, [76.2, 49.8]); // D1 pin 2 at (76, 50)
+    expect(sent).toEqual([{ type: "LabelPin", symbol_id: "sym_d1", pin: "2", name: "VCC", kind: "power" }]);
+    fireEvent.change(screen.getByLabelText("Net name"), { target: { value: "  " } });
+    clickOn(svg, [76.2, 49.8]);
+    expect(sent).toHaveLength(1);
+    expect(notify).toHaveBeenCalledWith("Enter a net name first.");
+  });
+});

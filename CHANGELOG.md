@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased - LCSC parts search and JLCPCB preparation
+- `eak-manufacturing`: `lcsc` (read-only LCSC product lookup over ureq + rustls, keyword search that reports LCSC's HTTP 403
+  instead of faking results, import plan onto existing library templates), `bom` (BOM view joined with stored sourcing
+  records, JLCPCB-format BOM), `jlcpcb` (CPL, DFM check against JLCPCB's published 2-layer limits, "prepared for review"
+  bundle) and `zip` (dependency-free store-only writer). `SourcingRecord` gains an optional `category`.
+- Desktop: `parts_search`, `parts_import`, `manufacturing_preview`, `jlcpcb_prepare` IPC commands; Parts and Manufacturing
+  panels; imported parts appear in the editors' part picker. No new `Command` (import uses `UpsertComponentDefinition`).
+- New dependency (feature `live-http`, on by default): `ureq` 3 with rustls, the client already approved for model providers.
+
 ## Unreleased - desktop shell
 - `apps/desktop`: Tauri 2 shell (`src-tauri`, workspace member `eak-desktop`) plus a React/TypeScript/Vite UI.
 - IPC commands wrap `eak_runtime::Engine`:
@@ -44,13 +53,20 @@
   InternallyVerifiedReleaseCandidate.
 
 ## 0.1.0 (unreleased) - M1 engineering foundation
-- EAK-IR v1, built-in starter library, schema gate and integrity checks.
+- EAK-IR v1, built-in library (48 parts: generic passives, discretes, headers, crystals, switch;
+  ESP32-C3-MINI-1, LMR33630 buck, SHT40, AO4406A, power inductors, SMD electrolytics, screw
+  terminal with datasheet provenance), schema gate and integrity checks.
 - Engineering core: IPC sizing rules, circuit calcs, netlist, copper connectivity, zone fill, router, placer.
-- Verification engine: ERC (13 rules), DRC (13 rules), mechanical (3 rules) with revision-bound evidence.
+- Verification engine: ERC (13 rules), DRC (13 rules at the time; 17 since multilayer PR #22), mechanical (3 rules) with revision-bound evidence.
 - Runtime: typed command engine, approvals, transactions, undo/redo, journal + crash recovery, checkpoints,
   process supervisor, task model, SQLite index.
 - Manufacturing compiler: Gerber, Excellon, BOM, CPL, SHA-256 manifest, release gate, package verification.
 - Three-OS CI workflow and Python-free policy scan.
+- LCSC sourcing, offline only: provenance-carrying sourcing records with search-hit, datasheet-matched
+  and verified states; `SOURCING` report (12 rules) for missing data, BOM-to-LCSC mapping and
+  symbol, footprint and package consistency; synthetic offline fixtures. No network client.
+- Access and terms research for LCSC and JLCPCB (`docs/engineering/sourcing.md`) and a separate
+  integration test matrix (`docs/engineering/INTEGRATION_TEST_MATRIX.md`).
 
 ## Unreleased - Intelligence Engine core (`eak-intelligence`)
 - Provider trait with OpenAI-compatible (`/chat/completions`), Anthropic Messages (`/v1/messages`) and

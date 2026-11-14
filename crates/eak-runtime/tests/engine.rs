@@ -377,3 +377,145 @@ fn sqlite_index_records_projects_and_events() {
     }
     assert!(idx.event_count(&e.project().id).unwrap() >= 1);
 }
+
+// ---- Phase 5: library properties, footprint assignment, placement
+
+fn props(id: &str, mfr: Option<&str>, mpn: Option<&str>, lcsc: Option<&str>) -> C {
+    C::SetComponentProperties {
+        component_id: id.into(),
+        manufacturer: mfr.map(Into::into),
+        mpn: mpn.map(Into::into),
+        lcsc: lcsc.map(Into::into),
+        datasheet: None,
+    }
+}
+
+#[test]
+fn placing_a_library_part_imports_it_and_syncs_a_linked_footprint() {
+    let mut e = Engine::in_memory(Project::new("lib"));
+    let sym = place(&mut e, "R_0603", 0.0, 0.0);
+    assert!(e.project().library.contains_key("R_0603"));
+    let r = run(&mut e, Actor::human(), C::SyncSchematicToPcb);
+    assert!(r.accepted, "{:?}", r.error);
+    let fp = e
+        .project()
+        .pcb
+        .footprints
+        .values()
+        .find(|f| f.symbol_id == sym)
+        .expect("footprint linked to the placed symbol");
+    assert_eq!(fp.component_id, "R_0603");
+}
+
+#[test]
+fn set_component_properties_edits_fields_and_preserves_provenance() {
+    let mut e = Engine::in_memory(Project::new("lib"));
+    place(&mut e, "R_0603", 0.0, 0.0);
+    let before = e.project().library["R_0603"].clone();
+    let r = run(
+        &mut e,
+        Actor::human(),
+        props(
+            "R_0603",
+            Some(" Yageo "),
+            Some("RC0603FR-0710KL"),
+            Some("C25804"),
+        ),
+    );
+    assert!(r.accepted, "{:?}", r.error);
+    let after = &e.project().library["R_0603"];
+    assert_eq!(after.manufacturer.as_deref(), Some("Yageo"));
+    assert_eq!(after.mpn.as_deref(), Some("RC0603FR-0710KL"));
+    assert_eq!(after.lcsc.as_deref(), Some("C25804"));
+    // Provenance, ratings, geometry and pin map are untouched.
+    assert_eq!(after.provenance, before.provenance);
+    assert_eq!(after.ratings, before.ratings);
+    assert_eq!(after.symbol, before.symbol);
+    assert_eq!(after.footprint, before.footprint);
+    assert_eq!(after.pin_map, before.pin_map);
+    // Blank clears a field.
+    assert!(
+        run(
+            &mut e,
+            Actor::human(),
+            props("R_0603", Some("  "), None, None)
+        )
+        .accepted
+    );
+    assert_eq!(e.project().library["R_0603"].mpn, None);
+    // Undo restores the previous values exactly.
+    let rev = e.project().revision;
+    assert!(e.undo(rev, &Actor::human()).accepted);
+    assert_eq!(
+        e.project().library["R_0603"].mpn.as_deref(),
+        Some("RC0603FR-0710KL")
+    );
+}
+
+#[test]
+fn set_component_properties_rejects_unknown_component() {
+    let mut e = Engine::in_memory(Project::new("lib"));
+    let r = run(&mut e, Actor::human(), props("NOPE", None, None, None));
+    assert!(!r.accepted);
+}
+
+#[test]
+fn assign_footprint_validates_records_provenance_and_undoes() {
+    let mut e = Engine::in_memory(Project::new("lib"));
+    place(&mut e, "R_0603", 0.0, 0.0);
+    let donor = eak_core::builtin::components()
+        .into_iter()
+        .find(|c| c.id != "R_0603" && c.pin_map.len() == 2 && c.footprint.name != "R_0603")
+        .expect("another two-pin part");
+    let before = e.project().library["R_0603"].clone();
+    let r = run(
+        &mut e,
+        Actor::human(),
+        C::AssignComponentFootprint {
+            component_id: "R_0603".into(),
+            footprint: donor.footprint.clone(),
+            pin_map: donor.pin_map.clone(),
+        },
+    );
+    assert!(r.accepted, "{:?}", r.error);
+    let after = &e.project().library["R_0603"];
+    assert_eq!(after.footprint.name, donor.footprint.name);
+    assert!(after.provenance.starts_with(&before.provenance));
+    assert!(after.provenance.contains(&donor.footprint.name));
+    // A pin map that points at a missing pad is rejected and changes nothing.
+    let mut bad = donor.pin_map.clone();
+    bad.insert("1".into(), vec!["99".into()]);
+    let rev = e.project().revision;
+    let r = run(
+        &mut e,
+        Actor::human(),
+        C::AssignComponentFootprint {
+            component_id: "R_0603".into(),
+            footprint: donor.footprint.clone(),
+            pin_map: bad,
+        },
+    );
+    assert!(!r.accepted);
+    assert_eq!(e.project().revision, rev);
+    let rev = e.project().revision;
+    assert!(e.undo(rev, &Actor::human()).accepted);
+    assert_eq!(e.project().library["R_0603"], before);
+}
+
+#[test]
+fn assign_footprint_is_refused_once_pcb_footprints_exist() {
+    let mut e = Engine::in_memory(Project::new("lib"));
+    place(&mut e, "R_0603", 0.0, 0.0);
+    assert!(run(&mut e, Actor::human(), C::SyncSchematicToPcb).accepted);
+    let def = e.project().library["R_0603"].clone();
+    let r = run(
+        &mut e,
+        Actor::human(),
+        C::AssignComponentFootprint {
+            component_id: "R_0603".into(),
+            footprint: def.footprint,
+            pin_map: def.pin_map,
+        },
+    );
+    assert!(!r.accepted);
+}

@@ -97,6 +97,8 @@ export interface Zone {
 
 /** Canonical EAK-IR project (fields the shell renders). */
 export interface Project {
+  /** Design rules and net declarations; absent only in fixtures that predate them. */
+  constraints?: Constraints;
   schema_version: number;
   id: Id;
   name: string;
@@ -115,6 +117,19 @@ export interface Project {
     vias: Record<Id, Via>;
     zones: Record<Id, Zone>;
   };
+  /** Definitions in the project's own library (built-ins copied in, and imported parts). */
+  library?: Record<
+    string,
+    {
+      id: string;
+      name: string;
+      category: string;
+      refdes_prefix: string;
+      default_value: string;
+      lcsc?: string | null;
+      symbol: { pins: { number: string; name: string }[] };
+    }
+  >;
 }
 
 export interface PinGeom {
@@ -165,6 +180,9 @@ export interface Snapshot {
 
 /** Argument-free engine commands offered by the command palette (eak-runtime `Command`). */
 export type Command =
+  | { type: "ImportLibraryComponent"; component_id: string }
+  | { type: "SetComponentProperties"; component_id: string; manufacturer: string | null; mpn: string | null; lcsc: string | null; datasheet: string | null }
+  | { type: "AssignComponentFootprint"; component_id: string; footprint: FootprintDef; pin_map: Record<string, string[]> }
   | { type: "PlaceSymbol"; sheet_id: Id | null; component_id: string; position: Point; rotation: Rotation; refdes: string | null; value: string | null }
   | { type: "MoveSymbol"; symbol_id: Id; position: Point }
   | { type: "RotateSymbol"; symbol_id: Id; rotation: Rotation }
@@ -177,6 +195,8 @@ export type Command =
   | { type: "ConnectPins"; a_symbol: Id; a_pin: string; b_symbol: Id; b_pin: string }
   | { type: "AddNetLabel"; sheet_id: Id | null; name: string; position: Point; kind: "net" | "power" }
   | { type: "DeleteNetLabel"; label_id: Id }
+  | { type: "LabelPin"; symbol_id: Id; pin: string; name: string; kind: "net" | "power" }
+  | { type: "SetNoConnect"; symbol_id: Id; pin: string }
   | { type: "MoveNetLabel"; label_id: Id; position: Point }
   | { type: "SetBoardOutline"; points: Point[] }
   | { type: "MoveFootprint"; footprint_id: Id; position: Point; rotation: Rotation | null; side: Side | null }
@@ -185,6 +205,10 @@ export type Command =
   | { type: "AddVia"; position: Point; net: string; drill: Nm | null; diameter: Nm | null; from?: CopperLayer | null; to?: CopperLayer | null }
   | { type: "AddZone"; layer: CopperLayer; net: string; outline: Point[]; clearance: Nm | null }
   | { type: "DeleteZone"; zone_id: Id }
+  | { type: "SetDesignRules"; min_track_width: Nm | null; min_clearance: Nm | null; min_drill: Nm | null; min_annular_ring: Nm | null; board_edge_clearance: Nm | null; default_track_width: Nm | null; default_clearance: Nm | null; temp_rise_c: number | null; max_component_height: Nm | null }
+  | { type: "UpsertNetClass"; class: NetClass }
+  | { type: "SetNetCurrent"; net: string; amps: number | null }
+  | { type: "SetNetVoltage"; net: string; volts: number | null }
   | { type: "SetLayerCount"; count: number; board_thickness?: Nm | null }
   | { type: "SetStackup"; stackup: Stackup }
   | { type: "DeleteVia"; via_id: Id }
@@ -256,7 +280,7 @@ export interface Report {
   not_implemented: string[];
   limitations: string[];
 }
-export type Check = "erc" | "drc";
+export type Check = "erc" | "drc" | "dfm";
 export interface CheckResult {
   report: Report;
   evidence_path: string | null;
@@ -323,6 +347,106 @@ export interface ExportResult {
     blocking_reasons: string[];
     files: ExportFile[];
     not_verified: string[];
+  };
+  reports: Report[];
+}
+
+// ---- parts search, BOM and JLCPCB preparation (src-tauri/src/parts.rs) ----
+
+export interface SourcingRecord {
+  provider: string;
+  source_url: string;
+  retrieved_at_unix_s: number;
+  raw_sha256: string;
+  lcsc_part: string | null;
+  mpn: string | null;
+  manufacturer: string | null;
+  package: string | null;
+  category: string | null;
+  description: string | null;
+  datasheet_url: string | null;
+  specs: { name: string; value: string }[];
+  stock: number | null;
+  price_breaks: { min_quantity: number; unit_price: string; currency: string }[];
+  missing: string[];
+  rejected: string[];
+  state: string;
+}
+
+export interface LibraryHit {
+  id: string;
+  name: string;
+  category: string;
+  lcsc: string | null;
+  mpn: string | null;
+}
+
+export type LiveStatus = "ok" | "blocked" | "not_found" | "unreachable" | "bad_query" | "error";
+
+export interface PartsSearch {
+  query: string;
+  library: LibraryHit[];
+  stored: SourcingRecord[];
+  live: { status: LiveStatus; message: string; records: SourcingRecord[] };
+}
+
+export interface ImportResult {
+  component_id: string;
+  response: CommandResponse;
+  notes: string[];
+  record: SourcingRecord;
+}
+
+export interface BomLine {
+  component_id: string;
+  value: string;
+  designators: string[];
+  quantity: number;
+  footprint: string;
+  lcsc: string | null;
+  manufacturer: string | null;
+  mpn: string | null;
+  smd: boolean;
+  placed: number;
+  stock: number | null;
+  unit_price_usd: string | null;
+  price_as_of_unix_s: number | null;
+  issues: string[];
+}
+
+export type DfmStatus = "pass" | "warn" | "fail" | "not_checked";
+
+export interface DfmCheck {
+  id: string;
+  title: string;
+  status: DfmStatus;
+  required: string;
+  measured: string;
+  detail: string[];
+}
+
+export interface DfmReport {
+  profile: { id: string; version: string; source_url: string; verified_on: string };
+  checks: DfmCheck[];
+  failures: number;
+  warnings: number;
+  not_checked: number;
+  statement: string;
+  limitations: string[];
+}
+
+export interface ManufacturingPreview {
+  revision: number;
+  bom: BomLine[];
+  dfm: DfmReport;
+  default_out_dir: string | null;
+}
+
+export interface PrepareResult {
+  prep: {
+    out_dir: string;
+    manifest: { statement: string; files: ExportFile[]; not_verified: string[] };
+    dfm: DfmReport;
   };
   reports: Report[];
 }
@@ -402,4 +526,180 @@ export interface ConnectivityReport {
   shorts: [string, string, string, string][];
   /** Unrouted connections: [net, from, to]. */
   ratsnest: [string, Point, Point][];
+}
+
+// AI panel (src-tauri/src/ai.rs): agent-loop proposals awaiting Accept/Reject.
+export type AgentOutcome =
+  | { outcome: "completed" }
+  | { outcome: "turn_limit_reached" }
+  | { outcome: "cancelled" }
+  | { outcome: "refused" }
+  | { outcome: "provider_failed"; detail: string };
+
+export interface AiStep {
+  id: number;
+  proposal_id: number;
+  command: Command;
+  class: "read_only" | "reversible_local" | "engineering_impacting" | "destructive";
+  checks_to_run: string[];
+  preview: CommandResponse;
+}
+
+export interface AiProposal {
+  id: number;
+  provider: string;
+  outcome: AgentOutcome;
+  text: string;
+  revision: number;
+  steps: AiStep[];
+}
+// ---- Phase 5: component library (mirrors eak-core `library.rs`)
+export type PinType = "input" | "output" | "bidirectional" | "passive" | "power_in" | "power_out" | "open_collector" | "no_connect";
+export interface SymbolPin { number: string; name: string; electrical_type: PinType; position: Point }
+export interface PadDef {
+  number: string;
+  kind: "smd" | "tht";
+  shape: "rect" | "circle" | "oval";
+  position: Point;
+  size_x: number;
+  size_y: number;
+  drill: number | null;
+}
+export interface FootprintDef {
+  name: string;
+  pads: PadDef[];
+  courtyard_half_w: number;
+  courtyard_half_h: number;
+  body_height: number | null;
+}
+export interface Rating { name: string; value: number; unit: string; source: string; verified: boolean }
+export interface ComponentDef {
+  id: string;
+  name: string;
+  category: string;
+  refdes_prefix: string;
+  default_value: string;
+  manufacturer: string | null;
+  mpn: string | null;
+  lcsc: string | null;
+  datasheet: string | null;
+  symbol: { pins: SymbolPin[]; body_half_w: number; body_half_h: number };
+  footprint: FootprintDef;
+  pin_map: Record<string, string[]>;
+  ratings: Rating[];
+  provenance: string;
+}
+/** A part as listed by `library_search` (built-in catalogue merged with the project library). */
+export interface LibraryPart {
+  id: string;
+  source: "builtin" | "project";
+  in_project: boolean;
+  def: ComponentDef;
+  unverified_ratings: number;
+}
+/** A footprint that passes library validation when assigned (`library_footprint_candidates`). */
+export interface FootprintCandidate {
+  name: string;
+  donor: string;
+  footprint: FootprintDef;
+  pin_map: Record<string, string[]>;
+}
+
+
+/** Optional ngspice simulation (eak-simulation). Results are computed by ngspice, never verified by EAK. */
+export interface NgspiceStatus {
+  available: boolean;
+  path: string | null;
+  version: string | null;
+  message: string | null;
+}
+export interface SimElement { refdes: string; kind: string; value: string; line: string }
+export interface SimSkipped { refdes: string; reason: string }
+export interface SimulationStatus {
+  ngspice: NgspiceStatus;
+  revision: number;
+  nets: string[];
+  elements: SimElement[];
+  skipped: SimSkipped[];
+}
+export type SimAnalysis = { kind: "op" } | { kind: "tran"; stop: number; step: number };
+export interface SimSource {
+  name: string;
+  kind: "voltage" | "current";
+  positive_net: string;
+  negative_net: string;
+  spec: string;
+}
+export interface SimRequest { analysis: SimAnalysis; sources: SimSource[]; timeout_secs?: number | null }
+export interface SimResult {
+  analysis: SimAnalysis;
+  ngspice_version: string;
+  nodes: { net: string; volts: number }[];
+  currents: { element: string; amps: number }[];
+  tran: { time: number[]; traces: { net: string; volts: number[] }[]; points_total: number; decimated: boolean } | null;
+  warnings: string[];
+  limitations: string[];
+  netlist: string;
+  elapsed_ms: number;
+}
+
+/** Interactive routing (eak_engineering::interactive). Points are board nm. */
+export type BendMode = "diagonal45" | "orthogonal90";
+export interface RouteStepRequest {
+  net: string;
+  layer: CopperLayer;
+  from: Point;
+  to: Point;
+  mode: BendMode;
+  width: Nm | null;
+  via_at_start: boolean;
+}
+export interface RouteSegment {
+  a: Point;
+  b: Point;
+}
+export interface ClearanceFeedback {
+  object: string;
+  /** Copper-to-copper gap in nm (negative = overlap). */
+  measured: number;
+  required: Nm;
+}
+export interface RouteStepReport {
+  revision: number;
+  net: string;
+  layer: CopperLayer;
+  width: Nm;
+  clearance: Nm;
+  mode: BendMode;
+  segments: RouteSegment[];
+  via: { position: Point; drill: Nm; diameter: Nm } | null;
+  end: Point;
+  reached: boolean;
+  walkaround: boolean;
+  blocking: ClearanceFeedback[];
+  min_gap: ClearanceFeedback | null;
+  message: string | null;
+}
+/** Net class (EAK-IR); lengths in nm. */
+export interface NetClass {
+  name: string;
+  track_width: Nm;
+  clearance: Nm;
+  via_drill: Nm;
+  via_diameter: Nm;
+  nets: string[];
+}
+/** Design rules and electrical declarations (EAK-IR `Constraints`). */
+export interface Constraints {
+  min_track_width: Nm;
+  min_clearance: Nm;
+  min_drill: Nm;
+  min_annular_ring: Nm;
+  board_edge_clearance: Nm;
+  default_class: NetClass;
+  net_classes?: NetClass[];
+  net_currents_a?: Record<string, number>;
+  net_voltages_v?: Record<string, number>;
+  temp_rise_c: number;
+  max_component_height?: Nm | null;
 }

@@ -69,7 +69,9 @@ describe("Engineering Monitor", () => {
     expect(screen.getByText(/Not implemented \(1\)/)).toBeTruthy();
     expect(screen.getByText(/Limitations \(1\)/)).toBeTruthy();
     expect(screen.getByText(/DRC/, { selector: "h3" }).textContent).toBe("DRC");
-    expect(screen.getByText(/unknown, not passing/)).toBeTruthy();
+    // DRC and DFM were not run: both say unknown, never passing.
+    expect(screen.getAllByText(/unknown, not passing/)).toHaveLength(2);
+    expect(screen.getByText(/DFM/, { selector: "h3" }).textContent).toBe("DFM");
     fireEvent.click(screen.getByText(/D1 pin 1/).closest("button")!);
     expect(sym(container, "sym_d1").classList).toContain("selected");
     // A finding without a symbol or footprint cannot be probed.

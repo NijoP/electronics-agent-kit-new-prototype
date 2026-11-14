@@ -1,0 +1,18 @@
+[package]
+name = "eak-simulation"
+description = "EAK simulation: SPICE netlist export from EAK-IR and an optional external ngspice runner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+eak-core.workspace = true
+eak-engineering.workspace = true
+eak-validation.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

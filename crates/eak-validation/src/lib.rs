@@ -4,9 +4,12 @@
 //! Every report is bound to a project revision and input hash and lists the checks
 //! that are not implemented (unknown is never reported as pass).
 
+pub mod dfm;
 pub mod drc;
 pub mod erc;
+pub mod holes;
 pub mod mech;
 pub mod report;
+pub mod sourcing;
 
 pub use report::{Bound, Finding, Limit, Outcome, Quantity, Report, Severity};

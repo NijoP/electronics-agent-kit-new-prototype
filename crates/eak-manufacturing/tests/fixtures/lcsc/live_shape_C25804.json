@@ -1,0 +1,64 @@
+{
+  "code": 200,
+  "msg": null,
+  "ok": true,
+  "result": {
+    "productCode": "C25804",
+    "productModel": "0603WAF1002T5E",
+    "brandNameEn": "UNI-ROYAL",
+    "parentCatalogName": "Resistors",
+    "catalogName": "Chip Resistor - Surface Mount",
+    "encapStandard": "0603",
+    "productIntroEn": "10kΩ ±1% 100mW 0603 Thick Film Resistor",
+    "pdfUrl": "https://datasheet.lcsc.com/datasheet/pdf/0a975aaa49b7c97f38a963127be4a823.pdf?productCode=C25804",
+    "stockNumber": 1004300,
+    "productPriceList": [
+      {
+        "ladder": 100,
+        "usdPrice": 0.0022
+      },
+      {
+        "ladder": 1000,
+        "usdPrice": 0.0019
+      },
+      {
+        "ladder": 5000,
+        "usdPrice": 0.0017
+      },
+      {
+        "ladder": 10000,
+        "usdPrice": 0.0015
+      }
+    ],
+    "paramVOList": [
+      {
+        "paramNameEn": "Power(Watts)",
+        "paramValueEn": "100mW"
+      },
+      {
+        "paramNameEn": "Resistance",
+        "paramValueEn": "10kΩ"
+      },
+      {
+        "paramNameEn": "Voltage Rating",
+        "paramValueEn": "75V"
+      },
+      {
+        "paramNameEn": "Type",
+        "paramValueEn": "Thick Film Resistor"
+      },
+      {
+        "paramNameEn": "Temperature Coefficient",
+        "paramValueEn": "±100ppm/℃"
+      },
+      {
+        "paramNameEn": "Tolerance",
+        "paramValueEn": "±1%"
+      },
+      {
+        "paramNameEn": "Operating Temperature",
+        "paramValueEn": "-55℃~+155℃"
+      }
+    ]
+  }
+}

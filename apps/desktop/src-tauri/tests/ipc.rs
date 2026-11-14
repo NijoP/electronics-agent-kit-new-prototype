@@ -390,12 +390,28 @@ fn editor_flow_places_wires_routes_and_exports_gerbers() {
     let drc = run_check(&s, Check::Drc).unwrap();
     assert_eq!(erc.report.revision, snap.project.revision);
     assert_eq!(drc.report.revision, snap.project.revision);
+    let dfm = run_check(&s, Check::Dfm).unwrap();
+    assert_eq!(dfm.report.check, "DFM");
+    assert_eq!(dfm.report.revision, snap.project.revision);
+    assert!(dfm.evidence_path.is_some());
 
     let out = export_manufacturing(&s).unwrap();
     let names: Vec<&str> = out.manifest.files.iter().map(|f| f.name.as_str()).collect();
-    for ext in [".gtl", ".gbl", ".gm1", ".drl"] {
+    for ext in [
+        ".gtl",
+        ".gbl",
+        ".gm1",
+        ".drl",
+        "fab-pack.zip",
+        "fab-README.txt",
+        "BOM.csv",
+        "CPL.csv",
+    ] {
         assert!(names.iter().any(|n| n.ends_with(ext)), "missing {ext}");
     }
+    let checks: Vec<&str> = out.reports.iter().map(|r| r.check.as_str()).collect();
+    assert_eq!(checks, ["ERC", "DRC", "MECH", "DFM"]);
+    assert!(out.manifest.gates.iter().any(|g| g.check == "DFM"));
     assert!(std::path::Path::new(&out.out_dir)
         .join("manifest.json")
         .exists());
@@ -509,6 +525,165 @@ fn connectivity_reports_the_ratsnest_for_the_current_revision() {
         after.connectivity.ratsnest.is_empty(),
         "routed: no airwires"
     );
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn library_search_merges_builtin_and_project_and_keeps_provenance() {
+    let d = tmpdir("libsearch");
+    let s = session();
+    create_project(&s, &path(&d), "Lib").unwrap();
+    let all = library_search(&s, "", "", "all").unwrap();
+    assert!(all.iter().all(|p| p.source == "builtin" && !p.in_project));
+    // Search is AND-over-terms across fields and filterable by category / source.
+    let r = library_search(&s, "resistor 0603", "", "all").unwrap();
+    assert!(r.iter().any(|p| p.id == "R_0603"));
+    assert!(library_search(&s, "resistor", "LED", "all")
+        .unwrap()
+        .is_empty());
+    assert!(library_search(&s, "", "", "project").unwrap().is_empty());
+    // Place + edit through typed commands; the project copy shadows the built-in and the
+    // original provenance text is preserved.
+    let builtin_prov = eak_core::builtin::get("R_0603").unwrap().provenance;
+    let r = execute_command(
+        &s,
+        0,
+        C::PlaceSymbol {
+            sheet_id: None,
+            component_id: "R_0603".into(),
+            position: Point::mm(0.0, 0.0),
+            rotation: Rotation::default(),
+            refdes: None,
+            value: None,
+        },
+    )
+    .unwrap();
+    assert!(r.accepted, "{:?}", r.error);
+    let r = execute_command(
+        &s,
+        r.revision_after,
+        C::SetComponentProperties {
+            component_id: "R_0603".into(),
+            manufacturer: Some("Yageo".into()),
+            mpn: Some("RC0603FR-0710KL".into()),
+            lcsc: Some("C25804".into()),
+            datasheet: None,
+        },
+    )
+    .unwrap();
+    assert!(r.accepted, "{:?}", r.error);
+    let hit = library_search(&s, "C25804", "", "all").unwrap();
+    assert_eq!(hit.len(), 1);
+    assert_eq!(hit[0].source, "project");
+    assert!(hit[0].in_project);
+    assert_eq!(hit[0].def.provenance, builtin_prov);
+    assert_eq!(hit[0].def.mpn.as_deref(), Some("RC0603FR-0710KL"));
+}
+
+#[test]
+fn footprint_candidates_only_offer_assignable_footprints() {
+    let d = tmpdir("fpcand");
+    let s = session();
+    create_project(&s, &path(&d), "Lib").unwrap();
+    let c = footprint_candidates(&s, "R_0603").unwrap();
+    let target = eak_core::builtin::get("R_0603").unwrap();
+    for cand in &c {
+        assert_ne!(cand.footprint.name, target.footprint.name);
+        let mut t = target.clone();
+        t.footprint = cand.footprint.clone();
+        t.pin_map = cand.pin_map.clone();
+        assert!(t.validate().is_empty(), "{}: {:?}", cand.name, t.validate());
+    }
+    assert!(footprint_candidates(&s, "NOPE").is_err());
+}
+
+/// Interactive routing end to end: `route_step` proposes a legal path for an airwire, the tool
+/// commits it as one `Batch`, DRC finds no clearance or short violation, and one undo removes
+/// the whole route.
+#[test]
+fn route_step_result_commits_as_one_batch_and_undoes_in_one_step() {
+    use eak_engineering::interactive::{BendMode, RouteStepRequest};
+    let s = session();
+    let req = |net: &str, from: Point, to: Point| RouteStepRequest {
+        net: net.into(),
+        layer: eak_core::CopperLayer::Top,
+        from,
+        to,
+        mode: BendMode::Diagonal45,
+        width: None,
+        via_at_start: false,
+    };
+    assert!(route_step(&s, &req("N", Point::default(), Point::mm(1.0, 0.0))).is_err());
+    let d = tmpdir("route-step");
+    create_project(&s, &path(&d), "Route step").unwrap();
+    let mut rev = 0;
+    let mut run = |c: C| {
+        let r = execute_command(&s, rev, c).unwrap();
+        assert!(r.accepted, "{:?}", r.error);
+        rev = r.revision_after;
+        r
+    };
+    let place = |x: f64| C::PlaceSymbol {
+        sheet_id: None,
+        component_id: "R_0603".into(),
+        position: Point::mm(x, -50.0),
+        rotation: Rotation::default(),
+        refdes: None,
+        value: None,
+    };
+    let a = run(place(40.0)).created[0].clone();
+    let b = run(place(80.0)).created[0].clone();
+    run(C::ConnectPins {
+        a_symbol: a,
+        a_pin: "2".into(),
+        b_symbol: b,
+        b_pin: "1".into(),
+    });
+    run(outline());
+    run(C::SyncSchematicToPcb);
+    run(C::AutoPlace { grid: None });
+    let before = connectivity(&s).unwrap();
+    let (net, from, to) = before.connectivity.ratsnest[0].clone();
+
+    let step = route_step(&s, &req(&net, from, to)).unwrap();
+    assert_eq!(step.revision, before.revision);
+    assert!(step.step.reached, "{:?}", step.step);
+    assert!(!step.step.segments.is_empty());
+    let commands: Vec<C> = step
+        .step
+        .segments
+        .iter()
+        .map(|sg| C::AddTrack {
+            layer: step.step.layer,
+            a: sg.a,
+            b: sg.b,
+            width: Some(step.step.width),
+            net: net.clone(),
+        })
+        .collect();
+    let n = commands.len();
+    let r = run(C::Batch {
+        commands,
+        label: Some(format!("Route {net}")),
+    });
+    assert_eq!(r.revision_after, before.revision + 1, "one revision");
+    assert_eq!(current_project(&s).unwrap().project.pcb.tracks.len(), n);
+    assert!(connectivity(&s).unwrap().connectivity.ratsnest.is_empty());
+    let drc = run_check(&s, Check::Drc).unwrap();
+    assert!(
+        !drc.report
+            .findings
+            .iter()
+            .any(|f| f.rule_id == "DRC-002" || f.rule_id == "DRC-003"),
+        "route step produced a clearance violation: {:?}",
+        drc.report.findings
+    );
+
+    let u = undo(&s, r.revision_after).unwrap();
+    assert!(u.accepted);
+    assert!(current_project(&s).unwrap().project.pcb.tracks.is_empty());
+    assert!(!connectivity(&s).unwrap().connectivity.ratsnest.is_empty());
     close_project(&s).unwrap();
     let _ = std::fs::remove_dir_all(&d);
 }

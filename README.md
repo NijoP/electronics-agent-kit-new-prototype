@@ -10,7 +10,48 @@ Tusk Innovations Global Pvt Ltd.
 
 ## Install and run the EAK desktop app
 
-EAK is built from source; there are no prebuilt releases yet. The installer checks prerequisites,
+There are two ways to install EAK: a prebuilt Linux package from GitHub Releases (A), or a
+build from source with the installer script (B), which also covers macOS and Windows.
+
+### A. Prebuilt Linux package (.deb or AppImage)
+
+Starting with v0.1.0, prebuilt Linux x86_64 packages, a `SHA256SUMS` file and release notes are
+attached to each release on the
+[GitHub Releases page](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases).
+They are **prerelease prototypes**: read the release notes and known limitations first. If no
+release is listed yet, use option B.
+
+**System requirements**
+
+- Linux x86_64 with glibc 2.39 or newer (Ubuntu 24.04 or a derivative). Built and launch-checked on
+  Zorin OS 18.1 (Ubuntu 24.04 base) only; other distributions may work but are untested.
+- The `.deb` depends on WebKitGTK 4.1 and GTK 3 (apt installs them). The AppImage bundles WebKitGTK.
+- A Secret Service keyring (GNOME Keyring or KWallet) to store model API keys.
+- No prebuilt packages for Windows or macOS yet: use option B.
+
+**Debian / Ubuntu (.deb)**
+
+```bash
+sudo apt install ./EAK_0.1.3_amd64.deb
+eak-desktop
+```
+
+EAK also appears in the applications menu. Remove it with `sudo apt remove eak`.
+
+**AppImage**
+
+```bash
+chmod +x EAK_0.1.3_amd64.AppImage
+./EAK_0.1.3_amd64.AppImage
+```
+
+If FUSE is not available, run it with `--appimage-extract-and-run`.
+
+**Verify the download** (in the download folder): `sha256sum -c SHA256SUMS --ignore-missing`
+
+### B. Build from source with the installer
+
+The installer checks prerequisites,
 clones (or reuses) this repository, builds the desktop app, installs a launcher and starts it. It
 never runs `sudo`: if a system package is missing it stops and prints the exact command to run.
 The first build takes several minutes.
@@ -54,7 +95,7 @@ OpenAI-compatible or Ollama), enter the key and click **Save**, then **Test conn
 stored in the OS keyring, never in a project or profile file. The AI agent is not yet wired into
 the desktop UI (see [Features](#features)).
 
-**Platform status:** Linux verified (2026-11-14), Windows UNVERIFIED, macOS UNVERIFIED.
+**Platform status (option B):** Linux verified (2026-11-14), Windows UNVERIFIED, macOS UNVERIFIED.
 "Verified" means `scripts/install.sh` was run from a fresh clone on one Linux machine and the app
 process stayed up; it is not a claim about every distribution.
 
@@ -85,7 +126,7 @@ has not.
 | Area | What it does | Maturity |
 |---|---|---|
 | **Schematic editor** | Place library parts, wire with pin snapping, connect pins, net and power labels, move, rotate, delete, edit reference and value | Tested headless (vitest + Rust IPC). Not yet exercised in a real window |
-| **2-layer PCB editor** | Board outline (rectangle or polygon), place, move, rotate and flip footprints, route tracks on top or bottom, vias | Same as above. No zone, text or multi-select editing yet |
+| **PCB editor (2-16 layers)** | Board outline (rectangle or polygon), place, move, rotate and flip footprints, route tracks on any copper layer, through/blind/buried vias, one-click plane fill, layer visibility and active layer | Same as above. No free-form zone drawing, text or multi-select editing yet |
 | **Undo, save, reopen** | Undo/redo for every command; each command is durably saved with a crash-safe journal; projects reopen with their history | Covered by engine contract tests |
 | **ERC and DRC** | Electrical rules (13) and design rules (13), plus 3 mechanical checks. Findings carry a stable id, affected objects, location, suggested fix and measured vs required values | Reports are bound to a revision and an input hash and list unimplemented checks and limitations |
 | **Manufacturing export** | Gerber (RS-274X), Excellon drill, BOM and CPL with a SHA-256 manifest and package re-verification | Output is marked DRAFT unless ERC, DRC and mechanical checks pass for that exact revision. Never called manufacturing-ready. Not yet viewed in an external viewer or sent to a fabricator |
@@ -145,8 +186,9 @@ npm ci
 npm run tauri dev
 ```
 
-A release binary with the embedded frontend: `npm run tauri -- build --no-bundle`. Installers are
-not produced yet.
+A release binary with the embedded frontend: `npm run tauri -- build --no-bundle`. To build the
+Linux installers (`.deb` and AppImage) with a `SHA256SUMS` file, run `bash scripts/release-build.sh`
+from the repository root; the output lands in `target/release-artifacts/`.
 
 ### Test
 
@@ -170,7 +212,7 @@ it has been professionally validated. In particular:
 
 - No independent engineering review or fabricator DFM check has been performed.
 - Output is **not production-ready and not manufacturing-ready**.
-- Multi-layer boards, differential pairs, impedance control and thermal reliefs are not implemented.
+- Differential pairs, impedance control and inner-layer autorouting are not implemented.
 
 See [STATUS.md](STATUS.md) for the verified record and [ROADMAP.md](ROADMAP.md) for what is next.
 

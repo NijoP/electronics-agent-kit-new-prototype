@@ -3,6 +3,69 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## LCSC parts search, BOM and JLCPCB preparation (2026-11-14, branch fm/eak-o2-lcsc-jlcpcb)
+
+**Platform tested:** Linux, Rust stable, Node. No window was opened: the panels are verified by vitest (jsdom, mocked
+IPC) and by headless Rust IPC tests only. Not verified in a real WebView. Exact command results are in the PR body.
+
+- **Implemented and tested:**
+  - `eak-manufacturing::lcsc`: read-only product lookup by LCSC part number (`/ftps/wm/product/detail`) over ureq + rustls,
+    ingested through the audited `ingest_product_detail` boundary (state stays `SearchHit`). Tests run over real HTTP against a
+    local test server, never the live site.
+  - Import into the library: `import_plan` reuses the symbol, footprint and pin map of an existing library template
+    (chip resistor, MLCC capacitor or LED in a package the library holds, or an exact MPN match) and the desktop submits
+    `Command::UpsertComponentDefinition` as the Human actor with the rendered revision. LCSC supplies identity only
+    (manufacturer, MPN, LCSC number, datasheet URL); ratings stay unverified. The record is stored in `<project>/sourcing/`.
+  - `eak-manufacturing::bom`: BOM view joined with stored records (stock and price shown as a snapshot with its retrieval time),
+    JLCPCB-format BOM (`Comment, Designator, Footprint, LCSC Part #`) and a review BOM.
+  - `eak-manufacturing::jlcpcb`: JLCPCB CPL (`Designator, Mid X, Mid Y, Layer, Rotation`, surface-mount only), Gerber + Excellon
+    `.zip` (dependency-free store-only writer, CRC-checked in tests), a DFM check against the 2-layer 1 oz limits read from
+    JLCPCB's published capability page on 2026-11-14 (14 evaluated rules, 6 listed as `not_checked`), and a manifest labelled
+    "PREPARED FOR REVIEW". Nothing is uploaded, quoted or ordered.
+  - Desktop: Parts panel (search, results with stock/price/package/datasheet link, import) and Manufacturing panel (BOM view,
+    DFM results, bundle written to a folder the user types; foreign non-empty folders and relative paths are refused).
+    Imported parts appear in the editors' part picker.
+- **Observed on 2026-11-14 (read-only requests, no credentials):** the product-detail endpoint answers HTTP 200 JSON to an
+  unauthenticated request; the keyword search endpoint (`/ftps/wm/search/global`) answers **HTTP 403 "Access Denied"**.
+  Keyword search is therefore **not working against the live site**: the app reports the refusal in the panel and shows no
+  results. Part-number search works. The shape of a successful keyword-search response has never been observed; the code only
+  reads product codes from it and then fetches each through the verified detail path, and the one test of that path uses an
+  assumed shape.
+- **Limitations (unsupported / unverified):** no EasyEDA footprint import, so a part with no template in the library is refused
+  with the reason rather than guessed; CPL rotation/polarity is not corrected per package (JLC-051 `not_checked`); basic vs
+  extended assembly classification and fees are not known (JLC-050); silkscreen, soldermask, slot and pour rules are not
+  evaluated; pad shapes are measured as their bounding rectangle; JLCPCB's limits can change and its own DFM is authoritative;
+  no real JLCPCB upload of the bundle was attempted; the Gerber zip has not been opened by a fabricator's viewer.
+
+
+## AI panel on the real agent loop (2026-11-14)
+- `apps/desktop/src-tauri/src/ai.rs`: IPC `ai_propose` runs the `eak-intelligence` agent (Manual mode) with the user's configured provider profile (key from the OS credential store) on a copy of the open project; each typed `Command` it proposes is dry-run on a sandbox and returned as a pending step. `ai_accept` applies one step through `Engine::execute` with `Actor::agent("assistant")` and an approval recorded as `human:user` for exactly that step's class (resolves evaluator finding C5: AI edits no longer enter as the human actor); it is submitted at the plan's revision, so an edit made in between makes it stale and refused. `ai_reject` drops the step (nothing recorded). `ai_rollback` undoes an accepted agent step only while it is the latest change.
+- Panel (`shell/AiPanel.tsx`): with a ready provider (model set, key stored when needed) requests go to the model; provider failures and refusals are shown as such. With none, it says "No AI model is configured" and offers Model settings; the old keyword interpreter remains only as replies labelled "Offline command (no AI)".
+- Classification: **partially working.** Verified: `tests/ai.rs` (scripted mock provider, no network: propose → accept → journal actor `agent:assistant` → rollback; reject records nothing; stale step refused; provider failure and missing key reported) and `src/aiPanel.test.tsx` (panel states). Not verified: a live run against a real provider from the desktop window; one request runs at a time with no Cancel button; Batch commands are not used (each step is its own engine operation).
+
+## Verification additions and manufacturing outputs: ERC/DRC/DFM, fab pack (2026-11-14, branch fm/eak-p4-validation-mfg)
+
+**Platform tested:** Linux only. Plan Phase 4 (verification additions) and Phase 7 (manufacturing outputs).
+
+### Implemented and tested
+- ERC-014 pin-conflict matrix (Output/OpenCollector, PowerOut/OpenCollector errors; Bidirectional/PowerOut, Output/PowerIn warnings), ERC-015 undriven input nets, ERC-016 power-net checks (PowerOut on ground = error; power net without a declared voltage = warning).
+- DRC-018 copper-to-hole (other-net copper vs drill edge, project min clearance), DRC-019 hole-to-hole (0.5 mm EAK default, unverified), DRC-020 silkscreen-to-board-edge (0.2 mm EAK default, unverified).
+- DFM (`eak-validation/src/dfm.rs`, DFM-001..010) against `data/fab-jlcpcb-standard.json` (JLCPCB standard 1-2 layer; source URL recorded; `verified: false`). DFM is now a release gate (ADR-0014).
+- Manufacturing: BOM grouped by value/footprint/MPN, CPL (pick-and-place), `<stem>-fab-pack.zip` (Gerber + drill + README of layers, CRC-checked by `verify_package`) and the README beside it.
+- Desktop: `run_check("dfm")` (palette "Run DFM", Design menu), DFM section in the Engineering Monitor, export runs and lists ERC/DRC/MECH/DFM in the export panel.
+- Tests executed (Linux, debug): fmt and clippy clean for eak-validation, eak-manufacturing and eak-engineering; eak-validation lib 5, actionable_findings 15, phase4 8, stackup 1; eak-manufacturing lib 3, end_to_end 5, multilayer 4; eak-engineering lib 27; desktop tsc clean and vitest 102/102.
+- The new rules found real issues. The silkscreen stroke was raised from 0.150 to 0.16 mm to meet DFM-010. The autorouter places same-net vias 0-0.45 mm apart: same-net pairs are warnings (duplicate drill or drill breakout), different-net pairs are errors. The router itself is not fixed.
+- Evaluator C1: DRC lists, per net, the nets for which DRC-008/014 current capacity and DRC-002 voltage clearance were NOT EVALUATED (no declared current/voltage) in `limitations`. Evaluator C2: the release gate stays DRAFT when no component height limit is declared (MECH-001 not evaluated) or any part lacks 3D body data (MECH-003); MECH lists the unevaluated height rule.
+
+### Not verified / not implemented
+- Keepouts: the IR has no keepout objects (reported `not_implemented` in DRC); needs a schema change and ADR.
+- Only one fabrication profile (1-2 layer); 4+ layer boards are DRAFT on export (DFM-008) until a matching profile exists. Profile values are transcribed, not confirmed with a quotation.
+- DFM does not measure copper gaps against the fabricator minimum (only the project rule); acid traps, slivers, mask web, paste, panelisation, assembly DFM are `not_implemented`.
+- UI tested in jsdom only, not a real WebView.
+## Release packaging: Linux .deb and AppImage, v0.1.0 (2026-11-14)
+- `scripts/release-build.sh` builds the Linux bundles from a clean `npm ci` and `tauri build` and writes `SHA256SUMS`; `tauri.conf.json` now has `bundle.active: true` with package metadata (other platforms still build with `--no-bundle`; no Windows/macOS packaging script yet).
+- Verified on Linux only (see `TEST_RESULTS.md`): both packages build, and the packaged binary launches, shows its window and stays up. Not verified: system-wide `apt` install, other distributions, interactive use, Windows and macOS. Release notes: `docs/release/RELEASE_NOTES_v0.1.0.md`.
+
 ## EDA desktop directive, Phase 0: research and repository audit (2026-11-14)
 
 Documentation only; no code changed and no tests were run. Adds the EasyEDA ecosystem research
@@ -20,6 +83,8 @@ files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The te
 - Deterministic classifier over EAK-IR (project name, requirements, component definitions, net labels): ranked classes with reasons and penalties, overlays, required component families, missing information, conflicts, status CLASSIFIED / REVIEW_REQUIRED / UNCLASSIFIED. No model call and no API key. Read-only agent tool `classify_domain`; desktop IPC `domain_classification`; `DomainPanel` in the workspace side bar.
 - Maturity ceiling (`Maturity::ceiling`): guidance for a class is shown as "Review prompts (unverified)" unless its DESK label is VERIFIED_AGAINST_SOURCE or LIVE_VERIFIED; BLOCKED shows nothing. EAK adds no evidence of its own.
 - Tests: `tests/domain.rs` (11: registry counts and consistency against DESK, every one of the 100 classes ranks first for a design naming its own keywords, ESP32 dashboard, buck power supply, brushed motor driver, mains-plus-controller needs review, empty design unclassified, determinism, maturity ceilings, not-implemented lists), unit tests in `domain/features.rs`, `ipc.rs::domain_classification_is_revision_bound_and_needs_no_model`, vitest `DomainPanel.test.tsx` (5).
+
+- **Library panel (Phase 5 slice, ADR-0015):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
 
 ### Not verified / not implemented
 - DESK's rule engine is not ported: per-class rule ids are listed, **no DESK rule is evaluated**, and required component roles are not checked against the design. Every result says so (`not_implemented`, `limitations`).
@@ -98,7 +163,7 @@ all 8 jobs passed: `rust` (policy script, fmt, clippy, `cargo test --workspace -
 
 ### Not verified / not implemented
 - The app has not been exercised interactively in a real WebView in this change. Rendering, focus and layout are covered only by jsdom tests.
-- No editing tools, 3D viewport, library browser, Terminal Center, Manufacturing Center or Agent Studio yet.
+- 3D viewport, Terminal Center, Manufacturing Center or Agent Studio yet.
 - No dockable, resizable or persisted panels (UI-01 is PARTIAL).
 - Project folders are typed as absolute paths; there is no native folder picker.
 - Installers are not produced (`bundle.active: false`).
@@ -111,7 +176,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
 ### Implemented and tested
 - EAK-IR (`eak-core`, schema v1 at M1, now v2): project, library, schematic, PCB, constraints, manufacturing config;
   integer-nanometre geometry; byte-stable JSON; schema version gate (newer/corrupt files are
-  rejected safely); integrity checker; 7 built-in generic components.
+  rejected safely); integrity checker; built-in library of 48 components (see below).
 - EAK-IR schema v2 (ADR-0008): per-layer stackup (copper weight, dielectric thickness and er per
   copper layer) with a tested v1 → v2 migration; DRC-008 sizes each track with its own layer's
   copper weight (`crates/eak-validation/tests/stackup.rs`).
@@ -143,7 +208,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
   - Every finding carries a stable id, the affected objects and location, and a suggested fix; quantitative rules also report measured vs required values with units (ADR-0009). Desktop and AI display of the new fields is not yet wired.
 - Runtime (`eak-runtime`):
-  - Typed command set (42 commands, including the atomic `Batch`, `MoveWire`, `MoveNetLabel`; ADR-0013).
+  - Typed command set (44 commands, including the atomic `Batch`, `MoveWire`, `MoveNetLabel` (ADR-0013) and library `SetComponentProperties`/`AssignComponentFootprint` (ADR-0015)).
   - Revision checks and the agent approval policy.
   - Transactional apply with integrity gate, diff-based undo/redo and an fsync'd journal with crash reconciliation (UNKNOWN_OUTCOME blocks writes).
   - Checkpoints, project lock, evidence store.
@@ -156,9 +221,41 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Release gate that requires revision-bound ERC/DRC/MECH with zero errors, otherwise the package is marked DRAFT.
   - Package re-verification that detects tampering.
 
+### Built-in component library (`eak-core/src/builtin.rs`, 48 parts)
+- Generic parts (IPC-7351 nominal land patterns, approximate; every rating `verified: false`,
+  source "unverified"):
+  - R, C (MLCC) and L in 0402, 0603, 0805, 1206 and 1210.
+  - LEDs in 0603 and 0805; diodes in SOD-123 and SMA.
+  - NPN, PNP, N-MOSFET and P-MOSFET in SOT-23; a SOT-23-5 LDO (VIN/GND/EN/NC/VOUT).
+  - 1x02 to 1x10 2.54 mm pin headers; crystals in HC-49/US and 3225; a 6x6 mm tactile switch.
+- Parts for the two validation boards. Pinouts and land patterns come from the named manufacturer
+  datasheets, and each part's provenance names its source. Ratings carry the datasheet as their
+  source but stay `verified: false`, because EAK has not independently reviewed them.
+  - Espressif ESP32-C3-MINI-1.
+  - TI LMR33630 3 A synchronous buck (HSOIC-8 PowerPAD).
+  - Sensirion SHT40.
+  - AOS AO4406A SO-8 N-MOSFET.
+  - Power inductors: Bourns SRP1038A (Isat 12 A), Würth WE-PD 7345 and WE-LQS 5040 (both saturate
+    below 3 A).
+  - Panasonic-land SMD electrolytics (6.3 mm and 8 mm).
+  - Phoenix MKDS 5.08 mm 2-pin screw terminal.
+  - The 8 M1 parts are pinned to a golden fixture, so their definitions cannot change silently.
+- Tests check, for every part:
+  - unique ids;
+  - every symbol pin maps to a pad and every pad is mapped;
+  - no overlapping pads;
+  - pads lie inside the courtyard;
+  - no rating claims verification.
+- Known limits:
+  - **No USB-C receptacle yet.** Its shell tabs and locating pegs need slotted and non-plated holes,
+    which `FootprintDef` cannot express. This needs an IR type change.
+  - Antenna and sensor copper keep-outs, and paste-window sizes, are noted in provenance only; they
+    are not modelled.
+  - AO4406A pin numbers follow the standard SO-8 assignment; they were not read from the drawing.
+  - Generic part ratings are typical class values, not datasheet facts.
+
 ### Tests executed (exact results)
-`cargo test --workspace --release`: **41 passed, 0 failed** (eak-core 11, eak-engineering 11,
-eak-runtime 11 engine + 4 process, eak-validation 1 stackup, eak-manufacturing 3 end-to-end).
+Test counts: see the PR body for the latest run (per-suite counts recorded here earlier are historical).
 `cargo clippy --workspace --all-targets -- -D warnings`: clean. `cargo fmt --check`: clean.
 
 The key end-to-end test (`reference_design_end_to_end`) runs a 10-component ATtiny85 + AMS1117 board through
@@ -172,10 +269,37 @@ the command API:
 4. Package status: InternallyVerifiedReleaseCandidate; the package re-verifies and tampering is detected.
 Injected short and clearance violations are detected (`drc_detects_injected_short_and_clearance_violation`).
 
+### LCSC sourcing, offline only (2026-11-13)
+Implemented and tested on Windows 11 only. Details: `docs/engineering/sourcing.md`; test
+matrix: `docs/engineering/INTEGRATION_TEST_MATRIX.md`.
+- Sourcing records (`eak-manufacturing/src/sourcing.rs`): built from raw response bytes, a source
+  URL and a retrieval time. Each record keeps the SHA-256 of the raw bytes, the fields exactly
+  as parsed, and lists of missing and rejected fields.
+- Verification states: search hit, datasheet-matched (hashed PDF that names the MPN), verified
+  (named human reviewer against that datasheet hash). A search hit is never a verified part.
+- `SOURCING` report (`eak-validation/src/sourcing.rs`): 12 rules covering missing MPN, LCSC number,
+  datasheet and ratings, BOM-to-LCSC mapping, record state, and symbol, footprint and package
+  consistency. It is not part of the manufacturing release gate.
+- Tests: 9 offline fixture tests and 6 unit tests, all passing. Fixtures are synthetic.
+  Full run with these added, `cargo test --workspace --release`: **50 passed, 0 failed**
+  (eak-core 7, eak-engineering 11, eak-validation 6, eak-runtime 10 engine + 4 process,
+  eak-manufacturing 3 end-to-end + 9 sourcing). Clippy with `-D warnings` and `cargo fmt --check`: clean.
+
+Not done, and not to be read as done:
+- **No network access exists.** No live LCSC search, stock, price or datasheet retrieval, and no
+  network-dependent test. Neither LCSC nor JLCPCB offers documented machine access without
+  private credentials; the choice of access route is an open product-owner decision.
+- **The LCSC field mapping is unverified.** LCSC's site refused the automated browser, so its
+  API documentation could not be read; the mapping follows third-party reports.
+- Datasheet matching reads uncompressed PDF bytes only. Ratings, pinouts and land patterns are
+  not extracted from datasheets.
+- No real part has been sourced or verified with this module.
+
 ### Not yet implemented (acceptance gaps)
 - Desktop application: superseded. See "Desktop shell" above (read-only views; editors not started).
-- Intelligence Engine: core crate exists (see below); no UI, no live-provider run, no context engine/skills.
-- Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser, LCSC/JLCPCB integrations.
+- Intelligence Engine: core crate exists (see below); no live-provider run, no context engine/skills.
+- Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser.
+- Live LCSC keyword search (HTTP 403 observed), basic/extended assembly classification, EasyEDA footprint import; JLCPCB multilayer checks (see the LCSC section above).
 - Differential pairs, impedance, inner-layer autorouting.
 - Per-zone / per-pad thermal-relief settings (needs an IR change and an ADR); silkscreen
   legibility, overlap and board-edge checks; user-placed silkscreen text and graphics.
@@ -233,7 +357,7 @@ installed. Development is proceeding directly in this repository.
 
 ## Desktop workspace shell (outcome 5 / master directive Phase 1, first slice, 2026-11-14)
 - `apps/desktop/src/shell/` and `src/design/`: activity bar, collapsible side panel (Project, Library/Parts, Domain, Manufacturing), tabbed editors (Schematic + PCB / Schematic / PCB), bottom panel (Findings, BOM derived from schematic symbols, Log), right assistant panel, status bar (project, layer, grid, DRC count, model), command palette (Ctrl/Cmd+K, Ctrl/Cmd+Shift+P) with shortcuts, quick open (Ctrl/Cmd+P), Ctrl+B/J/L panel toggles, tool digit shortcuts, dark + light tokens (8px grid, 120-200 ms motion).
-- The assistant is a **local deterministic command interpreter, not a model call**: proposals are typed `Command`s shown as a diff with a dashed canvas preview; Accept goes through `execute_command`, Reject changes nothing.
+- (Superseded 2026-11-14 by "AI panel on the real agent loop" above; the interpreter now only answers when no model is configured, labelled offline.) The assistant was a **local deterministic command interpreter, not a model call**: proposals are typed `Command`s shown as a diff with a dashed canvas preview; Accept goes through `execute_command`, Reject changes nothing.
 - Verified: `npm run build`, `npm test` (52 tests incl. `shell.test.tsx`), and the production bundle driven in headless Chrome against a **stubbed IPC** (screenshots kept outside the repo). **Not launched as the real Tauri window** (no display/X authorization in the build session). A browser-only crash (effect returning a non-function) was found this way and fixed; jsdom had not caught it.
 - Not done: top menus, document tabs bound to backend document identity (dirty/save-before-close), dockable/resizable/persisted panel layout, per-net highlight, 60 fps pan/zoom measurement, real-window tests.
 
@@ -256,13 +380,31 @@ installed. Development is proceeding directly in this repository.
 - Verified: `tsc`, vitest 75/75, production bundle in headless Chrome with a stubbed IPC. Not launched as the real Tauri window.
 - Not done: zone thermal/priority/refill controls, non-copper layers, copper weight / dielectric editing, track and via editing, multi-select, safe-fix buttons, real-window tests.
 
+## Schematic editor, Phase 2 (2026-11-14, in progress)
+- `Command::Batch { commands, label }`: several commands applied in order as one transaction, so one revision and one undo/redo step; a failing step rejects the whole batch with `batch step i (Name): ...`; no nesting; at most 1000 steps; class = riskiest step. AI tool `Batch` (domain `Mixed`: ERC, DRC, MECH afterwards); `types.ts` mirror. See ADR-0013.
+- Not done yet: multi-select and drag-move, wire rubber-banding, mirror, junctions, ports, text, inspector, net highlighting.
+
+## Interactive routing, Phase 4 slice (2026-11-14, branch `fm/eak-p4-routing`)
+- `eak-engineering::interactive::route_step`: legal path for a net from the last fixed point to the cursor against the exact copper geometry (pads, tracks, vias of other nets on the layer) and the board-edge clearance. Width from the net class (or an override), clearance = max(net class, board minimum). Direct 45-degree or 90-degree two-segment paths first; otherwise an A* walkaround on a local grid whose cells are only passable with a 0.75-pitch safety margin; every segment is re-checked exactly; if nothing reaches the cursor, the longest legal prefix is returned with `reached = false`. Layer switch: `via_at_start` places a through via at the anchor, checked on every copper layer. Live feedback: objects blocking the direct path and the smallest gap kept, both measured vs required.
+- IPC `route_step` (read-only, 23 IPC commands). Desktop route tool (`routeTool.ts` reducer, `PcbView.tsx`): click on a pad or track end starts on its net, the engine proposal follows the cursor (debounced), click fixes a step, L switches layer (via), `/` toggles 45/90, Backspace removes a step, Esc cancels, Enter / "Finish route" / clicking copper of the same net commits the whole route as ONE `Batch` of `AddVia`/`AddTrack` (one revision, one undo step). "Rip up & re-route net" = one `Batch` of `ClearRouting` + `AutoRoute` for the chosen net (reuses `router.rs`).
+- Zone refill: fills stay derived (`copper::fill_zone` recomputes from the current geometry for DRC, connectivity and Gerber), so every geometry change refills; tested by `zone_fill_is_derived_and_retreats_from_a_routed_track`.
+- Tests: `interactive.rs` unit tests incl. a 24-case property test (never a clearance violation, bend mode obeyed); `src-tauri/tests/ipc.rs` `route_step_result_commits_as_one_batch_and_undoes_in_one_step` (DRC has no DRC-002/003 after the routed batch; one undo removes it); vitest `routeTool.test.ts`.
+- Not done: push-and-shove, routing in a job with progress/cancel (Phase 4 jobs module), differential pairs and length tuning, blind/buried vias from the route tool (always through vias), arc corners, a stored `RefillZones` parameter set, a real-window test.
 ## Main toolbar and per-tab viewport (2026-11-14)
 - `shell/Toolbar.tsx`: data-driven main toolbar. Real: Open project (to Project Home), Save (asks the engine for its state and reports blocked writes; never claims more), Undo/Redo, Select tool and Move tool (arm the active editor's tool), Rotate/Delete selection (typed `RotateSymbol`/`MoveFootprint`/`DeleteSymbol`; delete asks first), Zoom out/in/Fit (drive the active canvas), Run ERC/DRC, Auto-route, Export Gerbers, Commands, Assistant, Close project. Disabled with the reason as tooltip: Save as, Grid (fixed grids), Design rules, Simulate.
 - `shell/viewState.ts`: per-document viewport (kept in memory and localStorage; a closed tab reopens at its last zoom/pan), plus imperative zoom/tool controls keyed by document id so the editors are not coupled to the toolbar. `SchematicView`/`PcbView` gained a 5-line tool registration each; `Canvas` restores and saves its viewport.
 - Verified: `tsc`, vitest 80/80 (new `toolbar.test.tsx`). Frontend-only jobs ran without the build lock per the lane rule. Not launched as the real Tauri window.
 - Not done: dock panels to other edges, configurable grid, rule editor, simulation.
 
+## End-to-end workflow, keyboard scope, design rules dialog (2026-11-14)
+- Verified by vitest against a stateful fake backend (`flow.test.tsx`, one test per step): New project dialog (replaces the open project, returns Home if the backend lost it) -> schematic tab -> part placed via the assistant (typed `PlaceSymbol`) -> **Update PCB from schematic** (`SyncSchematicToPcb`, then the PCB tab opens with the footprints and airwires re-read) -> ERC/DRC from the toolbar -> **Export manufacturing files** dialog (refuses without a board outline; shows the DRAFT manifest) -> File menu Save / Close / reopen from Recent. File-menu Save and Ctrl+S now ask the engine (they previously only set a message).
+- Evaluator C4: keyboard shortcuts are scoped to the active editor (clicking an editor or its tab makes it active), so a key no longer acts in both editors in split view (`shell/viewState.ts`, tested).
+- Evaluator C1 support: **Design rules** dialog (toolbar, Design menu, palette) with `SetDesignRules`, `UpsertNetClass`, `SetNetCurrent`, `SetNetVoltage`; engine validation errors surface in the status bar; values come from `Project.constraints` (`rules.test.tsx`).
+- Evaluator C5 (AI actor) was reassigned to `eak-p6-ai` and is NOT in this change.
+- Not done: panel docking to other edges; real Tauri window run; DRC/ERC re-run is manual after rule changes.
+
 ## Schematic editor, Phase 2 (2026-11-14, in progress)
 - `Command::Batch { commands, label }`: several commands applied in order as one transaction, so one revision and one undo/redo step; a failing step rejects the whole batch with `batch step i (Name): ...`; no nesting; at most 1000 steps; class = riskiest step. AI tool `Batch` (domain `Mixed`: ERC, DRC, MECH afterwards); `types.ts` mirror. See ADR-0013.
 - Select tool: click / Shift-click / marquee (Shift adds) / Ctrl+A selection of symbols, wires and labels; drag-move with live preview submits ONE `Batch` (`MoveWire` rubber-bands attached wire ends, `MoveNetLabel` drags pin labels, then `MoveSymbol`); R rotates the selection (wires follow), Del deletes it, Ctrl+C / Ctrl+V pastes at the cursor with fresh designators, W wire tool, Esc clears; Ctrl+Z / Ctrl+Shift+Z undo the whole edit in one step. New commands `MoveWire`, `MoveNetLabel` (42 commands). Verified by vitest (`selection.test.ts`, `SchematicSelect.test.tsx`) and `eak-runtime/tests/schematic_edit.rs`; not yet driven in a real Tauri window.
+- Evaluator C3 (ERC-001 remedy in the UI): schematic **No connect** tool (click a pin, `SetNoConnect`) and **Pin label** tool (click a pin, `LabelPin` with the typed net name and kind). Verified by vitest (`SchematicSelect.test.tsx`); no UI yet to remove a no-connect marker (no `DeleteNoConnect` command).
 - Not done yet: mirror (X/Y), junctions, ports, text, inspector, net highlighting; rubber-banded wires can go diagonal (no corner insertion).
