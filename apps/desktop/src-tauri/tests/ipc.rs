@@ -337,6 +337,7 @@ fn frontend_invokes_exactly_the_registered_commands() {
     let mut ts: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
     ts.sort();
     let mut rust = IPC_COMMANDS.to_vec();
+    rust.extend(eak_desktop::terminal::TERMINAL_COMMANDS);
     rust.sort();
     assert_eq!(ts, rust);
 }
