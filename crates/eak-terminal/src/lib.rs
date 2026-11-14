@@ -14,6 +14,7 @@
 //! that were open when the app last exited are listed again as [`State::Ended`] so the user
 //! can restart them deliberately; their old processes are gone.
 
+mod agents;
 pub mod api;
 mod proc_info;
 mod text;

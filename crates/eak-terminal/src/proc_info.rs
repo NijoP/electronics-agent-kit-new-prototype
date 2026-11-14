@@ -63,6 +63,9 @@ pub fn agent_from_argv(argv: &[String], known: &[String]) -> Option<String> {
         if i > 0 && a.starts_with('-') {
             continue;
         }
+        if let Some(label) = crate::agents::canonical(a) {
+            return Some(label.to_string());
+        }
         let b = base(a);
         if known.iter().any(|k| *k == b) {
             return Some(b);

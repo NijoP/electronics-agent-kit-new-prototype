@@ -1,7 +1,8 @@
 # Third-party licences (terminal workspace)
 
-See also `LICENSING.md` for the rest of EAK. No third-party terminal source code is copied or
-bundled; the terminal engine in `crates/eak-terminal` is EAK's own code.
+See also `LICENSING.md` for the rest of EAK. `crates/eak-terminal/src/agents.rs` is derived
+from Apache-2.0 third-party source; its licence, upstream commit and modifications are recorded
+in `third_party/licenses/THIRD_PARTY_NOTICES.md`. No third-party terminal binary is bundled.
 
 | Component | Licence | Use |
 |---|---|---|

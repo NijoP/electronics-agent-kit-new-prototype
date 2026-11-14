@@ -1,10 +1,9 @@
 # Terminal workspace architecture
 
-EAK's Terminal workspace is EAK's own, independently written terminal engine
-(`crates/eak-terminal`) shown in the desktop app with xterm.js. No third-party terminal
-multiplexer source is copied, vendored or bundled; only general architecture ideas common to
-terminal multiplexers were used (foreground-process-group state, agents reporting their own
-state, a local control API with `wait`).
+EAK's Terminal workspace is the terminal engine in `crates/eak-terminal`, shown in the
+desktop app with xterm.js. Its agent-CLI name/alias table (`src/agents.rs`) is derived from
+Apache-2.0 third-party source and keeps that source's notices; see
+`third_party/licenses/THIRD_PARTY_NOTICES.md`. No third-party binary is bundled or run.
 
 ```
 EAK desktop (Tauri backend, apps/desktop/src-tauri/src/terminal.rs)
