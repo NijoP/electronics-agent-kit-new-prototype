@@ -259,11 +259,9 @@ pub enum OperationClass {
 impl Command {
     pub fn name(&self) -> String {
         serde_json::to_value(self)
-            | MoveWire { .. }
-            | MoveNetLabel { .. }
-                .ok()
-                .and_then(|v| v.get("type").and_then(|t| t.as_str()).map(String::from))
-                .unwrap_or_default()
+            .ok()
+            .and_then(|v| v.get("type").and_then(|t| t.as_str()).map(String::from))
+            .unwrap_or_default()
     }
 
     pub fn class(&self) -> OperationClass {
@@ -290,6 +288,8 @@ impl Command {
             | SetNoConnect { .. }
             | DeleteWire { .. }
             | DeleteNetLabel { .. }
+            | MoveWire { .. }
+            | MoveNetLabel { .. }
             | UpsertComponentDefinition { .. }
             | AssignComponentFootprint { .. }
             | SetBoardOutline { .. }
