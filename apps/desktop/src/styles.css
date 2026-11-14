@@ -41,7 +41,7 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 
 /* Shell */
 .workspace { height: 100%; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; background: var(--bg-app); }
-.toolbar { display: flex; gap: var(--s-1); align-items: center; padding: var(--s-half) var(--s-2); height: 40px; border-bottom: 1px solid var(--line); background: var(--bg-panel); }
+.toolbar { display: flex; gap: var(--s-1); align-items: center; padding: var(--s-half) var(--s-2); min-height: 40px; flex-wrap: wrap; border-bottom: 1px solid var(--line); background: var(--bg-panel); }
 .banner { background: color-mix(in srgb, var(--warn) 22%, var(--bg-panel)); padding: var(--s-1) var(--s-2); display: flex; gap: var(--s-2); align-items: center; }
 .main { min-height: 0; display: grid; transition: grid-template-columns var(--t-slow) var(--ease); }
 .activity-bar { display: flex; flex-direction: column; align-items: center; gap: var(--s-half); padding: var(--s-1) 0; background: var(--bg-panel); border-right: 1px solid var(--line); }
@@ -262,3 +262,9 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .lib-facts dt { color: var(--fg-dim); }
 .lib-facts dd { margin: 0; overflow-wrap: anywhere; }
 .library-panel .field { display: grid; gap: 2px; font-size: 12px; }
+
+.tb-title { display: flex; gap: var(--s-1); align-items: baseline; margin-right: var(--s-1); }
+.tb-group { display: flex; gap: var(--s-half); padding-right: var(--s-1); border-right: 1px solid var(--line); }
+.tb-group:last-child { border-right: 0; }
+.toolbar button { padding: 0 var(--s-1); height: 26px; }
+.toolbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }

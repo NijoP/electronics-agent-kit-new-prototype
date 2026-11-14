@@ -8,7 +8,7 @@ import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
 import { PcbView } from "./PcbView";
 import { SchematicView } from "./SchematicView";
-import { formatShortcut, matches, SHORTCUTS, tip } from "./design/shortcuts";
+import { formatShortcut, matches, SHORTCUTS } from "./design/shortcuts";
 import type { Theme } from "./design/theme";
 import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
 import { AiPanel, type ChatMsg } from "./shell/AiPanel";
@@ -17,6 +17,8 @@ import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
 import { ManufacturingPanel, netNames, ProjectPanel } from "./shell/panels";
 import { LibraryPanel } from "./shell/LibraryPanel";
 import { StatusBar } from "./shell/StatusBar";
+import { Toolbar, type ToolbarGroup } from "./shell/Toolbar";
+import { canvasControls, DocIdContext, setEditorTool } from "./shell/viewState";
 import { LayerManager } from "./shell/LayerManager";
 import { useLayerView } from "./layerView";
 import type { Focus } from "./pcbFocus";
@@ -423,7 +425,73 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     return () => window.removeEventListener("keydown", onKey);
   }, [revision]);
 
+  const fpOfSelected = selected ? Object.values(snapshot.project.pcb.footprints).find((f) => f.symbol_id === selected) : undefined;
+  const rotateSel = () => {
+    if (!selectedSymbol) return;
+    // In the PCB editor the selected part's footprint rotates; otherwise the schematic symbol.
+    const activeKind = docs.find((d) => d.id === activeId)?.kind;
+    if (activeKind === "pcb" && fpOfSelected)
+      execute({ type: "MoveFootprint", footprint_id: fpOfSelected.id, position: fpOfSelected.position, rotation: nextRotation(fpOfSelected.rotation), side: null });
+    else execute({ type: "RotateSymbol", symbol_id: selectedSymbol.id, rotation: nextRotation(selectedSymbol.rotation) });
+  };
+  const deleteSel = () => {
+    if (!selectedSymbol) return;
+    if (!window.confirm(`Delete ${selectedSymbol.refdes}? This is a destructive change.`)) return;
+    execute({ type: "DeleteSymbol", symbol_id: selectedSymbol.id });
+  };
+  // Save: the engine writes every accepted command before it returns, so "Save" asks it for its
+  // state and reports whether anything is blocked; it never claims more than the engine says.
+  const save = () =>
+    guarded(async () => {
+      const s2 = await api.currentProject();
+      setSnapshot(s2);
+      setMessage(
+        s2.blocked
+          ? `Writes are blocked: ${s2.blocked}`
+          : `Revision ${s2.project.revision}: every accepted command is already written (engine reports no blocked writes).`,
+      );
+    });
+  const noDoc = activeId ? undefined : "Open a document first";
+  const toolTo = (tool: string) => () => {
+    if (!setEditorTool(activeId, tool)) setMessage(`The active editor has no ${tool} tool.`);
+  };
   const needSel = selectedSymbol ? undefined : "Select a part first";
+  const toolbarGroups: ToolbarGroup[] = [
+    [
+      { id: "open", label: "Open project", title: "New or open project (Project Home)", run: close, disabled: busy ? "An engine command is running" : undefined },
+      { id: "save", label: "Save", shortcut: SHORTCUTS.save, run: save, disabled: busy ? "An engine command is running" : undefined },
+      { id: "saveas", label: "Save as", disabled: "Not implemented: the engine saves the project in place" },
+    ],
+    [
+      { id: "undo", label: "Undo", shortcut: SHORTCUTS.undo, run: undo, disabled: busy ? "An engine command is running" : !snapshot.can_undo ? "Nothing to undo" : undefined },
+      { id: "redo", label: "Redo", shortcut: SHORTCUTS.redo, run: redo, disabled: busy ? "An engine command is running" : !snapshot.can_redo ? "Nothing to redo" : undefined },
+    ],
+    [
+      { id: "select", label: "Select tool", title: "Select tool (key 1)", run: toolTo("select"), disabled: noDoc },
+      { id: "move", label: "Move tool", title: "Move tool (schematic key 6, PCB key 3)", run: toolTo("move"), disabled: noDoc },
+      { id: "rotate", label: "Rotate selection", title: "Rotate selection (key R)", run: rotateSel, disabled: needSel ?? (busy ? "An engine command is running" : undefined) },
+      { id: "delete", label: "Delete selection", title: "Delete selection (asks first)", run: deleteSel, disabled: needSel ?? (busy ? "An engine command is running" : undefined) },
+    ],
+    [
+      { id: "zout", label: "Zoom out", run: () => canvasControls(activeId)?.zoomBy(1.4), disabled: noDoc },
+      { id: "zin", label: "Zoom in", run: () => canvasControls(activeId)?.zoomBy(1 / 1.4), disabled: noDoc },
+      { id: "fit", label: "Fit to view", title: "Fit to view (or double-click the canvas)", run: () => canvasControls(activeId)?.fit(), disabled: noDoc },
+      { id: "grid", label: "Grid", disabled: "Not implemented: the grid is fixed (schematic 1.27 mm, PCB 0.5 mm)" },
+    ],
+    [
+      { id: "rules", label: "Design rules", disabled: "Not implemented: no rule editor yet" },
+      { id: "erc", label: "Run ERC", run: () => check("erc"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "drc", label: "Run DRC", run: () => check("drc"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "route", label: "Auto-route", title: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), disabled: busy ? "An engine command is running" : undefined },
+      { id: "sim", label: "Simulate", disabled: "Not implemented: no SPICE integration yet" },
+      { id: "export", label: "Export Gerbers", title: "Gerber, Excellon, BOM, CPL", run: exportGerbers, disabled: busy ? "An engine command is running" : undefined },
+    ],
+    [
+      { id: "cmd", label: "Commands", shortcut: SHORTCUTS.palette, run: () => setPalette(true) },
+      { id: "ai", label: "Assistant", shortcut: SHORTCUTS.toggleAi, run: () => setAiOpen((o) => !o), pressed: aiOpen },
+      { id: "close", label: "Close project", run: close, disabled: busy ? "An engine command is running" : undefined },
+    ],
+  ];
   const noProject = busy ? "An engine command is running" : undefined;
   const menus: Menu[] = [
     { label: "File", items: [
@@ -435,7 +503,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     { label: "Edit", items: [
       { label: "Undo", shortcut: SHORTCUTS.undo, run: undo, disabled: !snapshot.can_undo ? "Nothing to undo" : noProject },
       { label: "Redo", shortcut: SHORTCUTS.redo, run: redo, disabled: !snapshot.can_redo ? "Nothing to redo" : noProject },
-      { label: "Rotate selection", run: () => selectedSymbol && execute({ type: "RotateSymbol", symbol_id: selectedSymbol.id, rotation: nextRotation(selectedSymbol.rotation) }), disabled: needSel ?? noProject, sep: true },
+      { label: "Rotate selection", run: rotateSel, disabled: needSel ?? noProject, sep: true },
       { label: "Delete selection", run: () => selectedSymbol && execute({ type: "DeleteSymbol", symbol_id: selectedSymbol.id }), disabled: needSel ?? noProject, destructive: true },
       { label: "Clear selection", run: () => setSelected(null), disabled: selected ? undefined : "Nothing is selected" },
     ] },
@@ -500,38 +568,18 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
   return (
     <div className="workspace">
       <MenuBar menus={menus} />
-      <header className="toolbar">
-        <strong>{snapshot.project.name}</strong>
-        <span className="muted">revision {revision}</span>
-        <span className="saved" title="Every accepted command is written to disk atomically before it returns">
-          Saved · r{revision}
-        </span>
-        <span className="spacer" />
-        <button type="button" onClick={undo} disabled={busy || !snapshot.can_undo} title={tip("Undo", SHORTCUTS.undo)}>
-          Undo
-        </button>
-        <button type="button" onClick={redo} disabled={busy || !snapshot.can_redo} title={tip("Redo", SHORTCUTS.redo)}>
-          Redo
-        </button>
-        <button type="button" onClick={() => check("erc")} disabled={busy}>
-          Run ERC
-        </button>
-        <button type="button" onClick={() => check("drc")} disabled={busy}>
-          Run DRC
-        </button>
-        <button type="button" onClick={exportGerbers} disabled={busy} title="Gerber, Excellon, BOM, CPL">
-          Export Gerbers
-        </button>
-        <button type="button" onClick={() => setPalette(true)} title={tip("Command palette", SHORTCUTS.palette)}>
-          Commands
-        </button>
-        <button type="button" onClick={() => setAiOpen((o) => !o)} aria-pressed={aiOpen} title={tip("AI assistant", SHORTCUTS.toggleAi)}>
-          Assistant
-        </button>
-        <button type="button" onClick={close} disabled={busy}>
-          Close project
-        </button>
-      </header>
+      <Toolbar
+        groups={toolbarGroups}
+        left={
+          <div className="tb-title">
+            <strong>{snapshot.project.name}</strong>
+            <span className="muted">revision {revision}</span>
+            <span className="saved" title="Every accepted command is written to disk atomically before it returns">
+              Saved · r{revision}
+            </span>
+          </div>
+        }
+      />
       {snapshot.blocked && (
         <div role="alert" className="banner">
           Writes are blocked: {snapshot.blocked}
@@ -580,13 +628,15 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
                 <span>Open the schematic or the PCB from the Project panel or the Project menu.</span>
               </div>
             )}
-            {shown.map((d) =>
-              d.kind === "schematic" ? (
+            {shown.map((d) => (
+              <DocIdContext.Provider key={d.id} value={d.id}>
+              {d.kind === "schematic" ? (
                 <SchematicView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} armPart={armPart} sheetId={d.ref} />
               ) : (
                 <PcbView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} onStatus={setStatus} layerView={layerView} focus={focus} airwires={conn && conn.revision === revision ? conn.ratsnest : null} />
-              ),
-            )}
+              )}
+              </DocIdContext.Provider>
+            ))}
             {noParts && (
               <div className="canvas-empty" aria-label="Empty design">
                 <strong>An empty design</strong>

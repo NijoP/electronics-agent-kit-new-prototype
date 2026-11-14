@@ -7,6 +7,7 @@ import { mmToNm, nextRotation, outlineFrom, segments, snapPoint } from "./editin
 import { layerKey, layerName, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
 import { useLayerView, type LayerView } from "./layerView";
 import { focusBounds, type Focus } from "./pcbFocus";
+import { useDocId, useRegisterTools } from "./shell/viewState";
 import type { CopperLayer, Id, PadGeom, Point, Snapshot } from "./types";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 
@@ -92,6 +93,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const [net, setNet] = useState("");
   const [start, setStart] = useState<Point | null>(null);
   const [corners, setCorners] = useState<Point[]>([]);
+  const docId = useDocId();
   const [picked, setPicked] = useState<Id | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
 
@@ -126,6 +128,11 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     reset();
     setTool(t);
   };
+  useRegisterTools(docId, (t) => {
+    const hit = TOOLS.find(([id]) => id === t);
+    if (hit) choose(hit[0]);
+    return !!hit;
+  });
   useEffect(() => {
     onStatus?.({ layer, gridMm: GRID / 1_000_000 });
   }, [layer, onStatus]);
