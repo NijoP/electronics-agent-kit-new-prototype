@@ -1,4 +1,4 @@
-# ADR-0014: Library part properties and footprint assignment commands
+# ADR-0015: Library part properties and footprint assignment commands
 
 Status: accepted (Phase 5, library panel)
 

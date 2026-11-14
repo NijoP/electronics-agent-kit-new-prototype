@@ -3,6 +3,25 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## Verification additions and manufacturing outputs: ERC/DRC/DFM, fab pack (2026-11-14, branch fm/eak-p4-validation-mfg)
+
+**Platform tested:** Linux only. Plan Phase 4 (verification additions) and Phase 7 (manufacturing outputs).
+
+### Implemented and tested
+- ERC-014 pin-conflict matrix (Output/OpenCollector, PowerOut/OpenCollector errors; Bidirectional/PowerOut, Output/PowerIn warnings), ERC-015 undriven input nets, ERC-016 power-net checks (PowerOut on ground = error; power net without a declared voltage = warning).
+- DRC-018 copper-to-hole (other-net copper vs drill edge, project min clearance), DRC-019 hole-to-hole (0.5 mm EAK default, unverified), DRC-020 silkscreen-to-board-edge (0.2 mm EAK default, unverified).
+- DFM (`eak-validation/src/dfm.rs`, DFM-001..010) against `data/fab-jlcpcb-standard.json` (JLCPCB standard 1-2 layer; source URL recorded; `verified: false`). DFM is now a release gate (ADR-0014).
+- Manufacturing: BOM grouped by value/footprint/MPN, CPL (pick-and-place), `<stem>-fab-pack.zip` (Gerber + drill + README of layers, CRC-checked by `verify_package`) and the README beside it.
+- Desktop: `run_check("dfm")` (palette "Run DFM", Design menu), DFM section in the Engineering Monitor, export runs and lists ERC/DRC/MECH/DFM in the export panel.
+- Tests executed (Linux, debug): fmt and clippy clean for eak-validation, eak-manufacturing and eak-engineering; eak-validation lib 5, actionable_findings 15, phase4 8, stackup 1; eak-manufacturing lib 3, end_to_end 5, multilayer 4; eak-engineering lib 27; desktop tsc clean and vitest 102/102.
+- The new rules found real issues. The silkscreen stroke was raised from 0.150 to 0.16 mm to meet DFM-010. The autorouter places same-net vias 0-0.45 mm apart: same-net pairs are warnings (duplicate drill or drill breakout), different-net pairs are errors. The router itself is not fixed.
+- Evaluator C1: DRC lists, per net, the nets for which DRC-008/014 current capacity and DRC-002 voltage clearance were NOT EVALUATED (no declared current/voltage) in `limitations`. Evaluator C2: the release gate stays DRAFT when no component height limit is declared (MECH-001 not evaluated) or any part lacks 3D body data (MECH-003); MECH lists the unevaluated height rule.
+
+### Not verified / not implemented
+- Keepouts: the IR has no keepout objects (reported `not_implemented` in DRC); needs a schema change and ADR.
+- Only one fabrication profile (1-2 layer); 4+ layer boards are DRAFT on export (DFM-008) until a matching profile exists. Profile values are transcribed, not confirmed with a quotation.
+- DFM does not measure copper gaps against the fabricator minimum (only the project rule); acid traps, slivers, mask web, paste, panelisation, assembly DFM are `not_implemented`.
+- UI tested in jsdom only, not a real WebView.
 ## Release packaging: Linux .deb and AppImage, v0.1.0 (2026-11-14)
 - `scripts/release-build.sh` builds the Linux bundles from a clean `npm ci` and `tauri build` and writes `SHA256SUMS`; `tauri.conf.json` now has `bundle.active: true` with package metadata (other platforms still build with `--no-bundle`; no Windows/macOS packaging script yet).
 - Verified on Linux only (see `TEST_RESULTS.md`): both packages build, and the packaged binary launches, shows its window and stays up. Not verified: system-wide `apt` install, other distributions, interactive use, Windows and macOS. Release notes: `docs/release/RELEASE_NOTES_v0.1.0.md`.
@@ -25,7 +44,7 @@ files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The te
 - Maturity ceiling (`Maturity::ceiling`): guidance for a class is shown as "Review prompts (unverified)" unless its DESK label is VERIFIED_AGAINST_SOURCE or LIVE_VERIFIED; BLOCKED shows nothing. EAK adds no evidence of its own.
 - Tests: `tests/domain.rs` (11: registry counts and consistency against DESK, every one of the 100 classes ranks first for a design naming its own keywords, ESP32 dashboard, buck power supply, brushed motor driver, mains-plus-controller needs review, empty design unclassified, determinism, maturity ceilings, not-implemented lists), unit tests in `domain/features.rs`, `ipc.rs::domain_classification_is_revision_bound_and_needs_no_model`, vitest `DomainPanel.test.tsx` (5).
 
-- **Library panel (Phase 5 slice, ADR-0014):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
+- **Library panel (Phase 5 slice, ADR-0015):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
 
 ### Not verified / not implemented
 - DESK's rule engine is not ported: per-class rule ids are listed, **no DESK rule is evaluated**, and required component roles are not checked against the design. Every result says so (`not_implemented`, `limitations`).
@@ -42,7 +61,7 @@ files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The te
 - `apps/desktop/src-tauri/src/models.rs`: profile store (JSON, no secrets), `KeyStore` with `OsKeyStore` (keyring v3), IPC commands `model_*` (7). The environment is never a key source in the desktop. `tests/models.rs` (9 tests): profiles/UI view/disk contain no key, remove deletes the key, corrupt file is not overwritten, list/test over real HTTP using the stored key, redaction, env not used, Ollama keyless, and a **real OS credential store round trip** (ran and passed on Linux).
 - UI: `ModelSettings.tsx` (add/edit/remove provider, presets, write-only key field, fetch models into a picker with free-text fallback, test connection), opened from a button in `App.tsx`. 5 vitest tests added.
 
-- **Library panel (Phase 5 slice, ADR-0014):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
+- **Library panel (Phase 5 slice, ADR-0015):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
 
 ### Not verified / not implemented
 - Never run against a live provider endpoint (no key was available); wire formats are checked against canned and loopback responses only.
@@ -104,7 +123,7 @@ all 8 jobs passed: `rust` (policy script, fmt, clippy, `cargo test --workspace -
 - `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check`: clean.
 - `npm run tauri -- build --no-bundle`: succeeds and produces `eak-desktop.exe` with the embedded frontend. A 6-second launch smoke check stayed running and created the SQLite index in the app data folder; no interactive use.
 
-- **Library panel (Phase 5 slice, ADR-0014):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
+- **Library panel (Phase 5 slice, ADR-0015):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
 
 ### Not verified / not implemented
 - The app has not been exercised interactively in a real WebView in this change. Rendering, focus and layout are covered only by jsdom tests.
@@ -153,7 +172,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
   - Every finding carries a stable id, the affected objects and location, and a suggested fix; quantitative rules also report measured vs required values with units (ADR-0009). Desktop and AI display of the new fields is not yet wired.
 - Runtime (`eak-runtime`):
-  - Typed command set (42 commands, including the atomic `Batch`, ADR-0013, and library `SetComponentProperties`/`AssignComponentFootprint`, ADR-0014).
+  - Typed command set (42 commands, including the atomic `Batch`, ADR-0013, and library `SetComponentProperties`/`AssignComponentFootprint`, ADR-0015).
   - Revision checks and the agent approval policy.
   - Transactional apply with integrity gate, diff-based undo/redo and an fsync'd journal with crash reconciliation (UNKNOWN_OUTCOME blocks writes).
   - Checkpoints, project lock, evidence store.

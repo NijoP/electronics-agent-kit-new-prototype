@@ -270,6 +270,12 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); border: 1
 .tb-group:last-child { border-right: 0; }
 .toolbar button { padding: 0 var(--s-1); height: 26px; }
 .toolbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+
+/* Simulation panel */
+.sim-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-1) 0; }
+.sim-source { display: flex; align-items: center; gap: var(--s-1); margin: 2px 0; }
+.sim-plot { margin: var(--s-1) 0; max-width: 640px; }
+.sim pre { overflow: auto; max-height: 160px; }
 .view-slot { display: contents; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-1); margin: var(--s-1) 0; }
 .modal.rules { max-height: 88vh; overflow: auto; }

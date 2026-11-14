@@ -263,7 +263,7 @@ export interface Report {
   not_implemented: string[];
   limitations: string[];
 }
-export type Check = "erc" | "drc";
+export type Check = "erc" | "drc" | "dfm";
 export interface CheckResult {
   report: Report;
   evidence_path: string | null;
@@ -463,6 +463,43 @@ export interface FootprintCandidate {
   pin_map: Record<string, string[]>;
 }
 
+
+/** Optional ngspice simulation (eak-simulation). Results are computed by ngspice, never verified by EAK. */
+export interface NgspiceStatus {
+  available: boolean;
+  path: string | null;
+  version: string | null;
+  message: string | null;
+}
+export interface SimElement { refdes: string; kind: string; value: string; line: string }
+export interface SimSkipped { refdes: string; reason: string }
+export interface SimulationStatus {
+  ngspice: NgspiceStatus;
+  revision: number;
+  nets: string[];
+  elements: SimElement[];
+  skipped: SimSkipped[];
+}
+export type SimAnalysis = { kind: "op" } | { kind: "tran"; stop: number; step: number };
+export interface SimSource {
+  name: string;
+  kind: "voltage" | "current";
+  positive_net: string;
+  negative_net: string;
+  spec: string;
+}
+export interface SimRequest { analysis: SimAnalysis; sources: SimSource[]; timeout_secs?: number | null }
+export interface SimResult {
+  analysis: SimAnalysis;
+  ngspice_version: string;
+  nodes: { net: string; volts: number }[];
+  currents: { element: string; amps: number }[];
+  tran: { time: number[]; traces: { net: string; volts: number[] }[]; points_total: number; decimated: boolean } | null;
+  warnings: string[];
+  limitations: string[];
+  netlist: string;
+  elapsed_ms: number;
+}
 
 /** Interactive routing (eak_engineering::interactive). Points are board nm. */
 export type BendMode = "diagonal45" | "orthogonal90";

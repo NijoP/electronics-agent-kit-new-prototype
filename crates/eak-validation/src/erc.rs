@@ -242,6 +242,120 @@ pub fn run(p: &Project) -> Report {
                 )),
             );
         }
+        // ERC-014: pin-to-pin conflict matrix (pairs ERC-004 does not already report).
+        let mut pairs_seen = BTreeSet::new();
+        for (i, a) in net.pins.iter().enumerate() {
+            for b in &net.pins[i + 1..] {
+                let Some((sev, why)) = pin_conflict(a.electrical_type, b.electrical_type) else {
+                    continue;
+                };
+                let pa = format!("{}.{}", a.refdes, a.pin_name);
+                let pb = format!("{}.{}", b.refdes, b.pin_name);
+                if !pairs_seen.insert((pa.clone(), pb.clone())) {
+                    continue;
+                }
+                f.push(
+                    finding(
+                        "ERC-014",
+                        sev,
+                        format!(
+                            "pin conflict on {}: {pa} ({:?}) with {pb} ({:?}): {why}",
+                            net.name, a.electrical_type, b.electrical_type
+                        ),
+                        vec![a.symbol_id.clone(), b.symbol_id.clone()],
+                        pin_at(&a.symbol_id, &a.pin),
+                    )
+                    .key(&format!("{net_key}|{}|{}|{}|{}", a.symbol_id, a.pin, b.symbol_id, b.pin))
+                    .fix(format!(
+                        "Check the pin types of {pa} and {pb} against their datasheets; split {} or change the circuit so the two pins do not fight.",
+                        net.name
+                    )),
+                );
+            }
+        }
+        // ERC-015: input pins with nothing that can drive them.
+        let inputs: Vec<_> = net
+            .pins
+            .iter()
+            .filter(|p| p.electrical_type == PinType::Input)
+            .collect();
+        let can_drive = net.has_power_port
+            || net.pins.iter().any(|p| {
+                !matches!(
+                    p.electrical_type,
+                    PinType::Input | PinType::PowerIn | PinType::NoConnect
+                )
+            });
+        if !inputs.is_empty() && !can_drive && connected {
+            f.push(
+                finding(
+                    "ERC-015",
+                    Warning,
+                    format!(
+                        "net {} connects only input pins ({}); nothing drives it",
+                        net.name,
+                        inputs
+                            .iter()
+                            .map(|p| format!("{}.{}", p.refdes, p.pin_name))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                    inputs.iter().map(|p| p.symbol_id.clone()).collect(),
+                    pin_at(&inputs[0].symbol_id, &inputs[0].pin),
+                )
+                .key(&net_key)
+                .fix(format!(
+                    "Drive {} from an output, or tie it to a defined level with a pull-up/pull-down resistor.",
+                    net.name
+                )),
+            );
+        }
+        // ERC-016: power-net checks.
+        for d in &drivers {
+            if is_ground_net(&net.name) {
+                f.push(
+                    finding(
+                        "ERC-016",
+                        Error,
+                        format!(
+                            "power output {}.{} is tied to ground net {}",
+                            d.refdes, d.pin_name, net.name
+                        ),
+                        vec![d.symbol_id.clone()],
+                        pin_at(&d.symbol_id, &d.pin),
+                    )
+                    .key(&format!("{net_key}|out|{}|{}", d.symbol_id, d.pin))
+                    .fix(format!(
+                        "Connect {}.{} to its output rail; a supply output shorted to ground is a short circuit.",
+                        d.refdes, d.pin_name
+                    )),
+                );
+            }
+        }
+        let is_power_net = !power_in.is_empty() || !drivers.is_empty() || net.has_power_port;
+        if is_power_net
+            && !is_ground_net(&net.name)
+            && connected
+            && !p.constraints.net_voltages_v.contains_key(&net.name)
+        {
+            f.push(
+                finding(
+                    "ERC-016",
+                    Warning,
+                    format!(
+                        "power net {} has no declared voltage; voltage-dependent checks (capacitor rating, clearance) skip it",
+                        net.name
+                    ),
+                    net.pins.iter().map(|p| p.symbol_id.clone()).collect(),
+                    net.pins.first().and_then(|q| pin_at(&q.symbol_id, &q.pin)),
+                )
+                .key(&format!("{net_key}|voltage"))
+                .fix(format!(
+                    "Declare the nominal voltage of {} in the design constraints.",
+                    net.name
+                )),
+            );
+        }
         if net.label_names.len() > 1 {
             f.push(
                 finding(
@@ -493,9 +607,22 @@ pub fn run(p: &Project) -> Report {
             "",
             "DESK erc.py (reimplemented)",
         ),
+        rule(
+            "ERC-014",
+            "Pin conflict matrix",
+            "Output/OpenCollector and PowerOut/OpenCollector (error); Bidirectional/PowerOut and Output/PowerIn (warning)",
+            "EAK",
+        ),
+        rule("ERC-015", "Undriven input net", "nets with Input pins and no possible driver", "EAK"),
+        rule(
+            "ERC-016",
+            "Power-net checks",
+            "PowerOut pin on a ground net (error); power net without a declared voltage (warning)",
+            "EAK",
+        ),
     ];
     let not_implemented = vec![
-        "Pin-to-pin compatibility matrix beyond driver conflicts".into(),
+        "Bus contention timing between tri-state/bidirectional drivers".into(),
         "Hierarchical sheet / bus consistency (hierarchy not yet supported)".into(),
         "Analog simulation, operating-point and tolerance analysis".into(),
         "Component stress/derating beyond capacitor voltage".into(),
@@ -505,4 +632,30 @@ pub fn run(p: &Project) -> Report {
         "Ratings in the built-in library are unverified unless marked verified".into(),
     ];
     Report::new("ERC", p, rules, f, not_implemented, limitations)
+}
+
+/// ERC-014 pin-to-pin compatibility for pairs not covered by other rules: ERC-004 reports
+/// several Output/PowerOut drivers, ERC-002 no-connect pins. `None` means compatible.
+pub fn pin_conflict(a: PinType, b: PinType) -> Option<(crate::Severity, &'static str)> {
+    use PinType::*;
+    let (a, b) = if a <= b { (a, b) } else { (b, a) };
+    match (a, b) {
+        (Output, OpenCollector) => Some((
+            Error,
+            "a push-pull output fights an open-collector output when it drives high",
+        )),
+        (PowerOut, OpenCollector) => Some((
+            Error,
+            "an open-collector output pulling low shorts the supply",
+        )),
+        (Bidirectional, PowerOut) => Some((
+            Warning,
+            "a bidirectional pin driving a supply rail can short it",
+        )),
+        (Output, PowerIn) => Some((
+            Warning,
+            "a logic output feeds a power input; check it can supply the load",
+        )),
+        _ => None,
+    }
 }
