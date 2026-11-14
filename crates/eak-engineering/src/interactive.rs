@@ -321,7 +321,10 @@ pub fn route_step(p: &Project, req: &RouteStepRequest) -> RouteStepResult {
             res.segments = segs;
             res.walkaround = true;
             if !res.reached {
-                res.message = Some("the cursor itself is too close to other copper".into());
+                res.message = Some(
+                    "the cursor point itself is too close to other copper; stopped at the nearest legal point"
+                        .into(),
+                );
             }
             return res;
         }
@@ -475,14 +478,14 @@ fn walkaround(rules: &Rules, req: &RouteStepRequest) -> Option<Vec<RouteSegment>
     cells.reverse();
     let mut pts: Vec<Point> = cells.iter().map(|&(i, j)| at(i, j)).collect();
     let last = *pts.last()?;
+    // Finish at the exact cursor with a legal one- or two-segment tail in the bend mode (the
+    // cursor is generally not on the walkaround grid).
     if last != to {
-        let (dx, dy) = (to.x - last.x, to.y - last.y);
-        let aligned = match req.mode {
-            BendMode::Orthogonal90 => dx == 0 || dy == 0,
-            BendMode::Diagonal45 => dx == 0 || dy == 0 || dx.abs() == dy.abs(),
-        };
-        if aligned && rules.legal(last, to) {
-            pts.push(to);
+        if let Some(tail) = direct_paths(last, to, req.mode)
+            .into_iter()
+            .find(|segs| segs.iter().all(|s| rules.legal(s.a, s.b)))
+        {
+            pts.extend(tail.iter().map(|s| s.b));
         }
     }
     // Merge collinear runs.
