@@ -17,5 +17,7 @@ Source inspection only. Nothing here is built, run or measured; no improvement i
 - **Correctness:** the JS side awaits each lifecycle call, so ordering is unchanged. Startup was inspected: every optional subsystem (index, harness, terminal API, model settings) already logs and continues; no change needed.
 - **Modules:** `apps/desktop/src-tauri/src/terminal.rs`.
 
+Bottleneck ledger and baseline map: `PERFORMANCE_LEDGER.md`.
+
 ## Remaining (not started)
 Execution profile setting (low/balanced/high), PTY leak review, cache bounds, P3 revision-keyed caching.
