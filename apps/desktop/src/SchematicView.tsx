@@ -6,6 +6,7 @@ import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, nextRotation, segments, snapPoint } from "./editing";
 import type { Id, Point, Snapshot, SymbolInstance } from "./types";
 import { boundsOf, fromView, mm, toView } from "./viewport";
+import { useDocId, useRegisterTools } from "./shell/viewState";
 
 interface Props {
   snapshot: Snapshot;
@@ -66,6 +67,12 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     reset();
     setTool(t);
   };
+  const docId = useDocId();
+  useRegisterTools(docId, (t) => {
+    const hit = TOOLS.find(([id]) => id === t);
+    if (hit) choose(hit[0]);
+    return !!hit;
+  });
   useEffect(() => {
     if (!armPart) return;
     setPartId(armPart.id);

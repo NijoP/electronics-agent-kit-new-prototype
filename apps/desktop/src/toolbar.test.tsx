@@ -1,0 +1,130 @@
+// Main toolbar and per-tab viewport persistence.
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { IPC_COMMANDS } from "./api";
+import { App } from "./App";
+import { fixture } from "./fixture.test-data";
+import { forgetViewports, loadViewport, sanitizeViewBox, saveViewport } from "./shell/viewState";
+import type { CommandResponse } from "./types";
+
+describe("viewport store", () => {
+  it("rejects malformed viewports and round-trips a good one", () => {
+    expect(sanitizeViewBox({ x: 1, y: 2, w: 0, h: 3 })).toBeNull();
+    expect(sanitizeViewBox({ x: "a" })).toBeNull();
+    forgetViewports();
+    localStorage.clear();
+    saveViewport("sch:x", { x: 1, y: 2, w: 3, h: 4 });
+    expect(loadViewport("sch:x")).toEqual({ x: 1, y: 2, w: 3, h: 4 });
+    forgetViewports();
+    localStorage.setItem("eak.viewport.sch:y", "garbage");
+    expect(loadViewport("sch:y")).toBeNull();
+  });
+});
+
+let revision: number;
+let executed: unknown[];
+let calls: string[];
+const resp = (): CommandResponse => ({ op_id: "o", command: "x", class: "reversible_local", accepted: true, revision_before: revision, revision_after: revision + 1, created: [], affected: [], warnings: [], error: null, validation_note: "" });
+beforeEach(() => {
+  localStorage.clear();
+  forgetViewports();
+  revision = 7;
+  executed = [];
+  calls = [];
+  mockIPC((cmd, payload) => {
+    const args = (payload ?? {}) as Record<string, unknown>;
+    calls.push(cmd);
+    if (!(IPC_COMMANDS as readonly string[]).includes(cmd)) throw new Error(`unknown ${cmd}`);
+    switch (cmd) {
+      case "recent_projects":
+        return [{ path: "/p.eak", project_id: "prj_1", name: "Fixture board", revision: 7, last_opened_ms: 1 }];
+      case "open_project":
+      case "current_project":
+        return fixture(revision);
+      case "events_since":
+        return [];
+      case "execute_command":
+        executed.push(args.command);
+        revision += 1;
+        return resp();
+      case "library_components":
+      case "model_providers":
+        return [];
+      default:
+        throw new Error(`unmocked ${cmd}`);
+    }
+  });
+});
+afterEach(() => {
+  cleanup();
+  clearMocks();
+  vi.restoreAllMocks();
+});
+
+async function open() {
+  render(<App />);
+  fireEvent.click(await screen.findByText("Fixture board"));
+  await screen.findByRole("img", { name: "Schematic canvas" });
+}
+const tb = () => within(screen.getByRole("toolbar", { name: "Main toolbar" }));
+const viewBox = () => screen.getByRole("img", { name: "Schematic canvas" }).getAttribute("viewBox");
+
+describe("main toolbar", () => {
+  it("unimplemented controls are disabled and say why; nothing decorative is clickable", async () => {
+    await open();
+    for (const [name, why] of [["Save as", "Not implemented"], ["Grid", "Not implemented"], ["Design rules", "Not implemented"], ["Simulate", "Not implemented"]] as const) {
+      const b = tb().getByRole("button", { name }) as HTMLButtonElement;
+      expect(b.disabled).toBe(true);
+      expect(b.title).toContain(why);
+    }
+    // selection-dependent controls explain themselves too
+    expect((tb().getByRole("button", { name: "Rotate selection" }) as HTMLButtonElement).title).toContain("Select a part first");
+  });
+
+  it("every enabled toolbar button does something: engine command, IPC call or UI state", async () => {
+    await open();
+    fireEvent.click(tb().getByRole("button", { name: "Auto-route" }));
+    await waitFor(() => expect(executed).toEqual([{ type: "AutoRoute", nets: null }]));
+    calls.length = 0;
+    fireEvent.click(tb().getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls).toContain("current_project"));
+    expect(screen.getByRole("status").textContent).toContain("already written");
+    const before = viewBox();
+    fireEvent.click(tb().getByRole("button", { name: "Zoom in" }));
+    await waitFor(() => expect(viewBox()).not.toBe(before));
+    fireEvent.click(tb().getByRole("button", { name: "Fit to view" }));
+    await waitFor(() => expect(viewBox()).toBe(before));
+  });
+
+  it("Move tool arms the active editor's move tool; Rotate and Delete act on the selection through typed commands", async () => {
+    await open();
+    fireEvent.click(tb().getByRole("button", { name: "Move tool" }));
+    const sch = within(screen.getByRole("region", { name: "Schematic view" }));
+    await waitFor(() => expect(sch.getByRole("button", { name: "Move" }).getAttribute("aria-pressed")).toBe("true"));
+    fireEvent.click(screen.getByRole("button", { name: /R1 330/ }));
+    fireEvent.click(tb().getByRole("button", { name: "Rotate selection" }));
+    await waitFor(() => expect(executed).toEqual([{ type: "RotateSymbol", symbol_id: "sym_r1", rotation: "R90" }]));
+    vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    fireEvent.click(tb().getByRole("button", { name: "Delete selection" }));
+    expect(executed).toHaveLength(1);
+    fireEvent.click(tb().getByRole("button", { name: "Delete selection" }));
+    await waitFor(() => expect(executed[1]).toEqual({ type: "DeleteSymbol", symbol_id: "sym_r1" }));
+  });
+});
+
+describe("per-tab viewport", () => {
+  it("a closed tab reopens at its last zoom, not at fit", async () => {
+    await open();
+    const fitted = viewBox();
+    fireEvent.click(tb().getByRole("button", { name: "Zoom in" }));
+    await waitFor(() => expect(viewBox()).not.toBe(fitted));
+    const zoomed = viewBox();
+    fireEvent.click(screen.getByRole("button", { name: "Close Sheet 1" }));
+    await waitFor(() => expect(screen.queryByRole("img", { name: "Schematic canvas" })).toBeNull());
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Application menu" })).getByRole("button", { name: "Project" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open sheet Sheet 1" }));
+    await screen.findByRole("img", { name: "Schematic canvas" });
+    expect(viewBox()).toBe(zoomed);
+  });
+});
