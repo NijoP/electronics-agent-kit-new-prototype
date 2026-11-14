@@ -306,10 +306,10 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
   };
   const resetLayout = () => setLayout(DEFAULT_LAYOUT);
   // Click a finding: open the right editor, select the object, zoom to it, highlight it.
-  // DRC findings live in the PCB editor (zoom + highlight); ERC findings select the symbol in
+  // DRC and DFM findings live in the PCB editor (zoom + highlight); ERC findings select the symbol in
   // the schematic (no zoom there yet).
   const navigateFinding = (f: Finding, checkName: Check) => {
-    const kind = checkName === "drc" ? "pcb" : "schematic";
+    const kind = checkName === "erc" ? "schematic" : "pcb";
     const d = docs.find((x) => x.kind === kind);
     if (d) open(d.id);
     const target = probeTarget(snapshot, f.objects);
@@ -332,6 +332,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     { id: "export", label: "Export Gerbers + drill", run: exportGerbers, group: "Manufacturing" },
     { id: "erc", label: "Run ERC", run: () => check("erc"), group: "Verify" },
     { id: "drc", label: "Run DRC", run: () => check("drc"), group: "Verify" },
+    { id: "dfm", label: "Run DFM (JLCPCB standard profile)", run: () => check("dfm"), group: "Verify" },
     { id: "annotate", label: "Annotate schematic", run: () => execute({ type: "Annotate" }), group: "Design" },
     { id: "sync", label: "Sync schematic to PCB", run: () => execute({ type: "SyncSchematicToPcb" }), group: "Design" },
     { id: "place", label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), group: "Design" },
@@ -461,6 +462,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     { label: "Design", items: [
       { label: "Run ERC", run: () => check("erc"), disabled: noProject },
       { label: "Run DRC", run: () => check("drc"), disabled: noProject },
+      { label: "Run DFM (JLCPCB standard)", run: () => check("dfm"), disabled: noProject },
       { label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), disabled: noProject, sep: true },
       { label: "Design rules…", disabled: "Not implemented: no rule editor yet" },
     ] },

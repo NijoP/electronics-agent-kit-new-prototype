@@ -3,6 +3,23 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## Verification additions and manufacturing outputs: ERC/DRC/DFM, fab pack (2026-11-14, branch fm/eak-p4-validation-mfg)
+
+**Platform tested:** Linux only. Plan Phase 4 (verification additions) and Phase 7 (manufacturing outputs).
+
+### Implemented and tested
+- ERC-014 pin-conflict matrix (Output/OpenCollector, PowerOut/OpenCollector errors; Bidirectional/PowerOut, Output/PowerIn warnings), ERC-015 undriven input nets, ERC-016 power-net checks (PowerOut on ground = error; power net without a declared voltage = warning).
+- DRC-018 copper-to-hole (other-net copper vs drill edge, project min clearance), DRC-019 hole-to-hole (0.5 mm EAK default, unverified), DRC-020 silkscreen-to-board-edge (0.2 mm EAK default, unverified).
+- DFM (`eak-validation/src/dfm.rs`, DFM-001..010) against `data/fab-jlcpcb-standard.json` (JLCPCB standard 1-2 layer; source URL recorded; `verified: false`). DFM is now a release gate (ADR-0014).
+- Manufacturing: BOM grouped by value/footprint/MPN, CPL (pick-and-place), `<stem>-fab-pack.zip` (Gerber + drill + README of layers, CRC-checked by `verify_package`) and the README beside it.
+- Desktop: `run_check("dfm")` (palette "Run DFM", Design menu), DFM section in the Engineering Monitor, export runs and lists ERC/DRC/MECH/DFM in the export panel.
+
+### Not verified / not implemented
+- Keepouts: the IR has no keepout objects (reported `not_implemented` in DRC); needs a schema change and ADR.
+- Only one fabrication profile (1-2 layer); 4+ layer boards are DRAFT on export (DFM-008) until a matching profile exists. Profile values are transcribed, not confirmed with a quotation.
+- DFM does not measure copper gaps against the fabricator minimum (only the project rule); acid traps, slivers, mask web, paste, panelisation, assembly DFM are `not_implemented`.
+- UI tested in jsdom only, not a real WebView.
+
 ## EDA desktop directive, Phase 0: research and repository audit (2026-11-14)
 
 Documentation only; no code changed and no tests were run. Adds the EasyEDA ecosystem research

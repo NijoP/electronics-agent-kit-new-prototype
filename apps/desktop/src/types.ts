@@ -253,7 +253,7 @@ export interface Report {
   not_implemented: string[];
   limitations: string[];
 }
-export type Check = "erc" | "drc";
+export type Check = "erc" | "drc" | "dfm";
 export interface CheckResult {
   report: Report;
   evidence_path: string | null;

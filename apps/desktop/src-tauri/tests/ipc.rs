@@ -390,12 +390,28 @@ fn editor_flow_places_wires_routes_and_exports_gerbers() {
     let drc = run_check(&s, Check::Drc).unwrap();
     assert_eq!(erc.report.revision, snap.project.revision);
     assert_eq!(drc.report.revision, snap.project.revision);
+    let dfm = run_check(&s, Check::Dfm).unwrap();
+    assert_eq!(dfm.report.check, "DFM");
+    assert_eq!(dfm.report.revision, snap.project.revision);
+    assert!(dfm.evidence_path.is_some());
 
     let out = export_manufacturing(&s).unwrap();
     let names: Vec<&str> = out.manifest.files.iter().map(|f| f.name.as_str()).collect();
-    for ext in [".gtl", ".gbl", ".gm1", ".drl"] {
+    for ext in [
+        ".gtl",
+        ".gbl",
+        ".gm1",
+        ".drl",
+        "fab-pack.zip",
+        "fab-README.txt",
+        "BOM.csv",
+        "CPL.csv",
+    ] {
         assert!(names.iter().any(|n| n.ends_with(ext)), "missing {ext}");
     }
+    let checks: Vec<&str> = out.reports.iter().map(|r| r.check.as_str()).collect();
+    assert_eq!(checks, ["ERC", "DRC", "MECH", "DFM"]);
+    assert!(out.manifest.gates.iter().any(|g| g.check == "DFM"));
     assert!(std::path::Path::new(&out.out_dir)
         .join("manifest.json")
         .exists());

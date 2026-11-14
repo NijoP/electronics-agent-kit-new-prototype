@@ -7,7 +7,7 @@ use eak_engineering::{copper, silk};
 use eak_manufacturing::{compile, verify_package, PackageStatus};
 use eak_runtime::{fixtures, Engine};
 use eak_validation::drc::silk_over_openings;
-use eak_validation::{drc, erc, mech, Severity};
+use eak_validation::{dfm, drc, erc, mech, Severity};
 
 fn print(r: &eak_validation::Report) {
     for f in &r.findings {
@@ -33,6 +33,9 @@ fn reference_design_end_to_end() {
     print(&mech_r);
     assert_eq!(drc_r.errors, 0, "DRC errors on reference board");
     assert_eq!(mech_r.errors, 0);
+    let dfm_r = dfm::run(e.project(), &dfm::jlcpcb_standard());
+    print(&dfm_r);
+    assert_eq!(dfm_r.errors, 0, "DFM errors on reference board");
     assert_eq!(drc_r.revision, e.project().revision);
     // Thermal reliefs, silkscreen text and their DRC rules are part of the verified slice.
     for id in ["DRC-014", "DRC-015"] {
@@ -75,14 +78,31 @@ fn reference_design_end_to_end() {
 
     let dir = std::env::temp_dir().join(format!("eak-mfg-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let m = compile(e.project(), &[&erc_r, &drc_r, &mech_r], &dir).expect("compile");
+    let m = compile(e.project(), &[&erc_r, &drc_r, &mech_r, &dfm_r], &dir).expect("compile");
     assert_eq!(
         m.status,
         PackageStatus::InternallyVerifiedReleaseCandidate,
         "{:?}",
         m.blocking_reasons
     );
-    assert_eq!(m.files.len(), 13); // 2 copper, 4 mask/paste, 2 legend, edge, drill, BOM, CPL, stackup
+    assert_eq!(m.files.len(), 15); // 2 copper, 4 mask/paste, 2 legend, edge, drill, BOM, CPL, stackup, README, fab pack
+                                   // The fab pack holds every Gerber and drill file plus the README of layers.
+    let zip = m.files.iter().find(|f| f.kind == "fab-pack").unwrap();
+    let names =
+        eak_manufacturing::fabpack::list(&std::fs::read(dir.join(&zip.name)).unwrap()).unwrap();
+    assert_eq!(names.len(), 11, "{names:?}");
+    assert!(names.contains(&"README.txt".to_string()));
+    let readme = m.files.iter().find(|f| f.kind == "readme").unwrap();
+    let readme = std::fs::read_to_string(dir.join(&readme.name)).unwrap();
+    assert!(
+        readme.contains("Top copper")
+            && readme.contains("Board outline")
+            && readme.contains("Plated through holes"),
+        "{readme}"
+    );
+    assert!(!readme
+        .to_lowercase()
+        .contains("manufacturing-ready claim: yes"));
     assert!(verify_package(&dir).unwrap().is_empty());
     // The written legend is exactly the clipped model: one draw per line, one flash per dot.
     let gto = m.files.iter().find(|f| f.name.ends_with(".gto")).unwrap();
@@ -105,6 +125,7 @@ fn stale_or_failing_reports_produce_only_a_draft() {
     fixtures::build_pcb(&mut e).unwrap();
     let erc_r = erc::run(e.project());
     let drc_r = drc::run(e.project());
+    let dfm_r = dfm::run(e.project(), &dfm::jlcpcb_standard());
     let mech_r = mech::run(e.project());
     // Change the design after verification: reports are now stale.
     let rev = e.project().revision;
@@ -118,7 +139,7 @@ fn stale_or_failing_reports_produce_only_a_draft() {
     });
     assert!(r.accepted);
     let dir = std::env::temp_dir().join(format!("eak-mfg-stale-{}", std::process::id()));
-    let m = compile(e.project(), &[&erc_r, &drc_r, &mech_r], &dir).unwrap();
+    let m = compile(e.project(), &[&erc_r, &drc_r, &mech_r, &dfm_r], &dir).unwrap();
     assert_eq!(m.status, PackageStatus::Draft);
     assert!(m.blocking_reasons.iter().any(|b| b.contains("re-run")));
     let _ = std::fs::remove_dir_all(&dir);
@@ -152,4 +173,55 @@ fn drc_detects_injected_short_and_clearance_violation() {
                 && (f.rule_id == "DRC-002" || f.rule_id == "DRC-003")),
         "expected clearance/short errors"
     );
+}
+
+#[test]
+fn bom_groups_by_value_footprint_and_mpn_and_cpl_lists_every_part() {
+    let mut e = Engine::in_memory(Project::new("ref"));
+    fixtures::build_schematic(&mut e).unwrap();
+    fixtures::build_pcb(&mut e).unwrap();
+    let p = e.project();
+    let bom = eak_manufacturing::bom_csv(p);
+    let mut lines = bom.lines();
+    assert_eq!(
+        lines.next().unwrap(),
+        "Comment,Designator,Footprint,LCSC Part #,Manufacturer,MPN,Quantity"
+    );
+    let mut keys = std::collections::BTreeSet::new();
+    let mut total = 0;
+    for l in lines {
+        // Quoted fields: Comment, Designator, Footprint, LCSC, Manufacturer, MPN; then qty.
+        let f: Vec<&str> = l.split("\",\"").collect();
+        assert_eq!(f.len(), 6, "{l}");
+        let qty: usize = l.rsplit(',').next().unwrap().parse().unwrap();
+        assert_eq!(f[1].split(',').count(), qty, "{l}");
+        assert!(
+            keys.insert((f[0], f[2], f[5].rsplit_once("\",").unwrap().0)),
+            "duplicate group {l}"
+        );
+        total += qty;
+    }
+    assert_eq!(total, p.schematic.symbols.len());
+    // Two parts with the same value and footprint but different MPNs are separate lines.
+    let mut q = p.clone();
+    let (sid, comp) = q
+        .schematic
+        .symbols
+        .values()
+        .map(|s| (s.id.clone(), s.component_id.clone()))
+        .next()
+        .unwrap();
+    let mut alt = q.library[&comp].clone();
+    alt.id = format!("{comp}-alt");
+    alt.mpn = Some("ALT-MPN-1".into());
+    q.library.insert(alt.id.clone(), alt.clone());
+    let base_lines = eak_manufacturing::bom_csv(&q).lines().count();
+    q.schematic.symbols.get_mut(&sid).unwrap().component_id = alt.id.clone();
+    let split = eak_manufacturing::bom_csv(&q);
+    assert!(split.contains("ALT-MPN-1"), "{split}");
+    assert!(split.lines().count() >= base_lines, "{split}");
+
+    let cpl = eak_manufacturing::cpl_csv(p);
+    assert!(cpl.starts_with("Designator,Mid X,Mid Y,Layer,Rotation\n"));
+    assert_eq!(cpl.lines().count(), 1 + p.pcb.footprints.len());
 }

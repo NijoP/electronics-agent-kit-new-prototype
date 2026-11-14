@@ -1,6 +1,7 @@
 //! Design rules check: geometry, clearance, connectivity, drill, edge, current capacity,
 //! thermal-relief spokes, silkscreen over soldermask openings and schematic/PCB consistency.
 
+use crate::holes;
 use crate::report::{finding, rule, Finding, Report, Severity::*};
 use eak_core::geom::{point_in_polygon, point_segment_distance, polygon_self_intersects, to_mm};
 use eak_core::{CopperLayer, Nm, PadKind, Point, Project, Rect, Side};
@@ -699,6 +700,16 @@ pub fn run(p: &Project) -> Report {
         }
     }
 
+    // DRC-018 / DRC-019 / DRC-020: holes and silkscreen-to-edge.
+    f.extend(holes::copper_to_hole(p, c.min_clearance));
+    f.extend(holes::hole_to_hole(
+        p,
+        HOLE_TO_HOLE_MIN,
+        "DRC-019",
+        "EAK default",
+    ));
+    f.extend(holes::silk_to_edge(p, SILK_TO_EDGE_MIN));
+
     let rules = vec![
         rule("DRC-001", "Minimum / net-class track width", format!("min {}", mm(c.min_track_width as f64)), "Project constraints"),
         rule("DRC-002", "Copper clearance", format!("min {}, net classes, declared net voltages", mm(c.min_clearance as f64)), "Project constraints; IPC-2221B Table 6-1 B2 for declared voltages (table unverified against standard text)"),
@@ -717,6 +728,9 @@ pub fn run(p: &Project) -> Report {
         rule("DRC-015", "Silkscreen over soldermask openings", format!("legend ink ≥ {} from pad openings (mask expansion {})", mm(silk::MASK_CLEARANCE as f64), mm(p.manufacturing.mask_expansion as f64)), "EAK default (common fabricator practice, not an IPC value; unverified)"),
         rule("DRC-016", "Copper on layers of the stackup", "tracks, zones and via spans must use layers the stackup has", "EAK"),
         rule("DRC-017", "Plane layers carry a zone", "every plane layer needs at least one zone", "EAK"),
+        rule("DRC-018", "Copper-to-hole clearance", format!("other-net copper ≥ {} (min clearance) from drill edges, on the layers each hole spans", mm(c.min_clearance as f64)), "Project constraints"),
+        rule("DRC-019", "Hole-to-hole spacing", format!("drill edges ≥ {} apart", mm(HOLE_TO_HOLE_MIN as f64)), "EAK default (common fabricator practice; unverified)"),
+        rule("DRC-020", "Silkscreen-to-board-edge clearance", format!("legend ink ≥ {} inside the outline", mm(SILK_TO_EDGE_MIN as f64)), "EAK default (common fabricator practice; unverified)"),
     ];
     let not_implemented = vec![
         "Controlled impedance and signal integrity".into(),
@@ -724,8 +738,8 @@ pub fn run(p: &Project) -> Report {
         "Thermal analysis and copper current density in zones (only relief-spoke width vs declared net current is checked)".into(),
         "Creepage (surface path) analysis — only voltage-based clearance (air gap) is checked"
             .into(),
-        "Silkscreen-to-board-edge, silkscreen overlap/legibility, solder-mask sliver and paste checks".into(),
-        "Copper-to-hole and hole-to-hole spacing".into(),
+        "Silkscreen overlap/legibility, solder-mask sliver and paste checks".into(),
+        "Keepout areas: EAK-IR has no keepout objects yet (needs a schema change and ADR)".into(),
         "Acid traps and copper slivers".into(),
     ];
     let limitations = vec![
@@ -736,6 +750,11 @@ pub fn run(p: &Project) -> Report {
     ];
     Report::new("DRC", p, rules, f, not_implemented, limitations)
 }
+
+/// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, unverified).
+pub const HOLE_TO_HOLE_MIN: Nm = 500_000;
+/// DRC-020 minimum legend-to-board-edge clearance (EAK default, unverified).
+pub const SILK_TO_EDGE_MIN: Nm = 200_000;
 
 /// Minimum number of relief spokes that must land in zone fill.
 pub const MIN_SPOKES: usize = 2;

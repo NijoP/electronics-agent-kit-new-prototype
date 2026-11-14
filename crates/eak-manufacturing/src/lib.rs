@@ -8,6 +8,7 @@
 //! "manufacturing-ready": independent engineering review and fabricator DFM are required.
 
 pub mod drill;
+pub mod fabpack;
 pub mod gerber;
 pub mod stackup;
 
@@ -66,28 +67,39 @@ fn sha(data: &[u8]) -> String {
     format!("{:x}", Sha256::digest(data))
 }
 
+/// BOM grouped by value, footprint and MPN: one line per distinct part to buy and place.
+/// LCSC and manufacturer come from the first component definition of each group.
 pub fn bom_csv(p: &Project) -> String {
-    let mut groups: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
+    type Row = (Vec<String>, String, String);
+    let mut groups: BTreeMap<(String, String, String), Row> = BTreeMap::new();
     for s in p.schematic.symbols.values() {
-        groups
-            .entry((s.component_id.clone(), s.value.clone()))
-            .or_default()
-            .push(s.refdes.clone());
+        let def = p.library.get(&s.component_id);
+        let footprint = def.map(|d| d.footprint.name.clone()).unwrap_or_default();
+        let mpn = def.and_then(|d| d.mpn.clone()).unwrap_or_default();
+        let row = groups
+            .entry((s.value.clone(), footprint, mpn))
+            .or_insert_with(|| {
+                (
+                    vec![],
+                    def.and_then(|d| d.lcsc.clone()).unwrap_or_default(),
+                    def.and_then(|d| d.manufacturer.clone()).unwrap_or_default(),
+                )
+            });
+        row.0.push(s.refdes.clone());
     }
     let q = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
     let mut out =
         String::from("Comment,Designator,Footprint,LCSC Part #,Manufacturer,MPN,Quantity\n");
-    for ((comp, value), mut refs) in groups {
+    for ((value, footprint, mpn), (mut refs, lcsc, manufacturer)) in groups {
         refs.sort_by_key(|a| natural(a));
-        let def = &p.library[&comp];
         out.push_str(&format!(
             "{},{},{},{},{},{},{}\n",
             q(&value),
             q(&refs.join(",")),
-            q(&def.footprint.name),
-            q(def.lcsc.as_deref().unwrap_or("")),
-            q(def.manufacturer.as_deref().unwrap_or("")),
-            q(def.mpn.as_deref().unwrap_or("")),
+            q(&footprint),
+            q(&lcsc),
+            q(&manufacturer),
+            q(&mpn),
             refs.len()
         ));
     }
@@ -128,7 +140,7 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
         return Err("cannot compile manufacturing outputs without a board outline".into());
     }
     let mut gates = vec![];
-    for need in ["ERC", "DRC", "MECH"] {
+    for need in ["ERC", "DRC", "MECH", "DFM"] {
         match reports.iter().find(|r| r.check == need) {
             None => blocking.push(format!("{need} report not supplied")),
             Some(r) => {
@@ -262,6 +274,34 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
             kind: kind.clone(),
         });
     }
+    // Fabrication pack: Gerber + drill files and a README of layers in one ZIP.
+    let fab: Vec<&(String, String, String)> = files
+        .iter()
+        .filter(|(_, kind, _)| kind == "gerber" || kind == "drill")
+        .collect();
+    let readme = pack_readme(p, &input, &blocking, &fab);
+    let mut zip_entries: Vec<(String, Vec<u8>)> = fab
+        .iter()
+        .map(|(name, _, content)| (name.clone(), content.as_bytes().to_vec()))
+        .collect();
+    zip_entries.push(("README.txt".into(), readme.as_bytes().to_vec()));
+    let pack = fabpack::zip(&zip_entries);
+    fabpack::list(&pack).map_err(|e| format!("generated fab pack failed self-validation: {e}"))?;
+    let readme_name = format!("{stem}-fab-README.txt");
+    eak_runtime::store::atomic_write(&out_dir.join(&readme_name), readme.as_bytes())
+        .map_err(|e| e.to_string())?;
+    let pack_name = format!("{stem}-fab-pack.zip");
+    eak_runtime::store::atomic_write(&out_dir.join(&pack_name), &pack)
+        .map_err(|e| e.to_string())?;
+    for (name, kind) in [(readme_name, "readme"), (pack_name, "fab-pack")] {
+        let written = std::fs::read(out_dir.join(&name)).map_err(|e| e.to_string())?;
+        entries.push(FileEntry {
+            name,
+            bytes: written.len() as u64,
+            sha256: sha(&written),
+            kind: kind.into(),
+        });
+    }
     let status = if blocking.is_empty() {
         PackageStatus::InternallyVerifiedReleaseCandidate
     } else {
@@ -286,7 +326,7 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
             "Independent senior electronics engineering review".into(),
             "Fabricator DFM review of these exact files".into(),
             "Physical prototype / bench testing".into(),
-            "Checks listed as not implemented in the ERC/DRC/MECH reports".into(),
+            "Checks listed as not implemented in the ERC/DRC/MECH/DFM reports".into(),
         ],
     };
     let mjson = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
@@ -314,6 +354,7 @@ pub fn verify_package(dir: &Path) -> Result<Vec<String>, String> {
                 }
                 let text = String::from_utf8_lossy(&data);
                 let syn = match f.kind.as_str() {
+                    "fab-pack" => fabpack::list(&data).err().into_iter().collect(),
                     "gerber" => gerber::validate(&text).problems,
                     "drill" => drill::validate(&text).problems,
                     "stackup" => stackup::validate(&text),
@@ -324,4 +365,46 @@ pub fn verify_package(dir: &Path) -> Result<Vec<String>, String> {
         }
     }
     Ok(problems)
+}
+
+/// README shipped inside the fab pack: what each file is, the stackup and the package status.
+fn pack_readme(
+    p: &Project,
+    input: &str,
+    blocking: &[String],
+    files: &[&(String, String, String)],
+) -> String {
+    let st = &p.pcb.board.stackup;
+    let mut r = format!(
+        "Fabrication files for {} (revision {})\nGenerated by eak-manufacturing {} from EAK-IR sha256 {input}\n\n",
+        p.name,
+        p.revision,
+        env!("CARGO_PKG_VERSION")
+    );
+    r.push_str(if blocking.is_empty() {
+        "Status: internal automated checks passed for this revision. NOT a manufacturing-ready claim: independent engineering review and the fabricator's DFM review are still required.\n\n"
+    } else {
+        "Status: DRAFT - NOT for fabrication. Blocking issues:\n"
+    });
+    for b in blocking {
+        r.push_str(&format!("  - {b}\n"));
+    }
+    if !blocking.is_empty() {
+        r.push('\n');
+    }
+    r.push_str("Files (Gerber RS-274X, Excellon drill; units mm):\n");
+    for (name, _, _) in files {
+        r.push_str(&format!("  {name:<40} {}\n", fabpack::describe(name)));
+    }
+    r.push_str(&format!(
+        "\nStackup: {} copper layers, finished thickness {:.2} mm, {}\n",
+        st.layers.len(),
+        to_mm(st.board_thickness),
+        st.dielectric
+    ));
+    for l in &st.layers {
+        r.push_str(&format!("  {:<8} {} oz\n", l.layer.name(), l.copper_oz));
+    }
+    r.push_str("\nBOM and pick-and-place (CPL) CSVs are delivered next to this archive.\n");
+    r
 }
