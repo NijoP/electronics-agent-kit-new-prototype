@@ -89,13 +89,137 @@ pub struct Rating {
     pub verified: bool,
 }
 
+/// File format of an attached 3D model. Only STEP is rendered today; WRL and GLB are
+/// recorded so a reference survives, and the viewer falls back to the box body for them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelFormat {
+    Step,
+    Wrl,
+    Glb,
+}
+
+impl ModelFormat {
+    /// Format implied by a file extension (case-insensitive), if supported.
+    pub fn from_extension(ext: &str) -> Option<ModelFormat> {
+        match ext.to_ascii_lowercase().as_str() {
+            "step" | "stp" => Some(ModelFormat::Step),
+            "wrl" => Some(ModelFormat::Wrl),
+            "glb" => Some(ModelFormat::Glb),
+            _ => None,
+        }
+    }
+}
+
+/// Where the model bytes live. Models are never bundled with EAK: the user points at their
+/// own library directory (for example a local copy of the KiCad 3D library).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ModelSource {
+    /// Absolute path of a file on this machine.
+    File { path: String },
+}
+
+/// Placement of a model relative to its footprint origin. Offset is in millimetres in
+/// footprint coordinates (x right, y down as in the PCB editor, z up from the mounting
+/// surface). Rotation is in degrees about the model's own x, y, z axes, applied as
+/// `Rz * Ry * Rx` (KiCad convention). Scale is per axis and must be positive.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ModelTransform {
+    pub offset_mm: [f64; 3],
+    pub rotation_deg: [f64; 3],
+    pub scale: [f64; 3],
+}
+
+impl Default for ModelTransform {
+    fn default() -> Self {
+        ModelTransform {
+            offset_mm: [0.0; 3],
+            rotation_deg: [0.0; 3],
+            scale: [1.0; 3],
+        }
+    }
+}
+
+/// How far a model is trusted. Declared by whoever attaches the model; EAK does not yet
+/// verify model geometry against the footprint, so `None` on a `ModelRef` means
+/// "unclassified" and the UI must never present such a model as exact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ModelQuality {
+    /// Published by the component manufacturer for this exact part.
+    VendorExact,
+    /// From a trusted library and checked against the footprint/package.
+    LibraryVerified,
+    /// Generated (for example from package dimensions) and validated against the footprint.
+    DerivedValidated,
+}
+
+/// Typed reference to a physical 3D model of a component, with its licence and provenance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ModelRef {
+    pub source: ModelSource,
+    pub format: ModelFormat,
+    /// Declared trust level; `None` = unclassified (shown as such, never as exact).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quality: Option<ModelQuality>,
+    #[serde(default)]
+    pub transform: ModelTransform,
+    /// SPDX identifier or free-text licence of the model file; `None` means not recorded.
+    #[serde(default)]
+    pub licence: Option<String>,
+    /// Where the model came from (library name, URL, author). Required.
+    pub provenance: String,
+}
+
+impl ModelRef {
+    /// Structural problems of the reference; empty when it is usable.
+    pub fn validate(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let ModelSource::File { path } = &self.source;
+        if path.trim().is_empty() {
+            out.push("3D model path is empty".to_string());
+        } else {
+            let ext = std::path::Path::new(path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+            if ModelFormat::from_extension(ext) != Some(self.format) {
+                out.push(format!(
+                    "3D model file extension does not match format {:?}",
+                    self.format
+                ));
+            }
+        }
+        let t = &self.transform;
+        if t.offset_mm
+            .iter()
+            .chain(t.rotation_deg.iter())
+            .any(|v| !v.is_finite())
+        {
+            out.push("3D model offset/rotation must be finite".to_string());
+        }
+        if t.scale.iter().any(|s| !s.is_finite() || *s <= 0.0) {
+            out.push("3D model scale must be positive and finite".to_string());
+        }
+        if self.provenance.trim().is_empty() {
+            out.push("3D model provenance is empty".to_string());
+        }
+        out
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Model3d {
-    /// Simple parametric body used when no external model is mapped.
+    /// Simple parametric body used when no external model is mapped (also the fallback when
+    /// the referenced model cannot be loaded).
     pub kind: String,
     pub color: String,
     #[serde(default)]
     pub external_ref: Option<String>,
+    /// Typed reference to a real 3D model; `None` means box body only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_ref: Option<ModelRef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -187,6 +311,11 @@ impl ComponentDef {
                 _ => {}
             }
         }
+        if let Some(m) = &self.model3d.model_ref {
+            for problem in m.validate() {
+                out.push(format!("{}: {problem}", self.id));
+            }
+        }
         for pin in self.pin_map.keys() {
             if self.pin(pin).is_none() {
                 out.push(format!(
@@ -219,6 +348,49 @@ impl ComponentDef {
         query
             .split_whitespace()
             .all(|t| hay.contains(&t.to_lowercase()))
+    }
+}
+
+#[cfg(test)]
+mod model_ref_tests {
+    use super::*;
+
+    fn good() -> ModelRef {
+        ModelRef {
+            source: ModelSource::File {
+                path: "/lib/R_0603.step".into(),
+            },
+            format: ModelFormat::Step,
+            quality: Some(ModelQuality::LibraryVerified),
+            transform: ModelTransform::default(),
+            licence: Some("CC-BY-SA-4.0".into()),
+            provenance: "user 3D library".into(),
+        }
+    }
+
+    #[test]
+    fn valid_reference_has_no_problems_and_round_trips() {
+        let m = good();
+        assert!(m.validate().is_empty());
+        let json = serde_json::to_string(&m).unwrap();
+        assert_eq!(serde_json::from_str::<ModelRef>(&json).unwrap(), m);
+    }
+
+    #[test]
+    fn rejects_mismatched_extension_bad_scale_and_missing_provenance() {
+        let mut m = good();
+        m.format = ModelFormat::Glb;
+        m.transform.scale = [1.0, 0.0, 1.0];
+        m.provenance = " ".into();
+        assert_eq!(m.validate().len(), 3);
+    }
+
+    #[test]
+    fn legacy_model3d_json_without_model_ref_still_loads() {
+        let m: Model3d =
+            serde_json::from_str(r##"{"kind":"box","color":"#000","external_ref":null}"##)
+                .unwrap();
+        assert!(m.model_ref.is_none());
     }
 }
 

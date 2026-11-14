@@ -240,11 +240,55 @@ pub fn component_def() -> Value {
         ],
         &["name", "value", "unit", "source", "verified"],
     );
+    let xyz = |desc: &str| array(number(desc), "three numbers: x, y, z");
+    let model_ref = obj(
+        &[
+            (
+                "source",
+                obj(
+                    &[
+                        ("kind", enumeration(&["file"], "model source kind")),
+                        ("path", string("absolute path of the model file")),
+                    ],
+                    &["kind", "path"],
+                ),
+            ),
+            (
+                "format",
+                enumeration(&["step", "wrl", "glb"], "model file format"),
+            ),
+            (
+                "quality",
+                nullable(enumeration(
+                    &["VENDOR_EXACT", "LIBRARY_VERIFIED", "DERIVED_VALIDATED"],
+                    "declared model trust level; omit when unclassified",
+                )),
+            ),
+            (
+                "transform",
+                obj(
+                    &[
+                        (
+                            "offset_mm",
+                            xyz("offset in footprint coordinates, millimetres"),
+                        ),
+                        ("rotation_deg", xyz("rotation about model x, y, z, degrees")),
+                        ("scale", xyz("positive per-axis scale")),
+                    ],
+                    &["offset_mm", "rotation_deg", "scale"],
+                ),
+            ),
+            ("licence", nullable(string("model licence, SPDX or text"))),
+            ("provenance", string("where the model came from")),
+        ],
+        &["source", "format", "provenance"],
+    );
     let model3d = obj(
         &[
             ("kind", string("parametric body kind")),
             ("color", string("body colour")),
             ("external_ref", nullable(string("external model reference"))),
+            ("model_ref", nullable(model_ref)),
         ],
         &["kind", "color"],
     );

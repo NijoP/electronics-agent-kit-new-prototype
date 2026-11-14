@@ -22,6 +22,10 @@ pub struct Body {
     pub sz: f64,
     pub kind: String,
     pub color: String,
+    /// Real 3D model reference from the library, if any; the box above is the fallback
+    /// and still carries the footprint-derived envelope.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<eak_core::ModelRef>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +77,7 @@ pub fn build(p: &Project) -> Scene {
                     sz: hz,
                     kind: def.model3d.kind.clone(),
                     color: def.model3d.color.clone(),
+                    model: def.model3d.model_ref.clone(),
                 });
             }
             None => missing.push(fp.refdes.clone()),

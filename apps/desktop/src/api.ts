@@ -86,6 +86,7 @@ export const IPC_COMMANDS = [
   "library_components",
   "library_search",
   "library_footprint_candidates",
+  "library_model_read",
   "domain_classification",
   "export_manufacturing",
   "connectivity",
@@ -124,6 +125,12 @@ export async function pickFolder(title: string): Promise<string | null> {
   return typeof r === "string" ? r : null;
 }
 
+/** Native file picker for a 3D model (STEP/WRL/GLB). Resolves to the absolute path, or null when cancelled. */
+export async function pickModelFile(title: string): Promise<string | null> {
+  const r = await openDialog({ directory: false, multiple: false, title, filters: [{ name: "3D model", extensions: ["step", "stp", "wrl", "glb"] }] });
+  return typeof r === "string" ? r : null;
+}
+
 export const api = {
   createProject: (path: string, name: string) => call<Snapshot>("create_project", { path, name }),
   openProject: (path: string, takeOverLock: boolean) =>
@@ -155,6 +162,8 @@ export const api = {
   libraryComponents: () => call<LibraryEntry[]>("library_components"),
   librarySearch: (query: string, category: string, source: string) => call<LibraryPart[]>("library_search", { query, category, source }),
   libraryFootprintCandidates: (componentId: string) => call<FootprintCandidate[]>("library_footprint_candidates", { component_id: componentId }),
+  /** Raw bytes of a component 3D model file (absolute path; .step/.stp/.wrl/.glb only). */
+  libraryModelRead: (path: string) => call<ArrayBuffer>("library_model_read", { path }),
   domainClassification: () => call<DomainReport>("domain_classification"),
   exportManufacturing: () => call<ExportResult>("export_manufacturing"),
   connectivity: () => call<ConnectivityReport>("connectivity"),

@@ -2,7 +2,7 @@
 // renders it and it is never electrical truth. Nothing is invented: a part without a body height in
 // its library definition is listed in `missing`, not drawn with a guessed height.
 import { layerColour, layerKey, layerName, stackLayers } from "../layers";
-import type { ComponentDef, CopperLayer, Point, Snapshot } from "../types";
+import type { ComponentDef, CopperLayer, ModelQuality, ModelRef, Point, Snapshot } from "../types";
 
 const MM = 1e6;
 const toMm = (nm: number) => nm / MM;
@@ -22,7 +22,17 @@ export interface SceneTrack { layer: string; ax: number; ay: number; bx: number;
 export interface ScenePad { layer: string; shape: "rect" | "circle" | "oval"; x: number; y: number; sx: number; sy: number }
 export interface SceneVia { x: number; y: number; diameter: number; drill: number; yTop: number; yBottom: number }
 export interface SceneZone { layer: string; outline: [number, number][] }
-export interface SceneBody { refdes: string; side: "top" | "bottom"; x: number; y: number; sx: number; sy: number; height: number }
+export interface SceneBody { footprintId: string; refdes: string; side: "top" | "bottom"; x: number; y: number; sx: number; sy: number; height: number }
+/** Every placed part and its library model reference (null = no model attached). */
+export interface ScenePart { footprintId: string; refdes: string; componentId: string; side: "top" | "bottom"; x: number; y: number; rotationDeg: number; model: ModelRef | null }
+
+/** Shown per part: a declared quality, UNCLASSIFIED (model attached, trust not declared) or MISSING (no usable model; any box is an approximation). */
+export type ModelStatus = ModelQuality | "UNCLASSIFIED" | "MISSING";
+export function modelStatus(model: ModelRef | null, loaded: boolean): ModelStatus {
+  if (!model || !loaded) return "MISSING";
+  return model.quality ?? "UNCLASSIFIED";
+}
+
 export interface SceneCourtyard { side: "top" | "bottom"; x: number; y: number; hw: number; hh: number }
 
 export interface BoardScene {
@@ -34,6 +44,7 @@ export interface BoardScene {
   vias: SceneVia[];
   zones: SceneZone[];
   bodies: SceneBody[];
+  parts: ScenePart[];
   courtyards: SceneCourtyard[];
   /** Reference designators whose library definition has no body height (not drawn). */
   missing: string[];
@@ -41,6 +52,7 @@ export interface BoardScene {
   bounds: [number, number, number, number];
 }
 
+const rotDeg = (r: unknown) => ({ R90: 90, R180: 180, R270: 270 } as Record<string, number>)[String(r)] ?? 0;
 const pt = (p: Point): [number, number] => [toMm(p.x), toMm(p.y)];
 
 /** Centre heights per copper layer: outer layers sit on the surfaces, inner ones are spread evenly. */
@@ -83,6 +95,7 @@ export function buildScene(s: Snapshot): BoardScene {
   const bodies: SceneBody[] = [];
   const courtyards: SceneCourtyard[] = [];
   const missing: string[] = [];
+  const parts: ScenePart[] = [];
   for (const fp of s.geometry.footprints) {
     const [cx, cy] = pt(fp.position);
     courtyards.push({ side: fp.side, x: cx, y: cy, hw: toMm(fp.half_w), hh: toMm(fp.half_h) });
@@ -97,13 +110,15 @@ export function buildScene(s: Snapshot): BoardScene {
     }
     const inst = p.pcb.footprints[fp.id];
     const def = inst ? (p.library?.[inst.component_id] as unknown as ComponentDef | undefined) : undefined;
+    const model = (def as unknown as { model3d?: { model_ref?: ModelRef | null } } | undefined)?.model3d?.model_ref ?? null;
+    parts.push({ footprintId: fp.id, refdes: fp.refdes, componentId: inst?.component_id ?? "", side: fp.side, x: cx, y: cy, rotationDeg: rotDeg(inst?.rotation), model });
     const h = def?.footprint?.body_height;
     if (h == null || h <= 0) {
       missing.push(fp.refdes);
       continue;
     }
     // Body footprint approximated as 85 % of the courtyard (same rule as eak-engineering scene3d).
-    bodies.push({ refdes: fp.refdes, side: fp.side, x: cx, y: cy, sx: toMm(fp.half_w) * 2 * 0.85, sy: toMm(fp.half_h) * 2 * 0.85, height: toMm(h) });
+    bodies.push({ footprintId: fp.id, refdes: fp.refdes, side: fp.side, x: cx, y: cy, sx: toMm(fp.half_w) * 2 * 0.85, sy: toMm(fp.half_h) * 2 * 0.85, height: toMm(h) });
   }
 
   const vias: SceneVia[] = Object.values(p.pcb.vias).map((v) => {
@@ -140,5 +155,5 @@ export function buildScene(s: Snapshot): BoardScene {
     });
   }
   const bounds: [number, number, number, number] = xs.length ? [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] : [0, 0, 10, 10];
-  return { outline, thickness, layers, tracks, pads, vias, zones, bodies, courtyards, missing, bounds };
+  return { outline, thickness, layers, tracks, pads, vias, zones, bodies, parts, courtyards, missing, bounds };
 }

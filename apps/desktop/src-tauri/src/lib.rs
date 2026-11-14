@@ -709,6 +709,34 @@ pub struct FootprintCandidate {
     pub pin_map: std::collections::BTreeMap<String, Vec<String>>,
 }
 
+/// Largest 3D model file the viewer will load (guards the IPC channel and the WASM heap).
+const MAX_MODEL_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Raw bytes of a user-chosen 3D model file (`.step`/`.stp`/`.wrl`/`.glb`). The path is the
+/// one stored in the component's `ModelRef`; only an absolute path with a model extension
+/// is read, so this cannot be used to read arbitrary project or system files.
+pub fn read_model_file(path: &str) -> Result<Vec<u8>, String> {
+    let p = Path::new(path);
+    if !p.is_absolute() {
+        return Err("3D model path must be absolute".into());
+    }
+    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if eak_core::ModelFormat::from_extension(ext).is_none() {
+        return Err("not a supported 3D model file (.step, .stp, .wrl, .glb)".into());
+    }
+    let meta = std::fs::metadata(p).map_err(|e| format!("cannot read 3D model: {e}"))?;
+    if !meta.is_file() {
+        return Err("3D model path is not a file".into());
+    }
+    if meta.len() > MAX_MODEL_BYTES {
+        return Err(format!(
+            "3D model is larger than {} MiB",
+            MAX_MODEL_BYTES / 1024 / 1024
+        ));
+    }
+    std::fs::read(p).map_err(|e| format!("cannot read 3D model: {e}"))
+}
+
 /// Footprints of other library parts whose pin map fits `component_id`'s symbol pins.
 pub fn footprint_candidates(
     s: &Session,
@@ -794,13 +822,14 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 49] = [
+pub const IPC_COMMANDS: [&str; 50] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
     "ai_rollback",
     "library_search",
     "library_footprint_candidates",
+    "library_model_read",
     "simulation_status",
     "run_simulation",
     "connectivity",
@@ -947,6 +976,12 @@ pub mod cmd {
         super::footprint_candidates(&state, &component_id)
     }
 
+    /// Bytes of a component's 3D model file, returned as a raw binary IPC response.
+    #[tauri::command(async, rename_all = "snake_case")]
+    pub fn library_model_read(path: String) -> Result<tauri::ipc::Response, String> {
+        super::read_model_file(&path).map(tauri::ipc::Response::new)
+    }
+
     #[tauri::command(async, rename_all = "snake_case")]
     pub fn simulation_status(state: State<'_, Session>) -> Result<SimulationStatus, String> {
         super::simulation_status(&state)
@@ -1066,6 +1101,7 @@ pub fn run() {
             cmd::library_components,
             cmd::library_search,
             cmd::library_footprint_candidates,
+            cmd::library_model_read,
             cmd::connectivity,
             cmd::simulation_status,
             cmd::run_simulation,

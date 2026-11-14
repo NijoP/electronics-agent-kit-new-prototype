@@ -5,8 +5,39 @@
 // `ImportLibraryComponent`). Placing arms the schematic place tool (`PlaceSymbol`).
 // The UI keeps no library model of its own: every list comes from the engine.
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../api";
-import type { Command, ComponentDef, FootprintCandidate, FootprintDef, LibraryPart } from "../types";
+import { api, pickModelFile } from "../api";
+import type { Command, ComponentDef, FootprintCandidate, FootprintDef, LibraryPart, ModelFormat, ModelQuality, ModelRef } from "../types";
+
+const FORMAT_BY_EXT: Record<string, ModelFormat> = { step: "step", stp: "step", wrl: "wrl", glb: "glb" };
+const formatOf = (path: string): ModelFormat | null => FORMAT_BY_EXT[path.split(".").pop()?.toLowerCase() ?? ""] ?? null;
+const QUALITIES: { value: ModelQuality | ""; label: string }[] = [
+  { value: "", label: "Not declared (shown as unclassified)" },
+  { value: "VENDOR_EXACT", label: "Vendor exact" },
+  { value: "LIBRARY_VERIFIED", label: "Library verified" },
+  { value: "DERIVED_VALIDATED", label: "Derived, validated" },
+];
+type Xyz = [string, string, string];
+interface ModelForm { path: string; quality: ModelQuality | ""; licence: string; provenance: string; offset: Xyz; rotation: Xyz; scale: Xyz }
+const emptyModelForm = (): ModelForm => ({ path: "", quality: "", licence: "", provenance: "", offset: ["0", "0", "0"], rotation: ["0", "0", "0"], scale: ["1", "1", "1"] });
+const modelFormOf = (m: ModelRef | null | undefined): ModelForm =>
+  m
+    ? { path: m.source.path, quality: m.quality ?? "", licence: m.licence ?? "", provenance: m.provenance, offset: m.transform.offset_mm.map(String) as Xyz, rotation: m.transform.rotation_deg.map(String) as Xyz, scale: m.transform.scale.map(String) as Xyz }
+    : emptyModelForm();
+const nums = (v: Xyz): [number, number, number] | null => {
+  const n = v.map((s) => (s.trim() === "" ? NaN : Number(s)));
+  return n.every(Number.isFinite) ? (n as [number, number, number]) : null;
+};
+/** The reference described by the form, or the reason it cannot be attached yet. */
+export function modelRefFromForm(f: ModelForm): { ref: ModelRef } | { problem: string } {
+  const format = formatOf(f.path);
+  if (!f.path.trim()) return { problem: "Choose a model file." };
+  if (!format) return { problem: "Use a .step, .stp, .wrl or .glb file." };
+  if (!f.provenance.trim()) return { problem: "Record where the model came from (provenance)." };
+  const offset = nums(f.offset), rotation = nums(f.rotation), scale = nums(f.scale);
+  if (!offset || !rotation || !scale) return { problem: "Offset, rotation and scale must be numbers." };
+  if (scale.some((s) => s <= 0)) return { problem: "Scale must be positive." };
+  return { ref: { source: { kind: "file", path: f.path.trim() }, format, quality: f.quality || null, transform: { offset_mm: offset, rotation_deg: rotation, scale }, licence: emptyToNull(f.licence), provenance: f.provenance.trim() } };
+}
 
 const NM_PER_MM = 1_000_000;
 const mm = (nm: number) => nm / NM_PER_MM;
@@ -76,6 +107,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
   const [form, setForm] = useState({ manufacturer: "", mpn: "", lcsc: "", datasheet: "" });
   const [candidates, setCandidates] = useState<FootprintCandidate[]>([]);
   const [fpChoice, setFpChoice] = useState("");
+  const [mf, setMf] = useState<ModelForm>(emptyModelForm);
 
   useEffect(() => {
     let live = true;
@@ -109,6 +141,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
     if (!sel) return;
     setForm({ manufacturer: sel.def.manufacturer ?? "", mpn: sel.def.mpn ?? "", lcsc: sel.def.lcsc ?? "", datasheet: sel.def.datasheet ?? "" });
     setFpChoice("");
+    setMf(modelFormOf(sel.def.model3d?.model_ref));
     let live = true;
     api
       .libraryFootprintCandidates(sel.id)
@@ -133,6 +166,23 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
     const c = candidates.find((x) => x.name === fpChoice);
     if (sel && c) void execute({ type: "AssignComponentFootprint", component_id: sel.id, footprint: c.footprint, pin_map: c.pin_map });
   };
+  const modelCheck = modelRefFromForm(mf);
+  const withModel = (ref: ModelRef | null): Command | null =>
+    sel ? { type: "UpsertComponentDefinition", definition: { ...sel.def, model3d: { kind: "box", color: "#808080", external_ref: null, ...sel.def.model3d, model_ref: ref } } } : null;
+  const attachModel = () => {
+    const c = "ref" in modelCheck ? withModel(modelCheck.ref) : null;
+    if (c) void execute(c);
+  };
+  const removeModel = () => {
+    const c = withModel(null);
+    if (c) void execute(c);
+  };
+  const browseModel = async () => {
+    const p = await pickModelFile("Choose a 3D model (STEP, WRL or GLB)");
+    if (p) setMf((f) => ({ ...f, path: p }));
+  };
+  const setXyz = (k: "offset" | "rotation" | "scale", i: number, v: string) =>
+    setMf((f) => ({ ...f, [k]: f[k].map((x, j) => (j === i ? v : x)) as Xyz }));
   const dirty = sel && (form.manufacturer !== (sel.def.manufacturer ?? "") || form.mpn !== (sel.def.mpn ?? "") || form.lcsc !== (sel.def.lcsc ?? "") || form.datasheet !== (sel.def.datasheet ?? ""));
 
   return (
@@ -190,7 +240,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
             <dt>Provenance</dt>
             <dd data-testid="lib-provenance">{sel.def.provenance}</dd>
             <dt>Licence</dt>
-            <dd className="muted">Not recorded by the library model (no licence field in EAK-IR yet).</dd>
+            <dd className="muted">{sel.def.model3d?.model_ref ? `3D model: ${sel.def.model3d.model_ref.licence ?? "not recorded"}. ` : ""}Part definition licence is not recorded by the library model.</dd>
             <dt>Ratings</dt>
             <dd>{sel.def.ratings.length === 0 ? "none" : `${sel.def.ratings.length - sel.unverified_ratings} verified, ${sel.unverified_ratings} unverified`}</dd>
           </dl>
@@ -235,9 +285,48 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
                 </div>
               )}
               <p className="muted">Refused while PCB footprints of this part exist.</p>
+              <h3>3D model</h3>
+              <p className="muted">Models are not bundled: point at a file in your own library (for example a local KiCad 3D library). Without a model the viewer draws an approximate box and marks the part as missing.</p>
+              <label className="field">
+                <span>Model file</span>
+                <input aria-label="3D model path" value={mf.path} onChange={(e) => setMf({ ...mf, path: e.target.value })} placeholder="Absolute path to .step, .stp, .wrl or .glb" />
+              </label>
+              <button type="button" onClick={() => void browseModel()}>Browse…</button>
+              <label className="field">
+                <span>Quality</span>
+                <select aria-label="3D model quality" value={mf.quality} onChange={(e) => setMf({ ...mf, quality: e.target.value as ModelQuality | "" })}>
+                  {QUALITIES.map((q) => (
+                    <option key={q.value} value={q.value}>{q.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Licence</span>
+                <input aria-label="3D model licence" value={mf.licence} onChange={(e) => setMf({ ...mf, licence: e.target.value })} placeholder="e.g. CC-BY-SA-4.0" />
+              </label>
+              <label className="field">
+                <span>Provenance</span>
+                <input aria-label="3D model provenance" value={mf.provenance} onChange={(e) => setMf({ ...mf, provenance: e.target.value })} placeholder="Library, URL or author" />
+              </label>
+              {([["offset", "Offset mm (x, y, z)"], ["rotation", "Rotation deg (x, y, z)"], ["scale", "Scale (x, y, z)"]] as const).map(([k, label]) => (
+                <div key={k} className="row">
+                  <span>{label}</span>
+                  {[0, 1, 2].map((i) => (
+                    <input key={i} aria-label={`3D model ${k} ${"xyz"[i]}`} size={5} value={mf[k][i]} onChange={(e) => setXyz(k, i, e.target.value)} />
+                  ))}
+                </div>
+              ))}
+              {"problem" in modelCheck && <p className="muted">{modelCheck.problem}</p>}
+              <div className="row">
+                <button type="button" disabled={busy || !("ref" in modelCheck)} onClick={attachModel}>{sel.def.model3d?.model_ref ? "Update 3D model" : "Attach 3D model"}</button>
+                {sel.def.model3d?.model_ref && <button type="button" disabled={busy} onClick={removeModel}>Remove 3D model</button>}
+              </div>
             </>
           ) : (
+            <>
+              <p data-testid="lib-model-readonly" className="muted">3D model: {sel.def.model3d?.model_ref ? `${sel.def.model3d.model_ref.format.toUpperCase()} · ${sel.def.model3d.model_ref.quality ?? "quality not declared"} · ${sel.def.model3d.model_ref.provenance}` : "none (approximate box)"}</p>
             <p className="muted">Add the part to the project to edit its properties or footprint.</p>
+            </>
           )}
         </section>
       )}

@@ -1,6 +1,6 @@
 // Unrun (no builds or tests during the testing freeze): scene builder for the 3D viewer.
 import { describe, expect, it } from "vitest";
-import { buildScene, layerHeights } from "./scene";
+import { buildScene, layerHeights, modelStatus } from "./scene";
 import type { Snapshot } from "../types";
 
 const MM = 1_000_000;
@@ -34,6 +34,17 @@ describe("buildScene", () => {
     const sc = buildScene(snap({}, null));
     expect(sc.bodies).toHaveLength(0);
     expect(sc.missing).toEqual(["R1"]);
+  });
+  it("reports every part with its model reference and a MISSING status when none loaded", () => {
+    const ref = { source: { kind: "file" as const, path: "/m/r.step" }, format: "step" as const, transform: { offset_mm: [0, 0, 0] as [number, number, number], rotation_deg: [0, 0, 0] as [number, number, number], scale: [1, 1, 1] as [number, number, number] }, licence: null, provenance: "p" };
+    const s = snap();
+    (s.project.library as Record<string, unknown>).c1 = { footprint: { body_height: 1_000_000 }, model3d: { kind: "box", color: "#000", external_ref: null, model_ref: ref } };
+    const sc = buildScene(s);
+    expect(sc.parts[0]).toMatchObject({ footprintId: "f1", componentId: "c1", rotationDeg: 0, model: ref });
+    expect(modelStatus(sc.parts[0].model, false)).toBe("MISSING");
+    expect(modelStatus(ref, true)).toBe("UNCLASSIFIED");
+    expect(modelStatus({ ...ref, quality: "VENDOR_EXACT" }, true)).toBe("VENDOR_EXACT");
+    expect(modelStatus(null, true)).toBe("MISSING");
   });
   it("places outer copper on the surfaces and inner copper inside", () => {
     const ls = layerHeights(["top", { inner: 1 }, { inner: 2 }, "bottom"], 1.6, [0.035, 0.035, 0.035, 0.035]);

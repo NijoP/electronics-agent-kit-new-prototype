@@ -116,6 +116,7 @@ fn two_pin(
             kind: model.0.into(),
             color: model.1.into(),
             external_ref: None,
+            model_ref: None,
         },
         provenance: GENERIC.into(),
     }
@@ -262,6 +263,7 @@ fn header_1xn(n: usize) -> ComponentDef {
             kind: "header".into(),
             color: "#151515".into(),
             external_ref: None,
+            model_ref: None,
         },
         provenance: GENERIC.into(),
     }
@@ -313,6 +315,7 @@ fn sot23_transistor(
             kind: "box".into(),
             color: "#1a1a1a".into(),
             external_ref: None,
+            model_ref: None,
         },
         provenance: format!(
             "{GENERIC}; pinout {}/{}/{} is the most common SOT-23 assignment, check the chosen part",
@@ -362,6 +365,7 @@ pub fn components() -> Vec<ComponentDef> {
             kind: "header".into(),
             color: "#151515".into(),
             external_ref: None,
+            model_ref: None,
         },
         provenance: GENERIC.into(),
     });
@@ -407,7 +411,12 @@ pub fn components() -> Vec<ComponentDef> {
             unverified("output_current_max", 1.0, "A"),
             unverified("dropout_voltage", 1.3, "V"),
         ],
-        model3d: Model3d { kind: "box".into(), color: "#2a2a2a".into(), external_ref: None },
+        model3d: Model3d {
+            kind: "box".into(),
+            color: "#2a2a2a".into(),
+            external_ref: None,
+            model_ref: None,
+        },
         provenance: "Pinout from widely published AMS1117 datasheet; land pattern generic; LCSC part number from public catalogue listing, not re-verified in this build".into(),
     });
 
@@ -452,7 +461,12 @@ pub fn components() -> Vec<ComponentDef> {
             body_height: Some(mm(1.75)),
         },
         ratings: vec![unverified("supply_voltage_max", 5.5, "V")],
-        model3d: Model3d { kind: "box".into(), color: "#1a1a1a".into(), external_ref: None },
+        model3d: Model3d {
+            kind: "box".into(),
+            color: "#1a1a1a".into(),
+            external_ref: None,
+            model_ref: None,
+        },
         provenance: "Pinout from Microchip ATtiny25/45/85 datasheet (as commonly published); land pattern generic".into(),
     });
 
@@ -594,6 +608,7 @@ pub fn components() -> Vec<ComponentDef> {
             kind: "box".into(),
             color: "#1a1a1a".into(),
             external_ref: None,
+            model_ref: None,
         },
         provenance: format!(
             "{GENERIC}; pinout is the common SOT-23-5 LDO assignment, check the chosen part"
@@ -641,6 +656,7 @@ pub fn components() -> Vec<ComponentDef> {
             kind: "box".into(),
             color: "#c0c0c0".into(),
             external_ref: None,
+            model_ref: None,
         },
         provenance: GENERIC.into(),
     });
@@ -688,6 +704,7 @@ pub fn components() -> Vec<ComponentDef> {
             kind: "box".into(),
             color: "#c0c0c0".into(),
             external_ref: None,
+            model_ref: None,
         },
         provenance: format!("{GENERIC}; pad assignment is the common 3225 4-pad layout"),
     });
@@ -737,6 +754,7 @@ pub fn components() -> Vec<ComponentDef> {
             kind: "box".into(),
             color: "#303030".into(),
             external_ref: None,
+            model_ref: None,
         },
         provenance: format!(
             "{GENERIC}; internal pairing is the common 6x6 mm tactile arrangement, check the chosen part"
@@ -789,6 +807,7 @@ fn model(color: &str) -> Model3d {
         kind: "box".into(),
         color: color.into(),
         external_ref: None,
+        model_ref: None,
     }
 }
 

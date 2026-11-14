@@ -70,7 +70,7 @@ describe("LibraryPanel", () => {
     expect(screen.getByRole("img", { name: /Symbol preview of Resistor 0603/ })).toBeTruthy();
     expect(screen.getByRole("img", { name: /Footprint preview of R_0603/ })).toBeTruthy();
     expect(screen.getByTestId("lib-provenance").textContent).toBe("Generic EAK land pattern; not datasheet-verified");
-    expect(screen.getByText(/no licence field/i)).toBeTruthy();
+    expect(screen.getByText(/licence is not recorded/i)).toBeTruthy();
   });
 
   it("places through the place tool, imports through ImportLibraryComponent", async () => {
@@ -93,6 +93,21 @@ describe("LibraryPanel", () => {
     fireEvent.change(screen.getByLabelText("LCSC id"), { target: { value: "C25804" } });
     fireEvent.click(save);
     expect(execute).toHaveBeenCalledWith({ type: "SetComponentProperties", component_id: "R_0603", manufacturer: "Yageo", mpn: "RC0603FR-0710KL", lcsc: "C25804", datasheet: null });
+  });
+
+  it("attaches a 3D model through UpsertComponentDefinition and refuses without provenance", async () => {
+    const { execute } = mount();
+    fireEvent.click(await screen.findByText("Resistor 0603"));
+    const attach = screen.getByRole("button", { name: "Attach 3D model" }) as HTMLButtonElement;
+    fireEvent.change(screen.getByLabelText("3D model path"), { target: { value: "/lib/R_0603.step" } });
+    expect(attach.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("3D model provenance"), { target: { value: "user 3D library" } });
+    fireEvent.change(screen.getByLabelText("3D model quality"), { target: { value: "LIBRARY_VERIFIED" } });
+    fireEvent.change(screen.getByLabelText("3D model rotation z"), { target: { value: "90" } });
+    fireEvent.click(attach);
+    const c = execute.mock.calls[0][0] as { type: string; definition: { model3d: { model_ref: Record<string, unknown> } } };
+    expect(c.type).toBe("UpsertComponentDefinition");
+    expect(c.definition.model3d.model_ref).toMatchObject({ source: { kind: "file", path: "/lib/R_0603.step" }, format: "step", quality: "LIBRARY_VERIFIED", provenance: "user 3D library", transform: { rotation_deg: [0, 0, 90] } });
   });
 
   it("assigns a validated footprint candidate through AssignComponentFootprint", async () => {

@@ -185,6 +185,7 @@ export interface Snapshot {
 /** Argument-free engine commands offered by the command palette (eak-runtime `Command`). */
 export type Command =
   | { type: "ImportLibraryComponent"; component_id: string }
+  | { type: "UpsertComponentDefinition"; definition: ComponentDef }
   | { type: "SetComponentProperties"; component_id: string; manufacturer: string | null; mpn: string | null; lcsc: string | null; datasheet: string | null }
   | { type: "AssignComponentFootprint"; component_id: string; footprint: FootprintDef; pin_map: Record<string, string[]> }
   | { type: "PlaceSymbol"; sheet_id: Id | null; component_id: string; position: Point; rotation: Rotation; refdes: string | null; value: string | null }
@@ -662,7 +663,33 @@ export interface ComponentDef {
   footprint: FootprintDef;
   pin_map: Record<string, string[]>;
   ratings: Rating[];
+  /** Box-body style and optional real 3D model reference (optional only in test fixtures). */
+  model3d?: Model3d;
   provenance: string;
+}
+export type ModelFormat = "step" | "wrl" | "glb";
+/** Offset (mm, footprint coordinates: x right, y down, z up), rotation (deg about model x/y/z, Rz*Ry*Rx), scale (> 0). */
+export interface ModelTransform {
+  offset_mm: [number, number, number];
+  rotation_deg: [number, number, number];
+  scale: [number, number, number];
+}
+/** Mirrors `eak_core::ModelRef`. */
+export type ModelQuality = "VENDOR_EXACT" | "LIBRARY_VERIFIED" | "DERIVED_VALIDATED";
+export interface ModelRef {
+  source: { kind: "file"; path: string };
+  format: ModelFormat;
+  /** Declared trust level; absent = unclassified (never shown as exact). */
+  quality?: ModelQuality | null;
+  transform: ModelTransform;
+  licence: string | null;
+  provenance: string;
+}
+export interface Model3d {
+  kind: string;
+  color: string;
+  external_ref: string | null;
+  model_ref?: ModelRef | null;
 }
 /** A part as listed by `library_search` (built-in catalogue merged with the project library). */
 export interface LibraryPart {

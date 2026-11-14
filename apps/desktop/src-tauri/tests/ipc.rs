@@ -690,3 +690,17 @@ fn route_step_result_commits_as_one_batch_and_undoes_in_one_step() {
     close_project(&s).unwrap();
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn model_file_read_is_limited_to_absolute_model_files() {
+    let d = tmpdir("model_read");
+    std::fs::create_dir_all(&d).unwrap();
+    let step = d.join("r.step");
+    std::fs::write(&step, b"ISO-10303-21;").unwrap();
+    assert_eq!(read_model_file(&path(&step)).unwrap(), b"ISO-10303-21;");
+    let txt = d.join("secret.txt");
+    std::fs::write(&txt, b"x").unwrap();
+    assert!(read_model_file(&path(&txt)).is_err());
+    assert!(read_model_file("r.step").is_err());
+    assert!(read_model_file(&path(&d.join("missing.step"))).is_err());
+}

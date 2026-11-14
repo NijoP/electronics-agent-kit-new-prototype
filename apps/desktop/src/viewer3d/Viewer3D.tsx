@@ -8,12 +8,16 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { api } from "../api";
 import type { Snapshot } from "../types";
-import { buildScene, type BoardScene } from "./scene";
+import { buildScene, modelStatus, type BoardScene, type ModelStatus } from "./scene";
+import { loadModel, modelKey } from "./modelLoader";
+import { modelToWorld } from "./modelTransform";
 
 interface Props {
   projectId: string | null;
   revision: number | null;
   active: boolean;
+  /** Called with the PCB footprint id when a part is clicked (selection maps to the engineering component). */
+  onSelect?: (footprintId: string) => void;
 }
 
 type Preset = "top" | "bottom" | "iso";
@@ -21,6 +25,7 @@ type Preset = "top" | "bottom" | "iso";
 /** Layer-group keys beyond the copper layers. */
 const GROUPS = [
   { key: "board", label: "Board" },
+  { key: "models", label: "3D models" },
   { key: "bodies-top", label: "Top bodies" },
   { key: "bodies-bottom", label: "Bottom bodies" },
   { key: "outline-top", label: "Top courtyards" },
@@ -60,7 +65,7 @@ function instanced(geo: THREE.BufferGeometry, color: number | string, items: num
 }
 
 /** Build the three.js groups, keyed by visibility group. PCB (x, y) maps to world (X, Z); Y is up. */
-export function buildGroups(sc: BoardScene): Map<string, THREE.Group> {
+export function buildGroups(sc: BoardScene, modelled: ReadonlySet<string> = new Set()): Map<string, THREE.Group> {
   const groups = new Map<string, THREE.Group>();
   const group = (key: string) => {
     let g = groups.get(key);
@@ -114,9 +119,13 @@ export function buildGroups(sc: BoardScene): Map<string, THREE.Group> {
   for (const side of ["top", "bottom"] as const) {
     const edge = side === "top" ? topCu.y + topCu.thickness / 2 : botCu.y - botCu.thickness / 2;
     const dir = side === "top" ? 1 : -1;
-    const bodies = sc.bodies.filter((b) => b.side === side).map((b) => [b.x, edge + (dir * b.height) / 2, b.y, b.sx, b.height, b.sy, 0]);
+    const sideBodies = sc.bodies.filter((b) => b.side === side && !modelled.has(b.footprintId));
+    const bodies = sideBodies.map((b) => [b.x, edge + (dir * b.height) / 2, b.y, b.sx, b.height, b.sy, 0]);
     const m = instanced(box, MAT.body, bodies);
-    if (m) group(`bodies-${side}`).add(m);
+    if (m) {
+      m.userData.ids = sideBodies.map((b) => b.footprintId);
+      group(`bodies-${side}`).add(m);
+    }
     // Courtyard rectangles stand in for silkscreen outlines (the IR has no silkscreen artwork yet).
     const seg: number[] = [];
     for (const c of sc.courtyards.filter((cy) => cy.side === side)) {
@@ -133,15 +142,39 @@ export function buildGroups(sc: BoardScene): Map<string, THREE.Group> {
   return groups;
 }
 
-export function Viewer3D({ projectId, revision, active }: Props) {
+const STATUS_TEXT: Record<ModelStatus, string> = {
+  VENDOR_EXACT: "Vendor exact",
+  LIBRARY_VERIFIED: "Library verified",
+  DERIVED_VALIDATED: "Derived, validated",
+  UNCLASSIFIED: "Model attached, quality not declared",
+  MISSING: "Missing",
+};
+
+/** Footprint id of whatever a ray hit: a placed model or an instanced box body. */
+function hitFootprint(h: THREE.Intersection): string | null {
+  for (let o: THREE.Object3D | null = h.object; o; o = o.parent) {
+    if (typeof o.userData.footprintId === "string") return o.userData.footprintId;
+    const ids = o.userData.ids as string[] | undefined;
+    if (ids && h.instanceId != null) return ids[h.instanceId] ?? null;
+  }
+  return null;
+}
+
+export function Viewer3D({ projectId, revision, active, onSelect }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const three = useRef<{
     camera: THREE.PerspectiveCamera;
     controls: OrbitControls;
     render: () => void;
     content: THREE.Group;
+    /** Placed real models. Instances share the cache's geometry, so this group is never disposed per rebuild. */
+    models: THREE.Group;
     groups: Map<string, THREE.Group>;
   } | null>(null);
+  const [loads, setLoads] = useState<Record<string, { ok: boolean; error?: string }>>({});
+  const [selected, setSelected] = useState<string | null>(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [webgl, setWebgl] = useState(true);
@@ -152,6 +185,16 @@ export function Viewer3D({ projectId, revision, active }: Props) {
   const fitted = useRef<string | null>(null);
 
   const scene = useMemo(() => (snapshot ? buildScene(snapshot) : null), [snapshot]);
+  /** Footprint ids whose real model loaded (comma-joined so it works as an effect dependency). */
+  const modelled = useMemo(
+    () =>
+      Object.entries(loads)
+        .filter(([, v]) => v.ok)
+        .map(([k]) => k)
+        .sort()
+        .join(","),
+    [loads],
+  );
 
   // Live update: re-read the active project's snapshot when it changes (only while this view is shown).
   useEffect(() => {
@@ -199,6 +242,8 @@ export function Viewer3D({ projectId, revision, active }: Props) {
     sc.add(fill);
     const content = new THREE.Group();
     sc.add(content);
+    const models = new THREE.Group();
+    sc.add(models);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = false;
     controls.screenSpacePanning = true;
@@ -227,9 +272,34 @@ export function Viewer3D({ projectId, revision, active }: Props) {
     const ro = new ResizeObserver(resize);
     ro.observe(el);
     resize();
-    three.current = { camera, controls, render, content, groups: new Map() };
+    // Click (not drag) selects the part under the cursor; the id is the PCB footprint id.
+    const ray = new THREE.Raycaster();
+    let down: [number, number] | null = null;
+    const dom = renderer.domElement;
+    const onDown = (e: PointerEvent) => {
+      down = [e.clientX, e.clientY];
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
+      const r = dom.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+      for (const h of ray.intersectObjects([models, content], true)) {
+        const id = hitFootprint(h);
+        if (id) {
+          setSelected(id);
+          onSelectRef.current?.(id);
+          return;
+        }
+      }
+    };
+    dom.addEventListener("pointerdown", onDown);
+    dom.addEventListener("pointerup", onUp);
+    three.current = { camera, controls, render, content, models, groups: new Map() };
     setReady(true);
     return () => {
+      dom.removeEventListener("pointerdown", onDown);
+      dom.removeEventListener("pointerup", onUp);
+      models.clear();
       ro.disconnect();
       controls.dispose();
       disposeGroup(content);
@@ -266,7 +336,8 @@ export function Viewer3D({ projectId, revision, active }: Props) {
     if (!t || !scene) return;
     t.content.clear();
     t.groups.forEach(disposeGroup);
-    const groups = buildGroups(scene);
+    // A box is replaced only by a model that actually loaded; otherwise the approximation stays.
+    const groups = buildGroups(scene, new Set(modelled.split(",").filter(Boolean)));
     groups.forEach((g, k) => {
       g.visible = !hiddenRef.current.has(k);
       t.content.add(g);
@@ -277,6 +348,53 @@ export function Viewer3D({ projectId, revision, active }: Props) {
       preset("iso", scene);
     } else t.render();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene, ready, modelled]);
+
+  // Real 3D models: loaded lazily through the cache (keyed by model file, not by revision or
+  // transform), then placed with the one ECAD -> viewer transform. Instances are cheap clones.
+  useEffect(() => {
+    const t = three.current;
+    if (!t || !scene) return;
+    let cancelled = false;
+    t.models.clear();
+    const topCu = scene.layers[0];
+    const botCu = scene.layers[scene.layers.length - 1];
+    const results: Record<string, { ok: boolean; error?: string }> = {};
+    void Promise.all(
+      scene.parts
+        .filter((p) => p.model)
+        .map(async (p) => {
+          const ref = p.model!;
+          try {
+            const template = await loadModel(ref, api.libraryModelRead);
+            if (cancelled) return;
+            const obj = template.clone(true);
+            obj.matrixAutoUpdate = false;
+            obj.matrix.fromArray(
+              modelToWorld(ref.transform, {
+                x: p.x,
+                y: p.y,
+                rotationDeg: p.rotationDeg,
+                side: p.side,
+                surfaceY: p.side === "top" ? topCu.y + topCu.thickness / 2 : botCu.y - botCu.thickness / 2,
+              }),
+            );
+            obj.userData.footprintId = p.footprintId;
+            t.models.add(obj);
+            results[p.footprintId] = { ok: true };
+          } catch (e) {
+            results[p.footprintId] = { ok: false, error: e instanceof Error ? e.message : String(e) };
+          }
+        }),
+    ).then(() => {
+      if (cancelled) return;
+      t.models.visible = !hiddenRef.current.has("models");
+      setLoads(results);
+      t.render();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [scene, ready]);
 
   // Layer visibility.
@@ -286,6 +404,7 @@ export function Viewer3D({ projectId, revision, active }: Props) {
     t.groups.forEach((g, k) => {
       g.visible = !hidden.has(k);
     });
+    t.models.visible = !hidden.has("models");
     t.render();
   }, [hidden]);
 
@@ -336,8 +455,28 @@ export function Viewer3D({ projectId, revision, active }: Props) {
                 Board {scene.thickness.toFixed(2)} mm, {scene.layers.length} copper layer{scene.layers.length === 1 ? "" : "s"}.
               </div>
               {scene.outline.length < 3 && <div>No board outline set: the board slab is not drawn.</div>}
-              <div>Bodies are boxes from footprint courtyard and library body height; courtyard outlines stand in for silkscreen; zone fills are not computed (outline only).</div>
-              {scene.missing.length > 0 && <div>No body height in the library, not drawn: {scene.missing.join(", ")}.</div>}
+              <div>Parts without a loaded model are approximate boxes from the footprint courtyard and library body height; courtyard outlines stand in for silkscreen; zone fills are not computed (outline only).</div>
+              {scene.missing.length > 0 && <div>No body height in the library, no box drawn: {scene.missing.join(", ")}.</div>}
+            </div>
+          )}
+          {scene && scene.parts.length > 0 && (
+            <div className="v3d-models" aria-label="3D model quality">
+              <strong>Models</strong>
+              <ul>
+                {scene.parts.map((p) => {
+                  const st = modelStatus(p.model, loads[p.footprintId]?.ok === true);
+                  const why = st === "MISSING" ? (p.model ? loads[p.footprintId]?.error ?? "loading…" : "no model attached; box is an approximation") : null;
+                  return (
+                    <li key={p.footprintId} className={p.footprintId === selected ? "on" : ""}>
+                      <button type="button" aria-pressed={p.footprintId === selected} onClick={() => { setSelected(p.footprintId); onSelect?.(p.footprintId); }} title={p.model ? modelKey(p.model) : undefined}>
+                        {p.refdes}
+                      </button>{" "}
+                      <span data-status={st}>{STATUS_TEXT[st]}</span>
+                      {why && <span className="muted"> — {why}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
         </aside>

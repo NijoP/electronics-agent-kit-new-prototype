@@ -84,6 +84,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Per-field evidence and verified state | partial | `Rating { source, verified }` and a `provenance` string only |
 | Symbol and footprint editors | - | |
 | User library | - | |
+| Component 3D model reference (STEP/WRL/GLB, transform, quality, licence), viewer loading, missing-model state | impl | code-reviewed only, unrun (ADR-0022); no model-vs-footprint verification or collision checks |
 | AI datasheet-to-library workflow | - | |
 
 ## Part 8: design manager and cross-probing
