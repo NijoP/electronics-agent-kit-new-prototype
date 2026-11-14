@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { IPC_COMMANDS } from "./api";
 import { App } from "./App";
 import { ercResult, fixture } from "./fixture.test-data";
+import { domainReport } from "./domain.test-data";
 import type { CommandResponse } from "./types";
 
 type Call = { cmd: string; args: Record<string, unknown> };
@@ -52,6 +53,8 @@ beforeEach(() => {
       }
       case "execute_command":
         return response(String((args.command as { type: string }).type), false);
+      case "domain_classification":
+        return domainReport(revision);
       case "run_check":
         return ercResult(revision);
       case "close_project":

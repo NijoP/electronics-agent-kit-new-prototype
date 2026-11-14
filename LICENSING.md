@@ -11,6 +11,48 @@ EAK is proprietary (see LICENSE). No third-party source code has been copied int
 | uuid | MIT OR Apache-2.0 | object ids |
 | rusqlite (bundled SQLite) | MIT; SQLite is public domain | metadata index |
 | tauri, tauri-build (2.x) | MIT OR Apache-2.0 | desktop shell (`apps/desktop/src-tauri`) |
+| keyring 3 (`apple-native`, `windows-native`, `sync-secret-service`, `crypto-rust`) | MIT OR Apache-2.0 | OS credential storage for model API keys (`apps/desktop/src-tauri`); transitive backends not yet inventoried |
+| ureq 3 (`rustls` feature; optional, `remote-http`) | MIT OR Apache-2.0 | HTTPS client for model providers (`eak-intelligence`) |
+
+### Crates added by `eak-intelligence` (feature `remote-http`)
+Generated with `cargo metadata --all-features` by diffing the lockfile against `main`. All of them
+reach the build only through the optional `ureq` dependency, which the `remote-http` feature
+enables; the default build compiles none of them. None is copyleft: the licences are MIT,
+Apache-2.0, ISC, BSD-3-Clause and CDLA-Permissive-2.0.
+
+| Crate | Version | Licence |
+|---|---|---|
+| base64 | 0.23.1 | MIT OR Apache-2.0 |
+| bytes | 1.12.1 | MIT |
+| getrandom | 0.2.17 | MIT OR Apache-2.0 |
+| http | 1.5.0 | MIT OR Apache-2.0 |
+| httparse | 1.10.1 | MIT OR Apache-2.0 |
+| log | 0.4.35 | MIT OR Apache-2.0 |
+| once_cell | 1.21.4 | MIT OR Apache-2.0 |
+| percent-encoding | 2.3.2 | MIT OR Apache-2.0 |
+| ring | 0.17.14 | Apache-2.0 AND ISC |
+| rustls | 0.23.46 | Apache-2.0 OR ISC OR MIT |
+| rustls-pki-types | 1.16.0 | MIT OR Apache-2.0 |
+| rustls-webpki | 0.103.17 | ISC |
+| subtle | 2.6.1 | BSD-3-Clause |
+| untrusted | 0.9.0 | ISC |
+| ureq | 3.5.2 | MIT OR Apache-2.0 |
+| ureq-proto | 0.7.1 | MIT OR Apache-2.0 |
+| utf8-zero | 0.8.1 | MIT OR Apache-2.0 |
+| wasi | 0.11.1+wasi-snapshot-preview1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| webpki-roots | 1.0.12 | CDLA-Permissive-2.0 |
+| windows_aarch64_gnullvm | 0.52.6 | MIT OR Apache-2.0 |
+| windows_aarch64_msvc | 0.52.6 | MIT OR Apache-2.0 |
+| windows_i686_gnu | 0.52.6 | MIT OR Apache-2.0 |
+| windows_i686_gnullvm | 0.52.6 | MIT OR Apache-2.0 |
+| windows_i686_msvc | 0.52.6 | MIT OR Apache-2.0 |
+| windows_x86_64_gnu | 0.52.6 | MIT OR Apache-2.0 |
+| windows_x86_64_gnullvm | 0.52.6 | MIT OR Apache-2.0 |
+| windows_x86_64_msvc | 0.52.6 | MIT OR Apache-2.0 |
+| windows-sys | 0.52.0 | MIT OR Apache-2.0 |
+| windows-targets | 0.52.6 | MIT OR Apache-2.0 |
+| zeroize | 1.9.1 | Apache-2.0 OR MIT |
+
 A full transitive inventory (`cargo deny`/`cargo about`) is required before the first installer is produced.
 
 ## Frontend dependencies (direct, `apps/desktop/package.json`)
@@ -34,3 +76,9 @@ These are concepts only and none is a dependency; see docs/REPOSITORY_RESEARCH.m
 ## Engineering data
 Built-in parts are generic definitions. The AMS1117 and ATtiny85 pinouts follow publicly published
 datasheets; no datasheet content is redistributed.
+
+## DESK domain registry data
+`crates/eak-intelligence/data/desk_domains.json` is derived from the owner's DESK repository
+(github.com/NijoP/DESK, `library/pcb_domains`, MIT licence). It is reference data (class names,
+keywords, constraint and verification prompts, standard identifiers) with no standard text.
+DESK's Python code is not used; the classifier is re-implemented in Rust.

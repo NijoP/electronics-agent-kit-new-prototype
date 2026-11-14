@@ -13,6 +13,7 @@
 //! * ERC/DRC run in `eak-validation`, and their revision-bound reports are stored as
 //!   evidence by the engine.
 
+pub mod models;
 pub mod parts;
 
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
@@ -377,6 +378,23 @@ pub fn run_check(s: &Session, check: Check) -> Result<CheckResult, String> {
     })?
 }
 
+/// Domain classification of the open project (DESK domain intelligence, `eak-intelligence`).
+/// Deterministic, needs no model or API key, and never evaluates DESK rules: the result lists
+/// what is not implemented and caps guidance at each class's DESK maturity label.
+/// The classification plus the revision it was computed from (the UI marks it stale otherwise).
+#[derive(Debug, Clone, Serialize)]
+pub struct DomainReport {
+    pub revision: u64,
+    pub classification: eak_intelligence::domain::DomainClassification,
+}
+
+pub fn domain_classification(s: &Session) -> Result<DomainReport, String> {
+    s.with_engine(|e| DomainReport {
+        revision: e.project().revision,
+        classification: eak_intelligence::domain::classify_project(e.project()),
+    })
+}
+
 /// A built-in library part the UI can place (read-only catalogue; placing it is a `PlaceSymbol` command).
 #[derive(Debug, Clone, Serialize)]
 pub struct LibraryEntry {
@@ -460,12 +478,13 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 17] = [
+pub const IPC_COMMANDS: [&str; 25] = [
     "parts_search",
     "parts_import",
     "manufacturing_preview",
     "jlcpcb_prepare",
     "library_components",
+    "domain_classification",
     "export_manufacturing",
     "create_project",
     "open_project",
@@ -478,6 +497,13 @@ pub const IPC_COMMANDS: [&str; 17] = [
     "acknowledge_recovery",
     "run_check",
     "recent_projects",
+    "model_providers",
+    "model_save_provider",
+    "model_remove_provider",
+    "model_set_key",
+    "model_clear_key",
+    "model_list_models",
+    "model_test_connection",
 ];
 
 /// Tauri command wrappers: argument decoding only, no logic.
@@ -554,6 +580,11 @@ pub mod cmd {
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
+    pub fn domain_classification(state: State<'_, Session>) -> Result<DomainReport, String> {
+        super::domain_classification(&state)
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
     pub fn library_components() -> Vec<LibraryEntry> {
         super::library_components()
     }
@@ -586,6 +617,21 @@ pub fn run() {
                 eprintln!("eak-desktop: recent-project index unavailable: {e}");
             }
             app.manage(Session::new(index));
+            // Profiles are plain JSON in the config dir; keys go to the OS credential store.
+            let profiles = app
+                .path()
+                .app_config_dir()
+                .ok()
+                .map(|d| d.join("model-providers.json"));
+            match models::ModelSettings::system(profiles) {
+                Ok(m) => {
+                    app.manage(m);
+                }
+                Err(e) => {
+                    eprintln!("eak-desktop: model settings unavailable: {e}");
+                    app.manage(models::ModelSettings::system(None).map_err(|e| e.to_string())?);
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -600,6 +646,14 @@ pub fn run() {
             cmd::acknowledge_recovery,
             cmd::run_check,
             cmd::recent_projects,
+            models::cmd::model_providers,
+            models::cmd::model_save_provider,
+            models::cmd::model_remove_provider,
+            models::cmd::model_set_key,
+            models::cmd::model_clear_key,
+            models::cmd::model_list_models,
+            models::cmd::model_test_connection,
+            cmd::domain_classification,
             cmd::library_components,
             cmd::export_manufacturing,
             parts::cmd::parts_search,

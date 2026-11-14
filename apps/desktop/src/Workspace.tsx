@@ -3,6 +3,7 @@
 // latest engine snapshot; edits are engine calls carrying the rendered revision.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, describeError } from "./api";
+import { DomainPanel } from "./DomainPanel";
 import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
 import { EngineeringMonitor } from "./EngineeringMonitor";
@@ -11,7 +12,7 @@ import { ManufacturingPanel } from "./ManufacturingPanel";
 import { PartsPanel } from "./PartsPanel";
 import { PcbView } from "./PcbView";
 import { SchematicView } from "./SchematicView";
-import type { Check, CheckResult, Command, CommandResponse, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
+import type { Check, CheckResult, Command, CommandResponse, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
   initial: Snapshot;
@@ -50,6 +51,8 @@ export function Workspace({ initial, onClosed }: Props) {
       }));
     return [...library, ...imported];
   }, [library, snapshot.project.library]);
+  const [domain, setDomain] = useState<DomainReport | null>(null);
+  const [domainError, setDomainError] = useState<string | null>(null);
 
   const pullEvents = useCallback(async () => {
     const fresh = await api.eventsSince(lastSeq.current);
@@ -69,6 +72,18 @@ export function Workspace({ initial, onClosed }: Props) {
       .then(setLibrary)
       .catch((e) => setMessage(`Library unavailable: ${String(e)}`));
   }, []);
+
+  // Deterministic and local: re-run whenever the design revision changes.
+  useEffect(() => {
+    let live = true;
+    api
+      .domainClassification()
+      .then((r) => live && (setDomain(r), setDomainError(null)))
+      .catch((e) => live && setDomainError(String(e)));
+    return () => {
+      live = false;
+    };
+  }, [revision]);
 
   useEffect(() => {
     pullEvents().catch((e) => setMessage(String(e)));
@@ -266,6 +281,7 @@ export function Workspace({ initial, onClosed }: Props) {
             />
           )}
           {panel === "mfg" && <ManufacturingPanel revision={revision} onPrepared={setMessage} />}
+          <DomainPanel report={domain} revision={revision} error={domainError} />
           <ExportPanel result={exported} />
           <section className="activity" aria-label="Activity">
             <h2>Activity</h2>

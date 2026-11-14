@@ -83,6 +83,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, li:focus-visibl
 .palette li { padding: 5px 8px; border-radius: 4px; cursor: pointer; }
 .palette li.active { background: #2e3540; }
 
+/* Model settings */
+.settings-fab { position: fixed; right: 12px; bottom: 30px; z-index: 5; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: grid; place-items: start center; padding: 24px; overflow: auto; z-index: 10; }
+.modal { width: min(720px, 100%); background: #1b1f25; border: 1px solid #3a414b; border-radius: 6px; padding: 16px; display: grid; gap: 10px; }
+.modal-head { display: flex; justify-content: space-between; align-items: center; }
+.modal-head h2, .modal h3 { margin: 0; }
+.modal form { display: grid; gap: 8px; border-top: 1px solid #2c323a; padding-top: 10px; }
+.modal label { display: grid; gap: 4px; }
+.providers { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 6px; }
+.providers li { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 6px 8px; border: 1px solid #2c323a; border-radius: 4px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ok { color: #8fd694; }
 /* Editors */
 .views.schematic, .views.pcb { grid-template-columns: 1fr; }
 .view { grid-template-rows: auto auto 1fr; }
@@ -100,3 +112,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, li:focus-visibl
 .saved { color: #8fd694; font-size: 12px; }
 .export h2 { font-size: 14px; margin: 12px 0 4px; }
 .export .files { list-style: none; padding: 0; margin: 0; font-size: 12px; }
+.domain h2 { font-size: 14px; margin: 12px 0 4px; }
+.domain-list { padding-left: 18px; margin: 4px 0; font-size: 12px; }
+.domain-list ul { margin: 2px 0 6px; padding-left: 16px; }
+.domain .badge { border: 1px solid #6b7280; border-radius: 3px; padding: 0 4px; font-size: 11px; white-space: nowrap; }

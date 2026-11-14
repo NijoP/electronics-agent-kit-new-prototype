@@ -10,4 +10,4 @@ pub mod mech;
 pub mod report;
 pub mod sourcing;
 
-pub use report::{Finding, Outcome, Report, Severity};
+pub use report::{Bound, Finding, Limit, Outcome, Quantity, Report, Severity};
