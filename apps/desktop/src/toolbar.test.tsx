@@ -73,7 +73,7 @@ const viewBox = () => screen.getByRole("img", { name: "Schematic canvas" }).getA
 describe("main toolbar", () => {
   it("unimplemented controls are disabled and say why; nothing decorative is clickable", async () => {
     await open();
-    for (const [name, why] of [["Save as", "Not implemented"], ["Grid", "Not implemented"], ["Design rules", "Not implemented"], ["Simulate", "Not implemented"]] as const) {
+    for (const [name, why] of [["Save as", "Not implemented"], ["Grid", "Not implemented"], ["Simulate", "Not implemented"]] as const) {
       const b = tb().getByRole("button", { name }) as HTMLButtonElement;
       expect(b.disabled).toBe(true);
       expect(b.title).toContain(why);
@@ -126,5 +126,30 @@ describe("per-tab viewport", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Open sheet Sheet 1" }));
     await screen.findByRole("img", { name: "Schematic canvas" });
     expect(viewBox()).toBe(zoomed);
+  });
+});
+
+describe("keyboard scope (evaluator C4)", () => {
+  it("C4: in split view a keypress acts only in the active editor; clicking the other editor hands it the keyboard", async () => {
+    await open();
+    const sch = within(screen.getByRole("region", { name: "Schematic view" }));
+    const pcb = within(screen.getByRole("region", { name: "PCB view" }));
+    const pressed = (v: typeof sch, name: string) => v.getByRole("button", { name }).getAttribute("aria-pressed");
+    fireEvent.keyDown(window, { key: "3" }); // schematic: Wire, PCB: Move
+    await waitFor(() => expect(pressed(sch, "Wire")).toBe("true"));
+    expect(pressed(pcb, "Move")).toBe("false");
+    fireEvent.pointerDown(screen.getByRole("region", { name: "PCB view" }));
+    fireEvent.keyDown(window, { key: "6" }); // PCB: Delete, schematic: Move
+    await waitFor(() => expect(pressed(pcb, "Delete")).toBe("true"));
+    expect(pressed(sch, "Move")).toBe("false");
+    expect(pressed(sch, "Wire")).toBe("true"); // untouched
+  });
+});
+
+describe("design rules entry point", () => {
+  it("the toolbar Design rules button opens the dialog", async () => {
+    await open();
+    fireEvent.click(tb().getByRole("button", { name: "Design rules" }));
+    expect(await screen.findByRole("dialog", { name: "Design rules" })).toBeTruthy();
   });
 });

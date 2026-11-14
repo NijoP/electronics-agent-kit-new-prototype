@@ -20,6 +20,7 @@ export function App() {
           key={opened.project.id}
           initial={opened}
           onClosed={() => setOpened(null)}
+          onOpened={setOpened}
           onSettings={() => setSettings(true)}
           theme={theme}
           onTheme={toggleTheme}

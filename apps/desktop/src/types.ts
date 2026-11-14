@@ -97,6 +97,8 @@ export interface Zone {
 
 /** Canonical EAK-IR project (fields the shell renders). */
 export interface Project {
+  /** Design rules and net declarations; absent only in fixtures that predate them. */
+  constraints?: Constraints;
   schema_version: number;
   id: Id;
   name: string;
@@ -183,6 +185,10 @@ export type Command =
   | { type: "AddVia"; position: Point; net: string; drill: Nm | null; diameter: Nm | null; from?: CopperLayer | null; to?: CopperLayer | null }
   | { type: "AddZone"; layer: CopperLayer; net: string; outline: Point[]; clearance: Nm | null }
   | { type: "DeleteZone"; zone_id: Id }
+  | { type: "SetDesignRules"; min_track_width: Nm | null; min_clearance: Nm | null; min_drill: Nm | null; min_annular_ring: Nm | null; board_edge_clearance: Nm | null; default_track_width: Nm | null; default_clearance: Nm | null; temp_rise_c: number | null; max_component_height: Nm | null }
+  | { type: "UpsertNetClass"; class: NetClass }
+  | { type: "SetNetCurrent"; net: string; amps: number | null }
+  | { type: "SetNetVoltage"; net: string; volts: number | null }
   | { type: "SetLayerCount"; count: number; board_thickness?: Nm | null }
   | { type: "SetStackup"; stackup: Stackup }
   | { type: "DeleteVia"; via_id: Id }
@@ -399,4 +405,28 @@ export interface ConnectivityReport {
   shorts: [string, string, string, string][];
   /** Unrouted connections: [net, from, to]. */
   ratsnest: [string, Point, Point][];
+}
+
+/** Net class (EAK-IR); lengths in nm. */
+export interface NetClass {
+  name: string;
+  track_width: Nm;
+  clearance: Nm;
+  via_drill: Nm;
+  via_diameter: Nm;
+  nets: string[];
+}
+/** Design rules and electrical declarations (EAK-IR `Constraints`). */
+export interface Constraints {
+  min_track_width: Nm;
+  min_clearance: Nm;
+  min_drill: Nm;
+  min_annular_ring: Nm;
+  board_edge_clearance: Nm;
+  default_class: NetClass;
+  net_classes?: NetClass[];
+  net_currents_a?: Record<string, number>;
+  net_voltages_v?: Record<string, number>;
+  temp_rise_c: number;
+  max_component_height?: Nm | null;
 }

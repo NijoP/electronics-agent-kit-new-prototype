@@ -6,7 +6,7 @@ import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, nextRotation, segments, snapPoint } from "./editing";
 import type { Id, Point, Snapshot, SymbolInstance } from "./types";
 import { boundsOf, fromView, mm, toView } from "./viewport";
-import { useDocId, useRegisterTools } from "./shell/viewState";
+import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 
 interface Props {
   snapshot: Snapshot;
@@ -85,7 +85,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   // Keyboard shortcuts act on the current selection through the same commands.
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey) return;
+    if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey || !isActiveEditor(docId)) return;
     const digit = Number(e.key);
     if (digit >= 1 && digit <= TOOLS.length) choose(TOOLS[digit - 1][0]);
     else if (e.key === "Escape") reset();
