@@ -162,12 +162,20 @@ pub fn hole_to_hole(p: &Project, min: Nm, rule_id: &str, basis: &str) -> Vec<Fin
             }
             let d = distance(&a.shape(), &b.shape());
             if d < min as f64 - 1.0 {
+                // Different nets: drill wander can short them (error). Same net: no short, but
+                // the web between the holes can break out during drilling (warning).
+                let same_net = !a.net.is_empty() && a.net == b.net;
+                let (severity, nets) = if same_net {
+                    (Warning, format!("same net {}", a.net))
+                } else {
+                    (Error, format!("nets {} / {}", a.net, b.net))
+                };
                 f.push(
                     finding(
                         rule_id,
-                        Error,
+                        severity,
                         format!(
-                            "holes of {} and {} are {} apart edge to edge (minimum {}, {basis})",
+                            "holes of {} and {} ({nets}) are {} apart edge to edge (minimum {}, {basis})",
                             a.label,
                             b.label,
                             mm(d.max(0.0)),
