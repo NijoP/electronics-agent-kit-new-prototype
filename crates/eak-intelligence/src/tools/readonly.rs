@@ -52,6 +52,24 @@ pub fn read_tools() -> Vec<ReadTool> {
             true,
         ),
         tool(
+            "analyze_routing",
+            "Routing intelligence (DESK-derived, deterministic, nothing is placed): unrouted connections in routing-priority order, differential pairs found by name, per-net track width and via chosen from net class and declared current (IPC-2221) with reasons, and by default a dry-run of the native router (passes, rip-ups, stagnation, congestion hotspots, failures with causes). Heuristic; never a certification: call verify_routing after AutoRoute.",
+            obj(
+                &[(
+                    "preview",
+                    json!({"type": "boolean", "description": "dry-run the router (default true); false returns only the analysis"}),
+                )],
+                &[],
+            ),
+            true,
+        ),
+        tool(
+            "verify_routing",
+            "Independent check of the routed board with eak-validation: physical connectivity (unrouted connections, shorts) plus DRC, with what is NOT verified (diff-pair coupling, length matching, impedance, thermal sizing) listed. 'No errors' never means manufacturing-ready.",
+            obj(&[], &[]),
+            true,
+        ),
+        tool(
             "list_library_components",
             "Components available for placement (built-in and project library) with their pins.",
             obj(&[], &[]),
@@ -275,6 +293,11 @@ pub fn run(name: &str, args: &Value, p: &Project) -> Option<Result<Value, String
             }
             v
         }
+        "analyze_routing" => Ok(analyze_routing(
+            p,
+            args.get("preview").and_then(Value::as_bool).unwrap_or(true),
+        )),
+        "verify_routing" => Ok(verify_routing(p)),
         "list_library_components" => Ok(json!({"revision": p.revision, "components": library(p)})),
         "get_netlist" => Ok(nets(p, args.get("net").and_then(Value::as_str))),
         "run_erc" => serde_json::to_value(eak_validation::erc::run(p)).map_err(|e| e.to_string()),
@@ -363,9 +386,128 @@ pub fn run(name: &str, args: &Value, p: &Project) -> Option<Result<Value, String
     Some(r)
 }
 
+/// Routing analysis: priority order, pairs, per-net width/via, and (optionally) a dry-run route.
+fn analyze_routing(p: &Project, preview: bool) -> Value {
+    use eak_engineering::{copper, priority, router, routing_intel as ri};
+    let conn = copper::analyse(p);
+    let mut todo = conn.ratsnest.clone();
+    priority::order_connections(p, &mut todo);
+    let nets: std::collections::BTreeSet<String> =
+        todo.iter().map(|(n, _, _)| n.clone()).collect();
+    let terminals = priority::terminal_counts(p);
+    let order: Vec<Value> = todo
+        .iter()
+        .take(40)
+        .map(|(n, a, b)| {
+            json!({
+                "net": n,
+                "priority": priority::net_priority(
+                    n,
+                    terminals.get(n).copied().unwrap_or(2),
+                    p.constraints.net_currents_a.get(n).copied(),
+                ),
+                "length_mm": (a.dist(*b) / 1e3).round() / 1e3,
+            })
+        })
+        .collect();
+    let specs: Vec<ri::NetSpec> = nets.iter().map(|n| ri::net_spec(p, n)).collect();
+    let mut out = json!({
+        "revision": p.revision,
+        "unrouted_connections": todo.len(),
+        "priority_order": order,
+        "differential_pairs": ri::diff_pairs(&nets),
+        "net_specs": specs,
+        "shorts": conn.shorts.len(),
+        "limitations": [
+            "differential pairs are detected by net name only",
+            "the router works on the two outer layers; inner-layer routing is not done",
+            "widths are IPC-2221 current sizing only; no impedance, no length matching, no return-path analysis",
+            "a dry run is not applied: run AutoRoute, then verify_routing",
+        ],
+    });
+    if !preview {
+        return out;
+    }
+    if p.pcb.board.outline.len() < 3 {
+        out["preview"] = json!({"skipped": "set a board outline before routing"});
+        return out;
+    }
+    let res = router::route(p, &router::RouterOptions::default());
+    out["preview"] = json!({
+        "routed_connections": res.routed_connections,
+        "failed_connections": res.failed_connections.iter().take(20).map(|(net, a, b, why)| {
+            json!({"net": net, "from": a, "to": b, "why": why})
+        }).collect::<Vec<_>>(),
+        "tracks": res.tracks.len(),
+        "vias": res.vias.len(),
+        "passes": res.passes,
+        "ripups": res.ripups,
+        "stagnated": res.stagnated,
+        "congestion_hotspots": res.congestion,
+        "pairs": res.pairs,
+        "notes": res.notes,
+        "grid_pitch_nm": res.grid_pitch,
+        "applied": false,
+    });
+    out
+}
+
+/// Independent verification of the routed board: connectivity plus DRC, never a certification.
+fn verify_routing(p: &Project) -> Value {
+    let conn = eak_engineering::copper::analyse(p);
+    let drc = eak_validation::drc::run(p);
+    let split: Vec<Value> = conn
+        .net_groups
+        .iter()
+        .filter(|(_, g)| **g > 1)
+        .map(|(n, g)| json!({"net": n, "copper_groups": g}))
+        .collect();
+    let drc_errors: Vec<Value> = drc
+        .findings
+        .iter()
+        .filter(|f| f.severity == eak_validation::Severity::Error)
+        .take(30)
+        .map(|f| json!({"rule_id": f.rule_id, "message": f.message, "objects": f.objects}))
+        .collect();
+    let clean = conn.ratsnest.is_empty() && conn.shorts.is_empty() && drc.errors == 0;
+    let mut not_implemented = drc.not_implemented.clone();
+    not_implemented.extend(
+        [
+            "differential-pair coupling, spacing and length matching",
+            "controlled impedance",
+            "high-speed return-path analysis",
+            "thermal verification of current-sized widths and vias",
+        ]
+        .map(String::from),
+    );
+    json!({
+        "revision": p.revision,
+        "outcome": if clean { "NO_ERRORS_IN_IMPLEMENTED_CHECKS" } else { "ERRORS" },
+        "unrouted_connections": conn.ratsnest.len(),
+        "nets_with_split_copper": split,
+        "shorts": conn.shorts.iter().map(|(a, b, ia, ib)| json!({"net_a": a, "net_b": b, "item_a": ia, "item_b": ib})).collect::<Vec<_>>(),
+        "drc_errors": drc.errors,
+        "drc_warnings": drc.warnings,
+        "drc_error_findings": drc_errors,
+        "not_implemented": not_implemented,
+        "limitations": drc.limitations,
+        "note": "no errors in implemented checks does not mean the board is correct or manufacturing-ready",
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn routing_tools_work_on_an_empty_project() {
+        let p = Project::new("t");
+        let a = run("analyze_routing", &json!({}), &p).unwrap().unwrap();
+        assert_eq!(a["unrouted_connections"], json!(0));
+        assert!(a["preview"]["skipped"].is_string());
+        let v = run("verify_routing", &json!({}), &p).unwrap().unwrap();
+        assert!(v["not_implemented"].as_array().unwrap().len() >= 4);
+    }
 
     #[test]
     fn every_listed_tool_dispatches_and_names_are_unique() {

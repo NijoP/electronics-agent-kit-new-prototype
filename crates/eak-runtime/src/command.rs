@@ -1317,6 +1317,25 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 res.routed_connections,
                 res.failed_connections.len()
             ));
+            if res.passes.len() > 1 || res.ripups > 0 || res.stagnated {
+                warnings.push(format!(
+                    "router: {} pass(es), {} rip-up(s) of lower-priority routes{}",
+                    res.passes.len(),
+                    res.ripups,
+                    if res.stagnated {
+                        ", stopped on stagnation (more passes would not change the result)"
+                    } else {
+                        ""
+                    }
+                ));
+            }
+            for note in res.notes.iter().take(10) {
+                warnings.push(format!("router: {note}"));
+            }
+            warnings.push(
+                "router: connectivity and clearance are not certified by the router; run run_check (eak-validation) and verify_routing"
+                    .into(),
+            );
             for (net, a, b, why) in res.failed_connections.iter().take(20) {
                 warnings.push(format!(
                     "unrouted {net} ({:.2},{:.2})→({:.2},{:.2}) mm: {why}",

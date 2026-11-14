@@ -5,7 +5,8 @@
 //! * `netlist` – schematic connectivity → canonical nets.
 //! * `copper`  – PCB copper shapes, zone fill with thermal reliefs, physical connectivity.
 //! * `silk`    – silkscreen legend: stroke-font reference designators, mask-opening clip.
-//! * `router`  – EAK's native two-layer grid router.
+//! * `router`  – EAK's native two-layer grid router (passes, rip-up, congestion, pairs, widths).
+//! * `routing_intel` – congestion, stagnation, differential pairs, width/via selection (DESK-derived).
 //! * `interactive` – route-step API for the interactive PCB route tool (walkaround, 45/90, vias).
 //! * `placer`  – constructive footprint placement.
 //! * `placement_intel` – placement mental models (roles, snaps, analysis) ported from DESK.
@@ -22,5 +23,6 @@ pub mod placer;
 pub mod power;
 pub mod priority;
 pub mod router;
+pub mod routing_intel;
 pub mod scene3d;
 pub mod silk;
