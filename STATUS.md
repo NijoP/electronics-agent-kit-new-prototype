@@ -135,7 +135,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
   - Every finding carries a stable id, the affected objects and location, and a suggested fix; quantitative rules also report measured vs required values with units (ADR-0009). Desktop and AI display of the new fields is not yet wired.
 - Runtime (`eak-runtime`):
-  - Typed command set (38 commands).
+  - Typed command set (39 commands).
   - Revision checks and the agent approval policy.
   - Transactional apply with integrity gate, diff-based undo/redo and an fsync'd journal with crash reconciliation (UNKNOWN_OUTCOME blocks writes).
   - Checkpoints, project lock, evidence store.
@@ -168,7 +168,7 @@ Injected short and clearance violations are detected (`drc_detects_injected_shor
 - Desktop application: superseded. See "Desktop shell" above (read-only views; editors not started).
 - Intelligence Engine: core crate exists (see below); no UI, no live-provider run, no context engine/skills.
 - Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser, LCSC/JLCPCB integrations.
-- Multi-layer (>2) boards (work in progress on this branch), differential pairs, impedance.
+- Differential pairs, impedance, inner-layer autorouting.
 - Per-zone / per-pad thermal-relief settings (needs an IR change and an ADR); silkscreen
   legibility, overlap and board-edge checks; user-placed silkscreen text and graphics.
 - Linux/macOS builds have not been executed yet; packaging and installers do not exist yet.
@@ -222,3 +222,7 @@ installed. Development is proceeding directly in this repository.
 1. Interactive schematic editor driving the same commands (the desktop shell above is the base).
 2. PCB editor and 3D view; Manufacturing Center and installer bundles.
 3. Intelligence Engine: manufacturing-export and MECH tools, run-log evidence persistence, desktop approval UI.
+
+## Multilayer boards (2026-11-14)
+- Stackup 2-16 copper layers (signal/plane, per-layer copper and dielectric), `SetLayerCount`, inner-layer tracks and zones, through/blind/buried vias, plane zones with thermal reliefs, DRC-016/017, one Gerber per copper layer, per-span drill files, `stackup.json`, JLCPCB stackup check (limits unverified). PCB editor: layer count, visibility, active layer, via span, plane fill. See ADR-0012.
+- Not done: autorouting on inner layers, per-via plane relief settings, impedance, fabricator-verified limits.
