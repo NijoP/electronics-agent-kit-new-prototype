@@ -989,7 +989,7 @@ pub mod cmd {
     use tauri::{AppHandle, Manager, State};
 
     /// Run `f` on the blocking pool, after taking a slot of `priority`'s class (if bounded).
-    async fn blocking<T: Send + 'static>(
+    pub(crate) async fn blocking<T: Send + 'static>(
         app: AppHandle,
         priority: Priority,
         f: impl FnOnce(&Session) -> Result<T, String> + Send + 'static,

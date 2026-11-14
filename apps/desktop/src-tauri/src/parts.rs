@@ -328,37 +328,49 @@ pub fn jlcpcb_prepare(s: &Session, out_dir: &str) -> Result<PrepareResult, Strin
     })?
 }
 
-/// Tauri command wrappers: argument decoding only, no logic.
+/// Tauri command wrappers: argument decoding only, no logic. Network and file work runs on the
+/// blocking pool (`crate::cmd::blocking`): supplier search is P4 (bounded background), the
+/// import is an edit (P1, never queued), fab previews/preparation are P3 (bounded).
 pub mod cmd {
-    use super::*;
-    use tauri::State;
+    use crate::cmd::blocking;
+    use crate::resources::Priority;
+    use tauri::AppHandle;
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn parts_search(state: State<'_, Session>, query: String) -> Result<PartsSearch, String> {
-        super::parts_search(&state, live_provider(), &query)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn parts_search(app: AppHandle, query: String) -> Result<super::PartsSearch, String> {
+        blocking(app, Priority::P4, move |s| {
+            super::parts_search(s, super::live_provider(), &query)
+        })
+        .await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn parts_import(
-        state: State<'_, Session>,
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn parts_import(
+        app: AppHandle,
         expected_revision: u64,
         lcsc: String,
-    ) -> Result<ImportResult, String> {
-        super::parts_import(&state, live_provider(), expected_revision, &lcsc)
+    ) -> Result<super::ImportResult, String> {
+        blocking(app, Priority::P1, move |s| {
+            super::parts_import(s, super::live_provider(), expected_revision, &lcsc)
+        })
+        .await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn manufacturing_preview(
-        state: State<'_, Session>,
-    ) -> Result<ManufacturingPreview, String> {
-        super::manufacturing_preview(&state)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn manufacturing_preview(
+        app: AppHandle,
+    ) -> Result<super::ManufacturingPreview, String> {
+        blocking(app, Priority::P3, super::manufacturing_preview).await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn jlcpcb_prepare(
-        state: State<'_, Session>,
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn jlcpcb_prepare(
+        app: AppHandle,
         out_dir: String,
-    ) -> Result<PrepareResult, String> {
-        super::jlcpcb_prepare(&state, &out_dir)
+    ) -> Result<super::PrepareResult, String> {
+        blocking(app, Priority::P3, move |s| {
+            super::jlcpcb_prepare(s, &out_dir)
+        })
+        .await
     }
 }
