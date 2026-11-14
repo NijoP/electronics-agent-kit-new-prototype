@@ -39,3 +39,18 @@
   the label is not yet shown in the history UI.
 - **Source:** Owner master directive Part 5 and final execution directive section 3 (interactive
   editing with undo/redo); EDA desktop implementation plan, Phase 2.
+
+## Addendum (2026-11-14): editing commands used by the select tool
+- `MoveWire { wire_id, a, b }` sets both ends of a wire (whole-wire move, or one end stretched
+  when an attached symbol is dragged). Zero-length is invalid; unchanged ends are `NothingTo`;
+  passing over another pin warns, like `AddWire`. Class `EngineeringImpacting` (connectivity).
+- `MoveNetLabel { label_id, position }`. Class `EngineeringImpacting` (a label names the net it
+  touches).
+- `MoveSymbol` now warns only when wire ends are actually left on its old pin positions (and no
+  new pin lands there), instead of always. A drag submits
+  `Batch [MoveWire..., MoveNetLabel..., MoveSymbol...]`; the wire steps come first, so the batch
+  carries no stale-wire warning.
+- Rubber-banding is computed by the desktop's pure reducers
+  (`apps/desktop/src/tools/schematic/selection.ts`) from the snapshot's derived pin geometry; the
+  plan's backend `wires_attached` helper was not needed. Wire ends move straight, so a rubber-band
+  can leave a diagonal wire (no automatic corner insertion yet).

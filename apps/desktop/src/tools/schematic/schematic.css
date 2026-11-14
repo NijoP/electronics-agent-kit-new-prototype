@@ -1,0 +1,7 @@
+/* Schematic select tool: selection highlight, move preview and marquee. Kept beside the tool
+   so schematic editing styles do not collide with workspace shell styles. */
+[data-wire-id].selected .wire { stroke: var(--accent); stroke-width: 0.45; }
+.label.selected circle { fill: var(--accent); }
+.label.selected text { fill: var(--accent); font-weight: 600; }
+.marquee { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 0.15; stroke-dasharray: 0.6 0.4; pointer-events: none; }
+.symbol[transform], .label[transform] { opacity: 0.75; }
