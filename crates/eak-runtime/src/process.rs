@@ -82,6 +82,13 @@ fn reader<R: Read + Send + 'static>(mut r: R, sink: Arc<Mutex<Bounded>>) {
     });
 }
 
+/// The `kill` argument that signals exactly one process group, or `None` when `pgid` could
+/// address anything broader (0 = own group, 1 = init, negatives = other group semantics).
+#[cfg_attr(not(unix), allow(dead_code))]
+fn group_kill_target(pgid: i64) -> Option<String> {
+    (pgid > 1).then(|| format!("-{pgid}"))
+}
+
 /// Terminate a process and all of its children.
 fn kill_tree(child: &mut Child) {
     #[cfg(windows)]
@@ -94,10 +101,15 @@ fn kill_tree(child: &mut Child) {
     }
     #[cfg(unix)]
     {
-        // The child was started as its own process-group leader.
-        let _ = Command::new("kill")
-            .args(["-TERM", &format!("-{}", child.id())])
-            .status();
+        // The child was started as its own process-group leader. `--` stops option parsing so
+        // the negative id is always read as a process group, and the guard guarantees the
+        // target is a real group (> 1): an id of 0, 1 or below would signal far more than
+        // this child's own tree (every process of the user, on some procps versions).
+        if let Some(target) = group_kill_target(i64::from(child.id())) {
+            let _ = Command::new("kill")
+                .args(["-s", "TERM", "--", &target])
+                .status();
+        }
     }
     let _ = child.kill();
     let _ = child.wait();
@@ -268,5 +280,19 @@ impl Drop for Supervisor {
         for id in ids {
             self.cancel(id);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::group_kill_target;
+
+    #[test]
+    fn kill_guard_rejects_ids_that_could_signal_more_than_one_group() {
+        for id in [i64::MIN, -100, -1, 0, 1] {
+            assert_eq!(group_kill_target(id), None, "id {id} must be rejected");
+        }
+        assert_eq!(group_kill_target(2).as_deref(), Some("-2"));
+        assert_eq!(group_kill_target(4242).as_deref(), Some("-4242"));
     }
 }
