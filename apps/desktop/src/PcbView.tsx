@@ -10,6 +10,7 @@ import { useLayerView, type LayerView } from "./layerView";
 import { focusBounds, type Focus } from "./pcbFocus";
 import { feedbackText, ripUpAndReroute, routeBatch, routeReducer, stepRequest } from "./routeTool";
 import type { CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
+import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 
 interface Props {
@@ -93,6 +94,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const zoomTo = focus ? { bounds: focusBounds(snapshot, focus.objects, focus.location), n: focus.n } : null;
   const [net, setNet] = useState("");
   const [corners, setCorners] = useState<Point[]>([]);
+  const docId = useDocId();
   const [picked, setPicked] = useState<Id | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
   // Interactive route: fixed steps (pure reducer) plus the engine's live proposal for the cursor.
@@ -132,6 +134,11 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     reset();
     setTool(t);
   };
+  useRegisterTools(docId, (t) => {
+    const hit = TOOLS.find(([id]) => id === t);
+    if (hit) choose(hit[0]);
+    return !!hit;
+  });
   useEffect(() => {
     onStatus?.({ layer, gridMm: GRID / 1_000_000 });
   }, [layer, onStatus]);
@@ -165,7 +172,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
 
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey) return;
+    if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey || !isActiveEditor(docId)) return;
     const k = e.key.toLowerCase();
     const digit = Number(e.key);
     if (digit >= 1 && digit <= TOOLS.length) choose(TOOLS[digit - 1][0]);

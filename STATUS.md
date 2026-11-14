@@ -3,6 +3,10 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## Release packaging: Linux .deb and AppImage, v0.1.0 (2026-11-14)
+- `scripts/release-build.sh` builds the Linux bundles from a clean `npm ci` and `tauri build` and writes `SHA256SUMS`; `tauri.conf.json` now has `bundle.active: true` with package metadata (other platforms still build with `--no-bundle`; no Windows/macOS packaging script yet).
+- Verified on Linux only (see `TEST_RESULTS.md`): both packages build, and the packaged binary launches, shows its window and stays up. Not verified: system-wide `apt` install, other distributions, interactive use, Windows and macOS. Release notes: `docs/release/RELEASE_NOTES_v0.1.0.md`.
+
 ## EDA desktop directive, Phase 0: research and repository audit (2026-11-14)
 
 Documentation only; no code changed and no tests were run. Adds the EasyEDA ecosystem research
@@ -266,3 +270,15 @@ installed. Development is proceeding directly in this repository.
 - Zone refill: fills stay derived (`copper::fill_zone` recomputes from the current geometry for DRC, connectivity and Gerber), so every geometry change refills; tested by `zone_fill_is_derived_and_retreats_from_a_routed_track`.
 - Tests: `interactive.rs` unit tests incl. a 24-case property test (never a clearance violation, bend mode obeyed); `src-tauri/tests/ipc.rs` `route_step_result_commits_as_one_batch_and_undoes_in_one_step` (DRC has no DRC-002/003 after the routed batch; one undo removes it); vitest `routeTool.test.ts`.
 - Not done: push-and-shove, routing in a job with progress/cancel (Phase 4 jobs module), differential pairs and length tuning, blind/buried vias from the route tool (always through vias), arc corners, a stored `RefillZones` parameter set, a real-window test.
+## Main toolbar and per-tab viewport (2026-11-14)
+- `shell/Toolbar.tsx`: data-driven main toolbar. Real: Open project (to Project Home), Save (asks the engine for its state and reports blocked writes; never claims more), Undo/Redo, Select tool and Move tool (arm the active editor's tool), Rotate/Delete selection (typed `RotateSymbol`/`MoveFootprint`/`DeleteSymbol`; delete asks first), Zoom out/in/Fit (drive the active canvas), Run ERC/DRC, Auto-route, Export Gerbers, Commands, Assistant, Close project. Disabled with the reason as tooltip: Save as, Grid (fixed grids), Design rules, Simulate.
+- `shell/viewState.ts`: per-document viewport (kept in memory and localStorage; a closed tab reopens at its last zoom/pan), plus imperative zoom/tool controls keyed by document id so the editors are not coupled to the toolbar. `SchematicView`/`PcbView` gained a 5-line tool registration each; `Canvas` restores and saves its viewport.
+- Verified: `tsc`, vitest 80/80 (new `toolbar.test.tsx`). Frontend-only jobs ran without the build lock per the lane rule. Not launched as the real Tauri window.
+- Not done: dock panels to other edges, configurable grid, rule editor, simulation.
+
+## End-to-end workflow, keyboard scope, design rules dialog (2026-11-14)
+- Verified by vitest against a stateful fake backend (`flow.test.tsx`, one test per step): New project dialog (replaces the open project, returns Home if the backend lost it) -> schematic tab -> part placed via the assistant (typed `PlaceSymbol`) -> **Update PCB from schematic** (`SyncSchematicToPcb`, then the PCB tab opens with the footprints and airwires re-read) -> ERC/DRC from the toolbar -> **Export manufacturing files** dialog (refuses without a board outline; shows the DRAFT manifest) -> File menu Save / Close / reopen from Recent. File-menu Save and Ctrl+S now ask the engine (they previously only set a message).
+- Evaluator C4: keyboard shortcuts are scoped to the active editor (clicking an editor or its tab makes it active), so a key no longer acts in both editors in split view (`shell/viewState.ts`, tested).
+- Evaluator C1 support: **Design rules** dialog (toolbar, Design menu, palette) with `SetDesignRules`, `UpsertNetClass`, `SetNetCurrent`, `SetNetVoltage`; engine validation errors surface in the status bar; values come from `Project.constraints` (`rules.test.tsx`).
+- Evaluator C5 (AI actor) was reassigned to `eak-p6-ai` and is NOT in this change.
+- Not done: panel docking to other edges; real Tauri window run; DRC/ERC re-run is manual after rule changes.

@@ -8,7 +8,7 @@ import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
 import { PcbView } from "./PcbView";
 import { SchematicView } from "./SchematicView";
-import { formatShortcut, matches, SHORTCUTS, tip } from "./design/shortcuts";
+import { formatShortcut, matches, SHORTCUTS } from "./design/shortcuts";
 import type { Theme } from "./design/theme";
 import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
 import { AiPanel, type ChatMsg } from "./shell/AiPanel";
@@ -16,6 +16,11 @@ import { interpret, type Proposal } from "./shell/ai";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
 import { ManufacturingPanel, netNames, PartsPanel, ProjectPanel } from "./shell/panels";
 import { StatusBar } from "./shell/StatusBar";
+import { ExportDialog } from "./shell/ExportDialog";
+import { RulesDialog } from "./shell/RulesDialog";
+import { NewProjectDialog, OpenProjectDialog } from "./shell/ProjectDialogs";
+import { Toolbar, type ToolbarGroup } from "./shell/Toolbar";
+import { canvasControls, DocIdContext, setActiveEditor, setEditorTool } from "./shell/viewState";
 import { LayerManager } from "./shell/LayerManager";
 import { useLayerView } from "./layerView";
 import type { Focus } from "./pcbFocus";
@@ -26,11 +31,13 @@ import { clampSize, DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "
 import { MenuBar, type Menu } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
 import { nextRotation } from "./editing";
-import type { Check, CheckResult, Command, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
+import type { RecentProject, Check, CheckResult, Command, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
   initial: Snapshot;
   onClosed: () => void;
+  /** A different project was created or opened from inside the workspace. */
+  onOpened: (s: Snapshot) => void;
   onSettings: () => void;
   theme: Theme;
   onTheme: () => void;
@@ -39,7 +46,9 @@ interface Props {
 
 const MAX_EVENTS = 200;
 
-export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Props) {
+export function Workspace({ initial, onClosed, onOpened, onSettings, theme, onTheme }: Props) {
+  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules">(null);
+  const [recent, setRecent] = useState<RecentProject[]>([]);
   const [snapshot, setSnapshot] = useState(initial);
   const [events, setEvents] = useState<EngineEvent[]>([]);
   const lastSeq = useRef(0);
@@ -84,6 +93,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
   const effective = { open: openIds, active: activeId };
   useEffect(() => saveDocState(snapshot.project.id, effective), [snapshot.project.id, openIds.join("|"), activeId]);
   const shown = visibleDocs(effective, docs, split);
+  setActiveEditor(activeId);
   const openDocs = openIds.map((id) => docs.find((d) => d.id === id)!);
   const dirty = busy || !!snapshot.blocked;
   const [domain, setDomain] = useState<DomainReport | null>(null);
@@ -117,6 +127,13 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
       })
       .catch(() => setModel(null));
   }, []);
+
+  useEffect(() => {
+    api
+      .recentProjects(6)
+      .then(setRecent)
+      .catch(() => setRecent([]));
+  }, [initial.project.id, dialog]);
 
   // Airwires come from the engine's connectivity analysis (the one DRC-004 uses), per revision.
   useEffect(() => {
@@ -193,6 +210,37 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
       await refresh();
     });
   const edit: EditCtx = { execute: executeAll, busy, library, notify: setMessage };
+  // "Update PCB from schematic": the typed SyncSchematicToPcb command, then show the PCB where the
+  // new footprints (staged beside the board) and the ratsnest airwires appear.
+  const syncPcb = () =>
+    guarded(async () => {
+      const r = await api.execute(revision, { type: "SyncSchematicToPcb" });
+      setMessage(
+        r.accepted
+          ? `Update PCB → revision ${r.revision_after}. Footprints are staged beside the board: use Auto-place or the Move tool; airwires show the unrouted connections.`
+          : `Update PCB rejected: ${r.error ? describeError(r.error) : "unknown error"}`,
+      );
+      await refresh();
+      if (r.accepted) {
+        const d = availableDocs(snapshot).find((x) => x.kind === "pcb");
+        if (d) setDocState((st) => openDoc({ open: st.open.includes(d.id) ? st.open : [...st.open, d.id], active: st.active }, d.id));
+      }
+    });
+  // Reopen a recent project: the backend drops the current one before opening the next, so a
+  // failure that leaves no project open returns to Project Home instead of a stale workspace.
+  const openRecent = (path: string) =>
+    guarded(async () => {
+      try {
+        onOpened(await api.openProject(path, false));
+      } catch (e) {
+        setMessage(`Could not open ${path}: ${String(e)}`);
+        try {
+          await api.currentProject();
+        } catch {
+          onClosed();
+        }
+      }
+    });
   const exportGerbers = () =>
     guarded(async () => {
       const r = await api.exportManufacturing();
@@ -329,11 +377,11 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
   const actions: PaletteAction[] = [
     { id: "undo", label: "Undo", run: undo, disabled: !snapshot.can_undo, shortcut: SHORTCUTS.undo, group: "Edit" },
     { id: "redo", label: "Redo", run: redo, disabled: !snapshot.can_redo, shortcut: SHORTCUTS.redo, group: "Edit" },
-    { id: "export", label: "Export Gerbers + drill", run: exportGerbers, group: "Manufacturing" },
+    { id: "export", label: "Export manufacturing files", run: () => setDialog("export"), group: "Manufacturing" },
     { id: "erc", label: "Run ERC", run: () => check("erc"), group: "Verify" },
     { id: "drc", label: "Run DRC", run: () => check("drc"), group: "Verify" },
     { id: "annotate", label: "Annotate schematic", run: () => execute({ type: "Annotate" }), group: "Design" },
-    { id: "sync", label: "Sync schematic to PCB", run: () => execute({ type: "SyncSchematicToPcb" }), group: "Design" },
+    { id: "sync", label: "Update PCB from schematic (sync)", run: syncPcb, group: "Design" },
     { id: "place", label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), group: "Design" },
     { id: "route", label: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), group: "Design" },
     {
@@ -345,6 +393,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     },
     { id: "deselect", label: "Clear selection", run: () => setSelected(null), group: "Edit" },
     { id: "quick-open", label: "Go to part, net or sheet…", run: () => setQuickOpen(true), shortcut: SHORTCUTS.quickOpen, group: "Navigate" },
+    { id: "rules", label: "Design rules and net classes…", run: () => setDialog("rules"), group: "Design" },
     { id: "tab-split", label: "View: Toggle split (schematic + PCB)", run: () => setSplit((v) => !v), group: "View" },
     ...docs.map((d) => ({ id: `open-${d.id}`, label: `Open ${d.kind === "pcb" ? "PCB" : `schematic ${d.title}`}`, run: () => open(d.id), group: "Documents" })),
     { id: "close-all", label: "Close all documents", run: closeAll, disabled: openIds.length === 0, group: "Documents" },
@@ -382,6 +431,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
   // Keep the latest handlers reachable from the single global key listener.
   const keys = useRef({ undo, redo });
   keys.current = { undo, redo };
+  const saveRef = useRef<() => void>(() => {});
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
@@ -406,7 +456,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
         setAiFocus((n) => n + 1);
       } else if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        setMessage(`Saved: every accepted command is already on disk (revision ${revision}).`);
+        saveRef.current();
       } else if (typing) {
         return;
       } else if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
@@ -423,19 +473,90 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     return () => window.removeEventListener("keydown", onKey);
   }, [revision]);
 
+  const fpOfSelected = selected ? Object.values(snapshot.project.pcb.footprints).find((f) => f.symbol_id === selected) : undefined;
+  const rotateSel = () => {
+    if (!selectedSymbol) return;
+    // In the PCB editor the selected part's footprint rotates; otherwise the schematic symbol.
+    const activeKind = docs.find((d) => d.id === activeId)?.kind;
+    if (activeKind === "pcb" && fpOfSelected)
+      execute({ type: "MoveFootprint", footprint_id: fpOfSelected.id, position: fpOfSelected.position, rotation: nextRotation(fpOfSelected.rotation), side: null });
+    else execute({ type: "RotateSymbol", symbol_id: selectedSymbol.id, rotation: nextRotation(selectedSymbol.rotation) });
+  };
+  const deleteSel = () => {
+    if (!selectedSymbol) return;
+    if (!window.confirm(`Delete ${selectedSymbol.refdes}? This is a destructive change.`)) return;
+    execute({ type: "DeleteSymbol", symbol_id: selectedSymbol.id });
+  };
+  // Save: the engine writes every accepted command before it returns, so "Save" asks it for its
+  // state and reports whether anything is blocked; it never claims more than the engine says.
+  const save = () =>
+    guarded(async () => {
+      const s2 = await api.currentProject();
+      setSnapshot(s2);
+      setMessage(
+        s2.blocked
+          ? `Writes are blocked: ${s2.blocked}`
+          : `Revision ${s2.project.revision}: every accepted command is already written (engine reports no blocked writes).`,
+      );
+    });
+  saveRef.current = save;
+  const noDoc = activeId ? undefined : "Open a document first";
+  const toolTo = (tool: string) => () => {
+    if (!setEditorTool(activeId, tool)) setMessage(`The active editor has no ${tool} tool.`);
+  };
   const needSel = selectedSymbol ? undefined : "Select a part first";
+  const toolbarGroups: ToolbarGroup[] = [
+    [
+      { id: "new", label: "New project", run: () => setDialog("new"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "open", label: "Open project", run: () => setDialog("open"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "save", label: "Save", shortcut: SHORTCUTS.save, run: save, disabled: busy ? "An engine command is running" : undefined },
+      { id: "saveas", label: "Save as", disabled: "Not implemented: the engine saves the project in place" },
+    ],
+    [
+      { id: "undo", label: "Undo", shortcut: SHORTCUTS.undo, run: undo, disabled: busy ? "An engine command is running" : !snapshot.can_undo ? "Nothing to undo" : undefined },
+      { id: "redo", label: "Redo", shortcut: SHORTCUTS.redo, run: redo, disabled: busy ? "An engine command is running" : !snapshot.can_redo ? "Nothing to redo" : undefined },
+    ],
+    [
+      { id: "select", label: "Select tool", title: "Select tool (key 1)", run: toolTo("select"), disabled: noDoc },
+      { id: "move", label: "Move tool", title: "Move tool (schematic key 6, PCB key 3)", run: toolTo("move"), disabled: noDoc },
+      { id: "rotate", label: "Rotate selection", title: "Rotate selection (key R)", run: rotateSel, disabled: needSel ?? (busy ? "An engine command is running" : undefined) },
+      { id: "delete", label: "Delete selection", title: "Delete selection (asks first)", run: deleteSel, disabled: needSel ?? (busy ? "An engine command is running" : undefined) },
+    ],
+    [
+      { id: "zout", label: "Zoom out", run: () => canvasControls(activeId)?.zoomBy(1.4), disabled: noDoc },
+      { id: "zin", label: "Zoom in", run: () => canvasControls(activeId)?.zoomBy(1 / 1.4), disabled: noDoc },
+      { id: "fit", label: "Fit to view", title: "Fit to view (or double-click the canvas)", run: () => canvasControls(activeId)?.fit(), disabled: noDoc },
+      { id: "grid", label: "Grid", disabled: "Not implemented: the grid is fixed (schematic 1.27 mm, PCB 0.5 mm)" },
+    ],
+    [
+      { id: "rules", label: "Design rules", title: "Design rules and net classes", run: () => setDialog("rules") },
+      { id: "sync", label: "Update PCB", title: "Update PCB from schematic", run: syncPcb, disabled: busy ? "An engine command is running" : undefined },
+      { id: "erc", label: "Run ERC", run: () => check("erc"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "drc", label: "Run DRC", run: () => check("drc"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "route", label: "Auto-route", title: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), disabled: busy ? "An engine command is running" : undefined },
+      { id: "sim", label: "Simulate", disabled: "Not implemented: no SPICE integration yet" },
+      { id: "export", label: "Export manufacturing files", title: "Gerber, Excellon, BOM, CPL", run: () => setDialog("export"), disabled: busy ? "An engine command is running" : undefined },
+    ],
+    [
+      { id: "cmd", label: "Commands", shortcut: SHORTCUTS.palette, run: () => setPalette(true) },
+      { id: "ai", label: "Assistant", shortcut: SHORTCUTS.toggleAi, run: () => setAiOpen((o) => !o), pressed: aiOpen },
+      { id: "close", label: "Close project", run: close, disabled: busy ? "An engine command is running" : undefined },
+    ],
+  ];
   const noProject = busy ? "An engine command is running" : undefined;
   const menus: Menu[] = [
     { label: "File", items: [
-      { label: "New or open project…", run: close, disabled: noProject },
-      { label: "Save", shortcut: SHORTCUTS.save, run: () => setMessage(`Saved: every accepted command is already on disk (revision ${revision}).`) },
+      { label: "New project…", run: () => setDialog("new"), disabled: noProject },
+      { label: "Open project…", run: () => setDialog("open"), disabled: noProject },
+      ...recent.filter((r) => r.project_id !== snapshot.project.id).slice(0, 5).map((r, i) => ({ label: `Recent: ${r.name}`, run: () => openRecent(r.path), disabled: noProject, sep: i === 0 })),
+      { label: "Save", shortcut: SHORTCUTS.save, run: save, disabled: noProject },
       { label: "Save as…", disabled: "Not implemented: the engine saves the project in place" },
       { label: "Close project", run: close, disabled: noProject, sep: true },
     ] },
     { label: "Edit", items: [
       { label: "Undo", shortcut: SHORTCUTS.undo, run: undo, disabled: !snapshot.can_undo ? "Nothing to undo" : noProject },
       { label: "Redo", shortcut: SHORTCUTS.redo, run: redo, disabled: !snapshot.can_redo ? "Nothing to redo" : noProject },
-      { label: "Rotate selection", run: () => selectedSymbol && execute({ type: "RotateSymbol", symbol_id: selectedSymbol.id, rotation: nextRotation(selectedSymbol.rotation) }), disabled: needSel ?? noProject, sep: true },
+      { label: "Rotate selection", run: rotateSel, disabled: needSel ?? noProject, sep: true },
       { label: "Delete selection", run: () => selectedSymbol && execute({ type: "DeleteSymbol", symbol_id: selectedSymbol.id }), disabled: needSel ?? noProject, destructive: true },
       { label: "Clear selection", run: () => setSelected(null), disabled: selected ? undefined : "Nothing is selected" },
     ] },
@@ -450,7 +571,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     ] },
     { label: "Project", items: [
       { label: "Annotate schematic", run: () => execute({ type: "Annotate" }), disabled: noProject },
-      { label: "Sync schematic to PCB", run: () => execute({ type: "SyncSchematicToPcb" }), disabled: noProject },
+      { label: "Update PCB from schematic", run: syncPcb, disabled: noProject },
       ...docs.map((d, i) => ({ label: `Open ${d.kind === "pcb" ? "PCB" : `sheet ${d.title}`}`, run: () => open(d.id), sep: i === 0 })),
       { label: "Close all documents", run: closeAll, disabled: openIds.length === 0 ? "No documents are open" : undefined },
     ] },
@@ -462,7 +583,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
       { label: "Run ERC", run: () => check("erc"), disabled: noProject },
       { label: "Run DRC", run: () => check("drc"), disabled: noProject },
       { label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), disabled: noProject, sep: true },
-      { label: "Design rules…", disabled: "Not implemented: no rule editor yet" },
+      { label: "Design rules…", run: () => setDialog("rules") },
     ] },
     { label: "Tools", items: [
       { label: "Command palette", shortcut: SHORTCUTS.palette, run: () => setPalette(true) },
@@ -476,7 +597,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
     ] },
     { label: "Simulation", items: [{ label: "Run simulation…", disabled: "Not implemented: no SPICE integration yet" }] },
     { label: "Manufacturing", items: [
-      { label: "Export Gerbers + drill", run: exportGerbers, disabled: noProject },
+      { label: "Export manufacturing files…", run: () => setDialog("export"), disabled: noProject },
       { label: "Show manufacturing panel", run: () => showSide("manufacturing") },
       { label: "Release check…", disabled: "Not implemented: exports are always DRAFT" },
     ] },
@@ -500,38 +621,18 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
   return (
     <div className="workspace">
       <MenuBar menus={menus} />
-      <header className="toolbar">
-        <strong>{snapshot.project.name}</strong>
-        <span className="muted">revision {revision}</span>
-        <span className="saved" title="Every accepted command is written to disk atomically before it returns">
-          Saved · r{revision}
-        </span>
-        <span className="spacer" />
-        <button type="button" onClick={undo} disabled={busy || !snapshot.can_undo} title={tip("Undo", SHORTCUTS.undo)}>
-          Undo
-        </button>
-        <button type="button" onClick={redo} disabled={busy || !snapshot.can_redo} title={tip("Redo", SHORTCUTS.redo)}>
-          Redo
-        </button>
-        <button type="button" onClick={() => check("erc")} disabled={busy}>
-          Run ERC
-        </button>
-        <button type="button" onClick={() => check("drc")} disabled={busy}>
-          Run DRC
-        </button>
-        <button type="button" onClick={exportGerbers} disabled={busy} title="Gerber, Excellon, BOM, CPL">
-          Export Gerbers
-        </button>
-        <button type="button" onClick={() => setPalette(true)} title={tip("Command palette", SHORTCUTS.palette)}>
-          Commands
-        </button>
-        <button type="button" onClick={() => setAiOpen((o) => !o)} aria-pressed={aiOpen} title={tip("AI assistant", SHORTCUTS.toggleAi)}>
-          Assistant
-        </button>
-        <button type="button" onClick={close} disabled={busy}>
-          Close project
-        </button>
-      </header>
+      <Toolbar
+        groups={toolbarGroups}
+        left={
+          <div className="tb-title">
+            <strong>{snapshot.project.name}</strong>
+            <span className="muted">revision {revision}</span>
+            <span className="saved" title="Every accepted command is written to disk atomically before it returns">
+              Saved · r{revision}
+            </span>
+          </div>
+        }
+      />
       {snapshot.blocked && (
         <div role="alert" className="banner">
           Writes are blocked: {snapshot.blocked}
@@ -564,7 +665,7 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
               <DomainPanel report={domain} revision={revision} error={domainError} />
             </div>
           )}
-          {sideView === "manufacturing" && <ManufacturingPanel result={exported} busy={busy} onExport={exportGerbers} />}
+          {sideView === "manufacturing" && <ManufacturingPanel result={exported} busy={busy} onExport={() => setDialog("export")} />}
         </aside>
         {sideOpen ? (
           <Splitter orientation="vertical" label="Resize side panel" value={layout.sideWidth} onResize={(d) => setLayout((l) => ({ ...l, sideWidth: clampSize("sideWidth", l.sideWidth + d) }))} onReset={() => setLayout((l) => ({ ...l, sideWidth: DEFAULT_LAYOUT.sideWidth }))} />
@@ -580,13 +681,17 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
                 <span>Open the schematic or the PCB from the Project panel or the Project menu.</span>
               </div>
             )}
-            {shown.map((d) =>
-              d.kind === "schematic" ? (
+            {shown.map((d) => (
+              <DocIdContext.Provider key={d.id} value={d.id}>
+              <div className="view-slot" onPointerDownCapture={() => d.id !== activeId && open(d.id)}>
+              {d.kind === "schematic" ? (
                 <SchematicView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} armPart={armPart} sheetId={d.ref} />
               ) : (
                 <PcbView key={d.id} snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} aiPreview={previewIds} onStatus={setStatus} layerView={layerView} focus={focus} airwires={conn && conn.revision === revision ? conn.ratsnest : null} />
-              ),
-            )}
+              )}
+              </div>
+              </DocIdContext.Provider>
+            ))}
             {noParts && (
               <div className="canvas-empty" aria-label="Empty design">
                 <strong>An empty design</strong>
@@ -645,6 +750,19 @@ export function Workspace({ initial, onClosed, onSettings, theme, onTheme }: Pro
         busy={busy}
         message={message}
       />
+      {dialog === "new" && <NewProjectDialog onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
+      {dialog === "open" && <OpenProjectDialog recent={recent} onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
+      {dialog === "rules" && <RulesDialog snapshot={snapshot} busy={busy} apply={edit.execute} onClose={() => setDialog(null)} />}
+      {dialog === "export" && (
+        <ExportDialog
+          result={exported}
+          revision={revision}
+          busy={busy}
+          blocked={snapshot.project.pcb.board.outline.length === 0 ? "This board has no outline yet: draw one in the PCB editor (Board outline tool) before exporting." : undefined}
+          onRun={exportGerbers}
+          onClose={() => setDialog(null)}
+        />
+      )}
       {help && (
         <div className="palette-backdrop" onClick={() => setHelp(false)}>
           <div className="palette help" role="dialog" aria-label="Keyboard shortcuts" onClick={(e) => e.stopPropagation()}>
