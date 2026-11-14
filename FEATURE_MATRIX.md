@@ -26,9 +26,10 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Command palette (Ctrl/Cmd+K) | unit | `App.test.tsx` |
 | Document tabs | unit | `shell/DocTabs.tsx`, `shell/documents.ts`: one tab per engine document, split view, per-project restore; `part4.test.tsx` (jsdom) |
 | Dirty indicator / save / save as | - | every command is durably saved; save/dirty semantics to be decided by ADR (plan Phase 1) |
-| Recent projects | integ | `ipc.rs::reopen_restores_state_history_and_recent_index` |
+| Recent projects | integ | `ipc.rs::reopen_restores_state_history_and_recent_index`; Project Home search/table/shortcuts code-reviewed only (`projectHome.test.ts` written, unrun) |
 | Dockable, resizable, persisted panels | partial (unit) | `shell/layout.ts`, `Splitter.tsx`: resizable and persisted (localStorage); no drag-to-re-dock; `part4.test.tsx` |
-| Dark and light themes | unit | `design/theme.ts` (dark and light), `design/tokens.css`; `shell.test.tsx` |
+| Dark and light themes | unit | `design/theme.ts` (dark and light), `design/tokens.css` (full token scale, `docs/design-system.md`; guard `design/tokens.test.ts` written, unrun); `shell.test.tsx` |
+| Project overview (side panel) | code-reviewed only | `shell/ProjectOverview.tsx`: real snapshot, check, connectivity, domain, event and terminal data; `shell/projectOverview.test.ts` written, unrun |
 | Status bar | partial | `shell/StatusBar.tsx`; `shell.test.tsx` |
 
 ## Part 5: schematic editor
