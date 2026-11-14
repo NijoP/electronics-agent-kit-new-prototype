@@ -1,0 +1,271 @@
+{
+  "schema_version": "1",
+  "note": "EAK domain mental models. Written from general engineering practice; maturity DRAFT for every model (not verified against any source, not validated on hardware). Standards are metadata only: no standard text is reproduced and applicability is decided by a human. Sections are kept apart: knowledge (how an engineer thinks), procedure (ordered steps), calculations (deterministic, eak-engineering), constraints (quantity keys produced or needed), verification (EAK checks or null = not implemented), ai_guidance (planning hints for a model; never evidence).",
+  "layers": {
+    "knowledge": 2,
+    "standards": 2,
+    "constraints": 2,
+    "required_inputs": 2,
+    "procedure": 3,
+    "calculations": 1,
+    "verification": 1,
+    "ai_guidance": 5
+  },
+  "layer_names": {
+    "1": "deterministic Rust engineering logic (eak-engineering, eak-validation)",
+    "2": "domain knowledge and structured engineering rules",
+    "3": "reusable engineering procedures",
+    "4": "external-tool adapters",
+    "5": "optional agent workflows"
+  },
+  "models": [
+    {
+      "domain": "power",
+      "maturity": "DRAFT",
+      "knowledge": {
+        "approach": ["Start from the input range and worst-case load, not the nominal point.", "Pick the topology from the voltage ratio, isolation need and power level before choosing parts.", "Treat the hot loop (input capacitor, switch, rectifier) as a component in its own right."],
+        "decomposition": ["input protection and filtering", "converter power stage", "control and feedback", "output filtering", "sequencing, enable and monitoring"],
+        "component_selection": ["switch and rectifier voltage rating above worst-case input plus ringing, with derating", "inductor saturation current above peak current at maximum load and minimum inductance", "capacitor ripple-current rating and DC-bias derating"],
+        "schematic": ["feedback divider sets the output and its tolerance budget", "compensation per controller datasheet", "soft-start and enable defined", "current sense and protection explicit"],
+        "placement": ["input capacitor next to the switch to minimise the hot-loop area", "switch node small", "feedback network near the controller, away from the switch node"],
+        "routing": ["wide short high-current paths sized from current", "Kelvin connection to sense resistors", "feedback trace away from the switch node"],
+        "power_grounding": ["solid ground plane under the power stage", "separate quiet controller ground joined at one point when the datasheet asks for it"],
+        "thermal": ["estimate switch, rectifier and inductor losses", "copper area and vias under dissipating pads"],
+        "mechanical": ["inductor and capacitor heights against the enclosure", "heat-sink mounting if used"],
+        "manufacturing": ["thermal pads need paste-aperture and via-plugging decisions", "heavy copper changes minimum spacing"],
+        "failure_modes": ["inductor saturation at hot start-up", "instability from wrong compensation or capacitor ESR", "switch overvoltage from layout ringing", "overheating with insufficient copper"]
+      },
+      "required_inputs": [
+        {"key": "input_voltage", "quantity_prefixes": ["input_voltage"], "why": "sets topology, ratings and duty-cycle range"},
+        {"key": "output_voltage", "quantity_prefixes": ["output_voltage"], "why": "sets feedback and duty cycle"},
+        {"key": "output_current", "quantity_prefixes": ["output_current"], "why": "sets inductor, switch and copper sizing"},
+        {"key": "switching_frequency", "quantity_prefixes": ["switching_frequency"], "why": "sets magnetics size, losses and EMI"},
+        {"key": "ambient_temperature", "quantity_prefixes": ["ambient_temperature"], "why": "sets thermal margin"},
+        {"key": "output_ripple", "quantity_prefixes": ["ripple"], "why": "sets the output filter"}
+      ],
+      "procedure": ["confirm input range, outputs and load profile", "choose topology", "compute duty cycle at both input extremes", "size inductor for ripple and saturation", "size input and output capacitors", "select switch and rectifier with derating", "design feedback and compensation", "place the hot loop first", "route power, then sense and feedback", "check trace capacity and thermal"],
+      "calculations": [
+        {"name": "buck duty cycle", "method": "eak_engineering::calc::buck_duty_cycle", "status": "implemented"},
+        {"name": "buck inductor ripple", "method": "eak_engineering::calc::buck_inductor_ripple_a", "status": "implemented"},
+        {"name": "linear regulator dissipation", "method": "eak_engineering::calc::linear_reg_dissipation_w", "status": "implemented"},
+        {"name": "junction temperature", "method": "eak_engineering::calc::junction_temp_c", "status": "implemented"},
+        {"name": "trace current capacity", "method": "eak_engineering::ipc", "status": "implemented"},
+        {"name": "switching and conduction loss", "method": null, "status": "not_implemented"},
+        {"name": "control-loop stability", "method": null, "status": "not_implemented"}
+      ],
+      "constraints": ["input_voltage", "output_voltage", "output_current", "trace_capacity_a", "switching_frequency"],
+      "verification": [
+        {"method": "ERC on power pins and nets", "eak_check": "erc"},
+        {"method": "DRC including trace width", "eak_check": "drc"},
+        {"method": "trace capacity against rail current", "eak_check": "net_trace_capacity_a"},
+        {"method": "duty cycle at worst-case input", "eak_check": "buck_duty_cycle"},
+        {"method": "transient simulation", "eak_check": "simulation"},
+        {"method": "loop stability measurement", "eak_check": null},
+        {"method": "thermal measurement on hardware", "eak_check": null}
+      ],
+      "standards": [
+        {"id": "IPC-2221", "scope": "generic PCB design: conductor current and spacing", "use": "metadata only; EAK's trace-capacity values are documented in docs/engineering/IPC_RULE_VALUES.md"},
+        {"id": "IEC 62368-1", "scope": "safety of audio/video and ICT equipment, including power supplies", "use": "metadata only; applicability decided by a human"}
+      ],
+      "ai_guidance": ["Ask for the input range and worst-case load before proposing a topology.", "Never state a converter is stable or efficient: those need simulation or measurement.", "Propose the hot-loop placement as the first placement step."]
+    },
+    {
+      "domain": "rf",
+      "maturity": "DRAFT",
+      "knowledge": {
+        "approach": ["Fix band, region and antenna before layout; the antenna and its keepout drive the board.", "Treat every RF trace as a transmission line with a defined reference plane."],
+        "decomposition": ["antenna and matching", "RF front end (filter, switch, LNA/PA)", "transceiver and reference clock", "RF supply filtering", "digital control interface"],
+        "component_selection": ["module versus chip-down decided by certification effort", "matching parts in the package size the reference design uses", "reference crystal accuracy against the radio's requirement"],
+        "schematic": ["matching-network footprints present even if populated later", "supply decoupling per transceiver pin", "test point or connector for conducted measurement"],
+        "placement": ["antenna at the board edge with the vendor keepout", "RF chain in a straight line with the shortest feed", "switching regulators away from the RF section"],
+        "routing": ["controlled-impedance feed with a continuous reference plane", "no other signals under or beside the RF path", "via fence along RF traces where appropriate"],
+        "power_grounding": ["unbroken ground under RF", "dense ground stitching near RF ground pads", "filtered RF supply"],
+        "thermal": ["PA dissipation at maximum duty cycle"],
+        "mechanical": ["enclosure material and distance to the antenna", "metal parts and batteries near the antenna", "RF connector access"],
+        "manufacturing": ["stackup ordered with impedance control", "dielectric-constant tolerance affects line width"],
+        "failure_modes": ["detuned antenna in the enclosure", "harmonic emissions", "desense from on-board switching noise", "broken return path under the feed"]
+      },
+      "required_inputs": [
+        {"key": "operating_frequency", "quantity_prefixes": ["operating_frequency"], "why": "sets line geometry, matching and filtering"},
+        {"key": "region", "quantity_prefixes": ["region"], "why": "sets band and emission limits"},
+        {"key": "antenna", "quantity_prefixes": ["antenna"], "why": "sets keepout and board shape"},
+        {"key": "rf_impedance", "quantity_prefixes": ["impedance"], "why": "sets trace width with the stackup"},
+        {"key": "tx_power", "quantity_prefixes": ["tx_power"], "why": "sets PA supply, thermal and emissions"}
+      ],
+      "procedure": ["fix band, region and antenna", "choose module or chip-down", "define stackup with impedance control", "place antenna and keepout", "place the RF chain", "route the RF feed first", "stitch and fence", "route the rest outside the RF area"],
+      "calculations": [
+        {"name": "microstrip/coplanar impedance", "method": null, "status": "not_implemented"},
+        {"name": "link budget", "method": null, "status": "not_implemented"},
+        {"name": "matching network", "method": null, "status": "not_implemented"}
+      ],
+      "constraints": ["operating_frequency", "impedance", "antenna", "tx_power"],
+      "verification": [
+        {"method": "ERC on RF pins", "eak_check": "erc"},
+        {"method": "keepout and clearance DRC", "eak_check": "drc"},
+        {"method": "impedance check against the stackup", "eak_check": null},
+        {"method": "conducted and radiated measurement", "eak_check": null}
+      ],
+      "standards": [
+        {"id": "FCC 47 CFR Part 15", "scope": "US unlicensed radio emissions", "use": "metadata only; applicability depends on market and band"},
+        {"id": "ETSI EN 300 220", "scope": "EU short-range devices", "use": "metadata only; applicability depends on market and band"}
+      ],
+      "ai_guidance": ["Ask for band, region and antenna type first.", "Never apply generic digital routing rules to RF nets.", "Prefer the vendor reference layout and say so when deviating."]
+    },
+    {
+      "domain": "analog",
+      "maturity": "DRAFT",
+      "knowledge": {
+        "approach": ["Start from the accuracy and noise budget and allocate it to each stage.", "Every error term has a temperature coefficient; budget across the temperature range."],
+        "decomposition": ["sensor interface and protection", "gain and filtering", "reference", "ADC and its driver", "analog supply"],
+        "component_selection": ["amplifier offset, drift, noise, bias current and common-mode range against the budget", "resistor tolerance and tempco in gain paths", "reference initial accuracy, drift and noise"],
+        "schematic": ["anti-aliasing filter matched to the sampling rate", "ADC driver able to settle the sampling capacitor", "input protection that does not ruin accuracy"],
+        "placement": ["reference and ADC close together, away from heat and switching", "sensitive inputs short", "guard rings for high-impedance nodes"],
+        "routing": ["analog returns kept apart from digital and power currents", "differential inputs routed together", "no digital lines under the sensitive area"],
+        "power_grounding": ["one ground plane with partitioned placement unless the datasheet requires otherwise", "filtered analog supply"],
+        "thermal": ["keep heat sources away from references and gain resistors", "symmetry against thermocouple effects"],
+        "mechanical": ["shielding if the environment requires it"],
+        "manufacturing": ["flux residue on high-impedance nodes; cleaning or coating"],
+        "failure_modes": ["drift over temperature", "aliasing", "ADC settling error", "ground-return coupling from digital or power"]
+      },
+      "required_inputs": [
+        {"key": "accuracy", "quantity_prefixes": ["accuracy"], "why": "drives the whole error budget"},
+        {"key": "bandwidth", "quantity_prefixes": ["bandwidth", "sample_rate"], "why": "sets filtering and ADC"},
+        {"key": "noise", "quantity_prefixes": ["noise"], "why": "sets amplifier and reference choice"},
+        {"key": "ambient_temperature", "quantity_prefixes": ["ambient_temperature"], "why": "sets the drift budget"}
+      ],
+      "procedure": ["state accuracy, bandwidth and noise targets", "allocate the error budget", "choose reference, amplifier and ADC", "design filter and driver", "place reference and ADC", "route analog first with clean returns"],
+      "calculations": [
+        {"name": "RC time constant", "method": "eak_engineering::calc::rc_time_constant_s", "status": "implemented"},
+        {"name": "voltage divider", "method": "eak_engineering::calc::divider_vout", "status": "implemented"},
+        {"name": "noise and error budget", "method": null, "status": "not_implemented"},
+        {"name": "ADC settling", "method": null, "status": "not_implemented"}
+      ],
+      "constraints": ["accuracy", "bandwidth", "noise"],
+      "verification": [
+        {"method": "ERC", "eak_check": "erc"},
+        {"method": "AC or noise simulation", "eak_check": "simulation"},
+        {"method": "error budget review", "eak_check": null}
+      ],
+      "standards": [],
+      "ai_guidance": ["Ask for accuracy and bandwidth before choosing parts.", "Do not claim an accuracy figure without a computed error budget."]
+    },
+    {
+      "domain": "digital_hs",
+      "maturity": "DRAFT",
+      "knowledge": {
+        "approach": ["Edge rate, not clock frequency, decides whether a net is high-speed.", "Choose the stackup for impedance and return paths before placement."],
+        "decomposition": ["processor or FPGA", "memory", "high-speed interfaces", "clocking", "power delivery and decoupling"],
+        "component_selection": ["interface PHYs and ESD parts with low capacitance", "clock source jitter against interface needs"],
+        "schematic": ["termination per interface specification", "decoupling per power pin and bulk per rail", "strapping and reset defined"],
+        "placement": ["connectors fixed by mechanics first", "PHY close to its connector", "decoupling close to pins"],
+        "routing": ["differential pairs with matched length and constant spacing", "continuous reference plane under every fast net", "few via transitions, with return vias near layer changes"],
+        "power_grounding": ["low-impedance planes and decoupling for each rail"],
+        "thermal": ["processor or FPGA dissipation"],
+        "mechanical": ["connector position and orientation"],
+        "manufacturing": ["impedance-controlled stackup ordered from the fabricator", "via-in-pad for fine-pitch BGAs"],
+        "failure_modes": ["reflection from impedance discontinuity", "crosstalk", "skew beyond budget", "ground bounce"]
+      },
+      "required_inputs": [
+        {"key": "interfaces", "quantity_prefixes": ["interface"], "why": "decides which nets are critical"},
+        {"key": "data_rate", "quantity_prefixes": ["data_rate"], "why": "sets impedance and length rules"},
+        {"key": "layer_count", "quantity_prefixes": ["layer_count", "stackup"], "why": "sets reference planes"}
+      ],
+      "procedure": ["list interfaces and data rates", "choose the stackup", "fix connectors", "place PHYs and memory", "route critical pairs first", "check length, skew and reference planes"],
+      "calculations": [
+        {"name": "differential impedance", "method": null, "status": "not_implemented"},
+        {"name": "timing budget", "method": null, "status": "not_implemented"}
+      ],
+      "constraints": ["interface", "data_rate", "impedance", "length_match"],
+      "verification": [
+        {"method": "ERC", "eak_check": "erc"},
+        {"method": "DRC", "eak_check": "drc"},
+        {"method": "length and skew matching", "eak_check": null},
+        {"method": "signal-integrity simulation", "eak_check": null}
+      ],
+      "standards": [
+        {"id": "USB 2.0 Specification", "scope": "USB electrical and routing requirements", "use": "metadata only"},
+        {"id": "IEEE 802.3", "scope": "Ethernet physical layer", "use": "metadata only"}
+      ],
+      "ai_guidance": ["Ask which interfaces are present and their data rates.", "Route critical pairs before general signals.", "Never claim signal integrity without simulation or measurement."]
+    },
+    {
+      "domain": "motor_drive",
+      "maturity": "DRAFT",
+      "knowledge": {
+        "approach": ["Size for stall and start-up current, not running current.", "The bridge, gate drive and current sense form one layout unit."],
+        "decomposition": ["DC bus and bulk capacitance", "power bridge", "gate drivers", "current and position sensing", "controller", "protection"],
+        "component_selection": ["MOSFET voltage rating above bus plus ringing; current from stall", "gate-driver strength against gate charge and dead time", "shunt power rating and Kelvin footprint"],
+        "schematic": ["dead time defined", "bootstrap or isolated supplies sized", "overcurrent and overtemperature protection"],
+        "placement": ["bulk capacitors close to the bridge", "gate driver close to the switches", "sense amplifiers close to shunts, away from phase nodes"],
+        "routing": ["phase and bus copper sized for current", "short gate loops with gate and return together", "Kelvin sense lines"],
+        "power_grounding": ["power ground and signal ground joined deliberately near the shunt"],
+        "thermal": ["switch losses into copper or heat sink", "shunt dissipation"],
+        "mechanical": ["motor connector rating and retention", "vibration and mounting"],
+        "manufacturing": ["heavy copper, high-current connectors and press-fit parts"],
+        "failure_modes": ["shoot-through", "gate ringing and false turn-on", "sense corruption by switching transients", "overheating at stall"]
+      },
+      "required_inputs": [
+        {"key": "bus_voltage", "quantity_prefixes": ["bus_voltage", "input_voltage"], "why": "sets switch ratings"},
+        {"key": "phase_current", "quantity_prefixes": ["phase_current"], "why": "sets switches, copper and shunt"},
+        {"key": "motor_type", "quantity_prefixes": ["motor_type"], "why": "sets bridge topology and sensing"},
+        {"key": "switching_frequency", "quantity_prefixes": ["switching_frequency"], "why": "sets losses and noise"}
+      ],
+      "procedure": ["confirm motor type, bus voltage, stall and running current", "choose bridge and gate driver", "set dead time", "design sensing and protection", "place bridge, capacitors and driver together", "route power, then gate, then sense"],
+      "calculations": [
+        {"name": "trace current capacity", "method": "eak_engineering::ipc", "status": "implemented"},
+        {"name": "junction temperature", "method": "eak_engineering::calc::junction_temp_c", "status": "implemented"},
+        {"name": "switching loss and dead time", "method": null, "status": "not_implemented"}
+      ],
+      "constraints": ["bus_voltage", "phase_current", "trace_capacity_a", "switching_frequency"],
+      "verification": [
+        {"method": "ERC", "eak_check": "erc"},
+        {"method": "DRC including trace width", "eak_check": "drc"},
+        {"method": "trace capacity against phase current", "eak_check": "net_trace_capacity_a"},
+        {"method": "switching-transient measurement on hardware", "eak_check": null}
+      ],
+      "standards": [
+        {"id": "IEC 61800-5-1", "scope": "safety of adjustable-speed electrical power drive systems", "use": "metadata only; applicability decided by a human"}
+      ],
+      "ai_guidance": ["Ask for stall current; never size from running current alone.", "Motor drives are high-risk: every finding needs human review."]
+    },
+    {
+      "domain": "battery",
+      "maturity": "DRAFT",
+      "knowledge": {
+        "approach": ["The cell chemistry and configuration fix every voltage, current and temperature limit.", "Protection must work with the firmware absent."],
+        "decomposition": ["cells and interconnect", "protection (over/under-voltage, overcurrent, short circuit)", "charger", "fuel gauge and monitoring", "temperature sensing", "power path"],
+        "component_selection": ["protection IC thresholds matched to the chemistry", "charger current and termination matched to the cell datasheet", "fuse or secondary protection"],
+        "schematic": ["charge enable and fault paths defined", "thermistor on the cell", "reverse-polarity behaviour defined"],
+        "placement": ["protection FETs and sense resistor in the main current path, short", "thermistor in thermal contact with the cell", "charger away from temperature-sensitive parts"],
+        "routing": ["high-current paths sized for fault current until protection acts", "Kelvin sense on the shunt"],
+        "power_grounding": ["pack negative and system ground relation explicit"],
+        "thermal": ["charger dissipation", "cell temperature window for charge and discharge"],
+        "mechanical": ["cell retention, swelling allowance, venting"],
+        "manufacturing": ["cell welding or connector assembly", "transport rules for shipped cells"],
+        "failure_modes": ["charging outside the temperature window", "short circuit before protection trips", "cell imbalance", "deep discharge"]
+      },
+      "required_inputs": [
+        {"key": "cell_chemistry", "quantity_prefixes": ["cell_chemistry"], "why": "sets every limit"},
+        {"key": "cell_configuration", "quantity_prefixes": ["cell_count", "cell_configuration"], "why": "sets pack voltage and balancing"},
+        {"key": "charge_current", "quantity_prefixes": ["charge_current"], "why": "sets charger and thermal"},
+        {"key": "ambient_temperature", "quantity_prefixes": ["ambient_temperature"], "why": "sets the charge window"}
+      ],
+      "procedure": ["confirm chemistry, configuration and capacity", "set protection thresholds from the cell datasheet", "choose charger and termination", "add temperature sensing", "place the protection path", "size copper for fault current"],
+      "calculations": [
+        {"name": "trace current capacity", "method": "eak_engineering::ipc", "status": "implemented"},
+        {"name": "charge time and thermal", "method": null, "status": "not_implemented"}
+      ],
+      "constraints": ["cell_chemistry", "charge_current", "trace_capacity_a"],
+      "verification": [
+        {"method": "ERC", "eak_check": "erc"},
+        {"method": "component ratings against the cell datasheet", "eak_check": "component_rating"},
+        {"method": "protection trip test on hardware", "eak_check": null}
+      ],
+      "standards": [
+        {"id": "IEC 62133-2", "scope": "safety of secondary lithium cells and batteries", "use": "metadata only; applicability decided by a human"},
+        {"id": "UN 38.3", "scope": "transport testing of lithium batteries", "use": "metadata only"}
+      ],
+      "ai_guidance": ["Ask for the cell chemistry and datasheet first.", "Batteries are high-risk: never mark protection adequate without human review."]
+    }
+  ]
+}

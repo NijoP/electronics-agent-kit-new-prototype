@@ -14,6 +14,8 @@
 //!   and approvals.
 //! * `knowledge` – local BM25 retrieval with chunk provenance; advisory only, never validation.
 //! * `mock`     – scripted provider for tests (no network).
+//! * `systems`  – multi-domain engineering model: domains, requirements, constraint graph,
+//!   interactions, risks and mental models (ADR-0027).
 
 pub mod agent;
 pub mod domain;
@@ -22,6 +24,7 @@ pub mod mental;
 pub mod message;
 pub mod mock;
 pub mod provider;
+pub mod systems;
 pub mod tools;
 
 pub use agent::{
