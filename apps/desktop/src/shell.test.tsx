@@ -49,6 +49,7 @@ const resp = (accepted: boolean): CommandResponse => ({
   revision_after: accepted ? revision + 1 : revision, created: [], affected: [], warnings: [], error: null, validation_note: "",
 });
 beforeEach(() => {
+  localStorage.clear();
   revision = 7;
   executed = [];
   mockIPC((cmd, payload) => {

@@ -13,6 +13,7 @@ interface Props {
   onProbe: (id: Id) => void;
   onAsk: (text: string, target: Id | null) => void;
   onClose: () => void;
+  height?: number;
 }
 
 export interface BomLine {
@@ -42,10 +43,10 @@ const TABS: [BottomTab, string][] = [
   ["log", "Log"],
 ];
 
-export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onAsk, onClose }: Props) {
+export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onAsk, onClose, height }: Props) {
   const bom = bomLines(snapshot);
   return (
-    <section className="bottom" aria-label="Bottom panel">
+    <section className="bottom" aria-label="Bottom panel" style={height ? { height } : undefined}>
       <div className="tabs" role="tablist">
         {TABS.map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "tab on" : "tab"} onClick={() => onTab(id)}>
