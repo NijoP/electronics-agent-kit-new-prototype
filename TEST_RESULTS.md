@@ -5,6 +5,20 @@ what was run, where, on which commit, and the exact outcome. A result copied fro
 so. Level 1 = Rust engineering tests, Level 2 = frontend tests (vitest + jsdom), Level 3 = real desktop
 tests in a Tauri WebView (directive Part 13).
 
+## 2026-11-14 - Release packaging dry run (v0.1.0, commit ab482da)
+
+**Where:** Zorin OS 18.1 (Ubuntu 24.04 base, glibc 2.39), x86_64, 8 GB RAM; rustc 1.97.1, Node 22.23.2.
+`ab482da` is `main` at `ea1efeb` plus the packaging branch.
+
+| Check | Result |
+|---|---|
+| `bash scripts/release-build.sh` (`npm ci`, `tauri build --bundles deb,appimage`) | exit 0; `EAK_0.1.0_amd64.deb` (6,223,550 bytes) and `EAK_0.1.0_amd64.AppImage` (87,333,368 bytes) + `SHA256SUMS`. AppImage plugin download failed; Tauri's built-in AppImage tooling was used |
+| `.deb` extracted (`dpkg-deb -x`), binary launched on Xwayland | up after 12 s, window "EAK" 1400x900 mapped, recent-project index created, no log errors, exited on `kill` |
+| AppImage launched directly | up after 15 s with bundled WebKitGTK processes, window capture shows Project Home, exited on `kill` |
+| `npx vitest run` (Level 2) | 10 files, **65 passed, 0 failed** |
+| Rust tests | not run for packaging |
+| Level 3 | launch check only, no interaction |
+
 ## 2026-11-14 - Phase 0 baseline (copied, not re-run)
 
 **Source:** the merged pull request bodies of #12-#19
