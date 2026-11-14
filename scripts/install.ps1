@@ -45,7 +45,7 @@ function Install-Eak {
     if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) { throw 'This script is for Windows. On Linux/macOS use scripts/install.sh.' }
     if (-not [Environment]::Is64BitOperatingSystem) { throw '32-bit Windows is not supported (x64 only).' }
     $arch = $env:PROCESSOR_ARCHITECTURE
-    if ($arch -eq 'ARM64') { Info 'Windows on ARM: the x64 build runs under emulation.' }
+    if ($arch -eq 'ARM64') { Info 'Windows on ARM64: a native ARM64 package is pending packaging; an x64 package (if published) would run under emulation.' }
     elseif ($arch -ne 'AMD64') { throw "unsupported architecture $arch (x64 only)" }
     Info "Windows x64, PowerShell $($PSVersionTable.PSVersion)"
 

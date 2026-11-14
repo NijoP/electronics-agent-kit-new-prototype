@@ -37,4 +37,9 @@ Upgrade: run the same command again. Your projects and settings are never touche
 
 ## Manual download
 Assets on v0.1.4: `EAK_0.1.4_amd64.deb`, `EAK_0.1.4_amd64.AppImage`, `SHA256SUMS`. Intended, not yet published: `eak-windows-x86_64-setup.exe`, `eak-macos-aarch64.dmg`, `eak-macos-x86_64.dmg`. Verify with `sha256sum -c SHA256SUMS --ignore-missing`.
-`eak-macos-aarch64.dmg`, `eak-macos-x86_64.dmg`, `SHA256SUMS`. Verify with `sha256sum -c SHA256SUMS --ignore-missing`.
+
+## Entry points, rollback, architectures
+- Both `install.sh` / `install.ps1` at the repo root and the same files under `scripts/` work as raw URLs; the root files only delegate to `scripts/` (HTTPS, same repo and ref; override the ref with `EAK_INSTALLER_REF`).
+- Linux/macOS upgrades keep the previous app directory until the launch check passes. If the new version fails it, the installer restores the previous one and its `VERSION`; a failed fresh install is removed. (Code-reviewed only, never run.)
+- No installer asks for admin rights by default. Linux `EAK_FORMAT=deb` uses `sudo` because a system package needs it; macOS falls back to `~/Applications` when `/Applications` is not writable.
+- Architectures: Linux x64 (published, v0.1.4 only), Linux ARM64, macOS Intel/Apple Silicon, Windows x64 and ARM64: **pending packaging**. The installers stop with a "no asset" message instead of guessing a URL.

@@ -10,6 +10,8 @@ In practice, evidence is thin. Nothing has been built or run since the testing f
 | Windows 10/11 x64 | **none yet** | built and tested locally earlier (GNU toolchain) | unverified | unverified (ConPTY path never run; harness uses loopback TCP) |
 | macOS arm64 / Intel | **none yet** | unverified | unverified | unverified |
 
+Windows ARM64 has no native package either (pending packaging); the installer notes that an x64 build would only run under emulation.
+
 Installers are unsigned; an installer stops with a clear message when a release lacks the asset for
 the OS/CPU. See `docs/INSTALL.md`.
 

@@ -34,9 +34,24 @@ echo "=== EAK install $(date -u +%FT%TZ) ==="
 STEP=0
 step() { STEP=$((STEP + 1)); printf '\n==> [%s] %s\n' "$STEP" "$*"; }
 info() { printf '    %s\n' "$*"; }
+RB_DIR=""; RB_OLD=""; RB_VERSION=""
+# Undo a half-finished upgrade: put the previous app directory back (only set once the swap happened).
+rollback() {
+  [ -n "$RB_DIR" ] || return 0
+  rm -rf "$RB_DIR"
+  if [ -d "$RB_OLD" ]; then
+    mv "$RB_OLD" "$RB_DIR"
+    echo "$RB_VERSION" > "$APP_ROOT/VERSION"
+    printf '       Rolled back to the previous installation (%s).\n' "${RB_VERSION:-unknown version}" >&2
+  else
+    rm -f "$APP_ROOT/VERSION"   # fresh install that failed its launch check: leave nothing half-installed
+  fi
+  RB_DIR=""
+}
 fail() {
   printf '\nERROR at step [%s]: %s\n' "$STEP" "$1" >&2
   shift; for l in "$@"; do printf '       %s\n' "$l" >&2; done
+  rollback
   printf '       Log file: %s\n' "$LOG" >&2
   exit 1
 }
@@ -148,9 +163,8 @@ mkdir -p "$BIN_DIR" "$APP_ROOT"
 if [ "$FORMAT" = deb ]; then
   if [ "$(id -u)" = 0 ]; then SUDO=(); elif sudo -n true 2>/dev/null; then SUDO=(sudo); else
     fail "installing the .deb needs root" "Run: sudo apt-get install -y ./$ASSET   (or omit EAK_FORMAT=deb for a per-user install)"; fi
-  cp "$TMP/$ASSET" /tmp/eak-install.deb
-  "${SUDO[@]}" apt-get install -y /tmp/eak-install.deb || fail "apt-get install failed"
-  rm -f /tmp/eak-install.deb
+  chmod 755 "$TMP"   # let apt's sandbox user read the verified package (no predictable /tmp path)
+  "${SUDO[@]}" apt-get install -y "$TMP/$ASSET" || fail "apt-get install failed"
   APP_BIN=/usr/bin/eak-desktop
 elif [ "$OS" = linux ]; then
   chmod +x "$TMP/$ASSET"
@@ -159,7 +173,9 @@ elif [ "$OS" = linux ]; then
   rm -rf "$APP_ROOT/app.new" "$APP_ROOT/app.old"
   mv "$TMP/squashfs-root" "$APP_ROOT/app.new"
   if [ -d "$APP_ROOT/app" ]; then mv "$APP_ROOT/app" "$APP_ROOT/app.old"; fi
-  mv "$APP_ROOT/app.new" "$APP_ROOT/app"; rm -rf "$APP_ROOT/app.old"
+  mv "$APP_ROOT/app.new" "$APP_ROOT/app"
+  # app.old is kept until the launch check passes so a failed upgrade can be rolled back.
+  RB_DIR="$APP_ROOT/app"; RB_OLD="$APP_ROOT/app.old"; RB_VERSION="$OLD"
   APP_BIN="$BIN_DIR/eak"
   printf '#!/bin/sh\nexec "%s/app/AppRun" "$@"\n' "$APP_ROOT" > "$APP_BIN"; chmod 755 "$APP_BIN"
   ICON="$(find "$APP_ROOT/app" -maxdepth 6 -name '*.png' -path '*128x128*' 2>/dev/null | head -n1)"
@@ -186,7 +202,10 @@ else
   killapp "EAK.app/Contents/MacOS"
   rm -rf "$DEST/EAK.app.new"; ditto "$SRCAPP" "$DEST/EAK.app.new"
   hdiutil detach -quiet "$MNT" || true
-  rm -rf "$DEST/EAK.app"; mv "$DEST/EAK.app.new" "$DEST/EAK.app"
+  rm -rf "$DEST/EAK.app.old"
+  if [ -d "$DEST/EAK.app" ]; then mv "$DEST/EAK.app" "$DEST/EAK.app.old"; fi
+  mv "$DEST/EAK.app.new" "$DEST/EAK.app"
+  RB_DIR="$DEST/EAK.app"; RB_OLD="$DEST/EAK.app.old"; RB_VERSION="$OLD"
   xattr -dr com.apple.quarantine "$DEST/EAK.app" 2>/dev/null || true
   APP_DIR="$DEST/EAK.app"
   info "installed: $APP_DIR (unsigned build: if macOS blocks it, right-click > Open once)"
@@ -217,6 +236,7 @@ if [ "${EAK_NO_LAUNCH:-0}" = 1 ]; then step "Skipping launch check"; else
   fi
 fi
 
+if [ -n "$RB_OLD" ]; then rm -rf "$RB_OLD"; RB_DIR=""; fi   # upgrade confirmed: drop the rollback copy
 printf '\nEAK %s installed (%s).\n' "$TAG" "$OS-$ARCH"
 if [ "$OS" = linux ]; then printf 'Start it from your applications menu or run: %s\n' "$APP_BIN"
 else printf 'Open it from Applications or run: open -a EAK\n'; fi
