@@ -16,6 +16,7 @@
 //! JSON list of chunks.
 
 use crate::mental;
+use eak_core::datasheet::FactLabel;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
@@ -58,7 +59,62 @@ pub struct Chunk {
     pub source_sha256: String,
     /// SHA-256 (hex) of this chunk's text.
     pub chunk_sha256: String,
+    /// Trust label. Quoted source text is `source_extracted`; an index written before labels
+    /// existed reads as `unverified`.
+    #[serde(default)]
+    pub label: FactLabel,
+    /// Part numbers this chunk is about (MPNs given at import, LCSC ids found in the text), upper
+    /// case; used for exact lookup and filtering.
+    #[serde(default)]
+    pub part_ids: Vec<String>,
     pub text: String,
+}
+
+/// Optional dense (embedding) scorer for hybrid ranking. EAK ships none; a caller that has a local
+/// model may supply one. Scores are added to BM25 with a weight; they never replace provenance.
+pub trait DenseScorer {
+    fn score(&self, query: &str, chunk: &Chunk) -> f64;
+}
+
+/// Engineering-aware rerank multiplier. Deterministic and explainable:
+/// x2 when a query token is one of the chunk's part numbers (exact part match);
+/// x1.25 when the query asks for a limit class and the chunk states that class
+/// ("absolute maximum", "recommended operating", "typical"/"typ").
+fn rerank_factor(q_lower: &str, q_tokens: &[String], c: &Chunk) -> f64 {
+    let text = c.text.to_lowercase();
+    let mut f = 1.0;
+    if q_tokens
+        .iter()
+        .any(|t| c.part_ids.iter().any(|p| p.eq_ignore_ascii_case(t)))
+    {
+        f *= 2.0;
+    }
+    let asks_abs = q_lower.contains("absolute max") || q_lower.contains("abs max");
+    let asks_rec = q_lower.contains("recommended");
+    let asks_typ = q_lower.contains("typical") || q_tokens.iter().any(|t| t == "typ");
+    if (asks_abs && text.contains("absolute max"))
+        || (asks_rec && text.contains("recommended operating"))
+        || (asks_typ && (text.contains("typical") || text.contains(" typ")))
+    {
+        f *= 1.25;
+    }
+    f
+}
+
+/// LCSC part numbers (`C` + 3..9 digits) in free text, upper case.
+fn lcsc_ids(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for t in text.split(|c: char| !c.is_alphanumeric()) {
+        let u = t.to_ascii_uppercase();
+        let digits = u.strip_prefix('C').unwrap_or("");
+        if (3..=9).contains(&digits.len())
+            && digits.bytes().all(|b| b.is_ascii_digit())
+            && !out.contains(&u)
+        {
+            out.push(u);
+        }
+    }
+    out
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -78,6 +134,8 @@ pub struct Citation {
     pub revision: String,
     pub source_sha256: String,
     pub chunk_sha256: String,
+    pub label: FactLabel,
+    pub part_ids: Vec<String>,
     pub quote: String,
     pub advisory: &'static str,
     /// Always states the limits of the citation.
@@ -234,6 +292,19 @@ impl KnowledgeIndex {
         revision: &str,
         text: &str,
     ) -> ImportSummary {
+        self.add_source_for_part(kind, source, revision, text, &[])
+    }
+
+    /// As `add_source`, tagging every chunk with the given part numbers (MPNs) in addition to the
+    /// LCSC ids found in each chunk's text. Re-adding a source replaces it (incremental ingestion).
+    pub fn add_source_for_part(
+        &mut self,
+        kind: SourceKind,
+        source: &str,
+        revision: &str,
+        text: &str,
+        parts: &[String],
+    ) -> ImportSummary {
         let before = self.chunks.len();
         self.chunks
             .retain(|c| !(c.kind == kind && c.source == source));
@@ -243,7 +314,16 @@ impl KnowledgeIndex {
         let id_prefix = sha256_hex(format!("{source}\n{source_sha}").as_bytes());
         let mut n = 0;
         for (i, (loc, passage)) in chunk_text(text).into_iter().enumerate() {
+            let mut part_ids: Vec<String> =
+                parts.iter().map(|p| p.trim().to_ascii_uppercase()).collect();
+            for id in lcsc_ids(&passage) {
+                if !part_ids.contains(&id) {
+                    part_ids.push(id);
+                }
+            }
             self.chunks.push(Chunk {
+                label: FactLabel::SourceExtracted,
+                part_ids,
                 id: format!("{}:{i}", &id_prefix[..12]),
                 kind,
                 source: source.to_string(),
@@ -270,6 +350,59 @@ impl KnowledgeIndex {
     /// BM25 (k1 = 1.2, b = 0.75) over the chunk text and its source name. Deterministic: ties
     /// break on chunk id. `kind` restricts the corpus.
     pub fn search(&self, query: &str, limit: usize, kind: Option<SourceKind>) -> Vec<Hit> {
+        self.search_filtered(query, limit, kind, None)
+    }
+
+    /// `search` restricted to chunks about one part number (MPN or LCSC id, case-insensitive).
+    pub fn search_filtered(
+        &self,
+        query: &str,
+        limit: usize,
+        kind: Option<SourceKind>,
+        part: Option<&str>,
+    ) -> Vec<Hit> {
+        let mut hits = self.rank(query, kind, part);
+        hits.truncate(limit.clamp(1, MAX_QUERY_LIMIT));
+        hits
+    }
+
+    /// BM25 plus `weight` x an optional dense score, then the same engineering rerank.
+    pub fn search_hybrid(
+        &self,
+        query: &str,
+        limit: usize,
+        kind: Option<SourceKind>,
+        part: Option<&str>,
+        dense: &dyn DenseScorer,
+        weight: f64,
+    ) -> Vec<Hit> {
+        let mut hits = self.rank(query, kind, part);
+        for h in &mut hits {
+            h.score += weight * dense.score(query, &h.chunk);
+        }
+        hits.sort_by(|a, b| {
+            b.score
+                .total_cmp(&a.score)
+                .then_with(|| a.chunk.id.cmp(&b.chunk.id))
+        });
+        hits.truncate(limit.clamp(1, MAX_QUERY_LIMIT));
+        hits
+    }
+
+    /// Exact part-number lookup (MPN given at import, or LCSC id in the text): every chunk about
+    /// that part, in source order. No scoring, so no lexical-match requirement.
+    pub fn by_part(&self, part: &str) -> Vec<&Chunk> {
+        let p = part.trim().to_ascii_uppercase();
+        self.chunks
+            .iter()
+            .filter(|c| c.part_ids.iter().any(|x| *x == p))
+            .collect()
+    }
+
+    /// Unlimited, scored and reranked hits (best first).
+    fn rank(&self, query: &str, kind: Option<SourceKind>, part: Option<&str>) -> Vec<Hit> {
+        let part = part.map(|p| p.trim().to_ascii_uppercase());
+        let q_lower = query.to_lowercase();
         let mut q: Vec<String> = Vec::new();
         for t in tokenize(query) {
             if !q.contains(&t) {
@@ -284,6 +417,10 @@ impl KnowledgeIndex {
             .iter()
             .filter(|c| match kind {
                 Some(k) => c.kind == k,
+                None => true,
+            })
+            .filter(|c| match &part {
+                Some(p) => c.part_ids.iter().any(|x| x == p),
                 None => true,
             })
             .map(|c| (c, tokenize(&format!("{} {}", c.source, c.text))))
@@ -319,7 +456,7 @@ impl KnowledgeIndex {
                 }
                 (score > 0.0).then(|| Hit {
                     chunk: (*c).clone(),
-                    score,
+                    score: score * rerank_factor(&q_lower, &q, c),
                     advisory: ADVISORY,
                 })
             })
@@ -329,7 +466,6 @@ impl KnowledgeIndex {
                 .total_cmp(&a.score)
                 .then_with(|| a.chunk.id.cmp(&b.chunk.id))
         });
-        hits.truncate(limit.clamp(1, MAX_QUERY_LIMIT));
         hits
     }
 
@@ -344,6 +480,8 @@ impl KnowledgeIndex {
             revision: c.revision.clone(),
             source_sha256: c.source_sha256.clone(),
             chunk_sha256: c.chunk_sha256.clone(),
+            label: c.label,
+            part_ids: c.part_ids.clone(),
             quote: c.text.clone(),
             advisory: ADVISORY,
             note: "Retrieved text only: it is not a verification result, a gate input or evidence that the design satisfies it. Check numbers with eak-engineering and rules with eak-validation.",
@@ -468,6 +606,65 @@ mod tests {
                 .source
                 .starts_with("docs/")
         );
+    }
+
+    #[test]
+    fn exact_part_lookup_and_filter() {
+        let mut i = KnowledgeIndex::new();
+        i.add_source_for_part(
+            SourceKind::UserDocument,
+            "reg.txt",
+            "rev 1",
+            "Absolute maximum input voltage is 6 V.",
+            &["tps62130".to_string()],
+        );
+        i.add_source(
+            SourceKind::UserDocument,
+            "bom.txt",
+            "rev 1",
+            "Decoupling capacitor C12345 is 100 nF. Absolute maximum 50 V.",
+        );
+        assert_eq!(i.by_part("TPS62130").len(), 1);
+        assert_eq!(i.by_part("c12345").len(), 1);
+        assert!(i.by_part("C999").is_empty());
+        let h = i.search_filtered("absolute maximum", 5, None, Some("C12345"));
+        assert_eq!(h.len(), 1);
+        assert_eq!(h[0].chunk.source, "bom.txt");
+        assert_eq!(h[0].chunk.label, FactLabel::SourceExtracted);
+    }
+
+    #[test]
+    fn rerank_prefers_the_requested_limit_class() {
+        let mut i = KnowledgeIndex::new();
+        i.add_source(SourceKind::UserDocument, "a.txt", "r", "Input voltage typical 5 V.");
+        i.add_source(
+            SourceKind::UserDocument,
+            "b.txt",
+            "r",
+            "Input voltage absolute maximum 6 V.",
+        );
+        let h = i.search("input voltage absolute maximum", 2, None);
+        assert_eq!(h[0].chunk.source, "b.txt");
+    }
+
+    struct Fixed(f64);
+    impl DenseScorer for Fixed {
+        fn score(&self, _q: &str, c: &Chunk) -> f64 {
+            if c.source == "a.txt" {
+                self.0
+            } else {
+                0.0
+            }
+        }
+    }
+
+    #[test]
+    fn hybrid_adds_the_dense_score() {
+        let mut i = KnowledgeIndex::new();
+        i.add_source(SourceKind::UserDocument, "a.txt", "r", "voltage rating");
+        i.add_source(SourceKind::UserDocument, "b.txt", "r", "voltage rating");
+        let h = i.search_hybrid("voltage rating", 2, None, None, &Fixed(5.0), 1.0);
+        assert_eq!(h[0].chunk.source, "a.txt");
     }
 
     #[test]

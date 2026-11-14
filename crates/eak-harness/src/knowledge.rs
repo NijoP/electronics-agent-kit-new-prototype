@@ -46,6 +46,7 @@ pub(crate) fn dispatch(engine: &Engine, name: &str, args: &Value) -> Result<Valu
     match name {
         "knowledge_search" => search(engine, args),
         "knowledge_cite" => cite(engine, args),
+        "knowledge_lookup" => lookup(engine, args),
         "knowledge_import" => import(engine, args),
         other => Err(fail(
             ErrorCode::UnknownTool,
@@ -61,7 +62,8 @@ fn search(engine: &Engine, args: &Value) -> Result<Value, Fail> {
         .and_then(Value::as_u64)
         .map_or(5, |n| n as usize);
     let idx = index(engine)?;
-    let hits = idx.search(query, limit, kind_filter(args)?);
+    let part = args.get("part").and_then(Value::as_str).filter(|s| !s.trim().is_empty());
+    let hits = idx.search_filtered(query, limit, kind_filter(args)?, part);
     Ok(json!({
         "advisory": ADVISORY,
         "note": "Retrieved text is advisory. It is not a validation result and does not change what eak-validation reports; cite it with knowledge_cite and verify numbers with the calc_* tools.",
@@ -73,6 +75,19 @@ fn search(engine: &Engine, args: &Value) -> Result<Value, Fail> {
             "PDFs are not parsed; import extracted text (form feed = page break)",
             "an empty result means no lexical match, not that the topic is unaddressed",
         ],
+    }))
+}
+
+/// Exact MPN / LCSC-id lookup: every chunk about the part, no lexical match needed.
+fn lookup(engine: &Engine, args: &Value) -> Result<Value, Fail> {
+    let part = arg_str(args, "part")?;
+    let idx = index(engine)?;
+    let chunks = idx.by_part(part);
+    Ok(json!({
+        "advisory": ADVISORY,
+        "note": "Chunks tagged with this part number at import or mentioning this LCSC id. Advisory only; an empty list means nothing was imported for it, not that the part is unsuitable or unknown.",
+        "part": part,
+        "chunks": chunks,
     }))
 }
 
@@ -143,7 +158,13 @@ fn import(engine: &Engine, args: &Value) -> Result<Value, Fail> {
         });
     let revision = format!("project revision {}", engine.project().revision);
     let mut user = KnowledgeIndex::load_user(dir).map_err(|e| fail(ErrorCode::Storage, e))?;
-    let summary = user.add_source(SourceKind::UserDocument, &source, &revision, &text);
+    let parts: Vec<String> = args
+        .get("mpn")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| vec![s.to_string()])
+        .unwrap_or_default();
+    let summary = user.add_source_for_part(SourceKind::UserDocument, &source, &revision, &text, &parts);
     user.save_user(dir)
         .map_err(|e| fail(ErrorCode::Storage, e))?;
     Ok(json!({

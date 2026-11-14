@@ -36,16 +36,31 @@ Licences are noted for awareness only; no code from any of them is used.
   The tools never call `Engine::execute`, never write evidence, never feed `eak-validation` gates.
   Retrieved text is data, not instructions.
 
+## Retrieval features (part 2 §8.3)
+
+* **Exact lookup**: `by_part` / `knowledge_lookup` by MPN (given as `mpn` at import) or LCSC id (found in text).
+* **Metadata filter**: `kind`, `part` on `knowledge_search`.
+* **Engineering-aware rerank** (`rerank_factor`, deterministic): x2 for an exact part match, x1.25 when the
+  query asks for "absolute maximum" / "recommended" / "typical" and the chunk states that class.
+* **Hybrid hook**: `DenseScorer` + `search_hybrid`; EAK ships no embedding model, so dense retrieval is off.
+* **Labels and citations**: each chunk has a `FactLabel` (`eak-core::datasheet`); citations carry source,
+  locator (page/section), revision, hashes, label and part ids. Datasheet values with class
+  (absolute max / recommended / characteristic), min/typ/max, conditions, package/revision scope and
+  extracted-auto vs human-verified are typed in `eak-core::datasheet::DatasheetValue`; nothing extracts
+  them automatically yet.
+* **Incremental ingestion**: re-importing a source replaces only its chunks.
+
 ## Harness tools (category `knowledge`, in `tool_specs()`)
 
-`knowledge_search {query, limit?, kind?}` · `knowledge_cite {chunk_id}` · `knowledge_import {path, source?}`.
-Implemented in `crates/eak-harness/src/knowledge.rs`.
+`knowledge_search {query, limit?, kind?, part?}` · `knowledge_lookup {part}` · `knowledge_cite {chunk_id}` ·
+`knowledge_import {path, source?, mpn?}`. Implemented in `crates/eak-harness/src/knowledge.rs`.
 
 ## Not implemented (do not report as available)
 
 * Table / parameter extraction from datasheets (min/typ/max, conditions), PDF parsing, OCR.
-* Exact MPN / LCSC-id lookup, metadata filters beyond `kind`, engineering-aware rerank, dense hybrid hook.
-* Per-fact labels (source-extracted / model interpretation / calculated / assumption / human-approved /
-  unverified) beyond the chunk-level `advisory` flag.
-* Incremental re-ingestion by file change detection (re-import is explicit).
-* Synonyms: lexical match only; an empty result is not evidence that a topic is unaddressed.
+* The dense scorer itself (only the hook exists).
+* Labels other than chunk-level `source_extracted` / `unverified`: model-interpretation, calculated,
+  assumption and human-approved are defined but nothing assigns them yet.
+* LCSC-id detection also matches footprint-like tokens such as `C0805` (affects exact lookup only).
+* File-change detection (re-import is explicit); synonyms (lexical match only: an empty result is not
+  evidence that a topic is unaddressed).

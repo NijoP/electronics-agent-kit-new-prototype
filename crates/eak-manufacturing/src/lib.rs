@@ -13,6 +13,7 @@ pub mod fabpack;
 pub mod gerber;
 pub mod jlcpcb;
 pub mod lcsc;
+pub mod provider;
 pub mod sourcing;
 pub mod stackup;
 pub mod zip;

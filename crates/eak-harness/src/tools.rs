@@ -271,9 +271,16 @@ pub fn tool_specs() -> Vec<ToolSpec> {
                 "query": str_schema("keywords"),
                 "limit": {"type": "integer", "minimum": 1, "maximum": 20},
                 "kind": {"type": "string", "enum": ["desk_rule", "eak_doc", "user_document"]},
+                "part": str_schema("restrict to chunks about this MPN or LCSC id"),
             }),
             &["query"],
         ),
+    ));
+    v.push(spec(
+        "knowledge_lookup",
+        Category::Knowledge,
+        "Exact lookup by MPN (given at import) or LCSC id (found in imported text): every chunk about that part with provenance and trust label. Advisory only.",
+        props(json!({"part": str_schema("MPN or LCSC id")}), &["part"]),
     ));
     v.push(spec(
         "knowledge_cite",
@@ -289,6 +296,7 @@ pub fn tool_specs() -> Vec<ToolSpec> {
             json!({
                 "path": str_schema("file inside the project folder (absolute or relative to it)"),
                 "source": str_schema("optional source label; defaults to the project-relative path"),
+                "mpn": str_schema("optional manufacturer part number every chunk of this document is about (enables knowledge_lookup)"),
             }),
             &["path"],
         ),

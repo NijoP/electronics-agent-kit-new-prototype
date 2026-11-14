@@ -10,8 +10,10 @@
 //! * `migrate`  – schema version handling; unknown/newer schemas fail safely.
 //! * `builtin`  – the built-in, provenance-tagged starter component library.
 //! * `units`    – typed physical quantities (from the earlier EAK prototype; not IR fields).
+//! * `datasheet` – datasheet-aware values, supplier refs, fact labels (not IR fields; ADR-0024).
 
 pub mod builtin;
+pub mod datasheet;
 pub mod geom;
 pub mod integrity;
 pub mod ir;
