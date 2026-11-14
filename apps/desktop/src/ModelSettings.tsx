@@ -9,6 +9,7 @@
 // A provider shows "Connected" only after the backend's staged test streamed a real reply.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
+import { PerformancePanel } from "./PerformancePanel";
 import type { ConnectionReport, ErrorClass, ModelInfo, ProfileInput, ProviderSpec, ProviderView, StatusState } from "./types";
 
 interface Draft {
@@ -502,6 +503,7 @@ export function ModelSettings({ onClose }: { onClose: () => void }) {
             )}
           </form>
         )}
+        <PerformancePanel />
       </div>
     </div>
   );

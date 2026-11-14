@@ -30,6 +30,8 @@ eak-harness.workspace = true
 eak-terminal.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# Semaphore for the bounded job classes (resources.rs). Already in the tree via tauri; "sync" only.
+tokio = { version = "1", default-features = false, features = ["sync"] }
 # OS credential storage for model API keys (owner-approved; keys are never stored anywhere else).
 keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 

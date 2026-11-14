@@ -16,8 +16,9 @@
 pub mod ai;
 pub mod models;
 pub mod parts;
-pub mod workspace;
+pub mod resources;
 pub mod terminal;
+pub mod workspace;
 
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
 use eak_runtime::index::{Index, RecentProject};
@@ -26,7 +27,7 @@ use eak_runtime::{Actor, Command, CommandRequest, CommandResponse, Engine, Event
 use eak_validation::{drc, erc, Report};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 /// Every project open in this window plus which one is active. All IPC commands act on the
 /// active engine only, so contexts never mix; switching changes which engine that is.
@@ -51,6 +52,29 @@ pub struct Session {
     index: Result<Mutex<Index>, String>,
     /// Harness endpoint for terminal agents (ADR-0018); advertised in the open project's folder.
     harness: Mutex<Option<eak_harness::endpoint::Server>>,
+    /// Immutable copy of the active project at one revision, shared by read-only analysis so
+    /// DRC, connectivity, route previews and exports run without holding the engine lock
+    /// (`docs/development/PERFORMANCE_LEDGER.md` L1). Cloned at most once per revision.
+    shared: Mutex<Option<(ProjectKey, Arc<Project>)>>,
+}
+
+/// Which project state a shared copy or a background result belongs to: folder, id, revision.
+/// A result is applied (evidence saved) only while the active engine still has the same key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectKey {
+    dir: Option<PathBuf>,
+    id: Id,
+    revision: u64,
+}
+
+impl ProjectKey {
+    fn of(e: &Engine) -> ProjectKey {
+        ProjectKey {
+            dir: e.dir().map(Path::to_path_buf),
+            id: e.project().id.clone(),
+            revision: e.project().revision,
+        }
+    }
 }
 
 impl Session {
@@ -59,6 +83,7 @@ impl Session {
             engine: Mutex::new(Open::default()),
             index: index.map(Mutex::new),
             harness: Mutex::new(None),
+            shared: Mutex::new(None),
         }
     }
 
@@ -88,6 +113,48 @@ impl Session {
         let mut guard = self.engine()?;
         let engine = guard.active_engine().ok_or("no project is open")?;
         Ok(f(engine))
+    }
+
+    /// The active project at its current revision, as a shared immutable copy. The engine lock
+    /// is held only to compare the key (and, once per revision, to clone); callers then compute
+    /// without it, so edits are never queued behind a long read.
+    fn shared_project(&self) -> Result<(ProjectKey, Arc<Project>), String> {
+        let mut guard = self.engine()?;
+        let engine = guard.active_engine().ok_or("no project is open")?;
+        let key = ProjectKey::of(engine);
+        // Lock order: engine, then shared (nothing takes them the other way round).
+        let mut shared = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some((k, p)) = shared.as_ref() {
+            if *k == key {
+                return Ok((key, Arc::clone(p)));
+            }
+        }
+        let project = Arc::new(engine.project().clone());
+        *shared = Some((key.clone(), Arc::clone(&project)));
+        Ok((key, project))
+    }
+
+    /// Run `f` on the active engine only if it is still the state `key` describes; a result
+    /// computed for an older revision (or another project) is rejected, never applied.
+    fn with_engine_at<T>(
+        &self,
+        key: &ProjectKey,
+        f: impl FnOnce(&mut Engine) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let mut guard = self.engine()?;
+        let engine = guard.active_engine().ok_or("no project is open")?;
+        if ProjectKey::of(engine) != *key {
+            return Err(format!(
+                "the project changed while this ran (it was computed for revision {}); run it again",
+                key.revision
+            ));
+        }
+        f(engine)
+    }
+
+    /// Drop the shared copy when a project closes, so its memory is not retained.
+    fn release_shared(&self) {
+        *self.shared.lock().unwrap_or_else(|p| p.into_inner()) = None;
     }
 
     fn touch_recent(&self, engine: &Engine) {
@@ -378,9 +445,10 @@ pub fn harness_call(s: &Session, req: &eak_harness::endpoint::Request) -> serde_
         );
     }
     let wanted = ctx.project.dir.as_deref();
-    let found = guard.engines.iter_mut().find(|e| {
-        matches!((e.dir(), wanted), (Some(o), Some(w)) if same(o, w))
-    });
+    let found = guard
+        .engines
+        .iter_mut()
+        .find(|e| matches!((e.dir(), wanted), (Some(o), Some(w)) if same(o, w)));
     match found {
         Some(engine) => eak_harness::handle(engine, ctx, "app", &req.tool, &req.args),
         None => {
@@ -449,6 +517,7 @@ pub fn close_project(s: &Session) -> Result<(), String> {
     if let Some(i) = guard.active {
         let gone = guard.engines.remove(i);
         s.advertise(None, gone.dir().map(Path::to_path_buf));
+        s.release_shared();
     }
     guard.active = guard.engines.len().checked_sub(1);
     Ok(())
@@ -496,15 +565,17 @@ pub fn acknowledge_recovery(s: &Session) -> Result<Snapshot, String> {
 
 /// Run ERC, DRC or DFM on the current revision and record the report as evidence.
 pub fn run_check(s: &Session, check: Check) -> Result<CheckResult, String> {
-    s.with_engine(|e| {
-        let report = match check {
-            Check::Erc => erc::run(e.project()),
-            Check::Drc => drc::run(e.project()),
-            Check::Dfm => {
-                eak_validation::dfm::run(e.project(), &eak_validation::dfm::jlcpcb_standard())
-            }
-        };
-        let json = serde_json::to_string_pretty(&report).map_err(|err| err.to_string())?;
+    // The check runs on the shared copy without the engine lock, so edits stay responsive. Its
+    // evidence is saved only if the project is still at the revision it checked: a stale result
+    // is rejected, never recorded against a newer revision.
+    let (key, p) = s.shared_project()?;
+    let report = match check {
+        Check::Erc => erc::run(&p),
+        Check::Drc => drc::run(&p),
+        Check::Dfm => eak_validation::dfm::run(&p, &eak_validation::dfm::jlcpcb_standard()),
+    };
+    let json = serde_json::to_string_pretty(&report).map_err(|err| err.to_string())?;
+    s.with_engine_at(&key, |e| {
         let evidence_path = match e.dir() {
             Some(_) => Some(
                 e.save_evidence(&report.check, &json)
@@ -520,7 +591,7 @@ pub fn run_check(s: &Session, check: Check) -> Result<CheckResult, String> {
             report,
             evidence_path,
         })
-    })?
+    })
 }
 
 /// Domain classification of the open project (DESK domain intelligence, `eak-intelligence`).
@@ -534,9 +605,10 @@ pub struct DomainReport {
 }
 
 pub fn domain_classification(s: &Session) -> Result<DomainReport, String> {
-    s.with_engine(|e| DomainReport {
-        revision: e.project().revision,
-        classification: eak_intelligence::domain::classify_project(e.project()),
+    let (_, p) = s.shared_project()?;
+    Ok(DomainReport {
+        revision: p.revision,
+        classification: eak_intelligence::domain::classify_project(&p),
     })
 }
 
@@ -561,9 +633,10 @@ pub struct ConnectivityReport {
 }
 
 pub fn connectivity(s: &Session) -> Result<ConnectivityReport, String> {
-    s.with_engine(|e| ConnectivityReport {
-        revision: e.project().revision,
-        connectivity: eak_engineering::copper::analyse(e.project()),
+    let (_, p) = s.shared_project()?;
+    Ok(ConnectivityReport {
+        revision: p.revision,
+        connectivity: eak_engineering::copper::analyse(&p),
     })
 }
 
@@ -578,8 +651,8 @@ pub struct SimulationStatus {
 }
 
 pub fn simulation_status(s: &Session) -> Result<SimulationStatus, String> {
-    let (revision, circuit) =
-        s.with_engine(|e| (e.project().revision, eak_simulation::describe(e.project())))?;
+    let (_, p) = s.shared_project()?;
+    let (revision, circuit) = (p.revision, eak_simulation::describe(&p));
     Ok(SimulationStatus {
         ngspice: eak_simulation::probe(),
         revision,
@@ -593,7 +666,7 @@ pub fn run_simulation(
     s: &Session,
     req: &eak_simulation::SimRequest,
 ) -> Result<eak_simulation::SimResult, String> {
-    let project = s.with_engine(|e| e.project().clone())?;
+    let (_, project) = s.shared_project()?;
     eak_simulation::run(&project, req).map_err(|e| e.to_string())
 }
 
@@ -612,9 +685,10 @@ pub fn route_step(
     s: &Session,
     request: &eak_engineering::interactive::RouteStepRequest,
 ) -> Result<RouteStepReport, String> {
-    s.with_engine(|e| RouteStepReport {
-        revision: e.project().revision,
-        step: eak_engineering::interactive::route_step(e.project(), request),
+    let (_, p) = s.shared_project()?;
+    Ok(RouteStepReport {
+        revision: p.revision,
+        step: eak_engineering::interactive::route_step(&p, request),
     })
 }
 
@@ -672,8 +746,8 @@ pub fn library_search(
     category: &str,
     source: &str,
 ) -> Result<Vec<LibraryPart>, String> {
-    let project = s.with_engine(|e| e.project().library.clone())?;
-    Ok(merged_library(&project, query, category, source))
+    let (_, p) = s.shared_project()?;
+    Ok(merged_library(&p.library, query, category, source))
 }
 
 fn merged_library(
@@ -752,7 +826,8 @@ pub fn footprint_candidates(
     s: &Session,
     component_id: &str,
 ) -> Result<Vec<FootprintCandidate>, String> {
-    let project = s.with_engine(|e| e.project().library.clone())?;
+    let (_, shared) = s.shared_project()?;
+    let project = &shared.library;
     let target = project
         .get(component_id)
         .cloned()
@@ -790,33 +865,39 @@ pub struct ExportResult {
 /// Gerber, Excellon, BOM, CPL and the zipped fab pack with its README into `<project>/output/rev-<N>`. The package status is
 /// DRAFT unless every gate passes; it is never called manufacturing-ready.
 pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
-    s.with_engine(|e| {
-        let dir = e
-            .dir()
-            .ok_or("export needs a saved project folder")?
-            .to_path_buf();
-        let reports = vec![
-            erc::run(e.project()),
-            drc::run(e.project()),
-            eak_validation::mech::run(e.project()),
-            eak_validation::dfm::run(e.project(), &eak_validation::dfm::jlcpcb_standard()),
-        ];
-        for r in &reports {
-            let json = serde_json::to_string_pretty(r).map_err(|err| err.to_string())?;
-            e.save_evidence(&r.check, &json)
+    // Checks and file generation run on the shared copy of one revision, without the engine
+    // lock. The lock is taken once to save the evidence, and only if the project is still at
+    // that revision; the output goes to `rev-<N>` of the revision that was checked.
+    let (key, p) = s.shared_project()?;
+    let dir = key
+        .dir
+        .clone()
+        .ok_or("export needs a saved project folder")?;
+    let reports = vec![
+        erc::run(&p),
+        drc::run(&p),
+        eak_validation::mech::run(&p),
+        eak_validation::dfm::run(&p, &eak_validation::dfm::jlcpcb_standard()),
+    ];
+    let mut evidence = Vec::with_capacity(reports.len());
+    for r in &reports {
+        evidence.push(serde_json::to_string_pretty(r).map_err(|err| err.to_string())?);
+    }
+    s.with_engine_at(&key, |e| {
+        for (r, json) in reports.iter().zip(&evidence) {
+            e.save_evidence(&r.check, json)
                 .ok_or_else(|| format!("{} evidence could not be saved", r.check))?;
         }
-        let out = dir
-            .join("output")
-            .join(format!("rev-{}", e.project().revision));
-        let refs: Vec<&Report> = reports.iter().collect();
-        let manifest = eak_manufacturing::compile(e.project(), &refs, &out)?;
-        Ok(ExportResult {
-            out_dir: out.display().to_string(),
-            manifest,
-            reports,
-        })
-    })?
+        Ok(())
+    })?;
+    let out = dir.join("output").join(format!("rev-{}", p.revision));
+    let refs: Vec<&Report> = reports.iter().collect();
+    let manifest = eak_manufacturing::compile(&p, &refs, &out)?;
+    Ok(ExportResult {
+        out_dir: out.display().to_string(),
+        manifest,
+        reports,
+    })
 }
 
 pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, String> {
@@ -838,7 +919,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 50] = [
+pub const IPC_COMMANDS: [&str; 54] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -890,29 +971,68 @@ pub const IPC_COMMANDS: [&str; 50] = [
     "model_set_default",
     "model_export_config",
     "model_import_config",
+    "resource_profile",
+    "performance_settings",
+    "set_performance_settings",
 ];
 
 /// Tauri command wrappers: argument decoding only, no logic.
+///
+/// Work that touches the disk or computes over the project runs on Tokio's blocking pool
+/// ([`blocking`]), never on an async worker thread or the main thread. Validation and analysis
+/// (P2) and background jobs (P3) wait for a slot sized by the resource profile
+/// ([`resources::Resources`]); interactive reads (P0) and edits (P1) never queue. The JS side
+/// awaits each edit, so edit order is unchanged.
 pub mod cmd {
     use super::*;
-    use tauri::State;
+    use crate::resources::{Priority, Resources};
+    use tauri::{AppHandle, Manager, State};
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn create_project(
-        state: State<'_, Session>,
+    /// Run `f` on the blocking pool, after taking a slot of `priority`'s class (if bounded).
+    async fn blocking<T: Send + 'static>(
+        app: AppHandle,
+        priority: Priority,
+        f: impl FnOnce(&Session) -> Result<T, String> + Send + 'static,
+    ) -> Result<T, String> {
+        let limit = app.state::<Resources>().limit(priority);
+        let permit = match limit {
+            Some(sem) => Some(
+                sem.acquire_owned()
+                    .await
+                    .map_err(|_| "the job queue is closed".to_string())?,
+            ),
+            None => None,
+        };
+        tauri::async_runtime::spawn_blocking(move || {
+            let _slot = permit;
+            f(&app.state::<Session>())
+        })
+        .await
+        .map_err(|e| format!("background job failed: {e}"))?
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn create_project(
+        app: AppHandle,
         path: String,
         name: String,
     ) -> Result<Snapshot, String> {
-        super::create_project(&state, &path, &name)
+        blocking(app, Priority::P1, move |s| {
+            super::create_project(s, &path, &name)
+        })
+        .await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn open_project(
-        state: State<'_, Session>,
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn open_project(
+        app: AppHandle,
         path: String,
         take_over_lock: bool,
     ) -> Result<Snapshot, String> {
-        super::open_project(&state, &path, take_over_lock)
+        blocking(app, Priority::P1, move |s| {
+            super::open_project(s, &path, take_over_lock)
+        })
+        .await
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
@@ -920,34 +1040,37 @@ pub mod cmd {
         super::close_project(&state)
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn current_project(state: State<'_, Session>) -> Result<Snapshot, String> {
-        super::current_project(&state)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn current_project(app: AppHandle) -> Result<Snapshot, String> {
+        blocking(app, Priority::P1, super::current_project).await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn execute_command(
-        state: State<'_, Session>,
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn execute_command(
+        app: AppHandle,
         expected_revision: u64,
         command: Command,
     ) -> Result<CommandResponse, String> {
-        super::execute_command(&state, expected_revision, command)
+        blocking(app, Priority::P1, move |s| {
+            super::execute_command(s, expected_revision, command)
+        })
+        .await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn undo(
-        state: State<'_, Session>,
-        expected_revision: u64,
-    ) -> Result<CommandResponse, String> {
-        super::undo(&state, expected_revision)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn undo(app: AppHandle, expected_revision: u64) -> Result<CommandResponse, String> {
+        blocking(app, Priority::P1, move |s| {
+            super::undo(s, expected_revision)
+        })
+        .await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn redo(
-        state: State<'_, Session>,
-        expected_revision: u64,
-    ) -> Result<CommandResponse, String> {
-        super::redo(&state, expected_revision)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn redo(app: AppHandle, expected_revision: u64) -> Result<CommandResponse, String> {
+        blocking(app, Priority::P1, move |s| {
+            super::redo(s, expected_revision)
+        })
+        .await
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
@@ -955,49 +1078,55 @@ pub mod cmd {
         super::events_since(&state, seq)
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn acknowledge_recovery(state: State<'_, Session>) -> Result<Snapshot, String> {
-        super::acknowledge_recovery(&state)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn acknowledge_recovery(app: AppHandle) -> Result<Snapshot, String> {
+        blocking(app, Priority::P1, super::acknowledge_recovery).await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn run_check(state: State<'_, Session>, check: Check) -> Result<CheckResult, String> {
-        super::run_check(&state, check)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn run_check(app: AppHandle, check: Check) -> Result<CheckResult, String> {
+        blocking(app, Priority::P2, move |s| super::run_check(s, check)).await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn domain_classification(state: State<'_, Session>) -> Result<DomainReport, String> {
-        super::domain_classification(&state)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn domain_classification(app: AppHandle) -> Result<DomainReport, String> {
+        blocking(app, Priority::P2, super::domain_classification).await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn intelligence_summary(
-        state: State<'_, Session>,
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn intelligence_summary(
+        app: AppHandle,
     ) -> Result<eak_intelligence::systems::IntelligenceSummary, String> {
-        super::intelligence_summary(&state)
+        blocking(app, Priority::P2, super::intelligence_summary).await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn connectivity(state: State<'_, Session>) -> Result<ConnectivityReport, String> {
-        super::connectivity(&state)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn connectivity(app: AppHandle) -> Result<ConnectivityReport, String> {
+        blocking(app, Priority::P2, super::connectivity).await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn library_search(
-        state: State<'_, Session>,
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn library_search(
+        app: AppHandle,
         query: String,
         category: String,
         source: String,
     ) -> Result<Vec<LibraryPart>, String> {
-        super::library_search(&state, &query, &category, &source)
+        blocking(app, Priority::P0, move |s| {
+            super::library_search(s, &query, &category, &source)
+        })
+        .await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn library_footprint_candidates(
-        state: State<'_, Session>,
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn library_footprint_candidates(
+        app: AppHandle,
         component_id: String,
     ) -> Result<Vec<FootprintCandidate>, String> {
-        super::footprint_candidates(&state, &component_id)
+        blocking(app, Priority::P0, move |s| {
+            super::footprint_candidates(s, &component_id)
+        })
+        .await
     }
 
     /// Bytes of a component's 3D model file, returned as a raw binary IPC response.
@@ -1006,25 +1135,30 @@ pub mod cmd {
         super::read_model_file(&path).map(tauri::ipc::Response::new)
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn simulation_status(state: State<'_, Session>) -> Result<SimulationStatus, String> {
-        super::simulation_status(&state)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn simulation_status(app: AppHandle) -> Result<SimulationStatus, String> {
+        // Probes for the ngspice executable (a process spawn), so it is background work.
+        blocking(app, Priority::P3, super::simulation_status).await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn run_simulation(
-        state: State<'_, Session>,
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn run_simulation(
+        app: AppHandle,
         request: eak_simulation::SimRequest,
     ) -> Result<eak_simulation::SimResult, String> {
-        super::run_simulation(&state, &request)
+        blocking(app, Priority::P3, move |s| {
+            super::run_simulation(s, &request)
+        })
+        .await
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn route_step(
-        state: State<'_, Session>,
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn route_step(
+        app: AppHandle,
         request: eak_engineering::interactive::RouteStepRequest,
     ) -> Result<RouteStepReport, String> {
-        super::route_step(&state, &request)
+        // Interactive preview: never queued behind validation or exports.
+        blocking(app, Priority::P0, move |s| super::route_step(s, &request)).await
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
@@ -1032,9 +1166,9 @@ pub mod cmd {
         super::library_components()
     }
 
-    #[tauri::command(async, rename_all = "snake_case")]
-    pub fn export_manufacturing(state: State<'_, Session>) -> Result<ExportResult, String> {
-        super::export_manufacturing(&state)
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn export_manufacturing(app: AppHandle) -> Result<ExportResult, String> {
+        blocking(app, Priority::P3, super::export_manufacturing).await
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
@@ -1062,6 +1196,13 @@ pub fn run() {
                 eprintln!("eak-desktop: recent-project index unavailable: {e}");
             }
             app.manage(Session::new(index));
+            // One resource profile for the whole app (docs/development/PERFORMANCE.md section 3).
+            app.manage(resources::Resources::load(
+                app.path()
+                    .app_config_dir()
+                    .ok()
+                    .map(|d| d.join("performance.json")),
+            ));
             // Harness endpoint for terminal agents: they act through this app's engine while a
             // project is open here (single writer; ADR-0018).
             match app.path().app_data_dir() {
@@ -1168,6 +1309,9 @@ pub fn run() {
             terminal::cmd::terminal_space_rename,
             terminal::cmd::terminal_space_close,
             terminal::cmd::terminal_move_tab,
+            resources::cmd::resource_profile,
+            resources::cmd::performance_settings,
+            resources::cmd::set_performance_settings,
         ])
         .build(tauri::generate_context!())
         .expect("EAK desktop failed to start")
@@ -1216,10 +1360,9 @@ fn terminal_state(app: &tauri::App) -> terminal::TerminalState {
     // this in `setup`); the project dir/id come from the session's space (docs/AGENT_HARNESS.md).
     let mut base_env = Vec::new();
     match &api {
-        Ok((file, _)) => base_env.push((
-            "EAK_TERMINAL_API_FILE".into(),
-            file.display().to_string(),
-        )),
+        Ok((file, _)) => {
+            base_env.push(("EAK_TERMINAL_API_FILE".into(), file.display().to_string()))
+        }
         Err(e) => eprintln!("eak-desktop: {e}"),
     }
     if let Some(h) = harness_endpoint(&app.state::<Session>()) {

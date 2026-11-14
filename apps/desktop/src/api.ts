@@ -2,6 +2,7 @@
 // module that talks to Rust; every project change is an engine call made here.
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import type { PerformanceSettings, ResourceProfile } from "./resourceProfile";
 import type {
   AiProposal,
   RouteStepReport,
@@ -113,6 +114,9 @@ export const IPC_COMMANDS = [
   "project_file_rename",
   "project_file_delete",
   "project_git_status",
+  "resource_profile",
+  "performance_settings",
+  "set_performance_settings",
   ...TERMINAL_IPC,
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
@@ -194,6 +198,10 @@ export const api = {
     call<FileEntry>("project_file_create", { project_id: projectId, rel, is_dir: isDir }),
   projectFileRename: (projectId: string, from: string, to: string) => call<void>("project_file_rename", { project_id: projectId, from, to }),
   projectGitStatus: (projectId: string) => call<GitStatus>("project_git_status", { project_id: projectId }),
+  // Central resource profile (src-tauri/src/resources.rs): job limits, cache budget, 3D tier, scrollback.
+  resourceProfile: () => call<ResourceProfile>("resource_profile"),
+  performanceSettings: () => call<PerformanceSettings>("performance_settings"),
+  setPerformanceSettings: (settings: PerformanceSettings) => call<ResourceProfile>("set_performance_settings", { settings }),
   projectFileDelete: (projectId: string, rel: string, recursive: boolean) =>
     call<void>("project_file_delete", { project_id: projectId, rel, recursive }),
 };

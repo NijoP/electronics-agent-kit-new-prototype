@@ -36,6 +36,12 @@ export interface DragHandler {
 
 const CLICK_SLOP_PX = 4;
 
+interface PointerSample {
+  clientX: number;
+  clientY: number;
+  buttons: number;
+}
+
 export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, underlay, overlay }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const docId = useDocId();
@@ -84,13 +90,54 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  const toView = (e: ReactPointerEvent<SVGSVGElement>): [number, number] | null => {
+  const toView = (e: { clientX: number; clientY: number }): [number, number] | null => {
     const el = ref.current;
     if (!el) return null;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return null;
     return clientToView(vbRef.current, r, e.clientX - r.left, e.clientY - r.top);
   };
+
+  // Pointer moves: the first move of a frame is handled at once (no added latency); further
+  // moves before the next frame are folded into one, handled in requestAnimationFrame, because
+  // they cannot change what is drawn. Pointer-up flushes the pending move first, so a drag
+  // always ends exactly where the pointer was released (PERFORMANCE_LEDGER.md L4).
+  const handleMove = (m: PointerSample) => {
+    const p = toView(m);
+    if (p && onHover) onHover(p[0], p[1]);
+    const d = drag.current;
+    const el = ref.current;
+    if (!d || !el || m.buttons === 0) return;
+    const g = down.current;
+    if (g && Math.hypot(m.clientX - g.x, m.clientY - g.y) > CLICK_SLOP_PX) g.moved = true;
+    if (g?.captured) {
+      if (g.moved && p) onDrag?.move(p[0], p[1]);
+      return;
+    }
+    // Middle-button drag always pans; a left drag pans only when no tool or drag claimed it.
+    if (tool && !g?.moved && !g?.middle) return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return;
+    setVb((v) => pan(v, r, m.clientX - d.x, m.clientY - d.y));
+    drag.current = { x: m.clientX, y: m.clientY };
+  };
+  const moveRef = useRef(handleMove);
+  moveRef.current = handleMove;
+  const frame = useRef<{ id: number; next: PointerSample | null } | null>(null);
+  const flushMove = () => {
+    const f = frame.current;
+    if (!f) return;
+    cancelAnimationFrame(f.id);
+    frame.current = null;
+    if (f.next) moveRef.current(f.next);
+  };
+  useEffect(
+    () => () => {
+      if (frame.current) cancelAnimationFrame(frame.current.id);
+      frame.current = null;
+    },
+    [],
+  );
 
   return (
     <svg
@@ -107,25 +154,22 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
         down.current = { x: e.clientX, y: e.clientY, moved: false, captured, middle: e.button === 1 };
       }}
       onPointerMove={(e) => {
-        const p = toView(e);
-        if (p && onHover) onHover(p[0], p[1]);
-        const d = drag.current;
-        const el = ref.current;
-        if (!d || !el || e.buttons === 0) return;
-        const g = down.current;
-        if (g && Math.hypot(e.clientX - g.x, e.clientY - g.y) > CLICK_SLOP_PX) g.moved = true;
-        if (g?.captured) {
-          if (g.moved && p) onDrag?.move(p[0], p[1]);
+        const m: PointerSample = { clientX: e.clientX, clientY: e.clientY, buttons: e.buttons };
+        if (frame.current) {
+          frame.current.next = m;
           return;
         }
-        // Middle-button drag always pans; a left drag pans only when no tool or drag claimed it.
-        if (tool && !g?.moved && !g?.middle) return;
-        const r = el.getBoundingClientRect();
-        if (r.width === 0 || r.height === 0) return;
-        setVb((v) => pan(v, r, e.clientX - d.x, e.clientY - d.y));
-        drag.current = { x: e.clientX, y: e.clientY };
+        handleMove(m);
+        const slot: { id: number; next: PointerSample | null } = { id: 0, next: null };
+        slot.id = requestAnimationFrame(() => {
+          if (frame.current !== slot) return;
+          frame.current = null;
+          if (slot.next) moveRef.current(slot.next);
+        });
+        frame.current = slot;
       }}
       onPointerUp={(e) => {
+        flushMove();
         const g = down.current;
         drag.current = null;
         down.current = null;
@@ -141,6 +185,8 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
         if (p) onPoint(p[0], p[1], e);
       }}
       onPointerLeave={() => {
+        if (frame.current) cancelAnimationFrame(frame.current.id);
+        frame.current = null;
         if (down.current?.captured) onDrag?.cancel();
         drag.current = null;
         down.current = null;
