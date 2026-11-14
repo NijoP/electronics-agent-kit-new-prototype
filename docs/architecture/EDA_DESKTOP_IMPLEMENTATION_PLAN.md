@@ -45,6 +45,17 @@ and `integrity.rs`) and `crates/eak-runtime/src/command.rs`. Rules:
 4. **Work in flight** when this was written: a desktop workspace-shell worker (this plan's Phase 1),
    a multi-layer engine worker (Phase 3.1) and a supplier-integration worker (Phase 5). This plan is
    to be reconciled with their PRs when they open; it does not assume their designs.
+5. **Update, later on 2026-11-14:** the shell work merged as
+   [PR #21](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/21) and the multi-layer
+   work as [PR #22](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/22) (`main` at
+   `6a3b358`). PR #22 already delivers much of Phase 3.1 in its own design (`CopperLayer::Inner(n)`,
+   2-16 layers, via spans, `SetLayerCount`, ADR-0012) rather than the `LayerId` design proposed here,
+   and PR #21 delivers part of Phase 1 (tabs, panels, status bar, themes, palette). Phase 1 therefore
+   starts with a re-audit of Parts 4 and 6 at the new `main`; Phase 3.1 shrinks to the gaps PR #22
+   lists (per-layer name and colour in EAK-IR, non-copper layers in the layer manager, microvias,
+   inner-layer autorouting), and the `LayerId` proposal is to be weighed against ADR-0012 in an ADR,
+   not assumed. The effort figures below were written before these merges and are now upper bounds
+   for Phases 1 and 3.1.
 
 ## Phase 0: repository audit and research (this PR)
 

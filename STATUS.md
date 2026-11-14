@@ -3,6 +3,14 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## EDA desktop directive, Phase 0: research and repository audit (2026-11-14)
+
+Documentation only; no code changed and no tests were run. Adds the EasyEDA ecosystem research
+(`docs/research/`: 37 repositories inspected, 104 listed, licence audit; nothing copied), the gap
+analysis, target architecture and phased implementation plan (`docs/architecture/`), and the tracking
+files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The test baseline in
+`TEST_RESULTS.md` is copied from the merged PR bodies #12-#19, not re-run.
+
 ## DESK domain intelligence: 100 domain classes, classifier, Domain panel (2026-11-14)
 
 **Platform tested:** Linux, Rust stable. Windows and macOS: not run. The Domain panel was tested in jsdom, not in a real WebView.

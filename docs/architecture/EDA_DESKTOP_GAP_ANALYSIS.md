@@ -17,6 +17,34 @@ sequence of work is in [`EDA_DESKTOP_IMPLEMENTATION_PLAN.md`](EDA_DESKTOP_IMPLEM
   *architecturally missing* (cannot be added without changing a shared contract: EAK-IR, `Command`,
   IPC types or report types).
 
+### Update after the snapshot (2026-11-14, later the same day)
+
+Two of the in-flight items in the table below merged into `origin/main` after this analysis was
+written, moving `main` from `afd9351` to `6a3b358`. **This document has not been re-audited against
+them**; the gap tables below still describe `afd9351`. The summaries here come only from the two PR
+bodies and the diff file list, not from reading or running the code:
+
+- [PR #22](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/22) (merge `21dfe5e`),
+  "multilayer boards": its body reports `CopperLayer::Inner(n)`, a 2-16 copper-layer stack-up with
+  signal/plane kinds, a `SetLayerCount` command, through/blind/buried via spans, inner plane zones with
+  thermal reliefs, DRC-016/017, per-layer Gerber and per-span drill export, a JLCPCB stack-up check
+  (limits unverified), and PCB editor layer controls; it merges and extends PRs #4 and #5 (ADR-0012). Its own
+  listed gaps: layer name/colour not stored per layer, no microvias, layer manager lists copper only,
+  autorouter outer layers and through vias only.
+- [PR #21](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/21) (merge `6a3b358`),
+  "professional workspace shell", frontend only: its body reports an activity bar, collapsible panels,
+  editor tabs (Schematic+PCB / Schematic / PCB), a bottom panel, a status bar, command palette and
+  quick open, dark and light tokens, and a local deterministic assistant that proposes typed commands.
+  Its own listed gaps: no menu bar, tabs not bound to backend document identity, layout not dockable
+  or persisted, not launched in a real Tauri window.
+
+Consequences for this audit: the Part 4 and Part 6 rows that say *missing* for tabs, themes, status
+bar, multi-layer IR, via spans, thermal reliefs and the layer controls are likely out of date, and the
+in-flight table below is superseded for the shell and multi-layer rows. The supplier work
+([PR #17](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/17)) and
+`fm/eak-install-scripts` were still unmerged at `6a3b358`. A re-audit of Parts 4 and 6 at the new
+`main` is the first item of plan Phase 1.
+
 ### Work in flight at the time of reading (pending, not part of this baseline)
 
 The owner has other workers on the same directive. Their branches were not read for this audit and

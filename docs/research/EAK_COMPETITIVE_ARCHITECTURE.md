@@ -9,12 +9,12 @@ public repositories show.
 
 ## Positioning
 
-| Dimension | EasyEDA Pro (from the public repositories) | EAK (on `main`, 2026-11-14) | Position EAK should take |
+| Dimension | EasyEDA Pro (from the public repositories) | EAK (on `main` at `afd9351`, 2026-11-14) | Position EAK should take |
 |---|---|---|---|
 | Engine | Closed-source editor; extensions reach it only through the `eda.*` API | Open Rust engine (`eak-core`, `eak-runtime`, `eak-engineering`, `eak-validation`, `eak-manufacturing`) | Keep; this is EAK's main differentiator |
 | Mutation boundary | Per-primitive create/modify/delete calls; schematic and PCB commit differently; no undo/redo API | One typed `Command` enum through `Engine::execute`; revision check, approval, transaction, journal, diff undo | Keep and extend (`Batch`, new primitives) |
 | AI integration | Local bridge executing arbitrary JavaScript in the editor; MCP server mode in the client; AI extensions trust model output | Typed tool per command, approval classes, sandbox preview, independent verification | Keep; add the desktop assistant and activity panels |
-| Data model | Append-only record log per document with logical clocks; floating-point mil; up to 32 copper layers | Canonical JSON EAK-IR, integer nanometres, two copper layers | Keep the representation; upgrade layers to an ordered stack-up |
+| Data model | Append-only record log per document with logical clocks; floating-point mil; up to 32 copper layers | Canonical JSON EAK-IR, integer nanometres, two copper layers (2-16 since PR #22, merged after this snapshot) | Keep the representation; complete the ordered stack-up |
 | Verification | Opaque `PCB_Drc.check` / `SCH_Drc.check`; DFM checks as extensions; no published rule catalogue | ERC/DRC/MECH with stable ids, revision + input hash, measured vs required, `not_implemented` | Keep; widen rule coverage using EasyEDA's taxonomy as a checklist |
 | Manufacturing | Many export formats (`PCB_ManufactureData`); viewers marked "reference only" | Gerber, Excellon, BOM, CPL, manifest, release gate that never says "ready" | Keep the gate; add formats over time |
 | Desktop UX | Professional workspace: document tabs, panels, layer manager, object trees, cross-probing, net highlighting (seen through the viewers and the API surface) | One workspace screen, SVG editors, findings panel, command palette | **Gap to close: this is what Phases 1-4 are for** |
