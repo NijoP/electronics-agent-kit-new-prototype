@@ -10,6 +10,7 @@
 //!   "active project".
 //! * `tools`    – the typed tool registry and its dispatcher over an `Engine`; every response is
 //!   one structured JSON envelope.
+//! * `engineering` – unit-aware copper/power calculations and the fail-closed gates as tools.
 //! * `endpoint` – the authenticated local socket the desktop app serves while it has a project
 //!   open (single writer), and its client.
 //! * `route`    – picks the running app's engine (socket) or a direct engine under the project
@@ -21,6 +22,7 @@ pub mod cli;
 pub mod context;
 pub mod design;
 pub mod endpoint;
+pub mod engineering;
 pub mod mcp;
 pub mod route;
 pub mod tools;

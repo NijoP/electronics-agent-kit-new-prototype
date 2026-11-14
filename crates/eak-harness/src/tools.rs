@@ -190,6 +190,49 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         props(json!({"check": {"type": "string", "enum": ["erc", "drc", "mech", "dfm", "all"], "description": "which check"}}), &["check"]),
     ));
     v.push(spec(
+        "run_gates",
+        Validation,
+        "Fail-closed engineering gates on the current revision: shorts, required pads connected, net connectivity, clearances, annular ring, outline, stackup, copper continuity, fabricator capability, electrical constraints, return path. Each gate is PASS, FAIL, UNKNOWN or NOT_RUN with evidence; only PASS passes and unknown is never a pass. Stored as evidence. Not a manufacturing-ready claim.",
+        props(json!({"fab_profile": {"type": "string", "enum": ["none", "jlcpcb_standard"], "description": "fabricator capability profile; none leaves the capability gate UNKNOWN"}}), &["fab_profile"]),
+    ));
+    let num = |d: &str| json!({"type": "number", "description": d});
+    v.push(spec(
+        "calc_copper_trace_width",
+        Read,
+        "IPC-2221 minimum trace width with every input explicit (no defaults); flags inputs outside the formula's source range. Source table unverified against the standard text.",
+        props(
+            json!({
+                "current_a": num("continuous current, A"),
+                "copper_thickness_um": num("copper thickness, µm (1 oz/ft² ≈ 34.8 µm)"),
+                "temp_rise_k": num("allowed conductor temperature rise, K (= °C difference)"),
+                "layer": {"type": "string", "enum": ["external", "internal"]},
+            }),
+            &["current_a", "copper_thickness_um", "temp_rise_k", "layer"],
+        ),
+    ));
+    v.push(spec(
+        "calc_copper_voltage_drop",
+        Read,
+        "DC resistance, voltage drop and dissipation of one copper conductor (IEC 60028 annealed copper, temperature-corrected). All inputs explicit; supply voltage only adds the percentage.",
+        props(
+            json!({
+                "current_a": num("current, A"),
+                "length_mm": num("conductor length, mm"),
+                "width_mm": num("conductor width, mm"),
+                "copper_thickness_um": num("copper thickness, µm"),
+                "conductor_temperature_c": num("absolute conductor temperature, °C"),
+                "supply_voltage_v": num("optional supply voltage, V"),
+            }),
+            &["current_a", "length_mm", "width_mm", "copper_thickness_um", "conductor_temperature_c"],
+        ),
+    ));
+    v.push(spec(
+        "power_analysis",
+        Read,
+        "Track-only DC drop upper bound per net with a declared current, declared currents with no copper, and return-path continuity (signal tracks over gaps in the adjacent ground plane, split ground zones). Unknown entries are reported with the reason.",
+        empty(),
+    ));
+    v.push(spec(
         "simulation_status",
         Simulation,
         "Whether ngspice is installed, and the nets/elements a simulation of the current revision would use (and parts it would skip).",
@@ -498,6 +541,7 @@ fn dispatch(
 ) -> Result<Value, Fail> {
     match spec.category {
         Category::Design => design(engine, ctx, spec, args),
+        Category::Validation if spec.name == "run_gates" => run_gates(engine, args),
         Category::Validation => {
             let check = args.get("check").and_then(Value::as_str).unwrap_or("");
             run_checks(engine, check)
@@ -618,6 +662,25 @@ pub(crate) fn run_checks(engine: &mut Engine, check: &str) -> Result<Value, Fail
         "reports": out,
         "note": "deterministic checks from eak-validation; no errors in implemented checks does not prove the design correct (see not_implemented and limitations)",
     }))
+}
+
+fn run_gates(engine: &mut Engine, args: &Value) -> Result<Value, Fail> {
+    let r = crate::engineering::run_gates(engine.project(), args)
+        .map_err(|e| fail(ErrorCode::InvalidArguments, e))?;
+    let json =
+        serde_json::to_string_pretty(&r).map_err(|e| fail(ErrorCode::Internal, e.to_string()))?;
+    let path = match engine.dir() {
+        Some(_) => Some(engine.save_evidence("GATES", &json).ok_or_else(|| {
+            fail(
+                ErrorCode::Storage,
+                "gates ran but their evidence could not be saved",
+            )
+        })?),
+        None => None,
+    };
+    let mut v = serde_json::to_value(&r).map_err(|e| fail(ErrorCode::Internal, e.to_string()))?;
+    v["evidence_path"] = json!(path);
+    Ok(v)
 }
 
 fn export(engine: &mut Engine, args: &Value) -> Result<Value, Fail> {
@@ -777,6 +840,15 @@ fn read(engine: &Engine, name: &str, args: &Value) -> Result<Value, Fail> {
                 .and_then(Value::as_u64)
                 .unwrap_or(0),
         )),
+        "calc_copper_trace_width" => {
+            crate::engineering::trace_width(args).map_err(|e| fail(ErrorCode::InvalidArguments, e))
+        }
+        "calc_copper_voltage_drop" => {
+            crate::engineering::voltage_drop(args).map_err(|e| fail(ErrorCode::InvalidArguments, e))
+        }
+        "power_analysis" => {
+            crate::engineering::power_analysis(p).map_err(|e| fail(ErrorCode::Internal, e))
+        }
         other => match readonly::run(other, args, p) {
             Some(r) => r.map_err(|e| fail(ErrorCode::InvalidArguments, e)),
             None => Err(fail(

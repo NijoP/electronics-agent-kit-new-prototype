@@ -7,9 +7,11 @@
 pub mod dfm;
 pub mod drc;
 pub mod erc;
+pub mod gates;
 pub mod holes;
 pub mod mech;
 pub mod report;
 pub mod sourcing;
 
+pub use gates::{GateReport, GateState};
 pub use report::{Bound, Finding, Limit, Outcome, Quantity, Report, Severity};

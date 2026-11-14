@@ -190,6 +190,23 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
             ));
         }
     }
+    // Fail-closed engineering gates, evaluated independently on this revision: every required
+    // gate must be PASS (FAIL and UNKNOWN both block). Fabricator capability is covered by the
+    // supplied, revision-bound DFM report above, so that gate is skipped here.
+    let gate_report = eak_validation::gates::evaluate(p, None);
+    for g in &gate_report.gates {
+        if g.required
+            && g.id != "fabricator_capability"
+            && g.state != eak_validation::GateState::Pass
+        {
+            blocking.push(format!(
+                "gate {} is {:?}: {}",
+                g.id,
+                g.state,
+                g.reasons.first().cloned().unwrap_or_default()
+            ));
+        }
+    }
     let stem = p
         .name
         .chars()

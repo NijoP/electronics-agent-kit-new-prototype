@@ -282,13 +282,16 @@ pub fn run(name: &str, args: &Value, p: &Project) -> Option<Result<Value, String
         "calc_trace_width" => (|| {
             let current = req_num(args, "current_a")?;
             let rise = arg_num(args, "temp_rise_c")?.unwrap_or(p.constraints.temp_rise_c);
-            let oz = arg_num(args, "copper_oz")?.unwrap_or(
-                p.pcb
+            // From the argument or the project's own top-layer copper; never a silent 1 oz.
+            let oz = match arg_num(args, "copper_oz")? {
+                Some(v) => v,
+                None => p
+                    .pcb
                     .board
                     .stackup
                     .copper_oz(eak_core::CopperLayer::Top)
-                    .unwrap_or(1.0),
-            );
+                    .ok_or("copper_oz is required: the stackup has no top copper layer")?,
+            };
             let internal = args
                 .get("internal")
                 .and_then(Value::as_bool)
