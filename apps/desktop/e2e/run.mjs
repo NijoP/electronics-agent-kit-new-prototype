@@ -89,8 +89,22 @@ const ok = (cond, msg) => {
 };
 
 // The same IPC entry point the UI's api.ts uses.
-const ipc = (cmd, args = {}) =>
-  browser.execute((c, a) => window.__TAURI_INTERNALS__.invoke(c, a), cmd, args);
+// WebKitWebDriver cannot serialize promise results of `execute`, so use the async callback
+// and pass the value as JSON; IPC errors come back as { err } and are rethrown here.
+async function ipc(cmd, args = {}) {
+  const raw = await browser.executeAsync(
+    (c, a, done) =>
+      window.__TAURI_INTERNALS__
+        .invoke(c, a)
+        .then((v) => done(JSON.stringify({ ok: v ?? null })))
+        .catch((e) => done(JSON.stringify({ err: String(e) }))),
+    cmd,
+    args,
+  );
+  const r = JSON.parse(raw);
+  if ("err" in r) throw new Error(`${cmd}: ${r.err}`);
+  return r.ok;
+}
 const snap = () => ipc("current_project");
 const count = (o) => Object.keys(o ?? {}).length;
 
@@ -106,7 +120,7 @@ async function waitRevisionAbove(rev, msg) {
 const statusMessage = () =>
   browser.execute(() => [...document.querySelectorAll(".statusbar, .status-bar, footer")].map((e) => e.textContent).join(" | "));
 async function clickButton(scope, text) {
-  const b = await browser.$(`${scope} button=${text}`);
+  const b = await browser.$(scope).$(`button=${text}`);
   await b.waitForClickable({ timeout: 10000 });
   await b.click();
 }
@@ -158,7 +172,7 @@ try {
     hostname: "127.0.0.1",
     port: PORT,
     logLevel: "error",
-    capabilities: { browserName: "wry", "tauri:options": { application: APP } },
+    capabilities: { "tauri:options": { application: APP } },
   });
 
   await step("S01", "Launch app, Project Home visible", "UI", async () => {
@@ -374,7 +388,7 @@ try {
   });
 
   await step("S18", "Reopen from Recent projects and compare", "UI", async () => {
-    const b = await browser.$(`section[aria-label="Recent projects"] button*=${PROJECT_NAME}`);
+    const b = await browser.$('section[aria-label="Recent projects"]').$(`button*=${PROJECT_NAME}`);
     await b.waitForClickable({ timeout: 10000 });
     await b.click();
     await browser.$(".workspace").waitForDisplayed({ timeout: 20000 });
