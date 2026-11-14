@@ -34,7 +34,7 @@ project's current id and revision when it was opened.
 `get_component`, `list_footprints` (pads with absolute position, size, drill, net), `get_board`
 (outline, stackup, tracks, vias, zones, constraints), `get_connectivity` (copper groups, shorts,
 ratsnest), `get_history` (journal revisions with actor, tool-call log, evidence files),
-`get_design_summary`, `get_netlist`, `list_library_components`, `classify_domain`, and the
+`get_design_summary`, `get_netlist`, `list_library_components`, `classify_domain`, `analyze_placement` (roles, decap/crystal/ESD snaps with measured distances, clusters, MST airwire length, findings, limitations; the rules `AutoPlace` applies), and the
 calculators `calc_trace_width`, `calc_conductor_clearance`, `calc_led_resistor`,
 `calc_voltage_divider`, `calc_linear_regulator`, `calc_rc_time_constant`.
 

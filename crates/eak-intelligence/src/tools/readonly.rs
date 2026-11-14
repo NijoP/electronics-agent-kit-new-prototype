@@ -46,6 +46,12 @@ pub fn read_tools() -> Vec<ReadTool> {
             true,
         ),
         tool(
+            "analyze_placement",
+            "Placement intelligence (DESK-derived mental models, deterministic): infers each footprint's role, finds decoupling/crystal/ESD snaps with measured pad distances, functional clusters per IC, total and longest airwire length (MST), and findings (decap > 2 mm from its IC pad, connector far from the board edge, heat-generating parts too close). Lists what it does not evaluate; never a certification. AutoPlace applies the same rules.",
+            obj(&[], &[]),
+            true,
+        ),
+        tool(
             "list_library_components",
             "Components available for placement (built-in and project library) with their pins.",
             obj(&[], &[]),
@@ -260,6 +266,14 @@ pub fn run(name: &str, args: &Value, p: &Project) -> Option<Result<Value, String
         "get_design_summary" => Ok(summary(p)),
         "classify_domain" => {
             serde_json::to_value(crate::domain::classify_project(p)).map_err(|e| e.to_string())
+        }
+        "analyze_placement" => {
+            let mut v = serde_json::to_value(eak_engineering::placement_intel::analyze(p))
+                .map_err(|e| e.to_string());
+            if let Ok(o) = v.as_mut() {
+                o["revision"] = json!(p.revision);
+            }
+            v
         }
         "list_library_components" => Ok(json!({"revision": p.revision, "components": library(p)})),
         "get_netlist" => Ok(nets(p, args.get("net").and_then(Value::as_str))),

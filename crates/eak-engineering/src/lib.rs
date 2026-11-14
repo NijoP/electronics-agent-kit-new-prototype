@@ -8,6 +8,7 @@
 //! * `router`  – EAK's native two-layer grid router.
 //! * `interactive` – route-step API for the interactive PCB route tool (walkaround, 45/90, vias).
 //! * `placer`  – constructive footprint placement.
+//! * `placement_intel` – placement mental models (roles, snaps, analysis) ported from DESK.
 //! * `scene3d` – board/component geometry for the 3D workspace and mechanical checks.
 
 pub mod calc;
@@ -15,6 +16,7 @@ pub mod copper;
 pub mod interactive;
 pub mod ipc;
 pub mod netlist;
+pub mod placement_intel;
 pub mod placer;
 pub mod router;
 pub mod scene3d;

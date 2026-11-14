@@ -19,6 +19,7 @@ assistant panel was removed in the IDE shell (#49); model providers remain as op
 |---|---|---|
 | EAK-IR, command engine, journal, undo, recovery | build/test-verified | engine contract tests (before the freeze) |
 | ERC / DRC / MECH, sourcing checks | build/test-verified | reports list `not_implemented` and `limitations` |
+| Placement intelligence (roles, snaps, `analyze_placement`) | code-reviewed only, unbuilt | DESK-derived heuristics; no thermal, RF, switching-node or escape analysis |
 | Engineering calculators, router, placer | build/test-verified | IPC tables not checked against the standard text |
 | Gerber / drill / BOM / CPL, JLCPCB preparation | build/test-verified | DRAFT output; no external viewer or fabricator check |
 | Schematic and PCB editors (select, drag, flip, grids, align) | build/test-verified (jsdom + engine) | not exercised in a real window |

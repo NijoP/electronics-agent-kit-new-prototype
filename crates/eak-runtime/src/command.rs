@@ -1251,6 +1251,17 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     p.pcb.footprints[&id].refdes
                 ));
             }
+            // Measurable reasoning: recompute constraints on the result (not model-asserted).
+            let a = eak_engineering::placement_intel::analyze(p);
+            warnings.push(format!(
+                "placement: {} snapped part(s), total airwire {:.1} mm, {} finding(s) (call analyze_placement; heuristic, not a certification)",
+                a.snaps.len(),
+                a.total_airwire_mm,
+                a.findings.len()
+            ));
+            for f in a.findings.iter().take(10) {
+                warnings.push(format!("{}: {}", f.rule, f.message));
+            }
         }
         AutoRoute { nets } => {
             if p.pcb.board.outline.len() < 3 {
