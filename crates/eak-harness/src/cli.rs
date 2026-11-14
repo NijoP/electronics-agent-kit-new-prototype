@@ -31,6 +31,15 @@ COMMANDS:
   check <erc|drc|mech|dfm|all>  run verification; findings + evidence
   history [SINCE_REV]           journal, tool calls, evidence
   export [REV]                  compile the manufacturing package
+  design schema                 requirement spec schema, metrics, evidence labels
+  design spec [FILE|JSON|-]     set the spec (no argument: show it)
+  design plan <FILE|JSON|->     record a plan of typed commands (nothing runs)
+  design apply <PLAN_ID> <REV>  execute a plan as one batch at revision REV
+  design validate               checks + spec evaluation (findings, labels)
+  design claim <FILE|JSON|->    record a claim and its basis
+  design log                    iteration record
+  design report                 evidence report with labels and approval state
+  design approve <REV> <FP>     human approval of a report (interactive terminal only)
   mcp                           serve MCP over stdio";
 
 fn read_arg(s: &str) -> Result<Value, String> {
@@ -44,6 +53,16 @@ fn read_arg(s: &str) -> Result<Value, String> {
     serde_json::from_str(&text).map_err(|e| format!("invalid JSON: {e}"))
 }
 
+/// A JSON argument: inline JSON, `-` for stdin, or a path to a JSON file.
+fn read_json_or_file(s: &str) -> Result<Value, String> {
+    let t = s.trim_start();
+    if s == "-" || t.starts_with('{') || t.starts_with('[') {
+        return read_arg(s);
+    }
+    let text = std::fs::read_to_string(s).map_err(|e| format!("{s}: {e}"))?;
+    serde_json::from_str(&text).map_err(|e| format!("{s}: invalid JSON: {e}"))
+}
+
 fn exit_code(v: &Value) -> i32 {
     if v["ok"] != json!(true) {
         return if v.pointer("/error/code") == Some(&json!("stale_revision")) {
@@ -52,8 +71,12 @@ fn exit_code(v: &Value) -> i32 {
             1
         };
     }
-    if v["category"] == json!("validation")
+    let gated = v["category"] == json!("validation")
+        || v["tool"] == json!("design_validate")
+        || v["tool"] == json!("design_report");
+    if gated
         && v.pointer("/result/errors")
+            .or_else(|| v.pointer("/result/body/errors"))
             .and_then(Value::as_u64)
             .unwrap_or(0)
             > 0
@@ -183,6 +206,41 @@ pub fn main_with(args: Vec<String>) -> i32 {
             };
             v["expected_revision"] = json!(rev);
             (t, v)
+        }
+        "design" => {
+            let json_arg = |i: usize| -> Result<Value, String> {
+                a(i).ok_or_else(|| "missing JSON argument".to_string())
+                    .and_then(|s| read_json_or_file(&s))
+            };
+            match a(1).as_deref() {
+                Some("schema") => ("design_spec_schema".into(), json!({})),
+                Some("spec") if a(2).is_none() => ("design_spec_get".into(), json!({})),
+                Some("spec") => match json_arg(2) {
+                    Ok(s) => ("design_spec_set".into(), json!({"spec": s})),
+                    Err(e) => return usage(&e),
+                },
+                Some(sub @ ("plan" | "claim")) => match json_arg(2) {
+                    Ok(v) => (format!("design_{sub}"), v),
+                    Err(e) => return usage(&e),
+                },
+                Some("apply") => match (a(2), a(3).and_then(|s| s.parse::<u64>().ok())) {
+                    (Some(id), Some(rev)) => (
+                        "design_apply".into(),
+                        json!({"plan_id": id, "expected_revision": rev}),
+                    ),
+                    _ => return usage("design apply <PLAN_ID> <REV>"),
+                },
+                Some("validate") => ("design_validate".into(), json!({})),
+                Some("log") => ("design_iteration_log".into(), json!({})),
+                Some("report") => ("design_report".into(), json!({})),
+                Some("approve") => {
+                    return match (a(2).and_then(|s| s.parse::<u64>().ok()), a(3)) {
+                        (Some(rev), Some(fp)) => crate::design::approve_cli(&ctx, rev, &fp),
+                        _ => usage("design approve <REV> <FINGERPRINT>"),
+                    };
+                }
+                _ => return usage("design <schema|spec|plan|apply|validate|claim|log|report|approve>"),
+            }
         }
         other => return usage(&format!("unknown command {other}")),
     };

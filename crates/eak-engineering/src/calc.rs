@@ -105,6 +105,31 @@ pub fn rc_time_constant_s(r: f64, c: f64) -> Result<f64, CalcError> {
     Ok(pos("R", r)? * pos("C", c)?)
 }
 
+/// Ideal continuous-conduction buck duty cycle D = Vout / Vin (losses ignored).
+pub fn buck_duty_cycle(vin: f64, vout: f64) -> Result<f64, CalcError> {
+    pos("input voltage", vin)?;
+    pos("output voltage", vout)?;
+    if vout >= vin {
+        return Err(CalcError::InvalidInput(
+            "a buck needs input voltage above output voltage".into(),
+        ));
+    }
+    Ok(vout / vin)
+}
+
+/// Ideal buck inductor peak-to-peak ripple current ΔI = (Vin − Vout) · D / (L · fsw).
+pub fn buck_inductor_ripple_a(
+    vin: f64,
+    vout: f64,
+    inductance_h: f64,
+    switching_hz: f64,
+) -> Result<f64, CalcError> {
+    let d = buck_duty_cycle(vin, vout)?;
+    let l = pos("inductance", inductance_h)?;
+    let f = pos("switching frequency", switching_hz)?;
+    Ok((vin - vout) * d / (l * f))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,6 +145,16 @@ mod tests {
         assert_eq!(parse_value("330"), Some(330.0));
         assert_eq!(parse_value("abc"), None);
         assert_eq!(parse_value(""), None);
+    }
+
+    #[test]
+    fn buck_duty_and_ripple() {
+        // 24 V -> 5 V, 10 uH, 400 kHz: D = 0.2083, dI = 19 * 0.2083 / 4 = 0.990 A.
+        assert!((buck_duty_cycle(24.0, 5.0).unwrap() - 5.0 / 24.0).abs() < 1e-12);
+        let r = buck_inductor_ripple_a(24.0, 5.0, 10e-6, 400e3).unwrap();
+        assert!((r - 19.0 * (5.0 / 24.0) / 4.0).abs() < 1e-9);
+        assert!(buck_duty_cycle(5.0, 5.0).is_err());
+        assert!(buck_inductor_ripple_a(24.0, 5.0, 0.0, 400e3).is_err());
     }
 
     #[test]

@@ -25,6 +25,7 @@ eak-runtime.workspace = true
 eak-intelligence.workspace = true
 eak-manufacturing.workspace = true
 eak-simulation.workspace = true
+sha2.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true

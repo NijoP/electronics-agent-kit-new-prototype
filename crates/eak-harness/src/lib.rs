@@ -19,6 +19,7 @@
 
 pub mod cli;
 pub mod context;
+pub mod design;
 pub mod endpoint;
 pub mod mcp;
 pub mod route;

@@ -39,6 +39,8 @@ pub enum Category {
     Manufacturing,
     Project,
     Discovery,
+    /// Autonomous design flow (ADR-0020): spec, plan, apply, validate, claim, report.
+    Flow,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -212,6 +214,75 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         "Compile the manufacturing package (Gerber, drill, BOM, CPL, manifest) of the current revision into <project>/output/rev-N after re-running ERC/DRC/MECH/DFM. Failing gates mark the package draft. Never 'manufacturing-ready'.",
         empty(),
     ));
+    // Autonomous design flow (ADR-0020, `design` module).
+    let flow = Category::Flow;
+    v.push(plain(
+        "design_spec_schema",
+        Discovery,
+        "JSON schema of the design requirement spec, the acceptance metrics EAK can evaluate deterministically, and the evidence labels.",
+        empty(),
+    ));
+    v.push(spec(
+        "design_spec_set",
+        flow,
+        "Store the structured requirement spec (rails with voltage/current, conditions, interfaces, protection, acceptance criteria, assumptions). Structural errors refuse it. Never edits the design.",
+        props(json!({"spec": {"type": "object", "description": "see design_spec_schema"}}), &["spec"]),
+    ));
+    v.push(spec("design_spec_get", flow, "The stored spec with its fingerprint and the revision it was set at.", empty()));
+    v.push(spec(
+        "design_plan",
+        flow,
+        "Record a plan: an ordered list of typed commands ({\"type\": \"PlaceSymbol\", ...}), each decoded now against the command schemas. Nothing is executed; returns plan_id bound to the current revision.",
+        props(
+            json!({
+                "title": str_schema("short plan title"),
+                "rationale": str_schema("why: which spec items or findings this addresses"),
+                "addresses": {"type": "array", "items": {"type": "string"}, "description": "finding or criterion ids this plan fixes"},
+                "steps": {"type": "array", "items": {"type": "object"}, "description": "typed commands; same shapes as the design tools plus \"type\""},
+            }),
+            &["title", "steps"],
+        ),
+    ));
+    v.push(spec(
+        "design_apply",
+        flow,
+        "Execute a recorded plan as one Engine::execute call (a Batch: all or nothing, one revision, one undo step) under the session's standing approval. expected_revision must equal the plan's base revision.",
+        props(
+            json!({
+                "plan_id": str_schema("id from design_plan"),
+                "expected_revision": {"type": "integer", "minimum": 0},
+            }),
+            &["plan_id", "expected_revision"],
+        ),
+    ));
+    v.push(spec(
+        "design_validate",
+        flow,
+        "Run ERC/DRC/MECH/DFM and evaluate the spec with eak-engineering (rail nets, declared current/voltage, IPC-2221 trace capacity, buck duty/ripple, ratings). Structured findings and labelled criteria, stored as evidence.",
+        empty(),
+    ));
+    v.push(spec(
+        "design_claim",
+        flow,
+        "Record a claim and its basis (assumption, datasheet, simulation, calculation, check). EAK labels it from the evidence it holds in design_report.",
+        props(
+            json!({
+                "statement": str_schema("the claim"),
+                "basis": {"type": "string", "enum": ["assumption", "datasheet", "simulation", "calculation", "check"]},
+                "component_id": str_schema("datasheet basis: component"),
+                "rating": str_schema("datasheet basis: rating name"),
+                "criterion_id": str_schema("calculation/check basis: spec criterion id"),
+            }),
+            &["statement", "basis"],
+        ),
+    ));
+    v.push(spec("design_iteration_log", flow, "The iteration record: spec, plan, apply, validate and claim events (revision, session, findings, fixes), plans, claims and human approvals.", empty()));
+    v.push(spec(
+        "design_report",
+        flow,
+        "The final evidence report at the current revision: every criterion and claim labelled verified / passed_deterministic_checks / simulation_supported / datasheet_supported / assumed / unverified, a fingerprint, and the human-approval state. Only a human can approve (eak design approve, interactive terminal). Never 'manufacturing-ready'.",
+        empty(),
+    ));
     for t in command_tools() {
         let mut s = spec(
             &t.spec.name,
@@ -262,13 +333,13 @@ fn project_echo(e: &Engine) -> Value {
     json!({"id": p.id, "name": p.name, "dir": e.dir(), "revision": p.revision})
 }
 
-struct Fail(ErrorCode, String, Value);
+pub(crate) struct Fail(pub(crate) ErrorCode, pub(crate) String, pub(crate) Value);
 
 fn fail(code: ErrorCode, msg: impl Into<String>) -> Fail {
     Fail(code, msg.into(), Value::Null)
 }
 
-fn command_error(e: &CommandError) -> Fail {
+pub(crate) fn command_error(e: &CommandError) -> Fail {
     let (code, details) = match e {
         CommandError::NotFound(_) => (ErrorCode::NotFound, Value::Null),
         CommandError::Invalid(_) => (ErrorCode::InvalidArguments, Value::Null),
@@ -423,6 +494,7 @@ fn dispatch(
         Category::Manufacturing => export(engine, args),
         Category::Simulation => simulation(engine.project(), &spec.name, args),
         Category::Read => read(engine, &spec.name, args),
+        Category::Flow => crate::design::dispatch(engine, ctx, &spec.name, args),
         Category::Project | Category::Discovery => Err(fail(
             ErrorCode::InvalidArguments,
             format!("{} does not run against an open project", spec.name),
@@ -491,7 +563,7 @@ fn all_reports(p: &Project) -> Vec<eak_validation::Report> {
     ]
 }
 
-fn run_checks(engine: &mut Engine, check: &str) -> Result<Value, Fail> {
+pub(crate) fn run_checks(engine: &mut Engine, check: &str) -> Result<Value, Fail> {
     let p = engine.project();
     let reports = match check {
         "erc" => vec![eak_validation::erc::run(p)],

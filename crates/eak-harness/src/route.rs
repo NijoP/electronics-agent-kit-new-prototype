@@ -26,10 +26,10 @@ pub fn invoke(base: &CallContext, tool: &str, args: &Value) -> Value {
     };
     match spec.category {
         Category::Discovery => {
-            let result = if tool == "guide" {
-                json!({"markdown": crate::GUIDE})
-            } else {
-                tools::list_tools_json()
+            let result = match tool {
+                "guide" => json!({"markdown": crate::GUIDE}),
+                "design_spec_schema" => crate::design::spec_schema(),
+                _ => tools::list_tools_json(),
             };
             return json!({"ok": true, "tool": tool, "category": spec.category, "result": result});
         }
