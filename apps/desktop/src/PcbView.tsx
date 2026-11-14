@@ -13,6 +13,10 @@ interface Props {
   selected: Id | null;
   onSelect: (symbolId: Id) => void;
   edit?: EditCtx;
+  /** Symbols an AI proposal would touch (their footprints are drawn dashed). */
+  aiPreview?: Id[];
+  /** Reports the active copper layer and grid for the status bar. */
+  onStatus?: (s: { layer: CopperLayer; gridMm: number }) => void;
 }
 
 type Tool = "select" | "outline" | "move" | "route" | "via" | "delete";
@@ -57,7 +61,7 @@ export function pcbBounds(s: Snapshot): Bounds {
   return boundsOf(outline.length ? outline : parts) ?? { minX: 0, minY: -80, maxX: 100, maxY: 0 };
 }
 
-export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
+export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], onStatus }: Props) {
   const { pcb } = snapshot.project;
   const outline = pcb.board.outline;
   const [tool, setTool] = useState<Tool>("select");
@@ -111,6 +115,9 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
     reset();
     setTool(t);
   };
+  useEffect(() => {
+    onStatus?.({ layer, gridMm: GRID / 1_000_000 });
+  }, [layer, onStatus]);
 
   const finishOutline = () => {
     const pts = outlineFrom(corners);
@@ -124,7 +131,9 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
   keys.current = (e) => {
     if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey) return;
     const k = e.key.toLowerCase();
-    if (e.key === "Escape") reset();
+    const digit = Number(e.key);
+    if (digit >= 1 && digit <= TOOLS.length) choose(TOOLS[digit - 1][0]);
+    else if (e.key === "Escape") reset();
     else if (e.key === "Enter" && tool === "outline") finishOutline();
     else if (k === "r" && fpInstance) {
       void edit.execute({
@@ -221,12 +230,13 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
         <span>PCB</span>
         {edit ? (
           <div className="tools" role="toolbar" aria-label="PCB tools">
-            {TOOLS.map(([t, label]) => (
+            {TOOLS.map(([t, label], i) => (
               <button
                 key={t}
                 type="button"
                 aria-pressed={tool === t}
                 className={tool === t ? "on" : ""}
+                title={`${label} (${i + 1})`}
                 onClick={() => choose(t)}
               >
                 {label}
@@ -393,7 +403,7 @@ export function PcbView({ snapshot, selected, onSelect, edit }: Props) {
               key={f.id}
               data-footprint-id={f.id}
               data-symbol-id={f.symbol_id}
-              className={`footprint ${f.side}${f.symbol_id === selected ? " selected" : ""}`}
+              className={`footprint ${f.side}${f.symbol_id === selected ? " selected" : ""}${aiPreview.includes(f.symbol_id) ? " ai-preview" : ""}`}
               onClick={() => onSelect(f.symbol_id)}
             >
               <rect className="courtyard" x={x - hw} y={y - hh} width={2 * hw} height={2 * hh} />

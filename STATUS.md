@@ -223,6 +223,12 @@ installed. Development is proceeding directly in this repository.
 2. PCB editor and 3D view; Manufacturing Center and installer bundles.
 3. Intelligence Engine: manufacturing-export and MECH tools, run-log evidence persistence, desktop approval UI.
 
+## Desktop workspace shell (outcome 5 / master directive Phase 1, first slice, 2026-11-14)
+- `apps/desktop/src/shell/` and `src/design/`: activity bar, collapsible side panel (Project, Library/Parts, Domain, Manufacturing), tabbed editors (Schematic + PCB / Schematic / PCB), bottom panel (Findings, BOM derived from schematic symbols, Log), right assistant panel, status bar (project, layer, grid, DRC count, model), command palette (Ctrl/Cmd+K, Ctrl/Cmd+Shift+P) with shortcuts, quick open (Ctrl/Cmd+P), Ctrl+B/J/L panel toggles, tool digit shortcuts, dark + light tokens (8px grid, 120-200 ms motion).
+- The assistant is a **local deterministic command interpreter, not a model call**: proposals are typed `Command`s shown as a diff with a dashed canvas preview; Accept goes through `execute_command`, Reject changes nothing.
+- Verified: `npm run build`, `npm test` (52 tests incl. `shell.test.tsx`), and the production bundle driven in headless Chrome against a **stubbed IPC** (screenshots kept outside the repo). **Not launched as the real Tauri window** (no display/X authorization in the build session). A browser-only crash (effect returning a non-function) was found this way and fixed; jsdom had not caught it.
+- Not done: top menus, document tabs bound to backend document identity (dirty/save-before-close), dockable/resizable/persisted panel layout, per-net highlight, 60 fps pan/zoom measurement, real-window tests.
+
 ## Multilayer boards (2026-11-14)
 - Stackup 2-16 copper layers (signal/plane, per-layer copper and dielectric), `SetLayerCount`, inner-layer tracks and zones, through/blind/buried vias, plane zones with thermal reliefs, DRC-016/017, one Gerber per copper layer, per-span drill files, `stackup.json`, JLCPCB stackup check (limits unverified). PCB editor: layer count, visibility, active layer, via span, plane fill. See ADR-0012.
 - Not done: autorouting on inner layers, per-via plane relief settings, impedance, fabricator-verified limits.

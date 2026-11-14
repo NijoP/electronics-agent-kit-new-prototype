@@ -6,6 +6,8 @@ interface Props {
   snapshot: Snapshot;
   results: Partial<Record<Check, CheckResult>>;
   onProbe: (symbolId: Id) => void;
+  /** Inline "Ask AI" on a finding: the message and the part it points at, if any. */
+  onAsk?: (text: string, target: Id | null) => void;
 }
 
 /** Map a finding's canonical object ids to the symbol id used for cross-probing. */
@@ -29,11 +31,13 @@ function ReportSection({
   result,
   snapshot,
   onProbe,
+  onAsk,
 }: {
   title: string;
   result: CheckResult | undefined;
   snapshot: Snapshot;
   onProbe: (id: Id) => void;
+  onAsk?: (text: string, target: Id | null) => void;
 }) {
   if (!result) {
     return (
@@ -63,6 +67,11 @@ function ReportSection({
               <button type="button" disabled={!target} onClick={() => target && onProbe(target)}>
                 <span className="sev">{f.severity}</span> <code>{f.rule_id}</code> {f.message}
               </button>
+              {onAsk && (
+                <button type="button" className="ask" title="Ask the assistant about this finding" onClick={() => onAsk(`${title} ${f.rule_id}: ${f.message}`, target)}>
+                  Ask AI
+                </button>
+              )}
             </li>
           );
         })}
@@ -91,12 +100,12 @@ function ReportSection({
   );
 }
 
-export function EngineeringMonitor({ snapshot, results, onProbe }: Props) {
+export function EngineeringMonitor({ snapshot, results, onProbe, onAsk }: Props) {
   return (
     <div className="monitor" aria-label="Engineering Monitor">
       <h2>Engineering Monitor</h2>
-      <ReportSection title="ERC" result={results.erc} snapshot={snapshot} onProbe={onProbe} />
-      <ReportSection title="DRC" result={results.drc} snapshot={snapshot} onProbe={onProbe} />
+      <ReportSection title="ERC" result={results.erc} snapshot={snapshot} onProbe={onProbe} onAsk={onAsk} />
+      <ReportSection title="DRC" result={results.drc} snapshot={snapshot} onProbe={onProbe} onAsk={onAsk} />
     </div>
   );
 }

@@ -1,0 +1,101 @@
+/* EAK design tokens. Dark is the default; light overrides the same names.
+   One accent (EAK amber); red/amber/green below are status colours, not accents.
+   Spacing is an 8px grid (--s-1 = 8px, half steps allowed); motion is 120-200 ms. */
+:root {
+  color-scheme: dark;
+  --s-half: 4px;
+  --s-1: 8px;
+  --s-2: 16px;
+  --s-3: 24px;
+  --s-4: 32px;
+  --r-1: 4px;
+  --r-2: 8px;
+  --t-fast: 120ms;
+  --t-med: 160ms;
+  --t-slow: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+
+  --bg-canvas: #0d0f11;
+  --bg-app: #14161a;
+  --bg-panel: #181b1f;
+  --bg-raised: #1f2328;
+  --bg-hover: #262b31;
+  --bg-active: #2d333a;
+  --line: #262a30;
+  --line-strong: #363c44;
+  --fg: #e6e8eb;
+  --fg-dim: #9aa2ad;
+  --fg-faint: #6b727c;
+  --accent: #e8c35a;
+  --accent-fg: #1a1505;
+  --accent-soft: rgba(232, 195, 90, 0.14);
+  --err: #ff8a80;
+  --warn: #e8c35a;
+  --ok: #8fd694;
+  --overlay: rgba(0, 0, 0, 0.5);
+  --shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+  /* Drawing colours */
+  --c-sheet: #12151a;
+  --c-sheet-line: #363c44;
+  --c-wire: #4caf50;
+  --c-label: #8fd694;
+  --c-text: #c9d1d9;
+  --c-sym-fill: #1e2a36;
+  --c-sym-line: #9cc3e6;
+  --c-sym-sel-fill: #3a3218;
+  --c-board: #10301f;
+  --c-copper-top: #c0392b;
+  --c-copper-bottom: #2e86de;
+  --c-pad: #c8a24a;
+  --c-pad-bottom: #4f7fb3;
+  --c-courtyard: #6b7480;
+  --c-via: #b0b0b0;
+  --c-preview: #7fb5ff;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-canvas: #fbfbfc;
+  --bg-app: #eceef1;
+  --bg-panel: #f4f5f7;
+  --bg-raised: #ffffff;
+  --bg-hover: #e4e7eb;
+  --bg-active: #d9dde3;
+  --line: #d8dce2;
+  --line-strong: #bcc2cb;
+  --fg: #1d2127;
+  --fg-dim: #566070;
+  --fg-faint: #8a93a0;
+  --accent: #a87400;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(168, 116, 0, 0.12);
+  --err: #c62828;
+  --warn: #9a6a00;
+  --ok: #2e7d32;
+  --overlay: rgba(20, 24, 30, 0.35);
+  --shadow: 0 16px 48px rgba(20, 24, 30, 0.22);
+
+  --c-sheet: #ffffff;
+  --c-sheet-line: #bcc2cb;
+  --c-wire: #2e7d32;
+  --c-label: #2e7d32;
+  --c-text: #1d2127;
+  --c-sym-fill: #e8f1fa;
+  --c-sym-line: #1f5a93;
+  --c-sym-sel-fill: #fbefc7;
+  --c-board: #cfe8d8;
+  --c-copper-top: #c0392b;
+  --c-copper-bottom: #1f6fc2;
+  --c-pad: #a67c14;
+  --c-pad-bottom: #3d6a9a;
+  --c-courtyard: #8a93a0;
+  --c-via: #6b727c;
+  --c-preview: #1f6fc2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-fast: 0ms; --t-med: 0ms; --t-slow: 0ms; }
+}
