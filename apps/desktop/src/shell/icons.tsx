@@ -18,5 +18,6 @@ export const Icons = {
   sun: svg(<><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2" /></>),
   schematic: svg(<><path d="M3 12h4l1.5-4 3 8 3-8 1.5 4h4" /><circle cx="3" cy="12" r="1" /><circle cx="21" cy="12" r="1" /></>),
   pcb: svg(<><rect x="4" y="4" width="16" height="16" rx="2" /><circle cx="8.5" cy="8.5" r="1.3" /><circle cx="15.5" cy="15.5" r="1.3" /><path d="M9.8 8.5H13v7h1.2" /></>),
+  viewer3d: svg(<><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" /><path d="M4 7.5l8 4.5 8-4.5M12 12v9" /></>),
   moon: svg(<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" />),
 };
