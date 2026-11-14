@@ -21,7 +21,8 @@ export function fmtEng(v: number, unit: string): string {
   return `${Number((v / f).toPrecision(4))} ${p}${unit}`;
 }
 
-const COLORS = ["#4fc3f7", "#ffb74d", "#81c784", "#e57373", "#ba68c8", "#fff176"];
+// Trace colours are design tokens (--c-plot-1..6), so both themes keep contrast.
+const COLORS = [1, 2, 3, 4, 5, 6].map((n) => `var(--c-plot-${n})`);
 
 export function TransientPlot({ result }: { result: SimResult }) {
   const t = result.tran;
@@ -42,7 +43,7 @@ export function TransientPlot({ result }: { result: SimResult }) {
         <text x={L} y={H - 6} fontSize="10" fill="currentColor">{fmtEng(t0, "s")}</text>
         <text x={W - 8} y={H - 6} fontSize="10" textAnchor="end" fill="currentColor">{fmtEng(t1, "s")}</text>
         {t.traces.map((s, i) => (
-          <polyline key={s.net} fill="none" stroke={COLORS[i % COLORS.length]} strokeWidth="1.5"
+          <polyline key={s.net} fill="none" style={{ stroke: COLORS[i % COLORS.length] }} strokeWidth="1.5"
             points={s.volts.map((v, k) => `${x(t.time[k]).toFixed(1)},${y(v).toFixed(1)}`).join(" ")} />
         ))}
       </svg>

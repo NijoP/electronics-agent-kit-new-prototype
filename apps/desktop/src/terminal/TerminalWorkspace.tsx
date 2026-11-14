@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { describeStatus, term, type Overview, type SessionInfo, type Space, type Tab } from "./api";
 import { disposeTerminal, XTermView } from "./XTermView";
+import { StatusDot } from "../design/ui";
 
 export interface ProjectContext { dir: string; name: string; id: string }
 
@@ -242,7 +243,7 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
                         ])
                       }
                     >
-                      <span className={`dot st-${s.status.state}`} />
+                      <StatusDot state={s.status.state} />
                       <span className="grow">{s.name}</span>
                       {s.status.agent && <span className="chip">{s.status.agent}</span>}
                     </div>
@@ -273,7 +274,7 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
                     if (from != null && from !== t.id) act(() => term.moveTab(from, i));
                   }}
                 >
-                  <span className={`dot st-${s?.status.state ?? "ended"}`} /> {s?.name ?? "terminal"}
+                  <StatusDot state={s?.status.state ?? "ended"} /> {s?.name ?? "terminal"}
                   {t.panes.length > 1 ? ` +${t.panes.length - 1}` : ""}
                 </button>
               );
@@ -341,7 +342,7 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
       <footer className="term-status" aria-label="Session status">
         {current ? (
           <>
-            <span className={`dot st-${current.status.state}`} /> {describeStatus(current.status)} · {current.status.detail} · cwd {current.spec.cwd}
+            <StatusDot state={current.status.state} /> {describeStatus(current.status)} · {current.status.detail} · cwd {current.spec.cwd}
             {current.pid ? ` · pid ${current.pid}` : ""}
             {current.status.agent ? ` · agent ${current.status.agent}` : ""}
             {space ? ` · space ${space.name}` : ""}

@@ -1,22 +1,62 @@
-/* EAK design tokens. Dark is the default; light overrides the same names.
-   One accent (EAK amber); red/amber/green below are status colours, not accents.
-   Spacing is an 8px grid (--s-1 = 8px, half steps allowed); motion is 120-200 ms. */
+/* EAK design tokens — the one scale every screen draws from (docs/design-system.md).
+   Dark is the default; light overrides the same names. One accent (EAK amber); red/amber/green/
+   blue are status colours, never decoration. A new size, gap or colour is a change here, not a
+   literal in a component (design/tokens.test.ts walks the styles and fails on raw colours). */
 :root {
   color-scheme: dark;
+
+  /* Spacing: 8 px grid, half and quarter steps for dense engineering rows. */
+  --s-quarter: 2px;
   --s-half: 4px;
   --s-1: 8px;
+  --s-1h: 12px;
   --s-2: 16px;
   --s-3: 24px;
   --s-4: 32px;
+
+  /* Corners: 4 rows/controls, 8 popovers/dialogs/cards, pill for status chips. */
   --r-1: 4px;
   --r-2: 8px;
+  --r-pill: 999px;
+  --border: 1px;
+
+  /* Type scale. 13 px is body; 11 px only for captions/badges in dense lists. */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  --fs-2xs: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+  --lh-tight: 1.25;
+  --lh: 1.45;
+  --fw-medium: 500;
+  --fw-strong: 600;
+  --tracking-caps: 0.06em;
+
+  /* Control heights: sm for toolbars and list rows, md for buttons/fields, lg for a screen's main action. */
+  --h-row: 22px;
+  --h-sm: 24px;
+  --h-md: 28px;
+  --h-lg: 32px;
+  --h-bar: 34px;
+
+  /* Motion. */
   --t-fast: 120ms;
   --t-med: 160ms;
   --t-slow: 200ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
 
+  /* Stacking. */
+  --z-raised: 2;
+  --z-fab: 5;
+  --z-menubar: 15;
+  --z-popover: 20;
+  --z-modal: 30;
+
+  /* Surfaces: canvas < app < panel < raised (fields, popovers); hover/active step up. */
   --bg-canvas: #0d0f11;
   --bg-app: #14161a;
   --bg-panel: #181b1f;
@@ -31,21 +71,54 @@
   --accent: #e8c35a;
   --accent-fg: #1a1505;
   --accent-soft: rgba(232, 195, 90, 0.14);
+  --on-accent-edge: #ffffff;
+  --overlay: rgba(0, 0, 0, 0.5);
+  --shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
+
+  /* Focus: a hairline in the accent plus a soft halo, on every focusable control. */
+  --focus-ring: 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-soft);
+
+  /* Status. err/warn/ok/info are the only signal colours. */
   --err: #ff8a80;
   --warn: #e8c35a;
   --ok: #8fd694;
-  --overlay: rgba(0, 0, 0, 0.5);
-  --shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --info: #79b8ff;
+  --neutral: #6b727c;
+  --err-soft: color-mix(in srgb, var(--err) 18%, transparent);
+  --warn-soft: color-mix(in srgb, var(--warn) 18%, transparent);
+  --ok-soft: color-mix(in srgb, var(--ok) 16%, transparent);
+  --info-soft: color-mix(in srgb, var(--info) 16%, transparent);
 
-  /* Drawing colours */
+  /* Process / session states (terminal, tasks) map onto the status colours. */
+  --st-running: var(--info);
+  --st-idle: var(--ok);
+  --st-waiting: var(--warn);
+  --st-failed: var(--err);
+  --st-ended: var(--neutral);
+
+  /* Version-control marks. */
+  --vcs-modified: var(--warn);
+  --vcs-added: var(--ok);
+  --vcs-deleted: var(--err);
+
+  /* Terminal surface: darker than the canvas so output reads as process output. */
+  --term-bg: #0a0b0d;
+
+  /* Engineering visualisation: schematic. */
   --c-sheet: #12151a;
   --c-sheet-line: #363c44;
   --c-wire: #4caf50;
   --c-label: #8fd694;
+  --c-power: var(--err);
   --c-text: #c9d1d9;
   --c-sym-fill: #1e2a36;
   --c-sym-line: #9cc3e6;
   --c-sym-sel-fill: #3a3218;
+  --c-grid-minor: color-mix(in srgb, var(--fg) 9%, transparent);
+  --c-grid-major: color-mix(in srgb, var(--fg) 22%, transparent);
+  /* Engineering visualisation: PCB. Per-layer copper defaults live in src/layers.ts because the
+     colour inputs and the 3D viewer need concrete hex values; top/bottom there mirror these. */
   --c-board: #10301f;
   --c-copper-top: #c0392b;
   --c-copper-bottom: #2e86de;
@@ -53,7 +126,17 @@
   --c-pad-bottom: #4f7fb3;
   --c-courtyard: #6b7480;
   --c-via: #b0b0b0;
+  --c-airwire: var(--fg);
   --c-preview: #7fb5ff;
+  --c-route-blocked: var(--err);
+  --c-violation: var(--err);
+  /* Engineering visualisation: plotted traces (simulation), in order. */
+  --c-plot-1: #4fc3f7;
+  --c-plot-2: #ffb74d;
+  --c-plot-3: #81c784;
+  --c-plot-4: #e57373;
+  --c-plot-5: #ba68c8;
+  --c-plot-6: #fff176;
 }
 
 :root[data-theme="light"] {
@@ -72,11 +155,16 @@
   --accent: #a87400;
   --accent-fg: #ffffff;
   --accent-soft: rgba(168, 116, 0, 0.12);
+  --on-accent-edge: #ffffff;
+  --overlay: rgba(20, 24, 30, 0.35);
+  --shadow: 0 16px 48px rgba(20, 24, 30, 0.22);
+  --shadow-sm: 0 4px 16px rgba(20, 24, 30, 0.14);
   --err: #c62828;
   --warn: #9a6a00;
   --ok: #2e7d32;
-  --overlay: rgba(20, 24, 30, 0.35);
-  --shadow: 0 16px 48px rgba(20, 24, 30, 0.22);
+  --info: #1f6fc2;
+  --neutral: #8a93a0;
+  --term-bg: #101215;
 
   --c-sheet: #ffffff;
   --c-sheet-line: #bcc2cb;
@@ -94,6 +182,12 @@
   --c-courtyard: #8a93a0;
   --c-via: #6b727c;
   --c-preview: #1f6fc2;
+  --c-plot-1: #0277bd;
+  --c-plot-2: #ef6c00;
+  --c-plot-3: #2e7d32;
+  --c-plot-4: #c62828;
+  --c-plot-5: #7b1fa2;
+  --c-plot-6: #9e9d24;
 }
 
 @media (prefers-reduced-motion: reduce) {
