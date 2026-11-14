@@ -19,5 +19,11 @@ Source inspection only. Nothing here is built, run or measured; no improvement i
 
 Bottleneck ledger and baseline map: `PERFORMANCE_LEDGER.md`.
 
+## 3. Resource profile and workload classes (P0/P2, code-reviewed only, unrun)
+- **Problem:** heavy IPC (ERC/DRC/DFM, export, simulation) ran as sync code on Tokio worker threads with no limit and held the single engine lock, so a check froze edits and route previews; nothing decided concurrency or 3D quality centrally (ledger L1–L4, L18).
+- **Change:** `apps/desktop/src-tauri/src/resources.rs` is the one profile: logical CPUs from `std::thread::available_parallelism` (no `sysinfo`: CPU count is enough for these limits and memory/GPU cannot be read portably); preference AUTO / LOW_RESOURCE / BALANCED / HIGH_PERFORMANCE / CUSTOM in `performance.json` (app config dir); AUTO is resolved at start and on change only (no polling, no oscillation). It exposes `analysis_jobs`, `background_jobs`, `cache_budget_mb`, `pixel_ratio_cap`, `antialias`, `scrollback_lines` and its limitations. Classes: P0 interactive reads and P1 edits run on `spawn_blocking` without queueing; P2 checks/analysis and P3+ export/simulation wait on Tokio semaphores sized by the profile (queued work waits, it is never skipped). Analysis runs on an `Arc<Project>` cloned once per revision; evidence is saved only if the engine is still at that (folder, id, revision), otherwise the call fails "run it again". The UI reads the profile for the 3D renderer and xterm scrollback; Settings → Performance changes it.
+- **Not done:** `cache_budget_mb` has no consumer yet (the 3D model cache belongs to the 3D-components lane); no memory-pressure adaptation; harness endpoint and terminal PTY creation are not yet bounded (ledger L12, L15).
+- **Correctness:** no engineering value, geometry, rule or validation outcome depends on the profile.
+
 ## Remaining (not started)
-Execution profile setting (low/balanced/high), PTY leak review, cache bounds, P3 revision-keyed caching.
+Typed incremental snapshots to the UI (ADR needed, L5), selection store (L6), SVG culling (L16), PTY output batching (L15), PTY leak review. Verification plan: `PERFORMANCE_VERIFICATION_PLAN.md`.

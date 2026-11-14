@@ -7,6 +7,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import { term, type OutputEvent } from "./api";
+import { profileNow } from "../resourceProfile";
 
 interface Entry { t: Terminal; fit: FitAddon; search: SearchAddon; host: HTMLDivElement; seq: number; ready: boolean; pending: OutputEvent[] }
 const registry = new Map<number, Entry>();
@@ -28,7 +29,9 @@ function entry(id: number): Entry {
   const have = registry.get(id);
   if (have) return have;
   ensureListener();
-  const t = new Terminal({ scrollback: 10000, cursorBlink: true, allowProposedApi: true, fontFamily: "ui-monospace, Menlo, Consolas, monospace", fontSize: 13 });
+  // View scrollback follows the resource profile; the backend keeps its own 2 MiB ring per
+  // session, so a redraw after reattach still has that much output.
+  const t = new Terminal({ scrollback: profileNow().scrollback_lines, cursorBlink: true, allowProposedApi: true, fontFamily: "ui-monospace, Menlo, Consolas, monospace", fontSize: 13 });
   const fit = new FitAddon();
   const search = new SearchAddon();
   t.loadAddon(fit);

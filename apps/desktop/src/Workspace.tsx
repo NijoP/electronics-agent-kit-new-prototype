@@ -216,6 +216,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   // events and re-render when one moved the project past the revision on screen (ADR-0018).
   useEffect(() => {
     const timer = setInterval(() => {
+      // Nothing to show while the window is hidden; the first visible tick catches up.
+      if (typeof document !== "undefined" && document.hidden) return;
       pullEvents()
         .then(async (fresh) => {
           if (fresh.some((e) => e.revision !== revision)) setSnapshot(await api.currentProject());

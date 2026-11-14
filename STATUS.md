@@ -35,6 +35,7 @@ assistant panel was removed in the IDE shell (#49); model providers remain as op
 | Phase 2 wiring: harness env in terminal sessions, space-project binding, editor resync after checks/exports | code-reviewed only | `git diff --check` and grep only; never compiled or run |
 | Engineering gates (PASS/FAIL/UNKNOWN/NOT_RUN), copper/power engineering, physical quantities, harness `run_gates` | code-reviewed only | ADR-0021; never compiled or run |
 | Autonomous design flow (`eak design`, `design_*` tools, evidence labels, TTY-only human approval; ADR-0020) | code-reviewed only | DESK mental models / 12-step procedure / derating (`eak-intelligence::mental`), domain gates blocking apply, intent read-back, component evidence; never compiled or run; unit tests in `design.rs` and `calc.rs` written, unrun; worked example in `docs/agents/AUTONOMOUS_DESIGN.md` not run |
+| Performance: resource profile (AUTO/LOW/BALANCED/HIGH/CUSTOM), bounded blocking jobs (P0–P5), lock-free analysis on a per-revision snapshot with stale-evidence rejection, per-frame pointer coalescing, 3D context-loss handling and quality tier, profile-sized terminal scrollback | code-reviewed only | never compiled or run; nothing measured; `resources.rs` and `canvasFrame.test.tsx` tests written, unrun; ledger `docs/development/PERFORMANCE_LEDGER.md` |
 
 ## Known gaps
 - No cargo, npm, vitest, tsc or tauri run has happened on the integrated tree.

@@ -3,7 +3,7 @@
 // frame rate, and no mode changes an engineering value or skips a check.
 import { useEffect, useState } from "react";
 import { api } from "./api";
-import { loadProfile, publish, type PerformanceMode, type PerformanceSettings, type ResourceProfile } from "./resourceProfile";
+import { loadProfile, publish, type CustomLimits, type PerformanceMode, type PerformanceSettings, type ResourceProfile } from "./resourceProfile";
 
 const MODES: { mode: PerformanceMode; label: string }[] = [
   { mode: "auto", label: "Auto (from this computer)" },
@@ -57,7 +57,10 @@ export function PerformancePanel() {
         value={custom[key]}
         onChange={(e) => {
           const v = Number(e.target.value);
-          if (e.target.value !== "" && Number.isFinite(v)) save({ ...settings, custom: { ...custom, [key]: v } });
+          if (e.target.value === "" || !Number.isFinite(v)) return;
+          const next: CustomLimits = { ...custom };
+          next[key] = v;
+          save({ ...settings, custom: next });
         }}
       />
     </label>

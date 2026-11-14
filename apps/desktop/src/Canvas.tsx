@@ -148,6 +148,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
       viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
       preserveAspectRatio="xMidYMid meet"
       onPointerDown={(e) => {
+        flushMove(); // a new gesture starts with its first move handled immediately
         drag.current = { x: e.clientX, y: e.clientY };
         const p = e.button === 0 && onDrag ? toView(e) : null;
         const captured = !!p && !!onDrag?.start(p[0], p[1], e);

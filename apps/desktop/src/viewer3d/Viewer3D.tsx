@@ -11,6 +11,7 @@ import type { Snapshot } from "../types";
 import { buildScene, modelStatus, type BoardScene, type ModelStatus } from "./scene";
 import { loadModel, modelKey } from "./modelLoader";
 import { modelToWorld } from "./modelTransform";
+import { onProfile, profileNow, type ResourceProfile } from "../resourceProfile";
 
 interface Props {
   projectId: string | null;
@@ -178,6 +179,7 @@ export function Viewer3D({ projectId, revision, active, onSelect }: Props) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [webgl, setWebgl] = useState(true);
+  const [gpuLost, setGpuLost] = useState(false);
   const [ready, setReady] = useState(false);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const hiddenRef = useRef(hidden);
@@ -220,13 +222,17 @@ export function Viewer3D({ projectId, revision, active, onSelect }: Props) {
     const el = host.current;
     if (!el) return;
     let renderer: THREE.WebGLRenderer;
+    // Quality tier from the resource profile: antialiasing is fixed per renderer, the back-buffer
+    // pixel ratio follows profile changes live. Canvas size and geometry are never scaled.
+    const tier = profileNow();
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer = new THREE.WebGLRenderer({ antialias: tier.antialias });
     } catch {
       setWebgl(false);
       return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const pixelRatio = (p: ResourceProfile) => Math.min(window.devicePixelRatio || 1, Math.max(p.pixel_ratio_cap, 0.5));
+    renderer.setPixelRatio(pixelRatio(tier));
     renderer.setClearColor(0x14181d);
     el.appendChild(renderer.domElement);
     renderer.domElement.style.display = "block";
@@ -249,13 +255,16 @@ export function Viewer3D({ projectId, revision, active, onSelect }: Props) {
     controls.screenSpacePanning = true;
     controls.maxPolarAngle = Math.PI;
 
+    // Demand-driven: one frame per change (camera, resize, rebuild, layers, models), no loop.
     let queued = false;
+    let contextLost = false;
+    let frame = 0;
     const render = () => {
-      if (queued) return;
+      if (queued || contextLost) return;
       queued = true;
-      requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
         queued = false;
-        renderer.render(sc, camera);
+        if (!contextLost) renderer.render(sc, camera);
       });
     };
     controls.addEventListener("change", render);
@@ -294,16 +303,40 @@ export function Viewer3D({ projectId, revision, active, onSelect }: Props) {
     };
     dom.addEventListener("pointerdown", onDown);
     dom.addEventListener("pointerup", onUp);
+    // GPU reset or resource exhaustion: keep the editors usable, say what happened, and redraw
+    // once the browser restores the context (three.js re-uploads buffers on the next render).
+    const onLost = (e: Event) => {
+      e.preventDefault(); // allow the context to be restored
+      contextLost = true;
+      setGpuLost(true);
+    };
+    const onRestored = () => {
+      contextLost = false;
+      setGpuLost(false);
+      render();
+    };
+    dom.addEventListener("webglcontextlost", onLost);
+    dom.addEventListener("webglcontextrestored", onRestored);
+    const offProfile = onProfile((p) => {
+      renderer.setPixelRatio(pixelRatio(p));
+      resize();
+    });
     three.current = { camera, controls, render, content, models, groups: new Map() };
     setReady(true);
     return () => {
+      offProfile();
+      cancelAnimationFrame(frame);
       dom.removeEventListener("pointerdown", onDown);
       dom.removeEventListener("pointerup", onUp);
+      dom.removeEventListener("webglcontextlost", onLost);
+      dom.removeEventListener("webglcontextrestored", onRestored);
       models.clear();
       ro.disconnect();
       controls.dispose();
       disposeGroup(content);
       renderer.dispose();
+      // Release the GL context now instead of waiting for GC: WebViews cap live contexts.
+      renderer.forceContextLoss();
       renderer.domElement.remove();
       three.current = null;
       setReady(false);
@@ -437,6 +470,12 @@ export function Viewer3D({ projectId, revision, active, onSelect }: Props) {
       <div className="v3d-main">
         <div className="v3d-canvas" ref={host}>
           {!webgl && <div className="v3d-msg">WebGL is not available in this window, so the 3D view cannot draw.</div>}
+          {gpuLost && (
+            <div className="v3d-msg" role="status">
+              The graphics context was lost (GPU reset or out of graphics memory). The schematic and PCB editors are unaffected; the 3D view
+              redraws when the context returns. If it keeps happening, choose Low resource in Settings → Performance.
+            </div>
+          )}
           {webgl && !projectId && <div className="v3d-msg">Open a project to see its board in 3D.</div>}
           {error && <div className="v3d-msg">{error}</div>}
         </div>
