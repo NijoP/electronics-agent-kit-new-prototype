@@ -48,6 +48,10 @@ beforeEach(() => {
         executed.push(args.command);
         revision += 1;
         return resp();
+      case "simulation_status":
+        return { ngspice: { available: false, path: null, version: null, message: "ngspice is not installed or not on PATH." }, revision, nets: [], elements: [], skipped: [] };
+      case "manufacturing_preview":
+        throw new Error("no preview in this test");
       case "library_components":
       case "model_providers":
         return [];
@@ -73,7 +77,7 @@ const viewBox = () => screen.getByRole("img", { name: "Schematic canvas" }).getA
 describe("main toolbar", () => {
   it("unimplemented controls are disabled and say why; nothing decorative is clickable", async () => {
     await open();
-    for (const [name, why] of [["Save as", "Not implemented"], ["Grid", "Not implemented"], ["Simulate", "Not implemented"]] as const) {
+    for (const [name, why] of [["Save as", "Not implemented"], ["Grid", "Not implemented"]] as const) {
       const b = tb().getByRole("button", { name }) as HTMLButtonElement;
       expect(b.disabled).toBe(true);
       expect(b.title).toContain(why);
@@ -151,5 +155,38 @@ describe("design rules entry point", () => {
     await open();
     fireEvent.click(tb().getByRole("button", { name: "Design rules" }));
     expect(await screen.findByRole("dialog", { name: "Design rules" })).toBeTruthy();
+  });
+});
+
+// @ts-expect-error node types are not installed for the frontend project
+const { readFileSync } = await import("node:fs");
+const css: string = readFileSync("src/styles.css", "utf8");
+describe("desktop layout fixes (E2E defects F1-F3)", () => {
+  const rule = (sel: string) => css.split("\n").find((l: string) => l.startsWith(`${sel} {`)) ?? "";
+
+  it("Simulate opens the Simulation panel, same as the Simulation menu", async () => {
+    await open();
+    const b = tb().getByRole("button", { name: "Simulate" }) as HTMLButtonElement;
+    expect(b.disabled).toBe(false);
+    fireEvent.click(b);
+    expect((await screen.findByRole("tab", { name: "Simulation" })).getAttribute("aria-selected")).toBe("true");
+    await screen.findByRole("button", { name: "Run simulation" });
+  });
+
+  it("split view: rows are bounded so the PCB view cannot paint over the bottom panel", () => {
+    for (const sel of [".main", ".views"]) expect(rule(sel)).toContain("grid-template-rows: minmax(0, 1fr)");
+    expect(rule(".views")).toContain("overflow: hidden");
+    expect(rule(".view")).toContain("overflow: hidden");
+    expect(rule(".view")).toContain("minmax(0, 1fr)");
+    expect(rule(".center")).toContain("overflow: hidden");
+  });
+
+  it("Manufacturing panel content scrolls inside the side panel", async () => {
+    await open();
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Activity bar" })).getByRole("button", { name: "Manufacturing" }));
+    const mfg = await screen.findByRole("region", { name: "Manufacturing prep" });
+    expect(mfg.closest(".side-scroll")).not.toBeNull();
+    expect(rule(".side-scroll")).toMatch(/overflow: auto/);
+    expect(rule(".side-scroll")).toContain("min-height: 0");
   });
 });

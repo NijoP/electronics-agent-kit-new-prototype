@@ -490,6 +490,9 @@ try {
     const m = msg.match(/prepared for review in (\S+)/);
     if (!m) throw new Error(`bundle failed: ${await sec.$('[role="alert"]').getText()}`);
     const dir = m[1].replace(/[|]$/, "");
+    // Defect F3: the check table scrolls inside the side panel; the status bar stays inside the window.
+    const sb = await browser.execute(() => { const r = document.querySelector(".status")?.getBoundingClientRect(); return r ? { bottom: r.bottom, h: window.innerHeight } : null; });
+    ok(sb && sb.bottom <= sb.h + 1, `status bar pushed off-window with the Manufacturing panel open: ${JSON.stringify(sb)}`);
     ok(fs.existsSync(dir), `bundle folder ${dir} not on disk`);
     return `DFM outcome ${dfm.outcome} (${dfm.errors} err, ${dfm.warnings} warn, ${dfm.not_implemented.length} not_implemented); panel BOM ${bomRows} row(s), DFM table ${dfmRows} row(s); bundle on disk: ${fs.readdirSync(dir).join(", ")}`;
   });
@@ -497,10 +500,14 @@ try {
   await step("X4", "Simulation panel (Simulation menu → Run simulation…)", "UI", async () => {
     const tb = await browser.$('header.toolbar button[aria-label="Simulate"]');
     const tbDisabled = (await tb.isExisting()) ? !(await tb.isEnabled()) : null;
-    await menu("Simulation", "Run simulation");
+    ok(tbDisabled === false, 'toolbar "Simulate" must be enabled (defect F2)');
+    await tb.click();
     const sim = await browser.$('section[aria-label="Simulation"]');
     await sim.waitForDisplayed({ timeout: 10000 });
     const head = await sim.$("p").getText();
+    // Defect F1: the Run button is the topmost element at its centre (not covered by the PCB view).
+    const covered = await browser.execute(() => { const b = [...document.querySelectorAll('section[aria-label="Simulation"] button')].find((x) => x.textContent?.trim() === "Run simulation"); if (!b) return "no Run button"; b.scrollIntoView({ block: "nearest" }); const r = b.getBoundingClientRect(); const t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return b === t || b.contains(t) ? "" : `covered by <${t?.tagName}>`; });
+    ok(!covered, `Run simulation button unreachable in split view: ${covered}`);
     const note = tbDisabled ? ` Toolbar "Simulate" is disabled ("Not implemented: no SPICE integration yet") while the menu opens a working panel: inconsistent.` : "";
     if (/not installed/i.test(head)) return `panel open; reports honestly: "${head}"; Run disabled.${note}`;
     // ngspice present: one 5 V source on the first net, operating point.
