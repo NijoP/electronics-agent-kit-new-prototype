@@ -443,6 +443,8 @@ export interface SimResult {
   limitations: string[];
   netlist: string;
   elapsed_ms: number;
+}
+
 /** Interactive routing (eak_engineering::interactive). Points are board nm. */
 export type BendMode = "diagonal45" | "orthogonal90";
 export interface RouteStepRequest {
