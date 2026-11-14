@@ -12,6 +12,8 @@ pub mod holes;
 pub mod mech;
 pub mod report;
 pub mod sourcing;
+pub mod state;
 
 pub use gates::{GateReport, GateState};
 pub use report::{Bound, Finding, Limit, Outcome, Quantity, Report, Severity};
+pub use state::{CheckState, Currency, RiskRecord, RuleResult};

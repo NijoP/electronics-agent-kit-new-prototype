@@ -1,6 +1,7 @@
 //! Revision-bound verification evidence (Spec §9; Execution Instructions §9.1).
 //! A report always lists what was NOT checked; "no errors" never means "design correct".
 
+use crate::state::{subsystem_of, CheckState, Currency, Detectability, Likelihood, RiskRecord, RuleResult, Severity as RiskSeverity};
 use eak_core::{Id, Point, Project};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -154,6 +155,12 @@ pub struct Report {
     /// Checks a professional flow would include that this build does not perform.
     pub not_implemented: Vec<String>,
     pub limitations: Vec<String>,
+    /// One explicit state per rule; a rule that could not be evaluated is `UNKNOWN`, never `PASS`.
+    #[serde(default)]
+    pub rule_results: Vec<RuleResult>,
+    /// Worst rule state; `UNKNOWN` in reports written before per-rule states existed.
+    #[serde(default)]
+    pub overall: CheckState,
 }
 
 pub fn project_hash(p: &Project) -> String {
@@ -195,7 +202,25 @@ impl Report {
             .iter()
             .filter(|f| f.severity == Severity::Warning)
             .count();
-        Report {
+        let rule_results: Vec<RuleResult> = rules
+            .iter()
+            .map(|r| {
+                let mine = findings.iter().filter(|f| f.rule_id == r.id);
+                let state = mine.fold(CheckState::Pass, |s, f| {
+                    s.worst(match f.severity {
+                        Severity::Error => CheckState::Fail,
+                        Severity::Warning => CheckState::Warning,
+                        Severity::Info => CheckState::Pass,
+                    })
+                });
+                RuleResult {
+                    rule_id: r.id.clone(),
+                    state,
+                    reason: String::new(),
+                }
+            })
+            .collect();
+        let mut report = Report {
             check: check.into(),
             project_id: p.id.clone(),
             revision: p.revision,
@@ -212,7 +237,112 @@ impl Report {
             warnings,
             not_implemented,
             limitations,
+            rule_results,
+            overall: CheckState::Pass,
+        };
+        report.recompute_overall();
+        report
+    }
+
+    fn recompute_overall(&mut self) {
+        self.overall = self
+            .rule_results
+            .iter()
+            .fold(CheckState::NotApplicable, |s, r| s.worst(r.state));
+        // A report that ran no rule at all certifies nothing.
+        if self.rule_results.is_empty() {
+            self.overall = CheckState::Unknown;
         }
+    }
+
+    /// Records that `rule_id` could not be fully evaluated. The worse of the existing state
+    /// and `state` is kept, so a deterministic `FAIL` is never softened to `UNKNOWN`.
+    pub(crate) fn degrade(mut self, rule_id: &str, state: CheckState, reason: &str) -> Report {
+        if let Some(r) = self.rule_results.iter_mut().find(|r| r.rule_id == rule_id) {
+            if r.state.worst(state) != r.state {
+                r.state = state;
+                r.reason = reason.into();
+            }
+        }
+        self.recompute_overall();
+        self
+    }
+
+    /// State of one rule; `Unknown` when the report has no such rule.
+    pub fn state_of(&self, rule_id: &str) -> CheckState {
+        self.rule_results
+            .iter()
+            .find(|r| r.rule_id == rule_id)
+            .map_or(CheckState::Unknown, |r| r.state)
+    }
+
+    /// A report speaks only for the project id, revision and canonical content it ran on.
+    pub fn currency(&self, p: &Project) -> Currency {
+        if self.project_id == p.id && self.revision == p.revision && self.input_sha256 == project_hash(p)
+        {
+            Currency::Current
+        } else {
+            Currency::Stale {
+                result_revision: self.revision,
+                project_revision: p.revision,
+            }
+        }
+    }
+
+    /// The state this report certifies for `p`: `Unknown` when it is stale, else `overall`.
+    pub fn state_for(&self, p: &Project) -> CheckState {
+        match self.currency(p) {
+            Currency::Current => self.overall,
+            Currency::Stale { .. } => CheckState::Unknown,
+        }
+    }
+
+    /// Risk records for every failing or unknown rule. Axes stay separate (no combined score);
+    /// a `FAIL` is detected, an `UNKNOWN` is by definition not checked.
+    pub fn risks(&self) -> Vec<RiskRecord> {
+        self.rule_results
+            .iter()
+            .filter(|r| matches!(r.state, CheckState::Fail | CheckState::Unknown))
+            .map(|r| {
+                let failed = r.state == CheckState::Fail;
+                let ids: Vec<String> = self
+                    .findings
+                    .iter()
+                    .filter(|f| f.rule_id == r.rule_id && f.severity == Severity::Error)
+                    .map(|f| f.id.clone())
+                    .collect();
+                let severity = if failed {
+                    RiskSeverity::High
+                } else {
+                    RiskSeverity::Medium
+                };
+                RiskRecord {
+                    id: format!("RISK-{}", r.rule_id),
+                    subsystem: subsystem_of(&r.rule_id).into(),
+                    severity,
+                    likelihood: if failed {
+                        Likelihood::Likely
+                    } else {
+                        Likelihood::Possible
+                    },
+                    detectability: if failed {
+                        Detectability::Detected
+                    } else {
+                        Detectability::NotChecked
+                    },
+                    consequence: if failed {
+                        format!("{} reports a violation that must be resolved before release", r.rule_id)
+                    } else {
+                        format!("{} could not be evaluated: {}", r.rule_id, r.reason)
+                    },
+                    evidence: std::iter::once(format!("{} report, revision {}", self.check, self.revision))
+                        .chain(ids)
+                        .collect(),
+                    mitigation: None,
+                    approval_required: severity >= RiskSeverity::High,
+                }
+            })
+            .collect()
     }
 }
 

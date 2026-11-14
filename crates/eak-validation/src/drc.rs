@@ -3,6 +3,7 @@
 
 use crate::holes;
 use crate::report::{finding, rule, Finding, Report, Severity::*};
+use crate::state::CheckState;
 use eak_core::geom::{point_in_polygon, point_segment_distance, polygon_self_intersects, to_mm};
 use eak_core::{CopperLayer, Nm, PadKind, Point, Project, Rect, Side};
 use eak_engineering::copper::{self, distance, Core, ItemKind};
@@ -749,7 +750,41 @@ pub fn run(p: &Project) -> Report {
         "Pad shapes: rectangle, circle, oval (no rounded-rectangle or custom polygons)".into(),
     ];
     limitations.extend(undeclared_nets_not_evaluated(p));
-    Report::new("DRC", p, rules, f, not_implemented, limitations)
+    let (no_current, no_voltage) = undeclared_nets(p);
+    let mut report = Report::new("DRC", p, rules, f, not_implemented, limitations);
+    // Fail-closed: a current/voltage rule over nets with no declared value checked nothing for
+    // those nets, so it is UNKNOWN (never PASS) until the value is declared (EVALUATION C1).
+    if !no_current.is_empty() {
+        let why = format!("no declared current for: {}", no_current.join(", "));
+        report = report
+            .degrade("DRC-008", CheckState::Unknown, &why)
+            .degrade("DRC-014", CheckState::Unknown, &why);
+    }
+    if !no_voltage.is_empty() {
+        let why = format!(
+            "no declared voltage for: {} (net-class clearance was checked; voltage-based clearance was not)",
+            no_voltage.join(", ")
+        );
+        report = report.degrade("DRC-002", CheckState::Unknown, &why);
+    }
+    report
+}
+
+/// Copper nets with no declared current, and with no declared voltage.
+fn undeclared_nets(p: &Project) -> (Vec<String>, Vec<String>) {
+    let c = &p.constraints;
+    let nets: BTreeSet<String> = copper::items(p)
+        .into_iter()
+        .map(|i| i.net)
+        .filter(|n| !n.is_empty())
+        .collect();
+    let missing = |declared: &dyn Fn(&String) -> bool| -> Vec<String> {
+        nets.iter().filter(|n| !declared(n)).cloned().collect()
+    };
+    (
+        missing(&|n| c.net_currents_a.contains_key(n)),
+        missing(&|n| c.net_voltages_v.contains_key(n)),
+    )
 }
 
 /// Nets on the board with no declared current or voltage: DRC-008 / DRC-014 current capacity and
@@ -962,6 +997,26 @@ mod tests {
             },
         );
         p
+    }
+
+    #[test]
+    fn undeclared_current_and_voltage_are_unknown_not_pass() {
+        let p = board(&[
+            Point::mm(0.0, 0.0),
+            Point::mm(20.0, 0.0),
+            Point::mm(20.0, 20.0),
+            Point::mm(0.0, 20.0),
+        ]);
+        let r = run(&p);
+        assert_eq!(r.state_of("DRC-008"), CheckState::Unknown);
+        assert_eq!(r.state_of("DRC-002"), CheckState::Unknown);
+        assert!(!r.overall.certifies());
+        let mut q = p.clone();
+        q.constraints.net_currents_a.insert("GND".into(), 1.0);
+        q.constraints.net_voltages_v.insert("GND".into(), 0.0);
+        let r = run(&q);
+        assert_ne!(r.state_of("DRC-008"), CheckState::Unknown);
+        assert_ne!(r.state_of("DRC-002"), CheckState::Unknown);
     }
 
     fn drc014(p: &Project) -> Vec<Finding> {

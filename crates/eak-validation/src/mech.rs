@@ -1,6 +1,7 @@
 //! Mechanical / 3D checks: component height limits, body collisions, missing models.
 
 use crate::report::{finding, rule, Bound, Report, Severity::*};
+use crate::state::CheckState;
 use eak_core::{geom::to_mm, Project};
 use eak_engineering::scene3d::body_rect;
 
@@ -97,7 +98,8 @@ pub fn run(p: &Project) -> Report {
     if p.constraints.max_component_height.is_none() {
         limitations.push("NOT EVALUATED: MECH-001 height limit (no limit declared); mechanical fit is unknown and blocks release above DRAFT".into());
     }
-    Report::new(
+    let missing_bodies = fps.len() - bodies.len();
+    let mut report = Report::new(
         "MECH",
         p,
         rules,
@@ -107,5 +109,45 @@ pub fn run(p: &Project) -> Report {
             "STEP model import and exact-solid collision".into(),
         ],
         limitations,
-    )
+    );
+    // Unknown mechanical fit is never a pass (EVALUATION C2): no declared height limit, or a
+    // part without 3D body data, leaves the affected rules UNKNOWN.
+    if p.constraints.max_component_height.is_none() {
+        report = report.degrade(
+            "MECH-001",
+            CheckState::Unknown,
+            "no component height limit declared",
+        );
+    }
+    if missing_bodies > 0 {
+        let why = format!("{missing_bodies} part(s) have no 3D body data");
+        report = report
+            .degrade("MECH-001", CheckState::Unknown, &why)
+            .degrade("MECH-002", CheckState::Unknown, &why)
+            .degrade("MECH-003", CheckState::Unknown, &why);
+    }
+    report
+}
+
+#[cfg(test)]
+mod tests {
+    // Written during the testing freeze; never compiled or run.
+    use super::*;
+
+    #[test]
+    fn undeclared_height_limit_is_unknown_not_pass() {
+        let p = Project::new("m");
+        let r = run(&p);
+        assert_eq!(r.state_of("MECH-001"), CheckState::Unknown);
+        assert!(!r.overall.certifies());
+    }
+
+    #[test]
+    fn report_is_stale_after_a_new_revision() {
+        let mut p = Project::new("m");
+        let r = run(&p);
+        assert_eq!(r.state_for(&p), r.overall);
+        p.revision += 1;
+        assert_eq!(r.state_for(&p), CheckState::Unknown);
+    }
 }
