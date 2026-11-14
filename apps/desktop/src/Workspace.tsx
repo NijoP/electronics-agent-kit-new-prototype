@@ -15,6 +15,7 @@ import type { Theme } from "./design/theme";
 import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
 import { ManufacturingPanel, netNames, ProjectPanel } from "./shell/panels";
+import { ProjectOverview } from "./shell/ProjectOverview";
 import { LibraryPanel } from "./shell/LibraryPanel";
 import { StatusBar } from "./shell/StatusBar";
 import { ExportDialog } from "./shell/ExportDialog";
@@ -749,6 +750,27 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           <header className="panel-head">
             <span className="title">{SIDE_VIEWS.find((v) => v.id === sideView)?.label}</span>
           </header>
+          {sideView === "overview" && (
+            <div className="side-scroll">
+              <ProjectOverview
+                snapshot={snapshot}
+                results={results}
+                conn={conn}
+                domain={domain}
+                events={events}
+                busy={busy}
+                views={edaViews.map((w) => w.id)}
+                onView={showWorkspace}
+                onCheck={check}
+                onFindings={() => {
+                  setBottomTab("findings");
+                  setBottomOpen(true);
+                }}
+                onLayers={() => showSide("layers")}
+                onParts={() => showSide("parts")}
+              />
+            </div>
+          )}
           {sideView === "project" && (
             <div className="side-scroll">
               <h3 className="side-h">Files</h3>

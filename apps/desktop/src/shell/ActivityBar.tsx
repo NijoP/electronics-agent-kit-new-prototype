@@ -7,9 +7,10 @@ import { tip } from "../design/shortcuts";
 import { Icons } from "./icons";
 import type { WorkspaceEntry } from "./registry";
 
-export type SideView = "project" | "parts" | "layers" | "domain" | "manufacturing";
+export type SideView = "overview" | "project" | "parts" | "layers" | "domain" | "manufacturing";
 
 export const SIDE_VIEWS: { id: SideView; label: string }[] = [
+  { id: "overview", label: "Overview" },
   { id: "project", label: "Explorer" },
   { id: "parts", label: "Library / Parts" },
   { id: "layers", label: "PCB Layers" },
@@ -53,11 +54,12 @@ export function ActivityBar({ sideView, sideOpen, onSide, workspace, onWorkspace
   );
   return (
     <nav className="activity-bar" aria-label="Activity bar">
+      {side("overview")}
       {side("project")}
       {EDITOR_WORKSPACES.map((w) => ws(w.id, w.label, Icons[w.id], w.shortcut))}
       {registered.map((w) => ws(w.id, w.label, w.icon, w.shortcut))}
       <span className="ab-sep" role="separator" />
-      {SIDE_VIEWS.filter((v) => v.id !== "project").map((v) => side(v.id))}
+      {SIDE_VIEWS.filter((v) => v.id !== "project" && v.id !== "overview").map((v) => side(v.id))}
       <span className="spacer" />
       <button type="button" className="ab" aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} title="Toggle light/dark theme" onClick={onTheme}>
         {theme === "dark" ? Icons.sun : Icons.moon}

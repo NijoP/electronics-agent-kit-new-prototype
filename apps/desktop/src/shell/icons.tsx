@@ -8,6 +8,7 @@ const svg = (children: ReactNode) => (
 );
 
 export const Icons = {
+  overview: svg(<><rect x="4" y="4" width="7" height="9" rx="1.5" /><rect x="13" y="4" width="7" height="5" rx="1.5" /><rect x="13" y="11" width="7" height="9" rx="1.5" /><rect x="4" y="15" width="7" height="5" rx="1.5" /></>),
   project: svg(<><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M9 4.5v15M3.5 10h5.5" /></>),
   parts: svg(<><rect x="8" y="8" width="8" height="8" rx="1" /><path d="M10 8V4M14 8V4M10 20v-4M14 20v-4M8 10H4M8 14H4M20 10h-4M20 14h-4" /></>),
   domain: svg(<><circle cx="12" cy="12" r="8" /><path d="M12 4a12 12 0 0 1 0 16M12 4a12 12 0 0 0 0 16M4 12h16" /></>),

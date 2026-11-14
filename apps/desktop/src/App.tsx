@@ -108,6 +108,11 @@ export function App() {
             +
           </button>
         )}
+        {opened && (
+          <span className="appbar-project" title={(projects.find((p) => p.active)?.dir ?? opened.dir) || undefined}>
+            {projects.find((p) => p.active)?.name ?? opened.project.name}
+          </span>
+        )}
       </header>
       <div className="app-main">
         <div className="ws-host" hidden={active !== "eda"}>
