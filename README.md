@@ -35,7 +35,7 @@ has not.
 | Area | What it does | Maturity |
 |---|---|---|
 | **Schematic editor** | Place library parts, wire with pin snapping, connect pins, net and power labels, move, rotate, delete, edit reference and value | Tested headless (vitest + Rust IPC). Not yet exercised in a real window |
-| **2-layer PCB editor** | Board outline (rectangle or polygon), place, move, rotate and flip footprints, route tracks on top or bottom, vias | Same as above. No zone, text or multi-select editing yet |
+| **PCB editor (2-16 layers)** | Board outline (rectangle or polygon), place, move, rotate and flip footprints, route tracks on any copper layer, through/blind/buried vias, one-click plane fill, layer visibility and active layer | Same as above. No free-form zone drawing, text or multi-select editing yet |
 | **Undo, save, reopen** | Undo/redo for every command; each command is durably saved with a crash-safe journal; projects reopen with their history | Covered by engine contract tests |
 | **ERC and DRC** | Electrical rules (13) and design rules (13), plus 3 mechanical checks. Findings carry a stable id, affected objects, location, suggested fix and measured vs required values | Reports are bound to a revision and an input hash and list unimplemented checks and limitations |
 | **Manufacturing export** | Gerber (RS-274X), Excellon drill, BOM and CPL with a SHA-256 manifest and package re-verification | Output is marked DRAFT unless ERC, DRC and mechanical checks pass for that exact revision. Never called manufacturing-ready. Not yet viewed in an external viewer or sent to a fabricator |
@@ -75,6 +75,49 @@ has not.
 
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PLATFORMS.md](docs/PLATFORMS.md).
 
+## Install
+
+Prebuilt packages are published on the
+[GitHub Releases page](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases).
+They are **prerelease prototypes**: read the release notes and known limitations first.
+
+### System requirements
+
+- **Linux x86_64** with glibc 2.39 or newer (built and tested on Ubuntu 24.04). Other
+  distributions may work but are untested.
+- WebKitGTK 4.1 and GTK 3 (installed automatically by the `.deb`; the AppImage expects them on the
+  host, as most current desktops have).
+- A Secret Service keyring (GNOME Keyring or KWallet) if you want to store model API keys.
+- About 100 MB of disk space and 4 GB of RAM.
+- **Windows and macOS:** no packages yet. Build from source (below); these platforms have not been
+  verified since commit 599bf91.
+
+### Debian / Ubuntu (.deb)
+
+```bash
+sudo apt install ./EAK_0.1.0_amd64.deb
+eak-desktop
+```
+
+EAK also appears in the application menu. Remove it with `sudo apt remove eak`.
+
+### AppImage (any recent x86_64 distribution)
+
+```bash
+chmod +x EAK_0.1.0_amd64.AppImage
+./EAK_0.1.0_amd64.AppImage
+```
+
+If FUSE is not available, run it with `--appimage-extract-and-run`.
+
+### Verify the download
+
+Each release includes a `SHA256SUMS` file. In the download folder:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
 ## Getting started
 
 ### Prerequisites
@@ -95,8 +138,9 @@ npm ci
 npm run tauri dev
 ```
 
-A release binary with the embedded frontend: `npm run tauri -- build --no-bundle`. Installers are
-not produced yet.
+A release binary with the embedded frontend: `npm run tauri -- build --no-bundle`. To build the
+Linux installers (`.deb` and AppImage) with a `SHA256SUMS` file, run `bash scripts/release-build.sh`
+from the repository root; the output lands in `target/release-artifacts/`.
 
 ### Test
 
@@ -120,7 +164,7 @@ it has been professionally validated. In particular:
 
 - No independent engineering review or fabricator DFM check has been performed.
 - Output is **not production-ready and not manufacturing-ready**.
-- Multi-layer boards, differential pairs, impedance control and thermal reliefs are not implemented.
+- Differential pairs, impedance control and inner-layer autorouting are not implemented.
 
 See [STATUS.md](STATUS.md) for the verified record and [ROADMAP.md](ROADMAP.md) for what is next.
 
