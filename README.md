@@ -8,6 +8,56 @@ Tusk Innovations Global Pvt Ltd.
 > **Early development.** EAK is a prototype. It is not production-ready and nothing it produces
 > should be treated as manufacturing-ready. See [Project status](#project-status).
 
+## Install and run the EAK desktop app
+
+EAK is built from source; there are no prebuilt releases yet. The installer checks prerequisites,
+clones (or reuses) this repository, builds the desktop app, installs a launcher and starts it. It
+never runs `sudo`: if a system package is missing it stops and prints the exact command to run.
+The first build takes several minutes.
+
+**Linux and macOS** (bash):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.sh | bash
+```
+
+**Windows** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.ps1 | iex
+```
+
+Already have a checkout? Run `bash scripts/install.sh` (or `.\scripts\install.ps1`) from it. Use
+`--no-launch` (`-NoLaunch` on Windows) to install without starting the app.
+
+**Prerequisites** (the installer checks each one and tells you what is missing):
+
+- Git, stable Rust 1.80 or newer ([rustup](https://rustup.rs)), Node.js 22 or newer with npm.
+- **Linux:** a C compiler, `pkg-config` and the Tauri 2 libraries (webkit2gtk-4.1, GTK 3,
+  libsoup 3, ayatana-appindicator, librsvg). On Debian/Ubuntu:
+  `sudo apt-get install build-essential pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev`.
+  The installer prints the equivalent for Fedora, Arch and openSUSE.
+- **macOS:** Xcode command-line tools (`xcode-select --install`).
+- **Windows:** MSVC build tools (C++ workload) and the WebView2 runtime; the installer prints the
+  `winget` commands.
+
+**Where it installs and how to launch it**
+
+| OS | Binary | Launcher |
+|---|---|---|
+| Linux | `~/.local/bin/eak-desktop` | "EAK" in the applications menu (`~/.local/share/applications/eak.desktop`), or run `eak-desktop` |
+| macOS | `~/Applications/EAK.app` (unsigned: right-click, Open the first time) | Finder / Launchpad |
+| Windows | `%LOCALAPPDATA%\EAK\eak-desktop.exe` | "EAK" in the Start Menu |
+
+**Add a model API key.** Open EAK, click **Model settings**, choose a provider (Anthropic,
+OpenAI-compatible or Ollama), enter the key and click **Save**, then **Test connection**. The key is
+stored in the OS keyring, never in a project or profile file. The AI agent is not yet wired into
+the desktop UI (see [Features](#features)).
+
+**Platform status:** Linux verified (2026-11-14), Windows UNVERIFIED, macOS UNVERIFIED.
+"Verified" means `scripts/install.sh` was run from a fresh clone on one Linux machine and the app
+process stayed up; it is not a claim about every distribution.
+
 ## What is EAK
 
 EAK is an electronics design automation (EDA) platform that treats AI as a first-class user of
