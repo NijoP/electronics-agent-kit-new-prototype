@@ -13,6 +13,8 @@ the listed tests pass; it does not mean professionally validated.
 - DFM (`eak-validation/src/dfm.rs`, DFM-001..010) against `data/fab-jlcpcb-standard.json` (JLCPCB standard 1-2 layer; source URL recorded; `verified: false`). DFM is now a release gate (ADR-0014).
 - Manufacturing: BOM grouped by value/footprint/MPN, CPL (pick-and-place), `<stem>-fab-pack.zip` (Gerber + drill + README of layers, CRC-checked by `verify_package`) and the README beside it.
 - Desktop: `run_check("dfm")` (palette "Run DFM", Design menu), DFM section in the Engineering Monitor, export runs and lists ERC/DRC/MECH/DFM in the export panel.
+- Tests executed (Linux, debug): fmt and clippy clean for eak-validation, eak-manufacturing and eak-engineering; eak-validation lib 5, actionable_findings 15, phase4 8, stackup 1; eak-manufacturing lib 3, end_to_end 5, multilayer 4; eak-engineering lib 27; desktop tsc clean and vitest 102/102.
+- The new rules found real issues. The silkscreen stroke was raised from 0.150 to 0.16 mm to meet DFM-010. The autorouter places same-net vias 0-0.45 mm apart: same-net pairs are warnings (duplicate drill or drill breakout), different-net pairs are errors. The router itself is not fixed.
 - Evaluator C1: DRC lists, per net, the nets for which DRC-008/014 current capacity and DRC-002 voltage clearance were NOT EVALUATED (no declared current/voltage) in `limitations`. Evaluator C2: the release gate stays DRAFT when no component height limit is declared (MECH-001 not evaluated) or any part lacks 3D body data (MECH-003); MECH lists the unevaluated height rule.
 
 ### Not verified / not implemented
