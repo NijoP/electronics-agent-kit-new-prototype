@@ -375,7 +375,12 @@ pub fn import_plan(rec: &SourcingRecord) -> Result<ImportPlan, String> {
     }
     def.manufacturer = rec.manufacturer.clone();
     def.mpn = Some(mpn.to_string());
-    def.lcsc = Some(lcsc.to_string());
+    // Commercial data goes into a supplier offer, not into the component's identity.
+    def.supplier_offers.clear();
+    def.set_offer(
+        rec.offer()
+            .unwrap_or_else(|| eak_core::SupplierOffer::bare("lcsc", lcsc)),
+    );
     def.datasheet = rec.datasheet_url.clone();
     def.provenance = format!(
         "LCSC {lcsc} (sourcing record sha256 {}, state {:?}); symbol and footprint reused from library template {}",

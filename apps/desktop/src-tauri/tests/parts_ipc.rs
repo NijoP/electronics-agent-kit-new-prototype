@@ -4,6 +4,7 @@
 use eak_desktop::parts::{jlcpcb_prepare, manufacturing_preview, parts_import, parts_search};
 use eak_desktop::*;
 use eak_manufacturing::lcsc::{LcscProvider, UreqFetch};
+use eak_manufacturing::provider::Resilient;
 use eak_runtime::index::Index;
 use eak_runtime::{fixtures, Engine};
 use std::io::{Read, Write};
@@ -27,7 +28,7 @@ fn resistor_json() -> Vec<u8> {
     std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
-fn lcsc_site() -> LcscProvider<UreqFetch> {
+fn lcsc_site() -> Resilient<LcscProvider<UreqFetch>> {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     let detail = resistor_json();
@@ -73,7 +74,7 @@ fn lcsc_site() -> LcscProvider<UreqFetch> {
     });
     let mut p = LcscProvider::new(UreqFetch::default(), &format!("http://{addr}"));
     p.pause = Duration::from_millis(1);
-    p
+    Resilient::new(p).with_sleep(|_| {})
 }
 
 fn open_empty(name: &str) -> (Session, PathBuf) {
@@ -104,6 +105,12 @@ fn search_reports_a_blocked_live_search_and_still_returns_library_hits() {
         Some("0603WAF1002T5E")
     );
     assert!(parts_search(&s, &p, "   ").is_err());
+    // The same query again is served from the process cache, not a second request.
+    let cached = parts_search(&s, &p, "C25804").unwrap();
+    assert!(matches!(
+        cached.live.served,
+        Some(eak_manufacturing::provider::Served::Cache { .. })
+    ));
 }
 
 #[test]
@@ -124,6 +131,11 @@ fn import_is_one_engine_command_with_a_revision_check_and_stores_the_record() {
     let snap = current_project(&s).unwrap();
     let def = &snap.project.library["LCSC_C25804"];
     assert_eq!(def.lcsc.as_deref(), Some("C25804"));
+    // Commercial data is a supplier offer, separate from identity (ADR-0027).
+    assert_eq!(def.supplier_part("lcsc"), Some("C25804"));
+    assert_eq!(def.supplier_offers.len(), 1);
+    assert!(def.supplier_offers[0].fetched_at_unix_s.is_some());
+    assert_eq!(def.mpn.as_deref(), Some("0603WAF1002T5E"));
     assert!(d.join("sourcing").join("C25804.json").is_file());
 
     // The stored record now answers an offline search.

@@ -481,13 +481,19 @@ export interface LibraryHit {
   mpn: string | null;
 }
 
-export type LiveStatus = "ok" | "blocked" | "not_found" | "unreachable" | "bad_query" | "error";
+export type LiveStatus = "ok" | "stale" | "blocked" | "not_found" | "unreachable" | "bad_query" | "error";
 
 export interface PartsSearch {
   query: string;
   library: LibraryHit[];
   stored: SourcingRecord[];
-  live: { status: LiveStatus; message: string; records: SourcingRecord[] };
+  live: {
+    status: LiveStatus;
+    message: string;
+    records: SourcingRecord[];
+    /** How the records were obtained; a `stale_cache` answer is an older snapshot shown because LCSC is down. */
+    served?: { source: "live" | "cache" | "stale_cache"; age_s?: number; because?: string } | null;
+  };
 }
 
 export interface ImportResult {

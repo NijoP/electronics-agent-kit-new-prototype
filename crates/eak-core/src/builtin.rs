@@ -94,6 +94,7 @@ fn two_pin(
         manufacturer: None,
         mpn: None,
         lcsc: None,
+        supplier_offers: vec![],
         datasheet: None,
         pin_map: one_to_one(&pins),
         symbol: SymbolDef {
@@ -233,6 +234,7 @@ fn header_1xn(n: usize) -> ComponentDef {
         manufacturer: None,
         mpn: None,
         lcsc: None,
+        supplier_offers: vec![],
         datasheet: None,
         pin_map: one_to_one(&pins),
         symbol: SymbolDef {
@@ -292,6 +294,7 @@ fn sot23_transistor(
         manufacturer: None,
         mpn: None,
         lcsc: None,
+        supplier_offers: vec![],
         datasheet: None,
         pin_map: one_to_one(&pins),
         symbol: SymbolDef {
@@ -343,6 +346,7 @@ pub fn components() -> Vec<ComponentDef> {
         manufacturer: None,
         mpn: None,
         lcsc: None,
+        supplier_offers: vec![],
         datasheet: None,
         pin_map: one_to_one(&hdr2_pins),
         symbol: SymbolDef {
@@ -391,6 +395,7 @@ pub fn components() -> Vec<ComponentDef> {
         manufacturer: Some("Advanced Monolithic Systems".into()),
         mpn: Some("AMS1117-3.3".into()),
         lcsc: Some("C6186".into()),
+        supplier_offers: vec![],
         datasheet: None,
         pin_map: ldo_map,
         symbol: SymbolDef { pins: ldo_pins, body_half_w: mm(5.08), body_half_h: mm(5.08) },
@@ -450,6 +455,7 @@ pub fn components() -> Vec<ComponentDef> {
         manufacturer: Some("Microchip".into()),
         mpn: Some("ATTINY85-20SU".into()),
         lcsc: None,
+        supplier_offers: vec![],
         datasheet: None,
         pin_map: one_to_one(&mcu_pins),
         symbol: SymbolDef { pins: mcu_pins, body_half_w: mm(7.62), body_half_h: mm(6.35) },
@@ -579,6 +585,7 @@ pub fn components() -> Vec<ComponentDef> {
         manufacturer: None,
         mpn: None,
         lcsc: None,
+        supplier_offers: vec![],
         datasheet: None,
         pin_map: one_to_one(&ldo5_pins),
         symbol: SymbolDef {
@@ -634,6 +641,7 @@ pub fn components() -> Vec<ComponentDef> {
         manufacturer: None,
         mpn: None,
         lcsc: None,
+        supplier_offers: vec![],
         datasheet: None,
         pin_map: one_to_one(&xtal_pins),
         symbol: SymbolDef {
@@ -680,6 +688,7 @@ pub fn components() -> Vec<ComponentDef> {
         manufacturer: None,
         mpn: None,
         lcsc: None,
+        supplier_offers: vec![],
         datasheet: None,
         pin_map: xtal4_map,
         symbol: SymbolDef {
@@ -727,6 +736,7 @@ pub fn components() -> Vec<ComponentDef> {
         manufacturer: None,
         mpn: None,
         lcsc: None,
+        supplier_offers: vec![],
         datasheet: None,
         pin_map: sw_map,
         symbol: SymbolDef {
@@ -923,6 +933,7 @@ fn board_parts() -> Vec<ComponentDef> {
             manufacturer: Some("Espressif Systems".into()),
             mpn: Some("ESP32-C3-MINI-1".into()),
             lcsc: None,
+            supplier_offers: vec![],
             datasheet: Some(ESP32_C3_MINI_1_DS.into()),
             pin_map,
             symbol: SymbolDef {
@@ -982,6 +993,7 @@ fn board_parts() -> Vec<ComponentDef> {
             manufacturer: Some("Texas Instruments".into()),
             mpn: Some("LMR33630ADDA".into()),
             lcsc: None,
+            supplier_offers: vec![],
             datasheet: Some(LMR33630_DS.into()),
             pin_map: one_to_one(&pins),
             symbol: SymbolDef {
@@ -1030,6 +1042,7 @@ fn board_parts() -> Vec<ComponentDef> {
             manufacturer: Some("Sensirion".into()),
             mpn: Some("SHT40-AD1B".into()),
             lcsc: None,
+            supplier_offers: vec![],
             datasheet: Some(SHT4X_DS.into()),
             pin_map: one_to_one(&pins),
             symbol: SymbolDef {
@@ -1085,6 +1098,7 @@ fn board_parts() -> Vec<ComponentDef> {
             manufacturer: Some("Alpha & Omega Semiconductor".into()),
             mpn: Some("AO4406A".into()),
             lcsc: None,
+            supplier_offers: vec![],
             datasheet: Some(AO4406A_DS.into()),
             pin_map,
             symbol: SymbolDef {
@@ -1262,6 +1276,7 @@ fn board_parts() -> Vec<ComponentDef> {
             manufacturer: Some("Phoenix Contact".into()),
             mpn: Some("1715721".into()),
             lcsc: None,
+            supplier_offers: vec![],
             datasheet: Some(MKDS_1715721_DS.into()),
             pin_map: one_to_one(&pins),
             symbol: SymbolDef {

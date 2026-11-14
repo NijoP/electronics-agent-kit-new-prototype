@@ -13,12 +13,14 @@ use crate::Session;
 use eak_core::builtin;
 use eak_manufacturing::bom::{self, BomLine};
 use eak_manufacturing::jlcpcb::{self, DfmReport, PrepResult};
-use eak_manufacturing::lcsc::{self, Fetch, LcscError, LcscProvider};
+use eak_manufacturing::lcsc::{self, LcscProvider, UreqFetch};
+use eak_manufacturing::provider::{Answer, ErrorKind, Resilient, Served, SupplierProvider};
 use eak_manufacturing::sourcing::{self, SourcingRecord};
 use eak_runtime::{Actor, Command, CommandRequest, CommandResponse};
 use eak_validation::{drc, erc, Report};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 /// A part already in the EAK library that matches the query.
 #[derive(Debug, Clone, Serialize)]
@@ -33,10 +35,13 @@ pub struct LibraryHit {
 /// What happened when LCSC was asked.
 #[derive(Debug, Clone, Serialize)]
 pub struct LiveSearch {
-    /// `ok`, `blocked`, `not_found`, `unreachable`, `bad_query` or `error`.
+    /// `ok`, `stale` (earlier cached answer, supplier down), `blocked`, `not_found`,
+    /// `unreachable`, `bad_query` or `error`.
     pub status: &'static str,
     /// Human-readable explanation, shown as-is. Empty when `ok`.
     pub message: String,
+    /// How the records were obtained (live, fresh cache, stale cache); `None` on failure.
+    pub served: Option<Served>,
     pub records: Vec<SourcingRecord>,
 }
 
@@ -95,21 +100,31 @@ fn library_hits(query: &str) -> Vec<LibraryHit> {
         .collect()
 }
 
-fn live_status(e: &LcscError) -> &'static str {
-    match e {
-        LcscError::BadQuery(_) => "bad_query",
-        LcscError::Transport(_) => "unreachable",
-        LcscError::Blocked { .. } => "blocked",
-        LcscError::NotFound(_) => "not_found",
-        LcscError::Unusable(_) => "error",
+fn live_status(k: ErrorKind) -> &'static str {
+    match k {
+        ErrorKind::BadQuery => "bad_query",
+        ErrorKind::Offline => "unreachable",
+        ErrorKind::Blocked => "blocked",
+        ErrorKind::NotFound => "not_found",
+        ErrorKind::Unusable => "error",
     }
+}
+
+/// Supplier lookups shared by every `parts_*` command: one cache, rate limit and retry policy
+/// per process (ADR-0027). The wrapper never holds a lock while waiting on the network, so a
+/// slow or dead supplier cannot freeze other commands.
+pub type LcscResilient = Resilient<LcscProvider<UreqFetch>>;
+
+pub fn live_provider() -> &'static LcscResilient {
+    static P: OnceLock<LcscResilient> = OnceLock::new();
+    P.get_or_init(|| Resilient::new(LcscProvider::live()))
 }
 
 /// Search the built-in library and the project's stored records offline, then ask LCSC.
 /// A failure of the live search is reported in `live`, never replaced by invented rows.
-pub fn parts_search<F: Fetch>(
+pub fn parts_search<P: SupplierProvider>(
     s: &Session,
-    provider: &LcscProvider<F>,
+    provider: &Resilient<P>,
     query: &str,
 ) -> Result<PartsSearch, String> {
     let q = query.trim();
@@ -121,7 +136,22 @@ pub fn parts_search<F: Fetch>(
         .cloned()
         .collect();
     let live = match provider.search(q) {
-        Ok(records) => LiveSearch {
+        Ok(Answer {
+            served: served @ Served::StaleCache { age_s, because },
+            records,
+            ..
+        }) => LiveSearch {
+            status: "stale",
+            message: format!(
+                "LCSC is not answering ({because:?}); showing an earlier answer from {age_s} s ago. \
+                 Stock and prices may have changed."
+            ),
+            served: Some(served),
+            records,
+        },
+        Ok(Answer {
+            served, records, ..
+        }) => LiveSearch {
             status: if records.is_empty() {
                 "not_found"
             } else {
@@ -132,11 +162,13 @@ pub fn parts_search<F: Fetch>(
             } else {
                 String::new()
             },
+            served: Some(served),
             records,
         },
         Err(e) => LiveSearch {
-            status: live_status(&e),
-            message: e.to_string(),
+            status: live_status(e.kind),
+            message: e.message,
+            served: None,
             records: vec![],
         },
     };
@@ -158,14 +190,29 @@ pub struct ImportResult {
 
 /// Re-fetch `lcsc` from LCSC, store the record with the project and add the part to the
 /// project library through `Command::UpsertComponentDefinition`.
-pub fn parts_import<F: Fetch>(
+pub fn parts_import<P: SupplierProvider>(
     s: &Session,
-    provider: &LcscProvider<F>,
+    provider: &Resilient<P>,
     expected_revision: u64,
     lcsc_part: &str,
 ) -> Result<ImportResult, String> {
-    let record = provider.lookup(lcsc_part).map_err(|e| e.to_string())?;
-    let plan = lcsc::import_plan(&record)?;
+    let answer = provider.lookup(lcsc_part).map_err(|e| e.message)?;
+    let stale = match answer.served {
+        Served::StaleCache { age_s, .. } => Some(age_s),
+        _ => None,
+    };
+    let record = answer
+        .records
+        .into_iter()
+        .next()
+        .ok_or("LCSC returned no record for that part number")?;
+    let mut plan = lcsc::import_plan(&record)?;
+    if let Some(age_s) = stale {
+        // The record keeps its original retrieval time and hash; say so in the notes.
+        plan.notes.push(format!(
+            "LCSC was unreachable: this record is an earlier answer from {age_s} s ago, not a fresh fetch"
+        ));
+    }
     let component_id = plan.definition.id.clone();
     let response = s.with_engine(|e| {
         let dir = e
@@ -288,7 +335,7 @@ pub mod cmd {
 
     #[tauri::command(async, rename_all = "snake_case")]
     pub fn parts_search(state: State<'_, Session>, query: String) -> Result<PartsSearch, String> {
-        super::parts_search(&state, &LcscProvider::live(), &query)
+        super::parts_search(&state, live_provider(), &query)
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
@@ -297,7 +344,7 @@ pub mod cmd {
         expected_revision: u64,
         lcsc: String,
     ) -> Result<ImportResult, String> {
-        super::parts_import(&state, &LcscProvider::live(), expected_revision, &lcsc)
+        super::parts_import(&state, live_provider(), expected_revision, &lcsc)
     }
 
     #[tauri::command(async, rename_all = "snake_case")]

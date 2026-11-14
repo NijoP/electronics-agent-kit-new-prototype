@@ -16,7 +16,7 @@
 //! * Supplier data never changes library ratings, pins or footprints ([`apply_identity`]
 //!   copies identity fields only), and nothing here feeds ERC, DRC or the release gate.
 
-use eak_core::ComponentDef;
+use eak_core::{ComponentDef, OfferPrice, SupplierOffer};
 use eak_runtime::{Actor, ActorKind};
 use eak_validation::sourcing::is_lcsc_part_number;
 pub use eak_validation::sourcing::{SupplierPart, VerificationState};
@@ -492,6 +492,28 @@ impl SourcingRecord {
         Ok(())
     }
 
+    /// This record's commercial side as a [`SupplierOffer`] (ADR-0027): LCSC number, stock,
+    /// price breaks and fetch time, none of it identity. `None` without an LCSC number. The
+    /// record carries no lifecycle field, so the offer's `lifecycle` stays `None` (not reported).
+    pub fn offer(&self) -> Option<SupplierOffer> {
+        let part = self.lcsc_part.clone()?;
+        let mut offer = SupplierOffer::bare("lcsc", &part);
+        offer.url = Some(self.source_url.clone());
+        offer.stock = self.stock;
+        offer.price_breaks = self
+            .price_breaks
+            .iter()
+            .map(|b| OfferPrice {
+                min_quantity: b.min_quantity,
+                unit_price: b.unit_price.clone(),
+                currency: b.currency.clone(),
+            })
+            .collect();
+        offer.fetched_at_unix_s = Some(self.retrieved_at_unix_s);
+        offer.source_sha256 = Some(self.raw_sha256.clone());
+        Some(offer)
+    }
+
     /// The facts the `SOURCING` verification report consumes. `None` without an LCSC number.
     pub fn supplier_part(&self) -> Option<SupplierPart> {
         Some(SupplierPart {
@@ -523,7 +545,11 @@ pub fn apply_identity(def: &ComponentDef, rec: &SourcingRecord) -> Result<Compon
             .map(String::from)
     };
     for (name, old, new) in [
-        ("LCSC part number", &def.lcsc, lcsc),
+        (
+            "LCSC part number",
+            &def.supplier_part("lcsc").map(String::from),
+            lcsc,
+        ),
         ("MPN", &def.mpn, mpn),
     ] {
         if let Some(old) = held(old).filter(|old| !old.eq_ignore_ascii_case(new)) {
@@ -534,7 +560,7 @@ pub fn apply_identity(def: &ComponentDef, rec: &SourcingRecord) -> Result<Compon
         }
     }
     let mut out = def.clone();
-    out.lcsc = Some(lcsc.clone());
+    out.set_offer(rec.offer().ok_or("sourcing record has no LCSC part number")?);
     out.mpn = held(&def.mpn).or_else(|| Some(mpn.clone()));
     // Manufacturer and datasheet only fill a gap; an existing library value is kept.
     out.manufacturer = held(&def.manufacturer).or_else(|| rec.manufacturer.clone());

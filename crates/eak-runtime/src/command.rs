@@ -557,7 +557,14 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             };
             def.manufacturer = clean(manufacturer);
             def.mpn = clean(mpn);
-            def.lcsc = clean(lcsc);
+            let new_lcsc = clean(lcsc);
+            if new_lcsc != def.lcsc {
+                // Keep the offer list in step; a different part number drops the old offer's
+                // stock/price, which described another part.
+                def.supplier_offers.retain(|o| o.supplier != "lcsc");
+                def.lcsc = new_lcsc;
+                def.migrate_offers();
+            }
             def.datasheet = clean(datasheet);
         }
         AssignComponentFootprint {

@@ -222,6 +222,61 @@ pub struct Model3d {
     pub model_ref: Option<ModelRef>,
 }
 
+/// One quantity break of a supplier offer. The price is decimal text exactly as the supplier
+/// stated it; EAK never rounds or converts it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OfferPrice {
+    pub min_quantity: u64,
+    pub unit_price: String,
+    pub currency: String,
+}
+
+/// What one supplier says about selling a component: its own part number, stock, price and
+/// lifecycle status, and when that was fetched.
+///
+/// This is *commercial* data and is deliberately not part of the component's identity
+/// (manufacturer + MPN, package, symbol, footprint, pin map, 3D model). It goes stale, differs
+/// per supplier, and is never proof that the part suits the design: nothing here feeds
+/// electrical checks. `lifecycle` is the supplier's own wording, not an EAK judgement.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SupplierOffer {
+    /// Lower-case supplier key, for example `lcsc`.
+    pub supplier: String,
+    /// The supplier's own identifier (an LCSC `C` number for `lcsc`).
+    pub supplier_part: String,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub stock: Option<u64>,
+    #[serde(default)]
+    pub price_breaks: Vec<OfferPrice>,
+    /// Lifecycle status as the supplier reported it; `None` = not reported.
+    #[serde(default)]
+    pub lifecycle: Option<String>,
+    /// When the supplier data was fetched (Unix seconds); `None` for a bare legacy id.
+    #[serde(default)]
+    pub fetched_at_unix_s: Option<u64>,
+    /// SHA-256 of the raw supplier response this offer was read from, when known.
+    #[serde(default)]
+    pub source_sha256: Option<String>,
+}
+
+impl SupplierOffer {
+    /// An offer that records only a supplier part number (no stock, price or fetch time).
+    pub fn bare(supplier: &str, supplier_part: &str) -> SupplierOffer {
+        SupplierOffer {
+            supplier: supplier.trim().to_ascii_lowercase(),
+            supplier_part: supplier_part.trim().to_string(),
+            url: None,
+            stock: None,
+            price_breaks: vec![],
+            lifecycle: None,
+            fetched_at_unix_s: None,
+            source_sha256: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ComponentDef {
     pub id: String,
@@ -234,8 +289,15 @@ pub struct ComponentDef {
     pub manufacturer: Option<String>,
     #[serde(default)]
     pub mpn: Option<String>,
+    /// Legacy single LCSC part number kept so older project files and the BOM/JLCPCB code
+    /// keep working. Supplier data lives in `supplier_offers`; read it through
+    /// [`ComponentDef::supplier_part`], which prefers the offer and falls back to this field.
     #[serde(default)]
     pub lcsc: Option<String>,
+    /// Supplier-specific offers, separate from the component's identity (ADR-0027).
+    /// Absent in older files (loads as empty).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub supplier_offers: Vec<SupplierOffer>,
     #[serde(default)]
     pub datasheet: Option<String>,
     pub symbol: SymbolDef,
@@ -250,6 +312,49 @@ pub struct ComponentDef {
 }
 
 impl ComponentDef {
+    /// The part number `supplier` uses for this component: its offer if present, else (for
+    /// `lcsc` only) the legacy `lcsc` field. A part number is an identifier, never evidence of
+    /// electrical suitability.
+    pub fn supplier_part(&self, supplier: &str) -> Option<&str> {
+        let key = supplier.trim().to_ascii_lowercase();
+        self.supplier_offers
+            .iter()
+            .find(|o| o.supplier == key && !o.supplier_part.trim().is_empty())
+            .map(|o| o.supplier_part.as_str())
+            .or_else(|| {
+                if key == "lcsc" {
+                    self.lcsc.as_deref().filter(|s| !s.trim().is_empty())
+                } else {
+                    None
+                }
+            })
+    }
+
+    /// Insert or replace this supplier's offer and keep the legacy `lcsc` mirror in step.
+    pub fn set_offer(&mut self, offer: SupplierOffer) {
+        if offer.supplier == "lcsc" {
+            self.lcsc = Some(offer.supplier_part.clone());
+        }
+        match self
+            .supplier_offers
+            .iter_mut()
+            .find(|o| o.supplier == offer.supplier)
+        {
+            Some(slot) => *slot = offer,
+            None => self.supplier_offers.push(offer),
+        }
+    }
+
+    /// Migrate a legacy definition: a bare `lcsc` id with no matching offer becomes a bare
+    /// `lcsc` offer. Idempotent. Identity fields are not touched.
+    pub fn migrate_offers(&mut self) {
+        if let Some(part) = self.lcsc.clone().filter(|s| !s.trim().is_empty()) {
+            if !self.supplier_offers.iter().any(|o| o.supplier == "lcsc") {
+                self.supplier_offers.push(SupplierOffer::bare("lcsc", &part));
+            }
+        }
+    }
+
     pub fn pin(&self, number: &str) -> Option<&SymbolPin> {
         self.symbol.pins.iter().find(|p| p.number == number)
     }
@@ -412,5 +517,54 @@ mod search_tests {
             .find(|c| c.lcsc.is_some())
             .expect("a part with LCSC");
         assert!(with_lcsc.matches_query(with_lcsc.lcsc.as_deref().unwrap()));
+    }
+}
+
+#[cfg(test)]
+mod supplier_offer_tests {
+    use crate::builtin;
+    use super::*;
+
+    fn part() -> ComponentDef {
+        builtin::components().into_iter().next().expect("a builtin part")
+    }
+
+    #[test]
+    fn legacy_json_without_offers_loads_and_migrates() {
+        let mut v = serde_json::to_value(part()).unwrap();
+        v.as_object_mut().unwrap().remove("supplier_offers");
+        v["lcsc"] = serde_json::json!("C25804");
+        let mut def: ComponentDef = serde_json::from_value(v).unwrap();
+        assert!(def.supplier_offers.is_empty());
+        assert_eq!(def.supplier_part("LCSC"), Some("C25804"));
+        def.migrate_offers();
+        def.migrate_offers();
+        assert_eq!(def.supplier_offers, vec![SupplierOffer::bare("lcsc", "C25804")]);
+    }
+
+    #[test]
+    fn empty_offers_are_not_serialised_and_identity_is_untouched() {
+        let def = part();
+        let v = serde_json::to_value(&def).unwrap();
+        assert!(v.get("supplier_offers").is_none());
+        let mut with = def.clone();
+        with.set_offer(SupplierOffer::bare("lcsc", "C1"));
+        assert_eq!(with.lcsc.as_deref(), Some("C1"));
+        assert_eq!((&with.mpn, &with.manufacturer), (&def.mpn, &def.manufacturer));
+        let back: ComponentDef =
+            serde_json::from_value(serde_json::to_value(&with).unwrap()).unwrap();
+        assert_eq!(back, with);
+    }
+
+    #[test]
+    fn set_offer_replaces_the_same_supplier_only() {
+        let mut def = part();
+        def.set_offer(SupplierOffer::bare("lcsc", "C1"));
+        def.set_offer(SupplierOffer::bare("mouser", "M9"));
+        def.set_offer(SupplierOffer::bare("lcsc", "C2"));
+        assert_eq!(def.supplier_offers.len(), 2);
+        assert_eq!(def.supplier_part("lcsc"), Some("C2"));
+        assert_eq!(def.supplier_part("mouser"), Some("M9"));
+        assert_eq!(def.supplier_part("digikey"), None);
     }
 }
