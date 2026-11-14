@@ -405,7 +405,7 @@ fn dfm_flags_violations_and_never_reports_unchecked_rules_as_passing() {
         v.drill = 100_000; // 0.1 mm
         v.diameter = 150_000; // ring 0.025 mm
     }
-    bad.pcb.board.stackup.copper_layers = 4;
+    bad.pcb.board.stackup.layers[0].copper_oz = 2.0;
     let r = jlcpcb::dfm(&bad, &bom::build(&bad, &[]), &profile);
     assert_eq!(get(&r, "JLC-010"), Status::Fail);
     assert_eq!(get(&r, "JLC-002"), Status::Fail);
