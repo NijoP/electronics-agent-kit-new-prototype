@@ -3,6 +3,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AiProposal,
+  RouteStepReport,
+  RouteStepRequest,
   Check,
   CheckResult,
   Command,
@@ -48,6 +50,7 @@ export const IPC_COMMANDS = [
   "ai_accept",
   "ai_reject",
   "ai_rollback",
+  "route_step",
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
@@ -87,6 +90,7 @@ export const api = {
   aiAccept: (stepId: number) => call<CommandResponse>("ai_accept", { step_id: stepId }),
   aiReject: (stepId: number) => call<void>("ai_reject", { step_id: stepId }),
   aiRollback: (opId: string) => call<CommandResponse>("ai_rollback", { op_id: opId }),
+  routeStep: (request: RouteStepRequest) => call<RouteStepReport>("route_step", { request }),
 };
 
 export function describeError(e: CommandError): string {
