@@ -1,0 +1,3957 @@
+{
+  "schema_version": 1,
+  "id": "prj_2dadda078068495a",
+  "name": "EAK Power Buck 12-24V to 5V 3A",
+  "revision": 217,
+  "requirements": [
+    {
+      "id": "req_21febd3a06d1410a",
+      "text": "REQ-IN: input 11.4-25.2 V DC (12 V -5 % to 24 V +5 %) from a SELV / IEC 62368-1 ES1 source; steady-state input above 25.2 V is out of specification"
+    },
+    {
+      "id": "req_d0bfc92d39c9425d",
+      "text": "REQ-OUT: output 5.0 V nominal (TPS54302 internal reference, 105k/14.3k divider), 0-3 A continuous, 15 W"
+    },
+    {
+      "id": "req_bed9cbf36da544f5",
+      "text": "REQ-TOPO: non-isolated synchronous buck, TI TPS54302 (integrated 85/40 mOhm FETs, 400 kHz, internal compensation)"
+    },
+    {
+      "id": "req_18b91e223a1b462a",
+      "text": "REQ-ENV: ambient 0-40 C, natural convection, altitude <= 2000 m, pollution degree 2, no conformal coating"
+    },
+    {
+      "id": "req_077294006e634765",
+      "text": "REQ-PROT: 3 A slow-blow input fuse; P-MOSFET reverse-polarity protection; SMAJ26A TVS after the reverse-polarity switch; controller cycle-by-cycle current limit and thermal shutdown"
+    },
+    {
+      "id": "req_adeaad9f055f45f1",
+      "text": "REQ-PCB: 2-layer FR-4 1.6 mm, 2 oz outer copper, conductor temperature rise <= 10 C at declared currents (IPC-2221)"
+    },
+    {
+      "id": "req_32c9232872f84fab",
+      "text": "REQ-ISO: no isolation barrier; output 0 V is input 0 V; the board inherits the safety class of its SELV/ES1 source"
+    }
+  ],
+  "library": {
+    "AO4407A": {
+      "id": "AO4407A",
+      "name": "AO4407A -30 V P-channel MOSFET (SOIC-8), reverse-polarity switch",
+      "category": "Transistor",
+      "refdes_prefix": "Q",
+      "default_value": "AO4407A",
+      "manufacturer": "Alpha & Omega Semiconductor",
+      "mpn": "AO4407A",
+      "lcsc": null,
+      "datasheet": "https://www.aosmd.com/res/data_sheets/AO4407A.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "S",
+            "electrical_type": "passive",
+            "position": {
+              "x": 7620000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "G",
+            "electrical_type": "passive",
+            "position": {
+              "x": 0,
+              "y": -7620000
+            }
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "electrical_type": "passive",
+            "position": {
+              "x": -7620000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "SOIC-8_3.9x4.9mm_P1.27mm",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -2700000,
+              "y": 1905000
+            },
+            "size_x": 1550000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -2700000,
+              "y": 635000
+            },
+            "size_x": 1550000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "3",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -2700000,
+              "y": -635000
+            },
+            "size_x": 1550000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "4",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -2700000,
+              "y": -1905000
+            },
+            "size_x": 1550000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "5",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 2700000,
+              "y": -1905000
+            },
+            "size_x": 1550000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "6",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 2700000,
+              "y": -635000
+            },
+            "size_x": 1550000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "7",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 2700000,
+              "y": 635000
+            },
+            "size_x": 1550000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "8",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 2700000,
+              "y": 1905000
+            },
+            "size_x": 1550000,
+            "size_y": 600000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 3700000,
+        "courtyard_half_h": 2700000,
+        "body_height": 1750000
+      },
+      "pin_map": {
+        "1": [
+          "1",
+          "2",
+          "3"
+        ],
+        "2": [
+          "4"
+        ],
+        "3": [
+          "5",
+          "6",
+          "7",
+          "8"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "vds_max",
+          "value": 30.0,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against AOS AO4407A datasheet https://www.aosmd.com/res/data_sheets/AO4407A.pdf",
+          "verified": false
+        },
+        {
+          "name": "vgs_max",
+          "value": 25.0,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against AOS AO4407A datasheet https://www.aosmd.com/res/data_sheets/AO4407A.pdf",
+          "verified": false
+        },
+        {
+          "name": "id_continuous_25c",
+          "value": 12.0,
+          "unit": "A",
+          "source": "UNVERIFIED designer assumption; must be checked against AOS AO4407A datasheet https://www.aosmd.com/res/data_sheets/AO4407A.pdf",
+          "verified": false
+        },
+        {
+          "name": "rdson_vgs_10v_max",
+          "value": 0.014,
+          "unit": "ohm",
+          "source": "UNVERIFIED designer assumption; must be checked against AOS AO4407A datasheet https://www.aosmd.com/res/data_sheets/AO4407A.pdf",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#202020",
+        "external_ref": null
+      },
+      "provenance": "Pinout follows the common SOIC-8 P-MOSFET arrangement (S=1-3, G=4, D=5-8); must be checked against the AO4407A datasheet; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "CP_EEE-FK1H470P": {
+      "id": "CP_EEE-FK1H470P",
+      "name": "47 µF 50 V aluminium electrolytic, SMD 8x10.2 mm (input bulk / damping)",
+      "category": "Capacitor",
+      "refdes_prefix": "C",
+      "default_value": "47u 50V",
+      "manufacturer": "Panasonic",
+      "mpn": "EEE-FK1H470P",
+      "lcsc": null,
+      "datasheet": "https://industrial.panasonic.com/",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "+",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "-",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "CP_EEE-FK1H470P",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -3350000,
+              "y": 0
+            },
+            "size_x": 3500000,
+            "size_y": 2500000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 3350000,
+              "y": 0
+            },
+            "size_x": 3500000,
+            "size_y": 2500000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 4600000,
+        "courtyard_half_h": 4600000,
+        "body_height": 10500000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "voltage",
+          "value": 50.0,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against Panasonic EEE-FK aluminium electrolytic datasheet (industrial.panasonic.com)",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "C_0603_100n_50V_X7R": {
+      "id": "C_0603_100n_50V_X7R",
+      "name": "100 nF 50 V X7R MLCC 0603",
+      "category": "Capacitor",
+      "refdes_prefix": "C",
+      "default_value": "100n 50V X7R",
+      "manufacturer": "Murata",
+      "mpn": "GRM188R71H104KA93D",
+      "lcsc": null,
+      "datasheet": "https://www.murata.com/en-us/products/productdetail?partno=GRM188R71H104KA93%23",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "C_0603_100n_50V_X7R",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 1500000,
+        "courtyard_half_h": 750000,
+        "body_height": 900000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "voltage",
+          "value": 50.0,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against Murata GRM188R71H104KA93 product data (psearch.en.murata.com)",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "C_1210_10u_50V_X7R": {
+      "id": "C_1210_10u_50V_X7R",
+      "name": "10 µF 50 V X7R MLCC 1210 (input)",
+      "category": "Capacitor",
+      "refdes_prefix": "C",
+      "default_value": "10u 50V X7R",
+      "manufacturer": "Murata",
+      "mpn": "GRM32ER71H106KA12L",
+      "lcsc": null,
+      "datasheet": "https://www.murata.com/en-us/products/productdetail?partno=GRM32ER71H106KA12%23",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "C_1210_10u_50V_X7R",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -1500000,
+              "y": 0
+            },
+            "size_x": 1200000,
+            "size_y": 2700000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 1500000,
+              "y": 0
+            },
+            "size_x": 1200000,
+            "size_y": 2700000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 2300000,
+        "courtyard_half_h": 1600000,
+        "body_height": 2700000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "voltage",
+          "value": 50.0,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against Murata GRM32ER71H106KA12 product data (psearch.en.murata.com)",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "C_1210_22u_25V_X7R": {
+      "id": "C_1210_22u_25V_X7R",
+      "name": "22 µF 25 V X7R MLCC 1210 (output)",
+      "category": "Capacitor",
+      "refdes_prefix": "C",
+      "default_value": "22u 25V X7R",
+      "manufacturer": "Murata",
+      "mpn": "GRM32ER71E226KE15L",
+      "lcsc": null,
+      "datasheet": "https://www.murata.com/en-us/products/productdetail?partno=GRM32ER71E226KE15%23",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "C_1210_22u_25V_X7R",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -1500000,
+              "y": 0
+            },
+            "size_x": 1200000,
+            "size_y": 2700000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 1500000,
+              "y": 0
+            },
+            "size_x": 1200000,
+            "size_y": 2700000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 2300000,
+        "courtyard_half_h": 1600000,
+        "body_height": 2700000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "voltage",
+          "value": 25.0,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against Murata GRM32ER71E226KE15 product data (psearch.en.murata.com)",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "FUSE_1206_3A_SLOW": {
+      "id": "FUSE_1206_3A_SLOW",
+      "name": "3 A slow-blow SMD fuse, 1206",
+      "category": "Fuse",
+      "refdes_prefix": "F",
+      "default_value": "3A slow",
+      "manufacturer": "Bourns",
+      "mpn": "SF-1206S300-2",
+      "lcsc": null,
+      "datasheet": "https://www.bourns.com/docs/product-datasheets/sf-1206s.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "FUSE_1206_3A_SLOW",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -1450000,
+              "y": 0
+            },
+            "size_x": 1150000,
+            "size_y": 1800000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 1450000,
+              "y": 0
+            },
+            "size_x": 1150000,
+            "size_y": 1800000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 2300000,
+        "courtyard_half_h": 1250000,
+        "body_height": 900000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "current",
+          "value": 3.0,
+          "unit": "A",
+          "source": "UNVERIFIED designer assumption; must be checked against Bourns SF-1206S series datasheet https://www.bourns.com/docs/product-datasheets/sf-1206s.pdf",
+          "verified": false
+        },
+        {
+          "name": "voltage",
+          "value": 32.0,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against Bourns SF-1206S series datasheet https://www.bourns.com/docs/product-datasheets/sf-1206s.pdf",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "LED_0603_APT1608SGC": {
+      "id": "LED_0603_APT1608SGC",
+      "name": "Green LED 0603 (power indicator); pin 1 = cathode, pin 2 = anode",
+      "category": "LED",
+      "refdes_prefix": "D",
+      "default_value": "Green",
+      "manufacturer": "Kingbright",
+      "mpn": "APT1608SGC",
+      "lcsc": null,
+      "datasheet": "https://www.kingbrightusa.com/images/catalog/SPEC/APT1608SGC.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "K",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "A",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "LED_0603_APT1608SGC",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 1500000,
+        "courtyard_half_h": 750000,
+        "body_height": 750000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "forward_voltage_typ",
+          "value": 2.2,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against Kingbright APT1608SGC datasheet (kingbrightusa.com)",
+          "verified": false
+        },
+        {
+          "name": "forward_current_max",
+          "value": 0.025,
+          "unit": "A",
+          "source": "UNVERIFIED designer assumption; must be checked against Kingbright APT1608SGC datasheet (kingbrightusa.com)",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "MH_M3_PTH": {
+      "id": "MH_M3_PTH",
+      "name": "M3 mounting hole, plated, 6 mm pad, unconnected",
+      "category": "Mechanical",
+      "refdes_prefix": "H",
+      "default_value": "M3",
+      "manufacturer": "n/a",
+      "mpn": "n/a",
+      "lcsc": null,
+      "datasheet": "n/a",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "MH",
+            "electrical_type": "no_connect",
+            "position": {
+              "x": 0,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "MountingHole_3.2mm_M3_Pad",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "tht",
+            "shape": "circle",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size_x": 6000000,
+            "size_y": 6000000,
+            "drill": 3200000
+          }
+        ],
+        "courtyard_half_w": 3200000,
+        "courtyard_half_h": 3200000,
+        "body_height": 100000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ]
+      },
+      "ratings": [],
+      "model3d": {
+        "kind": "cylinder",
+        "color": "#c0c0c0",
+        "external_ref": null
+      },
+      "provenance": "Mounting hole: 3.2 mm drill for M3, 6.0 mm annular pad, left floating (no net); land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "MMSZ5242B_SOD-123": {
+      "id": "MMSZ5242B_SOD-123",
+      "name": "12 V 500 mW Zener diode, SOD-123 (gate clamp)",
+      "category": "Diode",
+      "refdes_prefix": "D",
+      "default_value": "MMSZ5242B",
+      "manufacturer": "Diodes Incorporated",
+      "mpn": "MMSZ5242B-7-F",
+      "lcsc": null,
+      "datasheet": "https://www.diodes.com/assets/Datasheets/ds18010.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "K",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "A",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "MMSZ5242B_SOD-123",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -1650000,
+              "y": 0
+            },
+            "size_x": 900000,
+            "size_y": 1200000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 1650000,
+              "y": 0
+            },
+            "size_x": 900000,
+            "size_y": 1200000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 2300000,
+        "courtyard_half_h": 1000000,
+        "body_height": 1350000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "zener_voltage",
+          "value": 12.0,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against Diodes Inc. MMSZ5221B-MMSZ5259B datasheet https://www.diodes.com/assets/Datasheets/ds18010.pdf",
+          "verified": false
+        },
+        {
+          "name": "power",
+          "value": 0.5,
+          "unit": "W",
+          "source": "UNVERIFIED designer assumption; must be checked against Diodes Inc. MMSZ5221B-MMSZ5259B datasheet https://www.diodes.com/assets/Datasheets/ds18010.pdf",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "R_0603_100K": {
+      "id": "R_0603_100K",
+      "name": "100k 1 % 0.1 W thick-film resistor 0603",
+      "category": "Resistor",
+      "refdes_prefix": "R",
+      "default_value": "100k",
+      "manufacturer": "Yageo",
+      "mpn": "RC0603FR-07100KL",
+      "lcsc": null,
+      "datasheet": "https://www.yageo.com/upload/media/product/productsearch/datasheet/rchip/PYu-RC_Group_51_RoHS_L_12.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "R_0603_100K",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 1500000,
+        "courtyard_half_h": 750000,
+        "body_height": 450000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "power",
+          "value": 0.1,
+          "unit": "W",
+          "source": "UNVERIFIED designer assumption; must be checked against Yageo RC_L series datasheet (yageo.com)",
+          "verified": false
+        },
+        {
+          "name": "tolerance",
+          "value": 0.01,
+          "unit": "ratio",
+          "source": "UNVERIFIED designer assumption; must be checked against Yageo RC_L series datasheet (yageo.com)",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "R_0603_105K": {
+      "id": "R_0603_105K",
+      "name": "105k 1 % 0.1 W thick-film resistor 0603",
+      "category": "Resistor",
+      "refdes_prefix": "R",
+      "default_value": "105k",
+      "manufacturer": "Yageo",
+      "mpn": "RC0603FR-07105KL",
+      "lcsc": null,
+      "datasheet": "https://www.yageo.com/upload/media/product/productsearch/datasheet/rchip/PYu-RC_Group_51_RoHS_L_12.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "R_0603_105K",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 1500000,
+        "courtyard_half_h": 750000,
+        "body_height": 450000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "power",
+          "value": 0.1,
+          "unit": "W",
+          "source": "UNVERIFIED designer assumption; must be checked against Yageo RC_L series datasheet (yageo.com)",
+          "verified": false
+        },
+        {
+          "name": "tolerance",
+          "value": 0.01,
+          "unit": "ratio",
+          "source": "UNVERIFIED designer assumption; must be checked against Yageo RC_L series datasheet (yageo.com)",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "R_0603_14K3": {
+      "id": "R_0603_14K3",
+      "name": "14.3k 1 % 0.1 W thick-film resistor 0603",
+      "category": "Resistor",
+      "refdes_prefix": "R",
+      "default_value": "14.3k",
+      "manufacturer": "Yageo",
+      "mpn": "RC0603FR-0714K3L",
+      "lcsc": null,
+      "datasheet": "https://www.yageo.com/upload/media/product/productsearch/datasheet/rchip/PYu-RC_Group_51_RoHS_L_12.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "R_0603_14K3",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 1500000,
+        "courtyard_half_h": 750000,
+        "body_height": 450000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "power",
+          "value": 0.1,
+          "unit": "W",
+          "source": "UNVERIFIED designer assumption; must be checked against Yageo RC_L series datasheet (yageo.com)",
+          "verified": false
+        },
+        {
+          "name": "tolerance",
+          "value": 0.01,
+          "unit": "ratio",
+          "source": "UNVERIFIED designer assumption; must be checked against Yageo RC_L series datasheet (yageo.com)",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "R_0603_1K5": {
+      "id": "R_0603_1K5",
+      "name": "1.5k 1 % 0.1 W thick-film resistor 0603",
+      "category": "Resistor",
+      "refdes_prefix": "R",
+      "default_value": "1.5k",
+      "manufacturer": "Yageo",
+      "mpn": "RC0603FR-071K5L",
+      "lcsc": null,
+      "datasheet": "https://www.yageo.com/upload/media/product/productsearch/datasheet/rchip/PYu-RC_Group_51_RoHS_L_12.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "R_0603_1K5",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 825000,
+              "y": 0
+            },
+            "size_x": 800000,
+            "size_y": 950000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 1500000,
+        "courtyard_half_h": 750000,
+        "body_height": 450000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "power",
+          "value": 0.1,
+          "unit": "W",
+          "source": "UNVERIFIED designer assumption; must be checked against Yageo RC_L series datasheet (yageo.com)",
+          "verified": false
+        },
+        {
+          "name": "tolerance",
+          "value": 0.01,
+          "unit": "ratio",
+          "source": "UNVERIFIED designer assumption; must be checked against Yageo RC_L series datasheet (yageo.com)",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "SMAJ26A_SMA": {
+      "id": "SMAJ26A_SMA",
+      "name": "SMAJ26A 400 W unidirectional TVS, SMA (DO-214AC)",
+      "category": "Diode",
+      "refdes_prefix": "D",
+      "default_value": "SMAJ26A",
+      "manufacturer": "Vishay",
+      "mpn": "SMAJ26A-E3/61",
+      "lcsc": null,
+      "datasheet": "https://www.vishay.com/docs/88390/smaj50a.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "K",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "A",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "SMAJ26A_SMA",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -2000000,
+              "y": 0
+            },
+            "size_x": 2500000,
+            "size_y": 1700000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 2000000,
+              "y": 0
+            },
+            "size_x": 2500000,
+            "size_y": 1700000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 3300000,
+        "courtyard_half_h": 1600000,
+        "body_height": 2400000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "vrwm",
+          "value": 26.0,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against Vishay SMAJ series datasheet https://www.vishay.com/docs/88390/smaj50a.pdf",
+          "verified": false
+        },
+        {
+          "name": "vbr_min",
+          "value": 28.9,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against Vishay SMAJ series datasheet https://www.vishay.com/docs/88390/smaj50a.pdf",
+          "verified": false
+        },
+        {
+          "name": "vc_at_ipp",
+          "value": 42.1,
+          "unit": "V",
+          "source": "UNVERIFIED designer assumption; must be checked against Vishay SMAJ series datasheet https://www.vishay.com/docs/88390/smaj50a.pdf",
+          "verified": false
+        },
+        {
+          "name": "ppp",
+          "value": 400.0,
+          "unit": "W",
+          "source": "UNVERIFIED designer assumption; must be checked against Vishay SMAJ series datasheet https://www.vishay.com/docs/88390/smaj50a.pdf",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "SRP1265A-100M": {
+      "id": "SRP1265A-100M",
+      "name": "10 µH shielded power inductor, 13.5x12.5x6.5 mm",
+      "category": "Inductor",
+      "refdes_prefix": "L",
+      "default_value": "10u",
+      "manufacturer": "Bourns",
+      "mpn": "SRP1265A-100M",
+      "lcsc": null,
+      "datasheet": "https://www.bourns.com/docs/product-datasheets/srp1265a.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 0
+            }
+          },
+          {
+            "number": "2",
+            "name": "~",
+            "electrical_type": "passive",
+            "position": {
+              "x": 5080000,
+              "y": 0
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "SRP1265A-100M",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -5000000,
+              "y": 0
+            },
+            "size_x": 3600000,
+            "size_y": 4000000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 5000000,
+              "y": 0
+            },
+            "size_x": 3600000,
+            "size_y": 4000000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 7000000,
+        "courtyard_half_h": 6600000,
+        "body_height": 6700000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "inductance",
+          "value": 0.00001,
+          "unit": "H",
+          "source": "UNVERIFIED designer assumption; must be checked against Bourns SRP1265A datasheet https://www.bourns.com/docs/product-datasheets/srp1265a.pdf",
+          "verified": false
+        },
+        {
+          "name": "tolerance",
+          "value": 0.2,
+          "unit": "ratio",
+          "source": "UNVERIFIED designer assumption; must be checked against Bourns SRP1265A datasheet https://www.bourns.com/docs/product-datasheets/srp1265a.pdf",
+          "verified": false
+        },
+        {
+          "name": "isat",
+          "value": 12.0,
+          "unit": "A",
+          "source": "UNVERIFIED designer assumption; must be checked against Bourns SRP1265A datasheet https://www.bourns.com/docs/product-datasheets/srp1265a.pdf",
+          "verified": false
+        },
+        {
+          "name": "irms",
+          "value": 7.5,
+          "unit": "A",
+          "source": "UNVERIFIED designer assumption; must be checked against Bourns SRP1265A datasheet https://www.bourns.com/docs/product-datasheets/srp1265a.pdf",
+          "verified": false
+        },
+        {
+          "name": "dcr_max",
+          "value": 0.02,
+          "unit": "ohm",
+          "source": "UNVERIFIED designer assumption; must be checked against Bourns SRP1265A datasheet https://www.bourns.com/docs/product-datasheets/srp1265a.pdf",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#806040",
+        "external_ref": null
+      },
+      "provenance": "Electrical data per the cited datasheet where marked verified; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "TERM_1x02_P5.08": {
+      "id": "TERM_1x02_P5.08",
+      "name": "2-pole PCB screw terminal, 5.08 mm pitch",
+      "category": "Connector",
+      "refdes_prefix": "J",
+      "default_value": "MKDS 1,5/2-5,08",
+      "manufacturer": "Phoenix Contact",
+      "mpn": "1715721",
+      "lcsc": null,
+      "datasheet": "https://www.phoenixcontact.com/en-us/products/pcb-terminal-block-mkds-15-2-508-1715721",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "P1",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": 1270000
+            }
+          },
+          {
+            "number": "2",
+            "name": "P2",
+            "electrical_type": "passive",
+            "position": {
+              "x": -5080000,
+              "y": -1270000
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "TerminalBlock_1x02_P5.08mm",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "tht",
+            "shape": "rect",
+            "position": {
+              "x": -2540000,
+              "y": 0
+            },
+            "size_x": 2600000,
+            "size_y": 2600000,
+            "drill": 1300000
+          },
+          {
+            "number": "2",
+            "kind": "tht",
+            "shape": "circle",
+            "position": {
+              "x": 2540000,
+              "y": 0
+            },
+            "size_x": 2600000,
+            "size_y": 2600000,
+            "drill": 1300000
+          }
+        ],
+        "courtyard_half_w": 5300000,
+        "courtyard_half_h": 4600000,
+        "body_height": 10000000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "current",
+          "value": 13.5,
+          "unit": "A",
+          "source": "UNVERIFIED designer assumption; must be checked against Phoenix Contact 1715721 product data",
+          "verified": false
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#30a030",
+        "external_ref": null
+      },
+      "provenance": "Generic 5.08 mm two-pole terminal block; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    },
+    "TPS54302DDCR": {
+      "id": "TPS54302DDCR",
+      "name": "TPS54302 4.5-28 V 3 A synchronous buck converter (SOT-23-6 DDC)",
+      "category": "Power",
+      "refdes_prefix": "U",
+      "default_value": "TPS54302DDCR",
+      "manufacturer": "Texas Instruments",
+      "mpn": "TPS54302DDCR",
+      "lcsc": null,
+      "datasheet": "https://www.ti.com/lit/ds/symlink/tps54302.pdf",
+      "symbol": {
+        "pins": [
+          {
+            "number": "1",
+            "name": "GND",
+            "electrical_type": "power_in",
+            "position": {
+              "x": -10160000,
+              "y": 2540000
+            }
+          },
+          {
+            "number": "2",
+            "name": "SW",
+            "electrical_type": "power_out",
+            "position": {
+              "x": -10160000,
+              "y": 0
+            }
+          },
+          {
+            "number": "3",
+            "name": "VIN",
+            "electrical_type": "power_in",
+            "position": {
+              "x": -10160000,
+              "y": -2540000
+            }
+          },
+          {
+            "number": "4",
+            "name": "FB",
+            "electrical_type": "input",
+            "position": {
+              "x": 10160000,
+              "y": -2540000
+            }
+          },
+          {
+            "number": "5",
+            "name": "EN",
+            "electrical_type": "input",
+            "position": {
+              "x": 10160000,
+              "y": 0
+            }
+          },
+          {
+            "number": "6",
+            "name": "BOOT",
+            "electrical_type": "passive",
+            "position": {
+              "x": 10160000,
+              "y": 2540000
+            }
+          }
+        ],
+        "body_half_w": 5080000,
+        "body_half_h": 5080000
+      },
+      "footprint": {
+        "name": "SOT-23-6_DDC",
+        "pads": [
+          {
+            "number": "1",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -1140000,
+              "y": 950000
+            },
+            "size_x": 1100000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "2",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -1140000,
+              "y": 0
+            },
+            "size_x": 1100000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "3",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": -1140000,
+              "y": -950000
+            },
+            "size_x": 1100000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "4",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 1140000,
+              "y": -950000
+            },
+            "size_x": 1100000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "5",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 1140000,
+              "y": 0
+            },
+            "size_x": 1100000,
+            "size_y": 600000,
+            "drill": null
+          },
+          {
+            "number": "6",
+            "kind": "smd",
+            "shape": "rect",
+            "position": {
+              "x": 1140000,
+              "y": 950000
+            },
+            "size_x": 1100000,
+            "size_y": 600000,
+            "drill": null
+          }
+        ],
+        "courtyard_half_w": 1900000,
+        "courtyard_half_h": 1700000,
+        "body_height": 1100000
+      },
+      "pin_map": {
+        "1": [
+          "1"
+        ],
+        "2": [
+          "2"
+        ],
+        "3": [
+          "3"
+        ],
+        "4": [
+          "4"
+        ],
+        "5": [
+          "5"
+        ],
+        "6": [
+          "6"
+        ]
+      },
+      "ratings": [
+        {
+          "name": "vin_operating_min",
+          "value": 4.5,
+          "unit": "V",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "vin_operating_max",
+          "value": 28.0,
+          "unit": "V",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "vin_abs_max",
+          "value": 30.0,
+          "unit": "V",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.1 Absolute Maximum Ratings",
+          "verified": true
+        },
+        {
+          "name": "sw_abs_max",
+          "value": 30.0,
+          "unit": "V",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.1 Absolute Maximum Ratings",
+          "verified": true
+        },
+        {
+          "name": "en_abs_max",
+          "value": 7.0,
+          "unit": "V",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.1 Absolute Maximum Ratings",
+          "verified": true
+        },
+        {
+          "name": "boot_sw_abs_max",
+          "value": 7.0,
+          "unit": "V",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.1 Absolute Maximum Ratings",
+          "verified": true
+        },
+        {
+          "name": "vfb_min",
+          "value": 0.581,
+          "unit": "V",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "vfb_typ",
+          "value": 0.596,
+          "unit": "V",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "vfb_max",
+          "value": 0.611,
+          "unit": "V",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "fsw_min",
+          "value": 290000.0,
+          "unit": "Hz",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "fsw_typ",
+          "value": 400000.0,
+          "unit": "Hz",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "fsw_max",
+          "value": 510000.0,
+          "unit": "Hz",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "rdson_high_side_typ",
+          "value": 0.085,
+          "unit": "ohm",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "rdson_low_side_typ",
+          "value": 0.04,
+          "unit": "ohm",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "ilim_high_side_min",
+          "value": 4.0,
+          "unit": "A",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "ilim_high_side_max",
+          "value": 6.0,
+          "unit": "A",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "ilim_low_side_min",
+          "value": 3.1,
+          "unit": "A",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "ilim_low_side_max",
+          "value": 5.5,
+          "unit": "A",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        },
+        {
+          "name": "theta_ja_jedec",
+          "value": 118.9,
+          "unit": "C/W",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.4 Thermal Information (DDC)",
+          "verified": true
+        },
+        {
+          "name": "theta_ja_evm",
+          "value": 57.2,
+          "unit": "C/W",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.4 Thermal Information (DDC)",
+          "verified": true
+        },
+        {
+          "name": "psi_jt",
+          "value": 14.0,
+          "unit": "C/W",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.4 Thermal Information (DDC)",
+          "verified": true
+        },
+        {
+          "name": "tj_abs_max",
+          "value": 150.0,
+          "unit": "C",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.1 Absolute Maximum Ratings",
+          "verified": true
+        },
+        {
+          "name": "thermal_shutdown_rising",
+          "value": 160.0,
+          "unit": "C",
+          "source": "TI TPS54302 datasheet SLVSDG6C (Rev. C), https://www.ti.com/lit/ds/symlink/tps54302.pdf (values read from the TI HTML datasheet viewer https://www.ti.com/document-viewer/TPS54302/datasheet) §5.5 Electrical Characteristics",
+          "verified": true
+        }
+      ],
+      "model3d": {
+        "kind": "box",
+        "color": "#202020",
+        "external_ref": null
+      },
+      "provenance": "Pinout and ratings from TI SLVSDG6C Table 4-1, §5.1, §5.4, §5.5; land pattern: generic IPC-7351-style approximation authored for this validation board; NOT checked against the manufacturer's recommended land pattern"
+    }
+  },
+  "schematic": {
+    "sheets": {
+      "sht_d1ba7ae71a5241c1": {
+        "id": "sht_d1ba7ae71a5241c1",
+        "name": "Sheet 1",
+        "width": 297000000,
+        "height": 210000000
+      }
+    },
+    "symbols": {
+      "sym_0f619dcce9b34775": {
+        "id": "sym_0f619dcce9b34775",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_0603_100n_50V_X7R",
+        "refdes": "C5",
+        "value": "100n 50V X7R",
+        "position": {
+          "x": 220000000,
+          "y": 148000000
+        },
+        "rotation": "R0"
+      },
+      "sym_0fc67bba5dc14ce2": {
+        "id": "sym_0fc67bba5dc14ce2",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_1210_22u_25V_X7R",
+        "refdes": "C7",
+        "value": "22u 25V X7R",
+        "position": {
+          "x": 250000000,
+          "y": 88000000
+        },
+        "rotation": "R0"
+      },
+      "sym_121347513cf140b3": {
+        "id": "sym_121347513cf140b3",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "R_0603_1K5",
+        "refdes": "R4",
+        "value": "1.5k",
+        "position": {
+          "x": 250000000,
+          "y": 58000000
+        },
+        "rotation": "R0"
+      },
+      "sym_13db8822d83c4ca7": {
+        "id": "sym_13db8822d83c4ca7",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "R_0603_105K",
+        "refdes": "R2",
+        "value": "105k",
+        "position": {
+          "x": 220000000,
+          "y": 88000000
+        },
+        "rotation": "R0"
+      },
+      "sym_17784ec749bd4e5a": {
+        "id": "sym_17784ec749bd4e5a",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "MMSZ5242B_SOD-123",
+        "refdes": "D1",
+        "value": "MMSZ5242B 12V",
+        "position": {
+          "x": 80000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_268a192e795e4df9": {
+        "id": "sym_268a192e795e4df9",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "R_0603_100K",
+        "refdes": "R1",
+        "value": "100k",
+        "position": {
+          "x": 110000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_3ee2ce240cf348b0": {
+        "id": "sym_3ee2ce240cf348b0",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "AO4407A",
+        "refdes": "Q1",
+        "value": "AO4407A",
+        "position": {
+          "x": 80000000,
+          "y": 148000000
+        },
+        "rotation": "R0"
+      },
+      "sym_4361045d67584254": {
+        "id": "sym_4361045d67584254",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "CP_EEE-FK1H470P",
+        "refdes": "C1",
+        "value": "47u 50V",
+        "position": {
+          "x": 140000000,
+          "y": 148000000
+        },
+        "rotation": "R0"
+      },
+      "sym_455c5a80872d49ef": {
+        "id": "sym_455c5a80872d49ef",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "R_0603_14K3",
+        "refdes": "R3",
+        "value": "14.3k",
+        "position": {
+          "x": 220000000,
+          "y": 58000000
+        },
+        "rotation": "R0"
+      },
+      "sym_567526de365441fe": {
+        "id": "sym_567526de365441fe",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "TPS54302DDCR",
+        "refdes": "U1",
+        "value": "TPS54302DDCR",
+        "position": {
+          "x": 180000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_671b58bb6d374b06": {
+        "id": "sym_671b58bb6d374b06",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "TERM_1x02_P5.08",
+        "refdes": "J2",
+        "value": "VOUT 5V",
+        "position": {
+          "x": 280000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_79a8db7603f143e9": {
+        "id": "sym_79a8db7603f143e9",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "FUSE_1206_3A_SLOW",
+        "refdes": "F1",
+        "value": "3A slow",
+        "position": {
+          "x": 50000000,
+          "y": 148000000
+        },
+        "rotation": "R0"
+      },
+      "sym_85f32aeee3a24dd4": {
+        "id": "sym_85f32aeee3a24dd4",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_1210_10u_50V_X7R",
+        "refdes": "C3",
+        "value": "10u 50V X7R",
+        "position": {
+          "x": 140000000,
+          "y": 88000000
+        },
+        "rotation": "R0"
+      },
+      "sym_983fa4b857434b8b": {
+        "id": "sym_983fa4b857434b8b",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "SMAJ26A_SMA",
+        "refdes": "D2",
+        "value": "SMAJ26A",
+        "position": {
+          "x": 110000000,
+          "y": 148000000
+        },
+        "rotation": "R0"
+      },
+      "sym_bdf2178cefb9487d": {
+        "id": "sym_bdf2178cefb9487d",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "TERM_1x02_P5.08",
+        "refdes": "J1",
+        "value": "VIN 12-24V",
+        "position": {
+          "x": 20000000,
+          "y": 138000000
+        },
+        "rotation": "R0"
+      },
+      "sym_be99597b0d4745ef": {
+        "id": "sym_be99597b0d4745ef",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "LED_0603_APT1608SGC",
+        "refdes": "D3",
+        "value": "Green",
+        "position": {
+          "x": 250000000,
+          "y": 28000000
+        },
+        "rotation": "R0"
+      },
+      "sym_c681a05e69ac4ba1": {
+        "id": "sym_c681a05e69ac4ba1",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_1210_10u_50V_X7R",
+        "refdes": "C2",
+        "value": "10u 50V X7R",
+        "position": {
+          "x": 140000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_c97235c3d4a648ad": {
+        "id": "sym_c97235c3d4a648ad",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H2",
+        "value": "M3",
+        "position": {
+          "x": 40000000,
+          "y": 8000000
+        },
+        "rotation": "R0"
+      },
+      "sym_cabe0e18e0c545b7": {
+        "id": "sym_cabe0e18e0c545b7",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "SRP1265A-100M",
+        "refdes": "L1",
+        "value": "10u",
+        "position": {
+          "x": 220000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_d4652c2d8807456f": {
+        "id": "sym_d4652c2d8807456f",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H4",
+        "value": "M3",
+        "position": {
+          "x": 80000000,
+          "y": 8000000
+        },
+        "rotation": "R0"
+      },
+      "sym_d4abe814a0d444ce": {
+        "id": "sym_d4abe814a0d444ce",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H3",
+        "value": "M3",
+        "position": {
+          "x": 60000000,
+          "y": 8000000
+        },
+        "rotation": "R0"
+      },
+      "sym_e5654a387a0a416e": {
+        "id": "sym_e5654a387a0a416e",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_1210_22u_25V_X7R",
+        "refdes": "C6",
+        "value": "22u 25V X7R",
+        "position": {
+          "x": 250000000,
+          "y": 118000000
+        },
+        "rotation": "R0"
+      },
+      "sym_e57192eff7d241b9": {
+        "id": "sym_e57192eff7d241b9",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H1",
+        "value": "M3",
+        "position": {
+          "x": 20000000,
+          "y": 8000000
+        },
+        "rotation": "R0"
+      },
+      "sym_fb854062880e441c": {
+        "id": "sym_fb854062880e441c",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "component_id": "C_0603_100n_50V_X7R",
+        "refdes": "C4",
+        "value": "100n 50V X7R",
+        "position": {
+          "x": 140000000,
+          "y": 58000000
+        },
+        "rotation": "R0"
+      }
+    },
+    "wires": {},
+    "labels": {
+      "lbl_011debf4921c49f0": {
+        "id": "lbl_011debf4921c49f0",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 104920000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_107a97112c624ef8": {
+        "id": "lbl_107a97112c624ef8",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "BOOT",
+        "position": {
+          "x": 190160000,
+          "y": 120540000
+        },
+        "kind": "net"
+      },
+      "lbl_28edfe5f212a474d": {
+        "id": "lbl_28edfe5f212a474d",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 214920000,
+          "y": 88000000
+        },
+        "kind": "net"
+      },
+      "lbl_294e5ade5a2747b2": {
+        "id": "lbl_294e5ade5a2747b2",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 134920000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_2ae02cd1034a45cb": {
+        "id": "lbl_2ae02cd1034a45cb",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 169840000,
+          "y": 120540000
+        },
+        "kind": "net"
+      },
+      "lbl_45ad6d9664df4f03": {
+        "id": "lbl_45ad6d9664df4f03",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 14920000,
+          "y": 136730000
+        },
+        "kind": "power"
+      },
+      "lbl_49c645adc06f4aaf": {
+        "id": "lbl_49c645adc06f4aaf",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "Q1_G",
+        "position": {
+          "x": 104920000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_516564d03799462d": {
+        "id": "lbl_516564d03799462d",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "SW",
+        "position": {
+          "x": 214920000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_5ad5e99a56b94db6": {
+        "id": "lbl_5ad5e99a56b94db6",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 145080000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_6194de79266a4499": {
+        "id": "lbl_6194de79266a4499",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 145080000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_64323207bdaf408c": {
+        "id": "lbl_64323207bdaf408c",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 255080000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_65093e69e8a54cef": {
+        "id": "lbl_65093e69e8a54cef",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 244920000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_69d69fbb0dbb46c4": {
+        "id": "lbl_69d69fbb0dbb46c4",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "SW",
+        "position": {
+          "x": 169840000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_70ff68bbcb9742ba": {
+        "id": "lbl_70ff68bbcb9742ba",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 145080000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_757a3f4d966641d1": {
+        "id": "lbl_757a3f4d966641d1",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "FB",
+        "position": {
+          "x": 225080000,
+          "y": 88000000
+        },
+        "kind": "net"
+      },
+      "lbl_77dc09eef3134b68": {
+        "id": "lbl_77dc09eef3134b68",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 214920000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_7814ad7d4e914351": {
+        "id": "lbl_7814ad7d4e914351",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 115080000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_7851d4f3897c4b23": {
+        "id": "lbl_7851d4f3897c4b23",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 244920000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_8267f6b149784d08": {
+        "id": "lbl_8267f6b149784d08",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 115080000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_8417572d6b274f3c": {
+        "id": "lbl_8417572d6b274f3c",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 87620000,
+          "y": 148000000
+        },
+        "kind": "power"
+      },
+      "lbl_843bbdac24774cc9": {
+        "id": "lbl_843bbdac24774cc9",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "SW",
+        "position": {
+          "x": 225080000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_84c42b9a569745c3": {
+        "id": "lbl_84c42b9a569745c3",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 244920000,
+          "y": 28000000
+        },
+        "kind": "net"
+      },
+      "lbl_8973a38616854f22": {
+        "id": "lbl_8973a38616854f22",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 134920000,
+          "y": 88000000
+        },
+        "kind": "net"
+      },
+      "lbl_8d74cf44ac0d4d75": {
+        "id": "lbl_8d74cf44ac0d4d75",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 169840000,
+          "y": 115460000
+        },
+        "kind": "net"
+      },
+      "lbl_95cc337e90034790": {
+        "id": "lbl_95cc337e90034790",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "FB",
+        "position": {
+          "x": 225080000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_9b8ae79ddf934d19": {
+        "id": "lbl_9b8ae79ddf934d19",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 134920000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_a36ad76c79fe42fb": {
+        "id": "lbl_a36ad76c79fe42fb",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN_F",
+        "position": {
+          "x": 72380000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_aedc4e41e6c14231": {
+        "id": "lbl_aedc4e41e6c14231",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 225080000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_b74aa98b5fc74fd9": {
+        "id": "lbl_b74aa98b5fc74fd9",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN_F",
+        "position": {
+          "x": 55080000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_bcfd5318c6014184": {
+        "id": "lbl_bcfd5318c6014184",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "Q1_G",
+        "position": {
+          "x": 85080000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_c01b548951d64bd1": {
+        "id": "lbl_c01b548951d64bd1",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN_RAW",
+        "position": {
+          "x": 44920000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_c6d906c05c044075": {
+        "id": "lbl_c6d906c05c044075",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 255080000,
+          "y": 88000000
+        },
+        "kind": "net"
+      },
+      "lbl_cdfb38458b934647": {
+        "id": "lbl_cdfb38458b934647",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "FB",
+        "position": {
+          "x": 190160000,
+          "y": 115460000
+        },
+        "kind": "net"
+      },
+      "lbl_d5534d4d9e12428d": {
+        "id": "lbl_d5534d4d9e12428d",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "LED_A",
+        "position": {
+          "x": 255080000,
+          "y": 28000000
+        },
+        "kind": "net"
+      },
+      "lbl_d5ff4b9981f546cc": {
+        "id": "lbl_d5ff4b9981f546cc",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 134920000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_da6a16bfcd744837": {
+        "id": "lbl_da6a16bfcd744837",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 145080000,
+          "y": 88000000
+        },
+        "kind": "net"
+      },
+      "lbl_e16a1b83755b4851": {
+        "id": "lbl_e16a1b83755b4851",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "LED_A",
+        "position": {
+          "x": 255080000,
+          "y": 58000000
+        },
+        "kind": "net"
+      },
+      "lbl_e201f3470af44bd8": {
+        "id": "lbl_e201f3470af44bd8",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VOUT",
+        "position": {
+          "x": 274920000,
+          "y": 119270000
+        },
+        "kind": "net"
+      },
+      "lbl_e295458c9d304ee6": {
+        "id": "lbl_e295458c9d304ee6",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 274920000,
+          "y": 116730000
+        },
+        "kind": "net"
+      },
+      "lbl_e81315d6c561444c": {
+        "id": "lbl_e81315d6c561444c",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN",
+        "position": {
+          "x": 74920000,
+          "y": 118000000
+        },
+        "kind": "net"
+      },
+      "lbl_ea17e8fa5f1a48e2": {
+        "id": "lbl_ea17e8fa5f1a48e2",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "BOOT",
+        "position": {
+          "x": 214920000,
+          "y": 148000000
+        },
+        "kind": "net"
+      },
+      "lbl_f08a6618f34a4889": {
+        "id": "lbl_f08a6618f34a4889",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "Q1_G",
+        "position": {
+          "x": 80000000,
+          "y": 140380000
+        },
+        "kind": "net"
+      },
+      "lbl_f2fd50533fa54400": {
+        "id": "lbl_f2fd50533fa54400",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "VIN_RAW",
+        "position": {
+          "x": 14920000,
+          "y": 139270000
+        },
+        "kind": "power"
+      },
+      "lbl_f35071fb2d294fb6": {
+        "id": "lbl_f35071fb2d294fb6",
+        "sheet_id": "sht_d1ba7ae71a5241c1",
+        "name": "GND",
+        "position": {
+          "x": 244920000,
+          "y": 88000000
+        },
+        "kind": "net"
+      }
+    },
+    "no_connects": {
+      "nc_c9562cd084d14867": {
+        "id": "nc_c9562cd084d14867",
+        "symbol_id": "sym_567526de365441fe",
+        "pin": "5"
+      }
+    }
+  },
+  "pcb": {
+    "board": {
+      "outline": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 66000000,
+          "y": 0
+        },
+        {
+          "x": 66000000,
+          "y": 33000000
+        },
+        {
+          "x": 0,
+          "y": 33000000
+        }
+      ],
+      "stackup": {
+        "copper_layers": 2,
+        "board_thickness": 1600000,
+        "outer_copper_oz": 2.0,
+        "dielectric": "FR-4 (Tg >= 130 C)"
+      }
+    },
+    "footprints": {
+      "fp_00bfcadfa6534406": {
+        "id": "fp_00bfcadfa6534406",
+        "symbol_id": "sym_bdf2178cefb9487d",
+        "component_id": "TERM_1x02_P5.08",
+        "refdes": "J1",
+        "position": {
+          "x": 7000000,
+          "y": 19000000
+        },
+        "rotation": "R270",
+        "side": "top",
+        "pad_nets": {
+          "1": "VIN_RAW",
+          "2": "GND"
+        },
+        "locked": true
+      },
+      "fp_033f26b1fcb84122": {
+        "id": "fp_033f26b1fcb84122",
+        "symbol_id": "sym_13db8822d83c4ca7",
+        "component_id": "R_0603_105K",
+        "refdes": "R2",
+        "position": {
+          "x": 41050000,
+          "y": 9500000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "VOUT",
+          "2": "FB"
+        },
+        "locked": true
+      },
+      "fp_0eef6e1daaf74148": {
+        "id": "fp_0eef6e1daaf74148",
+        "symbol_id": "sym_268a192e795e4df9",
+        "component_id": "R_0603_100K",
+        "refdes": "R1",
+        "position": {
+          "x": 28000000,
+          "y": 25600000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "Q1_G",
+          "2": "GND"
+        },
+        "locked": true
+      },
+      "fp_0fc95662a3af42ec": {
+        "id": "fp_0fc95662a3af42ec",
+        "symbol_id": "sym_121347513cf140b3",
+        "component_id": "R_0603_1K5",
+        "refdes": "R4",
+        "position": {
+          "x": 57500000,
+          "y": 10000000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {
+          "1": "VOUT",
+          "2": "LED_A"
+        },
+        "locked": true
+      },
+      "fp_181009fa1a5a4dd2": {
+        "id": "fp_181009fa1a5a4dd2",
+        "symbol_id": "sym_fb854062880e441c",
+        "component_id": "C_0603_100n_50V_X7R",
+        "refdes": "C4",
+        "position": {
+          "x": 39500000,
+          "y": 14000000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "VIN"
+        },
+        "locked": true
+      },
+      "fp_2d79e9a432ec4e8d": {
+        "id": "fp_2d79e9a432ec4e8d",
+        "symbol_id": "sym_3ee2ce240cf348b0",
+        "component_id": "AO4407A",
+        "refdes": "Q1",
+        "position": {
+          "x": 23000000,
+          "y": 21000000
+        },
+        "rotation": "R180",
+        "side": "top",
+        "pad_nets": {
+          "1": "VIN",
+          "2": "VIN",
+          "3": "VIN",
+          "4": "Q1_G",
+          "5": "VIN_F",
+          "6": "VIN_F",
+          "7": "VIN_F",
+          "8": "VIN_F"
+        },
+        "locked": true
+      },
+      "fp_39e364b16fad4973": {
+        "id": "fp_39e364b16fad4973",
+        "symbol_id": "sym_671b58bb6d374b06",
+        "component_id": "TERM_1x02_P5.08",
+        "refdes": "J2",
+        "position": {
+          "x": 61000000,
+          "y": 18000000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "VOUT",
+          "2": "GND"
+        },
+        "locked": true
+      },
+      "fp_556e2523a0f04ced": {
+        "id": "fp_556e2523a0f04ced",
+        "symbol_id": "sym_983fa4b857434b8b",
+        "component_id": "SMAJ26A_SMA",
+        "refdes": "D2",
+        "position": {
+          "x": 31000000,
+          "y": 19700000
+        },
+        "rotation": "R270",
+        "side": "top",
+        "pad_nets": {
+          "1": "VIN",
+          "2": "GND"
+        },
+        "locked": true
+      },
+      "fp_5bdc6edbde6442b5": {
+        "id": "fp_5bdc6edbde6442b5",
+        "symbol_id": "sym_0f619dcce9b34775",
+        "component_id": "C_0603_100n_50V_X7R",
+        "refdes": "C5",
+        "position": {
+          "x": 45800000,
+          "y": 13500000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "BOOT",
+          "2": "SW"
+        },
+        "locked": true
+      },
+      "fp_5c360702cfb34b2a": {
+        "id": "fp_5c360702cfb34b2a",
+        "symbol_id": "sym_c681a05e69ac4ba1",
+        "component_id": "C_1210_10u_50V_X7R",
+        "refdes": "C2",
+        "position": {
+          "x": 37000000,
+          "y": 14000000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "VIN"
+        },
+        "locked": true
+      },
+      "fp_60599d4dbbbf4852": {
+        "id": "fp_60599d4dbbbf4852",
+        "symbol_id": "sym_cabe0e18e0c545b7",
+        "component_id": "SRP1265A-100M",
+        "refdes": "L1",
+        "position": {
+          "x": 46300000,
+          "y": 22800000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {
+          "1": "SW",
+          "2": "VOUT"
+        },
+        "locked": true
+      },
+      "fp_67b3e120430a43ef": {
+        "id": "fp_67b3e120430a43ef",
+        "symbol_id": "sym_c97235c3d4a648ad",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H2",
+        "position": {
+          "x": 62000000,
+          "y": 4000000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {},
+        "locked": true
+      },
+      "fp_70237e34e42e4de1": {
+        "id": "fp_70237e34e42e4de1",
+        "symbol_id": "sym_455c5a80872d49ef",
+        "component_id": "R_0603_14K3",
+        "refdes": "R3",
+        "position": {
+          "x": 38600000,
+          "y": 10325000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "FB"
+        },
+        "locked": true
+      },
+      "fp_958c7a5a95d940a1": {
+        "id": "fp_958c7a5a95d940a1",
+        "symbol_id": "sym_567526de365441fe",
+        "component_id": "TPS54302DDCR",
+        "refdes": "U1",
+        "position": {
+          "x": 42000000,
+          "y": 14000000
+        },
+        "rotation": "R270",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "SW",
+          "3": "VIN",
+          "4": "FB",
+          "6": "BOOT"
+        },
+        "locked": true
+      },
+      "fp_a0886346d7684fe9": {
+        "id": "fp_a0886346d7684fe9",
+        "symbol_id": "sym_e5654a387a0a416e",
+        "component_id": "C_1210_22u_25V_X7R",
+        "refdes": "C6",
+        "position": {
+          "x": 51300000,
+          "y": 13500000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "VOUT"
+        },
+        "locked": true
+      },
+      "fp_a5a21813d42a479a": {
+        "id": "fp_a5a21813d42a479a",
+        "symbol_id": "sym_d4abe814a0d444ce",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H3",
+        "position": {
+          "x": 4000000,
+          "y": 29000000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {},
+        "locked": true
+      },
+      "fp_a7b5e1921d024ed1": {
+        "id": "fp_a7b5e1921d024ed1",
+        "symbol_id": "sym_85f32aeee3a24dd4",
+        "component_id": "C_1210_10u_50V_X7R",
+        "refdes": "C3",
+        "position": {
+          "x": 33700000,
+          "y": 14000000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "VIN"
+        },
+        "locked": true
+      },
+      "fp_be543b92d23b4b52": {
+        "id": "fp_be543b92d23b4b52",
+        "symbol_id": "sym_e57192eff7d241b9",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H1",
+        "position": {
+          "x": 4000000,
+          "y": 4000000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {},
+        "locked": true
+      },
+      "fp_bec382ecd9444e2e": {
+        "id": "fp_bec382ecd9444e2e",
+        "symbol_id": "sym_be99597b0d4745ef",
+        "component_id": "LED_0603_APT1608SGC",
+        "refdes": "D3",
+        "position": {
+          "x": 61000000,
+          "y": 9500000
+        },
+        "rotation": "R180",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "LED_A"
+        },
+        "locked": true
+      },
+      "fp_c9d5bcf9e2574cae": {
+        "id": "fp_c9d5bcf9e2574cae",
+        "symbol_id": "sym_d4652c2d8807456f",
+        "component_id": "MH_M3_PTH",
+        "refdes": "H4",
+        "position": {
+          "x": 62000000,
+          "y": 29000000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {},
+        "locked": true
+      },
+      "fp_d78cd863c7b34341": {
+        "id": "fp_d78cd863c7b34341",
+        "symbol_id": "sym_0fc67bba5dc14ce2",
+        "component_id": "C_1210_22u_25V_X7R",
+        "refdes": "C7",
+        "position": {
+          "x": 54600000,
+          "y": 13500000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "GND",
+          "2": "VOUT"
+        },
+        "locked": true
+      },
+      "fp_dba12abf78b14e09": {
+        "id": "fp_dba12abf78b14e09",
+        "symbol_id": "sym_79a8db7603f143e9",
+        "component_id": "FUSE_1206_3A_SLOW",
+        "refdes": "F1",
+        "position": {
+          "x": 15000000,
+          "y": 21635000
+        },
+        "rotation": "R0",
+        "side": "top",
+        "pad_nets": {
+          "1": "VIN_RAW",
+          "2": "VIN_F"
+        },
+        "locked": true
+      },
+      "fp_dfbde51587f341c0": {
+        "id": "fp_dfbde51587f341c0",
+        "symbol_id": "sym_17784ec749bd4e5a",
+        "component_id": "MMSZ5242B_SOD-123",
+        "refdes": "D1",
+        "position": {
+          "x": 28000000,
+          "y": 21255000
+        },
+        "rotation": "R90",
+        "side": "top",
+        "pad_nets": {
+          "1": "VIN",
+          "2": "Q1_G"
+        },
+        "locked": true
+      },
+      "fp_e9d97e29ed1140e5": {
+        "id": "fp_e9d97e29ed1140e5",
+        "symbol_id": "sym_4361045d67584254",
+        "component_id": "CP_EEE-FK1H470P",
+        "refdes": "C1",
+        "position": {
+          "x": 24000000,
+          "y": 12000000
+        },
+        "rotation": "R180",
+        "side": "top",
+        "pad_nets": {
+          "1": "VIN",
+          "2": "GND"
+        },
+        "locked": true
+      }
+    },
+    "tracks": {
+      "trk_01f2fa1153504b70": {
+        "id": "trk_01f2fa1153504b70",
+        "layer": "top",
+        "width": 300000,
+        "a": {
+          "x": 41050000,
+          "y": 12860000
+        },
+        "b": {
+          "x": 41050000,
+          "y": 10325000
+        },
+        "net": "FB"
+      },
+      "trk_0513a14283d94f4f": {
+        "id": "trk_0513a14283d94f4f",
+        "layer": "top",
+        "width": 300000,
+        "a": {
+          "x": 42950000,
+          "y": 12860000
+        },
+        "b": {
+          "x": 45800000,
+          "y": 12860000
+        },
+        "net": "BOOT"
+      },
+      "trk_12f1895b8ba84c20": {
+        "id": "trk_12f1895b8ba84c20",
+        "layer": "top",
+        "width": 600000,
+        "a": {
+          "x": 39500000,
+          "y": 15140000
+        },
+        "b": {
+          "x": 41050000,
+          "y": 15140000
+        },
+        "net": "VIN"
+      },
+      "trk_179f0de461784e84": {
+        "id": "trk_179f0de461784e84",
+        "layer": "top",
+        "width": 1500000,
+        "a": {
+          "x": 51300000,
+          "y": 21000000
+        },
+        "b": {
+          "x": 51300000,
+          "y": 15000000
+        },
+        "net": "VOUT"
+      },
+      "trk_1a4aeea2091543f8": {
+        "id": "trk_1a4aeea2091543f8",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 39500000,
+          "y": 15900000
+        },
+        "b": {
+          "x": 39500000,
+          "y": 14825000
+        },
+        "net": "VIN"
+      },
+      "trk_1abf43ff21e84e95": {
+        "id": "trk_1abf43ff21e84e95",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 45800000,
+          "y": 14325000
+        },
+        "b": {
+          "x": 45800000,
+          "y": 17500000
+        },
+        "net": "SW"
+      },
+      "trk_62612937d3df447d": {
+        "id": "trk_62612937d3df447d",
+        "layer": "top",
+        "width": 1500000,
+        "a": {
+          "x": 51300000,
+          "y": 15000000
+        },
+        "b": {
+          "x": 61000000,
+          "y": 15000000
+        },
+        "net": "VOUT"
+      },
+      "trk_687f107b244d4bf7": {
+        "id": "trk_687f107b244d4bf7",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 45800000,
+          "y": 17500000
+        },
+        "b": {
+          "x": 42000000,
+          "y": 17500000
+        },
+        "net": "SW"
+      },
+      "trk_76d1b3484b574407": {
+        "id": "trk_76d1b3484b574407",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 48500000,
+          "y": 8675000
+        },
+        "b": {
+          "x": 41050000,
+          "y": 8675000
+        },
+        "net": "VOUT"
+      },
+      "trk_77829a5d31ad4011": {
+        "id": "trk_77829a5d31ad4011",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 33700000,
+          "y": 15900000
+        },
+        "b": {
+          "x": 39500000,
+          "y": 15900000
+        },
+        "net": "VIN"
+      },
+      "trk_7d326ca52a91487b": {
+        "id": "trk_7d326ca52a91487b",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 25700000,
+          "y": 19095000
+        },
+        "b": {
+          "x": 25700000,
+          "y": 21635000
+        },
+        "net": "VIN"
+      },
+      "trk_844d5fe107b84534": {
+        "id": "trk_844d5fe107b84534",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 44300000,
+          "y": 14100000
+        },
+        "b": {
+          "x": 44300000,
+          "y": 16200000
+        },
+        "net": "GND"
+      },
+      "trk_855386892a354689": {
+        "id": "trk_855386892a354689",
+        "layer": "top",
+        "width": 2000000,
+        "a": {
+          "x": 42000000,
+          "y": 17000000
+        },
+        "b": {
+          "x": 42000000,
+          "y": 21500000
+        },
+        "net": "SW"
+      },
+      "trk_89e70875ab864fbd": {
+        "id": "trk_89e70875ab864fbd",
+        "layer": "top",
+        "width": 300000,
+        "a": {
+          "x": 58325000,
+          "y": 10000000
+        },
+        "b": {
+          "x": 60175000,
+          "y": 9500000
+        },
+        "net": "LED_A"
+      },
+      "trk_8b6d3b36d9324431": {
+        "id": "trk_8b6d3b36d9324431",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 7000000,
+          "y": 21540000
+        },
+        "b": {
+          "x": 13550000,
+          "y": 21540000
+        },
+        "net": "VIN_RAW"
+      },
+      "trk_aa9cd443b9a04114": {
+        "id": "trk_aa9cd443b9a04114",
+        "layer": "top",
+        "width": 850000,
+        "a": {
+          "x": 42000000,
+          "y": 15140000
+        },
+        "b": {
+          "x": 42000000,
+          "y": 17000000
+        },
+        "net": "SW"
+      },
+      "trk_aecbfb0c2b364589": {
+        "id": "trk_aecbfb0c2b364589",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 20300000,
+          "y": 19095000
+        },
+        "b": {
+          "x": 20300000,
+          "y": 22905000
+        },
+        "net": "VIN_F"
+      },
+      "trk_b095ec2a67c24372": {
+        "id": "trk_b095ec2a67c24372",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 25700000,
+          "y": 20365000
+        },
+        "b": {
+          "x": 35350000,
+          "y": 20365000
+        },
+        "net": "VIN"
+      },
+      "trk_bb348589050e46b9": {
+        "id": "trk_bb348589050e46b9",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 16450000,
+          "y": 21635000
+        },
+        "b": {
+          "x": 20300000,
+          "y": 21635000
+        },
+        "net": "VIN_F"
+      },
+      "trk_ccefb7459374420e": {
+        "id": "trk_ccefb7459374420e",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 27350000,
+          "y": 20365000
+        },
+        "b": {
+          "x": 27350000,
+          "y": 12000000
+        },
+        "net": "VIN"
+      },
+      "trk_d3d6cd246da74ddd": {
+        "id": "trk_d3d6cd246da74ddd",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 51300000,
+          "y": 15000000
+        },
+        "b": {
+          "x": 48500000,
+          "y": 15000000
+        },
+        "net": "VOUT"
+      },
+      "trk_d426a04ce56f41d5": {
+        "id": "trk_d426a04ce56f41d5",
+        "layer": "top",
+        "width": 1000000,
+        "a": {
+          "x": 35350000,
+          "y": 20365000
+        },
+        "b": {
+          "x": 35350000,
+          "y": 15900000
+        },
+        "net": "VIN"
+      },
+      "trk_d711dfe660594fe2": {
+        "id": "trk_d711dfe660594fe2",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 56675000,
+          "y": 15000000
+        },
+        "b": {
+          "x": 56675000,
+          "y": 10000000
+        },
+        "net": "VOUT"
+      },
+      "trk_e5c46af401dc4eaa": {
+        "id": "trk_e5c46af401dc4eaa",
+        "layer": "top",
+        "width": 300000,
+        "a": {
+          "x": 39425000,
+          "y": 10325000
+        },
+        "b": {
+          "x": 41050000,
+          "y": 10325000
+        },
+        "net": "FB"
+      },
+      "trk_ea9305cd864f433e": {
+        "id": "trk_ea9305cd864f433e",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 43200000,
+          "y": 15140000
+        },
+        "b": {
+          "x": 44300000,
+          "y": 15140000
+        },
+        "net": "GND"
+      },
+      "trk_eea2e9658a764c8a": {
+        "id": "trk_eea2e9658a764c8a",
+        "layer": "top",
+        "width": 300000,
+        "a": {
+          "x": 25700000,
+          "y": 22905000
+        },
+        "b": {
+          "x": 28000000,
+          "y": 22905000
+        },
+        "net": "Q1_G"
+      },
+      "trk_f5ca9d484b434cc2": {
+        "id": "trk_f5ca9d484b434cc2",
+        "layer": "top",
+        "width": 800000,
+        "a": {
+          "x": 48500000,
+          "y": 15000000
+        },
+        "b": {
+          "x": 48500000,
+          "y": 8675000
+        },
+        "net": "VOUT"
+      },
+      "trk_fb49e1c81355452d": {
+        "id": "trk_fb49e1c81355452d",
+        "layer": "top",
+        "width": 300000,
+        "a": {
+          "x": 28000000,
+          "y": 22905000
+        },
+        "b": {
+          "x": 28000000,
+          "y": 24775000
+        },
+        "net": "Q1_G"
+      }
+    },
+    "vias": {
+      "via_0410a62848f64e38": {
+        "id": "via_0410a62848f64e38",
+        "position": {
+          "x": 51300000,
+          "y": 10500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_0cfebd5629cf4af6": {
+        "id": "via_0cfebd5629cf4af6",
+        "position": {
+          "x": 49600000,
+          "y": 10500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_2271a0c6820040e8": {
+        "id": "via_2271a0c6820040e8",
+        "position": {
+          "x": 20650000,
+          "y": 9600000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_29cc65f785564459": {
+        "id": "via_29cc65f785564459",
+        "position": {
+          "x": 38300000,
+          "y": 11500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_35558af628a2407e": {
+        "id": "via_35558af628a2407e",
+        "position": {
+          "x": 31000000,
+          "y": 15600000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_47420f17da4c4628": {
+        "id": "via_47420f17da4c4628",
+        "position": {
+          "x": 30000000,
+          "y": 4000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_47b619601f06449e": {
+        "id": "via_47b619601f06449e",
+        "position": {
+          "x": 54600000,
+          "y": 10500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_5ce077337fc045b4": {
+        "id": "via_5ce077337fc045b4",
+        "position": {
+          "x": 44300000,
+          "y": 14100000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_7839405eb59c4686": {
+        "id": "via_7839405eb59c4686",
+        "position": {
+          "x": 17900000,
+          "y": 12000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_7fb897cc5073482d": {
+        "id": "via_7fb897cc5073482d",
+        "position": {
+          "x": 63300000,
+          "y": 9500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_8145ce8c583c432b": {
+        "id": "via_8145ce8c583c432b",
+        "position": {
+          "x": 36500000,
+          "y": 10600000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_8f7fa2fc2ca649d0": {
+        "id": "via_8f7fa2fc2ca649d0",
+        "position": {
+          "x": 28000000,
+          "y": 28000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_9774213335374a63": {
+        "id": "via_9774213335374a63",
+        "position": {
+          "x": 44300000,
+          "y": 15150000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_9c75313896824ab8": {
+        "id": "via_9c75313896824ab8",
+        "position": {
+          "x": 35350000,
+          "y": 11200000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_a2b86e7ff9f043ee": {
+        "id": "via_a2b86e7ff9f043ee",
+        "position": {
+          "x": 39500000,
+          "y": 11900000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_c77b24809f454711": {
+        "id": "via_c77b24809f454711",
+        "position": {
+          "x": 45000000,
+          "y": 4000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_ca7861e7cc6046a2": {
+        "id": "via_ca7861e7cc6046a2",
+        "position": {
+          "x": 55600000,
+          "y": 10500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_d27050e776c14741": {
+        "id": "via_d27050e776c14741",
+        "position": {
+          "x": 12000000,
+          "y": 8000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_de05f03b24224de5": {
+        "id": "via_de05f03b24224de5",
+        "position": {
+          "x": 52950000,
+          "y": 10500000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_e5fc7553eb6e4d37": {
+        "id": "via_e5fc7553eb6e4d37",
+        "position": {
+          "x": 44300000,
+          "y": 16200000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_f05e9a0744fd4c72": {
+        "id": "via_f05e9a0744fd4c72",
+        "position": {
+          "x": 15000000,
+          "y": 28000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_f3c35be21e3540dc": {
+        "id": "via_f3c35be21e3540dc",
+        "position": {
+          "x": 33700000,
+          "y": 10800000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_f84e49641c514769": {
+        "id": "via_f84e49641c514769",
+        "position": {
+          "x": 55000000,
+          "y": 4000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      },
+      "via_feb75cef433e400f": {
+        "id": "via_feb75cef433e400f",
+        "position": {
+          "x": 45000000,
+          "y": 30000000
+        },
+        "drill": 300000,
+        "diameter": 600000,
+        "net": "GND"
+      }
+    },
+    "zones": {
+      "zon_56d9e347ed29497d": {
+        "id": "zon_56d9e347ed29497d",
+        "layer": "top",
+        "net": "GND",
+        "outline": [
+          {
+            "x": 7000000,
+            "y": 500000
+          },
+          {
+            "x": 59000000,
+            "y": 500000
+          },
+          {
+            "x": 65500000,
+            "y": 7000000
+          },
+          {
+            "x": 65500000,
+            "y": 26000000
+          },
+          {
+            "x": 59000000,
+            "y": 32500000
+          },
+          {
+            "x": 7000000,
+            "y": 32500000
+          },
+          {
+            "x": 500000,
+            "y": 26000000
+          },
+          {
+            "x": 500000,
+            "y": 7000000
+          }
+        ],
+        "clearance": 600000
+      },
+      "zon_617e375195fe4cee": {
+        "id": "zon_617e375195fe4cee",
+        "layer": "bottom",
+        "net": "GND",
+        "outline": [
+          {
+            "x": 7000000,
+            "y": 500000
+          },
+          {
+            "x": 59000000,
+            "y": 500000
+          },
+          {
+            "x": 65500000,
+            "y": 7000000
+          },
+          {
+            "x": 65500000,
+            "y": 26000000
+          },
+          {
+            "x": 59000000,
+            "y": 32500000
+          },
+          {
+            "x": 7000000,
+            "y": 32500000
+          },
+          {
+            "x": 500000,
+            "y": 26000000
+          },
+          {
+            "x": 500000,
+            "y": 7000000
+          }
+        ],
+        "clearance": 600000
+      }
+    }
+  },
+  "constraints": {
+    "min_track_width": 200000,
+    "min_clearance": 200000,
+    "min_drill": 300000,
+    "min_annular_ring": 150000,
+    "board_edge_clearance": 500000,
+    "default_class": {
+      "name": "Default",
+      "track_width": 300000,
+      "clearance": 200000,
+      "via_drill": 300000,
+      "via_diameter": 600000,
+      "nets": []
+    },
+    "net_classes": [
+      {
+        "name": "Power",
+        "track_width": 600000,
+        "clearance": 200000,
+        "via_drill": 300000,
+        "via_diameter": 600000,
+        "nets": [
+          "VIN_RAW",
+          "VIN_F",
+          "VIN",
+          "SW",
+          "VOUT",
+          "GND"
+        ]
+      }
+    ],
+    "net_currents_a": {
+      "GND": 3.0,
+      "SW": 3.1,
+      "VIN": 2.0,
+      "VIN_F": 2.0,
+      "VIN_RAW": 2.0,
+      "VOUT": 3.0
+    },
+    "net_voltages_v": {
+      "BOOT": 30.2,
+      "FB": 0.611,
+      "GND": 0.0,
+      "LED_A": 2.5,
+      "Q1_G": 13.2,
+      "SW": 25.2,
+      "VIN": 25.2,
+      "VIN_F": 25.2,
+      "VIN_RAW": 25.2,
+      "VOUT": 5.3
+    },
+    "temp_rise_c": 10.0,
+    "max_component_height": 12000000
+  },
+  "manufacturing": {
+    "fabricator_profile": "generic-2layer",
+    "surface_finish": "HASL",
+    "solder_mask_color": "Green",
+    "mask_expansion": 50000
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "check": "MECH",
+  "project_id": "prj_2dadda078068495a",
+  "revision": 217,
+  "input_sha256": "44b6765704fd66b4edf22bc7ab957b1d3b3c294f68e6a5c26f3a1b74301968c4",
+  "tool": "eak-validation 0.1.0",
+  "rules": [
+    {
+      "id": "MECH-001",
+      "description": "Component height limit",
+      "parameters": "12.00 mm",
+      "source": "Project constraints"
+    },
+    {
+      "id": "MECH-002",
+      "description": "3D body collision",
+      "parameters": "parametric bodies (85 % of courtyard)",
+      "source": "EAK"
+    },
+    {
+      "id": "MECH-003",
+      "description": "Missing 3D model data",
+      "parameters": "",
+      "source": "EAK"
+    }
+  ],
+  "findings": [],
+  "outcome": "NO_ERRORS_IN_IMPLEMENTED_CHECKS",
+  "errors": 0,
+  "warnings": 0,
+  "not_implemented": [
+    "Enclosure fit (no enclosure model)",
+    "STEP model import and exact-solid collision"
+  ],
+  "limitations": [
+    "Bodies are parametric boxes derived from library height and courtyard; real package shapes may differ"
+  ]
+}

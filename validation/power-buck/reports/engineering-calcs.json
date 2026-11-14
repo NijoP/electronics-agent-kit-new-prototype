@@ -1,0 +1,175 @@
+{
+  "project_revision": 217,
+  "ipc_tables_verified_against_standard": false,
+  "lines": [
+    {
+      "item": "Trace width, net VIN_RAW",
+      "function": "eak_engineering::ipc::trace_width_mm",
+      "inputs": "I = 2 A, external, 2 oz, ΔT = 10 °C",
+      "result": "required ≥ 0.393 mm; narrowest routed track 1.00 mm",
+      "requirement": "every track on the net ≥ required width",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Trace width, net VIN_F",
+      "function": "eak_engineering::ipc::trace_width_mm",
+      "inputs": "I = 2 A, external, 2 oz, ΔT = 10 °C",
+      "result": "required ≥ 0.393 mm; narrowest routed track 1.00 mm",
+      "requirement": "every track on the net ≥ required width",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Trace width, net VIN",
+      "function": "eak_engineering::ipc::trace_width_mm",
+      "inputs": "I = 2 A, external, 2 oz, ΔT = 10 °C",
+      "result": "required ≥ 0.393 mm; narrowest routed track 0.60 mm",
+      "requirement": "every track on the net ≥ required width",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Trace width, net SW",
+      "function": "eak_engineering::ipc::trace_width_mm",
+      "inputs": "I = 3.1 A, external, 2 oz, ΔT = 10 °C",
+      "result": "required ≥ 0.719 mm; narrowest routed track 0.80 mm",
+      "requirement": "every track on the net ≥ required width",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Trace width, net VOUT",
+      "function": "eak_engineering::ipc::trace_width_mm",
+      "inputs": "I = 3 A, external, 2 oz, ΔT = 10 °C",
+      "result": "required ≥ 0.687 mm; narrowest routed track 0.80 mm",
+      "requirement": "every track on the net ≥ required width",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Trace width, net GND",
+      "function": "eak_engineering::ipc::trace_width_mm",
+      "inputs": "I = 3 A, external, 2 oz, ΔT = 10 °C",
+      "result": "required ≥ 0.687 mm; narrowest routed track 0.80 mm",
+      "requirement": "every track on the net ≥ required width",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Via current capacity (0.3 mm drill)",
+      "function": "eak_engineering::ipc::via_current_a / vias_required",
+      "inputs": "drill 11.8 mil, plating 0.79 mil (assumed), ΔT 10 °C, sharing derating 0.8, 3.0 A",
+      "result": "0.80 A per via; 5 vias needed for 3 A; placed: U1 GND 3, input caps 5, output caps 5",
+      "requirement": "each GND via cluster that carries the full 3 A return ≥ required count",
+      "status": "PARTIAL: clusters below 5 vias rely on parallel top-layer GND pour (pour current density NOT checked by EAK)"
+    },
+    {
+      "item": "Electrical clearance VIN/SW to GND, external uncoated",
+      "function": "eak_engineering::ipc::clearance_mm",
+      "inputs": "25.2 V, B2",
+      "result": "required ≥ 0.10 mm; design minimum 0.20 mm",
+      "requirement": "design clearance ≥ required",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Electrical clearance VIN/SW to GND, component leads",
+      "function": "eak_engineering::ipc::clearance_mm",
+      "inputs": "25.2 V, A5",
+      "result": "required ≥ 0.13 mm; design minimum 0.20 mm",
+      "requirement": "design clearance ≥ required",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Electrical clearance BOOT to GND, external uncoated",
+      "function": "eak_engineering::ipc::clearance_mm",
+      "inputs": "30.2 V, B2",
+      "result": "required ≥ 0.60 mm; design minimum 0.60 mm",
+      "requirement": "design clearance ≥ required",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Creepage (functional insulation only, no isolation barrier)",
+      "function": "eak_engineering::ipc::creepage_mm",
+      "inputs": "30.2 V, pollution degree 2, material group IIIb (FR-4 assumed)",
+      "result": "table value 0.04 mm; design minimum surface distance 0.2 mm",
+      "requirement": "functional creepage ≥ table value (IEC 60664-1 table as transcribed; EAK flags the ≤50 V rows as unverified)",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Output voltage set point",
+      "function": "eak_engineering::calc::divider_vout",
+      "inputs": "R2 = 105 kΩ, R3 = 14.3 kΩ (±1 %), VFB = 0.581/0.596/0.611 V (TI SLVSDG6C §5.5)",
+      "result": "divider ratio 0.11987; VOUT typ 4.972 V, worst-case 4.763-5.188 V",
+      "requirement": "5.0 V ±5 % (4.75-5.25 V) and below the 5.3 V declared for clearance/rating checks",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Feedback divider dissipation (R2)",
+      "function": "eak_engineering::calc::resistor_power_w",
+      "inputs": "I = 41.9 µA, R = 105 kΩ",
+      "result": "0.184 mW",
+      "requirement": "≤ 50 % of 0603 rating (Yageo RC0603 0.1 W, unverified)",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Power LED series resistor",
+      "function": "eak_engineering::calc::led_resistor_ohm / resistor_power_w",
+      "inputs": "VOUT 4.972 V, Vf 2.2 V (Kingbright APT1608SGC, unverified), target If 2 mA",
+      "result": "1386 Ω → 1.5 kΩ chosen → 1.85 mA; 5.1 mW in R4",
+      "requirement": "R4 ≤ 50 % of rating",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "Q1 gate pull-down R1 dissipation (zener clamping at 12 V)",
+      "function": "eak_engineering::calc::resistor_power_w",
+      "inputs": "I = (25.2 V - 12 V) / 100 kΩ",
+      "result": "1.74 mW",
+      "requirement": "≤ 50 % of 0603 rating",
+      "status": "PASS (calculation)"
+    },
+    {
+      "item": "U1 junction temperature (JEDEC 2s2p θJA)",
+      "function": "eak_engineering::calc::junction_temp_c",
+      "inputs": "Ta 40 °C, P 0.93 W (hand estimate), θJA 118.9 °C/W (TI SLVSDG6C §5.4)",
+      "result": "Tj ≈ 150.6 °C (abs max 150 °C, shutdown 160 °C)",
+      "requirement": "Tj ≤ 125 °C design target (25 °C below abs max)",
+      "status": "FAIL against 125 °C target (estimate) - board copper must perform like TI EVM; NOT VERIFIED"
+    },
+    {
+      "item": "U1 junction temperature (TI EVM θJA)",
+      "function": "eak_engineering::calc::junction_temp_c",
+      "inputs": "Ta 40 °C, P 0.93 W (hand estimate), θJA 57.2 °C/W (TI SLVSDG6C §5.4)",
+      "result": "Tj ≈ 93.2 °C (abs max 150 °C, shutdown 160 °C)",
+      "requirement": "Tj ≤ 125 °C design target (25 °C below abs max)",
+      "status": "PASS (estimate only - NOT VERIFIED without measurement)"
+    },
+    {
+      "item": "Q1 reverse-polarity MOSFET dissipation and Tj",
+      "function": "eak_engineering::calc::resistor_power_w / junction_temp_c",
+      "inputs": "Iin 1.55 A (11.4 V, η 0.85 assumed), RDS(on) 0.014 Ω (unverified), θJA 75 °C/W (unverified)",
+      "result": "P ≈ 34 mW, Tj ≈ 42.5 °C",
+      "requirement": "Tj ≤ 125 °C",
+      "status": "PASS (estimate on unverified ratings - NOT VERIFIED)"
+    },
+    {
+      "item": "GND pour fill, Top layer",
+      "function": "eak_engineering::copper::fill_zone",
+      "inputs": "clearance 0.60 mm, 0.1 mm raster",
+      "result": "1522 mm² filled in 2 island(s)",
+      "requirement": "informational",
+      "status": "INFO"
+    },
+    {
+      "item": "GND pour fill, Bottom layer",
+      "function": "eak_engineering::copper::fill_zone",
+      "inputs": "clearance 0.60 mm, 0.1 mm raster",
+      "result": "1870 mm² filled in 1 island(s)",
+      "requirement": "informational",
+      "status": "INFO"
+    }
+  ],
+  "missing_in_eak": [
+    "Switching-converter operating point (generic, topology-parameterised; this board is a buck): duty cycle, inductor ripple/peak/RMS current (eak-engineering)",
+    "Output voltage ripple and output-capacitor RMS current (eak-engineering)",
+    "Input-capacitor RMS ripple current and input voltage ripple (eak-engineering)",
+    "MOSFET conduction + switching loss and converter efficiency (eak-engineering)",
+    "Loop stability / phase margin (internally compensated part; datasheet-defined only)",
+    "MLCC DC-bias capacitance derating (eak-engineering / library data)",
+    "Copper-pour current density and PCB thermal (spreading) model (eak-engineering / eak-validation)"
+  ]
+}

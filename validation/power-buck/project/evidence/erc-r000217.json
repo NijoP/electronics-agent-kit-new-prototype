@@ -1,0 +1,101 @@
+{
+  "check": "ERC",
+  "project_id": "prj_2dadda078068495a",
+  "revision": 217,
+  "input_sha256": "44b6765704fd66b4edf22bc7ab957b1d3b3c294f68e6a5c26f3a1b74301968c4",
+  "tool": "eak-validation 0.1.0",
+  "rules": [
+    {
+      "id": "ERC-001",
+      "description": "Unconnected pin",
+      "parameters": "single-pin nets without a no-connect marker",
+      "source": "EAK"
+    },
+    {
+      "id": "ERC-002",
+      "description": "No-connect conflict",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "ERC-003",
+      "description": "Undriven power input",
+      "parameters": "PowerIn pins need a PowerOut pin or power port on the net",
+      "source": "EAK"
+    },
+    {
+      "id": "ERC-004",
+      "description": "Output conflict",
+      "parameters": "more than one Output/PowerOut on a net",
+      "source": "EAK"
+    },
+    {
+      "id": "ERC-005",
+      "description": "Multiple net names",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "ERC-006",
+      "description": "Duplicate reference designator",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "ERC-007",
+      "description": "Unannotated symbol",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "ERC-008",
+      "description": "Dangling wire",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "ERC-009",
+      "description": "Label without pins",
+      "parameters": "",
+      "source": "EAK"
+    },
+    {
+      "id": "ERC-010",
+      "description": "Missing decoupling capacitor",
+      "parameters": "supply pin nets need a capacitor to a ground net",
+      "source": "DESK erc.py (reimplemented)"
+    },
+    {
+      "id": "ERC-011",
+      "description": "Capacitor voltage rating",
+      "parameters": "rating >= rail (error), >= 1.5x rail (warning); uses declared net voltages",
+      "source": "DESK erc.py (reimplemented)"
+    },
+    {
+      "id": "ERC-012",
+      "description": "Ground/supply pin mis-connection",
+      "parameters": "pin-name patterns",
+      "source": "DESK erc.py (reimplemented)"
+    },
+    {
+      "id": "ERC-013",
+      "description": "Non-numeric resistor value",
+      "parameters": "",
+      "source": "DESK erc.py (reimplemented)"
+    }
+  ],
+  "findings": [],
+  "outcome": "NO_ERRORS_IN_IMPLEMENTED_CHECKS",
+  "errors": 0,
+  "warnings": 0,
+  "not_implemented": [
+    "Pin-to-pin compatibility matrix beyond driver conflicts",
+    "Hierarchical sheet / bus consistency (hierarchy not yet supported)",
+    "Analog simulation, operating-point and tolerance analysis",
+    "Component stress/derating beyond capacitor voltage"
+  ],
+  "limitations": [
+    "Pin-name heuristics for supply/ground pins can miss unusual naming",
+    "Ratings in the built-in library are unverified unless marked verified"
+  ]
+}

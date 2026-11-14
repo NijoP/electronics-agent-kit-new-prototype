@@ -268,6 +268,7 @@ the command API:
    for draw.
 4. Package status: InternallyVerifiedReleaseCandidate; the package re-verifies and tampering is detected.
 Injected short and clearance violations are detected (`drc_detects_injected_short_and_clearance_violation`).
+Validation board (12-24 V to 5 V / 3 A buck, authored through the command engine): [validation/power-buck/README.md](validation/power-buck/README.md).
 
 ### LCSC sourcing, offline only (2026-11-13)
 Implemented and tested on Windows 11 only. Details: `docs/engineering/sourcing.md`; test

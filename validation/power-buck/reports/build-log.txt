@@ -1,0 +1,1 @@
+r115 SyncSchematicToPcb: 24 new footprint(s) staged outside the board; place them (AutoPlace or manual)
