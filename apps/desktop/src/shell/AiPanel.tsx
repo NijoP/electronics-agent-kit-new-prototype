@@ -33,8 +33,12 @@ export function AiPanel({ messages, snapshot, library, contextLabel, busy, model
   const [text, setText] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => input.current?.focus(), [focusNonce]);
-  useEffect(() => end.current?.scrollIntoView?.({ block: "end" }), [messages]);
+  useEffect(() => {
+    input.current?.focus();
+  }, [focusNonce]);
+  useEffect(() => {
+    end.current?.scrollIntoView?.({ block: "end" });
+  }, [messages]);
   const send = (t: string) => {
     if (!t.trim()) return;
     onSend(t);

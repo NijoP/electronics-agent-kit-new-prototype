@@ -128,3 +128,14 @@ describe("shell flows", () => {
     expect(screen.getByLabelText("Side panel").className).not.toContain("open");
   });
 });
+
+describe("assistant with a selection", () => {
+  it("rotate on a selected part previews, then Accept sends RotateSymbol", async () => {
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: /R1 330/ }));
+    fireEvent.click(screen.getByRole("button", { name: "rotate" }));
+    await screen.findByRole("group", { name: /Proposal: Rotate R1/ });
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    await waitFor(() => expect(executed).toEqual([{ type: "RotateSymbol", symbol_id: "sym_r1", rotation: "R90" }]));
+  });
+});

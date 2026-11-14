@@ -92,7 +92,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     reset();
     setTool(t);
   };
-  useEffect(() => onStatus?.({ layer, gridMm: GRID / 1_000_000 }), [layer, onStatus]);
+  useEffect(() => {
+    onStatus?.({ layer, gridMm: GRID / 1_000_000 });
+  }, [layer, onStatus]);
 
   const finishOutline = () => {
     const pts = outlineFrom(corners);

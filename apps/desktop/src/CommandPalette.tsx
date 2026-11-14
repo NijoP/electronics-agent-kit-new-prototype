@@ -40,7 +40,9 @@ export function CommandPalette({
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
-  useEffect(() => input.current?.focus(), []);
+  useEffect(() => {
+    input.current?.focus();
+  }, []);
 
   const q = query.trim().toLowerCase();
   const shown = actions.filter((a) => !a.disabled && `${a.label} ${a.group ?? ""}`.toLowerCase().includes(q));

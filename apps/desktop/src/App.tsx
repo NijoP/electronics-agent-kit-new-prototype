@@ -9,7 +9,9 @@ export function App() {
   const [opened, setOpened] = useState<Snapshot | null>(null);
   const [settings, setSettings] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
-  useEffect(() => applyTheme(theme), [theme]);
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
   return (
     <>
