@@ -1,4 +1,4 @@
-# ADR-0022: Typed 3D model reference on library components
+# ADR-0025: Typed 3D model reference on library components
 
 Status: accepted (code-reviewed only; nothing built or run)
 

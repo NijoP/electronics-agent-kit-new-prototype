@@ -23,7 +23,7 @@ EAK's licence applies; attribution in the file header). DESK (`NijoP/DESK`, MIT)
 `5ad8492c37a5dac919d97f4eccd8250780490e7a` was used as an engineering knowledge source only; no
 DESK code is included. Inventory: `docs/engineering/INTELLIGENCE_INTEGRATION.md`.
 
-## 3D component models (ADR-0022)
+## 3D component models (ADR-0025)
 | Item | Licence | Decision |
 |---|---|---|
 | three.js (incl. VRMLLoader, GLTFLoader, OrbitControls) | MIT | Dependency, as before. |
