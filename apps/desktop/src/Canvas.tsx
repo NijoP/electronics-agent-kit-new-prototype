@@ -15,11 +15,24 @@ interface Props {
   tool?: boolean;
   /** Zoom to these view-space bounds whenever `n` changes (finding navigation). */
   zoomTo?: { bounds: Bounds; n: number } | null;
+  /**
+   * Object drag (move, marquee). `start` is asked on a primary-button press; returning true
+   * captures the gesture instead of panning. `move` and `end` follow only once the pointer has
+   * moved past the click slop; a press released in place is still a click (`onPoint`).
+   */
+  onDrag?: DragHandler;
+}
+
+export interface DragHandler {
+  start: (x: number, y: number, e: ReactPointerEvent<SVGSVGElement>) => boolean;
+  move: (x: number, y: number) => void;
+  end: (x: number, y: number, e: ReactPointerEvent<SVGSVGElement>) => void;
+  cancel: () => void;
 }
 
 const CLICK_SLOP_PX = 4;
 
-export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo }: Props) {
+export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const docId = useDocId();
   // A restored viewport (this tab's last zoom/pan, kept across tab closes and sessions) wins over fit.
@@ -28,7 +41,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
   const vbRef = useRef(vb);
   vbRef.current = vb;
   const drag = useRef<{ x: number; y: number } | null>(null);
-  const down = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const down = useRef<{ x: number; y: number; moved: boolean; captured: boolean } | null>(null);
   const key = `${bounds.minX},${bounds.minY},${bounds.maxX},${bounds.maxY}`;
 
   // Re-fit only when the drawing extents change, not on every re-render.
@@ -85,7 +98,9 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
       preserveAspectRatio="xMidYMid meet"
       onPointerDown={(e) => {
         drag.current = { x: e.clientX, y: e.clientY };
-        down.current = { x: e.clientX, y: e.clientY, moved: false };
+        const p = e.button === 0 && onDrag ? toView(e) : null;
+        const captured = !!p && !!onDrag?.start(p[0], p[1], e);
+        down.current = { x: e.clientX, y: e.clientY, moved: false, captured };
       }}
       onPointerMove={(e) => {
         const p = toView(e);
@@ -95,6 +110,10 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
         if (!d || !el || e.buttons === 0) return;
         const g = down.current;
         if (g && Math.hypot(e.clientX - g.x, e.clientY - g.y) > CLICK_SLOP_PX) g.moved = true;
+        if (g?.captured) {
+          if (g.moved && p) onDrag?.move(p[0], p[1]);
+          return;
+        }
         if (tool && !g?.moved) return;
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) return;
@@ -105,11 +124,19 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
         const g = down.current;
         drag.current = null;
         down.current = null;
+        if (g?.captured && g.moved) {
+          const p = toView(e);
+          if (p) onDrag?.end(p[0], p[1], e);
+          else onDrag?.cancel();
+          return;
+        }
+        if (g?.captured) onDrag?.cancel();
         if (!g || g.moved || !onPoint || e.button !== 0) return;
         const p = toView(e);
         if (p) onPoint(p[0], p[1], e);
       }}
       onPointerLeave={() => {
+        if (down.current?.captured) onDrag?.cancel();
         drag.current = null;
         down.current = null;
       }}

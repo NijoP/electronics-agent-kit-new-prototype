@@ -208,7 +208,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
   - Every finding carries a stable id, the affected objects and location, and a suggested fix; quantitative rules also report measured vs required values with units (ADR-0009). Desktop and AI display of the new fields is not yet wired.
 - Runtime (`eak-runtime`):
-  - Typed command set (42 commands, including the atomic `Batch`, ADR-0013, and library `SetComponentProperties`/`AssignComponentFootprint`, ADR-0015).
+  - Typed command set (44 commands, including the atomic `Batch`, `MoveWire`, `MoveNetLabel` (ADR-0013) and library `SetComponentProperties`/`AssignComponentFootprint` (ADR-0015)).
   - Revision checks and the agent approval policy.
   - Transactional apply with integrity gate, diff-based undo/redo and an fsync'd journal with crash reconciliation (UNKNOWN_OUTCOME blocks writes).
   - Checkpoints, project lock, evidence store.
@@ -402,3 +402,9 @@ installed. Development is proceeding directly in this repository.
 - Evaluator C1 support: **Design rules** dialog (toolbar, Design menu, palette) with `SetDesignRules`, `UpsertNetClass`, `SetNetCurrent`, `SetNetVoltage`; engine validation errors surface in the status bar; values come from `Project.constraints` (`rules.test.tsx`).
 - Evaluator C5 (AI actor) was reassigned to `eak-p6-ai` and is NOT in this change.
 - Not done: panel docking to other edges; real Tauri window run; DRC/ERC re-run is manual after rule changes.
+
+## Schematic editor, Phase 2 (2026-11-14, in progress)
+- `Command::Batch { commands, label }`: several commands applied in order as one transaction, so one revision and one undo/redo step; a failing step rejects the whole batch with `batch step i (Name): ...`; no nesting; at most 1000 steps; class = riskiest step. AI tool `Batch` (domain `Mixed`: ERC, DRC, MECH afterwards); `types.ts` mirror. See ADR-0013.
+- Select tool: click / Shift-click / marquee (Shift adds) / Ctrl+A selection of symbols, wires and labels; drag-move with live preview submits ONE `Batch` (`MoveWire` rubber-bands attached wire ends, `MoveNetLabel` drags pin labels, then `MoveSymbol`); R rotates the selection (wires follow), Del deletes it, Ctrl+C / Ctrl+V pastes at the cursor with fresh designators, W wire tool, Esc clears; Ctrl+Z / Ctrl+Shift+Z undo the whole edit in one step. New commands `MoveWire`, `MoveNetLabel` (42 commands). Verified by vitest (`selection.test.ts`, `SchematicSelect.test.tsx`) and `eak-runtime/tests/schematic_edit.rs`; not yet driven in a real Tauri window.
+- Evaluator C3 (ERC-001 remedy in the UI): schematic **No connect** tool (click a pin, `SetNoConnect`) and **Pin label** tool (click a pin, `LabelPin` with the typed net name and kind). Verified by vitest (`SchematicSelect.test.tsx`); no UI yet to remove a no-connect marker (no `DeleteNoConnect` command).
+- Not done yet: mirror (X/Y), junctions, ports, text, inspector, net highlighting; rubber-banded wires can go diagonal (no corner insertion).

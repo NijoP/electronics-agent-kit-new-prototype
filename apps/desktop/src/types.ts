@@ -191,9 +191,13 @@ export type Command =
   | { type: "DeleteSymbol"; symbol_id: Id }
   | { type: "AddWire"; sheet_id: Id | null; a: Point; b: Point }
   | { type: "DeleteWire"; wire_id: Id }
+  | { type: "MoveWire"; wire_id: Id; a: Point; b: Point }
   | { type: "ConnectPins"; a_symbol: Id; a_pin: string; b_symbol: Id; b_pin: string }
   | { type: "AddNetLabel"; sheet_id: Id | null; name: string; position: Point; kind: "net" | "power" }
   | { type: "DeleteNetLabel"; label_id: Id }
+  | { type: "LabelPin"; symbol_id: Id; pin: string; name: string; kind: "net" | "power" }
+  | { type: "SetNoConnect"; symbol_id: Id; pin: string }
+  | { type: "MoveNetLabel"; label_id: Id; position: Point }
   | { type: "SetBoardOutline"; points: Point[] }
   | { type: "MoveFootprint"; footprint_id: Id; position: Point; rotation: Rotation | null; side: Side | null }
   | { type: "AddTrack"; layer: CopperLayer; a: Point; b: Point; width: Nm | null; net: string }

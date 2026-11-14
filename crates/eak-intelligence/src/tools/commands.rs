@@ -142,7 +142,7 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
         ),
         MoveSymbol { .. } => (
             D::Schematic,
-            "Move a symbol. Attached wires are not dragged.",
+            "Move a symbol. Attached wires are not dragged: to drag them, send a Batch with MoveWire steps first and the MoveSymbol last.",
             obj(
                 &[("symbol_id", id("symbol id")), ("position", point("new origin"))],
                 &["symbol_id", "position"],
@@ -190,6 +190,14 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Delete a wire segment.",
             obj(&[("wire_id", id("wire id"))], &["wire_id"]),
         ),
+        MoveWire { .. } => (
+            D::Schematic,
+            "Set both end points of a wire segment (move it or stretch one end).",
+            obj(
+                &[("wire_id", id("wire id")), ("a", point("new start")), ("b", point("new end"))],
+                &["wire_id", "a", "b"],
+            ),
+        ),
         ConnectPins { .. } => (
             D::Schematic,
             "Connect two pins on the same sheet with an L-shaped wire that avoids other pins.",
@@ -233,6 +241,14 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             D::Schematic,
             "Delete a net label.",
             obj(&[("label_id", id("label id"))], &["label_id"]),
+        ),
+        MoveNetLabel { .. } => (
+            D::Schematic,
+            "Move a net label (it names whatever wire or pin it then touches).",
+            obj(
+                &[("label_id", id("label id")), ("position", point("new position"))],
+                &["label_id", "position"],
+            ),
         ),
         SetNoConnect { .. } => (
             D::Schematic,
@@ -493,6 +509,11 @@ pub fn command_samples() -> Vec<Command> {
         DeleteWire {
             wire_id: "w".into(),
         },
+        MoveWire {
+            wire_id: "w".into(),
+            a: p,
+            b: Point::new(0, 1),
+        },
         ConnectPins {
             a_symbol: "a".into(),
             a_pin: "1".into(),
@@ -513,6 +534,10 @@ pub fn command_samples() -> Vec<Command> {
         },
         DeleteNetLabel {
             label_id: "l".into(),
+        },
+        MoveNetLabel {
+            label_id: "l".into(),
+            position: Point::new(2, 2),
         },
         SetNoConnect {
             symbol_id: "s".into(),
@@ -682,8 +707,8 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // STATUS.md records 42 commands (incl. SetComponentProperties, AssignComponentFootprint) in the runtime.
-        assert_eq!(tools.len(), 42);
+        // STATUS.md records 44 commands (incl. Batch, MoveWire, MoveNetLabel, SetComponentProperties, AssignComponentFootprint).
+        assert_eq!(tools.len(), 44);
         for t in &tools {
             assert!(t
                 .spec

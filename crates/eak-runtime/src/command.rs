@@ -84,6 +84,13 @@ pub enum Command {
     DeleteWire {
         wire_id: Id,
     },
+    /// Set both end points of a wire (whole-wire moves and rubber-banding when a selection is
+    /// dragged; ADR-0013).
+    MoveWire {
+        wire_id: Id,
+        a: Point,
+        b: Point,
+    },
     /// Draw an L-shaped wire between two pins, refusing routes that would touch other pins.
     ConnectPins {
         a_symbol: Id,
@@ -108,6 +115,10 @@ pub enum Command {
     },
     DeleteNetLabel {
         label_id: Id,
+    },
+    MoveNetLabel {
+        label_id: Id,
+        position: Point,
     },
     SetNoConnect {
         symbol_id: Id,
@@ -277,6 +288,8 @@ impl Command {
             | SetNoConnect { .. }
             | DeleteWire { .. }
             | DeleteNetLabel { .. }
+            | MoveWire { .. }
+            | MoveNetLabel { .. }
             | UpsertComponentDefinition { .. }
             | AssignComponentFootprint { .. }
             | SetBoardOutline { .. }
@@ -445,6 +458,20 @@ fn connection_points(p: &Project, sheet: &str) -> Vec<Point> {
     v
 }
 
+/// Absolute connection points of one symbol's pins.
+fn connection_points_of(p: &Project, s: &SymbolInstance) -> Vec<Point> {
+    p.library
+        .get(&s.component_id)
+        .map(|def| {
+            def.symbol
+                .pins
+                .iter()
+                .map(|pin| s.position.plus(s.rotation.apply(pin.position)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn passes_through(a: Point, b: Point, pts: &[Point], allowed: &[Point]) -> Vec<Point> {
     pts.iter()
         .filter(|q| !allowed.contains(q) && point_segment_distance(**q, a, b) <= 1_000.0)
@@ -609,15 +636,32 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             symbol_id,
             position,
         } => {
-            symbol(p, symbol_id)?;
-            let s = p.schematic.symbols.get_mut(symbol_id).expect("checked");
-            if s.position == *position {
+            let old = symbol(p, symbol_id)?.clone();
+            if old.position == *position {
                 return Err(CommandError::NothingTo(
                     "move: symbol already at that position".into(),
                 ));
             }
-            s.position = *position;
-            warnings.push("wires attached to the old pin positions are not dragged; re-check connectivity (ERC)".into());
+            let old_pins = connection_points_of(p, &old);
+            p.schematic
+                .symbols
+                .get_mut(symbol_id)
+                .expect("checked")
+                .position = *position;
+            let new_pins = connection_points_of(p, &p.schematic.symbols[symbol_id]);
+            // Wire ends left behind on the old pin positions (a batch that rubber-bands the
+            // wires moves them first, so it gets no warning).
+            let left = p
+                .schematic
+                .wires
+                .values()
+                .filter(|w| w.sheet_id == old.sheet_id)
+                .flat_map(|w| [w.a, w.b])
+                .filter(|e| old_pins.contains(e) && !new_pins.contains(e))
+                .count();
+            if left > 0 {
+                warnings.push(format!("{left} wire end(s) stay at the old pin positions and are no longer connected; drag them too or re-check connectivity (ERC)"));
+            }
         }
         RotateSymbol {
             symbol_id,
@@ -715,6 +759,32 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 .wires
                 .remove(wire_id)
                 .ok_or_else(|| CommandError::NotFound(format!("wire {wire_id}")))?;
+        }
+        MoveWire { wire_id, a, b } => {
+            let w = p
+                .schematic
+                .wires
+                .get(wire_id)
+                .ok_or_else(|| CommandError::NotFound(format!("wire {wire_id}")))?
+                .clone();
+            if a == b {
+                return Err(CommandError::Invalid("wire has zero length".into()));
+            }
+            if (w.a, w.b) == (*a, *b) {
+                return Err(CommandError::NothingTo(
+                    "move: wire already at that position".into(),
+                ));
+            }
+            let hits = passes_through(*a, *b, &connection_points(p, &w.sheet_id), &[*a, *b]);
+            if !hits.is_empty() {
+                warnings.push(format!(
+                    "wire passes over {} pin(s) and connects them",
+                    hits.len()
+                ));
+            }
+            let w = p.schematic.wires.get_mut(wire_id).expect("checked");
+            w.a = *a;
+            w.b = *b;
         }
         ConnectPins {
             a_symbol,
@@ -825,6 +895,19 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 .labels
                 .remove(label_id)
                 .ok_or_else(|| CommandError::NotFound(format!("label {label_id}")))?;
+        }
+        MoveNetLabel { label_id, position } => {
+            let l = p
+                .schematic
+                .labels
+                .get_mut(label_id)
+                .ok_or_else(|| CommandError::NotFound(format!("label {label_id}")))?;
+            if l.position == *position {
+                return Err(CommandError::NothingTo(
+                    "move: label already at that position".into(),
+                ));
+            }
+            l.position = *position;
         }
         SetNoConnect { symbol_id, pin } => {
             let s = symbol(p, symbol_id)?;
