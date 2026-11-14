@@ -3,6 +3,7 @@
 // `onHover` tracks the cursor so editors can draw rubber-band previews.
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { clientToView, fit, pan, zoomAt, type Bounds, type ViewBox } from "./viewport";
+import { loadViewport, saveViewport, useDocId, useRegisterCanvas } from "./shell/viewState";
 
 interface Props {
   label: string;
@@ -20,7 +21,10 @@ const CLICK_SLOP_PX = 4;
 
 export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo }: Props) {
   const ref = useRef<SVGSVGElement>(null);
-  const [vb, setVb] = useState<ViewBox>(() => fit(bounds));
+  const docId = useDocId();
+  // A restored viewport (this tab's last zoom/pan, kept across tab closes and sessions) wins over fit.
+  const restored = useRef<ViewBox | null>(docId ? loadViewport(docId) : null);
+  const [vb, setVb] = useState<ViewBox>(() => restored.current ?? fit(bounds));
   const vbRef = useRef(vb);
   vbRef.current = vb;
   const drag = useRef<{ x: number; y: number } | null>(null);
@@ -28,7 +32,20 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
   const key = `${bounds.minX},${bounds.minY},${bounds.maxX},${bounds.maxY}`;
 
   // Re-fit only when the drawing extents change, not on every re-render.
-  useEffect(() => setVb(fit(bounds)), [key]);
+  useEffect(() => {
+    if (restored.current) {
+      restored.current = null; // first run after mount: keep the restored viewport
+      return;
+    }
+    setVb(fit(bounds));
+  }, [key]);
+  useEffect(() => {
+    if (docId) saveViewport(docId, vb);
+  }, [docId, vb]);
+  useRegisterCanvas(docId, {
+    zoomBy: (f) => setVb((v) => zoomAt(v, f, v.x + v.w / 2, v.y + v.h / 2)),
+    fit: () => setVb(fit(bounds)),
+  });
   useEffect(() => {
     if (zoomTo) setVb(fit(zoomTo.bounds, 0.4));
   }, [zoomTo?.n]);
