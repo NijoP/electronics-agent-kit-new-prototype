@@ -682,8 +682,8 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // STATUS.md records 40 commands in the runtime.
-        assert_eq!(tools.len(), 40);
+        // STATUS.md records 42 commands (incl. SetComponentProperties, AssignComponentFootprint) in the runtime.
+        assert_eq!(tools.len(), 42);
         for t in &tools {
             assert!(t
                 .spec

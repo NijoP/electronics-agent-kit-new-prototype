@@ -153,7 +153,7 @@ AMD Ryzen 7 7840HS, 15.3 GB RAM. Linux and macOS: not run at M1; the first CI ru
   - Every report is bound to a revision and a SHA-256 input hash, and lists the checks that are not implemented.
   - Every finding carries a stable id, the affected objects and location, and a suggested fix; quantitative rules also report measured vs required values with units (ADR-0009). Desktop and AI display of the new fields is not yet wired.
 - Runtime (`eak-runtime`):
-  - Typed command set (40 commands, including the atomic `Batch`; ADR-0013).
+  - Typed command set (42 commands, including the atomic `Batch`, ADR-0013, and library `SetComponentProperties`/`AssignComponentFootprint`, ADR-0014).
   - Revision checks and the agent approval policy.
   - Transactional apply with integrity gate, diff-based undo/redo and an fsync'd journal with crash reconciliation (UNKNOWN_OUTCOME blocks writes).
   - Checkpoints, project lock, evidence store.
