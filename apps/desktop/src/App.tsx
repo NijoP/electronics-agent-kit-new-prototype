@@ -125,17 +125,7 @@ export function App() {
               onProjectsChanged={() => void refreshProjects()}
             />
           ) : (
-            <>
-              <ProjectHome onOpened={setOpened} />
-              <div className="home-fab">
-                <button type="button" onClick={toggleTheme} title="Toggle light/dark theme">
-                  {theme === "dark" ? "Light theme" : "Dark theme"}
-                </button>
-                <button type="button" className="settings-fab" onClick={() => setSettings(true)}>
-                  Model settings
-                </button>
-              </div>
-            </>
+            <ProjectHome onOpened={setOpened} active={active === "eda"} theme={theme} onTheme={toggleTheme} onSettings={() => setSettings(true)} />
           )}
         </div>
         {apps

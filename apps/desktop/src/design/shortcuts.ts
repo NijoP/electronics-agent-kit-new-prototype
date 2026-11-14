@@ -17,6 +17,13 @@ export const SHORTCUTS = {
   save: "Mod+S",
 } as const;
 
+/** Project Home only (not listed in the workspace shortcut help, where they do nothing). */
+export const HOME_SHORTCUTS = {
+  openProject: "Mod+O",
+  newProject: "Mod+N",
+  find: "Mod+F",
+} as const;
+
 /** Human text for a shortcut spec such as "Mod+Shift+P". */
 export function formatShortcut(spec: string, mac = isMac()): string {
   return spec
