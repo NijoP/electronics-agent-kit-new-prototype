@@ -814,10 +814,16 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
         .index
         .as_ref()
         .map_err(|e| format!("recent-project index unavailable: {e}"))?;
-    index
+    let mut rows = index
         .lock()
         .map_err(|_| "index lock poisoned".to_string())?
-        .recent(limit)
+        .recent(limit)?;
+    // Real, read-only status per project (last modified, stage, pending validation, errors);
+    // `None` when the folder moved or is not readable.
+    for r in &mut rows {
+        r.status = eak_runtime::status::read(std::path::Path::new(&r.path));
+    }
+    Ok(rows)
 }
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the

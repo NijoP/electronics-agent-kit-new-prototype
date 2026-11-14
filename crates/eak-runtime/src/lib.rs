@@ -14,6 +14,7 @@ pub mod engine;
 pub mod fixtures;
 pub mod index;
 pub mod process;
+pub mod status;
 pub mod store;
 pub mod tasks;
 

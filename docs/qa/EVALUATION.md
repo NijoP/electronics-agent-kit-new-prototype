@@ -58,3 +58,16 @@ was fixed by the evaluator.
 - The bottom-panel BOM is recomputed in the frontend (`BottomPanel.tsx:29-39`) instead of using
   `eak_manufacturing::bom_csv`; it can drift from the exported BOM.
 - `eak_runtime::store::write_project` is `pub` (`store.rs:129`); only the engine calls it today.
+
+## Status of the critical findings (2026-11-15, `fm/eak-valux`, code-reviewed only, never compiled or run)
+
+| # | Status |
+|---|---|
+| C1 | Fixed in code: every report carries a per-rule `CheckState`; DRC-008/DRC-014 are `UNKNOWN` while a copper net has no declared current and DRC-002 is `UNKNOWN` while one has no declared voltage (ADR-0026). Declaring values from the desktop still has no UI (Design › Design rules remains disabled). |
+| C2 | Fixed in code: MECH-001 is `UNKNOWN` with no height limit or any part without 3D body data, MECH-002/003 with missing body data; `compile` already blocks promotion above DRAFT on both. |
+| C3 | Already on main: the schematic No connect and Pin label tools send `SetNoConnect` / `LabelPin` (`SchematicView.tsx`). |
+| C4 | Already on main: both editors' key handlers return unless `isActiveEditor(docId)` (`shell/viewState.ts`). |
+| C5 | Resolved (see table). |
+| C6 | Not addressed here. |
+
+Project Home (§13.1): the native folder picker exists (`pickFolder`, Tauri dialog plugin registered with `dialog:allow-open`). Recent rows now show real status read from the project folder (`eak_runtime::status`): derived stage, last modified, checks with no evidence for the current revision, errors in current evidence. Manufacturing readiness is deliberately not shown on Home.

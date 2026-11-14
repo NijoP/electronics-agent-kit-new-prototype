@@ -293,12 +293,26 @@ export interface CheckResult {
   evidence_path: string | null;
 }
 
+/** Read-only status read from the project folder (src-tauri `recent_projects`); absent when unreadable. */
+export interface ProjectStatus {
+  last_modified_ms: number | null;
+  revision: number;
+  /** Stage derived from project content, not a stored workflow phase. */
+  phase: string;
+  /** Checks with no evidence for the current revision. */
+  pending_validation: string[];
+  evidence: { check: string; errors: number; warnings: number; state: string }[];
+  /** Errors in current evidence; null when no check has current evidence. */
+  unresolved_errors: number | null;
+}
+
 export interface RecentProject {
   path: string;
   project_id: Id;
   name: string;
   revision: number;
   last_opened_ms: number;
+  status?: ProjectStatus | null;
 }
 
 // Model providers (src-tauri/src/models.rs, eak-intelligence provider catalog). Optional

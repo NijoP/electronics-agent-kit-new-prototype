@@ -3,15 +3,15 @@
 // session, or create one (name, location, copper layers). The project that opens becomes the shared
 // context for the EDA and Terminal workspaces.
 //
-// Only real data is shown. A recent row carries what the recent-project index stores: name,
-// folder, revision at last open and when it was opened. Design stage, validation state and
-// project type are not stored for closed projects, so they are not shown here; they appear in
-// the workspace once a project is open.
+// Only real data is shown. A recent row carries what the recent-project index stores (name, folder,
+// revision and open time) plus a read-only status read from the project folder (`status`): stage
+// derived from content, file modification time, checks with no evidence for the current revision,
+// and errors in current evidence. An unreadable folder says so; nothing is inferred or invented.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, pickFolder } from "./api";
 import { formatShortcut, HOME_SHORTCUTS, matches, tip } from "./design/shortcuts";
 import { EmptyState } from "./design/ui";
-import type { RecentProject, Snapshot } from "./types";
+import type { ProjectStatus, RecentProject, Snapshot } from "./types";
 
 interface Props {
   onOpened: (s: Snapshot) => void;
@@ -56,6 +56,20 @@ export function ago(ms: number, now = Date.now()): string {
   return `${Math.floor(s / 86400)} d ago`;
 }
 
+
+/** One line of real project status for a recent row: stage, last modified, validation, errors. */
+export function statusLine(s: ProjectStatus | null | undefined, now = Date.now()): string {
+  if (!s) return "status unavailable (folder moved or unreadable)";
+  const parts = [s.phase];
+  if (s.last_modified_ms != null) parts.push(`modified ${ago(s.last_modified_ms, now)}`);
+  parts.push(
+    s.pending_validation.length === 0
+      ? "validation current"
+      : `validation pending: ${s.pending_validation.join(", ")}`,
+  );
+  if (s.unresolved_errors != null) parts.push(`${s.unresolved_errors} error${s.unresolved_errors === 1 ? "" : "s"} in current checks`);
+  return parts.join(" · ");
+}
 
 /** Recent projects whose name or folder contains every word of the query (case-insensitive). */
 export function filterRecent(recent: RecentProject[], query: string): RecentProject[] {
@@ -256,6 +270,7 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
                         <span className="home-loc">{r.path}</span>
                         <span className="num muted">revision {r.revision}</span>
                         <span className="num muted">{ago(r.last_opened_ms)}</span>
+                        <span className="home-status muted">{statusLine(r.status)}</span>
                       </button>
                     </li>
                   ))}

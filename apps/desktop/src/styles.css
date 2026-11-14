@@ -60,6 +60,8 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .home-row:hover:not(:disabled) { background: var(--bg-hover); }
 .home-row:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
 .home-name { font-weight: var(--fw-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-status { grid-column: 1 / -1; font-size: var(--fs-sm); padding-bottom: var(--s-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-row { align-content: center; }
 .home-loc { font-family: var(--mono); font-size: var(--fs-sm); color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-none { margin: 0; padding: var(--s-1) 0; }
 .home-side { display: grid; gap: var(--s-2); }

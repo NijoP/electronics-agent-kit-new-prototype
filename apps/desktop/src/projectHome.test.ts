@@ -19,3 +19,16 @@ describe("Project Home search", () => {
     expect(ago(0, 90_000)).toBe("1 min ago");
   });
 });
+
+describe("Project Home status line (unrun)", () => {
+  it("says so when status is unavailable instead of inventing one", async () => {
+    const { statusLine } = await import("./ProjectHome");
+    expect(statusLine(null)).toContain("unavailable");
+  });
+  it("lists pending checks and never claims validation passed", async () => {
+    const { statusLine } = await import("./ProjectHome");
+    const line = statusLine({ last_modified_ms: 0, revision: 3, phase: "Routing", pending_validation: ["DRC"], evidence: [], unresolved_errors: null }, 60_000);
+    expect(line).toContain("validation pending: DRC");
+    expect(line).not.toContain("error");
+  });
+});

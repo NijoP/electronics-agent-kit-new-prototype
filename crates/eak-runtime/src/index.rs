@@ -12,6 +12,9 @@ pub struct RecentProject {
     pub name: String,
     pub revision: u64,
     pub last_opened_ms: i64,
+    /// Read-only status of the folder, filled in by the caller (`status::read`); not stored.
+    #[serde(default)]
+    pub status: Option<crate::status::ProjectStatus>,
 }
 
 pub struct Index {
@@ -69,6 +72,7 @@ impl Index {
                     name: r.get(2)?,
                     revision: r.get::<_, i64>(3)? as u64,
                     last_opened_ms: r.get(4)?,
+                    status: None,
                 })
             })
             .map_err(|e| e.to_string())?;
