@@ -1,240 +1,231 @@
-# Electronics Agent Kit (EAK)
+<h1 align="center">EAK — Electronics Agent Kit</h1>
 
-**Intent in. Engineered, verified electronics design out.**
+<p align="center"><strong>Intent in. Manufactured board out.</strong></p>
 
-EAK is a standalone, Rust-first, AI-native desktop application for electronics design, built by
-Tusk Innovations Global Pvt Ltd.
+EAK is an AI-native electronics engineering workstation. It joins a native schematic and PCB
+environment, a terminal workspace for the coding agents you already use, and a deterministic
+engineering core, so that agents can work on a structured hardware project and independent
+validation, not the agent, decides whether the work holds up.
 
-> **Early development.** EAK is a prototype. It is not production-ready and nothing it produces
-> should be treated as manufacturing-ready. See [Project status](#project-status).
+It is not a chatbot with a schematic editor attached, and not an AI wrapper around another EDA tool.
 
-## Install and run the EAK desktop app
+> **Early prototype.** Several parts below have been written and reviewed but not yet compiled or
+> run. Nothing EAK produces is manufacturing-ready. The [capability matrix](#capabilities-and-status)
+> and [STATUS.md](STATUS.md) say exactly what is real.
 
-There are two ways to install EAK: a prebuilt Linux package from GitHub Releases (A), or a
-build from source with the installer script (B), which also covers macOS and Windows.
+[Why EAK](#why-eak) · [Workspaces](#two-workspaces) · [Harness](#the-engineering-harness) · [Architecture](#architecture) · [Capabilities](#capabilities-and-status) · [Install](#installation) · [Develop](#developer-setup) · [Roadmap](#roadmap)
 
-### A. Prebuilt Linux package (.deb or AppImage)
+## Why EAK
 
-Starting with v0.1.0, prebuilt Linux x86_64 packages, a `SHA256SUMS` file and release notes are
-attached to each release on the
-[GitHub Releases page](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases).
-They are **prerelease prototypes**: read the release notes and known limitations first. If no
-release is listed yet, use option B.
+Electronics development is spread across schematic and PCB tools, part libraries, datasheets, BOM
+sourcing, validation tools, fabricator portals, and now separate AI coding agents and terminals.
+Each handoff is manual and loses context.
 
-**System requirements**
+EAK connects these through one structured project model (EAK-IR) and one set of typed engineering
+operations. Agents become useful in real hardware work without making engineering correctness
+depend on an agent's confidence.
 
-- Linux x86_64 with glibc 2.39 or newer (Ubuntu 24.04 or a derivative). Built and launch-checked on
-  Zorin OS 18.1 (Ubuntu 24.04 base) only; other distributions may work but are untested.
-- The `.deb` depends on WebKitGTK 4.1 and GTK 3 (apt installs them). The AppImage bundles WebKitGTK.
-- A Secret Service keyring (GNOME Keyring or KWallet) to store model API keys.
-- No prebuilt packages for Windows or macOS yet: use option B.
+**An AI agent must not be the authority that certifies its own engineering work.** Agents can
+propose, generate, modify and correct designs. Deterministic EAK engines recompute the numbers and
+run the checks, and every report states what it did not check.
 
-**Debian / Ubuntu (.deb)**
+## Two workspaces
 
-```bash
-sudo apt install ./EAK_0.1.4_amd64.deb
-eak-desktop
+```mermaid
+flowchart LR
+  U([Engineer]) --> APP[EAK desktop app]
+  APP --> EDA[EDA workspace]
+  APP --> TERM[Terminal workspace]
+  EDA --> IR[(EAK-IR project)]
+  TERM --> AG[Agent CLIs, own login]
+  AG -->|eak CLI / MCP| IR
 ```
 
-EAK also appears in the applications menu. Remove it with `sudo apt remove eak`.
+**EDA workspace.** Project Home, a file explorer, separate schematic and PCB editors over the same
+project data, a component library, findings from ERC/DRC/mechanical checks, simulation and
+manufacturing panels. Everything is usable by hand; no AI model has to be configured. A 3D board
+viewer is not built yet.
 
-**AppImage**
+**Terminal workspace.** A first-class environment, not a panel beside a chat box: real shells on
+pseudo-terminals, spaces per project root, tabs, split panes, process-derived status (idle,
+running, waiting for input, blocked, done) and sessions owned by the backend so they survive
+switching workspaces. Agent CLIs found on the machine are offered as launchers and run with their
+own installation and authentication; EAK does not replace them. Claude Code, OpenCode and Pi are
+the intended targets, subject to their own compatibility. None has been tested end to end yet.
+Persistent processes across an app restart are not implemented. See
+[docs/TERMINAL_ARCHITECTURE.md](docs/TERMINAL_ARCHITECTURE.md).
 
-```bash
-chmod +x EAK_0.1.4_amd64.AppImage
-./EAK_0.1.4_amd64.AppImage
+## The engineering harness
+
+Intent → Requirements → Component selection → Schematic → PCB → Validation → Manufacturing.
+
+The harness is how an agent touches a design. The `eak` CLI and an MCP server expose typed tools;
+each design change is a typed command carrying the revision the agent last saw, so stale edits are
+refused. Calls are journalled under the agent's name and session. EAK's own validators then judge
+the result.
+
+```mermaid
+sequenceDiagram
+  participant A as Agent CLI
+  participant H as eak harness
+  participant E as Engine (execute)
+  participant V as Validation
+  A->>H: typed tool call + expected revision
+  H->>E: Command (agent actor)
+  E-->>H: accepted / stale revision / refused
+  A->>H: run checks
+  H->>V: ERC, DRC, MECH on that revision
+  V-->>A: findings + not_implemented + limitations
 ```
 
-If FUSE is not available, run it with `--appimage-extract-and-run`.
+Why this shape: revision-aware operations stop agents overwriting each other or the user;
+structured state avoids free-text edits to project files; an action and revision history makes
+every change traceable; destructive actions need explicit opt-in; and release decisions stay with a
+human.
 
-**Verify the download** (in the download folder): `sha256sum -c SHA256SUMS --ignore-missing`
+ERC and DRC do **not** prove electrical safety, thermal performance, EMC compliance or
+reliability. Those need further engineering analysis and verification that EAK does not perform.
 
-### B. Build from source with the installer
-
-The installer checks prerequisites,
-clones (or reuses) this repository, builds the desktop app, installs a launcher and starts it. It
-never runs `sudo`: if a system package is missing it stops and prints the exact command to run.
-The first build takes several minutes.
-
-**Linux and macOS** (bash):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.sh | bash
-```
-
-**Windows** (PowerShell):
-
-```powershell
-irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.ps1 | iex
-```
-
-Already have a checkout? Run `bash scripts/install.sh` (or `.\scripts\install.ps1`) from it. Use
-`--no-launch` (`-NoLaunch` on Windows) to install without starting the app.
-
-**Prerequisites** (the installer checks each one and tells you what is missing):
-
-- Git, stable Rust 1.80 or newer ([rustup](https://rustup.rs)), Node.js 22 or newer with npm.
-- **Linux:** a C compiler, `pkg-config` and the Tauri 2 libraries (webkit2gtk-4.1, GTK 3,
-  libsoup 3, ayatana-appindicator, librsvg). On Debian/Ubuntu:
-  `sudo apt-get install build-essential pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev`.
-  The installer prints the equivalent for Fedora, Arch and openSUSE.
-- **macOS:** Xcode command-line tools (`xcode-select --install`).
-- **Windows:** MSVC build tools (C++ workload) and the WebView2 runtime; the installer prints the
-  `winget` commands.
-
-**Where it installs and how to launch it**
-
-| OS | Binary | Launcher |
-|---|---|---|
-| Linux | `~/.local/bin/eak-desktop` | "EAK" in the applications menu (`~/.local/share/applications/eak.desktop`), or run `eak-desktop` |
-| macOS | `~/Applications/EAK.app` (unsigned: right-click, Open the first time) | Finder / Launchpad |
-| Windows | `%LOCALAPPDATA%\EAK\eak-desktop.exe` | "EAK" in the Start Menu |
-
-**Add a model API key.** Open EAK, click **Model settings**, choose a provider (Anthropic,
-OpenAI-compatible or Ollama), enter the key and click **Save**, then **Test connection**. The key is
-stored in the OS keyring, never in a project or profile file. The AI agent is not yet wired into
-the desktop UI (see [Features](#features)).
-
-**Platform status (option B):** Linux verified (2026-11-14), Windows UNVERIFIED, macOS UNVERIFIED.
-"Verified" means `scripts/install.sh` was run from a fresh clone on one Linux machine and the app
-process stayed up; it is not a claim about every distribution.
-
-## What is EAK
-
-EAK is an electronics design automation (EDA) platform that treats AI as a first-class user of
-the same tools a human engineer uses, without letting it grade its own work.
-
-- **One canonical design model.** Every schematic, PCB, library and manufacturing setting lives in
-  a single representation, **EAK-IR** (`crates/eak-core`). There is no second copy to drift out
-  of sync.
-- **One typed command engine.** Every design change is a typed `Command` executed through
-  `eak_runtime::Engine::execute`. The desktop UI and the AI agent submit the same commands
-  (a CLI is planned). Changes are revision-checked, transactional, undoable and journalled.
-- **Independent verification.** Engineering numbers are recomputed by deterministic Rust engines
-  (`eak-engineering`), and checks run in a separate engine (`eak-validation`). A check that is
-  not implemented is reported as not implemented, never as passing.
-- **Standalone.** EAK owns its engineering model. It does not wrap EasyEDA or KiCad and has no
-  mandatory Freerouting dependency.
-- **Cross-platform.** Windows, Linux and macOS are equal targets, from a Rust core with a
-  Tauri 2 + React/TypeScript desktop shell.
-
-## Features
-
-What exists on `main` today. [STATUS.md](STATUS.md) records exactly what has been tested and what
-has not.
-
-| Area | What it does | Maturity |
-|---|---|---|
-| **Schematic editor** | Place library parts, wire with pin snapping, connect pins, net and power labels, move, rotate, delete, edit reference and value | Tested headless (vitest + Rust IPC). Not yet exercised in a real window |
-| **PCB editor (2-16 layers)** | Board outline (rectangle or polygon), place, move, rotate and flip footprints, route tracks on any copper layer, through/blind/buried vias, one-click plane fill, layer visibility and active layer | Same as above. No free-form zone drawing, text or multi-select editing yet |
-| **Undo, save, reopen** | Undo/redo for every command; each command is durably saved with a crash-safe journal; projects reopen with their history | Covered by engine contract tests |
-| **ERC and DRC** | Electrical rules (13) and design rules (13), plus 3 mechanical checks. Findings carry a stable id, affected objects, location, suggested fix and measured vs required values | Reports are bound to a revision and an input hash and list unimplemented checks and limitations |
-| **Manufacturing export** | Gerber (RS-274X), Excellon drill, BOM and CPL with a SHA-256 manifest and package re-verification | Output is marked DRAFT unless ERC, DRC and mechanical checks pass for that exact revision. Never called manufacturing-ready. Not yet viewed in an external viewer or sent to a fabricator |
-| **Engineering engines** | IPC-2221 trace width, clearance, creepage and via current; circuit calculators; netlist resolution; a native two-layer router; a constructive placer | IPC tables are **not** verified against the standard text |
-| **Universal model adaptor** | Configure Anthropic, OpenAI-compatible (OpenAI, OpenRouter, Groq, Together, local servers) or Ollama providers. API keys are stored in the OS keyring, never in project or profile files. List models and test the connection | Never run against a live provider. Windows and macOS keyrings not exercised |
-| **AI agent core** | Typed tool per command, read-only design and calculator tools, bounded agent loop with Manual, Assisted and Autonomous modes, sandbox preview and approval policy | Tested with a scripted provider. Not yet wired into the desktop UI |
+References: [docs/AGENT_HARNESS.md](docs/AGENT_HARNESS.md), [docs/ENGINEERING_API.md](docs/ENGINEERING_API.md).
 
 ## Architecture
 
-```
-                 ┌────────────┐   ┌──────────────┐
-                 │ Desktop UI │   │  AI agent    │      same typed Command values
-                 │ Tauri 2 +  │   │ (eak-        │
-                 │ React / TS │   │ intelligence)│
-                 └─────┬──────┘   └──────┬───────┘
-                       └────────┬────────┘
-                         ┌──────▼───────┐
-                         │ eak-runtime  │  Engine::execute: revisions, approval policy,
-                         │              │  transactions, undo/redo, journal, recovery
-                         └──────┬───────┘
-                         ┌──────▼───────┐
-                         │   eak-core   │  EAK-IR: the one canonical design model
-                         └──────────────┘
-      eak-engineering · eak-validation · eak-manufacturing operate on that one model
+```mermaid
+flowchart TB
+  subgraph Desktop["apps/desktop: Tauri 2 + React/TypeScript"]
+    EDA[EDA workspace]
+    TERM[Terminal workspace]
+  end
+  TERM --> TE[eak-terminal: PTY sessions]
+  TE --> AG[Agent CLI processes]
+  AG --> HX[eak-harness: eak CLI, MCP, app endpoint]
+  EDA --> RT
+  HX --> RT[eak-runtime: Engine::execute]
+  INT[eak-intelligence: optional providers, typed tools, approvals] -.-> RT
+  RT --> IR[(eak-core: EAK-IR)]
+  IR --> ENG[eak-engineering: calcs, netlist, router, placer]
+  IR --> VAL[eak-validation: ERC, DRC, MECH]
+  IR --> MFG[eak-manufacturing: Gerber, drill, BOM, CPL]
+  IR --> SIM[eak-simulation: ngspice]
 ```
 
-| Path | Purpose |
+All design mutations go through `Engine::execute`; nothing writes project files directly.
+Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Capabilities and status
+
+"Implemented" means code exists and its automated tests passed when last run. Work that has only
+been read and reviewed is never listed as implemented. Levels of evidence:
+[docs/development/TEST_EVIDENCE.md](docs/development/TEST_EVIDENCE.md).
+
+| Capability | Status |
 |---|---|
-| `crates/eak-core` | EAK-IR, geometry, library model, schema and migration, integrity, built-in parts |
-| `crates/eak-engineering` | IPC calculations, circuit calcs, netlist, copper model, router, placer, 3D scene data |
-| `crates/eak-validation` | ERC, DRC, mechanical checks, revision-bound evidence |
-| `crates/eak-runtime` | Command engine, undo, journal and recovery, process supervisor, tasks, SQLite index |
-| `crates/eak-manufacturing` | Gerber, Excellon, BOM, CPL compiler, manifest, package re-verification |
-| `crates/eak-intelligence` | Provider adaptors, typed tools, agent loop |
-| `apps/desktop` | Tauri 2 shell and React/TypeScript UI |
-| `docs/` | Architecture, requirements traceability, ADRs, engineering rules |
+| EAK-IR, typed commands, revisions, undo/redo, journal, crash recovery | Implemented |
+| ERC, DRC and mechanical checks with stated gaps | Implemented |
+| Engineering calculators, netlist, native router and placer | Implemented |
+| Gerber, drill, BOM, CPL, JLCPCB preparation (DRAFT output; nothing is ordered) | Implemented |
+| Schematic editor (select, drag, flip, grids) and PCB editor (2–16 layers, align, lock) | Implemented, tested headless; not exercised in a real window |
+| IDE shell: workspaces, explorer, multiple projects, Project Home | Implemented, same caveat |
+| Library, parts search (LCSC read-only), simulation panel (ngspice) | Partially implemented |
+| Terminal engine (PTY sessions, status, local control API) | Partially implemented: PTY tests passed on Linux before the testing freeze |
+| Terminal workspace UI | In development: written, never run |
+| Engineering harness: `eak` CLI, MCP server, app endpoint | In development: written, never compiled |
+| Model providers (Anthropic, OpenAI-compatible, Gemini, Ollama), keys in the OS store | Partially implemented, optional; no chat UI |
+| Session context handed to agents, approval UI, agent activity view | Planned |
+| Requirements capture, automated component selection, autonomous design loop | Planned |
+| 3D board viewer, differential pairs, impedance control | Planned |
+| Independent engineering review, fabricator DFM sign-off | Not done |
 
-More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md).
+## Engineering workflow
 
-## Getting started
-
-### Prerequisites
-
-- Stable Rust (1.80 or newer) and Node.js 22 or newer with npm.
-- **Linux:** `sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev`
-- **macOS:** Xcode command-line tools (`xcode-select --install`).
-- **Windows:** the WebView2 runtime, plus either the MSVC build tools or a MinGW-w64 GCC
-  (`source scripts/env.sh` in Git Bash).
-
-No Python is required or permitted anywhere in this repository.
-
-### Build and run the desktop app
-
-```bash
-cd apps/desktop
-npm ci
-npm run tauri dev
+```mermaid
+flowchart LR
+  I[Intent] --> R[Requirements] --> C[Component selection] --> S[Schematic] --> P[PCB]
+  P --> V[Validation: ERC / DRC / MECH]
+  V -->|findings| P
+  V --> M[Manufacturing outputs: DRAFT]
+  M --> H{Human release decision}
 ```
 
-A release binary with the embedded frontend: `npm run tauri -- build --no-bundle`. To build the
-Linux installers (`.deb` and AppImage) with a `SHA256SUMS` file, run `bash scripts/release-build.sh`
-from the repository root; the output lands in `target/release-artifacts/`.
+Requirements capture and component selection are planned. Schematic, PCB, validation and
+manufacturing outputs exist today. Output stays marked DRAFT unless the checks pass for that exact
+revision, and it is never called manufacturing-ready.
 
-### Test
+## Installation
+
+The goal is a one-minute install. Today it is available for Linux only.
+
+| Platform | Command | Availability |
+|---|---|---|
+| Linux x86_64 | `curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.sh \| bash` | v0.1.4: `.deb` and AppImage |
+| Windows (PowerShell) | `irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.ps1 \| iex` | **Not yet available**: no Windows package is published; the script stops and says so |
+| macOS | same script as Linux | **Not yet available**: no macOS package is published |
+
+The published v0.1.4 predates the terminal workspace, the harness and the current shell; to run
+current `main`, build from source. Packages are unsigned; installers verify SHA-256 against the
+release `SHA256SUMS`. The Linux installer's fallback to v0.1.4's asset names is itself unrun.
+Options, paths and uninstall: [docs/INSTALL.md](docs/INSTALL.md).
+
+## Developer setup
+
+Needs stable Rust 1.80+, Node.js 22+, and the Tauri system libraries for your OS
+([docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)). No Python anywhere.
 
 ```bash
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace --release
-bash scripts/check-no-python.sh
+cd apps/desktop && npm ci && npm run tauri dev
+cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings \
+  && cargo test --workspace --release && bash scripts/check-no-python.sh
 (cd apps/desktop && npm test)
 ```
 
-### Command line
+The integrated tree has not been built yet; expect first-compile fallout.
 
-A standalone `eak` CLI is not on `main` yet. The engine is also usable as a Rust library
-(`eak-runtime`), as the integration tests demonstrate.
+## Repository structure
 
-## Project status
+| Path | Role |
+|---|---|
+| `crates/eak-core` | EAK-IR, schema, migration |
+| `crates/eak-runtime` | `Engine::execute`, journal, undo, recovery, process supervision |
+| `crates/eak-engineering` · `eak-validation` · `eak-manufacturing` · `eak-simulation` | calculators and router · ERC/DRC/MECH · outputs · ngspice |
+| `crates/eak-intelligence` | optional model providers, typed tools, approvals |
+| `crates/eak-terminal` · `crates/eak-harness` | PTY sessions and control API · `eak` CLI, MCP server, app endpoint |
+| `apps/desktop` | Tauri shell and React UI |
+| `docs/` | architecture, decisions (ADRs), engineering rules, status records |
 
-EAK is in early development. "Implemented" means code exists and its listed tests pass, not that
-it has been professionally validated. In particular:
+## Engineering principles
 
-- No independent engineering review or fabricator DFM check has been performed.
-- Output is **not production-ready and not manufacturing-ready**.
-- Differential pairs, impedance control and inner-layer autorouting are not implemented.
+1. One canonical design model; no second representation.
+2. Every mutation is a typed, revision-checked command.
+3. Agents never certify their own work; engines recompute and validate.
+4. Unknown or unimplemented checks are never reported as passing.
+5. Windows, Linux and macOS are equal targets.
 
-See [STATUS.md](STATUS.md) for the verified record and [ROADMAP.md](ROADMAP.md) for what is next.
+## Roadmap
+
+No dates. Detail and states: [ROADMAP.md](ROADMAP.md).
+
+1. **Core engineering foundation**: done.
+2. **Independent validation**: rules in place; more rules and external review ahead.
+3. **Integrated EDA workspace**: in place; real-window testing and a 3D viewer ahead.
+4. **Agent-compatible terminal** and **engineering harness**: written; compile, run and trial with real agents next.
+5. **Manufacturing workflows**: DRAFT outputs today; fabricator and viewer verification ahead.
+6. **Cross-platform distribution**: Linux only; Windows and macOS packages ahead.
+7. **Ecosystem integrations**: more suppliers and simulators.
 
 ## Contributing
 
-Read [AGENTS.md](AGENTS.md) for the working rules (one canonical IR, every mutation through the
-command engine, no Python, no unverified claims) and [TESTING.md](TESTING.md) for the test
-levels. Every bug fix needs a regression test, and changes to shared contracts need an ADR in
-[docs/decisions](docs/decisions).
+Read [AGENTS.md](AGENTS.md): one IR, every mutation through the command engine, no Python, no
+unverified claims. Every bug fix needs a regression test; shared-contract changes need an ADR in
+[docs/decisions](docs/decisions). Tests: [TESTING.md](TESTING.md).
 
-## License
+## Licensing
 
-Licensed under either of
+Dual licensed under [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. One small
+component derived from an Apache-2.0 open-source project keeps its notices in
+[`third_party/licenses/`](third_party/licenses/); dependency licences are in
+[LICENSING.md](LICENSING.md) and [docs/LICENSES_AND_ATTRIBUTION.md](docs/LICENSES_AND_ATTRIBUTION.md).
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+## About
 
-at your option.
-
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in
-this work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without
-any additional terms or conditions.
-
-Copyright 2026 Tusk Innovations Global Pvt Ltd. Third-party dependency licences are listed in
-[LICENSING.md](LICENSING.md).
+EAK is developed by Tusk Innovations Global Pvt Ltd. Repository:
+<https://github.com/NijoP/electronics-agent-kit-new-prototype>.
