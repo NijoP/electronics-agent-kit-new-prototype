@@ -5,6 +5,42 @@ what was run, where, on which commit, and the exact outcome. A result copied fro
 so. Level 1 = Rust engineering tests, Level 2 = frontend tests (vitest + jsdom), Level 3 = real desktop
 tests in a Tauri WebView (directive Part 13).
 
+## 2026-11-14 - Low-memory tooling, light batches (PARTIAL)
+
+**Run:** `scripts/test-batches.sh --no-lock --only light` on a branch from `ea1efeb`, Linux, 8 GB host
+shared with other jobs. Full numbers and method: `docs/dev/LOW_MEMORY_DEVELOPMENT.md`.
+
+| Batch | Result | Duration | Peak tree RSS |
+|---|---|---|---|
+| light:fmt | PASS | 7.4 s | 45 MB |
+| light:no-python | PASS | 1.2 s | - |
+| light:tsc | PASS | 52.1 s | 367 MB |
+| light:vitest | PASS, 10 files / 65 tests | 118.2 s | 552 MB |
+
+**Not run yet:** per-crate Rust tests (all 7 crates), clippy, packaging. They are pending a run on the
+frozen main commit; nothing here claims they pass.
+
+**Note (evaluator finding C6):** results for PRs #21-#26 (shell, multilayer, menus/tabs, installers,
+batch command) were recorded only in `STATUS.md` (for example vitest 52 then 65+ tests, build and tsc
+OK, production bundle checked in headless Chrome against a stubbed IPC, never launched as a real Tauri
+window). They are not re-run or copied here; see the `STATUS.md` sections of those PRs. `FEATURE_MATRIX.md`
+was corrected from the code: DRC declares 17 rules (`DRC-001`..`DRC-017`), ERC 13, MECH 3, and there is
+no MECH toolbar button.
+
+## 2026-11-14 - Release packaging dry run (v0.1.0, commit ab482da)
+
+**Where:** Zorin OS 18.1 (Ubuntu 24.04 base, glibc 2.39), x86_64, 8 GB RAM; rustc 1.97.1, Node 22.23.2.
+`ab482da` is `main` at `ea1efeb` plus the packaging branch.
+
+| Check | Result |
+|---|---|
+| `bash scripts/release-build.sh` (`npm ci`, `tauri build --bundles deb,appimage`) | exit 0; `EAK_0.1.0_amd64.deb` (6,223,550 bytes) and `EAK_0.1.0_amd64.AppImage` (87,333,368 bytes) + `SHA256SUMS`. AppImage plugin download failed; Tauri's built-in AppImage tooling was used |
+| `.deb` extracted (`dpkg-deb -x`), binary launched on Xwayland | up after 12 s, window "EAK" 1400x900 mapped, recent-project index created, no log errors, exited on `kill` |
+| AppImage launched directly | up after 15 s with bundled WebKitGTK processes, window capture shows Project Home, exited on `kill` |
+| `npx vitest run` (Level 2) | 10 files, **65 passed, 0 failed** |
+| Rust tests | not run for packaging |
+| Level 3 | launch check only, no interaction |
+
 ## 2026-11-14 - Phase 0 baseline (copied, not re-run)
 
 **Source:** the merged pull request bodies of #12-#19
