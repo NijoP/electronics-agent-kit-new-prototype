@@ -1,0 +1,6 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/herdr"],
+    "resources": { "binaries/conpty": "conpty" }
+  }
+}

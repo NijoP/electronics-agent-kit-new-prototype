@@ -11,3 +11,4 @@ apps/desktop/src-tauri/gen/
 Thumbs.db
 # Local EAK project folders created during manual testing
 *.eak/
+apps/desktop/src-tauri/binaries/

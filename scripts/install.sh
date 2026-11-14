@@ -1,237 +1,227 @@
 #!/usr/bin/env bash
-# EAK desktop installer for Linux and macOS: check prerequisites, get the source, build the
-# desktop app from source, install a launcher, start it.
+# EAK installer for Linux and macOS: downloads a prebuilt release, verifies SHA-256, installs it,
+# checks that the app and the bundled Herdr runtime start. No Rust/Node/build tools needed.
 #
 #   curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.sh | bash
-#   bash scripts/install.sh [--no-launch] [--dir <checkout>] [--repo <git-url>] [--ref <branch>]
+#   curl -fsSL .../install.sh | bash -s -- --uninstall
 #
-# It never runs sudo. Missing system packages are reported with the exact command to run.
-# Environment: EAK_DIR, EAK_REPO_URL, EAK_REF, CARGO_BUILD_JOBS, CARGO_TARGET_DIR.
+# Environment (all optional): EAK_VERSION=v0.2.0 (default: newest release incl. prereleases),
+#   EAK_FORMAT=deb (Linux: system-wide .deb via sudo instead of the per-user AppImage),
+#   EAK_NO_LAUNCH=1, EAK_UNINSTALL=1, EAK_REPO=owner/name,
+#   EAK_ASSET_DIR=<dir> (install from local assets + SHA256SUMS instead of downloading; used by CI).
+# Never runs sudo implicitly; never touches your projects or settings. Log: ~/.local/state/eak/install.log
 set -euo pipefail
 
-REPO_URL="${EAK_REPO_URL:-https://github.com/NijoP/electronics-agent-kit-new-prototype}"
-REF="${EAK_REF:-main}"
-DIR="${EAK_DIR:-}"
-LAUNCH=1
+REPO="${EAK_REPO:-NijoP/electronics-agent-kit-new-prototype}"
+LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/eak"
+LOG="$LOG_DIR/install.log"
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+APP_ROOT="$DATA/eak"
+BIN_DIR="$HOME/.local/bin"
+UNINSTALL="${EAK_UNINSTALL:-0}"
+for a in "$@"; do
+  case "$a" in
+    --uninstall) UNINSTALL=1 ;;
+    --no-launch) EAK_NO_LAUNCH=1 ;;
+    -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]:-/dev/null}" 2>/dev/null || true; exit 0 ;;
+    *) echo "unknown option: $a" >&2; exit 2 ;;
+  esac
+done
 
+mkdir -p "$LOG_DIR"
+exec > >(tee -a "$LOG") 2>&1
+echo "=== EAK install $(date -u +%FT%TZ) ==="
 STEP=0
 step() { STEP=$((STEP + 1)); printf '\n==> [%s] %s\n' "$STEP" "$*"; }
 info() { printf '    %s\n' "$*"; }
 fail() {
   printf '\nERROR at step [%s]: %s\n' "$STEP" "$1" >&2
-  shift
-  for line in "$@"; do printf '       %s\n' "$line" >&2; done
+  shift; for l in "$@"; do printf '       %s\n' "$l" >&2; done
+  printf '       Log file: %s\n' "$LOG" >&2
   exit 1
 }
+killapp() { pkill -f "$1" 2>/dev/null || true; }
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --no-launch) LAUNCH=0 ;;
-    --dir) [ $# -ge 2 ] || fail "--dir needs a path"; DIR="$2"; shift ;;
-    --repo) [ $# -ge 2 ] || fail "--repo needs a git URL"; REPO_URL="$2"; shift ;;
-    --ref) [ $# -ge 2 ] || fail "--ref needs a branch or tag"; REF="$2"; shift ;;
-    -h|--help) sed -n '2,9p' "$0" 2>/dev/null || true; exit 0 ;;
-    *) fail "unknown option: $1 (try --help)" ;;
-  esac
-  shift
-done
-
-version_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]; }
-
-# ---------------------------------------------------------------- 1. platform
+# ------------------------------------------------------------------ platform
 step "Detecting platform"
-OS="$(uname -s)"
-case "$OS" in
-  Linux) PLATFORM=linux ;;
-  Darwin) PLATFORM=macos ;;
-  *) fail "unsupported OS '$OS'" "On Windows use scripts/install.ps1 in PowerShell." ;;
+case "$(uname -s)" in
+  Linux) OS=linux ;;
+  Darwin) OS=macos ;;
+  *) fail "unsupported OS '$(uname -s)'" "On Windows run: irm https://raw.githubusercontent.com/$REPO/main/scripts/install.ps1 | iex" ;;
 esac
-info "platform: $PLATFORM ($(uname -m))"
-if [ "$PLATFORM" = macos ]; then info "macOS support is UNVERIFIED: this script has not been run on a Mac."; fi
+case "$(uname -m)" in
+  x86_64|amd64) ARCH=x86_64 ;;
+  aarch64|arm64) ARCH=aarch64 ;;
+  *) fail "unsupported CPU architecture '$(uname -m)'" "Prebuilt EAK packages exist for x86_64 (Linux, macOS) and aarch64 (macOS)." ;;
+esac
+if [ "$OS" = macos ] && [ "$ARCH" = x86_64 ] && [ "$(sysctl -in sysctl.proc_translated 2>/dev/null || echo 0)" = 1 ]; then
+  ARCH=aarch64; info "running under Rosetta; using the native Apple Silicon build"
+fi
+if [ "$OS" = linux ] && [ "$ARCH" != x86_64 ]; then
+  fail "no prebuilt Linux $ARCH package yet" "Only linux-x86_64 is published. See docs/PLATFORM_SUPPORT.md."
+fi
+info "platform: $OS-$ARCH"
+FORMAT=""; [ "$OS" = linux ] && FORMAT="${EAK_FORMAT:-appimage}"
 
-# ---------------------------------------------------------------- 2. prerequisites
+# ------------------------------------------------------------------ uninstall
+if [ "$UNINSTALL" = 1 ]; then
+  step "Uninstalling EAK (your projects and settings are not touched)"
+  if [ "$OS" = linux ]; then
+    killapp "$APP_ROOT/app/"
+    rm -rf "$APP_ROOT/app" "$APP_ROOT/VERSION" "$BIN_DIR/eak" "$BIN_DIR/herdr" \
+      "$DATA/applications/eak.desktop" "$DATA/icons/hicolor/128x128/apps/eak.png"
+    if dpkg -s eak >/dev/null 2>&1; then info "a system .deb is also installed: sudo apt-get remove eak"; fi
+  else
+    killapp "EAK.app/Contents/MacOS"
+    rm -rf /Applications/EAK.app "$HOME/Applications/EAK.app" 2>/dev/null \
+      || info "could not remove /Applications/EAK.app; run: sudo rm -rf /Applications/EAK.app"
+    rm -f "$BIN_DIR/herdr" "$APP_ROOT/VERSION"
+  fi
+  info "EAK removed. User project folders were left untouched."
+  exit 0
+fi
+
+# ------------------------------------------------------------------ prerequisites
 step "Checking prerequisites"
 MISSING=()
-
-if command -v git >/dev/null 2>&1; then info "git: $(git --version)"; else MISSING+=("git"); fi
-
-if command -v cargo >/dev/null 2>&1 && command -v rustc >/dev/null 2>&1; then
-  RUSTV="$(rustc --version | awk '{print $2}')"
-  info "rust: rustc $RUSTV, $(cargo --version)"
-  version_ge "$RUSTV" "1.80.0" || fail "Rust $RUSTV is too old (need 1.80 or newer)" "Run: rustup update stable"
+if [ -z "${EAK_ASSET_DIR:-}" ]; then command -v curl >/dev/null 2>&1 || MISSING+=("curl"); fi
+SHA=()
+if command -v sha256sum >/dev/null 2>&1; then SHA=(sha256sum); elif command -v shasum >/dev/null 2>&1; then SHA=(shasum -a 256); else MISSING+=("sha256sum or shasum"); fi
+if [ "$OS" = linux ]; then
+  GLIBC="$(ldd --version 2>&1 | head -n1 | grep -oE '[0-9]+\.[0-9]+$' || echo 0)"
+  info "glibc: $GLIBC (packages are built on Ubuntu 22.04, glibc 2.35)"
+  [ "$(printf '%s\n2.35\n' "$GLIBC" | sort -V | head -n1)" = "2.35" ] \
+    || fail "glibc $GLIBC is older than 2.35" "Use Ubuntu 22.04+/Debian 12+/Fedora 36+ or equivalent."
 else
-  fail "Rust toolchain (cargo, rustc) not found" \
-    "Install it with rustup: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" \
-    "Then open a new shell (or: . \"\$HOME/.cargo/env\") and re-run this script."
+  command -v hdiutil >/dev/null 2>&1 || MISSING+=("hdiutil (macOS)")
+  command -v ditto >/dev/null 2>&1 || MISSING+=("ditto (macOS)")
 fi
+[ ${#MISSING[@]} -eq 0 ] || fail "missing prerequisites: ${MISSING[*]}" "Install them with your package manager and re-run."
+info "prerequisites present"
 
-if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
-  NODEV="$(node --version | sed 's/^v//')"
-  info "node: v$NODEV, npm $(npm --version)"
-  version_ge "$NODEV" "22.0.0" || fail "Node.js v$NODEV is too old (need 22 or newer)" \
-    "Install a current Node.js from https://nodejs.org or via your package manager / nvm."
+# ------------------------------------------------------------------ resolve release
+step "Resolving release"
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+case "$OS-$FORMAT" in
+  linux-deb) ASSET="eak-linux-$ARCH.deb" ;;
+  linux-*) ASSET="eak-linux-$ARCH.AppImage" ;;
+  *) ASSET="eak-macos-$ARCH.dmg" ;;
+esac
+if [ -n "${EAK_ASSET_DIR:-}" ]; then
+  TAG="local"; SRC="$EAK_ASSET_DIR"; info "using local assets in $SRC"
 else
-  fail "Node.js 22+ and npm not found" "Install from https://nodejs.org or via your package manager / nvm."
-fi
-
-if [ "$PLATFORM" = linux ]; then
-  command -v cc >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1 || MISSING+=("a C compiler")
-  command -v pkg-config >/dev/null 2>&1 || MISSING+=("pkg-config")
-  command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || MISSING+=("curl")
-else
-  xcode-select -p >/dev/null 2>&1 || fail "Xcode command-line tools not found" "Run: xcode-select --install"
-fi
-
-# Tauri 2 Linux system libraries (pkg-config modules).
-if [ "$PLATFORM" = linux ] && command -v pkg-config >/dev/null 2>&1; then
-  LIB_MISSING=()
-  for mod in webkit2gtk-4.1 javascriptcoregtk-4.1 libsoup-3.0 gtk+-3.0 librsvg-2.0; do
-    pkg-config --exists "$mod" 2>/dev/null || LIB_MISSING+=("$mod")
-  done
-  if ! pkg-config --exists ayatana-appindicator3-0.1 2>/dev/null \
-     && ! pkg-config --exists appindicator3-0.1 2>/dev/null; then
-    LIB_MISSING+=("ayatana-appindicator3-0.1")
+  TAG="${EAK_VERSION:-}"
+  if [ -z "$TAG" ]; then
+    TAG="$(curl -fsSL --proto '=https' --tlsv1.2 "https://api.github.com/repos/$REPO/releases?per_page=10" \
+      | grep -m1 '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')" \
+      || fail "could not query GitHub releases" "Check your network, or set EAK_VERSION=vX.Y.Z."
+    [ -n "$TAG" ] || fail "no published EAK release found in $REPO" "Releases appear after a v* tag is pushed; see docs/INSTALL.md."
   fi
-  if [ ${#LIB_MISSING[@]} -gt 0 ]; then
-    MISSING+=("Tauri system libraries (${LIB_MISSING[*]})")
-  else
-    info "tauri system libraries: found"
-  fi
+  SRC="https://github.com/$REPO/releases/download/$TAG"
 fi
+info "release: $TAG, asset: $ASSET"
+OLD="$(cat "$APP_ROOT/VERSION" 2>/dev/null || true)"
+if [ -n "$OLD" ]; then info "currently installed: $OLD (upgrading/reinstalling to $TAG)"; fi
 
-if [ ${#MISSING[@]} -gt 0 ]; then
-  HINT=()
-  if [ "$PLATFORM" = linux ]; then
-    ID_LIKE_ALL=" $( (. /etc/os-release 2>/dev/null; echo "${ID:-} ${ID_LIKE:-}") ) "
-    case "$ID_LIKE_ALL" in
-      *" debian "*|*" ubuntu "*)
-        HINT=("sudo apt-get update && sudo apt-get install -y git curl build-essential pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev") ;;
-      *" fedora "*|*" rhel "*)
-        HINT=("sudo dnf install -y git curl gcc pkgconf-pkg-config webkit2gtk4.1-devel gtk3-devel libsoup3-devel libappindicator-gtk3-devel librsvg2-devel openssl-devel") ;;
-      *" arch "*)
-        HINT=("sudo pacman -S --needed git curl base-devel pkgconf webkit2gtk-4.1 gtk3 libsoup3 libappindicator-gtk3 librsvg openssl") ;;
-      *" suse "*|*" opensuse"*)
-        HINT=("sudo zypper install git curl gcc pkg-config webkit2gtk3-devel gtk3-devel libsoup-devel libappindicator3-devel librsvg-devel libopenssl-devel") ;;
-      *) HINT=("Install the equivalents of: git, curl, a C compiler, pkg-config, webkit2gtk-4.1, gtk3, libsoup3, ayatana-appindicator3, librsvg (dev packages).") ;;
-    esac
-  fi
-  fail "missing prerequisites: ${MISSING[*]}" \
-    "This script never runs sudo. Install them, then re-run it." \
-    ${HINT[@]+"${HINT[@]}"}
-fi
-info "all prerequisites present"
+# ------------------------------------------------------------------ download + verify
+step "Downloading and verifying (SHA-256)"
+fetch() {
+  if [ -n "${EAK_ASSET_DIR:-}" ]; then cp "$SRC/$1" "$TMP/$1"
+  else curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$TMP/$1" "$SRC/$1"; fi
+}
+fetch SHA256SUMS || fail "could not get SHA256SUMS from $SRC"
+fetch "$ASSET" || fail "could not download $ASSET from $SRC" "That release may not include a $OS-$ARCH package; see docs/PLATFORM_SUPPORT.md."
+WANT="$(grep -E "[ *]$ASSET\$" "$TMP/SHA256SUMS" | head -n1 | awk '{print $1}')"
+[ -n "$WANT" ] || fail "$ASSET is not listed in SHA256SUMS"
+GOT="$("${SHA[@]}" "$TMP/$ASSET" | awk '{print $1}')"
+[ "$GOT" = "$WANT" ] || fail "SHA-256 mismatch for $ASSET" "expected $WANT" "got      $GOT" "The download is corrupt or tampered with; nothing was installed."
+info "sha256 OK: $GOT"
 
-# ---------------------------------------------------------------- 3. source
-step "Locating the source checkout"
-SELF_DIR=""
-if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
-  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd -P || true)"
-fi
-if [ -z "$DIR" ] && [ -n "$SELF_DIR" ] && [ -f "$SELF_DIR/apps/desktop/src-tauri/tauri.conf.json" ]; then
-  DIR="$SELF_DIR"
-  info "running from an existing checkout, reusing it: $DIR"
-else
-  DIR="${DIR:-$HOME/.local/share/eak/src}"
-  if [ -d "$DIR/.git" ]; then
-    info "reusing checkout: $DIR"
-    git -C "$DIR" fetch --quiet origin "$REF" || fail "git fetch failed in $DIR" "Check your network, or remove $DIR to re-clone."
-    if [ -n "$(git -C "$DIR" status --porcelain)" ]; then
-      info "checkout has local changes; leaving it as is (no update)"
-    else
-      git -C "$DIR" checkout --quiet -B "$REF" FETCH_HEAD || fail "could not check out $REF in $DIR"
-    fi
-  elif [ -e "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null)" ]; then
-    fail "$DIR exists and is not a git checkout" "Choose another location with --dir, or remove it."
-  else
-    info "cloning $REPO_URL ($REF) into $DIR"
-    mkdir -p "$(dirname "$DIR")"
-    git clone --quiet --branch "$REF" "$REPO_URL" "$DIR" \
-      || fail "git clone failed" "URL: $REPO_URL" "If the repository is private, authenticate git first (e.g. gh auth login)."
-  fi
-fi
-[ -f "$DIR/apps/desktop/src-tauri/tauri.conf.json" ] || fail "$DIR does not look like an EAK checkout"
-
-# ---------------------------------------------------------------- 4. build
-step "Building the desktop app (first build takes several minutes)"
-export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
-TARGET_DIR="${CARGO_TARGET_DIR:-$DIR/target}"
-export CARGO_TARGET_DIR="$TARGET_DIR"
-info "cargo jobs: $CARGO_BUILD_JOBS, target dir: $TARGET_DIR"
-info "using 'tauri build --no-bundle': a release binary with the embedded frontend; installers are not produced"
-( cd "$DIR/apps/desktop" && npm ci --no-audit --no-fund ) \
-  || fail "npm ci failed in $DIR/apps/desktop" "Check your network and Node/npm versions."
-( cd "$DIR/apps/desktop" && npm run tauri -- build --no-bundle ) \
-  || fail "tauri build failed" "Scroll up for the first error. Common causes: missing system libraries, low RAM (try CARGO_BUILD_JOBS=1)."
-BIN="$TARGET_DIR/release/eak-desktop"
-[ -x "$BIN" ] || fail "build finished but the binary is missing: $BIN"
-info "built: $BIN"
-
-# ---------------------------------------------------------------- 5. install
+# ------------------------------------------------------------------ install
 step "Installing"
-if [ "$PLATFORM" = linux ]; then
-  BIN_DIR="$HOME/.local/bin"
-  DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}"
-  APP_DIR="$DATA_DIR/applications"
-  ICON_DIR="$DATA_DIR/icons/hicolor/128x128/apps"
-  mkdir -p "$BIN_DIR" "$APP_DIR" "$ICON_DIR"
-  install -m 755 "$BIN" "$BIN_DIR/eak-desktop" || fail "could not copy the binary to $BIN_DIR"
-  info "binary: $BIN_DIR/eak-desktop"
-  ICON_LINE="Icon=utilities-terminal"
-  if [ -f "$DIR/apps/desktop/src-tauri/icons/128x128.png" ]; then
-    install -m 644 "$DIR/apps/desktop/src-tauri/icons/128x128.png" "$ICON_DIR/eak.png"
-    ICON_LINE="Icon=$ICON_DIR/eak.png"
-  fi
-  cat > "$APP_DIR/eak.desktop" <<EOF
+mkdir -p "$BIN_DIR" "$APP_ROOT"
+if [ "$FORMAT" = deb ]; then
+  if [ "$(id -u)" = 0 ]; then SUDO=(); elif sudo -n true 2>/dev/null; then SUDO=(sudo); else
+    fail "installing the .deb needs root" "Run: sudo apt-get install -y ./$ASSET   (or omit EAK_FORMAT=deb for a per-user install)"; fi
+  cp "$TMP/$ASSET" /tmp/eak-install.deb
+  "${SUDO[@]}" apt-get install -y /tmp/eak-install.deb || fail "apt-get install failed"
+  rm -f /tmp/eak-install.deb
+  APP_BIN=/usr/bin/eak-desktop; HERDR_BIN=/usr/bin/herdr
+elif [ "$OS" = linux ]; then
+  chmod +x "$TMP/$ASSET"
+  ( cd "$TMP" && "./$ASSET" --appimage-extract >/dev/null ) || fail "could not unpack the AppImage"
+  [ -d "$TMP/squashfs-root" ] || fail "AppImage unpack produced no files"
+  rm -rf "$APP_ROOT/app.new" "$APP_ROOT/app.old"
+  mv "$TMP/squashfs-root" "$APP_ROOT/app.new"
+  if [ -d "$APP_ROOT/app" ]; then mv "$APP_ROOT/app" "$APP_ROOT/app.old"; fi
+  mv "$APP_ROOT/app.new" "$APP_ROOT/app"; rm -rf "$APP_ROOT/app.old"
+  APP_BIN="$BIN_DIR/eak"
+  printf '#!/bin/sh\nexec "%s/app/AppRun" "$@"\n' "$APP_ROOT" > "$APP_BIN"; chmod 755 "$APP_BIN"
+  HERDR_BIN="$APP_ROOT/app/usr/bin/herdr"
+  if [ -x "$HERDR_BIN" ]; then ln -sf "$HERDR_BIN" "$BIN_DIR/herdr"; fi
+  ICON="$(find "$APP_ROOT/app" -maxdepth 6 -name '*.png' -path '*128x128*' 2>/dev/null | head -n1)"
+  mkdir -p "$DATA/applications" "$DATA/icons/hicolor/128x128/apps"
+  if [ -n "$ICON" ]; then cp "$ICON" "$DATA/icons/hicolor/128x128/apps/eak.png"; fi
+  cat > "$DATA/applications/eak.desktop" <<DESK
 [Desktop Entry]
 Type=Application
 Name=EAK
 Comment=Electronics Agent Kit
-Exec=$BIN_DIR/eak-desktop
-$ICON_LINE
+Exec=$APP_BIN
+Icon=$DATA/icons/hicolor/128x128/apps/eak.png
 Terminal=false
 Categories=Development;Electronics;
-EOF
-  if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database "$APP_DIR" 2>/dev/null || true; fi
-  info "launcher: $APP_DIR/eak.desktop"
-  case ":$PATH:" in *":$BIN_DIR:"*) ;; *) info "note: $BIN_DIR is not on your PATH; add it to run 'eak-desktop' from a shell." ;; esac
-  RUN_BIN="$BIN_DIR/eak-desktop"
+DESK
+  if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database "$DATA/applications" 2>/dev/null || true; fi
+  info "launcher: $DATA/applications/eak.desktop, command: $APP_BIN"
 else
-  APP="$HOME/Applications/EAK.app"
-  mkdir -p "$APP/Contents/MacOS"
-  install -m 755 "$BIN" "$APP/Contents/MacOS/eak-desktop" || fail "could not create $APP"
-  cat > "$APP/Contents/Info.plist" <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>CFBundleName</key><string>EAK</string>
-<key>CFBundleIdentifier</key><string>dev.eak.desktop</string>
-<key>CFBundleExecutable</key><string>eak-desktop</string>
-<key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>0.1.0</string>
-</dict></plist>
-EOF
-  info "app bundle: $APP (unsigned; on first open use right-click > Open)"
-  RUN_BIN="$APP/Contents/MacOS/eak-desktop"
+  MNT="$TMP/mnt"; mkdir -p "$MNT"
+  hdiutil attach -nobrowse -readonly -quiet -mountpoint "$MNT" "$TMP/$ASSET" || fail "could not mount the DMG"
+  SRCAPP="$(find "$MNT" -maxdepth 1 -name '*.app' | head -n1)"
+  [ -n "$SRCAPP" ] || { hdiutil detach -quiet "$MNT" || true; fail "no .app inside the DMG"; }
+  DEST=/Applications; [ -w "$DEST" ] || { DEST="$HOME/Applications"; mkdir -p "$DEST"; }
+  killapp "EAK.app/Contents/MacOS"
+  rm -rf "$DEST/EAK.app.new"; ditto "$SRCAPP" "$DEST/EAK.app.new"
+  hdiutil detach -quiet "$MNT" || true
+  rm -rf "$DEST/EAK.app"; mv "$DEST/EAK.app.new" "$DEST/EAK.app"
+  xattr -dr com.apple.quarantine "$DEST/EAK.app" 2>/dev/null || true
+  APP_DIR="$DEST/EAK.app"; HERDR_BIN="$APP_DIR/Contents/MacOS/herdr"
+  if [ -x "$HERDR_BIN" ]; then ln -sf "$HERDR_BIN" "$BIN_DIR/herdr"; fi
+  info "installed: $APP_DIR (unsigned build: if macOS blocks it, right-click > Open once)"
 fi
+echo "$TAG" > "$APP_ROOT/VERSION"
 
-# ---------------------------------------------------------------- 6. launch
-if [ "$LAUNCH" -eq 1 ]; then
-  step "Starting EAK"
-  if [ "$PLATFORM" = linux ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
-    info "no display detected (DISPLAY/WAYLAND_DISPLAY unset); skipping launch. Start it from a desktop session."
+# ------------------------------------------------------------------ verify
+step "Verifying the bundled Herdr runtime"
+[ -x "$HERDR_BIN" ] || fail "Herdr runtime missing at $HERDR_BIN" "The package should bundle it; please report this."
+HV="$("$HERDR_BIN" --version 2>&1)" || fail "Herdr failed to run: $HV"
+info "herdr: $HV"
+
+if [ "${EAK_NO_LAUNCH:-0}" = 1 ]; then step "Skipping launch check"; else
+  step "Launch check (app must stay up for 6 seconds)"
+  if [ "$OS" = macos ]; then
+    open -n "$APP_DIR" || fail "could not open the app" "Check System Settings > Privacy & Security for a blocked-app notice."
+    sleep 6
+    pgrep -f "EAK.app/Contents/MacOS/eak-desktop" >/dev/null || fail "EAK exited right after launch"
+    killapp "EAK.app/Contents/MacOS"
+    info "EAK started and stayed up"
   else
-    nohup "$RUN_BIN" >/dev/null 2>&1 &
-    PID=$!
-    sleep 3
-    if kill -0 "$PID" 2>/dev/null; then
-      info "EAK is running (pid $PID)"
+    probe='"$0" & p=$!; sleep 6; if kill -0 $p 2>/dev/null; then kill $p; exit 0; else exit 1; fi'
+    RUNNER=()
+    if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then RUNNER=(sh -c "$probe" "$APP_BIN")
+    elif command -v xvfb-run >/dev/null 2>&1; then RUNNER=(xvfb-run -a sh -c "$probe" "$APP_BIN"); info "no display: using xvfb"; fi
+    if [ ${#RUNNER[@]} -eq 0 ]; then
+      info "no display and no xvfb-run: launch NOT verified (install xvfb or run from a desktop session)"
     else
-      fail "EAK exited immediately" "Run it in a terminal to see the error: $RUN_BIN"
+      "${RUNNER[@]}" || fail "EAK exited right after launch" "Run '$APP_BIN' in a terminal to see the error."
+      info "EAK started and stayed up"
     fi
   fi
-else
-  step "Skipping launch (--no-launch)"
 fi
 
-printf '\nDone. Launch EAK from your applications menu, or run: %s\n' "$RUN_BIN"
-printf 'To add a model API key: open EAK, click "Model settings", choose a provider, enter the key (stored in the OS keyring).\n'
+printf '\nEAK %s installed (%s).\n' "$TAG" "$OS-$ARCH"
+if [ "$OS" = linux ]; then printf 'Start it from your applications menu or run: %s\n' "$APP_BIN"
+else printf 'Open it from Applications or run: open -a EAK\n'; fi
+case ":$PATH:" in *":$BIN_DIR:"*) ;; *) printf 'Note: add %s to PATH to use the herdr command in your shell.\n' "$BIN_DIR" ;; esac
+printf 'Uninstall: curl -fsSL https://raw.githubusercontent.com/%s/main/scripts/install.sh | bash -s -- --uninstall\n' "$REPO"
+printf 'Log: %s\n' "$LOG"
