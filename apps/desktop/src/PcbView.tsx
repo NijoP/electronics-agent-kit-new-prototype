@@ -1,13 +1,15 @@
 // PCB editor: board outline, zones, tracks, vias and footprints from the snapshot, with
 // tools that turn clicks into typed engine commands (outline, move, route, via, delete).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
+import { api } from "./api";
 import { Canvas } from "./Canvas";
 import { isTyping, type EditCtx } from "./EditContext";
-import { mmToNm, nextRotation, outlineFrom, segments, snapPoint } from "./editing";
+import { mmToNm, nextRotation, outlineFrom, samePoint, snapPoint } from "./editing";
 import { layerKey, layerName, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
 import { useLayerView, type LayerView } from "./layerView";
 import { focusBounds, type Focus } from "./pcbFocus";
-import type { CopperLayer, Id, PadGeom, Point, Snapshot } from "./types";
+import { feedbackText, ripUpAndReroute, routeBatch, routeReducer, stepRequest } from "./routeTool";
+import type { CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 
 interface Props {
@@ -90,10 +92,13 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const highlighted = new Set(focus?.objects ?? []);
   const zoomTo = focus ? { bounds: focusBounds(snapshot, focus.objects, focus.location), n: focus.n } : null;
   const [net, setNet] = useState("");
-  const [start, setStart] = useState<Point | null>(null);
   const [corners, setCorners] = useState<Point[]>([]);
   const [picked, setPicked] = useState<Id | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
+  // Interactive route: fixed steps (pure reducer) plus the engine's live proposal for the cursor.
+  const [draft, dispatch] = useReducer(routeReducer, null);
+  const [proposal, setProposal] = useState<RouteStepReport | null>(null);
+  const stepSeq = useRef(0);
 
   const pads = snapshot.geometry.footprints.flatMap((f) => f.pads.map((p) => ({ at: p.position, net: p.net })));
   const trackEnds = Object.values(pcb.tracks).flatMap((t) => [
@@ -118,7 +123,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   };
 
   const reset = () => {
-    setStart(null);
+    dispatch({ type: "cancel" });
+    setProposal(null);
     setCorners([]);
     setPicked(null);
   };
@@ -149,6 +155,14 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     void edit.execute({ type: "SetBoardOutline", points: pts });
   };
 
+  // Commit the whole route as ONE Batch (one revision, one undo step).
+  const finishRoute = () => {
+    const cmd = draft ? routeBatch(draft) : null;
+    dispatch({ type: "cancel" });
+    setProposal(null);
+    if (cmd && edit) void edit.execute(cmd);
+  };
+
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
     if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey) return;
@@ -156,6 +170,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     const digit = Number(e.key);
     if (digit >= 1 && digit <= TOOLS.length) choose(TOOLS[digit - 1][0]);
     else if (e.key === "Escape") reset();
+    else if (e.key === "Enter" && tool === "route") finishRoute();
+    else if (e.key === "Backspace" && tool === "route") dispatch({ type: "back" });
+    else if (e.key === "/" && tool === "route") dispatch({ type: "toggleMode" });
     else if (e.key === "Enter" && tool === "outline") finishOutline();
     else if (e.key === "Enter" && tool === "zone") finishZone();
     else if (k === "r" && fpInstance) {
@@ -178,8 +195,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       const i = order.findIndex((o) => sameLayer(o, layer));
       const next = order[(i + 1) % order.length];
       setLayer(next);
-      // Switching layer in the middle of a track needs a via where the track stops.
-      if (start && net) void edit.execute({ type: "AddVia", position: start, net, drill: null, diameter: null, from: layer, to: next });
+      // Mid-route the next step starts with a via; the engine checks it before proposing it.
+      dispatch({ type: "switchLayer", layer: next });
     }
   };
   useEffect(() => {
@@ -217,16 +234,29 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         return;
       }
       case "route": {
-        const useNet = snapped?.net && !start ? snapped.net : net;
-        if (snapped?.net && !start) setNet(snapped.net);
-        if (!start) return setStart(snap.point);
-        if (!useNet) return edit.notify("Pick the net to route first.");
-        const legs = segments(start, snap.point, true);
-        setStart(snap.point);
-        if (legs.length)
-          void edit.execute(
-            legs.map(([a, b]) => ({ type: "AddTrack" as const, layer, a, b, width: null, net: useNet })),
-          );
+        if (!draft) {
+          const n = snapped?.net || net;
+          if (!n) return edit.notify("Start on a pad or track of a net, or pick the net first.");
+          setNet(n);
+          return dispatch({ type: "start", net: n, layer, at: snap.point, mode: "diagonal45" });
+        }
+        // Fix the engine's legal path to the clicked point; ending on copper of the net finishes.
+        const d = draft;
+        const ends = !!snapped && snapped.net === d.net && !samePoint(snap.point, d.anchor);
+        void api
+          .routeStep(stepRequest(d, snap.point))
+          .then((s) => {
+            dispatch({ type: "fix", step: s });
+            if (!s.reached) edit.notify(feedbackText(s));
+            else if (ends) {
+              const fixed = routeReducer(d, { type: "fix", step: s });
+              const cmd = fixed ? routeBatch(fixed) : null;
+              dispatch({ type: "cancel" });
+              setProposal(null);
+              if (cmd) void edit.execute(cmd);
+            }
+          })
+          .catch((err) => edit.notify(`route step failed: ${String(err)}`));
         return;
       }
       case "via": {
@@ -248,7 +278,28 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   };
 
   const hoverSnap = hover ? snapPoint(hover, GRID, targets.map((t) => t.at), CAPTURE).point : null;
-  const preview = tool === "route" && start && hoverSnap ? segments(start, hoverSnap, true) : [];
+  // Live route proposal from the engine, debounced at pointer rate; stale replies are dropped.
+  const hx = hoverSnap?.x;
+  const hy = hoverSnap?.y;
+  useEffect(() => {
+    if (tool !== "route" || !draft || hx === undefined || hy === undefined) return;
+    const seq = ++stepSeq.current;
+    const t = setTimeout(() => {
+      api
+        .routeStep(stepRequest(draft, { x: hx, y: hy }))
+        .then((s) => {
+          if (seq === stepSeq.current) setProposal(s);
+        })
+        .catch(() => {
+          if (seq === stepSeq.current) setProposal(null);
+        });
+    }, 30);
+    return () => clearTimeout(t);
+  }, [tool, draft, hx, hy, snapshot.project.revision]);
+  const live = draft && proposal && samePoint(proposal.segments[0]?.a ?? draft.anchor, draft.anchor) ? proposal : null;
+  const fixedSegs = (draft?.steps ?? []).flatMap((s) => s.segments.map((g) => ({ ...g, layer: s.layer, width: s.width })));
+  const liveSegs = live ? live.segments.map((g) => ({ ...g, layer: live.layer, width: live.width })) : [];
+  const routeVias = [...(draft?.steps ?? []).flatMap((s) => (s.via ? [s.via] : [])), ...(live?.via ? [live.via] : [])];
 
   return (
     <section className="view" aria-label="PCB view">
@@ -299,6 +350,21 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
                   </option>
                 ))}
               </select>
+            </>
+          )}
+          {tool === "route" && (
+            <>
+              <button type="button" onClick={finishRoute} disabled={!draft || !draft.steps.length}>
+                Finish route ({draft?.steps.length ?? 0} steps)
+              </button>
+              <button
+                type="button"
+                title="Remove this net's tracks and vias and re-route it with the EAK router (one undo step)"
+                onClick={() => edit && net && void edit.execute(ripUpAndReroute(net))}
+                disabled={!net || !Object.values(pcb.tracks).some((t) => t.net === net)}
+              >
+                Rip up &amp; re-route net
+              </button>
             </>
           )}
           {tool === "via" && (
@@ -353,7 +419,10 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             {outline.length === 0 && tool !== "outline" && "No board outline yet — use Board outline. "}
             {tool === "outline" && "Click two opposite corners (or 3+ points), then Enter"}
             {tool === "move" && (picked ? "Click the new position" : "Click a footprint, then its destination")}
-            {tool === "route" && (start ? "Click to end the track · L switches layer · Esc stops" : "Click a pad or point to start")}
+            {tool === "route" &&
+              (draft
+                ? `${feedbackText(live) || "Move to the target"} · click fixes · Enter commits · L layer (via) · / 45°/90° · Backspace undoes a step · Esc cancels`
+                : "Click a pad or track end to start routing its net")}
             {tool === "via" && "Click a pad, track end or point"}
             {tool === "delete" && "Click a track, via or zone"}
             {tool === "zone" && "Pick layer and net, click two opposite corners (or 3+ points), then Enter"}
@@ -428,11 +497,31 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             </g>
           );
         })}
-        {preview.map(([a, b], i) => {
-          const [x1, y1] = toView(a);
-          const [x2, y2] = toView(b);
-          return <line key={i} className={`track ${layerKey(layer)} preview`} style={{ stroke: layerColour(layer) }} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={0.25} />;
+        {[...fixedSegs.map((g) => ({ ...g, cls: "fixed" })), ...liveSegs.map((g) => ({ ...g, cls: "proposal" }))].map((g, i) => {
+          const [x1, y1] = toView(g.a);
+          const [x2, y2] = toView(g.b);
+          return (
+            <line
+              key={i}
+              className={`track ${layerKey(g.layer)} preview ${g.cls}`}
+              data-route-preview={g.cls}
+              style={{ stroke: layerColour(g.layer) }}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              strokeWidth={mm(g.width)}
+            />
+          );
         })}
+        {routeVias.map((v, i) => (
+          <circle key={`rv${i}`} className="via preview" cx={toView(v.position)[0]} cy={toView(v.position)[1]} r={mm(v.diameter) / 2} />
+        ))}
+        {live && !live.reached && hoverSnap && (
+          <line className="route-blocked" x1={toView(live.end)[0]} y1={toView(live.end)[1]} x2={toView(hoverSnap)[0]} y2={toView(hoverSnap)[1]}>
+            <title>{feedbackText(live)}</title>
+          </line>
+        )}
         {lv.airwires &&
           (airwires ?? []).map(([n, a, b], i) => {
             const [x1, y1] = toView(a);
@@ -481,7 +570,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             </g>
           );
         })}
-        {start && <circle className="anchor" cx={toView(start)[0]} cy={toView(start)[1]} r={0.5} />}
+        {draft && <circle className="anchor" cx={toView(draft.anchor)[0]} cy={toView(draft.anchor)[1]} r={0.5} />}
       </Canvas>
     </section>
   );
