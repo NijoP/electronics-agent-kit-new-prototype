@@ -6,7 +6,7 @@ use eak_desktop::models::{MemoryKeyStore, ModelSettings, ProfileInput};
 use eak_desktop::*;
 use eak_intelligence::mock::{call, ScriptedProvider, Step};
 use eak_intelligence::provider::http::default_transport;
-use eak_intelligence::{AgentOutcome, ChatResponse, ProviderKind};
+use eak_intelligence::{AgentOutcome, ChatResponse};
 use eak_runtime::index::Index;
 use eak_runtime::{Command, OperationClass};
 use serde_json::json;
@@ -146,11 +146,8 @@ fn no_key_configured_is_a_plain_error() {
     let v = m
         .save(
             ProfileInput {
-                id: None,
-                label: "Claude".into(),
-                kind: ProviderKind::Anthropic,
-                base_url: None,
                 model: Some("claude-x".into()),
+                ..ProfileInput::new("Claude", "anthropic")
             },
             None,
         )

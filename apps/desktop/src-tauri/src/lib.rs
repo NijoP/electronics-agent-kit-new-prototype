@@ -655,7 +655,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 35] = [
+pub const IPC_COMMANDS: [&str; 39] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -691,6 +691,10 @@ pub const IPC_COMMANDS: [&str; 35] = [
     "model_clear_key",
     "model_list_models",
     "model_test_connection",
+    "model_catalog",
+    "model_set_default",
+    "model_export_config",
+    "model_import_config",
 ];
 
 /// Tauri command wrappers: argument decoding only, no logic.
@@ -885,6 +889,10 @@ pub fn run() {
             models::cmd::model_clear_key,
             models::cmd::model_list_models,
             models::cmd::model_test_connection,
+            models::cmd::model_catalog,
+            models::cmd::model_set_default,
+            models::cmd::model_export_config,
+            models::cmd::model_import_config,
             cmd::domain_classification,
             cmd::library_components,
             cmd::library_search,

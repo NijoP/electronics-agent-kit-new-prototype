@@ -76,7 +76,7 @@ describe("AI panel", () => {
   });
 
   it("treats a provider as ready only with a model and a key when one is needed", () => {
-    const base: ProviderView = { id: "p", label: "Claude", kind: "anthropic", base_url: null, model: "m", has_key: false, needs_key: true, key_error: null };
+    const base = { id: "p", label: "Claude", kind: "anthropic", base_url: null, model: "m", has_key: false, needs_key: true, key_error: null } as ProviderView;
     expect(readyProvider([base])).toBeNull();
     expect(readyProvider([{ ...base, model: null, has_key: true }])).toBeNull();
     expect(readyProvider([{ ...base, has_key: true }])).toEqual({ id: "p", label: "Claude · m" });

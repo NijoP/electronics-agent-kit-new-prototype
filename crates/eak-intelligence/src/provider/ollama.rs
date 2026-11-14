@@ -128,17 +128,7 @@ impl Provider for OllamaProvider {
         request: &ChatRequest,
         cancel: &CancelToken,
     ) -> Result<ChatResponse, ProviderError> {
-        let headers = self
-            .ep
-            .api_key
-            .iter()
-            .map(|k| {
-                (
-                    "authorization".to_string(),
-                    format!("Bearer {}", k.expose()),
-                )
-            })
-            .collect();
+        let headers = super::auth_headers(super::ProviderKind::Ollama, self.ep.api_key.as_ref());
         let v = self.ep.post_json(
             "/api/chat",
             headers,
@@ -146,6 +136,67 @@ impl Provider for OllamaProvider {
             cancel,
         )?;
         parse_response(&v)
+    }
+    /// `/api/chat` with `stream: true` answers newline-delimited JSON objects.
+    fn stream(
+        &self,
+        request: &ChatRequest,
+        cancel: &CancelToken,
+        sink: &mut dyn FnMut(StreamEvent),
+    ) -> Result<ChatResponse, ProviderError> {
+        let headers = super::auth_headers(super::ProviderKind::Ollama, self.ep.api_key.as_ref());
+        let mut body = build_body(&self.ep.model, request);
+        body["stream"] = json!(true);
+        let mut text = String::new();
+        let mut tool_calls: Vec<Value> = vec![];
+        let mut last: Option<Value> = None;
+        self.ep
+            .post_stream("/api/chat", headers, &body, cancel, &mut |line| {
+                if line.trim().is_empty() {
+                    return Ok(());
+                }
+                let v: Value = serde_json::from_str(line)
+                    .map_err(|e| ProviderError::Malformed(format!("stream line: {e}")))?;
+                if let Some(e) = v.get("error") {
+                    return Err(ProviderError::Http {
+                        status: 0,
+                        message: e.as_str().unwrap_or("Ollama error").to_string(),
+                    });
+                }
+                if let Some(t) = v.pointer("/message/content").and_then(Value::as_str) {
+                    if !t.is_empty() {
+                        text.push_str(t);
+                        sink(StreamEvent::TextDelta { text: t.into() });
+                    }
+                }
+                if let Some(t) = v.pointer("/message/thinking").and_then(Value::as_str) {
+                    if !t.is_empty() {
+                        sink(StreamEvent::ThinkingDelta { text: t.into() });
+                    }
+                }
+                for c in v
+                    .pointer("/message/tool_calls")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
+                    sink(StreamEvent::ToolCallStarted {
+                        id: format!("ollama_call_{}", tool_calls.len()),
+                        name: c
+                            .pointer("/function/name")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .into(),
+                    });
+                    tool_calls.push(c.clone());
+                }
+                last = Some(v);
+                Ok(())
+            })?;
+        let mut done = last
+            .ok_or_else(|| ProviderError::Malformed("the stream ended without any chunk".into()))?;
+        done["message"] = json!({"role": "assistant", "content": text, "tool_calls": tool_calls});
+        parse_response(&done)
     }
 }
 
@@ -194,5 +245,44 @@ mod tests {
         assert_eq!(body["messages"][2]["role"], "tool");
         assert_eq!(body["messages"][2]["tool_name"], "get_netlist");
         assert!(body.get("tools").is_none());
+    }
+}
+
+#[cfg(test)]
+mod stream_tests {
+    use super::*;
+    use crate::provider::http::testing::RecordingTransport;
+    use crate::provider::{build_provider_with, ProviderConfig, ProviderKind};
+
+    /// Recorded shape of an Ollama `/api/chat` NDJSON stream.
+    const FIXTURE: &str = r#"{"model":"qwen3","message":{"role":"assistant","content":"Hel"},"done":false}
+{"model":"qwen3","message":{"role":"assistant","content":"lo"},"done":false}
+{"model":"qwen3","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","prompt_eval_count":7,"eval_count":2}
+"#;
+
+    #[test]
+    fn ndjson_stream_is_assembled() {
+        let t = RecordingTransport::with(vec![(200, FIXTURE)]);
+        let mut cfg = ProviderConfig::new(ProviderKind::Ollama);
+        cfg.model = Some("qwen3".into());
+        let p = build_provider_with(&cfg, t.clone()).unwrap();
+        let mut n = 0;
+        let r = p
+            .stream(
+                &ChatRequest {
+                    system: "s".into(),
+                    messages: vec![ChatMessage::User { text: "u".into() }],
+                    tools: vec![],
+                    max_tokens: 8,
+                },
+                &CancelToken::new(),
+                &mut |_| n += 1,
+            )
+            .unwrap();
+        assert_eq!(r.text, "Hello");
+        assert_eq!(r.stop_reason, StopReason::EndTurn);
+        assert_eq!((r.usage.input_tokens, r.usage.output_tokens), (7, 2));
+        assert_eq!(n, 2);
+        assert_eq!(t.bodies()[0]["stream"], true);
     }
 }
