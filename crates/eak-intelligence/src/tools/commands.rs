@@ -156,6 +156,17 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                 &["symbol_id", "rotation"],
             ),
         ),
+        FlipSymbol { .. } => (
+            D::Schematic,
+            "Mirror a symbol about a sheet axis through its origin (horizontal swaps left and right, vertical swaps top and bottom). Attached wires are not dragged: send a Batch with MoveWire steps first and the FlipSymbol last.",
+            obj(
+                &[
+                    ("symbol_id", id("symbol id")),
+                    ("axis", enumeration(&["horizontal", "vertical"], "flip axis")),
+                ],
+                &["symbol_id", "axis"],
+            ),
+        ),
         SetSymbolValue { .. } => (
             D::Schematic,
             "Set a symbol's value text (e.g. 10k).",
@@ -489,6 +500,10 @@ pub fn command_samples() -> Vec<Command> {
         RotateSymbol {
             symbol_id: "s".into(),
             rotation: Rotation::R180,
+        },
+        FlipSymbol {
+            symbol_id: "s".into(),
+            axis: FlipAxis::Vertical,
         },
         SetSymbolValue {
             symbol_id: "s".into(),

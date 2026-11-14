@@ -1,0 +1,26 @@
+/* Editor grids (grid.tsx): strokes stay one device pixel at any zoom so the hierarchy reads
+   the same zoomed in or out; major lines are clearly stronger than minor ones. */
+.grid path { fill: none; vector-effect: non-scaling-stroke; pointer-events: none; }
+.grid .grid-minor { stroke: var(--c-grid-minor, color-mix(in srgb, var(--fg) 9%, transparent)); stroke-width: 1px; }
+.grid .grid-major { stroke: var(--c-grid-major, color-mix(in srgb, var(--fg) 22%, transparent)); stroke-width: 1px; }
+.grid .grid-origin { stroke: var(--accent); stroke-width: 1.25px; opacity: 0.55; }
+.rulers { pointer-events: none; }
+.rulers .ruler-band { fill: color-mix(in srgb, var(--bg-panel) 92%, transparent); stroke: var(--line-strong, var(--line)); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.rulers .ruler-tick { fill: none; stroke: var(--fg-dim); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.canvas .rulers text.ruler-label { font-size: inherit; text-anchor: start; fill: var(--fg-dim); }
+.grid-controls { display: inline-flex; align-items: center; gap: var(--s-1, 4px); margin-left: auto; }
+.grid-controls label { display: inline-flex; align-items: center; gap: 2px; }
+.coords { font-variant-numeric: tabular-nums; min-width: 17ch; white-space: pre; }
+.selection-bar { display: inline-flex; gap: 2px; }
+/* Selection boundary and placement preview (schematic symbols and PCB footprints). */
+.sel-box { fill: none; stroke: var(--accent); stroke-width: 1px; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.place-ghost { pointer-events: none; opacity: 0.7; }
+.place-ghost rect { fill: color-mix(in srgb, var(--accent) 10%, transparent); stroke: var(--accent); stroke-width: 1px; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.place-ghost path { fill: none; stroke: var(--accent); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.place-ghost text { fill: var(--accent); }
+.footprint.locked .courtyard { stroke-dasharray: 0.4 0.3; }
+.footprint.selected .courtyard { stroke: var(--accent); }
+/* A footprint is picked anywhere inside its courtyard, not only on its pads or outline. */
+.footprint .courtyard { pointer-events: all; }
+.board-edge { fill: none; stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; pointer-events: none; }
+.marquee { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1px; vector-effect: non-scaling-stroke; stroke-dasharray: 4 3; pointer-events: none; }

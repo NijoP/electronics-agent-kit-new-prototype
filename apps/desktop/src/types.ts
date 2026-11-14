@@ -40,7 +40,11 @@ export interface SymbolInstance {
   value: string;
   position: Point;
   rotation: Rotation;
+  /** Mirrored about the local Y axis before rotation (ADR-0016); absent when not mirrored. */
+  mirror?: boolean;
 }
+/** Sheet axis of a symbol flip (ADR-0016). */
+export type FlipAxis = "horizontal" | "vertical";
 export interface Wire {
   id: Id;
   sheet_id: Id;
@@ -186,6 +190,7 @@ export type Command =
   | { type: "PlaceSymbol"; sheet_id: Id | null; component_id: string; position: Point; rotation: Rotation; refdes: string | null; value: string | null }
   | { type: "MoveSymbol"; symbol_id: Id; position: Point }
   | { type: "RotateSymbol"; symbol_id: Id; rotation: Rotation }
+  | { type: "FlipSymbol"; symbol_id: Id; axis: FlipAxis }
   | { type: "SetSymbolValue"; symbol_id: Id; value: string }
   | { type: "SetRefdes"; symbol_id: Id; refdes: string }
   | { type: "DeleteSymbol"; symbol_id: Id }
@@ -200,6 +205,7 @@ export type Command =
   | { type: "MoveNetLabel"; label_id: Id; position: Point }
   | { type: "SetBoardOutline"; points: Point[] }
   | { type: "MoveFootprint"; footprint_id: Id; position: Point; rotation: Rotation | null; side: Side | null }
+  | { type: "SetFootprintLocked"; footprint_id: Id; locked: boolean }
   | { type: "AddTrack"; layer: CopperLayer; a: Point; b: Point; width: Nm | null; net: string }
   | { type: "DeleteTrack"; track_id: Id }
   | { type: "AddVia"; position: Point; net: string; drill: Nm | null; diameter: Nm | null; from?: CopperLayer | null; to?: CopperLayer | null }

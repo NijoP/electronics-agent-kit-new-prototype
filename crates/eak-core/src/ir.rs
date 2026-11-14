@@ -72,6 +72,33 @@ pub struct SymbolInstance {
     pub value: String,
     pub position: Point,
     pub rotation: Rotation,
+    /// Mirrored about the symbol's local Y axis (local X negated) before `rotation` is applied
+    /// (ADR-0016). Absent in files written before mirroring existed, and omitted when false so
+    /// unmirrored projects keep their exact on-disk form.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mirror: bool,
+}
+
+impl SymbolInstance {
+    /// Sheet position of a point given in the symbol's local (library) coordinates.
+    pub fn place(&self, local: Point) -> Point {
+        let l = if self.mirror {
+            Point::new(-local.x, local.y)
+        } else {
+            local
+        };
+        self.position.plus(self.rotation.apply(l))
+    }
+}
+
+/// Axis of a symbol flip, in sheet coordinates through the symbol origin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FlipAxis {
+    /// Left and right swap (sheet X mirrored).
+    Horizontal,
+    /// Top and bottom swap (sheet Y mirrored).
+    Vertical,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -620,7 +647,7 @@ impl Project {
     pub fn pin_position(&self, sym: &SymbolInstance, pin: &str) -> Option<Point> {
         let def = self.library.get(&sym.component_id)?;
         let p = def.pin(pin)?;
-        Some(sym.position.plus(sym.rotation.apply(p.position)))
+        Some(sym.place(p.position))
     }
 
     /// Absolute position of a footprint pad (bottom side mirrors X).

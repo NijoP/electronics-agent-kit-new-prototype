@@ -76,6 +76,10 @@ impl Rotation {
     pub fn next(self) -> Rotation {
         Rotation::from_degrees(self.degrees() as i64 + 90).unwrap_or_default()
     }
+    /// The opposite turn (R90 <-> R270).
+    pub fn inverse(self) -> Rotation {
+        Rotation::from_degrees(-(self.degrees() as i64)).unwrap_or_default()
+    }
     /// Rotate a local offset counter-clockwise (Y up) by this rotation.
     pub fn apply(self, p: Point) -> Point {
         match self {

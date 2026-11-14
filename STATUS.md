@@ -3,6 +3,37 @@
 Truthful record of what exists and what has been verified. "Implemented" means code exists and
 the listed tests pass; it does not mean professionally validated.
 
+## Independent selection and movement, editor grids (2026-11-15, branch fm/eak-ide-select)
+Captain report: "two resistors, select one and drag it, both move". **Root cause:** object drag
+was wired only for the schematic Select tool. Under every other tool (the Place tool stays armed
+after placing the two resistors; the Move tool invites dragging) a left-drag on a symbol fell
+through to `Canvas`'s pan, so the whole view slid and both resistors appeared to move together,
+and no command was sent. The PCB editor had no drag-move at all, so the same happened for every
+footprint, and a press inside a courtyard (fill `none`) did not even hit the footprint.
+Entity ids were already independent (`new_id` UUIDs) and the selection reducers were correct.
+
+### Implemented and tested
+- Schematic: drag on an object moves only it under Select/Place/Move (one Batch with wire
+  rubber-banding); click selects one, Shift adds, Ctrl/Cmd toggles; marquee; Ctrl+C/X/V/D;
+  Delete; R rotate; X/Y flip through the new `FlipSymbol` command (`SymbolInstance.mirror`,
+  ADR-0016, old files load unchanged and unmirrored symbols serialize as before); selection
+  bar buttons; dashed selection boundary; Place-tool placement preview.
+- PCB: footprint click/Shift/Ctrl/marquee selection, drag-move (one Batch, locked footprints
+  skipped with a message), R/F and buttons for rotate, flip, align (left/right/top/bottom/
+  centre lines), distribute (3+), lock/unlock (`SetFootprintLocked`).
+- Grids (`grid.tsx`): major/minor lines, spacing select, Grid and Snap toggles, density coarsens
+  with zoom, origin axes, cursor X/Y readout; PCB rulers and board-edge highlight. Schematic and
+  PCB grids have separate spacings, major division and stored preferences. Middle-drag pans.
+- Tests: vitest 24 files / 170 tests pass, including `twoResistors.test.tsx` (fails on the old
+  code under Place and Move), `PcbSelect.test.tsx`, `grid.test.ts`; engine test
+  `flip_symbol_mirrors_pins_about_the_origin_and_round_trips`.
+
+### Not verified / not implemented
+- Not exercised in a real Tauri window (jsdom + engine tests only).
+- Symbol graphics are boxes with pin stubs, so a mirror is visible through pin positions only.
+- Align/distribute use courtyard extents; there is no "align to grid" or keyboard nudge.
+- Footprint drag does not drag tracks (engine warns; run DRC), as before.
+
 ## LCSC parts search, BOM and JLCPCB preparation (2026-11-14, branch fm/eak-o2-lcsc-jlcpcb)
 
 **Platform tested:** Linux, Rust stable, Node. No window was opened: the panels are verified by vitest (jsdom, mocked

@@ -213,3 +213,88 @@ fn move_symbol_alone_warns_only_when_it_leaves_wire_ends_behind() {
     );
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
+
+/// Flip (ADR-0016): every pin mirrors about the sheet axis through the symbol origin, two
+/// flips restore the original, a flip is one undo step, and unmirrored projects keep their
+/// on-disk form (no `mirror` key).
+#[test]
+fn flip_symbol_mirrors_pins_about_the_origin_and_round_trips() {
+    use eak_core::FlipAxis;
+    let mut e = Engine::in_memory(Project::new("x"));
+    let r = place(&mut e, 10.0, 20.0);
+    let o = e.project().schematic.symbols[&r].position;
+    let mirror_x = |p: Point| Point::new(2 * o.x - p.x, p.y);
+    let mirror_y = |p: Point| Point::new(p.x, 2 * o.y - p.y);
+    let json = serde_json::to_string(e.project()).unwrap();
+    assert!(
+        !json.contains("\"mirror\""),
+        "unmirrored symbols must not gain a key"
+    );
+    for rot in ["R0", "R90", "R180", "R270"] {
+        let rotation = serde_json::from_value(serde_json::json!(rot)).unwrap();
+        if e.project().schematic.symbols[&r].rotation != rotation {
+            ok(
+                &mut e,
+                C::RotateSymbol {
+                    symbol_id: r.clone(),
+                    rotation,
+                },
+            );
+        }
+        for (axis, f) in [
+            (FlipAxis::Horizontal, &mirror_x as &dyn Fn(Point) -> Point),
+            (FlipAxis::Vertical, &mirror_y),
+        ] {
+            let (p1, p2) = (pin(&e, &r, "1"), pin(&e, &r, "2"));
+            ok(
+                &mut e,
+                C::FlipSymbol {
+                    symbol_id: r.clone(),
+                    axis,
+                },
+            );
+            assert_eq!(
+                (pin(&e, &r, "1"), pin(&e, &r, "2")),
+                (f(p1), f(p2)),
+                "{rot} {axis:?}"
+            );
+            assert!(e.project().schematic.symbols[&r].mirror);
+            let back = serde_json::to_string(e.project()).unwrap();
+            let loaded: Project = serde_json::from_str(&back).unwrap();
+            assert_eq!(&loaded, e.project(), "mirror survives a save/load");
+            ok(
+                &mut e,
+                C::FlipSymbol {
+                    symbol_id: r.clone(),
+                    axis,
+                },
+            );
+            assert_eq!(
+                (pin(&e, &r, "1"), pin(&e, &r, "2")),
+                (p1, p2),
+                "{rot} {axis:?} twice"
+            );
+            assert!(!e.project().schematic.symbols[&r].mirror);
+        }
+    }
+    let before = e.project().clone();
+    ok(
+        &mut e,
+        C::FlipSymbol {
+            symbol_id: r.clone(),
+            axis: FlipAxis::Horizontal,
+        },
+    );
+    assert!(e.undo(e.project().revision, &Actor::human()).accepted);
+    let mut expect = before;
+    expect.revision = e.project().revision;
+    assert_eq!(e.project(), &expect);
+    let missing = run(
+        &mut e,
+        C::FlipSymbol {
+            symbol_id: "nope".into(),
+            axis: FlipAxis::Vertical,
+        },
+    );
+    assert!(!missing.accepted);
+}

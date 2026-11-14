@@ -2,7 +2,7 @@
 // rotating, deleting and pasting a selection. They only compute typed engine commands; the
 // caller submits them as one `Batch` (ADR-0013), so a multi-object edit is one revision and
 // one undo step. The engine snapshot stays the only design model.
-import type { Command, Id, NetLabel, Point, Rotation, Snapshot, SymbolGeom, Wire } from "../../types";
+import type { Command, FlipAxis, Id, NetLabel, Point, Rotation, Snapshot, SymbolGeom, Wire } from "../../types";
 
 export type Kind = "symbol" | "wire" | "label";
 export interface Selection {
@@ -18,11 +18,17 @@ export const isEmpty = (s: Selection) => !s.symbols.length && !s.wires.length &&
 export const count = (s: Selection) => s.symbols.length + s.wires.length + s.labels.length;
 export const has = (s: Selection, k: Kind, id: Id) => s[listOf(k)].includes(id);
 
-/** Click selects one object; shift-click (additive) toggles it in the current selection. */
-export function pick(s: Selection, k: Kind, id: Id, additive: boolean): Selection {
-  if (!additive) return { ...EMPTY, [listOf(k)]: [id] };
+/** How a click combines with the current selection: plain replaces, Shift adds, Ctrl/Cmd toggles. */
+export type PickMode = "replace" | "add" | "toggle";
+export const pickMode = (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }): PickMode =>
+  e.ctrlKey || e.metaKey ? "toggle" : e.shiftKey ? "add" : "replace";
+
+/** Click selects exactly one object; Shift adds it to the selection; Ctrl/Cmd toggles it. */
+export function pick(s: Selection, k: Kind, id: Id, mode: PickMode): Selection {
+  if (mode === "replace") return { ...EMPTY, [listOf(k)]: [id] };
   const l = s[listOf(k)];
-  return { ...s, [listOf(k)]: l.includes(id) ? l.filter((x) => x !== id) : [...l, id] };
+  if (l.includes(id)) return mode === "add" ? s : { ...s, [listOf(k)]: l.filter((x) => x !== id) };
+  return { ...s, [listOf(k)]: [...l, id] };
 }
 
 /** Union of two selections (shift-marquee adds to the selection). */
@@ -132,6 +138,30 @@ export function rotateCommands(snap: Snapshot, sheet: Id, sel: Selection): Comma
     for (const p of g.pins) moved.set(key(p.position), quarter(p.position, g.position));
     const s = symbols[g.id];
     if (s) out.push({ type: "RotateSymbol", symbol_id: s.id, rotation: ORDER[(ORDER.indexOf(s.rotation) + 1) % 4] });
+  }
+  if (!out.length) return [];
+  const wires = rubberBand(sheetWires(snap, sheet), moved, new Set(), null);
+  const labels: Command[] = sheetLabels(snap, sheet).flatMap((l: NetLabel) => {
+    const to = moved.get(key(l.position));
+    return to && !same(to, l.position) ? [{ type: "MoveNetLabel" as const, label_id: l.id, position: to }] : [];
+  });
+  return [...wires, ...labels, ...out];
+}
+
+/** Mirror point `p` about the vertical (horizontal flip) or horizontal axis through `about`. */
+const mirror = (p: Point, about: Point, axis: FlipAxis): Point =>
+  axis === "horizontal" ? { x: 2 * about.x - p.x, y: p.y } : { x: p.x, y: 2 * about.y - p.y };
+
+/**
+ * Flip each selected symbol about its own origin (`FlipSymbol`, ADR-0016), dragging attached
+ * wire ends and pin labels to the mirrored pins. Wire edits come first, the flips last.
+ */
+export function flipCommands(snap: Snapshot, sheet: Id, sel: Selection, axis: FlipAxis): Command[] {
+  const moved = new Map<string, Point>();
+  const out: Command[] = [];
+  for (const g of sheetSymbols(snap, sheet).filter((g) => sel.symbols.includes(g.id))) {
+    for (const p of g.pins) moved.set(key(p.position), mirror(p.position, g.position, axis));
+    out.push({ type: "FlipSymbol", symbol_id: g.id, axis });
   }
   if (!out.length) return [];
   const wires = rubberBand(sheetWires(snap, sheet), moved, new Set(), null);

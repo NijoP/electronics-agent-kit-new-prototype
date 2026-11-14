@@ -464,6 +464,7 @@ mod tests {
                     value: value.to_string(),
                     position: Point::mm(0.0, 0.0),
                     rotation: Rotation::R0,
+                    mirror: false,
                 },
             );
         }

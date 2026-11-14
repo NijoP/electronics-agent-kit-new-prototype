@@ -2,14 +2,16 @@
 // tools that turn clicks into typed engine commands (outline, move, route, via, delete).
 import { useEffect, useReducer, useRef, useState } from "react";
 import { api } from "./api";
-import { Canvas } from "./Canvas";
+import { Canvas, type DragHandler } from "./Canvas";
 import { isTyping, type EditCtx } from "./EditContext";
-import { mmToNm, nextRotation, outlineFrom, samePoint, snapPoint } from "./editing";
+import { mmToNm, outlineFrom, samePoint, snapPoint } from "./editing";
+import { Coords, GridControls, GridLayer, Rulers, useGridConfig } from "./grid";
+import * as P from "./tools/pcb/selection";
 import { layerKey, layerName, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
 import { useLayerView, type LayerView } from "./layerView";
 import { focusBounds, type Focus } from "./pcbFocus";
 import { feedbackText, ripUpAndReroute, routeBatch, routeReducer, stepRequest } from "./routeTool";
-import type { CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
+import type { Command, CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 
@@ -40,8 +42,10 @@ const TOOLS: [Tool, string][] = [
   ["delete", "Delete"],
   ["zone", "Zone"],
 ];
-const GRID = mmToNm(0.5);
 const CAPTURE = mmToNm(0.8);
+/** Tools under which pressing on a footprint and dragging moves it (instead of panning). */
+const MOVE_TOOLS: Tool[] = ["select", "move"];
+type Drag = { mode: "move" | "marquee"; from: Point; to: Point; additive: boolean };
 const poly = (pts: Point[]) => pts.map((p) => toView(p).join(",")).join(" ");
 
 const hit = (e: { target: EventTarget }, attr: string): string | null =>
@@ -111,8 +115,24 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const nets = [...new Set([...pads.map((p) => p.net), ...Object.values(pcb.tracks).map((t) => t.net)])]
     .filter((n): n is string => !!n)
     .sort();
+  const [grid, setGrid] = useGridConfig("pcb");
+  const step = mmToNm(grid.spacingMm);
+  // Snap step in nm; with snap off, points and moves land on whole nanometres.
+  const GRID = grid.snap ? step : 1;
+  const snapDelta = (from: Point, to: Point): Point => ({
+    x: Math.round((to.x - from.x) / GRID) * GRID,
+    y: Math.round((to.y - from.y) / GRID) * GRID,
+  });
+  // Footprint selection: the canvas selection, or the footprint of the symbol selected
+  // elsewhere (explorer, schematic cross-probe, findings).
+  const [selRaw, setSel] = useState<Id[]>([]);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const pressed = useRef<Id | null>(null);
   const footprint = snapshot.geometry.footprints.find((f) => f.symbol_id === selected);
-  const fpInstance = footprint ? pcb.footprints[footprint.id] : undefined;
+  const pruned = P.prune(selRaw, snapshot);
+  const sel = pruned.length ? pruned : footprint ? [footprint.id] : [];
+  const one = sel.length === 1 ? snapshot.geometry.footprints.find((f) => f.id === sel[0]) : undefined;
+  const lockedCount = sel.filter((id) => pcb.footprints[id]?.locked).length;
 
   const hasZone = (l: CopperLayer) => Object.values(pcb.zones).some((z) => sameLayer(z.layer, l));
   // One zone over the board outline for every plane layer that has none, on the chosen net.
@@ -140,8 +160,28 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     return !!hit;
   });
   useEffect(() => {
-    onStatus?.({ layer, gridMm: GRID / 1_000_000 });
-  }, [layer, onStatus]);
+    onStatus?.({ layer, gridMm: grid.spacingMm });
+  }, [layer, onStatus, grid.spacingMm]);
+
+  /** Submit a selection edit as one engine command (a `Batch` when there are several). */
+  const submit = (commands: Command[], label: string) => {
+    if (!edit || !commands.length) return;
+    void edit.execute(commands.length === 1 ? commands[0] : { type: "Batch", commands, label });
+  };
+  const fps = (n: number) => `${n} footprint${n === 1 ? "" : "s"}`;
+  /** Warn when locked footprints were left out of a move-type edit. */
+  const lockedNote = () => {
+    const n = P.movable(snapshot, sel).locked;
+    if (n && edit) edit.notify(`${fps(n)} locked; unlock to move.`);
+  };
+  // Selection actions, shared by the selection bar and the keyboard shortcuts.
+  const actions = {
+    rotate: () => (lockedNote(), submit(P.rotateCommands(snapshot, sel), `Rotate ${fps(sel.length)}`)),
+    flip: () => (lockedNote(), submit(P.flipCommands(snapshot, sel), `Flip ${fps(sel.length)}`)),
+    align: (how: P.Align) => (lockedNote(), submit(P.alignCommands(snapshot, sel, how), `Align ${how}`)),
+    distribute: (axis: "x" | "y") => (lockedNote(), submit(P.distributeCommands(snapshot, sel, axis), `Distribute ${axis === "x" ? "horizontally" : "vertically"}`)),
+    lock: (locked: boolean) => submit(P.lockCommands(snapshot, sel, locked), `${locked ? "Lock" : "Unlock"} ${fps(sel.length)}`),
+  };
 
   const finishZone = () => {
     if (!edit) return;
@@ -172,33 +212,30 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
 
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (!edit || isTyping(e.target) || e.ctrlKey || e.metaKey || !isActiveEditor(docId)) return;
+    if (!edit || isTyping(e.target) || !isActiveEditor(docId)) return;
     const k = e.key.toLowerCase();
+    if (e.ctrlKey || e.metaKey) {
+      if (k === "a" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setSel(snapshot.geometry.footprints.map((f) => f.id));
+      }
+      return;
+    }
     const digit = Number(e.key);
     if (digit >= 1 && digit <= TOOLS.length) choose(TOOLS[digit - 1][0]);
-    else if (e.key === "Escape") reset();
+    else if (e.key === "Escape") {
+      reset();
+      setDrag(null);
+      setSel([]);
+    }
     else if (e.key === "Enter" && tool === "route") finishRoute();
     else if (e.key === "Backspace" && tool === "route") dispatch({ type: "back" });
     else if (e.key === "/" && tool === "route") dispatch({ type: "toggleMode" });
     else if (e.key === "Enter" && tool === "outline") finishOutline();
     else if (e.key === "Enter" && tool === "zone") finishZone();
-    else if (k === "r" && fpInstance) {
-      void edit.execute({
-        type: "MoveFootprint",
-        footprint_id: fpInstance.id,
-        position: fpInstance.position,
-        rotation: nextRotation(fpInstance.rotation),
-        side: null,
-      });
-    } else if (k === "f" && fpInstance) {
-      void edit.execute({
-        type: "MoveFootprint",
-        footprint_id: fpInstance.id,
-        position: fpInstance.position,
-        rotation: null,
-        side: fpInstance.side === "top" ? "bottom" : "top",
-      });
-    } else if (k === "l" && tool === "route") {
+    else if (k === "r" && sel.length) actions.rotate();
+    else if (k === "f" && sel.length) actions.flip();
+    else if (k === "l" && tool === "route") {
       const i = order.findIndex((o) => sameLayer(o, layer));
       const next = order[(i + 1) % order.length];
       setLayer(next);
@@ -212,8 +249,60 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     return () => window.removeEventListener("keydown", h);
   }, []);
 
+  // Select tool: a click selects exactly the footprint under the pointer (Shift adds, Ctrl/Cmd
+  // toggles; empty board clears). Pressing on a footprint and dragging moves the selection
+  // (Select and Move tools); pressing an unselected footprint first makes it the selection, so
+  // only it moves. A drag on empty board draws a marquee (Select) or pans (other tools).
+  const selectClick = (e: React.PointerEvent) => {
+    const id = hit(e, "data-footprint-id");
+    const justPicked = pressed.current;
+    pressed.current = null;
+    const mode = P.pickMode(e);
+    if (!id) return setSel(mode === "replace" ? [] : sel);
+    if (justPicked === id) return;
+    setSel(P.pick(sel, id, mode));
+    const f = snapshot.geometry.footprints.find((g) => g.id === id);
+    if (f) onSelect(f.symbol_id);
+  };
+  const dragHandler: DragHandler = {
+    start: (x, y, e) => {
+      if (!edit || edit.busy) return false;
+      const at = fromView(x, y);
+      const id = hit(e, "data-footprint-id");
+      pressed.current = null;
+      if (!id && tool !== "select") return false;
+      if (id && !sel.includes(id)) {
+        pressed.current = id;
+        setSel(P.pick(sel, id, P.pickMode(e) === "replace" ? "replace" : "add"));
+        const f = snapshot.geometry.footprints.find((g) => g.id === id);
+        if (f) onSelect(f.symbol_id);
+      }
+      setDrag({ mode: id ? "move" : "marquee", from: at, to: at, additive: P.pickMode(e) !== "replace" });
+      return true;
+    },
+    move: (x, y) => setDrag((d) => d && { ...d, to: fromView(x, y) }),
+    end: (x, y) => {
+      const d = drag;
+      setDrag(null);
+      if (!d) return;
+      const to = fromView(x, y);
+      if (d.mode === "marquee") {
+        const found = P.marquee(snapshot, P.rectOf(d.from, to));
+        setSel(d.additive ? [...sel, ...found.filter((f) => !sel.includes(f))] : found);
+        return;
+      }
+      setPicked(null);
+      lockedNote();
+      submit(P.moveCommands(snapshot, sel, snapDelta(d.from, to)), `Move ${fps(sel.length)}`);
+    },
+    cancel: () => setDrag(null),
+  };
+  const movingIds = drag?.mode === "move" ? new Set(P.movable(snapshot, sel).ids) : null;
+  const dragDelta = drag?.mode === "move" ? snapDelta(drag.from, drag.to) : null;
+
   const onPoint = (x: number, y: number, e: React.PointerEvent) => {
-    if (!edit || edit.busy || tool === "select") return;
+    if (!edit || edit.busy) return;
+    if (tool === "select") return selectClick(e);
     const snap = snapPoint(
       fromView(x, y),
       GRID,
@@ -332,6 +421,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             {outline.length ? "" : "no board outline yet · "}read-only · wheel zoom · drag pan · double-click fit
           </span>
         )}
+        <GridControls kind="pcb" cfg={grid} onChange={setGrid} />
+        <Coords at={hover} />
       </header>
       {edit && (
         <div className="tool-options">
@@ -417,15 +508,34 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               Finish outline ({corners.length} pts)
             </button>
           )}
-          {footprint && (
-            <span className="muted">
-              {footprint.refdes} · {footprint.side} · R rotates · F flips
+          {sel.length > 0 && (
+            <span className="selection-bar" role="group" aria-label="Footprint selection">
+              <span className="muted">
+                {one ? `${one.refdes} · ${one.side}${lockedCount ? " · locked" : ""}` : `${fps(sel.length)}${lockedCount ? ` (${lockedCount} locked)` : ""}`}
+              </span>
+              <button type="button" title="Rotate 90° (R)" onClick={actions.rotate}>Rotate</button>
+              <button type="button" title="Flip to the other board side (F)" onClick={actions.flip}>Flip</button>
+              {sel.length >= 2 && (
+                <>
+                  <button type="button" title="Align left edges" onClick={() => actions.align("left")}>Align left</button>
+                  <button type="button" title="Align right edges" onClick={() => actions.align("right")}>Align right</button>
+                  <button type="button" title="Align top edges" onClick={() => actions.align("top")}>Align top</button>
+                  <button type="button" title="Align bottom edges" onClick={() => actions.align("bottom")}>Align bottom</button>
+                  <button type="button" title="Put centres on one horizontal line" onClick={() => actions.align("hcenter")}>Center H</button>
+                  <button type="button" title="Put centres on one vertical line" onClick={() => actions.align("vcenter")}>Center V</button>
+                  <button type="button" title="Equal horizontal spacing (needs 3+)" disabled={sel.length < 3} onClick={() => actions.distribute("x")}>Distribute H</button>
+                  <button type="button" title="Equal vertical spacing (needs 3+)" disabled={sel.length < 3} onClick={() => actions.distribute("y")}>Distribute V</button>
+                </>
+              )}
+              <button type="button" title="Lock: the footprint cannot be moved" disabled={lockedCount === sel.length} onClick={() => actions.lock(true)}>Lock</button>
+              <button type="button" title="Unlock" disabled={lockedCount === 0} onClick={() => actions.lock(false)}>Unlock</button>
             </span>
           )}
           <span className="muted hint">
             {outline.length === 0 && tool !== "outline" && "No board outline yet — use Board outline. "}
             {tool === "outline" && "Click two opposite corners (or 3+ points), then Enter"}
-            {tool === "move" && (picked ? "Click the new position" : "Click a footprint, then its destination")}
+            {tool === "select" && (sel.length ? `${fps(sel.length)} selected · drag to move · R rotate · F flip · Esc clear` : "Click a footprint (Shift adds, Ctrl toggles) or drag a box · middle-drag pans")}
+            {tool === "move" && (picked ? "Click the new position" : "Drag a footprint, or click one then its destination")}
             {tool === "route" &&
               (draft
                 ? `${feedbackText(live) || "Move to the target"} · click fixes · Enter commits · L layer (via) · / 45°/90° · Backspace undoes a step · Esc cancels`
@@ -474,9 +584,17 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         zoomTo={zoomTo && zoomTo.bounds ? { bounds: zoomTo.bounds, n: zoomTo.n } : null}
         tool={!!edit && tool !== "select"}
         onPoint={edit ? onPoint : undefined}
-        onHover={edit ? (x, y) => setHover(fromView(x, y)) : undefined}
+        onHover={(x, y) => setHover(fromView(x, y))}
+        onDrag={edit && MOVE_TOOLS.includes(tool) ? dragHandler : undefined}
+        underlay={(vb) => (
+          <>
+            {outline.length > 0 && <polygon className="board" points={poly(outline)} />}
+            <GridLayer vb={vb} kind="pcb" cfg={grid} />
+          </>
+        )}
+        overlay={(vb) => <Rulers vb={vb} kind="pcb" cfg={grid} />}
       >
-        {outline.length > 0 && <polygon className="board" points={poly(outline)} />}
+        {outline.length > 0 && <polygon className="board-edge" points={poly(outline)} />}
         {Object.values(pcb.zones)
           .filter((z) => shown(z.layer))
           .map((z) => (
@@ -552,10 +670,12 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               key={f.id}
               data-footprint-id={f.id}
               data-symbol-id={f.symbol_id}
-              className={`footprint ${f.side}${highlighted.has(f.id) || highlighted.has(f.symbol_id) ? " finding-hit" : ""}${f.symbol_id === selected ? " selected" : ""}${aiPreview.includes(f.symbol_id) ? " ai-preview" : ""}`}
+              className={`footprint ${f.side}${highlighted.has(f.id) || highlighted.has(f.symbol_id) ? " finding-hit" : ""}${sel.includes(f.id) ? " selected" : ""}${pcb.footprints[f.id]?.locked ? " locked" : ""}${aiPreview.includes(f.symbol_id) ? " ai-preview" : ""}`}
+              transform={dragDelta && movingIds?.has(f.id) ? `translate(${mm(dragDelta.x)} ${-mm(dragDelta.y)})` : undefined}
               onClick={() => onSelect(f.symbol_id)}
             >
               <rect className="courtyard" x={x - hw} y={y - hh} width={2 * hw} height={2 * hh} />
+              {sel.includes(f.id) && <rect className="sel-box" x={x - hw - 0.3} y={y - hh - 0.3} width={2 * hw + 0.6} height={2 * hh + 0.6} />}
               {f.pads.map((p) => (
                 <Pad key={p.number} pad={p} />
               ))}
@@ -578,6 +698,15 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           );
         })}
         {draft && <circle className="anchor" cx={toView(draft.anchor)[0]} cy={toView(draft.anchor)[1]} r={0.5} />}
+        {drag?.mode === "marquee" && (
+          <rect
+            className="marquee"
+            x={Math.min(toView(drag.from)[0], toView(drag.to)[0])}
+            y={Math.min(toView(drag.from)[1], toView(drag.to)[1])}
+            width={Math.abs(toView(drag.to)[0] - toView(drag.from)[0])}
+            height={Math.abs(toView(drag.to)[1] - toView(drag.from)[1])}
+          />
+        )}
       </Canvas>
     </section>
   );

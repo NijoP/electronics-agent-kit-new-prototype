@@ -104,6 +104,7 @@ fn unconnected_pin_and_empty_circuit_are_clear_errors() {
             value: "1k".into(),
             position: Point::mm(20.0, 20.0),
             rotation: Rotation::R0,
+            mirror: false,
         },
     );
     // Unlabelled pins still get their own auto-named nets; ngspice reports a floating node

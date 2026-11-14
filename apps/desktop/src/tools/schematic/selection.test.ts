@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fixture } from "../../fixture.test-data";
 import type { Snapshot } from "../../types";
 import {
+  pickMode,
   EMPTY,
   asBatch,
   copy,
@@ -28,14 +29,21 @@ function wired(): Snapshot {
 }
 
 describe("selection", () => {
-  it("click replaces, shift-click toggles, union merges", () => {
-    let s = pick(EMPTY, "symbol", "sym_r1", false);
+  it("click replaces, shift-click adds, ctrl-click toggles, union merges", () => {
+    let s = pick(EMPTY, "symbol", "sym_r1", "replace");
     expect(s).toEqual({ symbols: ["sym_r1"], wires: [], labels: [] });
-    s = pick(s, "wire", "wir_1", true);
+    s = pick(s, "wire", "wir_1", "add");
     expect(s.wires).toEqual(["wir_1"]);
-    s = pick(s, "symbol", "sym_r1", true);
+    expect(pick(s, "symbol", "sym_r1", "add")).toBe(s); // Shift on a selected object keeps it
+    s = pick(s, "symbol", "sym_r1", "toggle");
     expect(s.symbols).toEqual([]);
-    expect(pick(s, "label", "lab_1", false)).toEqual({ symbols: [], wires: [], labels: ["lab_1"] });
+    s = pick(s, "symbol", "sym_r1", "toggle");
+    expect(s.symbols).toEqual(["sym_r1"]);
+    expect(pick(s, "label", "lab_1", "replace")).toEqual({ symbols: [], wires: [], labels: ["lab_1"] });
+    expect(pickMode({ shiftKey: true, ctrlKey: false, metaKey: false })).toBe("add");
+    expect(pickMode({ shiftKey: true, ctrlKey: true, metaKey: false })).toBe("toggle");
+    expect(pickMode({ shiftKey: false, ctrlKey: false, metaKey: true })).toBe("toggle");
+    expect(pickMode({ shiftKey: false, ctrlKey: false, metaKey: false })).toBe("replace");
     expect(union({ ...EMPTY, symbols: ["a"] }, { ...EMPTY, symbols: ["a", "b"] }).symbols).toEqual(["a", "b"]);
   });
 

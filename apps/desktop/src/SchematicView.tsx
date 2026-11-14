@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Canvas, type DragHandler } from "./Canvas";
 import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, segments, snapPoint } from "./editing";
-import type { Command, Id, Point, Snapshot, SymbolInstance } from "./types";
+import { Coords, GridControls, GridLayer, useGridConfig } from "./grid";
+import type { Command, FlipAxis, Id, Point, Snapshot, SymbolGeom, SymbolInstance } from "./types";
 import { boundsOf, fromView, mm, toView } from "./viewport";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import * as S from "./tools/schematic/selection";
@@ -35,7 +36,8 @@ const TOOLS: [Tool, string][] = [
   ["noconnect", "No connect"],
   ["pinlabel", "Pin label"],
 ];
-const GRID = mmToNm(1.27);
+/** Tools under which pressing on an object and dragging moves it (instead of panning the view). */
+const MOVE_TOOLS: Tool[] = ["select", "place", "move"];
 const CAPTURE = mmToNm(1.5);
 
 const hit = (e: { target: EventTarget }, attr: string): string | null =>
@@ -50,11 +52,6 @@ const objectAt = (e: { target: EventTarget }): [S.Kind, Id] | null => {
   const w = hit(e, "data-wire-id");
   return w ? ["wire", w] : null;
 };
-
-const snapDelta = (from: Point, to: Point): Point => ({
-  x: Math.round((to.x - from.x) / GRID) * GRID,
-  y: Math.round((to.y - from.y) / GRID) * GRID,
-});
 
 type Drag = { mode: "move" | "marquee"; from: Point; to: Point; additive: boolean };
 
@@ -76,6 +73,14 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   const [selRaw, setSel] = useState<S.Selection>(S.EMPTY);
   const [drag, setDrag] = useState<Drag | null>(null);
   const clip = useRef<S.Clip | null>(null);
+  const [grid, setGrid] = useGridConfig("schematic");
+  // Grid step in nm; with snap off, points and moves land on whole nanometres.
+  const step = mmToNm(grid.spacingMm);
+  const GRID = grid.snap ? step : 1;
+  const snapDelta = (from: Point, to: Point): Point => ({
+    x: Math.round((to.x - from.x) / GRID) * GRID,
+    y: Math.round((to.y - from.y) / GRID) * GRID,
+  });
   // Object selected by the current press, so the click that ends it does not toggle it back.
   const pressed = useRef<Id | null>(null);
   const sheet = sheets.find((s) => s.id === sheetId) ?? sheets[0];
@@ -118,23 +123,48 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   };
   const objects = (n: number) => `${n} object${n === 1 ? "" : "s"}`;
 
+  // Selection actions, shared by the keyboard shortcuts and the selection bar buttons. Each is
+  // one engine command (a Batch for several objects).
+  const actions = sheet && {
+    rotate: () => submit(S.rotateCommands(snapshot, sheet.id, sel), `Rotate ${objects(sel.symbols.length)}`),
+    flip: (axis: FlipAxis) => submit(S.flipCommands(snapshot, sheet.id, sel, axis), `Flip ${objects(sel.symbols.length)}`),
+    remove: () => {
+      submit(S.deleteCommands(sel), `Delete ${objects(S.count(sel))}`);
+      setSel(S.EMPTY);
+    },
+    copy: () => {
+      const c = S.copy(snapshot, sel);
+      if (c) {
+        clip.current = c;
+        edit?.notify(`Copied ${objects(S.count(sel))}.`);
+      }
+      return c;
+    },
+    paste: () => clip.current && submit(S.pasteCommands(clip.current, sheet.id, S.pasteOffset(clip.current, hover, step)), "Paste"),
+    /** Copy-and-paste in one step, four grid steps up and right of the original. */
+    duplicate: () => {
+      const c = S.copy(snapshot, sel);
+      if (c) submit(S.pasteCommands(c, sheet.id, S.pasteOffset(c, null, step)), `Duplicate ${objects(S.count(sel))}`);
+    },
+  };
+
   // Keyboard shortcuts act on the current selection through the same commands. Undo/redo
   // (Ctrl+Z, Ctrl+Shift+Z) are workspace-wide and handled by the workspace.
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (!edit || !sheet || isTyping(e.target) || e.altKey || !isActiveEditor(docId)) return;
+    if (!edit || !sheet || !actions || isTyping(e.target) || e.altKey || !isActiveEditor(docId)) return;
     const k = e.key.toLowerCase();
     if (e.ctrlKey || e.metaKey) {
       if (e.shiftKey) return;
-      if (k === "c") {
-        const c = S.copy(snapshot, sel);
-        if (c) {
-          clip.current = c;
-          edit.notify(`Copied ${objects(S.count(sel))}.`);
-        }
+      if (k === "c") actions.copy();
+      else if (k === "x") {
+        if (actions.copy()) actions.remove();
       } else if (k === "v" && clip.current) {
         e.preventDefault();
-        submit(S.pasteCommands(clip.current, sheet.id, S.pasteOffset(clip.current, hover, GRID)), "Paste");
+        actions.paste();
+      } else if (k === "d") {
+        e.preventDefault();
+        actions.duplicate();
       } else if (k === "a") {
         e.preventDefault();
         setSel(S.marquee(snapshot, sheet.id, S.rectOf({ x: -1e15, y: -1e15 }, { x: 1e15, y: 1e15 })));
@@ -149,11 +179,10 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       setSel(S.EMPTY);
       setTool("select");
     } else if (k === "w") choose("wire");
-    else if (k === "r") submit(S.rotateCommands(snapshot, sheet.id, sel), `Rotate ${objects(sel.symbols.length)}`);
-    else if (e.key === "Delete" || e.key === "Backspace") {
-      submit(S.deleteCommands(sel), `Delete ${objects(S.count(sel))}`);
-      setSel(S.EMPTY);
-    }
+    else if (k === "r") actions.rotate();
+    else if (k === "x") actions.flip("horizontal");
+    else if (k === "y") actions.flip("vertical");
+    else if (e.key === "Delete" || e.key === "Backspace") actions.remove();
   };
   useEffect(() => {
     const h = (e: KeyboardEvent) => keys.current(e);
@@ -171,15 +200,19 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     [mm(sheet.width), -mm(sheet.height)],
   ])!;
 
-  // Select tool: click picks (Shift toggles), drag on an object moves the selection (one
-  // Batch, wires rubber-banded), drag on empty sheet draws a marquee (Shift adds).
+  // Select tool: a click selects exactly the object under the pointer (Shift adds, Ctrl/Cmd
+  // toggles). Pressing on an object and dragging moves the selection (one Batch, wires
+  // rubber-banded) under the Select, Place and Move tools; pressing an unselected object first
+  // makes it the selection, so only that object moves. A drag on empty sheet draws a marquee
+  // (Select tool; Shift/Ctrl add) or pans (other tools). Middle-button drag always pans.
   const selectClick = (e: React.PointerEvent) => {
     const o = objectAt(e);
     const justPicked = pressed.current;
     pressed.current = null;
-    if (!o) return setSel(e.shiftKey ? sel : S.EMPTY);
+    const mode = S.pickMode(e);
+    if (!o) return setSel(mode === "replace" ? S.EMPTY : sel);
     if (justPicked === o[1]) return;
-    setSel(S.pick(sel, o[0], o[1], e.shiftKey));
+    setSel(S.pick(sel, o[0], o[1], mode));
     if (o[0] === "symbol") onSelect(o[1]);
   };
   const dragHandler: DragHandler = {
@@ -188,12 +221,13 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       const at = fromView(x, y);
       const o = objectAt(e);
       pressed.current = null;
+      if (!o && tool !== "select") return false;
       if (o && !S.has(sel, o[0], o[1])) {
         pressed.current = o[1];
-        setSel(S.pick(sel, o[0], o[1], e.shiftKey));
+        setSel(S.pick(sel, o[0], o[1], S.pickMode(e) === "replace" ? "replace" : "add"));
         if (o[0] === "symbol") onSelect(o[1]);
       }
-      setDrag({ mode: o ? "move" : "marquee", from: at, to: at, additive: e.shiftKey });
+      setDrag({ mode: o ? "move" : "marquee", from: at, to: at, additive: S.pickMode(e) !== "replace" });
       return true;
     },
     move: (x, y) => setDrag((d) => d && { ...d, to: fromView(x, y) }),
@@ -352,6 +386,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         ) : (
           <span className="muted">read-only · wheel zoom · drag pan · double-click fit</span>
         )}
+        <GridControls kind="schematic" cfg={grid} onChange={setGrid} />
+        <Coords at={hover} />
       </header>
       {edit && (
         <div className="tool-options">
@@ -376,16 +412,35 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
           {sym && (
             <SymbolFields key={`${sym.id}|${sym.refdes}|${sym.value}`} sym={sym} edit={edit} />
           )}
+          {actions && !S.isEmpty(sel) && (
+            <span className="selection-bar" role="group" aria-label="Selection">
+              <button type="button" title="Rotate 90° (R)" disabled={!sel.symbols.length} onClick={actions.rotate}>
+                Rotate
+              </button>
+              <button type="button" title="Flip left/right (X)" disabled={!sel.symbols.length} onClick={() => actions.flip("horizontal")}>
+                Flip H
+              </button>
+              <button type="button" title="Flip top/bottom (Y)" disabled={!sel.symbols.length} onClick={() => actions.flip("vertical")}>
+                Flip V
+              </button>
+              <button type="button" title="Duplicate (Ctrl+D)" onClick={actions.duplicate}>
+                Duplicate
+              </button>
+              <button type="button" title="Delete (Del)" onClick={actions.remove}>
+                Delete
+              </button>
+            </span>
+          )}
           <span className="muted hint">
             {tool === "select" &&
               (S.isEmpty(sel)
-                ? "Click or drag a box to select (Shift adds) · W wire · Ctrl+V paste"
-                : `${objects(S.count(sel))} selected · drag to move · R rotate · Del delete · Ctrl+C copy · Esc clear`)}
-            {tool === "place" && "Click the sheet to place the part"}
+                ? "Click or drag a box to select (Shift adds, Ctrl toggles) · W wire · Ctrl+V paste · middle-drag pans"
+                : `${objects(S.count(sel))} selected · drag to move · R rotate · X/Y flip · Del delete · Ctrl+C/X/V/D copy/cut/paste/duplicate · Esc clear`)}
+            {tool === "place" && "Click the sheet to place the part · drag a part to move it"}
             {tool === "wire" && (start ? "Click to end the wire segment · Esc stops" : "Click a start point (pins snap)")}
             {tool === "connect" && (pin ? "Click the second pin" : "Click the first pin")}
             {tool === "label" && "Click to drop the label"}
-            {tool === "move" && (picked ? "Click the new position" : "Click a symbol, then its destination")}
+            {tool === "move" && (picked ? "Click the new position" : "Drag a part, or click a symbol then its destination")}
             {tool === "delete" && "Click a symbol, wire or label"}
             {tool === "noconnect" && "Click a pin to mark it intentionally unconnected (the ERC-001 remedy)"}
             {tool === "pinlabel" && "Click a pin to put the net label on it"}
@@ -397,10 +452,15 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         bounds={bounds}
         tool={!!edit && tool !== "select"}
         onPoint={edit ? onPoint : undefined}
-        onHover={edit ? (x, y) => setHover(fromView(x, y)) : undefined}
-        onDrag={edit && tool === "select" ? dragHandler : undefined}
+        onHover={(x, y) => setHover(fromView(x, y))}
+        onDrag={edit && MOVE_TOOLS.includes(tool) ? dragHandler : undefined}
+        underlay={(vb) => (
+          <>
+            <rect className="sheet" x={0} y={-mm(sheet.height)} width={mm(sheet.width)} height={mm(sheet.height)} />
+            <GridLayer vb={vb} kind="schematic" cfg={grid} />
+          </>
+        )}
       >
-        <rect className="sheet" x={0} y={-mm(sheet.height)} width={mm(sheet.width)} height={mm(sheet.height)} />
         {Object.values(schematic.wires)
           .filter((w) => w.sheet_id === sheet.id)
           .map((w) => {
@@ -451,6 +511,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
                 );
               })}
               <rect className="body" x={x - hw} y={y - hh} width={2 * hw} height={2 * hh} />
+              {S.has(sel, "symbol", s.id) && <SelectionBox s={s} />}
               <text className="refdes" x={x} y={y - hh - 1}>
                 {s.refdes}
               </text>
@@ -486,6 +547,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
             <path key={n.id} className="no-connect" d={`M${x - 1} ${y - 1}L${x + 1} ${y + 1}M${x - 1} ${y + 1}L${x + 1} ${y - 1}`} />
           );
         })}
+        {tool === "place" && hover && part && <PlaceGhost snapshot={snapshot} componentId={part.id} name={part.name} at={snapPoint(hover, GRID, [], 0).point} />}
         {drag?.mode === "marquee" && <Marquee from={drag.from} to={drag.to} />}
         {start && <circle className="anchor" cx={toView(start)[0]} cy={toView(start)[1]} r={0.6} />}
       </Canvas>
@@ -522,6 +584,38 @@ function SymbolFields({ sym, edit }: { sym: SymbolInstance; edit: EditCtx }) {
         />
       </label>
     </>
+  );
+}
+
+/** Dashed boundary around a selected symbol's body and pins. */
+function SelectionBox({ s }: { s: SymbolGeom }) {
+  const pts: [number, number][] = [
+    [mm(s.position.x - s.half_w), -mm(s.position.y - s.half_h)],
+    [mm(s.position.x + s.half_w), -mm(s.position.y + s.half_h)],
+    ...s.pins.map((p) => toView(p.position)),
+  ];
+  const b = boundsOf(pts)!;
+  const pad = 0.8;
+  return <rect className="sel-box" x={b.minX - pad} y={b.minY - pad} width={b.maxX - b.minX + 2 * pad} height={b.maxY - b.minY + 2 * pad} />;
+}
+
+/**
+ * Where the Place tool will drop the part: its body outline at the snapped cursor (when the
+ * definition or an existing instance gives the size) and a crosshair on the origin.
+ */
+function PlaceGhost({ snapshot, componentId, name, at }: { snapshot: Snapshot; componentId: string; name: string; at: Point }) {
+  const def = snapshot.project.library?.[componentId]?.symbol as { body_half_w?: number; body_half_h?: number } | undefined;
+  const twin = Object.values(snapshot.project.schematic.symbols).find((s) => s.component_id === componentId && (s.rotation === "R0" || s.rotation === "R180"));
+  const geom = twin && snapshot.geometry.symbols.find((g) => g.id === twin.id);
+  const hw = def?.body_half_w ?? geom?.half_w;
+  const hh = def?.body_half_h ?? geom?.half_h;
+  const [x, y] = toView(at);
+  return (
+    <g className="place-ghost" data-place-ghost={componentId}>
+      {hw !== undefined && hh !== undefined && <rect x={x - mm(hw)} y={y - mm(hh)} width={2 * mm(hw)} height={2 * mm(hh)} />}
+      <path d={`M${x - 1.27} ${y}H${x + 1.27}M${x} ${y - 1.27}V${y + 1.27}`} />
+      <text x={x} y={y - (hh !== undefined ? mm(hh) : 1.27) - 1}>{name}</text>
+    </g>
   );
 }
 
