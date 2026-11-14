@@ -19,6 +19,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 eak-core.workspace = true
+eak-engineering.workspace = true
 eak-intelligence = { workspace = true, features = ["remote-http"] }
 eak-runtime.workspace = true
 eak-validation.workspace = true

@@ -456,3 +456,59 @@ fn domain_classification_is_revision_bound_and_needs_no_model() {
     assert!(!after.classification.not_implemented.is_empty());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn connectivity_reports_the_ratsnest_for_the_current_revision() {
+    let s = session();
+    assert!(connectivity(&s).is_err(), "no project open");
+    let d = tmpdir("connectivity");
+    create_project(&s, &path(&d), "Ratsnest").unwrap();
+    let mut rev = 0;
+    let mut run = |c: C| {
+        let r = execute_command(&s, rev, c).unwrap();
+        assert!(r.accepted, "{:?}", r.error);
+        rev = r.revision_after;
+        r
+    };
+    let place = |x: f64| C::PlaceSymbol {
+        sheet_id: None,
+        component_id: "R_0603".into(),
+        position: Point::mm(x, -50.0),
+        rotation: Rotation::default(),
+        refdes: None,
+        value: None,
+    };
+    let a = run(place(40.0)).created[0].clone();
+    let b = run(place(80.0)).created[0].clone();
+    run(C::ConnectPins {
+        a_symbol: a,
+        a_pin: "2".into(),
+        b_symbol: b,
+        b_pin: "1".into(),
+    });
+    run(outline());
+    run(C::SyncSchematicToPcb);
+    run(C::AutoPlace { grid: None });
+    let before = connectivity(&s).unwrap();
+    assert_eq!(
+        before.revision,
+        current_project(&s).unwrap().project.revision
+    );
+    assert!(
+        !before.connectivity.ratsnest.is_empty(),
+        "placed but unrouted: the connection is an airwire"
+    );
+    run(C::AutoRoute { nets: None });
+    let after = connectivity(&s).unwrap();
+    assert_eq!(
+        after.revision,
+        current_project(&s).unwrap().project.revision
+    );
+    assert!(after.revision > before.revision);
+    assert!(
+        after.connectivity.ratsnest.is_empty(),
+        "routed: no airwires"
+    );
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}

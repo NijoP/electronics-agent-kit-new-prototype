@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Canvas } from "./Canvas";
 import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, nextRotation, outlineFrom, segments, snapPoint } from "./editing";
-import { layerColour, layerKey, layerName, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
+import { layerKey, layerName, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
+import { useLayerView, type LayerView } from "./layerView";
+import { focusBounds, type Focus } from "./pcbFocus";
 import type { CopperLayer, Id, PadGeom, Point, Snapshot } from "./types";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 
@@ -17,9 +19,15 @@ interface Props {
   aiPreview?: Id[];
   /** Reports the active copper layer and grid for the status bar. */
   onStatus?: (s: { layer: CopperLayer; gridMm: number }) => void;
+  /** Layer manager state (active layer, visibility, colours); the view keeps its own if absent. */
+  layerView?: LayerView;
+  /** Finding navigation: zoom to and highlight these objects / this location. */
+  focus?: Focus | null;
+  /** Unrouted connections from the engine's connectivity analysis: [net, from, to]. */
+  airwires?: [string, Point, Point][] | null;
 }
 
-type Tool = "select" | "outline" | "move" | "route" | "via" | "delete";
+type Tool = "select" | "outline" | "move" | "route" | "via" | "delete" | "zone";
 const TOOLS: [Tool, string][] = [
   ["select", "Select"],
   ["outline", "Board outline"],
@@ -27,6 +35,7 @@ const TOOLS: [Tool, string][] = [
   ["route", "Route"],
   ["via", "Via"],
   ["delete", "Delete"],
+  ["zone", "Zone"],
 ];
 const GRID = mmToNm(0.5);
 const CAPTURE = mmToNm(0.8);
@@ -61,23 +70,25 @@ export function pcbBounds(s: Snapshot): Bounds {
   return boundsOf(outline.length ? outline : parts) ?? { minX: 0, minY: -80, maxX: 100, maxY: 0 };
 }
 
-export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], onStatus }: Props) {
+export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], onStatus, layerView, focus, airwires }: Props) {
+  const ownView = useLayerView(null);
+  const lv = layerView ?? ownView;
   const { pcb } = snapshot.project;
   const outline = pcb.board.outline;
   const [tool, setTool] = useState<Tool>("select");
-  const [layer, setLayer] = useState<CopperLayer>("top");
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [viaFrom, setViaFrom] = useState<CopperLayer>("top");
   const [viaTo, setViaTo] = useState<CopperLayer>("bottom");
   const stack = stackLayers(pcb.board.stackup);
   const order = stack.map((s) => s.layer);
-  const shown = (l: CopperLayer) => !hidden.has(layerKey(l));
-  const toggle = (l: CopperLayer) =>
-    setHidden((h) => {
-      const n = new Set(h);
-      if (!n.delete(layerKey(l))) n.add(layerKey(l));
-      return n;
-    });
+  const shown = (l: CopperLayer) => !lv.hidden.has(layerKey(l));
+  const toggle = lv.toggle;
+  // The active layer must exist in the current stackup (it may have been removed).
+  const layer: CopperLayer = order.find((o) => layerKey(o) === lv.active) ?? order[0] ?? "top";
+  const setLayer = lv.setActive;
+  const layerColour = lv.colourOf;
+  const [zoneClearance, setZoneClearance] = useState("");
+  const highlighted = new Set(focus?.objects ?? []);
+  const zoomTo = focus ? { bounds: focusBounds(snapshot, focus.objects, focus.location), n: focus.n } : null;
   const [net, setNet] = useState("");
   const [start, setStart] = useState<Point | null>(null);
   const [corners, setCorners] = useState<Point[]>([]);
@@ -119,6 +130,17 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     onStatus?.({ layer, gridMm: GRID / 1_000_000 });
   }, [layer, onStatus]);
 
+  const finishZone = () => {
+    if (!edit) return;
+    const pts = outlineFrom(corners);
+    if (!pts) return edit.notify("A zone needs two opposite corners or at least three points.");
+    if (!net) return edit.notify("Pick the net the zone belongs to first.");
+    const cl = zoneClearance.trim() === "" ? null : mmToNm(Number(zoneClearance));
+    if (cl !== null && !(cl >= 0)) return edit.notify("Zone clearance must be a number of millimetres.");
+    setCorners([]);
+    void edit.execute({ type: "AddZone", layer, net, outline: pts, clearance: cl });
+  };
+
   const finishOutline = () => {
     const pts = outlineFrom(corners);
     if (!edit) return;
@@ -135,6 +157,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     if (digit >= 1 && digit <= TOOLS.length) choose(TOOLS[digit - 1][0]);
     else if (e.key === "Escape") reset();
     else if (e.key === "Enter" && tool === "outline") finishOutline();
+    else if (e.key === "Enter" && tool === "zone") finishZone();
     else if (k === "r" && fpInstance) {
       void edit.execute({
         type: "MoveFootprint",
@@ -177,6 +200,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     const fpId = hit(e, "data-footprint-id");
     switch (tool) {
       case "outline":
+      case "zone":
         return setCorners((c) => [...c, snap.point]);
       case "move": {
         if (!picked) {
@@ -214,7 +238,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       case "delete": {
         const t = hit(e, "data-track-id");
         const v = hit(e, "data-via-id");
+        const z = hit(e, "data-zone-id");
         if (v) void edit.execute({ type: "DeleteVia", via_id: v });
+        else if (z && !t) void edit.execute({ type: "DeleteZone", zone_id: z });
         else if (t) void edit.execute({ type: "DeleteTrack", track_id: t });
         return;
       }
@@ -251,7 +277,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       </header>
       {edit && (
         <div className="tool-options">
-          {(tool === "route" || tool === "via") && (
+          {(tool === "route" || tool === "via" || tool === "zone") && (
             <>
               <select
                 aria-label="Layer"
@@ -302,6 +328,17 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               <span className="muted">{viaKind(viaFrom, viaTo)} via</span>
             </>
           )}
+          {tool === "zone" && (
+            <>
+              <label>
+                Clearance (mm)
+                <input aria-label="Zone clearance" inputMode="decimal" placeholder="rule default" size={9} value={zoneClearance} onChange={(e) => setZoneClearance(e.target.value)} />
+              </label>
+              <button type="button" onClick={finishZone} disabled={corners.length < 2}>
+                Finish zone ({corners.length} pts)
+              </button>
+            </>
+          )}
           {tool === "outline" && (
             <button type="button" onClick={finishOutline} disabled={corners.length < 2}>
               Finish outline ({corners.length} pts)
@@ -318,7 +355,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             {tool === "move" && (picked ? "Click the new position" : "Click a footprint, then its destination")}
             {tool === "route" && (start ? "Click to end the track · L switches layer · Esc stops" : "Click a pad or point to start")}
             {tool === "via" && "Click a pad, track end or point"}
-            {tool === "delete" && "Click a track or via"}
+            {tool === "delete" && "Click a track, via or zone"}
+            {tool === "zone" && "Pick layer and net, click two opposite corners (or 3+ points), then Enter"}
           </span>
         </div>
       )}
@@ -357,6 +395,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       <Canvas
         label="PCB canvas"
         bounds={pcbBounds(snapshot)}
+        zoomTo={zoomTo && zoomTo.bounds ? { bounds: zoomTo.bounds, n: zoomTo.n } : null}
         tool={!!edit && tool !== "select"}
         onPoint={edit ? onPoint : undefined}
         onHover={edit ? (x, y) => setHover(fromView(x, y)) : undefined}
@@ -367,7 +406,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           .map((z) => (
             <polygon
               key={z.id}
-              className={`zone ${layerKey(z.layer)}`}
+              data-zone-id={z.id}
+              className={`zone ${layerKey(z.layer)}${highlighted.has(z.id) ? " finding-hit" : ""}`}
               style={{ fill: layerColour(z.layer), stroke: layerColour(z.layer) }}
               points={poly(z.outline)}
             >
@@ -380,7 +420,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           const [x1, y1] = toView(t.a);
           const [x2, y2] = toView(t.b);
           return (
-            <g key={t.id} data-track-id={t.id}>
+            <g key={t.id} data-track-id={t.id} className={highlighted.has(t.id) ? "finding-hit" : undefined}>
               <line className={`track ${layerKey(t.layer)}`} style={{ stroke: layerColour(t.layer) }} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={mm(t.width)}>
                 <title>{`${t.net} (${layerName(t.layer)})`}</title>
               </line>
@@ -393,6 +433,19 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           const [x2, y2] = toView(b);
           return <line key={i} className={`track ${layerKey(layer)} preview`} style={{ stroke: layerColour(layer) }} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={0.25} />;
         })}
+        {lv.airwires &&
+          (airwires ?? []).map(([n, a, b], i) => {
+            const [x1, y1] = toView(a);
+            const [x2, y2] = toView(b);
+            return (
+              <line key={i} className="airwire" x1={x1} y1={y1} x2={x2} y2={y2}>
+                <title>{`unrouted: ${n}`}</title>
+              </line>
+            );
+          })}
+        {focus?.location && (
+          <circle className="finding-marker" cx={toView(focus.location)[0]} cy={toView(focus.location)[1]} r={1.6} />
+        )}
         {corners.length > 0 && <polyline className="outline-draft" points={poly([...corners, ...(hoverSnap ? [hoverSnap] : [])])} />}
         {snapshot.geometry.footprints.map((f) => {
           const [x, y] = toView(f.position);
@@ -403,7 +456,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               key={f.id}
               data-footprint-id={f.id}
               data-symbol-id={f.symbol_id}
-              className={`footprint ${f.side}${f.symbol_id === selected ? " selected" : ""}${aiPreview.includes(f.symbol_id) ? " ai-preview" : ""}`}
+              className={`footprint ${f.side}${highlighted.has(f.id) || highlighted.has(f.symbol_id) ? " finding-hit" : ""}${f.symbol_id === selected ? " selected" : ""}${aiPreview.includes(f.symbol_id) ? " ai-preview" : ""}`}
               onClick={() => onSelect(f.symbol_id)}
             >
               <rect className="courtyard" x={x - hw} y={y - hh} width={2 * hw} height={2 * hh} />
@@ -421,7 +474,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           .map((v) => {
           const [x, y] = toView(v.position);
           return (
-            <g key={v.id} className="via" data-via-id={v.id}>
+            <g key={v.id} className={highlighted.has(v.id) ? "via finding-hit" : "via"} data-via-id={v.id}>
               <title>{`${viaKind(v.from ?? "top", v.to ?? "bottom")} via ${v.net} (${layerName(v.from ?? "top")}→${layerName(v.to ?? "bottom")})`}</title>
               <circle cx={x} cy={y} r={mm(v.diameter) / 2} />
               <circle className="drill" cx={x} cy={y} r={mm(v.drill) / 2} />
