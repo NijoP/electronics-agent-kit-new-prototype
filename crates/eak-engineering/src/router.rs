@@ -26,7 +26,9 @@
 //! manufacturing correct is decided afterwards by `eak-validation` (DRC, connectivity), never here.
 
 use crate::copper::{distance, items, CopperItem, Core, ItemKind, Shape};
-use crate::routing_intel::{self as intel, CongestionMap, Hotspot, NetSpec, PassRecord, Stagnation};
+use crate::routing_intel::{
+    self as intel, CongestionMap, Hotspot, NetSpec, PassRecord, Stagnation,
+};
 use eak_core::geom::{point_in_polygon, point_segment_distance};
 use eak_core::{CopperLayer, Nm, Point, Project, Rect};
 use serde::{Deserialize, Serialize};

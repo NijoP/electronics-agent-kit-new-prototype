@@ -12,7 +12,7 @@
 //! `analyze_placement` harness tool. Roles come from reference-designator prefixes and net
 //! names: a heuristic, so every result carries its limitations and is never a certification.
 
-use eak_core::geom::{point_segment_distance, to_mm};
+use eak_core::geom::point_segment_distance;
 use eak_core::{Id, Point, Project, Rect};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -91,9 +91,11 @@ pub fn is_power(net: &str) -> bool {
         return false;
     }
     let n = net.to_ascii_uppercase();
-    ["VCC", "VDD", "VBAT", "VBUS", "VIN", "VOUT", "3V3", "5V", "1V8", "1V2", "12V"]
-        .iter()
-        .any(|k| n.contains(k))
+    [
+        "VCC", "VDD", "VBAT", "VBUS", "VIN", "VOUT", "3V3", "5V", "1V8", "1V2", "12V",
+    ]
+    .iter()
+    .any(|k| n.contains(k))
         || n.starts_with('+')
 }
 
@@ -332,7 +334,7 @@ pub fn analyze(p: &Project) -> Analysis {
             continue;
         };
         let dmm = d / 1_000_000.0;
-        let ok = (role == Role::DecouplingCapacitor).then(|| dmm <= DECAP_MAX_MM);
+        let ok = (role == Role::DecouplingCapacitor).then_some(dmm <= DECAP_MAX_MM);
         if ok == Some(false) {
             a.findings.push(Finding {
                 rule: "PLACE-DECAP-DISTANCE".into(),

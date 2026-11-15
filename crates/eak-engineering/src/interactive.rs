@@ -612,7 +612,11 @@ mod tests {
         let from = Point::mm(60.0, 5.0);
         let r = route_step(&p, &req(from, Point::mm(20.0, 5.0), BendMode::Diagonal45));
         assert!(r.segments.is_empty() && !r.reached);
-        assert!(r.message.as_deref().unwrap_or("").contains("outside the board outline"));
+        assert!(r
+            .message
+            .as_deref()
+            .unwrap_or("")
+            .contains("outside the board outline"));
         assert!(r.blocking.iter().any(|b| b.object == "board edge"));
     }
 

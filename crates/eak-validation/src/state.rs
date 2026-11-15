@@ -132,9 +132,18 @@ mod tests {
 
     #[test]
     fn worst_state_wins_and_fail_is_never_softened() {
-        assert_eq!(CheckState::Pass.worst(CheckState::Unknown), CheckState::Unknown);
-        assert_eq!(CheckState::Fail.worst(CheckState::Unknown), CheckState::Fail);
-        assert_eq!(CheckState::NotApplicable.worst(CheckState::Pass), CheckState::Pass);
+        assert_eq!(
+            CheckState::Pass.worst(CheckState::Unknown),
+            CheckState::Unknown
+        );
+        assert_eq!(
+            CheckState::Fail.worst(CheckState::Unknown),
+            CheckState::Fail
+        );
+        assert_eq!(
+            CheckState::NotApplicable.worst(CheckState::Pass),
+            CheckState::Pass
+        );
     }
 
     #[test]

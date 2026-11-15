@@ -131,7 +131,10 @@ pub fn place(p: &Project, grid: Nm, spacing: Nm) -> Placement {
                     }
                     match plan.role(id) {
                         Role::MountingHole => {
-                            cost = corners.iter().map(|c| at.dist(*c)).fold(f64::INFINITY, f64::min);
+                            cost = corners
+                                .iter()
+                                .map(|c| at.dist(*c))
+                                .fold(f64::INFINITY, f64::min);
                         }
                         Role::Connector => cost = 20.0 * intel::edge_distance(at, outline),
                         _ => {}
@@ -142,8 +145,9 @@ pub fn place(p: &Project, grid: Nm, spacing: Nm) -> Placement {
                         let d = cands
                             .iter()
                             .filter_map(|c| {
-                                let (_, _, apos, arot) =
-                                    placed.iter().find(|(pid, _, _, _)| *pid == c.footprint_id)?;
+                                let (_, _, apos, arot) = placed
+                                    .iter()
+                                    .find(|(pid, _, _, _)| *pid == c.footprint_id)?;
                                 intel::pad_at(p, &c.footprint_id, *apos, *arot, &c.pad)
                             })
                             .map(|pp| at.dist(pp))
@@ -167,8 +171,12 @@ pub fn place(p: &Project, grid: Nm, spacing: Nm) -> Placement {
             Some((_, at, rot)) => {
                 let r = courtyard(p, id, at, rot).expect("checked above");
                 let keep = if plan.role(id) == Role::MountingHole {
-                    Rect::centered(at, mm(intel::MOUNT_HOLE_KEEPOUT_MM * 2.0), mm(intel::MOUNT_HOLE_KEEPOUT_MM * 2.0))
-                        .union(&r)
+                    Rect::centered(
+                        at,
+                        mm(intel::MOUNT_HOLE_KEEPOUT_MM * 2.0),
+                        mm(intel::MOUNT_HOLE_KEEPOUT_MM * 2.0),
+                    )
+                    .union(&r)
                 } else {
                     r
                 };

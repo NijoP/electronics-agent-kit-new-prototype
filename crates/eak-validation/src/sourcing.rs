@@ -48,7 +48,7 @@ pub struct BomRow {
 /// LCSC part numbers are the letter `C` followed by decimal digits.
 pub fn is_lcsc_part_number(s: &str) -> bool {
     let b = s.as_bytes();
-    b.len() >= 2 && b.len() <= 13 && b[0] == b'C' && b[1..].iter().all(u8::is_ascii_digit)
+    (2..=13).contains(&b.len()) && b[0] == b'C' && b[1..].iter().all(u8::is_ascii_digit)
 }
 
 fn present(v: &Option<String>) -> Option<&str> {

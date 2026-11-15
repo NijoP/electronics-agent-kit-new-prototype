@@ -55,9 +55,14 @@ impl std::error::Error for ProviderError {}
 pub enum Served {
     Live,
     /// Fresh cache hit (younger than the TTL).
-    Cache { age_s: u64 },
+    Cache {
+        age_s: u64,
+    },
     /// Supplier failed; this older cached answer is shown instead, never as live data.
-    StaleCache { age_s: u64, because: ErrorKind },
+    StaleCache {
+        age_s: u64,
+        because: ErrorKind,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -159,7 +164,9 @@ impl<P: SupplierProvider> Resilient<P> {
             let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
             let now = Instant::now();
             let wait = match s.last_call {
-                Some(t) => self.min_interval.saturating_sub(now.saturating_duration_since(t)),
+                Some(t) => self
+                    .min_interval
+                    .saturating_sub(now.saturating_duration_since(t)),
                 None => Duration::ZERO,
             };
             // Reserve the slot so concurrent callers queue behind each other.
@@ -297,7 +304,10 @@ mod tests {
     fn second_call_is_a_cache_hit() {
         let (r, calls) = make(0, ErrorKind::Offline);
         assert_eq!(r.lookup("C1").unwrap().served, Served::Live);
-        assert!(matches!(r.lookup("c1").unwrap().served, Served::Cache { .. }));
+        assert!(matches!(
+            r.lookup("c1").unwrap().served,
+            Served::Cache { .. }
+        ));
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 

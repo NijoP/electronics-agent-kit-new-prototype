@@ -560,7 +560,10 @@ pub fn apply_identity(def: &ComponentDef, rec: &SourcingRecord) -> Result<Compon
         }
     }
     let mut out = def.clone();
-    out.set_offer(rec.offer().ok_or("sourcing record has no LCSC part number")?);
+    out.set_offer(
+        rec.offer()
+            .ok_or("sourcing record has no LCSC part number")?,
+    );
     out.mpn = held(&def.mpn).or_else(|| Some(mpn.clone()));
     // Manufacturer and datasheet only fill a gap; an existing library value is kept.
     out.manufacturer = held(&def.manufacturer).or_else(|| rec.manufacturer.clone());
