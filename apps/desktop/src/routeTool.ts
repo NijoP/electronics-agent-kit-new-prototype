@@ -1,5 +1,4 @@
-| { type: "start"; net: string; layer: CopperLayer; at: Point; mode: BendMode; width?: Nm | null }
-  | { type: "setWidth"; width: Nm | null }// Interactive PCB route tool state (pure). The engine computes every legal path
+// Interactive PCB route tool state (pure). The engine computes every legal path
 // (`route_step` IPC -> eak_engineering::interactive); this reducer only records the steps the
 // user fixed with a click and turns the finished route into ONE `Batch` command, so a whole
 // route is one revision and one undo step. Nothing here writes the project.
@@ -12,8 +11,6 @@ export interface RouteStep {
   width: Nm;
   segments: RouteSegment[];
   via: { position: Point; drill: Nm; diameter: Nm } | null;
-  /** Track width override in nm; null uses the net-class width. */
-  width: Nm | null;
 }
 
 export interface RouteDraft {
@@ -27,10 +24,13 @@ export interface RouteDraft {
   viaPending: boolean;
   /** Layer before the pending switch (switching back cancels the via). */
   previousLayer: CopperLayer | null;
+  /** Track width override in nm; null uses the net-class width. */
+  width: Nm | null;
 }
 
 export type RouteAction =
-  | { type: "start"; net: string; layer: CopperLayer; at: Point; mode: BendMode }
+  | { type: "start"; net: string; layer: CopperLayer; at: Point; mode: BendMode; width?: Nm | null }
+  | { type: "setWidth"; width: Nm | null }
   /** Fix the engine's proposal for the current cursor (the result of `route_step`). */
   | { type: "fix"; step: RouteStepReport }
   | { type: "switchLayer"; layer: CopperLayer }

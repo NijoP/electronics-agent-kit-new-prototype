@@ -1,24 +1,3 @@
-              <label title="Track width for this route; empty uses the net-class width">
-                Width (mm)
-                <input aria-label="Track width" inputMode="decimal" placeholder="net class" size={6} value={widthText} onChange={(e) => changeWidth(e.target.value)} />
-              </label>
-              <button type="button" aria-label="Bend mode" title="45° or 90° corners (/)" onClick={toggleMode}>
-                {mode === "diagonal45" ? "45°" : "90°"}
-              </button>
-              {draft && (
-                <>
-                  <span className="route-net" aria-label="Active net">Routing {draft.net} · {layerName(draft.layer)}{draft.viaPending ? " · via next" : ""}</span>
-                  <button type="button" title="Place a via here and continue on the next copper layer (L)" onClick={() => changeLayer(order[(order.findIndex((o) => sameLayer(o, layer)) + 1) % order.length])}>
-                    Via + switch layer
-                  </button>
-                  <button type="button" title="Remove the last fixed step (Backspace)" disabled={!draft.steps.length} onClick={() => dispatch({ type: "back" })}>
-                    Undo step
-                  </button>
-                  <button type="button" title="Discard this route (Esc)" onClick={reset}>
-                    Cancel
-                  </button>
-                </>
-              )}
 // PCB editor: board outline, zones, tracks, vias and footprints from the snapshot, with
 // tools that turn clicks into typed engine commands (outline, move, route, via, delete).
 import { useEffect, useReducer, useRef, useState } from "react";
@@ -580,6 +559,27 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           )}
           {tool === "route" && (
             <>
+              <label title="Track width for this route; empty uses the net-class width">
+                Width (mm)
+                <input aria-label="Track width" inputMode="decimal" placeholder="net class" size={6} value={widthText} onChange={(e) => changeWidth(e.target.value)} />
+              </label>
+              <button type="button" aria-label="Bend mode" title="45° or 90° corners (/)" onClick={toggleMode}>
+                {mode === "diagonal45" ? "45°" : "90°"}
+              </button>
+              {draft && (
+                <>
+                  <span className="route-net" aria-label="Active net">Routing {draft.net} · {layerName(draft.layer)}{draft.viaPending ? " · via next" : ""}</span>
+                  <button type="button" title="Place a via here and continue on the next copper layer (L)" onClick={() => changeLayer(order[(order.findIndex((o) => sameLayer(o, layer)) + 1) % order.length])}>
+                    Via + switch layer
+                  </button>
+                  <button type="button" title="Remove the last fixed step (Backspace)" disabled={!draft.steps.length} onClick={() => dispatch({ type: "back" })}>
+                    Undo step
+                  </button>
+                  <button type="button" title="Discard this route (Esc)" onClick={reset}>
+                    Cancel
+                  </button>
+                </>
+              )}
               <button type="button" onClick={finishRoute} disabled={!draft || !draft.steps.length}>
                 Finish route ({draft?.steps.length ?? 0} steps)
               </button>
