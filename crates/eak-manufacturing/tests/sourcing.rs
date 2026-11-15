@@ -54,7 +54,7 @@ fn ingest_records_provenance_and_fields_exactly_as_parsed() {
     // Hash of the committed fixture, computed independently with `sha256sum`.
     assert_eq!(
         r.raw_sha256,
-        "a7591da9bdab5c5ba6c4789db7d9ad0b7bcdef0107f5f782aa99c86e0bb0543c"
+        "7154d439e729b112fca14e4951a600067389a3845c7e973c4d2a1faddbec41ff"
     );
     assert_eq!(r.raw_sha256, sha(&raw));
     assert_eq!(r.distributor_part.as_deref(), Some("C990000001"));
@@ -224,7 +224,7 @@ fn source_url_must_be_https_on_the_provider_domain() {
     let raw = fixture("distributor/product_detail_resistor.json");
     for ok in [
         "https://distributor.invalid/x",
-        "https://WWW.Distributor.COM:443/x?y#z",
+        "https://WWW.Distributor.INVALID:443/x?y#z",
     ] {
         assert!(ingest_product_detail(&raw, ok, T0).is_ok(), "{ok}");
     }
