@@ -14,9 +14,9 @@ use crate::Session;
 use eak_core::builtin;
 use eak_manufacturing::assembly::{self, AssemblyClass, AssemblyRecord, AssemblyReport};
 use eak_manufacturing::bom::{self, BomLine};
-use eak_manufacturing::fabricator::{self, DfmReport, PrepResult};
 use eak_manufacturing::distributor::{self, UreqFetch};
 use eak_manufacturing::distributor_api::DistributorApi;
+use eak_manufacturing::fabricator::{self, DfmReport, PrepResult};
 use eak_manufacturing::provider::{Answer, ErrorKind, Resilient, Served, SupplierProvider};
 use eak_manufacturing::sourcing::{self, SourcingRecord};
 use eak_runtime::{Actor, Command, CommandRequest, CommandResponse};
@@ -323,7 +323,10 @@ pub fn manufacturing_preview(s: &Session) -> Result<ManufacturingPreview, String
             assembly,
             default_out_dir: e
                 .dir()
-                .map(|d| d.join("output").join(format!("fabricator-rev-{}", p.revision)))
+                .map(|d| {
+                    d.join("output")
+                        .join(format!("fabricator-rev-{}", p.revision))
+                })
                 .map(|d| d.display().to_string()),
         }
     })

@@ -46,10 +46,16 @@ pub struct ImportReport {
 
 impl ImportReport {
     pub fn imported(&self) -> usize {
-        self.items.iter().filter(|i| i.status == ImportStatus::Imported).count()
+        self.items
+            .iter()
+            .filter(|i| i.status == ImportStatus::Imported)
+            .count()
     }
     pub fn rejected(&self) -> usize {
-        self.items.iter().filter(|i| i.status == ImportStatus::Rejected).count()
+        self.items
+            .iter()
+            .filter(|i| i.status == ImportStatus::Rejected)
+            .count()
     }
 }
 
@@ -147,16 +153,25 @@ fn pin_type(t: &str) -> (PinType, Option<&'static str>) {
         "input" => (PinType::Input, None),
         "output" => (PinType::Output, None),
         "bidirectional" => (PinType::Bidirectional, None),
-        "tri_state" => (PinType::Bidirectional, Some("tri_state mapped to bidirectional")),
+        "tri_state" => (
+            PinType::Bidirectional,
+            Some("tri_state mapped to bidirectional"),
+        ),
         "passive" => (PinType::Passive, None),
         "free" => (PinType::Passive, Some("free mapped to passive")),
         "unspecified" => (PinType::Passive, Some("unspecified mapped to passive")),
         "power_in" => (PinType::PowerIn, None),
         "power_out" => (PinType::PowerOut, None),
         "open_collector" => (PinType::OpenCollector, None),
-        "open_emitter" => (PinType::OpenCollector, Some("open_emitter mapped to open_collector")),
+        "open_emitter" => (
+            PinType::OpenCollector,
+            Some("open_emitter mapped to open_collector"),
+        ),
         "no_connect" => (PinType::NoConnect, None),
-        _ => (PinType::Passive, Some("unknown electrical type mapped to passive")),
+        _ => (
+            PinType::Passive,
+            Some("unknown electrical type mapped to passive"),
+        ),
     }
 }
 
@@ -180,10 +195,17 @@ fn rejected(report: &mut ImportReport, name: &str, why: &str) {
 /// reported as `Rejected` items.
 pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, ParseError> {
     let root = parse(src, limits)?;
-    let mut report = ImportReport { format: "kicad_symbol_lib".into(), ..Default::default() };
+    let mut report = ImportReport {
+        format: "kicad_symbol_lib".into(),
+        ..Default::default()
+    };
     let mut symbols = Vec::new();
     if root.head() != Some("kicad_symbol_lib") {
-        rejected(&mut report, "(file)", "top-level element is not kicad_symbol_lib");
+        rejected(
+            &mut report,
+            "(file)",
+            "top-level element is not kicad_symbol_lib",
+        );
         return Ok(SymbolLibImport { symbols, report });
     }
     track_unknown(
@@ -194,7 +216,11 @@ pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, P
     );
     let mut seen: BTreeSet<String> = BTreeSet::new();
     for sym in root.children("symbol") {
-        let name = items(sym).get(1).and_then(Node::text).unwrap_or("").to_string();
+        let name = items(sym)
+            .get(1)
+            .and_then(Node::text)
+            .unwrap_or("")
+            .to_string();
         if name.is_empty() {
             rejected(&mut report, "(unnamed)", "symbol has no name");
             continue;
@@ -242,7 +268,10 @@ pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, P
                 }
             }
             if style == Some(2) {
-                count(&mut report.unsupported, "symbol/alternate_body_style".into());
+                count(
+                    &mut report.unsupported,
+                    "symbol/alternate_body_style".into(),
+                );
                 continue;
             }
             for g in items(sub) {
@@ -346,13 +375,21 @@ pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, P
         symbols.push(SymbolImport {
             name: name.clone(),
             item_id,
-            def: SymbolDef { pins, body_half_w: mm_nm(bw), body_half_h: mm_nm(bh) },
+            def: SymbolDef {
+                pins,
+                body_half_w: mm_nm(bw),
+                body_half_h: mm_nm(bh),
+            },
             footprint: property(sym, "Footprint"),
             datasheet: property(sym, "Datasheet").filter(|d| d != "~"),
             refdes_prefix: refdes,
             value: property(sym, "Value"),
         });
-        report.items.push(ImportItem { name, status: ImportStatus::Imported, notes });
+        report.items.push(ImportItem {
+            name,
+            status: ImportStatus::Imported,
+            notes,
+        });
     }
     Ok(SymbolLibImport { symbols, report })
 }
@@ -364,7 +401,10 @@ fn pad_shape(s: &str) -> (PadShape, Option<&'static str>) {
         "oval" => (PadShape::Oval, None),
         "roundrect" => (PadShape::Rect, Some("roundrect imported as rect")),
         "trapezoid" => (PadShape::Rect, Some("trapezoid imported as rect")),
-        "custom" => (PadShape::Rect, Some("custom pad imported as its anchor rect")),
+        "custom" => (
+            PadShape::Rect,
+            Some("custom pad imported as its anchor rect"),
+        ),
         _ => (PadShape::Rect, Some("unknown pad shape imported as rect")),
     }
 }
@@ -382,16 +422,29 @@ fn drill_of(pad: &Node) -> Option<f64> {
 /// Parse one footprint file.
 pub fn import_footprint(src: &str, limits: Limits) -> Result<FootprintFileImport, ParseError> {
     let root = parse(src, limits)?;
-    let mut report = ImportReport { format: "kicad_footprint".into(), ..Default::default() };
+    let mut report = ImportReport {
+        format: "kicad_footprint".into(),
+        ..Default::default()
+    };
     let head = root.head();
     if head != Some("footprint") && head != Some("module") {
         rejected(&mut report, "(file)", "top-level element is not footprint");
-        return Ok(FootprintFileImport { footprint: None, report });
+        return Ok(FootprintFileImport {
+            footprint: None,
+            report,
+        });
     }
-    let name = items(&root).get(1).and_then(Node::text).unwrap_or("").to_string();
+    let name = items(&root)
+        .get(1)
+        .and_then(Node::text)
+        .unwrap_or("")
+        .to_string();
     if name.is_empty() {
         rejected(&mut report, "(unnamed)", "footprint has no name");
-        return Ok(FootprintFileImport { footprint: None, report });
+        return Ok(FootprintFileImport {
+            footprint: None,
+            report,
+        });
     }
     let mut notes: Vec<String> = Vec::new();
     track_unknown(
@@ -426,7 +479,11 @@ pub fn import_footprint(src: &str, limits: Limits) -> Result<FootprintFileImport
             p,
             &["at", "size", "drill", "layers", "rect_delta"],
         );
-        let number = items(p).get(1).and_then(Node::text).unwrap_or("").to_string();
+        let number = items(p)
+            .get(1)
+            .and_then(Node::text)
+            .unwrap_or("")
+            .to_string();
         let ptype = items(p).get(2).and_then(Node::text).unwrap_or("");
         let shape_text = items(p).get(3).and_then(Node::text).unwrap_or("");
         let kind = match ptype {
@@ -465,13 +522,19 @@ pub fn import_footprint(src: &str, limits: Limits) -> Result<FootprintFileImport
         if (r - 90.0).abs() < 1e-6 || (r - 270.0).abs() < 1e-6 {
             std::mem::swap(&mut w, &mut h);
         } else if r.abs() > 1e-6 && (r - 180.0).abs() > 1e-6 {
-            notes.push(format!("pad {number} rotated {r} degrees imported unrotated"));
+            notes.push(format!(
+                "pad {number} rotated {r} degrees imported unrotated"
+            ));
         }
         let (shape, note) = pad_shape(shape_text);
         if let Some(n) = note {
             notes.push(format!("pad {number}: {n}"));
         }
-        let drill = if kind == PadKind::Tht { drill_of(p) } else { None };
+        let drill = if kind == PadKind::Tht {
+            drill_of(p)
+        } else {
+            None
+        };
         if kind == PadKind::Tht && drill.is_none() {
             notes.push(format!("through-hole pad {number} has no drill; skipped"));
             continue;
@@ -488,7 +551,10 @@ pub fn import_footprint(src: &str, limits: Limits) -> Result<FootprintFileImport
     }
     if pads.is_empty() {
         rejected(&mut report, &name, "footprint has no usable pads");
-        return Ok(FootprintFileImport { footprint: None, report });
+        return Ok(FootprintFileImport {
+            footprint: None,
+            report,
+        });
     }
     // Courtyard: extent of graphics on the courtyard layers.
     let (mut cx, mut cy, mut have_court) = (0.0f64, 0.0f64, false);
@@ -503,7 +569,10 @@ pub fn import_footprint(src: &str, limits: Limits) -> Result<FootprintFileImport
             .and_then(Node::text)
             .unwrap_or("");
         if !layer.ends_with("CrtYd") {
-            count(&mut report.unsupported, format!("footprint_graphics/{h}:{layer}"));
+            count(
+                &mut report.unsupported,
+                format!("footprint_graphics/{h}:{layer}"),
+            );
             continue;
         }
         let mut pts: Vec<(f64, f64)> = Vec::new();
@@ -558,7 +627,11 @@ pub fn import_footprint(src: &str, limits: Limits) -> Result<FootprintFileImport
         .and_then(|d| items(d).get(1))
         .and_then(Node::text)
         .map(str::to_string);
-    report.items.push(ImportItem { name: name.clone(), status: ImportStatus::Imported, notes });
+    report.items.push(ImportItem {
+        name: name.clone(),
+        status: ImportStatus::Imported,
+        notes,
+    });
     Ok(FootprintFileImport {
         footprint: Some(FootprintImport {
             item_id,
@@ -608,8 +681,15 @@ mod tests {
         assert_eq!(s.datasheet, None);
         assert_eq!(s.refdes_prefix.as_deref(), Some("R"));
         assert_eq!(r.report.imported(), 1);
-        assert_eq!(r.report.rejected(), 2, "EMPTY and the duplicate must be rejected visibly");
-        assert_eq!(r.report.unsupported.get("symbol_graphics/polyline"), Some(&1));
+        assert_eq!(
+            r.report.rejected(),
+            2,
+            "EMPTY and the duplicate must be rejected visibly"
+        );
+        assert_eq!(
+            r.report.unsupported.get("symbol_graphics/polyline"),
+            Some(&1)
+        );
         let notes = &r.report.items[0].notes;
         assert!(notes.iter().any(|n| n.contains("free mapped to passive")));
     }
@@ -655,7 +735,12 @@ mod tests {
         assert!(notes.iter().any(|n| n.contains("repeated")));
         assert!(notes.iter().any(|n| n.contains("np_thru_hole")));
         assert_eq!(r.report.unsupported.get("footprint/fp_text"), Some(&1));
-        assert_eq!(r.report.unsupported.get("footprint_graphics/fp_line:F.SilkS"), Some(&1));
+        assert_eq!(
+            r.report
+                .unsupported
+                .get("footprint_graphics/fp_line:F.SilkS"),
+            Some(&1)
+        );
     }
 
     #[test]

@@ -121,26 +121,40 @@ fn version_ok(s: &str) -> bool {
 
 /// 64 lower-case hex characters.
 pub fn is_content_hash(s: &str) -> bool {
-    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    s.len() == 64
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 impl LibraryManifest {
     pub fn validate(&self) -> Vec<String> {
         let mut out = Vec::new();
         if !ident_ok(&self.id) {
-            out.push(format!("library id '{}' is not a valid identifier", self.id));
+            out.push(format!(
+                "library id '{}' is not a valid identifier",
+                self.id
+            ));
         }
         if !ident_ok(&self.namespace) {
-            out.push(format!("namespace '{}' is not a valid identifier", self.namespace));
+            out.push(format!(
+                "namespace '{}' is not a valid identifier",
+                self.namespace
+            ));
         }
         if self.name.trim().is_empty() {
             out.push(format!("{}: name is empty", self.id));
         }
         if !version_ok(&self.version) {
-            out.push(format!("{}: version '{}' is not dotted numeric", self.id, self.version));
+            out.push(format!(
+                "{}: version '{}' is not dotted numeric",
+                self.id, self.version
+            ));
         }
         if !is_content_hash(&self.content_hash) {
-            out.push(format!("{}: content hash is not 64 lower-case hex characters", self.id));
+            out.push(format!(
+                "{}: content hash is not 64 lower-case hex characters",
+                self.id
+            ));
         }
         if self.license.trim().is_empty() {
             out.push(format!("{}: licence is not recorded", self.id));
@@ -172,13 +186,16 @@ impl QualifiedId {
         if item.is_empty()
             || item.len() > 128
             || item.contains("..")
-            || !item.bytes().all(|b| {
-                b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'+' | b'/' | b'-')
-            })
+            || !item
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'+' | b'/' | b'-'))
         {
             return Err(format!("item part '{item}' is not a valid identifier"));
         }
-        Ok(Self { library: lib.to_string(), item: item.to_string() })
+        Ok(Self {
+            library: lib.to_string(),
+            item: item.to_string(),
+        })
     }
 }
 
@@ -204,7 +221,10 @@ pub enum RefStatus {
     Current,
     /// The library is installed but differs from what the project committed. The project keeps
     /// its own snapshot until the user accepts the update.
-    Drifted { installed_version: String, installed_hash: String },
+    Drifted {
+        installed_version: String,
+        installed_hash: String,
+    },
     /// Library not installed.
     MissingLibrary,
     /// Library installed but disabled.
@@ -277,7 +297,10 @@ impl LibraryCatalog {
 
     /// Libraries in a scope, in id order.
     pub fn in_scope(&self, scope: LibraryScope) -> Vec<&LibraryManifest> {
-        self.libraries.values().filter(|m| m.scope == scope).collect()
+        self.libraries
+            .values()
+            .filter(|m| m.scope == scope)
+            .collect()
     }
 
     /// Enabled libraries, in id order. Placement and search only ever see these.
@@ -357,7 +380,10 @@ mod tests {
         );
         let mut same_name = manifest("b", LibraryScope::User);
         same_name.name = "LIBRARY A".into();
-        assert!(matches!(c.install(same_name), Err(CatalogError::DuplicateName(..))));
+        assert!(matches!(
+            c.install(same_name),
+            Err(CatalogError::DuplicateName(..))
+        ));
         assert_eq!(c.get("a").unwrap().scope, LibraryScope::System);
     }
 
@@ -389,7 +415,10 @@ mod tests {
         c.install(newer).unwrap();
         assert_eq!(
             c.check_ref(&r),
-            RefStatus::Drifted { installed_version: "1.1.0".into(), installed_hash: hash('b') }
+            RefStatus::Drifted {
+                installed_version: "1.1.0".into(),
+                installed_hash: hash('b')
+            }
         );
         c.set_enabled("a", false).unwrap();
         assert_eq!(c.check_ref(&r), RefStatus::Disabled);

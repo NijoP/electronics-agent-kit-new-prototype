@@ -18,7 +18,7 @@ use crate::models::KeyStore;
 use eak_core::ComponentDef;
 use eak_manufacturing::distributor::{Fetch, UreqFetch};
 use eak_manufacturing::distributor_api::{
-    ApiError, Catalogue, CategoryNode, CredentialSource, Credentials, Fetched, DistributorApi,
+    ApiError, Catalogue, CategoryNode, CredentialSource, Credentials, DistributorApi, Fetched,
     Manufacturer, SearchRequest, APPLY_URL, DEFAULT_LIMIT, MAX_LIMIT, PRODUCTION_BASE,
 };
 use eak_manufacturing::library_link::{link_record, Link, Scope};
@@ -424,7 +424,11 @@ pub fn search_linked<F: Fetch>(
         let query = keyword.clone().unwrap_or_default();
         let links = kept
             .iter()
-            .filter_map(|r| r.distributor_part.clone().map(|l| (l, link_record(r, defs))))
+            .filter_map(|r| {
+                r.distributor_part
+                    .clone()
+                    .map(|l| (l, link_record(r, defs)))
+            })
             .collect();
         Fetched {
             served: f.served,

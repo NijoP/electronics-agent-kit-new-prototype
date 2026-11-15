@@ -17,7 +17,11 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Self {
-        Self { max_bytes: 8 * 1024 * 1024, max_depth: 64, max_nodes: 2_000_000 }
+        Self {
+            max_bytes: 8 * 1024 * 1024,
+            max_depth: 64,
+            max_nodes: 2_000_000,
+        }
     }
 }
 
@@ -86,7 +90,7 @@ impl Node {
     }
 
     /// First child list with head `name`.
-    pub fn child(&self, name: &str) -> Option<&Node> {
+    pub fn child<'a>(&'a self, name: &'a str) -> Option<&'a Node> {
         self.children(name).next()
     }
 }
@@ -212,7 +216,10 @@ mod tests {
         let sym = n.child("symbol").unwrap();
         assert_eq!(sym.as_list().unwrap()[1].text(), Some("R"));
         let pin = sym.child("pin").unwrap();
-        assert_eq!(pin.child("number").unwrap().as_list().unwrap()[1].text(), Some("1"));
+        assert_eq!(
+            pin.child("number").unwrap().as_list().unwrap()[1].text(),
+            Some("1")
+        );
         assert_eq!(n.children("symbol").count(), 1);
     }
 
@@ -229,19 +236,43 @@ mod tests {
         assert_eq!(parse("(a (b)", l), Err(ParseError::Unclosed(1)));
         assert_eq!(parse("(a))", l), Err(ParseError::UnbalancedClose(1)));
         assert_eq!(parse("(a)\n(b)", l), Err(ParseError::Trailing(2)));
-        assert_eq!(parse("(a\n\"open", l), Err(ParseError::UnterminatedString(2)));
+        assert_eq!(
+            parse("(a\n\"open", l),
+            Err(ParseError::UnterminatedString(2))
+        );
     }
 
     #[test]
     fn limits_bound_size_depth_and_node_count() {
-        let small = Limits { max_bytes: 4, ..Limits::default() };
-        assert!(matches!(parse("(abcdef)", small), Err(ParseError::TooLarge(8, 4))));
-        let shallow = Limits { max_depth: 2, ..Limits::default() };
-        assert!(matches!(parse("(((a)))", shallow), Err(ParseError::TooDeep(1, 2))));
-        let few = Limits { max_nodes: 3, ..Limits::default() };
-        assert!(matches!(parse("(a b c d)", few), Err(ParseError::TooManyNodes(3))));
+        let small = Limits {
+            max_bytes: 4,
+            ..Limits::default()
+        };
+        assert!(matches!(
+            parse("(abcdef)", small),
+            Err(ParseError::TooLarge(8, 4))
+        ));
+        let shallow = Limits {
+            max_depth: 2,
+            ..Limits::default()
+        };
+        assert!(matches!(
+            parse("(((a)))", shallow),
+            Err(ParseError::TooDeep(1, 2))
+        ));
+        let few = Limits {
+            max_nodes: 3,
+            ..Limits::default()
+        };
+        assert!(matches!(
+            parse("(a b c d)", few),
+            Err(ParseError::TooManyNodes(3))
+        ));
         // Hostile deep nesting is cut off long before the stack could overflow.
         let deep = "(".repeat(100_000);
-        assert!(matches!(parse(&deep, Limits::default()), Err(ParseError::TooDeep(..))));
+        assert!(matches!(
+            parse(&deep, Limits::default()),
+            Err(ParseError::TooDeep(..))
+        ));
     }
 }
