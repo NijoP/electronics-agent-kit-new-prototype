@@ -93,16 +93,33 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="appbar" role="tablist" aria-label="Workspaces">
+      <header className="appbar">
         <span className="brand">EAK</span>
-        <button type="button" role="tab" aria-selected={active === "eda"} className={active === "eda" ? "app-tab on" : "app-tab"} onClick={() => show("eda")} title="Electronics workspace: project, schematic, PCB">
+        <div
+          className="app-tabs"
+          role="tablist"
+          aria-label="Workspaces"
+          onKeyDown={(e) => {
+            // Arrow / Home / End move between workspaces (roving tabindex, automatic activation).
+            const ids = ["eda", ...apps.map((a) => a.id)];
+            const i = ids.indexOf(active);
+            const next = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? ids.length - 1 : null;
+            if (next === null) return;
+            e.preventDefault();
+            const id = ids[(next + ids.length) % ids.length];
+            show(id);
+            requestAnimationFrame(() => document.getElementById(`app-tab-${id}`)?.focus());
+          }}
+        >
+        <button type="button" role="tab" id="app-tab-eda" tabIndex={active === "eda" ? 0 : -1} aria-selected={active === "eda"} className={active === "eda" ? "app-tab on" : "app-tab"} onClick={() => show("eda")} title="Electronics workspace: project, schematic, PCB">
           Project / EDA
         </button>
         {apps.map((a) => (
-          <button key={a.id} type="button" role="tab" aria-selected={active === a.id} className={active === a.id ? "app-tab on" : "app-tab"} onClick={() => show(a.id)} title={tip(a.label, a.shortcut)}>
+          <button key={a.id} type="button" role="tab" id={`app-tab-${a.id}`} tabIndex={active === a.id ? 0 : -1} aria-selected={active === a.id} className={active === a.id ? "app-tab on" : "app-tab"} onClick={() => show(a.id)} title={tip(a.label, a.shortcut)}>
             {a.label}
           </button>
         ))}
+        </div>
         {creator && (
           <button type="button" className="app-new" aria-label={creator.newLabel ?? `New ${creator.label} space`} title={`${creator.newLabel ?? `New ${creator.label} space`} (${formatShortcut(SHORTCUTS.newTerminalSpace)})`} onClick={newSpace}>
             +

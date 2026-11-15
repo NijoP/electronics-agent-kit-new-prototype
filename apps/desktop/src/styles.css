@@ -339,12 +339,14 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 
 /* ---- App shell: workspaces bar, hosts ---- */
 .app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--bg-app); }
-.appbar { display: flex; align-items: center; gap: var(--s-quarter); height: var(--h-bar); padding: 0 var(--s-1); background: var(--bg-panel); border-bottom: 1px solid var(--line); }
-.appbar .brand { font-weight: 700; letter-spacing: 0.08em; color: var(--accent); font-size: var(--fs-sm); margin-right: var(--s-2); }
-.app-tab { height: var(--h-sm); padding: 0 var(--s-1h); font-weight: var(--fw-medium); border: 0; background: transparent; color: var(--fg-dim); border-radius: var(--r-1); }
+.appbar { display: flex; align-items: center; gap: var(--s-1); height: var(--h-tab); padding: 0 var(--s-1h); background: var(--bg-panel); border-bottom: 1px solid var(--line); }
+.app-tabs { display: flex; align-items: stretch; gap: var(--s-half); height: 100%; }
+.appbar .brand { font-weight: 700; letter-spacing: 0.08em; color: var(--accent); font-size: var(--fs-lg); margin-right: var(--s-1h); }
+.app-tab { height: 100%; min-width: 120px; padding: 0 var(--s-2); font-size: var(--fs-lg); font-weight: var(--fw-medium); border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--fg-dim); border-radius: var(--r-1) var(--r-1) 0 0; }
 .app-tab:hover { background: var(--bg-hover); color: var(--fg); }
-.app-tab.on { background: var(--bg-active); color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
-.app-new { width: var(--h-sm); height: var(--h-sm); padding: 0; border: 1px solid var(--line); background: transparent; color: var(--fg-dim); border-radius: var(--r-1); font-size: 16px; line-height: 1; }
+.app-tab.on { background: var(--bg-active); color: var(--fg); font-weight: var(--fw-strong); border-bottom-color: var(--accent); }
+.app-tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.app-new { width: var(--h-xl); height: var(--h-xl); padding: 0; border: 1px solid var(--line); background: transparent; color: var(--fg-dim); border-radius: var(--r-1); font-size: 16px; line-height: 1; }
 .app-new:hover { background: var(--bg-hover); color: var(--fg); }
 .appbar-project { margin-left: auto; max-width: 40%; padding: 0 var(--s-1); font-size: var(--fs-sm); color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-main { min-height: 0; position: relative; }
