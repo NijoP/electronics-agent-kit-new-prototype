@@ -566,3 +566,9 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .term-nested:hover { background: var(--bg-hover); color: var(--fg); }
 .term-nested.on { background: var(--accent-soft); color: var(--fg); }
 .term-nested:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* PCB net highlight: every track, via and zone on the selected track's net. */
+.net-hit { filter: drop-shadow(0 0 1px var(--accent)); }
+.net-hit line.track { stroke: var(--accent) !important; }
+.zone.net-hit { stroke: var(--accent) !important; stroke-width: 0.3; fill-opacity: 0.45; }
+.via.net-hit circle:not(.drill) { stroke: var(--accent); stroke-width: 0.2; }

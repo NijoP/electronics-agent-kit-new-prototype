@@ -129,6 +129,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const [trackSel, setTrackSel] = useState<Id | null>(null);
   const [trackWidthText, setTrackWidthText] = useState("");
   const selTrack = trackSel ? pcb.tracks[trackSel] : undefined;
+  // Net highlight: selecting a track lights every track, via and zone of its net.
+  const hiNet = selTrack?.net ?? null;
+  const netHit = (net: string) => (hiNet !== null && net === hiNet ? " net-hit" : "");
   const routeNet = draft?.net ?? null;
 
   const pads = snapshot.geometry.footprints.flatMap((f) => f.pads.map((p) => ({ at: p.position, net: p.net })));
@@ -771,7 +774,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             <polygon
               key={z.id}
               data-zone-id={z.id}
-              className={`zone ${layerKey(z.layer)}${highlighted.has(z.id) ? " finding-hit" : ""}`}
+              className={`zone ${layerKey(z.layer)}${highlighted.has(z.id) ? " finding-hit" : ""}${netHit(z.net)}`}
               style={{ fill: layerColour(z.layer), stroke: layerColour(z.layer) }}
               points={poly(z.outline)}
             >
@@ -784,7 +787,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           const [x1, y1] = toView(t.a);
           const [x2, y2] = toView(t.b);
           return (
-            <g key={t.id} data-track-id={t.id} className={`${highlighted.has(t.id) ? "finding-hit" : ""}${t.id === trackSel ? " selected-track" : ""}` || undefined}>
+            <g key={t.id} data-track-id={t.id} className={`${highlighted.has(t.id) ? "finding-hit" : ""}${t.id === trackSel ? " selected-track" : ""}${netHit(t.net)}` || undefined}>
               <line className={`track ${layerKey(t.layer)}`} style={{ stroke: layerColour(t.layer) }} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={mm(t.width)}>
                 <title>{`${t.net} (${layerName(t.layer)})`}</title>
               </line>
@@ -860,7 +863,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           .map((v) => {
           const [x, y] = toView(v.position);
           return (
-            <g key={v.id} className={highlighted.has(v.id) ? "via finding-hit" : "via"} data-via-id={v.id}>
+            <g key={v.id} className={`${highlighted.has(v.id) ? "via finding-hit" : "via"}${netHit(v.net)}`} data-via-id={v.id}>
               <title>{`${viaKind(v.from ?? "top", v.to ?? "bottom")} via ${v.net} (${layerName(v.from ?? "top")}→${layerName(v.to ?? "bottom")})`}</title>
               <circle cx={x} cy={y} r={mm(v.diameter) / 2} />
               <circle className="drill" cx={x} cy={y} r={mm(v.drill) / 2} />
