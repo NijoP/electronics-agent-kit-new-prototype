@@ -32,3 +32,29 @@ describe("Project Home status line (unrun)", () => {
     expect(line).not.toContain("error");
   });
 });
+
+describe("Project Home lock wording (unrun)", () => {
+  it("explains an interrupted session without process ids", async () => {
+    const { lockCopy } = await import("./ProjectHome");
+    const c = lockCopy({ state: "interrupted", pending_operations: 2 });
+    expect(c.title).toBe("Previous session interrupted");
+    expect(c.body).toContain("2 unfinished operations");
+    expect(c.body).not.toMatch(/process \d/);
+  });
+  it("never offers takeover wording for a live or unverifiable holder", async () => {
+    const { lockCopy } = await import("./ProjectHome");
+    expect(lockCopy({ state: "open_elsewhere", this_app: false }).title).toBe("Open elsewhere");
+    expect(lockCopy({ state: "unverifiable", reason: "the lock was written on another computer" }).body).toContain("will not take over");
+  });
+});
+describe("Project Home sort (unrun)", () => {
+  it("sorts by name, modified and last opened without mutating the input", async () => {
+    const { sortRecent } = await import("./ProjectHome");
+    const a = { ...row("B", "/b"), last_opened_ms: 1 };
+    const b = { ...row("A", "/a"), last_opened_ms: 2 };
+    const input = [a, b];
+    expect(sortRecent(input, "name").map((r) => r.name)).toEqual(["A", "B"]);
+    expect(sortRecent(input, "opened").map((r) => r.name)).toEqual(["A", "B"]);
+    expect(input[0]).toBe(a);
+  });
+});

@@ -163,9 +163,14 @@ fn locked_project_needs_explicit_take_over() {
     assert!(open_project(&s, &path(&d), false)
         .unwrap_err()
         .contains("locked"));
+    // The holder is this live process: takeover is refused, never forced (ADR-0029).
+    assert!(open_project(&s, &path(&d), true).unwrap_err().contains("locked"));
+    drop(holder);
+    // A lock left by a process that is gone is an interrupted session: takeover recovers it.
+    std::fs::write(d.join(".lock"), "4000000000").unwrap();
+    assert!(open_project(&s, &path(&d), false).unwrap_err().contains("interrupted"));
     let snap = open_project(&s, &path(&d), true).unwrap();
     assert_eq!(snap.project.name, "Held");
-    drop(holder);
     close_project(&s).unwrap();
     let _ = std::fs::remove_dir_all(&d);
 }

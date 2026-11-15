@@ -9,7 +9,7 @@
 //!   checkpoints/       named full snapshots
 //!   evidence/          verification reports bound to revisions
 //!   outputs/           manufacturing packages
-//!   .lock              project write lock (pid)
+//!   .lock              project write lock (pid, host); see `inspect_lock`
 //! ```
 
 use crate::delta::Change;
@@ -76,20 +76,184 @@ impl Drop for ProjectLock {
     }
 }
 
+/// What the project's `.lock` file means right now (ADR-0029). Locks are never deleted or overridden
+/// automatically: only [`LockState::Interrupted`] may be taken over, and only on explicit request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum LockState {
+    /// No lock file: the project can be opened.
+    Unlocked,
+    /// A live process holds it (`this_app`: this very EAK process, e.g. a second window).
+    OpenElsewhere { this_app: bool },
+    /// The holder is provably gone (same host, process not running): a previous session ended
+    /// without releasing. `pending_operations` is how many journalled operations will be reconciled
+    /// on open (recovery available when non-zero). Takeover is safe.
+    Interrupted { pending_operations: usize },
+    /// A lock exists but its holder cannot be judged (other machine, unreadable or unknown
+    /// format, liveness check unavailable). Never taken over automatically.
+    Unverifiable { reason: String },
+    /// The project folder cannot be inspected at all.
+    Unavailable { reason: String },
+}
+
+/// Lock file content: `pid`, then optionally `host` on a second line.
+fn host_id() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        fs::read_to_string("/proc/sys/kernel/hostname")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::env::var("COMPUTERNAME").ok().filter(|s| !s.is_empty())
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    {
+        std::process::Command::new("hostname")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+}
+
+/// `Some(true/false)` when the process table answers, `None` when it cannot be asked.
+fn pid_alive(pid: u32) -> Option<bool> {
+    if pid == std::process::id() {
+        return Some(true);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Some(Path::new(&format!("/proc/{pid}")).exists())
+    }
+    #[cfg(all(unix, not(target_os = "linux")))]
+    {
+        std::process::Command::new("kill")
+            .args(["-0", &pid.to_string()])
+            .output()
+            .ok()
+            .map(|o| o.status.success())
+    }
+    #[cfg(windows)]
+    {
+        let out = std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
+            .output()
+            .ok()?;
+        Some(String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\"")))
+    }
+}
+
+/// Journal operations still pending (not committed/aborted) that `recover` will reconcile.
+pub fn pending_operations(dir: &Path) -> usize {
+    let mut open: Vec<String> = vec![];
+    for e in read_journal(dir) {
+        match e.state {
+            EntryState::Pending => open.push(e.op_id),
+            _ => open.retain(|o| *o != e.op_id),
+        }
+    }
+    open.len()
+}
+
+/// Read-only: classify the project's lock. A reused process id looks alive, which errs on the safe
+/// side (reported as open elsewhere, never as takeover-safe).
+pub fn inspect_lock(dir: &Path) -> LockState {
+    let path = dir.join(".lock");
+    let text = match fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return if dir.is_dir() {
+                LockState::Unlocked
+            } else {
+                LockState::Unavailable {
+                    reason: "the project folder does not exist or is not a folder".into(),
+                }
+            };
+        }
+        Err(e) => {
+            return LockState::Unavailable {
+                reason: format!("the lock file cannot be read: {e}"),
+            }
+        }
+    };
+    let mut lines = text.lines();
+    let Some(pid) = lines.next().and_then(|l| l.trim().parse::<u32>().ok()) else {
+        // Empty or unparsable: a writer may be mid-write, or the file is foreign. Do not judge.
+        return LockState::Unverifiable {
+            reason: "the lock file does not name its holder".into(),
+        };
+    };
+    if let Some(host) = lines.next().map(str::trim).filter(|h| !h.is_empty()) {
+        if host_id().as_deref() != Some(host) {
+            return LockState::Unverifiable {
+                reason: "the lock was written on another computer".into(),
+            };
+        }
+    } else if host_id().is_none() {
+        return LockState::Unverifiable {
+            reason: "this computer could not be identified".into(),
+        };
+    }
+    match pid_alive(pid) {
+        Some(true) => LockState::OpenElsewhere {
+            this_app: pid == std::process::id(),
+        },
+        Some(false) => LockState::Interrupted {
+            pending_operations: pending_operations(dir),
+        },
+        None => LockState::Unverifiable {
+            reason: "whether the holder is still running could not be checked".into(),
+        },
+    }
+}
+
+/// Plain wording for a refused open; the structured state is what the UI acts on.
+fn lock_message(s: &LockState) -> String {
+    match s {
+        LockState::OpenElsewhere { this_app: true } => {
+            "project is locked: it is already open in this EAK app".into()
+        }
+        LockState::OpenElsewhere { .. } => {
+            "project is locked: it is open in another EAK window or process".into()
+        }
+        LockState::Interrupted { .. } => {
+            "project is locked: the previous session was interrupted; recover and open to continue"
+                .into()
+        }
+        LockState::Unverifiable { reason } => {
+            format!("project is locked and cannot be taken over safely: {reason}")
+        }
+        LockState::Unlocked => "project lock could not be created".into(),
+        LockState::Unavailable { reason } => format!("project access unavailable: {reason}"),
+    }
+}
+
+/// Take the project write lock. `take_over` removes an existing lock only when [`inspect_lock`]
+/// proves the previous holder is gone; a live or unverifiable holder is never overridden.
 pub fn acquire_lock(dir: &Path, take_over: bool) -> Result<ProjectLock, String> {
     let path = dir.join(".lock");
     if take_over {
-        let _ = fs::remove_file(&path);
+        match inspect_lock(dir) {
+            LockState::Interrupted { .. } => {
+                let _ = fs::remove_file(&path);
+            }
+            LockState::Unlocked => {}
+            other => return Err(lock_message(&other)),
+        }
     }
     match OpenOptions::new().write(true).create_new(true).open(&path) {
         Ok(mut f) => {
             let _ = write!(f, "{}", std::process::id());
+            if let Some(h) = host_id() {
+                let _ = write!(f, "\n{h}");
+            }
             Ok(ProjectLock { path })
         }
-        Err(_) => {
-            let holder = fs::read_to_string(&path).unwrap_or_default();
-            Err(format!("project is locked by process {holder} (open elsewhere, or a previous session crashed — reopen with recovery to take over)"))
-        }
+        Err(_) => Err(lock_message(&inspect_lock(dir))),
     }
 }
 

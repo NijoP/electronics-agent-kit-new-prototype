@@ -54,6 +54,8 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .home-cta { display: flex; gap: var(--s-1); flex-wrap: wrap; margin-top: var(--s-1); }
 .home-cta button { height: var(--h-lg); padding: 0 var(--s-2); }
 .home-alert { margin: 0; padding: var(--s-1) var(--s-1h); border-radius: var(--r-1); color: var(--err); background: var(--err-soft); }
+.home-lock { display: grid; gap: var(--s-1); max-width: 640px; padding: var(--s-2); border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: var(--r-2); background: var(--bg-panel); }
+.home-lock p { margin: 0; }
 .home-new { display: grid; gap: var(--s-1h); max-width: 520px; padding: var(--s-2); border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg-panel); }
 .home-new label { display: grid; gap: var(--s-half); font-size: var(--fs-sm); color: var(--fg-dim); }
 .home-new label input, .home-new label select { color: var(--fg); height: var(--h-md); }

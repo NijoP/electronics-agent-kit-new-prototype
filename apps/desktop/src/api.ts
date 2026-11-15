@@ -12,6 +12,7 @@ import type {
   Command,
   CommandError,
   CommandResponse,
+  LockState,
   ConnectivityReport,
   ConnectionReport,
   EngineEvent,
@@ -141,6 +142,7 @@ export const api = {
   createProject: (path: string, name: string) => call<Snapshot>("create_project", { path, name }),
   openProject: (path: string, takeOverLock: boolean) =>
     call<Snapshot>("open_project", { path, take_over_lock: takeOverLock }),
+  projectLockState: (path: string) => call<LockState>("project_lock_state", { path }),
   closeProject: () => call<void>("close_project"),
   currentProject: () => call<Snapshot>("current_project"),
   execute: (expectedRevision: number, command: Command) =>

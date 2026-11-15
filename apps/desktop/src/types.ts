@@ -316,6 +316,14 @@ export interface ProjectStatus {
   unresolved_errors: number | null;
 }
 
+/** Meaning of a project's `.lock` (eak_runtime::store::LockState, ADR-0029). */
+export type LockState =
+  | { state: "unlocked" }
+  | { state: "open_elsewhere"; this_app: boolean }
+  | { state: "interrupted"; pending_operations: number }
+  | { state: "unverifiable"; reason: string }
+  | { state: "unavailable"; reason: string };
+
 export interface RecentProject {
   path: string;
   project_id: Id;

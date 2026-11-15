@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, pickFolder } from "./api";
 import { formatShortcut, HOME_SHORTCUTS, matches, tip } from "./design/shortcuts";
 import { EmptyState, Pill } from "./design/ui";
-import type { ProjectStatus, RecentProject, Snapshot } from "./types";
+import type { LockState, ProjectStatus, RecentProject, Snapshot } from "./types";
 
 interface Props {
   onOpened: (s: Snapshot) => void;
@@ -99,6 +99,54 @@ function validation(s: ProjectStatus | null | undefined): { tone: "ok" | "warn" 
   return { tone: "ok", text: "Checks current" };
 }
 
+/** Plain-language explanation of a locked project and the one safe action, if there is one. */
+export function lockCopy(s: LockState): { title: string; body: string } {
+  switch (s.state) {
+    case "open_elsewhere":
+      return s.this_app
+        ? { title: "Already open", body: "This project is already open in this EAK app. Switch to it instead of opening it again." }
+        : { title: "Open elsewhere", body: "This project is open in another EAK window or process. Close it there, then try again. EAK does not override a lock held by a running session." };
+    case "interrupted":
+      return {
+        title: "Previous session interrupted",
+        body:
+          s.pending_operations > 0
+            ? `The last session ended without closing the project, with ${s.pending_operations} unfinished operation${s.pending_operations === 1 ? "" : "s"}. Recovery is available: EAK checks them against the saved project and never replays them blindly.`
+            : "The last session ended without closing the project. No unfinished operations were found, and the project file is untouched.",
+      };
+    case "unverifiable":
+      return { title: "Cannot confirm it is safe to open", body: `${s.reason[0].toUpperCase()}${s.reason.slice(1)}. EAK will not take over a lock it cannot prove is stale.` };
+    case "unavailable":
+      return { title: "Project access unavailable", body: `${s.reason[0].toUpperCase()}${s.reason.slice(1)}. Check that the folder exists and that you can read and write it.` };
+    default:
+      return { title: "Project could not be opened", body: "Try again." };
+  }
+}
+
+function LockNotice(p: { lock: { path: string; state: LockState }; busy: boolean; confirming: boolean; onConfirm: () => void; onCancel: () => void; onRecover: () => void; onRetry: () => void }) {
+  const { title, body } = lockCopy(p.lock.state);
+  const interrupted = p.lock.state.state === "interrupted";
+  return (
+    <section role="alert" className="home-lock" aria-label="Project lock">
+      <strong>{title}</strong>
+      <p className="muted">{body}</p>
+      <p className="home-path muted">{p.lock.path}</p>
+      <div className="home-actions">
+        {interrupted && !p.confirming && (
+          <button type="button" className="primary" disabled={p.busy} onClick={p.onConfirm}>Recover and open…</button>
+        )}
+        {interrupted && p.confirming && (
+          <>
+            <button type="button" className="primary" disabled={p.busy} onClick={p.onRecover}>Confirm: recover and open</button>
+            <button type="button" className="ghost" onClick={p.onCancel}>Cancel</button>
+          </>
+        )}
+        {!interrupted && <button type="button" disabled={p.busy} onClick={p.onRetry}>Try again</button>}
+      </div>
+    </section>
+  );
+}
+
 export function ProjectHome({ onOpened, active = true, theme, onTheme, onSettings }: Props) {
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -112,6 +160,8 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
   const [layers, setLayers] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lock, setLock] = useState<{ path: string; state: LockState } | null>(null);
+  const [confirmRecover, setConfirmRecover] = useState(false);
   const session = loadSession();
   const searchRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -149,7 +199,24 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
       return null;
     }
   };
-  const openPath = (dir: string) => attempt(() => api.openProject(dir, false));
+  // A refused open is explained from the typed lock state (never raw process ids); takeover is only
+  // offered for an interrupted session and only after an explicit confirmation.
+  const openPath = async (dir: string, takeOver = false) => {
+    setLock(null);
+    setConfirmRecover(false);
+    setBusy(true);
+    setError(null);
+    try {
+      onOpened(await api.openProject(dir, takeOver));
+    } catch (e) {
+      const message = String(e).replace(/^Error: /, "");
+      const state = await api.projectLockState(dir).catch(() => null);
+      if (state && state.state !== "unlocked") setLock({ path: dir, state });
+      else setError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
   const openFolder = async () => {
     const dir = await choose("Open an EAK project folder");
     if (dir) await openPath(dir);
@@ -292,6 +359,18 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
           <p role="alert" className="home-alert">
             {error}
           </p>
+        )}
+
+        {lock && (
+          <LockNotice
+            lock={lock}
+            busy={busy}
+            confirming={confirmRecover}
+            onConfirm={() => setConfirmRecover(true)}
+            onCancel={() => setConfirmRecover(false)}
+            onRecover={() => void openPath(lock.path, true)}
+            onRetry={() => void openPath(lock.path)}
+          />
         )}
 
         {creating && (

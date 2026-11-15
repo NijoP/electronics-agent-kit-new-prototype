@@ -22,7 +22,7 @@ pub mod workspace;
 
 use eak_core::{Id, Nm, PadKind, PadShape, Point, Project, Rotation, Side};
 use eak_runtime::index::{Index, RecentProject};
-use eak_runtime::store::RecoveryReport;
+use eak_runtime::store::{LockState, RecoveryReport};
 use eak_runtime::{Actor, Command, CommandRequest, CommandResponse, Engine, Event};
 use eak_validation::{drc, erc, Report};
 use serde::{Deserialize, Serialize};
@@ -511,6 +511,11 @@ pub fn open_project(s: &Session, path: &str, take_over_lock: bool) -> Result<Sna
     install(s, &dir, || Engine::open(&dir, take_over_lock))
 }
 
+/// Read-only: what the project's lock means (open elsewhere, interrupted, unverifiable, ...).
+pub fn project_lock_state(path: &str) -> Result<LockState, String> {
+    Ok(eak_runtime::store::inspect_lock(&project_dir(path)?))
+}
+
 /// Close the active project; the most recently opened remaining one (if any) becomes active.
 pub fn close_project(s: &Session) -> Result<(), String> {
     let mut guard = s.engine()?;
@@ -941,6 +946,7 @@ pub const IPC_COMMANDS: [&str; 54] = [
     "export_manufacturing",
     "create_project",
     "open_project",
+    "project_lock_state",
     "close_project",
     "current_project",
     "execute_command",
@@ -1033,6 +1039,11 @@ pub mod cmd {
             super::open_project(s, &path, take_over_lock)
         })
         .await
+    }
+
+    #[tauri::command(async, rename_all = "snake_case")]
+    pub fn project_lock_state(path: String) -> Result<LockState, String> {
+        super::project_lock_state(&path)
     }
 
     #[tauri::command(async, rename_all = "snake_case")]
@@ -1242,6 +1253,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             cmd::create_project,
             cmd::open_project,
+            cmd::project_lock_state,
             cmd::close_project,
             cmd::current_project,
             cmd::execute_command,
