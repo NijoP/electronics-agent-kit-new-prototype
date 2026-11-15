@@ -524,7 +524,7 @@ impl Session {
         let Some(live) = &self.live else {
             return st(State::Failed, Source::Process, "no process".into());
         };
-        let fg_pid = foreground_pid(live);
+        let fg_pid = foreground_pid(live, self.is_shell());
         let fg_name = fg_pid.and_then(proc_info::name);
         let shell_at_prompt = self.is_shell() && fg_pid.is_some() && fg_pid == live.pid;
         let quiet = self.last_output.elapsed() >= QUIET;
@@ -580,11 +580,20 @@ impl Session {
             ));
         }
         if fg_pid.is_none() && quiet && self.is_shell() {
-            // Windows ConPTY exposes no foreground process group.
             return with_fg(st(
                 State::Idle,
                 Source::Heuristic,
                 "no output for a while (foreground process unknown on this OS)".into(),
+            ));
+        }
+        if quiet && cfg!(windows) {
+            // ConPTY cannot tell whether a program is blocked reading the terminal; a quiet
+            // program (an agent waiting at its prompt) is labelled idle by heuristic.
+            let who = fg_name.as_deref().unwrap_or("the program");
+            return with_fg(st(
+                State::Idle,
+                Source::Heuristic,
+                format!("no output for a while from {who}"),
             ));
         }
         let detail = match &fg_name {
@@ -621,14 +630,27 @@ impl Session {
 }
 
 #[cfg(unix)]
-fn foreground_pid(live: &Live) -> Option<u32> {
+fn foreground_pid(live: &Live, _shell: bool) -> Option<u32> {
     live.master
         .process_group_leader()
         .and_then(|p| u32::try_from(p).ok())
 }
 
-#[cfg(not(unix))]
-fn foreground_pid(_live: &Live) -> Option<u32> {
+/// ConPTY has no foreground process group: a shell's newest child is what runs in front of it,
+/// and the shell itself when it has none (at its prompt). A non-shell program is its own
+/// foreground (its children are its tools, not what the user started).
+#[cfg(windows)]
+fn foreground_pid(live: &Live, shell: bool) -> Option<u32> {
+    let pid = live.pid?;
+    if shell {
+        Some(proc_info::foreground_child(pid).unwrap_or(pid))
+    } else {
+        Some(pid)
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn foreground_pid(_live: &Live, _shell: bool) -> Option<u32> {
     None
 }
 
