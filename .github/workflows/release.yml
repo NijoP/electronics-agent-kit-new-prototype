@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Commit to release (default: the tip of the selected ref). Its ci run must be green.
+        description: 'Full commit sha to release (empty = the tip of the selected ref). Its ci run must be green.'
         required: false
         default: ''
 permissions:
