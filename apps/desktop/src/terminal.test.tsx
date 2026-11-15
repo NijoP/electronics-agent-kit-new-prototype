@@ -63,7 +63,9 @@ beforeEach(() => {
     if (!(IPC_COMMANDS as readonly string[]).includes(cmd)) throw new Error(`unknown command ${cmd}`);
     switch (cmd) {
       case "terminal_overview":
-        return { spaces, tabs, sessions, focused, layout_seq: 1 } satisfies Overview;
+        // A fresh copy per call, like the real IPC: the workspace memoises on array identity, and
+        // this mock mutates its arrays in place when a terminal is created.
+        return structuredClone({ spaces, tabs, sessions, focused, layout_seq: 1 }) satisfies Overview;
       case "terminal_space_create": {
         const sp = { id: nextId++, name: String(args.name), root: String(args.root), project_id: null };
         spaces.push(sp);
@@ -235,7 +237,8 @@ describe("terminal workspace", () => {
       { id: 3, space: 1, name: null, direction: "row", panes: [2] },
       { id: 4, space: 1, name: "Build", direction: "row", panes: [5] },
     ];
-    sessions = [session(2, 1, 3, "idle"), session(5, 1, 4, "idle")];
+    // A shell at its prompt is still a live process (closing it asks first); an ended one is not.
+    sessions = [session(2, 1, 3, "idle"), session(5, 1, 4, "ended")];
     focused = 2;
     render(<TerminalWorkspace visible project={null} newSpaceNonce={0} />);
     const build = await screen.findByRole("tab", { name: /Build/ });
@@ -248,7 +251,7 @@ describe("terminal workspace", () => {
     fireEvent.contextMenu(build);
     fireEvent.click(await screen.findByRole("menuitem", { name: "Move left" }));
     await waitFor(() => expect(calls.find((c) => c.cmd === "terminal_move_tab")?.args).toEqual({ tab: 4, index: 0 }));
-    // Closing an idle tab needs no confirmation.
+    // Closing a tab whose process has ended needs no confirmation.
     fireEvent.click(screen.getByRole("button", { name: "Close tab Build" }));
     await waitFor(() => expect(calls.find((c) => c.cmd === "terminal_close")?.args).toEqual({ id: 5 }));
   });

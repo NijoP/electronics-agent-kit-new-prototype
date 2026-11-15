@@ -17,6 +17,7 @@ pub mod ai;
 pub mod models;
 pub mod parts;
 pub mod resources;
+pub mod sync;
 pub mod terminal;
 pub mod workspace;
 
@@ -416,7 +417,13 @@ fn install(
 
 /// Serve one harness request from a terminal agent on the open project's engine. The request
 /// must target the project the app has open; anything else is refused, never redirected.
-pub fn harness_call(s: &Session, req: &eak_harness::endpoint::Request) -> serde_json::Value {
+/// `emit` receives a [`sync::RevisionChange`] for every call that moved the project's revision,
+/// so the UI learns of agent edits at once (docs/AGENT_HARNESS.md, "Live synchronisation").
+pub fn harness_call(
+    s: &Session,
+    req: &eak_harness::endpoint::Request,
+    emit: &dyn Fn(sync::RevisionChange),
+) -> serde_json::Value {
     use eak_harness::{envelope_error, ErrorCode};
     let ctx = &req.context;
     let mut guard = match s.engine() {
@@ -450,7 +457,16 @@ pub fn harness_call(s: &Session, req: &eak_harness::endpoint::Request) -> serde_
         .iter_mut()
         .find(|e| matches!((e.dir(), wanted), (Some(o), Some(w)) if same(o, w)));
     match found {
-        Some(engine) => eak_harness::handle(engine, ctx, "app", &req.tool, &req.args),
+        Some(engine) => {
+            let before = engine.project().revision;
+            let out = eak_harness::handle(engine, ctx, "app", &req.tool, &req.args);
+            if let Some(change) =
+                sync::revision_change(engine, before, "harness", Some(&ctx.session_id))
+            {
+                emit(change);
+            }
+            out
+        }
         None => {
             let open: Vec<PathBuf> = guard
                 .engines
@@ -1193,7 +1209,7 @@ pub mod cmd {
 
 /// Start the desktop application.
 pub fn run() {
-    use tauri::Manager;
+    use tauri::{Emitter, Manager};
     tauri::Builder::default()
         // Native folder pickers for Project Home (open a project folder, choose a parent directory).
         .plugin(tauri_plugin_dialog::init())
@@ -1221,7 +1237,12 @@ pub fn run() {
                     let handle = app.handle().clone();
                     let handler: eak_harness::endpoint::Handler =
                         std::sync::Arc::new(move |req: &eak_harness::endpoint::Request| {
-                            harness_call(&handle.state::<Session>(), req)
+                            let emitter = handle.clone();
+                            harness_call(&handle.state::<Session>(), req, &move |change| {
+                                if let Err(e) = emitter.emit(sync::REVISION_EVENT, change) {
+                                    eprintln!("eak-desktop: revision event not emitted: {e}");
+                                }
+                            })
                         });
                     if let Err(e) =
                         start_harness(&app.state::<Session>(), &dir.join("harness"), handler)
