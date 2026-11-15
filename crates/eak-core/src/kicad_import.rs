@@ -141,7 +141,7 @@ fn track_unknown(
 ) {
     for c in items(node) {
         if let Some(h) = c.head() {
-            if !known.iter().any(|k| *k == h) {
+            if !known.contains(&h) {
                 count(unsupported, format!("{ctx}/{h}"));
             }
         }
