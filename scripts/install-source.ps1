@@ -377,6 +377,9 @@ function Install-EakSource {
       $psExe = (Get-Process -Id $PID).Path
       $bp = Start-Process -FilePath $psExe -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File ' + (Quote-Arg (Join-Path $src 'scripts\build.ps1')) + ' -ResultFile ' + (Quote-Arg $result)) `
         -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru -NoNewWindow
+      # Windows PowerShell 5.1: without touching Handle while the process runs, ExitCode reads as
+      # $null after exit, and `$null -ne 0` would report every successful build as failed.
+      $null = $bp.Handle
       $t0 = Get-Date
       while (-not $bp.HasExited) {
         Start-Sleep -Seconds 20
