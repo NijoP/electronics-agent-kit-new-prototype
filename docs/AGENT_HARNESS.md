@@ -35,6 +35,38 @@ If the EAK desktop app has the project open, calls go through the app's engine (
 and the editor shows your edits; otherwise the CLI opens the project directly under its lock
 (`route: "direct"`). Two engines never write the same project.
 
+## Live synchronisation (terminal → editor)
+
+The path of one agent edit, from the shell in an EAK terminal to the pixels:
+
+1. **Context.** The terminal session exports `EAK_PROJECT_DIR`, `EAK_PROJECT_ID`, `EAK_SESSION_ID`,
+   `EAK_HARNESS_SOCKET` and `EAK_HARNESS_TOKEN_FILE` (`eak-terminal` base env + the space's
+   project binding, `apps/desktop/src-tauri/src/lib.rs::terminal_state`). `eak` / `eak mcp` read
+   them into a `CallContext` (`crates/eak-harness/src/context.rs`).
+2. **Route.** `route::invoke` finds the app via `<project>/.harness.json` and sends one JSON line
+   to the endpoint (`endpoint.rs`, token-authenticated). The app handler is
+   `apps/desktop/src-tauri/src/lib.rs::harness_call`, which only serves the project the app has
+   open (`project_mismatch` otherwise).
+3. **Commit.** `eak_harness::handle` runs the tool on the app's engine: a design tool is a typed
+   `Command` through `Engine::execute` with `expected_revision` (stale → `stale_revision`) and the
+   agent actor `agent:<name>@<EAK_SESSION_ID>`. Nothing writes project files directly.
+4. **Event.** If the revision moved, `harness_call` emits `eak://revision-changed`
+   (`apps/desktop/src-tauri/src/sync.rs`, ADR-0031): project id and dir, `revision_before/after`,
+   `source: "harness"`, the caller's `session_id`, and `areas` — the top-level IR sections
+   (`schematic`, `pcb`, `library`, …) read from the engine's journalled change list. Reads and
+   rejected commands emit nothing.
+5. **Refetch.** The open workspace (`apps/desktop/src/Workspace.tsx`, decisions in
+   `revisionSync.ts`) drops events for another project or for a revision it already shows, fetches
+   one `current_project` snapshot, and applies it only if it is strictly newer than what is on
+   screen. The schematic, PCB and 3D views render from that snapshot; the airwires and
+   classification refetch only when an area they read changed. The 1.5 s event poll remains as a
+   fallback if an event is missed.
+
+Switching between the Terminal and EDA workspaces keeps both mounted, so terminal sessions and
+design state survive. Commits made by the UI itself do not emit the event (the caller already has
+the response). Tests: `apps/desktop/src-tauri/tests/live_sync.rs`, `apps/desktop/src/liveSync.test.tsx`
+(run in CI; not run locally).
+
 ## Workflow
 
 1. `eak info --json` → note `project.id` and `project.revision`.
