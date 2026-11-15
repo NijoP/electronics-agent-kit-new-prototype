@@ -5,7 +5,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- --uninstall
 #
-# Environment (all optional): EAK_VERSION=v0.2.0 (default: newest release incl. prereleases),
+# Environment (all optional): EAK_VERSION=prebuilt-<date>-<sha> (default: the newest prebuilt-* release,
+#   built by the release workflow from a CI-green commit; other releases are never picked),
 #   EAK_FORMAT=deb (Linux: system-wide .deb via sudo instead of the per-user AppImage),
 #   EAK_NO_LAUNCH=1, EAK_UNINSTALL=1, EAK_REPO=owner/name,
 #   EAK_ASSET_DIR=<dir> (install from local assets + SHA256SUMS instead of downloading; used by CI).
@@ -127,10 +128,11 @@ if [ -n "${EAK_ASSET_DIR:-}" ]; then
 else
   TAG="${EAK_VERSION:-}"
   if [ -z "$TAG" ]; then
-    TAG="$(curl -fsSL --proto '=https' --tlsv1.2 "https://api.github.com/repos/$REPO/releases?per_page=10" \
-      | grep -m1 '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')" \
-      || fail "could not query GitHub releases" "Check your network, or set EAK_VERSION=vX.Y.Z."
-    [ -n "$TAG" ] || fail "no published EAK release found in $REPO" "Releases appear after a v* tag is pushed; see docs/INSTALL.md."
+    # Only releases built by the release workflow count (tag prebuilt-*); older releases are never picked.
+    TAG="$(curl -fsSL --proto '=https' --tlsv1.2 "https://api.github.com/repos/$REPO/releases?per_page=30" \
+      | grep -o '"tag_name": *"prebuilt-[^"]*"' | head -n1 | sed 's/.*"\(prebuilt-[^"]*\)"/\1/')" \
+      || fail "could not query GitHub releases" "Check your network, or set EAK_VERSION=prebuilt-<date>-<sha>."
+    [ -n "$TAG" ] || fail "no verified prebuilt EAK release exists in $REPO yet" "Prebuilt releases are published by the release workflow from a CI-green commit; install from source instead (see docs/INSTALL.md)."
   fi
   SRC="https://github.com/$REPO/releases/download/$TAG"
 fi
@@ -145,11 +147,6 @@ fetch() {
   else curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$TMP/$1" "$SRC/$1"; fi
 }
 fetch SHA256SUMS || fail "release $TAG has no SHA256SUMS ($SRC/SHA256SUMS is missing)" "Nothing was installed; the release may be incomplete."
-# Releases up to v0.1.4 name Linux packages with the Tauri bundler's pattern (EAK_<version>_amd64.*).
-if [ "$OS" = linux ] && [ "$ARCH" = x86_64 ] && ! grep -qE "[ *]$ASSET\$" "$TMP/SHA256SUMS"; then
-  ALT="EAK_${TAG#v}_amd64.${ASSET##*.}"
-  if grep -qE "[ *]$ALT\$" "$TMP/SHA256SUMS"; then info "using legacy asset name $ALT"; ASSET="$ALT"; fi
-fi
 fetch "$ASSET" || fail "release $TAG has no asset named $ASSET for $OS-$ARCH" "Missing artifact: $SRC/$ASSET" "See docs/PLATFORM_SUPPORT.md; nothing was installed."
 WANT="$(grep -E "[ *]$ASSET\$" "$TMP/SHA256SUMS" | head -n1 | awk '{print $1}')"
 [ -n "$WANT" ] || fail "release $TAG has no checksum entry for $ASSET" "Missing artifact: $ASSET"

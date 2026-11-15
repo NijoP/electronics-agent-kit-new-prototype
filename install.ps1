@@ -1,7 +1,8 @@
-# EAK installer entry point for Windows 10/11 x64. DEFAULT: build the current source on this machine and install it.
+# EAK installer entry point for Windows 10/11 x64. DEFAULT (auto): install the verified prebuilt release (built by
+# the release workflow from a CI-green commit, SHA-256 checked) when one is published, otherwise build the source.
 #   irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 | iex
-# Prebuilt release instead (explicit opt-in, never a silent fallback):
-#   $env:EAK_INSTALL_MODE='prebuilt'; irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 | iex
+# Force a mode: $env:EAK_INSTALL_MODE='source' (build from source) or 'prebuilt' (prebuilt only, fail if none):
+#   $env:EAK_INSTALL_MODE='source'; irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 | iex
 # Options are environment variables (see scripts/install-source.ps1): EAK_REF, EAK_UNINSTALL, EAK_CLEAN_CACHE,
 # EAK_NO_LAUNCH, EAK_ASSUME_YES, EAK_FORCE, EAK_BUILD_JOBS.
 #
@@ -11,9 +12,9 @@
 function Start-EakInstall {
   $repo = if ($env:EAK_REPO) { $env:EAK_REPO } else { 'NijoP/electronics-agent-kit-new-prototype' }
   $ref = if ($env:EAK_INSTALLER_REF) { $env:EAK_INSTALLER_REF } else { 'main' }
-  $mode = if ($env:EAK_INSTALL_MODE) { $env:EAK_INSTALL_MODE } else { 'source' }
-  if ($mode -ne 'source' -and $mode -ne 'prebuilt') {
-    Write-Host "EAK_INSTALL_MODE must be 'source' (default) or 'prebuilt', got '$mode'" -ForegroundColor Red
+  $mode = if ($env:EAK_INSTALL_MODE) { $env:EAK_INSTALL_MODE } else { 'auto' }
+  if ($mode -ne 'auto' -and $mode -ne 'source' -and $mode -ne 'prebuilt') {
+    Write-Host "EAK_INSTALL_MODE must be 'auto' (default), 'source' or 'prebuilt', got '$mode'" -ForegroundColor Red
     $global:LASTEXITCODE = 2
     return
   }
@@ -21,6 +22,18 @@ function Start-EakInstall {
     Write-Host "invalid EAK_REPO '$repo' (want owner/name)" -ForegroundColor Red
     $global:LASTEXITCODE = 2
     return
+  }
+  # auto: the verified prebuilt (built by the release workflow from a CI-green commit, SHA-256 checked) is the
+  # fast path when one is published; otherwise build the source, and say so. Never an old release.
+  if ($mode -eq 'auto') {
+    $mode = 'source'
+    try {
+      try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+      $rels = Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/$repo/releases?per_page=30" -Headers @{ 'User-Agent' = 'eak-installer' }
+      if (@($rels | Where-Object { -not $_.draft -and $_.tag_name -like 'prebuilt-*' }).Count -gt 0) { $mode = 'prebuilt' }
+    } catch { }
+    if ($mode -eq 'prebuilt') { Write-Host 'EAK: a verified prebuilt release is published: installing it (fast path). Set $env:EAK_INSTALL_MODE=''source'' to build from source instead.' }
+    else { Write-Host 'EAK: no verified prebuilt release is published for this repository: building from source.' }
   }
   $name = if ($mode -eq 'prebuilt') { 'install.ps1' } else { 'install-source.ps1' }
   $local = $null

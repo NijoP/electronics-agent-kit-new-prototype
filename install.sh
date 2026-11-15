@@ -1,8 +1,10 @@
 #!/bin/sh
-# EAK installer entry point. DEFAULT: build the current source on this machine and install it.
+# EAK installer entry point. DEFAULT (auto): install the verified prebuilt release (built by the release
+# workflow from a CI-green commit, SHA-256 checked) when one is published, otherwise build the current source.
 #   curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.sh | bash
-# Prebuilt release instead (explicit opt-in; the variable goes on the shell, AFTER the pipe):
-#   curl -fsSL .../install.sh | EAK_INSTALL_MODE=prebuilt bash        (or: ... | bash -s -- --prebuilt)
+# Force a mode (the variable goes on the shell, AFTER the pipe):
+#   curl -fsSL .../install.sh | bash -s -- --source        (or EAK_INSTALL_MODE=source)  build from source
+#   curl -fsSL .../install.sh | bash -s -- --prebuilt      (or EAK_INSTALL_MODE=prebuilt) prebuilt only, fail if none
 # Other arguments (--uninstall, --clean-cache, --no-launch, --yes, --force, --ref X) go to the chosen installer.
 #
 # Works piped from curl (no reliance on a script directory) and from a clone: a clone uses its own
@@ -12,7 +14,7 @@
 set -eu
 REPO="${EAK_REPO:-NijoP/electronics-agent-kit-new-prototype}"
 REF="${EAK_INSTALLER_REF:-main}"
-MODE="${EAK_INSTALL_MODE:-source}"
+MODE="${EAK_INSTALL_MODE:-auto}"
 
 # Pick the mode from flags and pass every other argument through (POSIX sh has no arrays: rotate "$@").
 n=$#
@@ -26,11 +28,24 @@ while [ "$n" -gt 0 ]; do
 done
 
 case "$MODE" in
-  source) NAME=install-source.sh ;;
-  prebuilt) NAME=install.sh ;;
-  *) echo "EAK_INSTALL_MODE must be 'source' (default) or 'prebuilt', got '$MODE'" >&2; exit 2 ;;
+  auto|source|prebuilt) ;;
+  *) echo "EAK_INSTALL_MODE must be 'auto' (default), 'source' or 'prebuilt', got '$MODE'" >&2; exit 2 ;;
 esac
 case "$REPO" in */*) ;; *) echo "invalid EAK_REPO '$REPO' (want owner/name)" >&2; exit 2 ;; esac
+
+# auto: the verified prebuilt (built by the release workflow from a CI-green commit, SHA-256 checked) is
+# the fast path when one is published; otherwise build the source, and say so. Never an old release.
+if [ "$MODE" = auto ]; then
+  MODE=source
+  if command -v curl >/dev/null 2>&1 \
+    && curl -fsSL --proto '=https' --tlsv1.2 "https://api.github.com/repos/$REPO/releases?per_page=30" 2>/dev/null | grep -q '"tag_name": *"prebuilt-'; then
+    MODE=prebuilt
+    echo "EAK: a verified prebuilt release is published: installing it (fast path). Pass --source to build from source instead." >&2
+  else
+    echo "EAK: no verified prebuilt release is published for this repository: building from source." >&2
+  fi
+fi
+case "$MODE" in source) NAME=install-source.sh ;; *) NAME=install.sh ;; esac
 
 command -v bash >/dev/null 2>&1 || { echo "The EAK installer needs bash; install it and re-run." >&2; exit 1; }
 
