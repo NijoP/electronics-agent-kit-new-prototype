@@ -38,6 +38,10 @@ export const TOOLBAR_CONTEXT: Record<string, ToolbarContext[]> = {
   zout: EDITING, zin: EDITING, fit: EDITING, grid: EDITING, rules: EDITING, sync: EDITING,
   erc: ["schematic"], sim: ["schematic"],
   drc: ["pcb"], dfm: ["pcb"], route: ["pcb"], export: ["pcb"],
+  // Placement and drawing tools of each editor (they select the editor's own tool; see Workspace).
+  "t-place": ["schematic"], "t-wire": ["schematic"], "t-label": ["schematic"], "t-noconnect": ["schematic"],
+  "t-pinlabel": ["schematic"], "t-mirror": ["schematic"],
+  "t-route": ["pcb"], "t-via": ["pcb"], "t-outline": ["pcb"], "t-zone": ["pcb"], "t-flip": ["pcb"],
 };
 
 /** The toolbar for the current context: drops buttons that do not apply and groups left empty. */
