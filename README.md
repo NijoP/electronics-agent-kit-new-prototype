@@ -44,7 +44,7 @@ flowchart LR
 **EDA workspace.** Project Home, a file explorer, separate schematic and PCB editors over the same
 project data, a component library, findings from ERC/DRC/mechanical checks, simulation and
 manufacturing panels. Everything is usable by hand; no AI model has to be configured. A 3D board
-viewer is not built yet.
+viewer with real component models is written but has never been built or run.
 
 **Terminal workspace.** A first-class environment, not a panel beside a chat box: real shells on
 pseudo-terminals, spaces per project root, tabs, split panes, process-derived status (idle,
@@ -131,10 +131,59 @@ been read and reviewed is never listed as implemented. Levels of evidence:
 | Terminal workspace UI | In development: written, never run |
 | Engineering harness: `eak` CLI, MCP server, app endpoint | In development: written, never compiled |
 | Model providers (Anthropic, OpenAI-compatible, Gemini, Ollama), keys in the OS store | Partially implemented, optional; no chat UI |
+| Routing and placement intelligence: congestion-aware pass-based router, selective rip-up, net-priority order, role-based placement | Code-reviewed only; not yet built or run (ADR-0023) |
+| Existing-project rework: immutable baseline, protected objects, labelled readiness report | Code-reviewed only; not yet built or run (ADR-0022) |
+| Multi-domain engineering model: domains, typed requirements, constraint graph, calculation records, risks | Code-reviewed only; not yet built or run (ADR-0027) |
+| Fail-closed validation: every rule is PASS, FAIL or UNKNOWN; stale reports certify UNKNOWN | Code-reviewed only; not yet built or run (ADR-0021, ADR-0026) |
+| Autonomous design flow with TTY-only human approval | Code-reviewed only; not yet built or run (ADR-0020) |
+| Local knowledge search with source citations; supplier layer with cache, retry and stale-cache fallback | Code-reviewed only; not yet built or run (ADR-0024) |
+| Part identity separate from supplier offers, with legacy migration | Code-reviewed only; not yet built or run (ADR-0028) |
+| 3D board viewer and real component models (STEP/WRL/GLB) with declared quality labels | Code-reviewed only; not yet built or run (ADR-0025) |
+| Performance profile (resource tiers, blocking-pool IPC, per-revision compute) | Code-reviewed only; nothing measured |
 | Session context handed to agents, approval UI, agent activity view | Planned |
-| Requirements capture, automated component selection, autonomous design loop | Planned |
-| 3D board viewer, differential pairs, impedance control | Planned |
+| Requirements capture and automated component selection | Planned |
+| Differential-pair rules, impedance control | Planned |
 | Independent engineering review, fabricator DFM sign-off | Not done |
+
+## Recent engineering additions
+
+Everything in this section is **code-reviewed only**: written and read through, never compiled or
+run, with nothing measured. Treat it as design intent until the build and tests pass.
+
+- **Routing and placement intelligence.** The native router adds a congestion map, pass-based
+  routing with stagnation detection, selective rip-up of lower-priority routes, name-based
+  differential-pair adjacency, and current-sized track widths and vias. Power, ground and
+  high-current nets route first. Placement follows a hierarchy of mechanical, footprint,
+  electrical, functional and routability rules. Read-only harness tools report the analysis. No
+  external router is required ([ADR-0023](docs/decisions/0023-routing-intelligence.md)).
+- **Existing-project rework.** An agent can inspect an existing design, freeze an immutable
+  baseline, protect or accept objects, plan and apply repairs, and produce a labelled readiness
+  report. Protected objects are verified by hash after every repair, and a violation undoes the
+  repair. Approval is human-only ([ADR-0022](docs/decisions/0022-existing-project-rework.md),
+  [docs/agents/REWORK.md](docs/agents/REWORK.md)).
+- **Per-domain engineering models.** A domain registry, typed requirements with a knowledge state,
+  a constraint graph, calculation records, interactions and risks across electrical, thermal,
+  mechanical and other disciplines ([ADR-0027](docs/decisions/0027-multi-domain-engineering-model.md)).
+- **Fail-closed validation.** Every rule reports PASS, FAIL or UNKNOWN. Undeclared current,
+  voltage or mechanical fit is UNKNOWN, and a report for an older revision certifies nothing
+  ([ADR-0021](docs/decisions/0021-fail-closed-engineering-gates.md),
+  [ADR-0026](docs/decisions/0026-check-states-and-risk-record.md)). Project Home and the findings
+  panel show these states.
+- **Knowledge search and suppliers.** Local BM25 search over imported documents returns passages
+  with source, page, section and revision, and is advisory only. Supplier lookups go through a
+  cache with rate limiting, retry and a labelled stale-cache fallback, and never invent data
+  ([ADR-0024](docs/decisions/0024-canonical-state-and-knowledge-architecture.md)).
+- **Part identity and supplier offers.** A component's identity is separate from the offers that
+  supply it; older project files still load and are migrated
+  ([ADR-0028](docs/decisions/0028-supplier-offers-separate-from-identity.md)).
+- **3D viewer and component models.** The viewer derives the scene from the project snapshot and
+  loads STEP, WRL and GLB models. Each model carries a declared quality (`VENDOR_EXACT`,
+  `LIBRARY_VERIFIED`, `DERIVED_VALIDATED`, or "not declared"). EAK does not yet verify model
+  geometry against the footprint ([ADR-0025](docs/decisions/0025-component-3d-model-references.md)).
+- **Performance work.** A resource profile (auto, low, balanced, high, custom), heavy commands on a
+  bounded blocking pool, per-revision compute without the engine lock, and 3D context-loss
+  handling. No timings have been measured; see
+  [docs/development/PERFORMANCE.md](docs/development/PERFORMANCE.md).
 
 ## Engineering workflow
 
@@ -157,12 +206,12 @@ The goal is a one-minute install. Today it is available for Linux only.
 
 | Platform | Command | Availability |
 |---|---|---|
-| Linux x86_64 | `curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.sh \| bash` | v0.1.4: `.deb` and AppImage |
+| Linux x86_64 | `curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.sh \| bash` | v0.1.4: `.deb` and AppImage (old; does not include current `main`) |
 | Windows (PowerShell) | `irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.ps1 \| iex` | **Not yet available**: no Windows package is published; the script stops and says so |
 | macOS | same script as Linux | **Not yet available**: no macOS package is published |
 
-The published v0.1.4 predates the terminal workspace, the harness and the current shell; to run
-current `main`, build from source. Packages are unsigned; installers verify SHA-256 against the
+The published v0.1.4 (Linux only) predates the terminal workspace, the harness and all the work
+listed above. **Current `main` must be built from source**; see [Developer setup](#developer-setup). Windows and macOS packages are pending. Packages are unsigned; installers verify SHA-256 against the
 release `SHA256SUMS`. The Linux installer's fallback to v0.1.4's asset names is itself unrun.
 Options, paths and uninstall: [docs/INSTALL.md](docs/INSTALL.md).
 
@@ -178,7 +227,7 @@ cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warni
 (cd apps/desktop && npm test)
 ```
 
-The integrated tree has not been built yet; expect first-compile fallout.
+Build from source with the commands above. The integrated tree has not been built yet; expect first-compile fallout.
 
 ## Repository structure
 
@@ -206,7 +255,7 @@ No dates. Detail and states: [ROADMAP.md](ROADMAP.md).
 
 1. **Core engineering foundation**: done.
 2. **Independent validation**: rules in place; more rules and external review ahead.
-3. **Integrated EDA workspace**: in place; real-window testing and a 3D viewer ahead.
+3. **Integrated EDA workspace**: in place; real-window testing ahead; the 3D viewer is written but unbuilt.
 4. **Agent-compatible terminal** and **engineering harness**: written; compile, run and trial with real agents next.
 5. **Manufacturing workflows**: DRAFT outputs today; fabricator and viewer verification ahead.
 6. **Cross-platform distribution**: Linux only; Windows and macOS packages ahead.
