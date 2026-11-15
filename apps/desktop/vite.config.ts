@@ -20,6 +20,9 @@ export default defineConfig({
     setupFiles: ["./src/test-setup.ts"],
     testTimeout: 15000,
     // Forked processes, at most 2 at once (override: `vitest run --maxWorkers=N`).
+    // Vitest blanks every stylesheet import by default, including `?raw` ones; the layout
+    // regression tests read the real rules of styles.css through `?raw`.
+    css: { include: [/\.css\?raw$/] },
     pool: "forks",
     maxWorkers: 2,
   },

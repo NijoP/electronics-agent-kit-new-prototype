@@ -3,7 +3,10 @@ import { shellCmd } from "./shell.test-data";
 // shapes the Rust layer expects, and that the UI re-renders engine state only.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// The native folder dialog is an OS window: the test stands in for the user's choice.
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "/p") }));
 import { IPC_COMMANDS } from "./api";
 import { App } from "./App";
 import { ercResult, fixture } from "./fixture.test-data";
@@ -80,7 +83,7 @@ afterEach(() => {
 
 async function openFromRecent() {
   render(<App />);
-  fireEvent.click(await screen.findByText("Fixture board"));
+  fireEvent.click((await screen.findAllByText("Fixture board"))[0]);
   await screen.findByRole("img", { name: "Schematic canvas" });
   // The canvas appears at commit, but Workspace attaches its global key listener in a passive
   // effect that can run later on a slow runner. The event-log line comes from the effect declared
@@ -101,11 +104,14 @@ describe("desktop shell flow", () => {
 
   it("creates a project with the typed path and name", async () => {
     render(<App />);
-    fireEvent.change(screen.getByLabelText(/New project folder/), { target: { value: "/p/new.eak" } });
+    fireEvent.click(await screen.findByRole("button", { name: "New Project" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "New" } });
+    // The parent folder comes from the (mocked) native folder dialog, never from pasted text.
+    fireEvent.click(screen.getByRole("button", { name: /Choose parent folder/ }));
+    await screen.findByText("/p");
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await screen.findByRole("img", { name: "PCB canvas" });
-    expect(calls.find((c) => c.cmd === "create_project")!.args).toEqual({ path: "/p/new.eak", name: "New" });
+    expect(calls.find((c) => c.cmd === "create_project")!.args).toEqual({ path: "/p/New", name: "New" });
   });
 
   it("undo sends the rendered revision and the view refreshes from the engine", async () => {

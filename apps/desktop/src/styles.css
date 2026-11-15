@@ -46,7 +46,7 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .home .ghost, .home .ghost-link { height: var(--h-md); display: inline-flex; align-items: center; padding: 0 var(--s-1h); background: transparent; border-color: transparent; color: var(--fg-dim); text-decoration: none; font-size: var(--fs-md); border-radius: var(--r-1); }
 .home .ghost:hover:not(:disabled), .home .ghost-link:hover { color: var(--fg); background: var(--bg-hover); }
 .home-settings { position: relative; }
-.home-menu { position: absolute; right: 0; top: calc(100% + var(--s-half)); display: grid; min-width: 280px; padding: var(--s-half); border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg-panel); box-shadow: 0 6px 20px rgb(0 0 0 / 0.3); }
+.home-menu { position: absolute; right: 0; top: calc(100% + var(--s-half)); display: grid; min-width: 280px; padding: var(--s-half); border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg-panel); box-shadow: var(--shadow-sm); }
 .home-menu button { text-align: left; background: transparent; border-color: transparent; height: var(--h-lg); }
 .home-menu button:hover { background: var(--bg-hover); }
 .home-hero { display: grid; gap: var(--s-1h); padding: var(--s-3) 0 var(--s-1); max-width: 640px; }

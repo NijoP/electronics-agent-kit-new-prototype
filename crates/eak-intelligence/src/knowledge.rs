@@ -395,7 +395,7 @@ impl KnowledgeIndex {
         let p = part.trim().to_ascii_uppercase();
         self.chunks
             .iter()
-            .filter(|c| c.part_ids.iter().any(|x| *x == p))
+            .filter(|c| c.part_ids.contains(&p))
             .collect()
     }
 

@@ -30,7 +30,8 @@ describe("board outline geometry", () => {
   });
   it("flags unclosed or self-crossing outlines", () => {
     expect(O.validateOutline([P(0, 0), P(1, 1)])[0]).toContain("at least 3");
-    expect(O.validateOutline([P(0, 0), P(10, 10), P(10, 0), P(0, 10)])[0]).toContain("cross");
+    // A bow-tie has zero signed area as well as crossing edges: both issues are reported.
+    expect(O.validateOutline([P(0, 0), P(10, 10), P(10, 0), P(0, 10)]).some((i) => i.includes("cross"))).toBe(true);
     expect(O.validateOutline([P(0, 0), P(5, 0), P(10, 0)])).toContain("outline has zero area");
   });
 });

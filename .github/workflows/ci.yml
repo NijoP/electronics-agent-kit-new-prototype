@@ -27,6 +27,9 @@ jobs:
         run: bash scripts/check-no-python.sh
       - name: Frontend install, typecheck, tests
         working-directory: apps/desktop
+        env:
+          # A failing UI test prints the whole DOM, not the first 7000 characters.
+          DEBUG_PRINT_LIMIT: "200000"
         run: |
           npm ci
           npm run typecheck

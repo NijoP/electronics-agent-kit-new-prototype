@@ -185,7 +185,7 @@ afterEach(() => {
 describe("finding navigation", () => {
   it("click opens the PCB tab, highlights the object and shows measured vs required", async () => {
     render(<App />);
-    fireEvent.click(await screen.findByText("Fixture board"));
+    fireEvent.click((await screen.findAllByText("Fixture board"))[0]);
     await screen.findByRole("img", { name: "PCB canvas" });
     // airwires come from the connectivity command
     await waitFor(() => expect(document.querySelectorAll(".airwire")).toHaveLength(1));
@@ -205,7 +205,7 @@ describe("finding navigation", () => {
   });
   it("the Layers view is reachable from the activity bar", async () => {
     render(<App />);
-    fireEvent.click(await screen.findByText("Fixture board"));
+    fireEvent.click((await screen.findAllByText("Fixture board"))[0]);
     await screen.findByRole("img", { name: "PCB canvas" });
     fireEvent.click(screen.getByRole("button", { name: "PCB Layers" }));
     expect(await screen.findByRole("list", { name: "Layers" })).toBeTruthy();
