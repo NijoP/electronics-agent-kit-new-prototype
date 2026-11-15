@@ -95,9 +95,8 @@ fn closing_the_active_project_activates_the_previous_one_and_reopening_does_not_
     open_project(&s, &path(&db), false).unwrap();
     let open = open_projects(&s).unwrap();
     assert_eq!(open.len(), 2);
-    assert!(open
-        .iter()
-        .any(|p| p.id == b.project.id.to_string() && p.active));
+    let b_id = b.project.id.to_string();
+    assert!(open.iter().any(|p| p.id == b_id && p.active));
     let _ = std::fs::remove_dir_all(&da);
     let _ = std::fs::remove_dir_all(&db);
 }

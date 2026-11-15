@@ -722,8 +722,9 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // STATUS.md records 44 commands (incl. Batch, MoveWire, MoveNetLabel, SetComponentProperties, AssignComponentFootprint).
-        assert_eq!(tools.len(), 44);
+        // 45 `Command` variants (SetProjectName .. SetManufacturing, plus Batch); bump this
+        // together with the enum.
+        assert_eq!(tools.len(), 45);
         for t in &tools {
             assert!(t
                 .spec

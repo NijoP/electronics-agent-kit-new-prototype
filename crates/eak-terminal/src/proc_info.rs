@@ -34,6 +34,7 @@ pub fn reading_terminal(_pid: u32) -> bool {
 }
 
 /// Runtimes that run an agent script (`node /path/to/pi`), whose own name says nothing.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 const RUNTIMES: &[&str] = &["node", "bun", "deno", "python", "python3", "env"];
 
 /// The known agent this process is, judged from its command line: the program name, or
@@ -54,6 +55,9 @@ pub fn agent(_pid: u32, _known: &[String]) -> Option<String> {
     None
 }
 
+/// Portable argv matching; only the Linux `agent` reads a command line today, but the logic
+/// is tested on every OS.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub fn agent_from_argv(argv: &[String], known: &[String]) -> Option<String> {
     let base = |s: &str| {
         let b = s.rsplit(['/', '\\']).next().unwrap_or(s);
@@ -67,7 +71,7 @@ pub fn agent_from_argv(argv: &[String], known: &[String]) -> Option<String> {
             return Some(label.to_string());
         }
         let b = base(a);
-        if known.iter().any(|k| *k == b) {
+        if known.contains(&b) {
             return Some(b);
         }
         if !RUNTIMES.contains(&b.as_str()) && i == 0 {

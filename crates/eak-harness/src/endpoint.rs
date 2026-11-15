@@ -289,10 +289,13 @@ pub fn call(
     args: &Value,
     context: &CallContext,
 ) -> Result<Value, ClientError> {
-    let token = std::fs::read_to_string(token_file)
-        .map_err(|e| ClientError::Token(format!("{}: {e}", token_file.display())))?;
+    // Connect before reading the token: an app that exited cleanly has already removed its
+    // token file, and that must surface as Unreachable (stale record, fall through), not as a
+    // token error. On Windows the TCP endpoint has no socket file to vanish first.
     let mut s = connect(endpoint, Duration::from_secs(2))
         .map_err(|e| ClientError::Unreachable(e.to_string()))?;
+    let token = std::fs::read_to_string(token_file)
+        .map_err(|e| ClientError::Token(format!("{}: {e}", token_file.display())))?;
     let req = Request {
         token: token.trim().into(),
         tool: tool.into(),
