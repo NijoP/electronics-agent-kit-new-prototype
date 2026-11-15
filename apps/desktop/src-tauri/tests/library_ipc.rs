@@ -203,10 +203,9 @@ fn browse_merges_scopes_without_merging_entries_and_filters_by_source_package_an
     );
     assert!(all.facets.sources.iter().any(|f| f.value == "personal"));
     assert!(all.facets.sources.iter().any(|f| f.value == "builtin"));
-    assert_eq!(
-        all.entries[0].scope_label, "personal",
-        "favourites sort first"
-    );
+    // Favourites and tags are per part id, so both copies of R_0603 are starred and sort first.
+    assert!(all.entries[0].favourite && all.entries[1].favourite);
+    assert!(all.entries[0].id == "R_0603" && all.entries[1].id == "R_0603");
 
     let personal = browse(
         &st,
@@ -227,6 +226,7 @@ fn browse_merges_scopes_without_merging_entries_and_filters_by_source_package_an
         &BrowseQuery {
             tag: Some("BENCH".into()),
             favourites_only: Some(true),
+            source: Some("personal".into()),
             ..BrowseQuery::default()
         },
     );
