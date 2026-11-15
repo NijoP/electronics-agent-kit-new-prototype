@@ -9,9 +9,15 @@ the numbers and run the checks, so the agent never certifies its own work. It is
 onto an EDA tool, and it does not wrap KiCad or EasyEDA.
 
 > **Status: early prototype, source-reviewed only.**
-> - The current tree has **never been compiled or run** since the owner's no-build rule. Everything
->   below was written and read through, not built. **The first build may surface compile errors.**
-> - The only published binary, **v0.1.4** (Linux), is old and predates most of what is described here.
+> - **CI proof (GitHub Actions only, nothing is built on a developer laptop):** `cargo fmt --check`,
+>   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --locked` on Linux,
+>   Windows and macOS (arm64 + x64), plus the frontend typecheck and its 253 vitest tests, passed for
+>   commit `b62d0e2` ([run 43733291036](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43733291036))
+>   and `b096688` ([run 43734737480](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43734737480)).
+>   That proves it compiles and its tests pass; it does not prove the app was used on real hardware
+>   or that any design is correct.
+> - Prebuilt downloads exist only as `prebuilt-*` pre-releases made by the release workflow from a
+>   CI-green commit (unsigned, SHA-256 checksums and `provenance.json`). The old **v0.1.4** is never used.
 > - Nothing EAK produces is manufacturing-ready. Unchecked or unimplemented checks are reported as
 >   unknown, never as passing.
 >
@@ -34,10 +40,11 @@ before anything needs administrator rights).
   [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md).
 - Pin a revision with `EAK_REF` (tag, branch or commit); the exact commit built is printed. Options,
   install paths, log locations and troubleshooting: [docs/INSTALL.md](docs/INSTALL.md).
-- **Prebuilt mode** installs the old v0.1.4 release instead of building, and only when you ask for it
-  with `EAK_INSTALL_MODE=prebuilt` (Linux/macOS: after the pipe, `... | EAK_INSTALL_MODE=prebuilt bash`;
-  Windows: `$env:EAK_INSTALL_MODE='prebuilt'` first). It never stands in for `main`. See
-  [docs/INSTALL.md](docs/INSTALL.md#prebuilt-release-optional).
+- **Prebuilt fast path (default):** when a verified `prebuilt-*` release exists, the installer downloads
+  it and checks its SHA-256 before installing; otherwise it says so and builds the source. Force a mode
+  with `--source` / `--prebuilt` (Linux/macOS: `... | bash -s -- --source`) or `EAK_INSTALL_MODE`
+  (Windows: `$env:EAK_INSTALL_MODE='source'` first). It never installs the old v0.1.4. See
+  [docs/INSTALL.md](docs/INSTALL.md#prebuilt-release-the-default-fast-path-when-one-exists).
 
 ### Update
 
