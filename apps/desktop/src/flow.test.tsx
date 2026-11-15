@@ -186,6 +186,8 @@ describe("end-to-end flow", () => {
     calls.length = 0;
     fireEvent.click(toolbar().getByRole("button", { name: "Update PCB" }));
     await waitFor(() => expect(executed()).toEqual(["SyncSchematicToPcb"]));
+    // ADR-0036 gate: ERC ran on this revision before the schematic was synchronised (unrun test).
+    expect(ran("run_check").map((c) => c.args.check)).toEqual(["erc"]);
     const dlg = await screen.findByRole("dialog", { name: "Update PCB report" });
     // the report comes from the engine's own change list for that operation
     expect(ran("operation_changes")).toHaveLength(1);

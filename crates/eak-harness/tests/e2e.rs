@@ -161,7 +161,7 @@ fn cli_drives_a_fresh_project_from_create_to_checks() {
         json!({"type": "SetBoardOutline", "points": [
         {"x": 0, "y": 0}, {"x": 40000000, "y": 0}, {"x": 40000000, "y": 30000000}, {"x": 0, "y": 30000000}]}),
     );
-    // Gate (ADR-0035): PCB synchronisation is refused until ERC has run on the schematic.
+    // Gate (ADR-0036): PCB synchronisation is refused until ERC has run on the schematic.
     let (code, v) = eak(
         &dir,
         &[

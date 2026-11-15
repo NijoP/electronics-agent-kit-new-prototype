@@ -1,4 +1,4 @@
-# ADR-0035: Agent task phases, the PCB synchronisation gate and shared task status
+# ADR-0036: Agent task phases, the PCB synchronisation gate and shared task status
 
 Status: accepted (2026-11-16)
 

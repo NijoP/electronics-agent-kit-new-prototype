@@ -3,7 +3,7 @@
 Built from the code in this tree, not from plans. It reuses
 [CAPABILITY_GAP_MATRIX](../development/CAPABILITY_GAP_MATRIX.md) (state letters),
 [ADR-0031](../decisions/0031-revision-changed-event.md) (live sync) and
-[ADR-0035](../decisions/0035-agent-task-phases-and-pcb-sync-gate.md) (task phases and gate) rather
+[ADR-0036](../decisions/0036-agent-task-phases-and-pcb-sync-gate.md) (task phases and gate) rather
 than re-deriving them. Research basis:
 [EASYEDA_EDA_INTERACTION_AUDIT](../research/EASYEDA_EDA_INTERACTION_AUDIT.md).
 

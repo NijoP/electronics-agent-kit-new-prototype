@@ -54,6 +54,19 @@ export function needsRefetch(change: RevisionChange | null, revision: number, in
   return change.areas.some((a) => inputs.includes(a));
 }
 
+/**
+ * Selection after a refresh: kept while the selected object still exists (a symbol or its
+ * footprint), dropped only when an external commit removed it. The camera is untouched: it is
+ * per-document view state (shell/viewState.ts), not part of the snapshot.
+ */
+export function reconcileSelection(
+  selected: string | null,
+  project: { schematic: { symbols: Record<string, unknown> }; pcb: { footprints: Record<string, unknown> } },
+): string | null {
+  if (!selected) return null;
+  return selected in project.schematic.symbols || selected in project.pcb.footprints ? selected : null;
+}
+
 export function onRevisionChange(f: (ev: RevisionChange) => void): Promise<UnlistenFn> {
   return listen<RevisionChange>(REVISION_EVENT, (e) => f(e.payload));
 }

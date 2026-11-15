@@ -1,4 +1,4 @@
-//! Agent task phases (ADR-0035): an execution-grounded record of what a terminal agent has done
+//! Agent task phases (ADR-0036): an execution-grounded record of what a terminal agent has done
 //! to the open project, shown identically in the terminal and EDA workspaces.
 //!
 //! * Phases are **observed, never declared**: the ledger is advanced by the outcome of harness

@@ -9,6 +9,8 @@ interface Props {
   gridMm: number;
   drc: CheckResult | undefined;
   selection: string | null;
+  /** Revision + agent task phase, the same text the Terminal workspace shows (ADR-0036). */
+  task?: { text: string; title: string };
   busy: boolean;
   message: string | null;
 }
@@ -19,7 +21,7 @@ export function drcText(drc: CheckResult | undefined, revision: number): string 
   return `DRC ${r.errors} err · ${r.warnings} warn${r.revision !== revision ? " (stale)" : ""}`;
 }
 
-export function StatusBar({ project, revision, layer, gridMm, drc, selection, busy, message }: Props) {
+export function StatusBar({ project, revision, layer, gridMm, drc, selection, task, busy, message }: Props) {
   const stale = drc && drc.report.revision !== revision;
   const sev = drc ? (drc.report.errors > 0 ? "bad" : stale ? "warn" : "") : "";
   return (
@@ -28,6 +30,11 @@ export function StatusBar({ project, revision, layer, gridMm, drc, selection, bu
       <span className="item">Layer {layer}</span>
       <span className="item">Grid {gridMm} mm</span>
       <span className={`item ${sev}`}>{drcText(drc, revision)}</span>
+      {task && (
+        <span className="item" data-testid="agent-task" title={task.title}>
+          {task.text}
+        </span>
+      )}
       <span className="item">{selection ?? "Nothing selected"}</span>
       <span className="item grow msg">{busy ? "Working…" : message}</span>
     </footer>

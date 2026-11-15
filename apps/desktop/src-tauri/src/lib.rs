@@ -550,7 +550,7 @@ pub fn current_project(s: &Session) -> Result<Snapshot, String> {
     s.with_engine(|e| snapshot(e))
 }
 
-/// The agent task ledger of the active project (ADR-0035), oldest first.
+/// The agent task ledger of the active project (ADR-0036), oldest first.
 pub fn agent_tasks(s: &Session) -> Result<Vec<eak_harness::agent_task::AgentTask>, String> {
     s.with_engine(|e| {
         let id = e.project().id.clone();
@@ -1281,7 +1281,7 @@ pub fn run() {
                         std::sync::Arc::new(move |req: &eak_harness::endpoint::Request| {
                             let emitter = handle.clone();
                             // The task ledger can move without a revision change (an ERC run),
-                            // so it has its own event (ADR-0035).
+                            // so it has its own event (ADR-0036).
                             let dir = req.context.project.dir.clone();
                             let before = dir.as_deref().map(eak_harness::agent_task::stamp);
                             let out = harness_call(

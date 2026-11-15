@@ -43,7 +43,8 @@ import { clampSize, DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "
 import { MenuBar, type Menu } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
 import { nextRotation } from "./editing";
-import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, type RevisionChange, type Shown } from "./revisionSync";
+import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
+import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
 import type { OpenProject, RecentProject, Check, CheckResult, Command, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
@@ -121,6 +122,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const [armPart, setArmPart] = useState<{ id: string; n: number } | null>(null);
   const [status, setStatus] = useState<{ layer: CopperLayer; gridMm: number }>({ layer: "top", gridMm: 0.5 });
   const revision = snapshot.project.revision;
+  const agentTasks = useAgentTasks(snapshot.project.id, revision);
+  // An external commit may delete what is selected; otherwise selection (and camera) survive it.
+  useEffect(() => {
+    setSelected((s) => reconcileSelection(s, snapshot.project));
+  }, [snapshot]);
   onScreen.current = { projectId: snapshot.project.id, revision };
   const rank = (k: string) => (k === "schematic" ? 0 : k === "pcb" ? 1 : 2);
   const wsCtx = (active: boolean): WorkspaceContext => ({
@@ -318,6 +324,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       await track(
         "Update PCB",
         async () => {
+          // Gate (ADR-0036): the PCB is synchronised only from a schematic ERC has run on.
+          if (results.erc?.report.revision !== revision) {
+            const erc = await api.runCheck("erc");
+            setResults((old) => ({ ...old, erc }));
+          }
           const r = await api.execute(revision, { type: "SyncSchematicToPcb" });
           if (!r.accepted) {
             if (r.error?.code === "NothingTo") {
@@ -923,6 +934,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         gridMm={status.gridMm}
         drc={results.drc}
         selection={selLabel ? `Selected ${selLabel}` : null}
+        task={{ text: taskSummary(currentTask(agentTasks), revision), title: taskTitle(currentTask(agentTasks)) }}
         busy={busy}
         message={message}
       />

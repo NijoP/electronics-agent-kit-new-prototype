@@ -33,7 +33,7 @@ registerWorkspace({
   render: (ctx) => (
     <Terminal
       active={ctx.active}
-      project={ctx.projectDir && ctx.projectId ? { dir: ctx.projectDir, name: ctx.projectName ?? "project", id: ctx.projectId } : null}
+      project={ctx.projectDir && ctx.projectId ? { dir: ctx.projectDir, name: ctx.projectName ?? "project", id: ctx.projectId, revision: ctx.revision } : null}
     />
   ),
 });

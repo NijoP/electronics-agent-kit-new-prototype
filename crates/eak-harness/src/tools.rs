@@ -45,7 +45,7 @@ pub enum Category {
     Rework,
     /// Advisory knowledge retrieval (ADR-0024): never a validation result, never a design edit.
     Knowledge,
-    /// Agent task ledger (ADR-0035): begin, finish and read the execution-grounded task record.
+    /// Agent task ledger (ADR-0036): begin, finish and read the execution-grounded task record.
     Task,
 }
 
@@ -711,7 +711,7 @@ fn design(
         name => {
             let command = decode_command(name, &command_args(args))
                 .map_err(|e| fail(ErrorCode::InvalidArguments, e))?;
-            // ADR-0035: PCB synchronisation needs a committed schematic and an ERC run on it.
+            // ADR-0036: PCB synchronisation needs a committed schematic and an ERC run on it.
             if carries_pcb_sync(&command) {
                 crate::agent_task::pcb_sync_gate(engine).map_err(|why| {
                     Fail(

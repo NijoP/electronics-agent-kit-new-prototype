@@ -5,12 +5,13 @@
 // the window reloads. The default action opens a normal shell; the user runs whichever coding agent
 // CLI they installed themselves. Agents are only detected passively (see ./agents.ts), never started.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { currentTask, taskSummary, taskTitle, useAgentTasks } from "../agentTasks";
 import { describeStatus, term, type Overview, type SessionInfo, type Space, type Tab } from "./api";
 import { disposeTerminal, XTermView } from "./XTermView";
 import { StatusDot } from "../design/ui";
 import { AGENT_DOT, agentEntries, rollup, STATE_WORD, tabTitle } from "./agents";
 
-export interface ProjectContext { dir: string; name: string; id: string }
+export interface ProjectContext { dir: string; name: string; id: string; revision?: number | null }
 
 interface Props {
   project: ProjectContext | null;
@@ -40,6 +41,8 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [details, setDetails] = useState(false);
   const dragTab = useRef<number | null>(null);
+  // Same revision and task phase as the EDA status bar (ADR-0036).
+  const agentTask = currentTask(useAgentTasks(project?.id ?? null, project?.revision ?? 0));
 
   const refresh = useCallback(async () => setOv(await term.overview()), []);
   const act = useCallback(
@@ -375,6 +378,11 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
               </button>
             </div>
           </div>
+          {project && project.revision != null && (
+            <div className="term-msg" data-testid="agent-task" title={taskTitle(agentTask)}>
+              {project.name}: {taskSummary(agentTask, project.revision)}
+            </div>
+          )}
           {message && (
             <div className="term-msg" role="status">
               {message} <button type="button" onClick={() => setMessage(null)}>Dismiss</button>
