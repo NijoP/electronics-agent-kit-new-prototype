@@ -315,15 +315,23 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
                 {tab.panes.map((id, i) => {
                   const s = byId.get(id);
                   return (
-                    <div key={id} className="term-pane-wrap" style={{ flexBasis: `${fractions(tab)[i] * 100}%` }}>
+                    <div key={id} className="term-pane-wrap" style={{ flex: `${fractions(tab)[i]} 1 0%` }}>
                       <div className="term-pane" onPointerDownCapture={() => s && s.id !== ov?.focused && void term.focus(s.id).then(refresh)}>
-                        {s && s.status.state === "ended" ? (
+                        {!s ? (
+                          <div className="term-pick" role="group" aria-label="Empty pane">
+                            <span>No session in this pane.</span>
+                            <button type="button" onClick={() => newTerminal()}>New terminal</button>
+                            {sessions.filter((o) => o.space === spaceId && o.id !== current?.id).slice(0, 4).map((o) => (
+                              <button key={o.id} type="button" onClick={() => focus(o)}>Show {o.name}</button>
+                            ))}
+                          </div>
+                        ) : s.status.state === "ended" ? (
                           <div className="pad">
                             {s.name} ended when EAK last exited ({s.spec.cwd}). Its process is gone.{" "}
                             <button type="button" onClick={() => act(() => term.restart(s.id))}>Restart</button>
                           </div>
                         ) : (
-                          <XTermView id={id} focused={visible && id === current?.id} />
+                          <XTermView id={id} visible={visible} focused={visible && id === current?.id} />
                         )}
                       </div>
                       {i < tab.panes.length - 1 && (

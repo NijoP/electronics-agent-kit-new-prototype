@@ -31,7 +31,7 @@ function entry(id: number): Entry {
   ensureListener();
   // View scrollback follows the resource profile; the backend keeps its own 2 MiB ring per
   // session, so a redraw after reattach still has that much output.
-  const t = new Terminal({ scrollback: profileNow().scrollback_lines, cursorBlink: true, allowProposedApi: true, fontFamily: "ui-monospace, Menlo, Consolas, monospace", fontSize: 13 });
+  const t = new Terminal({ scrollback: profileNow().scrollback_lines, cursorBlink: true, allowProposedApi: true, fontFamily: "ui-monospace, Menlo, Consolas, monospace", fontSize: 14 });
   const fit = new FitAddon();
   const search = new SearchAddon();
   t.loadAddon(fit);
@@ -79,32 +79,56 @@ export function disposeTerminal(id: number) {
   registry.delete(id);
 }
 
-export function XTermView({ id, focused }: { id: number; focused: boolean }) {
+export function XTermView({ id, focused, visible = true }: { id: number; focused: boolean; visible?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
+  const refit = useRef<() => void>(() => {});
   useEffect(() => {
     const en = entry(id);
     const el = box.current!;
     el.appendChild(en.host);
     if (!en.t.element) en.t.open(en.host);
+    // Fit the emulator to its box and tell the PTY. Runs on mount, activation, window / box
+    // resize and font-metric changes. A hidden workspace (0x0 box) keeps its size; when xterm has
+    // not measured a cell yet (opened while hidden / fonts loading) it retries on the next frames.
+    let raf = 0;
+    let tries = 0;
     const resize = () => {
-      if (!el.clientWidth || !el.clientHeight) return; // hidden workspace: keep the size
-      try {
-        en.fit.fit();
-        void term.resize(id, en.t.cols, en.t.rows).catch(() => {});
-      } catch {
-        /* not laid out yet */
-      }
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (!el.clientWidth || !el.clientHeight) return;
+        try {
+          const dims = en.fit.proposeDimensions();
+          if (!dims || !dims.cols || !dims.rows) {
+            if (tries++ < 30) resize();
+            return;
+          }
+          tries = 0;
+          en.fit.fit();
+          void term.resize(id, en.t.cols, en.t.rows).catch(() => {});
+        } catch {
+          /* not laid out yet */
+        }
+      });
     };
+    refit.current = resize;
     const ro = new ResizeObserver(resize);
     ro.observe(el);
+    window.addEventListener("resize", resize);
+    void document.fonts?.ready.then(resize);
     resize();
     return () => {
+      cancelAnimationFrame(raf);
       ro.disconnect();
+      window.removeEventListener("resize", resize);
       if (en.host.parentElement === el) el.removeChild(en.host);
     };
   }, [id]);
+  // A terminal mounted or kept in a hidden workspace is refit the moment it becomes visible.
+  useEffect(() => {
+    if (visible) refit.current();
+  }, [id, visible]);
   useEffect(() => {
     if (focused) registry.get(id)?.t.focus();
   }, [id, focused]);

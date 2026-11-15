@@ -42,6 +42,8 @@
   --h-md: 28px;
   --h-lg: 32px;
   --h-bar: 34px;
+  --h-xl: 40px;
+  --h-tab: 42px;
 
   /* Motion. */
   --t-fast: 120ms;

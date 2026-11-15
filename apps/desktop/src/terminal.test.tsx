@@ -22,7 +22,7 @@ vi.mock("@xterm/xterm", () => ({
     hasSelection() { return false; }
   },
 }));
-vi.mock("@xterm/addon-fit", () => ({ FitAddon: class { fit() {} } }));
+vi.mock("@xterm/addon-fit", () => ({ FitAddon: class { fit() {} proposeDimensions() { return { cols: 80, rows: 24 }; } } }));
 vi.mock("@xterm/addon-search", () => ({ SearchAddon: class { findNext() {} findPrevious() {} } }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
@@ -139,5 +139,37 @@ describe("terminal workspace", () => {
     expect(calls.some((c) => c.cmd === "terminal_close")).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Close and terminate" }));
     await waitFor(() => expect(calls.find((c) => c.cmd === "terminal_close")?.args).toEqual({ id: 2 }));
+  });
+
+  // Regression (unrun): the terminal must be fitted and the PTY resized when it mounts in a box
+  // with a real size, and panes must share the whole area (flex fractions sum to 1, no dead band).
+  it("sends PTY rows/cols on mount and panes fill the area", async () => {
+    const w = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+    const h = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, value: 800 });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, value: 600 });
+    try {
+      spaces = [{ id: 1, name: "Board", root: "/projects/board", project_id: null }];
+      tabs = [{ id: 3, space: 1, direction: "column", panes: [2, 4] }];
+      sessions = [session(2, 1, 3, "idle"), session(4, 1, 3, "idle")];
+      focused = 2;
+      render(<TerminalWorkspace visible project={null} newSpaceNonce={0} />);
+      await waitFor(() => expect(calls.filter((c) => c.cmd === "terminal_resize").map((c) => c.args.id).sort()).toEqual([2, 4]));
+      expect(calls.find((c) => c.cmd === "terminal_resize")?.args).toMatchObject({ cols: 80, rows: 24 });
+      const wraps = [...document.querySelectorAll<HTMLElement>(".term-pane-wrap")];
+      expect(wraps.map((e) => e.style.flexGrow)).toEqual(["0.5", "0.5"]);
+    } finally {
+      if (w) Object.defineProperty(HTMLElement.prototype, "clientWidth", w);
+      if (h) Object.defineProperty(HTMLElement.prototype, "clientHeight", h);
+    }
+  });
+
+  it("a pane whose session is gone shows a session picker, not a blank rectangle", async () => {
+    spaces = [{ id: 1, name: "Board", root: "/projects/board", project_id: null }];
+    tabs = [{ id: 3, space: 1, direction: "row", panes: [2, 9] }];
+    sessions = [session(2, 1, 3, "idle")];
+    focused = 2;
+    render(<TerminalWorkspace visible project={null} newSpaceNonce={0} />);
+    await screen.findByRole("group", { name: "Empty pane" });
   });
 });
