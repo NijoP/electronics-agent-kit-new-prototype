@@ -440,16 +440,19 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .term-session .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .term-session .chip { border: 1px solid var(--line-strong); font-family: var(--mono); font-size: var(--fs-2xs); }
 .term-center { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.term-panes { flex: 1; min-width: 0; min-height: 0; display: flex; overflow: hidden; }
-.term-panes.column { flex-direction: column; }
+/* Split direction classes are `split-row` / `split-column`, never bare `row` / `column`: the global
+   `.row` utility (align-items: center) vertically centred the panes, and the absolutely positioned
+   xterm host has no intrinsic height, so every terminal collapsed to 0 px (blank black pane). */
+.term-panes { flex: 1; min-width: 0; min-height: 0; display: flex; align-items: stretch; overflow: hidden; }
+.term-panes.split-column { flex-direction: column; }
 .term-pane-wrap { min-width: 0; min-height: 0; display: flex; overflow: hidden; }
-.term-panes.column > .term-pane-wrap { flex-direction: column; }
+.term-panes.split-column > .term-pane-wrap { flex-direction: column; }
 .term-pane { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .term-pane:focus-within { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
 .term-divider { flex: 0 0 4px; background: var(--line); transition: background var(--t-fast) var(--ease); }
 .term-divider:hover { background: var(--accent); }
-.term-divider.row { cursor: col-resize; }
-.term-divider.column { cursor: row-resize; }
+.term-divider.split-row { cursor: col-resize; }
+.term-divider.split-column { cursor: row-resize; }
 .term-confirm { position: fixed; left: 50%; top: 80px; transform: translateX(-50%); z-index: var(--z-popover); background: var(--bg-raised); border: 1px solid var(--line-strong); border-radius: var(--r-2); box-shadow: var(--shadow); padding: var(--s-1) var(--s-1h); }
 
 /* Status dot: one primitive (design/ui.tsx StatusDot) for sessions, tasks and project rows. */

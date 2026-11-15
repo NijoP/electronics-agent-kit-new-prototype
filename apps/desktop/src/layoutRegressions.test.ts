@@ -1,6 +1,7 @@
 // Regression tests for the installed-app QA fixes (docs/qa/REMEDIATION_LEDGER.md). Written, not run.
 import { describe, expect, it } from "vitest";
 import css from "./styles.css?raw";
+import workspaceSrc from "./terminal/TerminalWorkspace.tsx?raw";
 import { visibleViewBox } from "./viewport";
 
 const rule = (selector: string): string => {
@@ -17,6 +18,15 @@ describe("terminal layout CSS", () => {
   });
   it("pane containers clip instead of overflowing", () => {
     for (const s of [".term-center", ".term-main", ".term-panes", ".term-pane-wrap"]) expect(rule(s)).toContain("overflow: hidden");
+  });
+  // Regression: panes were classed `row`, picking up the global `.row { align-items: center }`
+  // utility, so the pane (whose xterm host is absolutely positioned) collapsed to 0 px height and
+  // every terminal showed as an empty black area (found on Windows, all platforms affected).
+  it("terminal panes stretch to full height and never use the generic row/column classes", () => {
+    expect(rule(".term-panes")).toContain("align-items: stretch");
+    expect(workspaceSrc).not.toMatch(/className=\{`term-(panes|divider) \$\{tab\.direction\}`\}/);
+    expect(workspaceSrc).toContain("term-panes split-${tab.direction}");
+    expect(rule(".term-panes.split-column")).toContain("flex-direction: column");
   });
   it("session tab bar is one row that scrolls horizontally", () => {
     const r = rule(".term-tabs");

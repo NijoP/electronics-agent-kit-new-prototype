@@ -339,7 +339,7 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
           )}
           <div className="term-main">
             {tab ? (
-              <div className={`term-panes ${tab.direction}`}>
+              <div className={`term-panes split-${tab.direction}`}>
                 {tab.panes.map((id, i) => {
                   const s = byId.get(id);
                   return (
@@ -363,7 +363,7 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
                         )}
                       </div>
                       {i < tab.panes.length - 1 && (
-                        <div className={`term-divider ${tab.direction}`} role="separator" aria-label="Resize panes" onPointerDown={(e) => dragDivider(tab, i, e)} />
+                        <div className={`term-divider split-${tab.direction}`} role="separator" aria-label="Resize panes" onPointerDown={(e) => dragDivider(tab, i, e)} />
                       )}
                     </div>
                   );
