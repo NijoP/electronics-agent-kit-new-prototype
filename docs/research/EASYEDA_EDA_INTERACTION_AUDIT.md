@@ -52,7 +52,7 @@ repeat, the broader [ecosystem audit](EASYEDA_ECOSYSTEM_AUDIT.md) (37 repositori
   reset camera or selection (the viewer's page-switch behaviour). EAK has `pcbFocus.ts`,
   `viewport.ts`, `shell/viewState.ts`.
 - **Cannot reuse:** it is a viewer over exported files, with no edit semantics or command boundary.
-- **EAK equivalent:** per-document camera and selection kept across a revision event (ADR-0035).
+- **EAK equivalent:** per-document camera and selection kept across a revision event (ADR-0036).
 
 ### easyeda-file-format / easyeda-eprj3-format (no licence)
 - **Files:** trees. The example project is a descriptor, one folder per schematic with per-page files
@@ -77,7 +77,7 @@ repeat, the broader [ecosystem audit](EASYEDA_ECOSYSTEM_AUDIT.md) (37 repositori
 - **Patterns:** each failed item is recorded (not found, name mismatch) and reported together instead
   of aborting the batch.
 - **Applies:** EAK batch results report per-item failures and label partial success as partial, never
-  as success (task states `Partial`/`Blocked` in ADR-0035).
+  as success (task states `Partial`/`Blocked` in ADR-0036).
 
 ### eext-open-auto-router / easyeda-pcb-router (GPL-3.0)
 - **Files:** trees, README, `AGENTS.md`; algorithm detail from the ecosystem audit (negotiated
