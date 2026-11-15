@@ -1,4 +1,4 @@
-//! Library identity, scope, maturity and a vendor-neutral catalogue (ADR-0031).
+//! Library identity, scope, maturity and a vendor-neutral catalogue (ADR-0035).
 //!
 //! This module describes *libraries* (the shared, versioned definition containers) and how a
 //! definition is addressed. It is deliberately separate from placed design instances: a project

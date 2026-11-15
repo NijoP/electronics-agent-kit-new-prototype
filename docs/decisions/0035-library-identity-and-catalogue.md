@@ -1,4 +1,4 @@
-# ADR-0031 Library identity, scope and committed-definition references
+# ADR-0035 Library identity, scope and committed-definition references
 
 Status: accepted (static-review only, not runtime verified).
 
@@ -15,3 +15,7 @@ MissingLibrary | Disabled`. Content hashes are computed by callers (a crate that
 
 Consequences: a later change may store `DefRef` on placed instances (an IR change needing its own ADR).
 Supplier data stays generic metadata; nothing here depends on any supplier.
+
+Relation to ADR-0033: that ADR defines the desktop-side scope views (builtin, project, personal,
+imported) and the browser; this ADR adds the core identity/version/hash/drift types underneath them.
+The desktop scopes are not yet wired to `LibraryCatalog`; that is the next slice.

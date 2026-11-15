@@ -10,7 +10,7 @@ component. Supplier data is generic, optional, stale-prone commercial metadata, 
 ## Current coupling (grep at this commit, case-insensitive `lcsc|jlcpcb|easyeda`)
 | Area | Where | Class |
 |---|---|---|
-| Core model | `eak-core/src/library.rs` (`ComponentDef.lcsc` legacy field, `supplier_part`, `set_offer`, `migrate_offers`, search over `lcsc`), `builtin.rs` (`lcsc: None` fields; one AMS1117 part carries `C6186`) | generic `supplier_offers` already exist (ADR-0028); legacy `lcsc` mirror remains for old files |
+| Core model | `eak-core/src/library.rs` (`ComponentDef.lcsc` legacy field, `supplier_part`, `set_offer`, `migrate_offers`, search over `lcsc`), `builtin.rs` (`lcsc: None` fields; one AMS1117 part carries `C6186`) | generic `supplier_offers` already exist (ADR-0028; desktop scope views in ADR-0033, ADR-0034 for assembly classification); legacy `lcsc` mirror remains for old files |
 | Command | `eak-runtime/src/command.rs` (`lcsc` argument of a component edit) | legacy field; to become `supplier_offers` edit |
 | Manufacturing | `eak-manufacturing/src/{lcsc,jlcpcb,provider,sourcing,bom}.rs` and tests/fixtures | optional adapter; network provider |
 | Validation | `eak-validation/src/{sourcing,gates,dfm}.rs` | gate names/profile mention the fabricator |
@@ -21,7 +21,7 @@ component. Supplier data is generic, optional, stale-prone commercial metadata, 
 ## Plan and status
 | Capability | Status |
 |---|---|
-| Stable library identity, scopes, maturity, content hash, catalogue, committed `DefRef` with drift detection (`eak-core/src/libmeta.rs`, ADR-0031) | Implemented in source; test source added; static-review only |
+| Stable library identity, scopes, maturity, content hash, catalogue, committed `DefRef` with drift detection (`eak-core/src/libmeta.rs`, ADR-0035) | Implemented in source; test source added; static-review only |
 | Generic supplier metadata kept (`manufacturer`, `mpn`, `supplier_offers`) | Already present; unchanged |
 | Placement independent of any supplier response | Already true for placement (library is local); not re-verified at runtime |
 | Move legacy `lcsc` field behind `supplier_offers` only; remove from search keys and command arguments | Not yet done (needs IR migration and ADR; planned next) |
