@@ -66,6 +66,7 @@ export const TERMINAL_IPC = [
 export const IPC_COMMANDS = [
   "create_project",
   "open_project",
+  "project_lock_state",
   "close_project",
   "current_project",
   "execute_command",
