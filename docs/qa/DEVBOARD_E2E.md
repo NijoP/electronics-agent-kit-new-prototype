@@ -63,6 +63,61 @@ terminal (see T2); the journal shows `get_component` x7 and `list_library_compon
 | M1 | Low | MECH-001 height check is skipped unless a height limit is declared; the manifest lists it as a blocking reason, which is correct, but `run_check mech` itself still says `NO_ERRORS_IN_IMPLEMENTED_CHECKS` | `crates/eak-validation/src/mech.rs` | open (already C2 in EVALUATION.md) |
 | Q1 | Info | My own monitor polled `get_history` through the forwarder under agent name "claude", inflating Claude's call count by ~50; counts above use the journal for session 4 only | QA tooling | n/a |
 
-## Run B — shipped CLI (pending)
+## Run B — shipped `eak` CLI, genuine EAK path end to end
 
-To follow once the installer finishes and the app is relaunched.
+Installed from main `2778396` by the source installer, then `8fde70c` (see I1). Claude Code
+(`--model sonnet --permission-mode dontAsk`, Write/Edit/web denied, only `eak`/`jq`/`head`/`grep`
+Bash allowed) ran in an EAK terminal of a fresh app instance and project, using only the shipped
+`eak` on PATH (`/home/dev/.local/bin/eak` -> `current/eak`). Nothing from a forwarder was involved.
+
+Verified in a new EAK terminal with a project open: `command -v eak eak-mcp` found both,
+`eak info`, `eak tools` (with the discovery fix) and `eak guide` all worked against the running engine.
+
+How it was driven: project create, Terminal workspace, new space and the **Claude Code launcher
+button** were GUI (AT-SPI). The launcher starts bare `claude` as the PTY program, so the flagged
+run was started from a shell tab with the terminal control API (not-via-GUI for that step).
+
+### Stage matrix (genuine engine, journal timestamps)
+| Stage | Wall | Revisions |
+|---|---|---|
+| App launch to window | ~8 s | |
+| Project + terminal + launcher (GUI) | ~40 s | 0 |
+| Claude run (brief to last call) | ~5 min | 21 |
+| Idle until Claude stopped by itself | ~7 min | 21 |
+
+Journal: Batch x4, PlaceSymbol, SetBoardOutline, SetNoConnect, SyncSchematicToPcb, AutoPlace,
+AutoRoute, AddTrack, AddVia x2, AddZone, AddNetLabel, Undo x5, Redo. 71 session tool calls, 12
+failures (AddZone `invalid_arguments` x2, AutoRoute `nothing_to_do` x2, LabelPin `invalid_arguments` x2,
+AddTrack `invalid_arguments`, `design_spec_set` `invalid_arguments`, ClearRouting `approval_required`,
+Annotate/SetNetVoltage `nothing_to_do`, Batch `not_found`). 4 `export_manufacturing` calls, 8 `verify_routing`.
+Resources: app RSS 74-101 MB, ~2% CPU; claude RSS 330-410 MB, 9-38% CPU. No crash.
+
+### Final board (genuine engine, rev 21)
+16 parts, 54 labels, 0 wires, 4-point outline, 385 tracks, 37 vias, 1 zone (GND).
+- ERC `ERRORS`: 2 errors + 2 warnings. Errors are ERC-003 (nets GND and VBUS feed power-input pins
+  with no power-output driver; the design has no USB-C source pin driving VBUS), ERC-016 x2 warnings.
+- DRC `ERRORS`: 2 errors (DRC-004: GND and IO4 each have 1 unrouted connection) + 8 warnings
+  (DRC-019 x6, DRC-013 x1 zone islands, DRC-020 x1); 7 `not_implemented`.
+- MECH: `NO_ERRORS_IN_IMPLEMENTED_CHECKS`, 2 `not_implemented`; MECH-001 not evaluated (no height limit).
+- DFM: 6 warnings (DFM-005), 7 `not_implemented`.
+- `run_gates jlcpcb_standard`: `required_pads_connected` Fail, `copper_continuity` Fail (zone has 43
+  isolated copper islands), `fabricator_capability` Unknown, `electrical_constraints` Unknown (3V3, VBUS
+  have no declared current).
+- Export manifest status: **DRAFT** (16 files in `output/rev-21/`). Not manufacturing-ready; EAK does not claim it.
+
+Claude again stopped before the board was clean. Compared with Run A it produced a smaller board
+(16 vs 18 parts) with different open problems, so the outcome is not repeatable at this model/effort.
+
+## Issues (cumulative, both runs)
+
+| ID | Sev | Issue | Source | State |
+|---|---|---|---|---|
+| I1 | **High** | Linux source installer exited 0 but never installed `eak`/`eak-mcp`: `install_linux` called `link_cli` without `install_cli`, so `~/.local/bin/eak` pointed at a missing file | `scripts/install-source.sh` `install_linux` | **Fixed**, main `8fde70c`; verified by rerun (`current/` has eak, eak-mcp, eak-desktop). Installer run 1 built in ~5 min with cached deps, no compile errors |
+| T1b | Med | The `strip_ansi` fix is incomplete: Claude Code's TUI read back through `session.read` is still word-glued ("Quicksafetycheck:") on the installed `8fde70c` build. The TUI repositions with other cursor codes; stripping cannot recover that. Real fix is reading from a terminal screen grid (a vt emulator), same root cause as T2 | `crates/eak-terminal/src/lib.rs` `read` | open |
+| L1 | Low | The "Claude Code" launcher runs bare `claude` as the PTY program: no way to pass model/permission flags, and the tab dies when claude exits (session `completed`, shell gone) | `apps/desktop` agent launcher, `crates/eak-terminal/src/agents.rs` | open |
+| C1 | Low | `eak guide \| head` panics "failed printing to stdout: Broken pipe" (`println!` on a closed pipe) | `crates/eak-harness/src/cli.rs` | open |
+| E3 | Med | ERC-003 error "nothing drives VBUS/GND": the library has no connector/source pin of power-output type, so a USB-powered board cannot clear ERC without PWR_FLAG-style markers or `SetNetVoltage`; agent tried `SetNetVoltage` (`nothing_to_do`) | `eak-validation/erc.rs`, library | open |
+| Q2 | Info | Side effect of running QA with a private `XDG_DATA_HOME`: Claude Code's auto-updater placed its binary under that tmp dir and repointed `~/.local/bin/claude` there; the tmp dir must not be deleted (or the symlink repaired) | QA environment | noted |
+
+H1, T1, P1 above stay as listed: H1 and T1 fixed in source, P1 resolved by I1 and verified.
+All fixes are **code-reviewed only** except where verified on the installed build as stated.
