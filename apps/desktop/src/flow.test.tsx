@@ -141,6 +141,7 @@ const executed = () => execCalls().map((c) => (c.args.command as { type: string 
 async function createFromHome(name = "Flow") {
   render(<App />);
   // Project Home uses the native folder dialog (mocked IPC answer), not a pasted path.
+  fireEvent.click(await screen.findByRole("button", { name: "New Project" }));
   fireEvent.change(await screen.findByLabelText("Name"), { target: { value: name } });
   fireEvent.click(screen.getByRole("button", { name: "Choose parent folder…" }));
   await screen.findByText("/p");
@@ -256,6 +257,7 @@ describe("end-to-end flow", () => {
 
   it("1b. Project Home creates in <parent>/<name> and cancelling the dialog changes nothing", async () => {
     render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "New Project" }));
     fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Board A" } });
     expect((screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(true); // no parent chosen yet
     fireEvent.click(screen.getByRole("button", { name: "Choose parent folder…" }));

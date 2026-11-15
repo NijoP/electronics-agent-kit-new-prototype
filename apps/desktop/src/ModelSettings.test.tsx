@@ -147,7 +147,8 @@ afterEach(() => {
 
 async function openPanel() {
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "Model settings" }));
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: /Model and provider settings/ }));
   await screen.findByRole("dialog", { name: "Model settings" });
 }
 

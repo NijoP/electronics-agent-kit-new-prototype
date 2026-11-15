@@ -1,16 +1,16 @@
-// Project Home: the engineering project launcher. Open a project folder with the operating system's
-// dialog (no pasted paths), find one in the recent list (search by name or folder), reopen the last
-// session, or create one (name, location, copper layers). The project that opens becomes the shared
-// context for the EDA and Terminal workspaces.
+// Project Home: the launchpad. Header (identity, navigation, settings), a short introduction, the two
+// primary actions (Open Project, New Project; both use the operating system folder dialog, no pasted
+// paths), Continue Working (the most recently opened projects) and a searchable, sortable recent list.
 //
 // Only real data is shown. A recent row carries what the recent-project index stores (name, folder,
 // revision and open time) plus a read-only status read from the project folder (`status`): stage
 // derived from content, file modification time, checks with no evidence for the current revision,
 // and errors in current evidence. An unreadable folder says so; nothing is inferred or invented.
+// Nothing engineering-related is initialised here: the list is one IPC call.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, pickFolder } from "./api";
 import { formatShortcut, HOME_SHORTCUTS, matches, tip } from "./design/shortcuts";
-import { EmptyState } from "./design/ui";
+import { EmptyState, Pill } from "./design/ui";
 import type { ProjectStatus, RecentProject, Snapshot } from "./types";
 
 interface Props {
@@ -81,12 +81,32 @@ export function filterRecent(recent: RecentProject[], query: string): RecentProj
   });
 }
 
+export type RecentSort = "opened" | "name" | "modified";
+
+/** Sorted copy of the recent list: last opened (default), name, or project-folder modification time. */
+export function sortRecent(recent: RecentProject[], by: RecentSort): RecentProject[] {
+  const r = [...recent];
+  if (by === "name") return r.sort((a, b) => a.name.localeCompare(b.name));
+  if (by === "modified") return r.sort((a, b) => (b.status?.last_modified_ms ?? -1) - (a.status?.last_modified_ms ?? -1));
+  return r.sort((a, b) => b.last_opened_ms - a.last_opened_ms);
+}
+
+/** Validation wording from real evidence only; never "passed" without evidence. */
+function validation(s: ProjectStatus | null | undefined): { tone: "ok" | "warn" | "bad" | "neutral"; text: string } {
+  if (!s) return { tone: "neutral", text: "Unavailable" };
+  if (s.unresolved_errors != null && s.unresolved_errors > 0) return { tone: "bad", text: `${s.unresolved_errors} error${s.unresolved_errors === 1 ? "" : "s"}` };
+  if (s.pending_validation.length > 0) return { tone: "warn", text: `${s.pending_validation.length} check${s.pending_validation.length === 1 ? "" : "s"} pending` };
+  return { tone: "ok", text: "Checks current" };
+}
+
 export function ProjectHome({ onOpened, active = true, theme, onTheme, onSettings }: Props) {
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [recentError, setRecentError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [takeOver, setTakeOver] = useState(false);
+  const [sort, setSort] = useState<RecentSort>("opened");
+  const [menu, setMenu] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [parent, setParent] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [layers, setLayers] = useState(2);
@@ -97,14 +117,18 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
   const nameRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  useEffect(() => {
+  const load = () => {
+    setLoaded(false);
+    setRecentError(null);
     api
       .recentProjects(50)
       .then((r) => setRecent(Array.isArray(r) ? r : []))
-      .catch((e) => setRecentError(String(e)))
+      .catch((e) => setRecentError(String(e).replace(/^Error: /, "")))
       .finally(() => setLoaded(true));
-  }, []);
-  const shown = useMemo(() => filterRecent(recent, query), [recent, query]);
+  };
+  useEffect(load, []);
+  const shown = useMemo(() => sortRecent(filterRecent(recent, query), sort), [recent, query, sort]);
+  const continueList = useMemo(() => sortRecent(recent, "opened").slice(0, 3), [recent]);
 
   const attempt = async (f: () => Promise<Snapshot>) => {
     setBusy(true);
@@ -125,9 +149,10 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
       return null;
     }
   };
+  const openPath = (dir: string) => attempt(() => api.openProject(dir, false));
   const openFolder = async () => {
     const dir = await choose("Open an EAK project folder");
-    if (dir) await attempt(() => api.openProject(dir, takeOver));
+    if (dir) await openPath(dir);
   };
   const chooseParent = async () => {
     const dir = await choose("Choose where the new project folder is created");
@@ -152,6 +177,10 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
       return last;
     });
   const ready = !!parent && name.trim().length > 0;
+  const startNew = () => {
+    setCreating(true);
+    setTimeout(() => nameRef.current?.focus(), 0);
+  };
 
   // Mod+O opens a folder, Mod+N starts a new project, Mod+F or "/" searches the recent list.
   useEffect(() => {
@@ -159,12 +188,13 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
     const onKey = (e: KeyboardEvent) => {
       const t = e.target;
       const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
+      if (e.key === "Escape") setMenu(false);
       if (matches(e, HOME_SHORTCUTS.openProject)) {
         e.preventDefault();
         if (!busy) void openFolder();
       } else if (matches(e, HOME_SHORTCUTS.newProject)) {
         e.preventDefault();
-        nameRef.current?.focus();
+        startNew();
       } else if (matches(e, HOME_SHORTCUTS.find) || (!typing && e.key === "/")) {
         e.preventDefault();
         searchRef.current?.focus();
@@ -191,28 +221,72 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
 
   return (
     <main className="home">
-      <div className="home-inner">
-        <header className="home-head">
-          <div className="home-brand">
-            <span className="home-mark" aria-hidden="true" />
-            <div>
-              <h1>EAK</h1>
-              <p className="muted">Electronics engineering workstation · schematic, PCB, validation and terminal agents on one project</p>
+      <header className="home-bar">
+        <div className="home-brand">
+          <span className="home-mark" aria-hidden="true" />
+          <strong className="home-wordmark">EAK</strong>
+          <span className="muted home-descriptor">Electronics Agent Kit</span>
+        </div>
+        <nav className="home-nav" aria-label="Project navigation">
+          <button type="button" className="ghost" disabled={busy} onClick={() => void openFolder()}>Open</button>
+          <button type="button" className="ghost" onClick={startNew}>New</button>
+          <a className="ghost-link" href="#home-recent">Recent</a>
+        </nav>
+        <div className="home-settings">
+          <button type="button" className="ghost" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
+            Settings
+          </button>
+          {menu && (
+            <div className="home-menu" role="menu">
+              {onTheme && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onTheme();
+                    setMenu(false);
+                  }}
+                >
+                  Theme: {theme === "dark" ? "Dark (switch to light)" : "Light (switch to dark)"}
+                </button>
+              )}
+              {onSettings && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onSettings();
+                    setMenu(false);
+                  }}
+                >
+                  Model and provider settings (optional)…
+                </button>
+              )}
             </div>
-          </div>
-          <div className="home-head-actions">
-            {onTheme && (
-              <button type="button" onClick={onTheme} title="Toggle light/dark theme">
-                {theme === "dark" ? "Light theme" : "Dark theme"}
+          )}
+        </div>
+      </header>
+
+      <div className="home-inner">
+        <section className="home-hero" aria-label="Start">
+          <h1>Your engineering workspace.</h1>
+          <p className="muted">
+            Schematic, PCB, engineering checks and terminal agents on one project, with every change recorded and verified by the engine.
+          </p>
+          <div className="home-cta">
+            <button type="button" className="primary" disabled={busy} onClick={() => void openFolder()} title={tip("Open an EAK project folder", HOME_SHORTCUTS.openProject)}>
+              Open Project…
+            </button>
+            <button type="button" aria-expanded={creating} disabled={busy} onClick={startNew} title={tip("Create a project", HOME_SHORTCUTS.newProject)}>
+              New Project
+            </button>
+            {session.length > 0 && (
+              <button type="button" className="ghost" disabled={busy} onClick={reopenSession} title={session.join("\n")}>
+                Reopen last session ({session.length})
               </button>
             )}
-            {onSettings && (
-              <button type="button" onClick={onSettings}>
-                Model settings
-              </button>
-            )}
           </div>
-        </header>
+        </section>
 
         {error && (
           <p role="alert" className="home-alert">
@@ -220,123 +294,141 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
           </p>
         )}
 
-        <div className="home-grid">
-          <section aria-label="Recent projects" className="home-recent">
-            <header className="home-section-head">
-              <h2>Recent projects</h2>
-              {recent.length > 0 && <span className="count">{recent.length}</span>}
-              <span className="spacer" />
-              <input
-                ref={searchRef}
-                type="search"
-                className="home-search"
-                aria-label="Search projects"
-                placeholder={`Search name or folder (${formatShortcut(HOME_SHORTCUTS.find)})`}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setQuery("");
-                  else if (e.key === "Enter" && shown.length > 0 && !busy) void attempt(() => api.openProject(shown[0].path, takeOver));
-                  else rowNav(e);
-                }}
-              />
-            </header>
-            {recentError && <p className="error">{recentError}</p>}
-            {!recentError && loaded && recent.length === 0 && (
-              <EmptyState title="No recent projects.">
-                Open an existing project folder or create a new project; it is listed here with its location, revision and when it was last opened.
-              </EmptyState>
-            )}
-            {recent.length > 0 && shown.length === 0 && <p className="muted home-none">No project matches “{query}”.</p>}
-            {shown.length > 0 && (
-              <div className="home-table">
-                <div className="home-cols" aria-hidden="true">
-                  <span>Project</span>
-                  <span>Location</span>
-                  <span className="num">Revision</span>
-                  <span className="num">Opened</span>
-                </div>
-                <ul className="recent" ref={listRef} onKeyDown={rowNav}>
-                  {shown.map((r) => (
-                    <li key={r.path}>
-                      <button
-                        type="button"
-                        className="home-row"
-                        disabled={busy}
-                        title={`Open ${r.path}`}
-                        onClick={() => attempt(() => api.openProject(r.path, takeOver))}
-                      >
-                        <strong className="home-name">{r.name}</strong>
-                        <span className="home-loc">{r.path}</span>
-                        <span className="num muted">revision {r.revision}</span>
-                        <span className="num muted">{ago(r.last_opened_ms)}</span>
-                        <span className="home-status muted">{statusLine(r.status)}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </section>
-
-          <aside className="home-side">
-            <section aria-label="Start" className="home-card">
-              <h2>Open a project</h2>
-              <button type="button" className="primary home-wide" disabled={busy} onClick={openFolder} title={tip("Open an EAK project folder", HOME_SHORTCUTS.openProject)}>
-                Open project folder…
-              </button>
-              {session.length > 0 && (
-                <button type="button" className="home-wide" disabled={busy} onClick={reopenSession} title={session.join("\n")}>
-                  Reopen last session ({session.length} project{session.length > 1 ? "s" : ""})
+        {creating && (
+          <form
+            aria-label="Create project"
+            className="home-new"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (ready) void create();
+            }}
+          >
+            <label>
+              Name
+              <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. motor-driver" />
+            </label>
+            <div className="home-field">
+              <span className="home-label">Location</span>
+              <div className="home-actions">
+                <button type="button" disabled={busy} onClick={chooseParent}>
+                  Choose parent folder…
                 </button>
-              )}
-              <label className="inline home-small">
-                <input type="checkbox" checked={takeOver} onChange={(e) => setTakeOver(e.target.checked)} />
-                Take over a stale lock (only after a crash; never while the project is open elsewhere)
-              </label>
-            </section>
-
-            <form
-              aria-label="Create project"
-              className="home-card"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (ready) void create();
-              }}
-            >
-              <h2>New project</h2>
-              <label>
-                Name
-                <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder={`e.g. motor-driver (${formatShortcut(HOME_SHORTCUTS.newProject)})`} />
-              </label>
-              <div className="home-field">
-                <span className="home-label">Location</span>
-                <div className="home-actions">
-                  <button type="button" disabled={busy} onClick={chooseParent}>
-                    Choose parent folder…
-                  </button>
-                  <span className="muted home-path">{parent ?? "No folder chosen"}</span>
-                </div>
+                <span className="muted home-path">{parent ?? "No folder chosen"}</span>
               </div>
-              <label>
-                Copper layers
-                <select value={layers} onChange={(e) => setLayers(Number(e.target.value))}>
-                  {[2, 4, 6].map((n) => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-              </label>
-              {ready && (
-                <p className="muted home-small">
-                  Creates and opens <code>{projectFolder(parent!, name)}</code>
-                </p>
-              )}
-              <button type="submit" className="primary" disabled={busy || !ready} title={ready ? undefined : "Enter a name and choose a parent folder"}>
+            </div>
+            <label>
+              Copper layers
+              <select value={layers} onChange={(e) => setLayers(Number(e.target.value))}>
+                {[2, 4, 6].map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </label>
+            <div className="home-actions">
+              <button type="submit" className="primary" disabled={busy || !ready} title={ready ? undefined : "Enter a name and choose a folder"}>
                 Create
               </button>
-            </form>
-          </aside>
-        </div>
+              <button type="button" className="ghost" onClick={() => setCreating(false)}>Cancel</button>
+              {ready && <span className="muted home-path">Creates <code>{projectFolder(parent!, name)}</code></span>}
+            </div>
+          </form>
+        )}
+
+        {continueList.length > 0 && (
+          <section aria-label="Continue working" className="home-continue">
+            <h2>Continue working</h2>
+            <ul>
+              {continueList.map((r) => {
+                const v = validation(r.status);
+                return (
+                  <li key={r.path}>
+                    <button type="button" className="home-continue-item" disabled={busy} title={`Open ${r.path}`} onClick={() => void openPath(r.path)}>
+                      <strong>{r.name}</strong>
+                      <span className="muted">{r.status ? r.status.phase : "Status unavailable"} · opened {ago(r.last_opened_ms)}</span>
+                      <Pill tone={v.tone}>{v.text}</Pill>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        <section aria-label="Recent projects" className="home-recent" id="home-recent">
+          <header className="home-section-head">
+            <h2>Recent projects</h2>
+            {recent.length > 0 && <span className="count">{recent.length}</span>}
+            <span className="spacer" />
+            <select aria-label="Sort projects" value={sort} onChange={(e) => setSort(e.target.value as RecentSort)}>
+              <option value="opened">Last opened</option>
+              <option value="modified">Last modified</option>
+              <option value="name">Name</option>
+            </select>
+            <input
+              ref={searchRef}
+              type="search"
+              className="home-search"
+              aria-label="Search projects"
+              placeholder={`Search name or folder (${formatShortcut(HOME_SHORTCUTS.find)})`}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setQuery("");
+                else if (e.key === "Enter" && shown.length > 0 && !busy) void openPath(shown[0].path);
+                else rowNav(e);
+              }}
+            />
+          </header>
+          {!loaded && <p className="muted home-none" role="status">Loading recent projects…</p>}
+          {loaded && recentError && (
+            <EmptyState
+              title="Recent projects could not be read."
+              action={<button type="button" onClick={load}>Try again</button>}
+            >
+              {recentError} You can still open a project folder.
+            </EmptyState>
+          )}
+          {loaded && !recentError && recent.length === 0 && (
+            <EmptyState title="No recent projects.">
+              Open an existing project folder or create a new project; it is listed here with its location, revision and when it was last opened.
+            </EmptyState>
+          )}
+          {recent.length > 0 && shown.length === 0 && <p className="muted home-none">No project matches “{query}”.</p>}
+          {shown.length > 0 && (
+            <div className="home-table">
+              <div className="home-cols" aria-hidden="true">
+                <span>Project</span>
+                <span>Stage</span>
+                <span>Validation</span>
+                <span className="num">Revision</span>
+                <span className="num">Modified</span>
+                <span className="num">Opened</span>
+              </div>
+              <ul className="recent" ref={listRef} onKeyDown={rowNav}>
+                {shown.map((r) => {
+                  const v = validation(r.status);
+                  return (
+                    <li key={r.path}>
+                      <button type="button" className="home-row" disabled={busy} title={`Open ${r.path}`} onClick={() => void openPath(r.path)}>
+                        <span className="home-id">
+                          <strong className="home-name">{r.name}</strong>
+                          <span className="home-loc">{r.path}</span>
+                        </span>
+                        <span>{r.status ? r.status.phase : <span className="muted">Unavailable</span>}</span>
+                        <span title={r.status ? statusLine(r.status) : "The project folder moved or cannot be read"}>
+                          <Pill tone={v.tone}>{v.text}</Pill>
+                        </span>
+                        <span className="num muted">{r.revision}</span>
+                        <span className="num muted">{r.status?.last_modified_ms != null ? ago(r.status.last_modified_ms) : "—"}</span>
+                        <span className="num muted">{ago(r.last_opened_ms)}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );

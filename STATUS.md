@@ -25,7 +25,7 @@ assistant panel was removed in the IDE shell (#49); model providers remain as op
 | Gerber / drill / BOM / CPL, JLCPCB preparation | build/test-verified | DRAFT output; no external viewer or fabricator check |
 | Schematic and PCB editors (select, drag, flip, grids, align) | build/test-verified (jsdom + engine) | not exercised in a real window |
 | IDE shell: workspaces, explorer, multi-project, Project Home | build/test-verified at #49 | merged before the freeze; real-window run not done |
-| UI redesign: design system (tokens, primitives, `docs/design-system.md`), Project Home launcher, project Overview panel, editor/terminal chrome on tokens | code-reviewed only | never built, run or looked at in a window; `tokens.test.ts`, `projectHome.test.ts`, `projectOverview.test.ts` written, unrun |
+| UI redesign: design system (tokens, primitives, `docs/design-system.md`), Project Home launchpad (rebuilt 2026-11-15), project Overview panel, editor/terminal chrome on tokens | code-reviewed only | never built, run or looked at in a window; `tokens.test.ts`, `projectHome.test.ts`, `projectOverview.test.ts` written, unrun |
 | Install scripts and v0.1.4 Linux release | code-reviewed only (scripts); package published | no install of the published package has been verified on real hardware (`docs/PLATFORM_SUPPORT.md`); Windows/macOS: no published binaries |
 | Terminal engine (`eak-terminal`) | runtime-verified (real-PTY tests passed before the override, Linux) | later edits and the derived agent table test: not run |
 | Terminal workspace UI, registry wiring | code-reviewed only | |
