@@ -30,10 +30,10 @@ fn manager() -> (Arc<Manager>, Arc<Mutex<Vec<OutputEvent>>>) {
     )
 }
 
-fn sh(m: &Arc<Manager>, cwd: &PathBuf) -> u64 {
+fn sh(m: &Arc<Manager>, cwd: &std::path::Path) -> u64 {
     let info = m
         .create(CreateOptions {
-            cwd: Some(cwd.clone()),
+            cwd: Some(cwd.to_path_buf()),
             shell: Some("/bin/sh".into()),
             ..Default::default()
         })
