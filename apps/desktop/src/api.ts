@@ -60,6 +60,7 @@ export const TERMINAL_IPC = [
   "terminal_space_rename",
   "terminal_space_close",
   "terminal_move_tab",
+  "terminal_tab_rename",
 ] as const;
 
 // Must match `IPC_COMMANDS` in src-tauri/src/lib.rs (checked by tests/ipc.rs).

@@ -158,6 +158,8 @@ pub enum Direction {
 pub struct Tab {
     pub id: TabId,
     pub space: SpaceId,
+    /// User-chosen tab name; `None` shows the first pane's name.
+    pub name: Option<String>,
     pub direction: Direction,
     pub panes: Vec<SessionId>,
 }
@@ -322,6 +324,8 @@ struct SavedSpace {
 
 #[derive(Serialize, Deserialize)]
 struct SavedTab {
+    #[serde(default)]
+    name: Option<String>,
     direction: Direction,
     panes: Vec<SavedPane>,
 }
@@ -712,6 +716,7 @@ impl Manager {
                     g.tabs.push(Tab {
                         id: tab,
                         space,
+                        name: t.name,
                         direction: t.direction,
                         panes,
                     });
@@ -738,6 +743,7 @@ impl Manager {
                         .iter()
                         .filter(|t| t.space == sp.id)
                         .map(|t| SavedTab {
+                            name: t.name.clone(),
                             direction: t.direction,
                             panes: t
                                 .panes
@@ -884,6 +890,20 @@ impl Manager {
         Ok(())
     }
 
+    /// Rename a tab; an empty name restores the default (the first pane's name).
+    pub fn rename_tab(&self, tab: TabId, name: &str) -> Result<(), String> {
+        let mut g = self.lock();
+        let t = g
+            .tabs
+            .iter_mut()
+            .find(|t| t.id == tab)
+            .ok_or_else(|| format!("no tab {tab}"))?;
+        let name = name.trim();
+        t.name = (!name.is_empty()).then(|| name.chars().take(80).collect());
+        self.bump(&mut g);
+        Ok(())
+    }
+
     /// Move a tab to position `index` among its space's tabs.
     pub fn move_tab(&self, tab: TabId, index: usize) -> Result<(), String> {
         let mut g = self.lock();
@@ -1005,6 +1025,7 @@ impl Manager {
                 g.tabs.push(Tab {
                     id: tab,
                     space,
+                    name: None,
                     direction: Direction::Row,
                     panes: vec![id],
                 });

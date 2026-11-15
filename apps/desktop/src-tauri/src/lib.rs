@@ -1321,6 +1321,7 @@ pub fn run() {
             terminal::cmd::terminal_space_rename,
             terminal::cmd::terminal_space_close,
             terminal::cmd::terminal_move_tab,
+            terminal::cmd::terminal_tab_rename,
             resources::cmd::resource_profile,
             resources::cmd::performance_settings,
             resources::cmd::set_performance_settings,

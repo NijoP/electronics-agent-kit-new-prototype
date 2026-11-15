@@ -1,37 +1,97 @@
-// Agent launch surface data: which coding-agent CLIs EAK knows, which are installed (the backend
-// only reports launchers whose executable it found, see src-tauri/src/terminal.rs), and the argv a
-// launch runs. A launch runs the executable itself on the PTY, never a shell labelled as the agent.
-export interface Launcher { name: string; command: string; path: string | null }
-export interface AgentRow { id: string; label: string; glyph: string; installed: boolean; command: string; path: string | null }
+// Pure view logic for the Terminal workspace: the aggregated Agents list, tab titles and the
+// per-space status roll-up. EAK never starts, installs or configures a coding agent: a session is
+// listed as an agent only when the backend recognised an agent CLI as its foreground program
+// (`status.agent`, from the executable name; see crates/eak-terminal). A plain shell is never
+// shown as an agent. Anything the process facts cannot settle is reported as "unknown".
+import type { Overview, SessionInfo, SessionState, Tab } from "./api";
 
-/** Always offered, in this order; installed or not. */
-export const KNOWN_AGENTS: { id: string; label: string; glyph: string }[] = [
-  { id: "pi", label: "Pi", glyph: "π" },
-  { id: "opencode", label: "OpenCode", glyph: "O" },
-  { id: "claude", label: "Claude Code", glyph: "C" },
-  { id: "codex", label: "Codex", glyph: "X" },
-  { id: "gemini", label: "Gemini", glyph: "G" },
-];
+export type AgentState = "working" | "blocked" | "idle" | "done" | "unknown";
 
-export function agentRows(launchers: Launcher[]): AgentRow[] {
-  const have = new Map(launchers.map((l) => [l.name, l]));
-  const known = KNOWN_AGENTS.map((a) => {
-    const l = have.get(a.id);
-    return { ...a, installed: !!l, command: l?.command ?? a.id, path: l?.path ?? null };
-  });
-  const extra = launchers
-    .filter((l) => !KNOWN_AGENTS.some((a) => a.id === l.name))
-    .map((l) => ({ id: l.name, label: l.name, glyph: l.name.slice(0, 1).toUpperCase(), installed: true, command: l.command, path: l.path }));
-  return [...known, ...extra];
+/** Dot class (design `StatusDot` state) for an agent state. */
+export const AGENT_DOT: Record<AgentState, string> = {
+  working: "running",
+  blocked: "waiting_for_input",
+  idle: "idle",
+  done: "completed",
+  unknown: "ended",
+};
+
+/**
+ * Agent state from the session's process-derived status. Waiting-for-input and blocked both
+ * mean "needs you"; a session restored from a previous run (`ended`) or whose idle verdict is
+ * only a quiet-output heuristic is "unknown" rather than guessed.
+ */
+export function agentState(s: SessionInfo): AgentState {
+  switch (s.status.state) {
+    case "running":
+      return "working";
+    case "waiting_for_input":
+    case "blocked":
+      return "blocked";
+    case "idle":
+      return s.status.source === "heuristic" ? "unknown" : "idle";
+    case "completed":
+    case "failed":
+      return "done";
+    default:
+      return "unknown";
+  }
 }
 
-/** argv for `terminal_create`: the resolved executable (when known) plus any declared arguments. */
-export function launchArgv(a: Pick<AgentRow, "command" | "path">): string[] {
-  const [prog, ...rest] = a.command.trim().split(/\s+/);
-  return [a.path ?? prog, ...rest];
+export interface AgentEntry {
+  session: number;
+  agent: string;
+  state: AgentState;
+  space: number;
+  spaceName: string;
+  tab: number;
+  tabTitle: string;
+  /** 1-based pane position inside the tab. */
+  pane: number;
+  panes: number;
 }
 
-/** Short process-derived state word for a session tab. */
+/** A tab's title: its own name, else its first pane's session name. */
+export function tabTitle(t: Tab, byId: Map<number, SessionInfo>): string {
+  return t.name?.trim() || byId.get(t.panes[0])?.name || "terminal";
+}
+
+/** Detected agent sessions across every space, in space then tab then pane order. */
+export function agentEntries(ov: Overview | null): AgentEntry[] {
+  if (!ov) return [];
+  const byId = new Map(ov.sessions.map((s) => [s.id, s]));
+  const out: AgentEntry[] = [];
+  for (const sp of ov.spaces) {
+    for (const t of ov.tabs.filter((x) => x.space === sp.id)) {
+      t.panes.forEach((id, i) => {
+        const s = byId.get(id);
+        if (!s?.status.agent) return;
+        out.push({
+          session: id,
+          agent: s.status.agent,
+          state: agentState(s),
+          space: sp.id,
+          spaceName: sp.name,
+          tab: t.id,
+          tabTitle: tabTitle(t, byId),
+          pane: i + 1,
+          panes: t.panes.length,
+        });
+      });
+    }
+  }
+  return out;
+}
+
+const RANK: SessionState[] = ["blocked", "waiting_for_input", "failed", "running", "idle", "completed", "ended"];
+
+/** The most attention-worthy state among sessions (for a space or tab dot). */
+export function rollup(sessions: SessionInfo[]): SessionState {
+  const present = new Set(sessions.map((s) => s.status.state));
+  return RANK.find((r) => present.has(r)) ?? "ended";
+}
+
+/** Short process-derived state word for tabs and pane headers. */
 export const STATE_WORD: Record<string, string> = {
   running: "running",
   idle: "idle",

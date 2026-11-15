@@ -471,6 +471,16 @@ fn spaces_isolate_roots_and_sessions() {
         vec![a2, a1]
     );
 
+    // Tab rename: a custom name is kept; empty restores the default.
+    m.rename_tab(t2, "  Build  ").unwrap();
+    assert_eq!(
+        m.overview().tabs.iter().find(|t| t.id == t2).unwrap().name.as_deref(),
+        Some("Build")
+    );
+    m.rename_tab(t2, "").unwrap();
+    assert!(m.overview().tabs.iter().find(|t| t.id == t2).unwrap().name.is_none());
+    assert!(m.rename_tab(u64::MAX, "x").is_err());
+
     // Closing DESK terminates only DESK's sessions.
     let d_pid = m.info(d1).unwrap().pid.unwrap();
     m.close_space(d.id).unwrap();
