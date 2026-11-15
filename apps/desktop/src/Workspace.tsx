@@ -71,7 +71,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const [events, setEvents] = useState<EngineEvent[]>([]);
   const lastSeq = useRef(0);
   // What is on screen, and the engine's own account of the last external commit (src-tauri/src/sync.rs).
-  const shown = useRef<Shown>({ projectId: initial.project.id, revision: initial.project.revision });
+  const onScreen = useRef<Shown>({ projectId: initial.project.id, revision: initial.project.revision });
   const lastChange = useRef<RevisionChange | null>(null);
   const [results, setResults] = useState<Partial<Record<Check, CheckResult>>>({});
   const [selected, setSelected] = useState<Id | null>(null);
@@ -121,7 +121,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const [armPart, setArmPart] = useState<{ id: string; n: number } | null>(null);
   const [status, setStatus] = useState<{ layer: CopperLayer; gridMm: number }>({ layer: "top", gridMm: 0.5 });
   const revision = snapshot.project.revision;
-  shown.current = { projectId: snapshot.project.id, revision };
+  onScreen.current = { projectId: snapshot.project.id, revision };
   const rank = (k: string) => (k === "schematic" ? 0 : k === "pcb" ? 1 : 2);
   const wsCtx = (active: boolean): WorkspaceContext => ({
     projectId: snapshot.project.id,
@@ -226,12 +226,12 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     let live = true;
     let off: (() => void) | undefined;
     onRevisionChange(async (ev) => {
-      if (isStale(ev, shown.current)) return;
-      const before = shown.current;
+      if (isStale(ev, onScreen.current)) return;
+      const before = onScreen.current;
       try {
         const fresh = await api.currentProject();
         // A local commit may have landed while this was in flight: only a strictly newer snapshot wins.
-        if (!live || !acceptsSnapshot({ projectId: fresh.project.id, revision: fresh.project.revision }, shown.current)) return;
+        if (!live || !acceptsSnapshot({ projectId: fresh.project.id, revision: fresh.project.revision }, onScreen.current)) return;
         lastChange.current = exactChange(ev, before);
         setSnapshot(fresh);
         await pullEvents();
