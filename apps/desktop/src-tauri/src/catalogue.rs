@@ -457,7 +457,7 @@ pub struct Distributor {
 }
 
 static STATUS_FILE: OnceLock<PathBuf> = OnceLock::new();
-static Distributor: OnceLock<Distributor> = OnceLock::new();
+static DISTRIBUTOR: OnceLock<Distributor> = OnceLock::new();
 
 /// Set where the non-secret status JSON lives. Call once at start-up, before first use.
 pub fn init(dir: &Path) {
@@ -465,7 +465,7 @@ pub fn init(dir: &Path) {
 }
 
 pub fn distributor() -> &'static Distributor {
-    Distributor.get_or_init(|| {
+    DISTRIBUTOR.get_or_init(|| {
         let settings = Settings::new(Arc::new(DistributorKeyStore), STATUS_FILE.get().cloned());
         let api = DistributorApi::new(UreqFetch::default(), PRODUCTION_BASE, settings.source());
         Distributor {
