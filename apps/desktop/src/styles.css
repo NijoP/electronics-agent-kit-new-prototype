@@ -559,3 +559,10 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .pcb-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: var(--z-raised); display: grid; gap: var(--s-1); justify-items: start; max-width: 420px; padding: var(--s-2) var(--s-3); background: var(--bg-raised); border: 1px solid var(--line-strong); border-radius: var(--r-2); box-shadow: var(--shadow); }
 .pcb-empty p { margin: 0; line-height: var(--lh); }
 .pcb-empty button { height: var(--h-lg); padding: 0 var(--s-2); font-size: var(--fs-md); }
+
+/* Terminal sidebar: each agent nested under its workspace with a live status dot (name drawn from data-agent). */
+.term-nested { display: flex; align-items: center; gap: var(--s-1); min-height: var(--h-md, 20px); padding: 0 var(--s-1) 0 var(--s-4, 18px); margin: 0 var(--s-half); border-radius: var(--r-1); cursor: pointer; color: var(--fg-dim); font-size: var(--fs-xs, 11px); }
+.term-nested::after { content: attr(data-agent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.term-nested:hover { background: var(--bg-hover); color: var(--fg); }
+.term-nested.on { background: var(--accent-soft); color: var(--fg); }
+.term-nested:focus-visible { outline: none; box-shadow: var(--focus-ring); }

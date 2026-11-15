@@ -4,7 +4,7 @@
 // on a pseudo-terminal owned by the backend, so it keeps running while the EDA workspace is shown or
 // the window reloads. The default action opens a normal shell; the user runs whichever coding agent
 // CLI they installed themselves. Agents are only detected passively (see ./agents.ts), never started.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "../agentTasks";
 import { describeStatus, term, type Overview, type SessionInfo, type Space, type Tab } from "./api";
 import { disposeTerminal, XTermView } from "./XTermView";
@@ -231,8 +231,8 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
             {(ov?.spaces ?? []).map((sp) => {
               const inside = sessions.filter((s) => s.space === sp.id);
               return (
+                <Fragment key={sp.id}>
                 <div
-                  key={sp.id}
                   className={sp.id === spaceId ? "term-space-row on" : "term-space-row"}
                   role="button"
                   tabIndex={0}
@@ -257,6 +257,32 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
                   <span className="chip" title={`${inside.length} terminal session(s)`}>{inside.length}</span>
                   <button type="button" className="sess-x" aria-label={`Close space ${sp.name}`} title="Close space" onClick={(e) => { e.stopPropagation(); closeSpace(sp); }}>×</button>
                 </div>
+                {agents
+                  .filter((a) => a.space === sp.id)
+                  .map((a) => (
+                    // Nested under its workspace with a live status dot; the agent name is drawn by
+                    // CSS (data-agent) so the AGENTS list below stays the one textual listing.
+                    <div
+                      key={`n${a.session}`}
+                      className={a.session === current?.id ? "term-nested on" : "term-nested"}
+                      role="button"
+                      tabIndex={0}
+                      data-agent={a.agent}
+                      aria-label={`${a.agent}, ${a.state}, ${a.tabTitle} pane ${a.pane}`}
+                      title={`${a.agent}: ${a.state}`}
+                      onClick={() => {
+                        const s = byId.get(a.session);
+                        if (s) focus(s);
+                      }}
+                      onKeyDown={(e) => {
+                        const s = byId.get(a.session);
+                        if (e.key === "Enter" && s) focus(s);
+                      }}
+                    >
+                      <StatusDot state={AGENT_DOT[a.state]} />
+                    </div>
+                  ))}
+                </Fragment>
               );
             })}
             {ov && ov.spaces.length === 0 && <p className="muted pad">No spaces yet. Create one, or press “+” to open a terminal.</p>}
