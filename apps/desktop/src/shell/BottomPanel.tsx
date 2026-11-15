@@ -1,5 +1,6 @@
 // Bottom panel: ERC/DRC/DFM findings (diagnostics), a BOM derived from the schematic, simulation,
 // the engine log and this session's tasks.
+import { useState } from "react";
 import { EngineeringMonitor } from "../EngineeringMonitor";
 import { SimulationPanel } from "../SimulationPanel";
 import type { Check, CheckResult, EngineEvent, Finding, Id, Snapshot } from "../types";
@@ -43,9 +44,38 @@ export function bomLines(s: Snapshot): BomLine[] {
     .sort((a, b) => a.refdes[0].localeCompare(b.refdes[0], undefined, { numeric: true }));
 }
 
+export interface SearchHit {
+  id: Id;
+  kind: "symbol" | "footprint";
+  label: string;
+  detail: string;
+}
+
+/** Case-insensitive search over the real symbols and footprints (refdes, value, component). */
+export function searchDesign(s: Snapshot, query: string): SearchHit[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const hit = (...f: string[]) => f.some((x) => x.toLowerCase().includes(q));
+  const out: SearchHit[] = [];
+  for (const y of Object.values(s.project.schematic.symbols)) {
+    if (hit(y.refdes, y.value, y.component_id)) out.push({ id: y.id, kind: "symbol", label: y.refdes, detail: `${y.value} · ${y.component_id}` });
+  }
+  for (const f of Object.values(s.project.pcb.footprints)) {
+    if (hit(f.refdes, f.component_id)) out.push({ id: f.symbol_id, kind: "footprint", label: f.refdes, detail: `footprint · ${f.component_id}` });
+  }
+  return out.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+}
+
+/** Tabs that have no backend yet are shown disabled with the reason (never decorative). */
+const DISABLED: Partial<Record<string, string>> = {
+  netlist: "Netlist view needs an engine netlist IPC that is not exposed to the desktop yet",
+};
+
 const TABS: [BottomTab, string][] = [
   ["findings", "Findings"],
+  ["netlist", "Netlist"],
   ["bom", "BOM"],
+  ["search", "Search"],
   ["sim", "Simulation"],
   ["log", "Log"],
   ["tasks", "Tasks"],
@@ -72,6 +102,26 @@ function TasksList({ tasks, onClear }: { tasks: Task[]; onClear?: () => void }) 
   );
 }
 
+function SearchTab({ snapshot, onProbe }: { snapshot: Snapshot; onProbe: (id: Id) => void }) {
+  const [q, setQ] = useState("");
+  const hits = searchDesign(snapshot, q);
+  return (
+    <section className="search" aria-label="Search design">
+      <input type="search" value={q} placeholder="Search reference, value or component" aria-label="Search query" onChange={(e) => setQ(e.target.value)} />
+      {q.trim() && hits.length === 0 && <p className="empty-state">No symbol or footprint matches “{q.trim()}”.</p>}
+      <ul>
+        {hits.map((h) => (
+          <li key={`${h.kind}:${h.id}`}>
+            <button type="button" onClick={() => onProbe(h.id)} title="Select in the editor">
+              <strong>{h.label}</strong> <span className="muted">{h.detail}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, activeFinding, tasks = [], onClearTasks }: Props) {
   const bom = bomLines(snapshot);
   const running = tasks.filter((t) => t.status === "running").length;
@@ -79,7 +129,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
     <section className="bottom" aria-label="Bottom panel" style={height ? { height } : undefined}>
       <div className="tabs" role="tablist">
         {TABS.map(([id, label]) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "tab on" : "tab"} onClick={() => onTab(id)}>
+          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "tab on" : "tab"} disabled={!!DISABLED[id]} title={DISABLED[id]} onClick={() => onTab(id)}>
             {label}
             {id === "tasks" && running > 0 && <span className="count">{running}</span>}
           </button>
@@ -111,6 +161,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
             </>
           ))}
         {tab === "tasks" && <TasksList tasks={tasks} onClear={onClearTasks} />}
+        {tab === "search" && <SearchTab snapshot={snapshot} onProbe={onProbe} />}
         {tab === "sim" && <SimulationPanel revision={snapshot.project.revision} />}
         {tab === "log" && (
           <section className="activity" aria-label="Activity">
