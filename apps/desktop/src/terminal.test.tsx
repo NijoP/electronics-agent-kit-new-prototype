@@ -191,3 +191,16 @@ describe("terminal workspace", () => {
     await waitFor(() => expect(calls.some((c) => c.cmd === "terminal_focus" && c.args.id === 2)).toBe(true));
   });
 });
+
+// Regression: tab.direction is "row"/"column" and is used as a class on .term-panes. The global
+// `.row` utility (align-items:center, wrap) used to shrink the pane to content height (10 px host,
+// blank terminal). jsdom cannot lay out, so assert the override in the stylesheet source.
+describe("terminal pane layout css", () => {
+  it(".term-panes resets the global .row utility so panes stretch to the full area", async () => {
+    const { readFileSync } = await import("node:fs");
+    const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+    const rule = css.split("\n").find((l) => l.startsWith(".term-panes {")) ?? "";
+    expect(rule).toContain("align-items: stretch");
+    expect(rule).toContain("flex-wrap: nowrap");
+  });
+});
