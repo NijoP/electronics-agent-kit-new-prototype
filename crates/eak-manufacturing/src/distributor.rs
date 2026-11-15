@@ -219,9 +219,9 @@ impl<F: Fetch> DistributorProvider<F> {
                 r.distributor_part
             ))),
             // Distributor answers an unknown part number with `{"code":200,"result":null}`.
-            Err(SourcingError::Provider(m)) if m.contains("without a result") => {
-                Err(DistributorError::NotFound(format!("Distributor has no part {code}")))
-            }
+            Err(SourcingError::Provider(m)) if m.contains("without a result") => Err(
+                DistributorError::NotFound(format!("Distributor has no part {code}")),
+            ),
             Err(e) => Err(DistributorError::Unusable(e.to_string())),
         }
     }

@@ -16,7 +16,7 @@
 //!
 //! The cache is per process (not persisted). Code-reviewed only; tests are written, unrun.
 
-use crate::distributor::{Fetch, DistributorError, DistributorProvider};
+use crate::distributor::{DistributorError, DistributorProvider, Fetch};
 use crate::sourcing::SourcingRecord;
 use serde::Serialize;
 use std::collections::HashMap;

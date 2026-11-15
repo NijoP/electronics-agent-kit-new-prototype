@@ -67,8 +67,10 @@ pub fn disabled(root: &Path) -> BTreeSet<String> {
 
 fn save_disabled(root: &Path, set: &BTreeSet<String>) -> Result<(), String> {
     std::fs::create_dir_all(root).map_err(|e| format!("cannot create {}: {e}", root.display()))?;
-    let text = serde_json::to_string_pretty(&DisabledFile { disabled: set.clone() })
-        .map_err(|e| e.to_string())?;
+    let text = serde_json::to_string_pretty(&DisabledFile {
+        disabled: set.clone(),
+    })
+    .map_err(|e| e.to_string())?;
     let tmp = root.join(format!("{DISABLED_FILE}.tmp"));
     std::fs::write(&tmp, text).map_err(|e| format!("cannot write {}: {e}", tmp.display()))?;
     std::fs::rename(&tmp, disabled_path(root))
@@ -239,7 +241,10 @@ pub fn build(project: &BTreeMap<String, ComponentDef>, root: &Path) -> Catalog {
             &defs,
         );
     }
-    Catalog { libraries: rows, problems }
+    Catalog {
+        libraries: rows,
+        problems,
+    }
 }
 
 pub fn catalog_for(s: &Session) -> Catalog {
@@ -294,7 +299,10 @@ mod tests {
         assert_eq!(slug("My Lib/1"), "my-lib-1");
         assert_eq!(slug("  "), "x");
         assert_eq!(scope_id(&Scope::Builtin), "eak.builtin");
-        assert_eq!(scope_id(&Scope::Imported("Open Parts".into())), "imported.open-parts");
+        assert_eq!(
+            scope_id(&Scope::Imported("Open Parts".into())),
+            "imported.open-parts"
+        );
         assert!(slug(&"a".repeat(100)).len() <= 40);
     }
 

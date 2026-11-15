@@ -114,7 +114,9 @@ pub fn parse_parts_csv(
         .collect();
     let find = |names: &[&str]| cols.iter().position(|c| names.contains(&c.as_str()));
     let distributor_col = find(&["distributorpart", "distributorpartnumber", "distributor"])
-        .ok_or("no Distributor part column (expected `Distributor Part` or `Distributor Part #`)")?;
+        .ok_or(
+            "no Distributor part column (expected `Distributor Part` or `Distributor Part #`)",
+        )?;
     let type_col = find(&["librarytype", "basicextended", "type", "partclass"])
         .ok_or("no library-type column (expected `Library Type` or `Basic/Extended`)")?;
     let preferred_col = find(&["preferred", "ispreferred"]);
@@ -132,7 +134,9 @@ pub fn parse_parts_csv(
         let Some(distributor) = f.get(distributor_col).map(|s| s.to_ascii_uppercase()) else {
             continue;
         };
-        if !is_distributor_part_number(&distributor) || wanted.is_some_and(|w| !w.contains(&distributor)) {
+        if !is_distributor_part_number(&distributor)
+            || wanted.is_some_and(|w| !w.contains(&distributor))
+        {
             continue;
         }
         let preferred = preferred_col
@@ -165,7 +169,10 @@ pub fn assembly_dir(sourcing_dir: &Path) -> PathBuf {
 
 pub fn write_record(sourcing_dir: &Path, rec: &AssemblyRecord) -> Result<(), String> {
     if !is_distributor_part_number(&rec.distributor) {
-        return Err(format!("{:?} is not an Distributor part number", rec.distributor));
+        return Err(format!(
+            "{:?} is not an Distributor part number",
+            rec.distributor
+        ));
     }
     let dir = assembly_dir(sourcing_dir);
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -238,8 +245,10 @@ pub fn warnings(
     assembly: &[AssemblyRecord],
     now: u64,
 ) -> AssemblyReport {
-    let by_distributor: BTreeMap<&str, &AssemblyRecord> =
-        assembly.iter().map(|a| (a.distributor.as_str(), a)).collect();
+    let by_distributor: BTreeMap<&str, &AssemblyRecord> = assembly
+        .iter()
+        .map(|a| (a.distributor.as_str(), a))
+        .collect();
     let mut out = vec![];
     let mut rows = BTreeMap::new();
     for l in lines {
@@ -505,7 +514,8 @@ mod tests {
 
     #[test]
     fn the_parts_csv_is_read_by_column_name_and_filtered_to_wanted_parts() {
-        let csv = "\u{feff}Distributor Part,First Category,\"Library Type\",Preferred,Stock,Price\n\
+        let csv =
+            "\u{feff}Distributor Part,First Category,\"Library Type\",Preferred,Stock,Price\n\
                    C25804,Resistors,Basic,No,\"1,200\",0.0021\n\
                    C99999,ICs,Extended,Yes,5,1.5\n\
                    C11111,ICs,Extended,No,7,abc\n\

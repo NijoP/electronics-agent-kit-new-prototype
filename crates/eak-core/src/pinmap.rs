@@ -43,16 +43,23 @@ impl MapReport {
             out.push(format!("symbol pin {p} is not mapped to a pad"));
         }
         for (pin, pad) in &self.missing_pads {
-            out.push(format!("pin {pin} maps to pad {pad}, which the footprint does not have"));
+            out.push(format!(
+                "pin {pin} maps to pad {pad}, which the footprint does not have"
+            ));
         }
         for p in &self.unknown_pins {
-            out.push(format!("mapping names pin {p}, which the symbol does not have"));
+            out.push(format!(
+                "mapping names pin {p}, which the symbol does not have"
+            ));
         }
         for p in &self.unmapped_pads {
             out.push(format!("warning: pad {p} is not used by any pin"));
         }
         for (pad, pins) in &self.shared_pads {
-            out.push(format!("warning: pad {pad} is shared by pins {}", pins.join(", ")));
+            out.push(format!(
+                "warning: pad {pad} is shared by pins {}",
+                pins.join(", ")
+            ));
         }
         out
     }
@@ -66,14 +73,20 @@ pub fn check_map(
 ) -> MapReport {
     let pads: BTreeSet<&str> = footprint.pads.iter().map(|p| p.number.as_str()).collect();
     let pins: BTreeSet<&str> = symbol.pins.iter().map(|p| p.number.as_str()).collect();
-    let mut r = MapReport { pin_count: pins.len(), pad_count: pads.len(), ..Default::default() };
+    let mut r = MapReport {
+        pin_count: pins.len(),
+        pad_count: pads.len(),
+        ..Default::default()
+    };
     let mut used: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for pin in &symbol.pins {
         match pin_map.get(&pin.number) {
             Some(v) if !v.is_empty() => {
                 for pad in v {
                     if pads.contains(pad.as_str()) {
-                        used.entry(pad.as_str()).or_default().push(pin.number.clone());
+                        used.entry(pad.as_str())
+                            .or_default()
+                            .push(pin.number.clone());
                     } else {
                         r.missing_pads.push((pin.number.clone(), pad.clone()));
                     }
@@ -149,7 +162,11 @@ mod tests {
     }
 
     fn sym(pins: Vec<SymbolPin>) -> SymbolDef {
-        SymbolDef { pins, body_half_w: 1_000_000, body_half_h: 1_000_000 }
+        SymbolDef {
+            pins,
+            body_half_w: 1_000_000,
+            body_half_h: 1_000_000,
+        }
     }
 
     fn fp(pads: Vec<PadDef>) -> FootprintDef {
@@ -189,7 +206,11 @@ mod tests {
         let f = fp(vec![pad("1")]);
         let r = check_map(&s, &f, &map(&[("1", &["1"]), ("9", &["1"])]));
         assert!(r.blocking());
-        assert_eq!(r.unmapped_pins, vec!["2".to_string()], "no-connect pin 3 needs no pad");
+        assert_eq!(
+            r.unmapped_pins,
+            vec!["2".to_string()],
+            "no-connect pin 3 needs no pad"
+        );
         assert_eq!(r.unknown_pins, vec!["9".to_string()]);
         let r = check_map(&s, &f, &map(&[("1", &["7"]), ("2", &["1"])]));
         assert_eq!(r.missing_pads, vec![("1".to_string(), "7".to_string())]);
@@ -204,7 +225,13 @@ mod tests {
         assert!(!r.blocking());
         assert_eq!(r.unmapped_pads, vec!["X".to_string()]);
         assert_eq!(r.shared_pads.len(), 1);
-        assert_eq!(r.messages().iter().filter(|m| m.starts_with("warning")).count(), 2);
+        assert_eq!(
+            r.messages()
+                .iter()
+                .filter(|m| m.starts_with("warning"))
+                .count(),
+            2
+        );
     }
 
     #[test]

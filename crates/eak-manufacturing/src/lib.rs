@@ -9,12 +9,12 @@
 
 pub mod assembly;
 pub mod bom;
-pub mod drill;
-pub mod fabpack;
-pub mod gerber;
-pub mod fabricator;
 pub mod distributor;
 pub mod distributor_api;
+pub mod drill;
+pub mod fabpack;
+pub mod fabricator;
+pub mod gerber;
 pub mod library_link;
 pub mod matching;
 pub mod provider;

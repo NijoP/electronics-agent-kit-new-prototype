@@ -41,7 +41,10 @@ fn names_that_could_escape_the_library_folder_are_refused() {
     for bad in ["", "../x", "a/b", "a\\b", ".hidden", "x y", "é"] {
         assert!(safe_name(bad).is_err(), "{bad:?}");
     }
-    assert_eq!(safe_name("DISTRIBUTOR_C25804").unwrap(), "DISTRIBUTOR_C25804");
+    assert_eq!(
+        safe_name("DISTRIBUTOR_C25804").unwrap(),
+        "DISTRIBUTOR_C25804"
+    );
 }
 
 #[test]

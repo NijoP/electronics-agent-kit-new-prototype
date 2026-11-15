@@ -983,8 +983,11 @@ pub fn prepare_with(
         assembly: asm,
     };
     let mjson = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
-    eak_runtime::store::atomic_write(&out_dir.join("fabricator-prep-manifest.json"), mjson.as_bytes())
-        .map_err(|e| e.to_string())?;
+    eak_runtime::store::atomic_write(
+        &out_dir.join("fabricator-prep-manifest.json"),
+        mjson.as_bytes(),
+    )
+    .map_err(|e| e.to_string())?;
     Ok(PrepResult {
         out_dir: out_dir.display().to_string(),
         manifest,

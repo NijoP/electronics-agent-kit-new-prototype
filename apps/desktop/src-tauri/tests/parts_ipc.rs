@@ -23,8 +23,9 @@ fn session() -> Session {
 }
 
 fn resistor_json() -> Vec<u8> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../crates/eak-manufacturing/tests/fixtures/distributor/live_shape_C25804.json");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+        "../../../crates/eak-manufacturing/tests/fixtures/distributor/live_shape_C25804.json",
+    );
     std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 

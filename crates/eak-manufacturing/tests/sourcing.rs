@@ -166,7 +166,10 @@ fn hostile_input_is_treated_as_data_and_cannot_raise_the_state() {
             r.rejected
         );
     }
-    assert_eq!(r.missing, ["distributor_part", "mpn", "package", "datasheet_url"]);
+    assert_eq!(
+        r.missing,
+        ["distributor_part", "mpn", "package", "datasheet_url"]
+    );
     // `state`, `verified`, `attestation` and `datasheet` keys in the input are ignored.
     assert_eq!(r.state, VerificationState::SearchHit);
     assert!(r.datasheet.is_none() && r.attestation.is_none());
@@ -219,7 +222,10 @@ fn malformed_oversized_and_error_responses_are_rejected() {
 #[test]
 fn source_url_must_be_https_on_the_provider_domain() {
     let raw = fixture("distributor/product_detail_resistor.json");
-    for ok in ["https://distributor.invalid/x", "https://WWW.Distributor.COM:443/x?y#z"] {
+    for ok in [
+        "https://distributor.invalid/x",
+        "https://WWW.Distributor.COM:443/x?y#z",
+    ] {
         assert!(ingest_product_detail(&raw, ok, T0).is_ok(), "{ok}");
     }
     for bad in [

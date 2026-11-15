@@ -7,7 +7,9 @@ use eak_desktop::catalogue::{
 };
 use eak_desktop::models::{KeyStore, MemoryKeyStore};
 use eak_manufacturing::distributor::{Fetch, HttpResponse};
-use eak_manufacturing::distributor_api::{Catalogue, CredentialSource, DistributorApi, PRODUCTION_BASE};
+use eak_manufacturing::distributor_api::{
+    Catalogue, CredentialSource, DistributorApi, PRODUCTION_BASE,
+};
 use std::sync::{Arc, Mutex};
 
 const SECRET: &str = "very-secret-value-123";

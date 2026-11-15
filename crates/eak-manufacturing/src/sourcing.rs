@@ -614,7 +614,9 @@ pub fn write_record(dir: &Path, rec: &SourcingRecord) -> Result<PathBuf, Sourcin
         .distributor_part
         .as_deref()
         .filter(|l| is_distributor_part_number(l))
-        .ok_or_else(|| SourcingError::Io("record has no Distributor part number to store under".into()))?;
+        .ok_or_else(|| {
+            SourcingError::Io("record has no Distributor part number to store under".into())
+        })?;
     let io = |e: std::io::Error| SourcingError::Io(e.to_string());
     std::fs::create_dir_all(dir).map_err(io)?;
     let path = dir.join(format!("{distributor}.json"));

@@ -158,7 +158,9 @@ fn check_component(
         Some(l) if !is_distributor_part_number(l) => push(
             "SRC-002",
             Error,
-            format!("{id} ({refs}): Distributor part number {l:?} is malformed; BOM row is unmapped"),
+            format!(
+                "{id} ({refs}): Distributor part number {l:?} is malformed; BOM row is unmapped"
+            ),
         ),
         Some(_) => {}
     }
@@ -356,7 +358,8 @@ pub fn run(p: &Project, parts: &[SupplierPart]) -> Report {
             .iter()
             .filter(|r| r.component_id == *component_id)
             .collect();
-        let part = present(&def.distributor).and_then(|l| parts.iter().find(|s| s.distributor == l));
+        let part =
+            present(&def.distributor).and_then(|l| parts.iter().find(|s| s.distributor == l));
         check_component(def, &own, objects, part, &mut f);
     }
     let unmapped = rows.iter().filter(|r| r.distributor.is_none()).count();

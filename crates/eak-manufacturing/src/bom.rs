@@ -114,7 +114,9 @@ pub fn build(p: &Project, records: &[SourcingRecord]) -> Vec<BomLine> {
         let (stock, unit_price_usd, as_of) = match record {
             Some(r) => {
                 if let Some(s) = r.stock.filter(|s| *s < qty) {
-                    issues.push(format!("stored Distributor stock {s} is below the quantity {qty}"));
+                    issues.push(format!(
+                        "stored Distributor stock {s} is below the quantity {qty}"
+                    ));
                 }
                 let price = r
                     .price_breaks

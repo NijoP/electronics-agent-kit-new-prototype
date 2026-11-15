@@ -362,9 +362,11 @@ impl Ledger {
                     Some(format!("completion not supported by evidence: {gap}")),
                 ),
             },
-            other => return Err(format!(
+            other => {
+                return Err(format!(
                 "outcome must be completed, partial, blocked, failed or cancelled, got {other:?}"
-            )),
+            ))
+            }
         };
         t.set(phase, revision, now, detail);
         t.ended_ms = Some(now);

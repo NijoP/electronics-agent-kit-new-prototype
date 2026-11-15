@@ -83,7 +83,8 @@ pub struct Candidate {
 /// Records with the same Distributor number are kept once. The order is total and deterministic.
 pub fn rank(query: &str, hints: &Hints, records: Vec<SourcingRecord>) -> Vec<Candidate> {
     let q = query.trim();
-    let q_distributor = is_distributor_part_number(&q.to_ascii_uppercase()).then(|| q.to_ascii_uppercase());
+    let q_distributor =
+        is_distributor_part_number(&q.to_ascii_uppercase()).then(|| q.to_ascii_uppercase());
     let q_norm = normalize_mpn(q);
     let hint_maker = hints
         .manufacturer

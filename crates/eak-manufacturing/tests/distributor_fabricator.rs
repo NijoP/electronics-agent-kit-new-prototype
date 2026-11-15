@@ -11,8 +11,8 @@
 
 use eak_core::{builtin, Point, Project};
 use eak_manufacturing::bom;
-use eak_manufacturing::fabricator::{self, Status};
 use eak_manufacturing::distributor::{self, DistributorError, DistributorProvider, UreqFetch};
+use eak_manufacturing::fabricator::{self, Status};
 use eak_manufacturing::sourcing::SourcingRecord;
 use eak_runtime::{fixtures, Actor, Command, Engine};
 use eak_validation::{drc, erc, mech};
@@ -105,7 +105,9 @@ fn distributor_site() -> String {
 }
 
 fn resistor_record() -> SourcingRecord {
-    provider(&distributor_site()).lookup("c25804").expect("lookup")
+    provider(&distributor_site())
+        .lookup("c25804")
+        .expect("lookup")
 }
 
 #[test]
@@ -141,7 +143,10 @@ fn unknown_part_is_not_found_and_bad_queries_never_reach_the_network() {
             "{bad:?}"
         );
     }
-    assert!(matches!(p.search("   "), Err(DistributorError::BadQuery(_))));
+    assert!(matches!(
+        p.search("   "),
+        Err(DistributorError::BadQuery(_))
+    ));
     assert!(matches!(
         p.search(&"x".repeat(500)),
         Err(DistributorError::BadQuery(_))
@@ -259,7 +264,10 @@ fn bom_marks_missing_distributor_numbers_and_never_invents_them() {
     let lines = bom::build(e.project(), &[]);
     assert!(!lines.is_empty());
     for l in lines.iter().filter(|l| l.distributor.is_none()) {
-        assert!(l.issues.iter().any(|i| i.contains("no Distributor part number")));
+        assert!(l
+            .issues
+            .iter()
+            .any(|i| i.contains("no Distributor part number")));
     }
     let csv = bom::fabricator_csv(&lines);
     assert!(csv.starts_with("Comment,Designator,Footprint,Distributor Part #\n"));

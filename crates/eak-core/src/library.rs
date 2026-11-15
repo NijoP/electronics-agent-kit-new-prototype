@@ -349,7 +349,11 @@ impl ComponentDef {
     /// `distributor` offer. Idempotent. Identity fields are not touched.
     pub fn migrate_offers(&mut self) {
         if let Some(part) = self.distributor.clone().filter(|s| !s.trim().is_empty()) {
-            if !self.supplier_offers.iter().any(|o| o.supplier == "distributor") {
+            if !self
+                .supplier_offers
+                .iter()
+                .any(|o| o.supplier == "distributor")
+            {
                 self.supplier_offers
                     .push(SupplierOffer::bare("distributor", &part));
             }

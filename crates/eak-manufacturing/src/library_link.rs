@@ -272,7 +272,13 @@ mod tests {
     use crate::sourcing::{Spec, VerificationState};
     use eak_core::builtin;
 
-    fn rec(distributor: &str, mpn: &str, maker: &str, package: &str, category: &str) -> SourcingRecord {
+    fn rec(
+        distributor: &str,
+        mpn: &str,
+        maker: &str,
+        package: &str,
+        category: &str,
+    ) -> SourcingRecord {
         SourcingRecord {
             provider: "Distributor".into(),
             source_url: "https://distributor.invalid/x".into(),
