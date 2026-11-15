@@ -164,6 +164,13 @@ describe("model provider settings", () => {
     expect(screen.getByText(/use their own sign-in; EAK never reads their credentials/)).toBeTruthy();
   });
 
+  // Regression (unrun): Escape must close the dialog even when focus is outside it.
+  it("Escape closes the dialog", async () => {
+    await openPanel();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Model settings" })).toBeNull());
+  });
+
   it("known providers have a fixed endpoint: no base URL to type", async () => {
     await openPanel();
     await addProvider("anthropic");
