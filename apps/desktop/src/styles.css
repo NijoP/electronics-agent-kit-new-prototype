@@ -548,3 +548,9 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .sess-x:hover { background: var(--bg-active); color: var(--fg); }
 .term-sessctl { display: flex; align-items: center; gap: var(--s-half); height: var(--h-tab); flex: none; }
 .term-sessctl button { height: var(--h-md); }
+
+/* PCB with no board outline: guidance card over the (otherwise empty) canvas, with the one action. */
+.view { position: relative; }
+.pcb-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: var(--z-raised); display: grid; gap: var(--s-1); justify-items: start; max-width: 420px; padding: var(--s-2) var(--s-3); background: var(--bg-raised); border: 1px solid var(--line-strong); border-radius: var(--r-2); box-shadow: var(--shadow); }
+.pcb-empty p { margin: 0; line-height: var(--lh); }
+.pcb-empty button { height: var(--h-lg); padding: 0 var(--s-2); font-size: var(--fs-md); }

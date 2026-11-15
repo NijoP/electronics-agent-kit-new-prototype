@@ -22,7 +22,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 |---|---|---|
 | Desktop app builds and starts (Tauri 2) | integ | `tauri build --no-bundle` plus a 6-second launch smoke check on Windows (PR #12); no interactive WebView test |
 | Application menu bar | unit | `shell/MenuBar.tsx` (13 menus, defined in `Workspace.tsx`); `part4.test.tsx` (jsdom) |
-| Main toolbar | partial (unit) | grouped toolbar in `Workspace.tsx`: open/save, undo/redo, tools, zoom, ERC, DRC, auto-route, export Gerbers, commands. There is no MECH button: `Check` is `Erc`/`Drc` only (`src-tauri/src/lib.rs`); MECH runs inside `export_manufacturing`. Save as, grid, rules and simulation are shown disabled with a reason |
+| Main toolbar | partial (unit); regrouped 2026-11-15 (code-reviewed only, unrun): file/history, edit, checks, view, manufacturing, More menu when narrow | grouped toolbar in `Workspace.tsx`: open/save, undo/redo, tools, zoom, ERC, DRC, auto-route, export Gerbers, commands. There is no MECH button: `Check` is `Erc`/`Drc` only (`src-tauri/src/lib.rs`); MECH runs inside `export_manufacturing`. Save as, grid, rules and simulation are shown disabled with a reason |
 | Command palette (Ctrl/Cmd+K) | unit | `App.test.tsx` |
 | Document tabs | unit | `shell/DocTabs.tsx`, `shell/documents.ts`: one tab per engine document, split view, per-project restore; `part4.test.tsx` (jsdom) |
 | Dirty indicator / save / save as | - | every command is durably saved; save/dirty semantics to be decided by ADR (plan Phase 1) |

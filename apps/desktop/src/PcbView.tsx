@@ -878,6 +878,20 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           />
         )}
       </Canvas>
+      {outline.length === 0 && tool !== "outline" && (
+        <div className="pcb-empty" role="note" aria-label="No board outline">
+          <strong>No board outline yet</strong>
+          <p className="muted">
+            The board edge defines the fabrication area, routing limits and copper zones.
+            {Object.keys(pcb.footprints).length > 0 ? " Footprints are placed; the view is framed on them until an outline exists." : " Draw the outline first, then place footprints inside it."}
+          </p>
+          {edit ? (
+            <button type="button" className="primary" onClick={() => choose("outline")}>Draw board outline</button>
+          ) : (
+            <span className="muted">This view is read-only: open the PCB in an editor to draw the outline.</span>
+          )}
+        </div>
+      )}
     </section>
   );
 }
