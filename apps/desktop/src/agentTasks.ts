@@ -102,7 +102,7 @@ export function useAgentTasks(projectId: string | null, revision: number): Agent
     let live = true;
     api
       .agentTasks()
-      .then((t) => live && setTasks(t))
+      .then((t) => live && setTasks(Array.isArray(t) ? t : []))
       .catch(() => live && setTasks([]));
     return () => {
       live = false;
