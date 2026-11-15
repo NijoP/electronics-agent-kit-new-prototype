@@ -42,25 +42,22 @@ as typed commands on the same engine the editor uses, so there is no second desi
 
 ## Install from the prebuilt release
 
-The release workflow publishes unsigned `prebuilt-*` pre-releases (Linux `.deb`/AppImage, Windows
-installer, macOS dmg, plus the `eak` CLI) from a commit that passed CI, with SHA-256 checksums and
-`provenance.json`. The installer below prefers a verified prebuilt release and falls back to building
-from source. You can also download from the repository's Releases page and verify the checksum
-yourself. Installers are **unrun on real hardware**.
+Latest release: [prebuilt-20261115-d3bdf7b](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/tag/prebuilt-20261115-d3bdf7b) (unsigned, built from a commit whose CI was green: [run 43760954310](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43760954310)). The installer below installs the newest `prebuilt-*` release: **no compile, no Node.js, no Rust**. It verifies the SHA-256 checksum first. Building from source is only the fallback when no prebuilt release exists, or when you pass `--source`. Installers have **not been run on real hardware**.
+
 
 ## Honest status
 
 | Area | State |
 |---|---|
-| Whole tree since `c16a5f3` (terminal/EDA sync, task phases, gate, Netlist and Search tabs) | **Code-reviewed only, not runtime-verified**; CI has not confirmed these commits |
-| Compiles and tests pass | Last proven by CI at the earlier commits named above, not at the current head |
+| Source tree through `d3bdf7b` | **Passed CI on Linux, Windows and macOS (arm64 + x64)**: [run 43760954310](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43760954310). Compiles, lints and tests pass; **not runtime-verified on real hardware** |
+| Commits after `d3bdf7b` | Not yet confirmed by CI |
 | Schematic / PCB editors, terminal workspace, installers | Written and reviewed; never used on real hardware |
 | Manufacturing output | Always a draft; nothing is manufacturing-ready |
 
 ## Install
 
-One command builds **the current `main` source on your own computer**, installs EAK for your user,
-adds a launcher and starts it. It provisions Rust, Node.js and the native build libraries (asking
+One command installs EAK for your user (the prebuilt release; or, as a fallback, it builds **the current `main` source on your own computer**),
+adds a launcher and starts it. Only the source fallback provisions Rust, Node.js and the native build libraries (asking
 before anything needs administrator rights).
 
 | Platform | Command |
