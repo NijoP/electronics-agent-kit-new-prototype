@@ -135,7 +135,7 @@ function Install-EakSource {
     if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) { Fail 'This script is for Windows.' @('On Linux/macOS run: curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.sh | bash') }
     if (-not [Environment]::Is64BitOperatingSystem) { Fail '32-bit Windows is not supported (x64 only).' }
     $arch = $env:PROCESSOR_ARCHITEW6432; if (-not $arch) { $arch = $env:PROCESSOR_ARCHITECTURE }
-    if ($arch -ne 'AMD64') { Fail "unsupported architecture $arch: only Windows 10/11 x64 is supported" @('Windows ARM64 is not supported yet; see docs/PLATFORM_SUPPORT.md.') }
+    if ($arch -ne 'AMD64') { Fail "unsupported architecture ${arch}: only Windows 10/11 x64 is supported" @('Windows ARM64 is not supported yet; see docs/PLATFORM_SUPPORT.md.') }
     $os = [Environment]::OSVersion.Version
     if ($os.Major -lt 10) { Fail "Windows $os is too old (Windows 10 or 11 required)" }
     Info "windows-x86_64 (Windows $os), PowerShell $($PSVersionTable.PSVersion)"
