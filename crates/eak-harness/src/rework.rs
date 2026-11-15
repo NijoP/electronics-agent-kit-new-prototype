@@ -235,8 +235,8 @@ fn load_baseline(root: &Path, sid: &str) -> Result<Value, Fail> {
     let doc: Value = serde_json::from_str(&text).map_err(storage)?;
     let body = doc["body"].clone();
     let copy = std::fs::read(dir.join(BASELINE_PROJECT)).unwrap_or_default();
-    if doc["fingerprint"].as_str() != Some(&fingerprint(&body))
-        || body["project_sha256"].as_str() != Some(&sha_hex(&copy))
+    if doc["fingerprint"].as_str() != Some(fingerprint(&body).as_str())
+        || body["project_sha256"].as_str() != Some(sha_hex(&copy).as_str())
     {
         return Err(Fail(
             ErrorCode::Integrity,
@@ -1063,7 +1063,7 @@ fn load_plan(root: &Path, plan_id: &str) -> Result<(String, Value, Value), Fail>
     let text = std::fs::read_to_string(root.join(&sid).join(PLANS).join(format!("{plan_id}.json")))
         .map_err(|_| Fail(ErrorCode::NotFound, format!("no plan {plan_id}"), Value::Null))?;
     let doc: Value = serde_json::from_str(&text).map_err(storage)?;
-    if doc["fingerprint"].as_str() != Some(&fingerprint(&doc["body"])) {
+    if doc["fingerprint"].as_str() != Some(fingerprint(&doc["body"]).as_str()) {
         return Err(Fail(
             ErrorCode::Integrity,
             format!("plan {plan_id} was modified after it was made; re-plan"),

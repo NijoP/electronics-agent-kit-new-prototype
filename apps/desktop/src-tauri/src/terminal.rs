@@ -62,15 +62,14 @@ fn extra_dirs() -> Vec<PathBuf> {
 pub fn locate(program: &str) -> Option<PathBuf> {
     eak_terminal::find_on_path(program).or_else(|| {
         extra_dirs().into_iter().find_map(|d| {
-            let exe = if cfg!(windows) {
+            if cfg!(windows) {
                 [".exe", ".cmd", ""]
                     .iter()
                     .map(|e| d.join(format!("{program}{e}")))
                     .find(|p| p.is_file())
             } else {
                 Some(d.join(program)).filter(|p| p.is_file())
-            };
-            exe
+            }
         })
     })
 }

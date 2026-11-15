@@ -840,7 +840,7 @@ pub fn footprint_candidates(
         .ok_or_else(|| format!("unknown component {component_id}"))?;
     let mut out = vec![];
     let mut seen = std::collections::BTreeSet::new();
-    for p in merged_library(&project, "", "", "all") {
+    for p in merged_library(project, "", "", "all") {
         if p.id == target.id || !seen.insert(p.def.footprint.name.clone()) {
             continue;
         }
@@ -924,7 +924,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 54] = [
+pub const IPC_COMMANDS: [&str; 55] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
