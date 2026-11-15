@@ -537,6 +537,7 @@ install_linux() {
   install -m 755 "$ART" "$stage/eak-desktop"
   [ -s "$stage/eak-desktop" ] || fail "staged executable is empty"
   [ "$(head -c4 "$stage/eak-desktop" | od -An -tx1 | tr -d ' \n')" = 7f454c46 ] || fail "staged file is not a Linux executable"
+  install_cli "$stage"   # eak + eak-mcp next to eak-desktop; link_cli below points the launchers here
   prev="$(readlink "$APP_ROOT/current" 2>/dev/null || true)"
   mv "$stage" "$APP_ROOT/versions/$vname"
   RB_KIND=linux; RB_NEW="$APP_ROOT/versions/$vname"; RB_PREV="$prev"
