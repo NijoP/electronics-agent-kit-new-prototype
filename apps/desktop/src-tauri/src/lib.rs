@@ -15,6 +15,7 @@
 
 pub mod ai;
 pub mod catalogue;
+pub mod libcatalog;
 pub mod libstore;
 pub mod models;
 pub mod parts;
@@ -1012,6 +1013,8 @@ pub const IPC_COMMANDS: [&str; 73] = [
     "catalogue_search",
     "parts_save_record",
     "library_browse",
+    "library_catalog",
+    "library_set_enabled",
     "library_meta",
     "library_personal_save",
     "library_personal_remove",
@@ -1425,6 +1428,8 @@ pub fn run() {
             catalogue::cmd::catalogue_search,
             parts::cmd::parts_save_record,
             libstore::cmd::library_browse,
+            libcatalog::cmd::library_catalog,
+            libcatalog::cmd::library_set_enabled,
             libstore::cmd::library_meta,
             libstore::cmd::library_personal_save,
             libstore::cmd::library_personal_remove,

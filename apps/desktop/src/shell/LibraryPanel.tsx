@@ -6,6 +6,7 @@
 // The UI keeps no library model of its own: every list comes from the engine.
 import { useEffect, useMemo, useState } from "react";
 import { api, pickModelFile } from "../api";
+import { LibraryManager } from "./LibraryManager";
 import type { Command, ComponentDef, FootprintCandidate, FootprintDef, LibraryPart, ModelFormat, ModelQuality, ModelRef } from "../types";
 
 const FORMAT_BY_EXT: Record<string, ModelFormat> = { step: "step", stp: "step", wrl: "wrl", glb: "glb" };
@@ -187,6 +188,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
 
   return (
     <div className="panel-body library-panel">
+      <LibraryManager revision={revision} />
       <input aria-label="Search library" placeholder="Search name, MPN, Distributor, footprint…" value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="row">
         <select aria-label="Category filter" value={category} onChange={(e) => setCategory(e.target.value)}>

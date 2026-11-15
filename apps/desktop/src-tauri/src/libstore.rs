@@ -168,6 +168,11 @@ impl LibraryStore {
         LibraryStore { root }
     }
 
+    /// Library root folder (for state files kept beside the libraries).
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     fn personal_dir(&self) -> PathBuf {
         self.root.join("personal")
     }
@@ -416,6 +421,9 @@ pub fn all_defs(
                 .map(|d| (Scope::Imported(m.name.clone()), d)),
         );
     }
+    // A disabled library is invisible to search and placement (ADR-0035).
+    let off = crate::libcatalog::disabled(store.root());
+    out.retain(|(sc, _)| !off.contains(&crate::libcatalog::scope_id(sc)));
     out
 }
 

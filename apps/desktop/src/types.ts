@@ -1137,3 +1137,24 @@ export interface LibraryImportSummary {
   accepted: string[];
   rejected: string[];
 }
+
+export type LibraryScopeKind = "system" | "user" | "project" | "imported" | "organisation";
+
+export interface LibraryCatalogRow {
+  id: string;
+  name: string;
+  namespace: string;
+  version: string;
+  source: string;
+  license: string;
+  description: string;
+  content_hash: string;
+  scope: LibraryScopeKind;
+  enabled: boolean;
+  components: number;
+}
+
+export interface LibraryCatalogView {
+  libraries: LibraryCatalogRow[];
+  problems: string[];
+}
