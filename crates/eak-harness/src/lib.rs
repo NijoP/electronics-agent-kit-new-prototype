@@ -18,6 +18,7 @@
 //! * `mcp`      – Model Context Protocol server over stdio exposing the same tools.
 //! * `cli`      – the `eak` command line.
 
+pub mod agent_task;
 pub mod cli;
 pub mod context;
 pub mod design;

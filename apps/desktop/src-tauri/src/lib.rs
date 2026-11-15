@@ -550,6 +550,22 @@ pub fn current_project(s: &Session) -> Result<Snapshot, String> {
     s.with_engine(|e| snapshot(e))
 }
 
+/// The agent task ledger of the active project (ADR-0035), oldest first.
+pub fn agent_tasks(s: &Session) -> Result<Vec<eak_harness::agent_task::AgentTask>, String> {
+    s.with_engine(|e| {
+        let id = e.project().id.clone();
+        e.dir()
+            .map(|d| {
+                eak_harness::agent_task::read(d)
+                    .tasks
+                    .into_iter()
+                    .filter(|t| t.project_id == id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
 /// Execute one typed command as the Human actor. The UI cannot choose the actor or
 /// attach an approval: agent requests never enter through this boundary.
 pub fn execute_command(
@@ -942,7 +958,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 71] = [
+pub const IPC_COMMANDS: [&str; 72] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -983,6 +999,7 @@ pub const IPC_COMMANDS: [&str; 71] = [
     "project_lock_state",
     "close_project",
     "current_project",
+    "agent_tasks",
     "execute_command",
     "undo",
     "redo",
@@ -1088,6 +1105,13 @@ pub mod cmd {
     #[tauri::command(rename_all = "snake_case")]
     pub async fn current_project(app: AppHandle) -> Result<Snapshot, String> {
         blocking(app, Priority::P1, super::current_project).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn agent_tasks(
+        app: AppHandle,
+    ) -> Result<Vec<eak_harness::agent_task::AgentTask>, String> {
+        blocking(app, Priority::P1, super::agent_tasks).await
     }
 
     #[tauri::command(rename_all = "snake_case")]
@@ -1256,11 +1280,31 @@ pub fn run() {
                     let handler: eak_harness::endpoint::Handler =
                         std::sync::Arc::new(move |req: &eak_harness::endpoint::Request| {
                             let emitter = handle.clone();
-                            harness_call(&handle.state::<Session>(), req, &move |change| {
-                                if let Err(e) = emitter.emit(sync::REVISION_EVENT, change) {
-                                    eprintln!("eak-desktop: revision event not emitted: {e}");
+                            // The task ledger can move without a revision change (an ERC run),
+                            // so it has its own event (ADR-0035).
+                            let dir = req.context.project.dir.clone();
+                            let before = dir.as_deref().map(eak_harness::agent_task::stamp);
+                            let out = harness_call(
+                                &handle.state::<Session>(),
+                                req,
+                                &move |change| {
+                                    if let Err(e) = emitter.emit(sync::REVISION_EVENT, change) {
+                                        eprintln!("eak-desktop: revision event not emitted: {e}");
+                                    }
+                                },
+                            );
+                            if let (Some(d), Some(b)) = (dir.as_deref(), before) {
+                                if eak_harness::agent_task::stamp(d) != b {
+                                    let change = sync::AgentTasksChanged {
+                                        dir: d.display().to_string(),
+                                        tasks: eak_harness::agent_task::read(d).tasks,
+                                    };
+                                    if let Err(e) = handle.emit(sync::AGENT_TASK_EVENT, change) {
+                                        eprintln!("eak-desktop: task event not emitted: {e}");
+                                    }
                                 }
-                            })
+                            }
+                            out
                         });
                     if let Err(e) =
                         start_harness(&app.state::<Session>(), &dir.join("harness"), handler)
@@ -1301,6 +1345,7 @@ pub fn run() {
             cmd::project_lock_state,
             cmd::close_project,
             cmd::current_project,
+            cmd::agent_tasks,
             cmd::execute_command,
             cmd::undo,
             cmd::redo,

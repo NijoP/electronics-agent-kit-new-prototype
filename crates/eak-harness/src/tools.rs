@@ -45,6 +45,8 @@ pub enum Category {
     Rework,
     /// Advisory knowledge retrieval (ADR-0024): never a validation result, never a design edit.
     Knowledge,
+    /// Agent task ledger (ADR-0035): begin, finish and read the execution-grounded task record.
+    Task,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -305,6 +307,30 @@ pub fn tool_specs() -> Vec<ToolSpec> {
             }),
             &["path"],
         ),
+    ));
+    v.push(spec(
+        "agent_task_begin",
+        Category::Task,
+        "Name the task this session is working on (starts the session task record at the current revision; an active task is only renamed). Phases are recorded from what the harness observes, never from this call. Does not change the design.",
+        props(json!({"title": str_schema("short task title")}), &["title"]),
+    ));
+    v.push(spec(
+        "agent_task_finish",
+        Category::Task,
+        "End this session's task: completed, partial, blocked, failed or cancelled. `completed` is granted only when the recorded evidence supports it (ERC-clean schematic, and a clean DRC after any board change); otherwise the task ends partial with the reason. Does not change the design.",
+        props(
+            json!({
+                "outcome": {"type": "string", "enum": ["completed", "partial", "blocked", "failed", "cancelled"]},
+                "note": str_schema("what was achieved or why it stopped"),
+            }),
+            &["outcome"],
+        ),
+    ));
+    v.push(spec(
+        "agent_task_status",
+        Category::Task,
+        "This session's active task and the project's recent tasks: phase, starting revision, latest revision, last ERC/DRC error counts and phase history. Read-only.",
+        empty(),
     ));
     // Autonomous design flow (ADR-0020, `design` module).
     let flow = Category::Flow;
@@ -586,6 +612,7 @@ pub fn handle(
     };
     // Echo the project state *after* the call (a design tool moved the revision).
     out["project"] = project_echo(engine);
+    crate::agent_task::record(engine, ctx, tool, args, &out);
     log_call(engine, ctx, tool, ok, code, &out);
     out
 }
@@ -649,6 +676,7 @@ fn dispatch(
         Category::Flow => crate::design::dispatch(engine, ctx, &spec.name, args),
         Category::Rework => crate::rework::dispatch(engine, ctx, &spec.name, args),
         Category::Knowledge => crate::knowledge::dispatch(engine, &spec.name, args),
+        Category::Task => crate::agent_task::dispatch(engine, ctx, &spec.name, args),
         // Discovery needs no project, but a client that sends its project context (the MCP
         // server, any app-endpoint client) must still get an answer rather than a refusal.
         Category::Discovery => Ok(discovery(&spec.name)),
@@ -683,6 +711,16 @@ fn design(
         name => {
             let command = decode_command(name, &command_args(args))
                 .map_err(|e| fail(ErrorCode::InvalidArguments, e))?;
+            // ADR-0035: PCB synchronisation needs a committed schematic and an ERC run on it.
+            if carries_pcb_sync(&command) {
+                crate::agent_task::pcb_sync_gate(engine).map_err(|why| {
+                    Fail(
+                        ErrorCode::Precondition,
+                        why,
+                        json!({"gate": "pcb_sync", "needs": ["committed schematic symbols", "ERC run since the last schematic change"]}),
+                    )
+                })?;
+            }
             engine.execute(CommandRequest {
                 expected_revision: expected,
                 actor,
@@ -706,6 +744,15 @@ fn design(
         serde_json::to_value(&resp).map_err(|e| fail(ErrorCode::Internal, e.to_string()))?;
     v["rerun_checks"] = json!(spec.rerun_checks);
     Ok(v)
+}
+
+/// Whether a command is, or (in a batch) contains, the PCB synchronisation the ERC gate guards.
+fn carries_pcb_sync(c: &eak_runtime::Command) -> bool {
+    match c {
+        eak_runtime::Command::SyncSchematicToPcb => true,
+        eak_runtime::Command::Batch { commands, .. } => commands.iter().any(carries_pcb_sync),
+        _ => false,
+    }
 }
 
 fn report_json(r: &eak_validation::Report, evidence: Option<&Path>) -> Value {

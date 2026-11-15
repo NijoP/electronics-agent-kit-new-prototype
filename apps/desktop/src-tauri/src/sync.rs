@@ -13,6 +13,17 @@ use std::collections::BTreeSet;
 /// Tauri event name carrying a [`RevisionChange`].
 pub const REVISION_EVENT: &str = "eak://revision-changed";
 
+/// Tauri event carrying an [`AgentTasksChanged`] (ADR-0035): the task ledger moved, which can
+/// happen without a revision change (an ERC run or a refused gate).
+pub const AGENT_TASK_EVENT: &str = "eak://agent-task-changed";
+
+/// The project's whole agent task ledger after a harness call changed it.
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentTasksChanged {
+    pub dir: String,
+    pub tasks: Vec<eak_harness::agent_task::AgentTask>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RevisionChange {
     pub project_id: String,

@@ -161,7 +161,34 @@ fn cli_drives_a_fresh_project_from_create_to_checks() {
         json!({"type": "SetBoardOutline", "points": [
         {"x": 0, "y": 0}, {"x": 40000000, "y": 0}, {"x": 40000000, "y": 30000000}, {"x": 0, "y": 30000000}]}),
     );
+    // Gate (ADR-0035): PCB synchronisation is refused until ERC has run on the schematic.
+    let (code, v) = eak(
+        &dir,
+        &[
+            "exec",
+            &rev(&r).to_string(),
+            r#"{"type":"SyncSchematicToPcb"}"#,
+        ],
+    );
+    assert_ne!(code, 0, "{v}");
+    assert_eq!(v["error"]["code"], "precondition", "{v}");
+    assert_eq!(v["error"]["details"]["gate"], "pcb_sync", "{v}");
+    assert_eq!(rev(&v), rev(&r), "a refused gate must not move the revision");
+    let (_, task) = eak(&dir, &["call", "agent_task_status"]);
+    assert_eq!(
+        task["result"]["session_task"]["phase"], "blocked",
+        "{task}"
+    );
+    // ERC evidence is revision-bound; the outline change before it is not a schematic change.
+    let (_, erc) = eak(&dir, &["check", "erc"]);
+    assert_eq!(erc["category"], "validation", "{erc}");
     let r = exec(&dir, rev(&r), json!({"type": "SyncSchematicToPcb"}));
+    let (_, task) = eak(&dir, &["call", "agent_task_status"]);
+    assert_eq!(
+        task["result"]["session_task"]["phase"], "syncing_pcb",
+        "{task}"
+    );
+    assert!(task["result"]["session_task"]["starting_revision"].is_u64());
     let r = exec(&dir, rev(&r), json!({"type": "AutoPlace"}));
     let r = exec(&dir, rev(&r), json!({"type": "AutoRoute"}));
     assert!(r["result"]["rerun_checks"]
