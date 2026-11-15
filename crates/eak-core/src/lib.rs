@@ -6,6 +6,7 @@
 //! * `geom`     – exact integer geometry (nanometres).
 //! * `library`  – native component / symbol / footprint definitions.
 //! * `libmeta`  – library identity, scope, maturity, catalogue and committed-definition references (ADR-0035).
+//! * `sexpr`    – bounded S-expression reader for library interchange files (import groundwork).
 //! * `ir`       – project, schematic, PCB, constraints, manufacturing config.
 //! * `integrity`– structural validation of a whole project (dangling references etc.).
 //! * `migrate`  – schema version handling; unknown/newer schemas fail safely.
@@ -21,6 +22,7 @@ pub mod ir;
 pub mod libmeta;
 pub mod library;
 pub mod migrate;
+pub mod sexpr;
 pub mod units;
 
 pub use geom::{Nm, Point, Rect, Rotation};
