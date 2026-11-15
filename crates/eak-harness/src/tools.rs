@@ -649,10 +649,23 @@ fn dispatch(
         Category::Flow => crate::design::dispatch(engine, ctx, &spec.name, args),
         Category::Rework => crate::rework::dispatch(engine, ctx, &spec.name, args),
         Category::Knowledge => crate::knowledge::dispatch(engine, &spec.name, args),
-        Category::Project | Category::Discovery => Err(fail(
+        // Discovery needs no project, but a client that sends its project context (the MCP
+        // server, any app-endpoint client) must still get an answer rather than a refusal.
+        Category::Discovery => Ok(discovery(&spec.name)),
+        Category::Project => Err(fail(
             ErrorCode::InvalidArguments,
             format!("{} does not run against an open project", spec.name),
         )),
+    }
+}
+
+/// Result of a discovery tool; none of them reads a project.
+pub fn discovery(tool: &str) -> Value {
+    match tool {
+        "guide" => json!({"markdown": crate::GUIDE}),
+        "design_spec_schema" => crate::design::spec_schema(),
+        "design_procedure" => crate::design::procedure(),
+        _ => list_tools_json(),
     }
 }
 
