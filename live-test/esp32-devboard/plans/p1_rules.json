@@ -1,0 +1,23 @@
+{"label":"Phase 1: requirements, rules, net classes, stackup, manufacturing","commands":[
+{"type":"SetProjectName","name":"ESP32 DevBoard (WROOM-32E, USB-C, CH340C) rev A"},
+{"type":"AddRequirement","text":"R1 Module: ESP32-WROOM-32E-N4 (4 MB flash); PCB antenna overhangs the board edge; no copper on any layer and no parts under the antenna (Espressif hardware design guidelines)."},
+{"type":"AddRequirement","text":"R2 USB: USB-C receptacle, USB 2.0 full speed only; 5.1 kOhm pull-downs on CC1 and CC2; ESD protection (USBLC6-2SC6) on D+, D-, VBUS; D+/D- routed as a short 90 Ohm differential pair."},
+{"type":"AddRequirement","text":"R3 USB-UART: CH340C (CP2102N not in library, see ASSUMPTIONS) with two-transistor DTR/RTS auto-reset (EN) and auto-boot (IO0)."},
+{"type":"AddRequirement","text":"R4 Power: VBUS 5 V -> SS14 back-feed Schottky -> +5V (header 5V pin) -> AMS1117-3.3 (>= 600 mA, 1 A rated) -> +3V3; 10 uF + 100 nF at LDO input and output; 10 uF + 100 nF at module 3V3 pin; 22 uF bulk near module."},
+{"type":"AddRequirement","text":"R5 Controls: EN (reset) and BOOT (IO0) buttons; EN RC 10 kOhm + 1 uF; power LED on +3V3; user LED on GPIO4 (not a strapping pin)."},
+{"type":"AddRequirement","text":"R6 I/O: two 1x19 2.54 mm headers, DevKitC-style order; flash pins GPIO6-11 not brought out (NC on WROOM-32E); strapping pins (IO0, IO2, IO5, IO12, IO15) not used for on-board functions except IO0 boot."},
+{"type":"AddRequirement","text":"R7 PCB: 2 layers, 1.6 mm FR-4, 1 oz copper, approx. 28 x 55 mm, GND pour both layers with stitching vias, JLCPCB standard 2-layer capabilities, mostly LCSC basic parts; every part with MPN and LCSC number where possible."},
+{"type":"SetDesignRules","min_track_width":150000,"min_clearance":150000,"default_track_width":250000,"default_clearance":200000,"min_drill":300000,"min_annular_ring":150000,"board_edge_clearance":300000,"max_component_height":12000000,"temp_rise_c":10},
+{"type":"UpsertNetClass","class":{"name":"POWER","nets":["VBUS","+5V","+3V3"],"track_width":500000,"clearance":200000,"via_drill":400000,"via_diameter":800000}},
+{"type":"UpsertNetClass","class":{"name":"GND","nets":["GND"],"track_width":400000,"clearance":200000,"via_drill":400000,"via_diameter":800000}},
+{"type":"UpsertNetClass","class":{"name":"USB","nets":["USB_DP","USB_DN"],"track_width":300000,"clearance":150000,"via_drill":300000,"via_diameter":600000}},
+{"type":"SetStackup","stackup":{"board_thickness":1600000,"dielectric":"FR-4","layers":[{"layer":"top","copper_oz":1.0,"dielectric_after_um":1510,"er":4.5,"kind":"signal"},{"layer":"bottom","copper_oz":1.0,"dielectric_after_um":0,"er":4.5,"kind":"signal"}]}},
+{"type":"SetManufacturing","config":{"fabricator_profile":"jlcpcb-standard-2layer","surface_finish":"HASL (lead-free)","solder_mask_color":"Green","mask_expansion":50000}},
+{"type":"SetNetCurrent","net":"VBUS","amps":0.8},
+{"type":"SetNetCurrent","net":"+5V","amps":0.8},
+{"type":"SetNetCurrent","net":"+3V3","amps":0.6},
+{"type":"SetNetCurrent","net":"GND","amps":0.8},
+{"type":"SetNetVoltage","net":"VBUS","volts":5.5},
+{"type":"SetNetVoltage","net":"+5V","volts":5.5},
+{"type":"SetNetVoltage","net":"+3V3","volts":3.6}
+]}

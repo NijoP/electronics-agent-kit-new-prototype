@@ -1,0 +1,24 @@
+{"title":"ESP32-WROOM-32E USB-C development board rev A",
+"design_class":"mcu_devboard",
+"rails":[
+ {"net":"VBUS","role":"input","v_min":4.75,"v_nom":5.0,"v_max":5.25,"i_max_a":0.8},
+ {"net":"+5V","role":"internal","v_min":4.4,"v_nom":4.65,"v_max":5.25,"i_max_a":0.8},
+ {"net":"+3V3","role":"output","v_min":3.2,"v_nom":3.3,"v_max":3.4,"i_max_a":0.6,"ripple_mv_pp":50}],
+"conditions":{"ambient_min_c":0,"ambient_max_c":40,"notes":"bench / hobby use, USB powered"},
+"safety":{"isolation":"none","notes":"SELV, 5 V USB only"},
+"interfaces":[
+ {"name":"USB","kind":"usb2_fs","nets":["VBUS","USB_DP","USB_DN","CC1","CC2","GND"],"notes":"USB-C receptacle, USB 2.0 only; 90 ohm differential pair requested"},
+ {"name":"UART0","kind":"uart","nets":["U0TXD","U0RXD"]},
+ {"name":"Headers","kind":"gpio","nets":["+5V","+3V3","GND","EN","IO0"]}],
+"protection":[
+ {"kind":"esd","nets":["USB_DP","USB_DN","VBUS"],"notes":"USBLC6-2SC6"},
+ {"kind":"reverse_backfeed","nets":["VBUS","+5V"],"notes":"SS14 Schottky VBUS -> +5V"}],
+"assumptions":["LDO theta_JA 60 C/W with SOT-223 tab copper (not computed by EAK)","Module peak current spikes (~500 mA during TX) covered by 22 uF bulk + 10 uF local"],
+"acceptance":[
+ {"id":"A1","description":"ERC clean","metric":"erc_errors","max":0},
+ {"id":"A2","description":"DRC clean","metric":"drc_errors","max":0},
+ {"id":"A3","description":"MECH clean","metric":"mech_errors","max":0},
+ {"id":"A4","description":"DFM (JLCPCB) clean","metric":"dfm_errors","max":0},
+ {"id":"A5","description":"+3V3 track carries 0.6 A","metric":"net_trace_capacity_a","net":"+3V3","min":0.6,"unit":"A"},
+ {"id":"A6","description":"VBUS track carries 0.8 A","metric":"net_trace_capacity_a","net":"VBUS","min":0.8,"unit":"A"},
+ {"id":"A7","description":"+5V track carries 0.8 A","metric":"net_trace_capacity_a","net":"+5V","min":0.8,"unit":"A"}]}
