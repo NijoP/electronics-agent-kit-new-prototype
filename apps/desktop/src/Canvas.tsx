@@ -2,7 +2,7 @@
 // click (pointer released without dragging) reports the view-space point under it, and
 // `onHover` tracks the cursor so editors can draw rubber-band previews.
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { clientToView, fit, pan, zoomAt, type Bounds, type ViewBox } from "./viewport";
+import { clientToView, fit, pan, visibleViewBox, zoomAt, type Bounds, type Size, type ViewBox } from "./viewport";
 import { loadViewport, saveViewport, useDocId, useRegisterCanvas } from "./shell/viewState";
 
 interface Props {
@@ -72,6 +72,22 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
   useEffect(() => {
     if (zoomTo) setVb(fit(zoomTo.bounds, 0.4));
   }, [zoomTo?.n]);
+
+  // Pane size in pixels, so the grid/rulers can cover the whole pane (not just the view box).
+  const [size, setSize] = useState<Size>({ width: 0, height: 0 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setSize((s) => (s.width === r.width && s.height === r.height ? s : { width: r.width, height: r.height }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const visible = visibleViewBox(vb, size);
 
   useEffect(() => {
     const el = ref.current;
@@ -200,9 +216,9 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
         if (!tool) setVb(fit(bounds));
       }}
     >
-      {underlay?.(vb)}
+      {underlay?.(visible)}
       {children}
-      {overlay?.(vb)}
+      {overlay?.(visible)}
     </svg>
   );
 }
