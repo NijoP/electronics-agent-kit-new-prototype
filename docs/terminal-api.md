@@ -52,3 +52,16 @@ close | report | release` (`eak-term --help`). Exit code 2 when `wait` times out
 ## Session context contract
 Every session exports `EAK_SESSION_ID`, `EAK_PROJECT_DIR` (its space root) and, for project
 spaces, `EAK_PROJECT_ID`. `EAK_HARNESS_SOCKET` / `EAK_HARNESS_TOKEN_FILE` are not set yet.
+
+## Session environment
+
+Each terminal session starts from an explicit allowlist, not the full launching environment:
+`PATH`, `HOME`, `USER`/`USERNAME`/`LOGNAME`, `SHELL`, `TERM`, `LANG`/`LC_*`, `TZ`, temp dirs, display and
+session variables (`DISPLAY`, `WAYLAND_DISPLAY`, `DBUS_SESSION_BUS_ADDRESS`, `SSH_AUTH_SOCK`), `XDG_*`,
+the Windows system variables, and `EAK_*`. Variables that look like credentials (`*_TOKEN`, `*_KEY`,
+`*_SECRET`, `*PASSWORD*`, ...) are dropped even under an allowed prefix. Agent CLIs keep their native
+auth because their config files live under `HOME`.
+
+Opt-in passthrough: set `EAK_TERMINAL_PASSTHROUGH_ENV=NAME1,NAME2` in the environment that launches EAK
+to pass those named variables to every session. Variables given explicitly in a session spec or by the
+app are always applied.

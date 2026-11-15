@@ -1486,6 +1486,83 @@ fn home_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// Opt-in setting: comma-separated names of extra variables to pass through to terminals
+/// (for example `MY_TOOL_TOKEN,OTHER_KEY`). Unset by default. See `docs/terminal-api.md`.
+pub const PASSTHROUGH_VAR: &str = "EAK_TERMINAL_PASSTHROUGH_ENV";
+
+/// Exact names inherited by default (compared case-insensitively so Windows spellings work).
+const ENV_ALLOW: &[&str] = &[
+    "PATH",
+    "PATHEXT",
+    "HOME",
+    "USER",
+    "USERNAME",
+    "LOGNAME",
+    "SHELL",
+    "TERM",
+    "COLORTERM",
+    "LANG",
+    "LANGUAGE",
+    "TZ",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "PWD",
+    "DISPLAY",
+    "WAYLAND_DISPLAY",
+    "DBUS_SESSION_BUS_ADDRESS",
+    "SSH_AUTH_SOCK",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "PROGRAMDATA",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "WINDIR",
+    "COMSPEC",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "COMPUTERNAME",
+    "OS",
+    "NUMBER_OF_PROCESSORS",
+    "PROCESSOR_ARCHITECTURE",
+];
+
+/// Name prefixes inherited by default.
+const ENV_ALLOW_PREFIX: &[&str] = &["LC_", "XDG_", "EAK_"];
+
+/// Variables carrying credentials are never inherited by default, even under an allowed
+/// prefix; only [`PASSTHROUGH_VAR`] can pass them.
+fn looks_secret(name: &str) -> bool {
+    let n = name.to_ascii_uppercase();
+    ["TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "APIKEY", "API_KEY", "PRIVATE_KEY"]
+        .iter()
+        .any(|s| n.contains(s))
+        || n.ends_with("_KEY")
+}
+
+/// The part of the launching process environment a terminal session may inherit.
+fn inherited_env(
+    vars: impl Iterator<Item = (String, String)>,
+    passthrough: &str,
+) -> Vec<(String, String)> {
+    let extra: Vec<String> = passthrough
+        .split(',')
+        .map(|s| s.trim().to_ascii_uppercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+    vars.filter(|(k, _)| {
+        let up = k.to_ascii_uppercase();
+        extra.contains(&up)
+            || (!looks_secret(&up)
+                && (ENV_ALLOW.contains(&up.as_str())
+                    || ENV_ALLOW_PREFIX.iter().any(|p| up.starts_with(p))))
+    })
+    .collect()
+}
+
 type Spawned = (
     Live,
     Box<dyn Read + Send>,
@@ -1510,6 +1587,13 @@ fn spawn(
         }
     };
     cmd.cwd(&spec.cwd);
+    // Build the environment from an allowlist instead of inheriting everything: unrelated
+    // secrets (`*_TOKEN`, `*_KEY`, ...) in the launching environment must not reach a shell.
+    cmd.env_clear();
+    let passthrough = std::env::var(PASSTHROUGH_VAR).unwrap_or_default();
+    for (k, v) in inherited_env(std::env::vars(), &passthrough) {
+        cmd.env(k, v);
+    }
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("EAK_TERMINAL", "1");
@@ -1535,6 +1619,39 @@ fn spawn(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Regression test (written, not run): terminals must not inherit unrelated secrets.
+    #[test]
+    fn inherited_env_drops_secrets_keeps_allowlist_and_honours_opt_in() {
+        let v = |k: &str| (k.to_string(), "x".to_string());
+        let all = || {
+            [
+                "PATH",
+                "HOME",
+                "LC_ALL",
+                "XDG_CONFIG_HOME",
+                "EAK_PROJECT_DIR",
+                "GITHUB_TOKEN",
+                "OPENAI_API_KEY",
+                "AWS_SECRET_ACCESS_KEY",
+                "EAK_API_KEY",
+                "RANDOM_VAR",
+            ]
+            .into_iter()
+            .map(v)
+        };
+        let names = |p: &str| -> Vec<String> {
+            inherited_env(all(), p).into_iter().map(|(k, _)| k).collect()
+        };
+        let got = names("");
+        for k in ["PATH", "HOME", "LC_ALL", "XDG_CONFIG_HOME", "EAK_PROJECT_DIR"] {
+            assert!(got.contains(&k.to_string()), "{k} should be kept");
+        }
+        for k in ["GITHUB_TOKEN", "OPENAI_API_KEY", "AWS_SECRET_ACCESS_KEY", "EAK_API_KEY", "RANDOM_VAR"] {
+            assert!(!got.contains(&k.to_string()), "{k} must be dropped");
+        }
+        assert!(names("github_token, OPENAI_API_KEY").contains(&"GITHUB_TOKEN".to_string()));
+    }
 
     #[test]
     fn utf8_split_across_chunks_is_kept_whole() {
