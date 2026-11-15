@@ -1563,6 +1563,19 @@ fn inherited_env(
     .collect()
 }
 
+/// The `eak` CLI installed with the app: next to the running executable (Linux and Windows
+/// installs), else the per-user launcher directory the installer writes to (`~/.local/bin`,
+/// macOS). `None` in development builds, where nothing is injected.
+fn find_cli() -> Option<PathBuf> {
+    let name = if cfg!(windows) { "eak.exe" } else { "eak" };
+    let mut dirs = Vec::new();
+    if let Some(d) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
+        dirs.push(d);
+    }
+    dirs.push(home_dir().join(".local").join("bin"));
+    dirs.into_iter().map(|d| d.join(name)).find(|p| p.is_file())
+}
+
 type Spawned = (
     Live,
     Box<dyn Read + Send>,
@@ -1593,6 +1606,18 @@ fn spawn(
     let passthrough = std::env::var(PASSTHROUGH_VAR).unwrap_or_default();
     for (k, v) in inherited_env(std::env::vars(), &passthrough) {
         cmd.env(k, v);
+    }
+    // Agents in the terminal need the `eak` CLI / MCP harness installed with the app.
+    if let Some(cli) = find_cli() {
+        let dir = cli.parent().map(Path::to_path_buf).unwrap_or_default();
+        let mut paths = vec![dir];
+        if let Some(p) = std::env::var_os("PATH") {
+            paths.extend(std::env::split_paths(&p));
+        }
+        if let Ok(joined) = std::env::join_paths(paths) {
+            cmd.env("PATH", joined);
+        }
+        cmd.env("EAK_CLI", cli);
     }
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");

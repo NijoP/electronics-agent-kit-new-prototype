@@ -65,3 +65,9 @@ auth because their config files live under `HOME`.
 Opt-in passthrough: set `EAK_TERMINAL_PASSTHROUGH_ENV=NAME1,NAME2` in the environment that launches EAK
 to pass those named variables to every session. Variables given explicitly in a session spec or by the
 app are always applied.
+
+Installed CLI: when an `eak` binary sits next to the app executable (Linux/Windows source install) or in
+`~/.local/bin` (launchers written by the installer), its directory is put first on the session `PATH` and
+`EAK_CLI` points at it, so agents can run `eak` / `eak-mcp`. The source installers build both binaries
+(`cargo build --release --locked -p eak-harness --bin eak --bin eak-mcp`), install them, record `cli=` in the
+install record, and remove them (and the Windows user-PATH entry) on uninstall.

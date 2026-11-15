@@ -110,6 +110,9 @@ function Install-EakSource {
       if ($env:EAK_UNINSTALL -eq '1') {
         Step 'Uninstalling EAK (source install). Projects, settings and credentials are not touched'
         Remove-Item $exe, "$exe.old", "$exe.new", $infoFile -Force -ErrorAction SilentlyContinue
+        Remove-Item (Join-Path $installDir 'eak.exe'), (Join-Path $installDir 'eak-mcp.exe') -Force -ErrorAction SilentlyContinue
+        $up = [Environment]::GetEnvironmentVariable('Path', 'User')
+        if ($up) { [Environment]::SetEnvironmentVariable('Path', (($up -split ';' | Where-Object { $_ -and $_ -ne $installDir }) -join ';'), 'User') }
         if (Test-Path $lnk) {
           $target = $null
           try { $target = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath } catch { }
@@ -391,7 +394,7 @@ function Install-EakSource {
           'Common causes: out of memory (retry with $env:EAK_BUILD_JOBS=1), missing C++ components, no network, path too long. See docs/INSTALL.md#troubleshooting')
       }
       $kv = @{}; foreach ($l in Get-Content $result) { $i = $l.IndexOf('='); if ($i -gt 0) { $kv[$l.Substring(0, $i)] = $l.Substring($i + 1) } }
-      $art = $kv['path']; $version = $kv['version']
+      $art = $kv['path']; $version = $kv['version']; $cliDir = $kv['cli_dir']
       if (-not $art -or -not (Test-Path $art)) { Fail 'the build did not report a usable artifact' @("See $log") }
       Info "built EAK ${version}: $art"
     } else {
@@ -411,6 +414,19 @@ function Install-EakSource {
       if ($b0 -ne 0x4D -or $b1 -ne 0x5A) { Fail 'staged file is not a Windows executable' }
       if (Test-Path $exe) { Move-Item $exe "$exe.old" -Force }   # renaming works even while the old EAK runs
       Move-Item $new $exe
+      # EAK CLI + MCP harness from the same build, next to the app; the install dir goes on the user PATH.
+      if (-not $cliDir) { Fail 'the build did not report the eak harness directory' @("See $log") }
+      foreach ($b in 'eak.exe', 'eak-mcp.exe') {
+        $srcBin = Join-Path $cliDir $b
+        if (-not (Test-Path $srcBin) -or (Get-Item $srcBin).Length -le 0) { Fail "harness binary missing or empty: $srcBin" }
+        Copy-Item $srcBin (Join-Path $installDir $b) -Force -ErrorAction Stop
+      }
+      $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+      if (-not (($userPath -split ';') -contains $installDir)) {
+        [Environment]::SetEnvironmentVariable('Path', ((@($userPath, $installDir) | Where-Object { $_ }) -join ';'), 'User')
+        Info "added $installDir to your user PATH (new terminals see eak and eak-mcp)"
+      }
+      Info "CLI: $installDir\eak.exe, $installDir\eak-mcp.exe"
       $script:rb = @{ Active = $true }
       $sh = New-Object -ComObject WScript.Shell
       $sc = $sh.CreateShortcut($lnk)
@@ -434,7 +450,7 @@ function Install-EakSource {
       $rv = ''; $nv = ''
       try { $rv = (& rustc --version) } catch { }
       try { $nv = (& node --version) } catch { }
-      $infoText = "repo=$repo`nref=$ref`ncommit=$sha`nversion=$version`nos=windows`narch=x86_64`ninstalled_at=$(Get-Date -Format s)`nlog=$log`nrustc=$rv`nnode=$nv"
+      $infoText = "repo=$repo`nref=$ref`ncommit=$sha`nversion=$version`nos=windows`narch=x86_64`ninstalled_at=$(Get-Date -Format s)`nlog=$log`nrustc=$rv`nnode=$nv`ncli=eak.exe eak-mcp.exe`npath_entry=$installDir"
       Set-Content -Path $infoFile -Value $infoText -Encoding ASCII
       Remove-Item "$exe.old" -Force -ErrorAction SilentlyContinue
       $script:rb = $null
