@@ -27,3 +27,10 @@ supplier key under the former vendor-specific spelling; those keys are no longer
 distributor SKU (or re-run supplier discovery) on affected components. Git history before this commit
 still contains the former names (history is not rewritten). The optional distributor and fabricator
 adapters point at placeholder `.invalid` hosts and are non-functional until a real endpoint is configured.
+
+## KiCad independence
+EAK does not depend on KiCad. Its native library format and IR are the source of truth. "Import from
+KiCad" (`eak-core/src/kicad_import.rs`) is an optional one-way converter of user-supplied text files
+into EAK-native definitions with provenance; no code path needs a KiCad install, KiCad libraries or
+KiCad formats, and no KiCad library is bundled. UI and docs must call it "Import from KiCad", one
+interchange option among others, never "KiCad libraries" as EAK's own.

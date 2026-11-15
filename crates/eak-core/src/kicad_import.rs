@@ -1,4 +1,7 @@
-//! Import of KiCad-format symbol and footprint text files into EAK definitions (ADR-0035, M3).
+//! Optional one-way "Import from KiCad": converts KiCad-format symbol and footprint text files
+//! into EAK-native definitions (ADR-0035, M3). EAK's own library format and IR stay the source of
+//! truth; nothing in EAK needs KiCad, KiCad libraries or KiCad file formats to work, and no KiCad
+//! library is bundled. Imported records carry provenance and are never marked verified.
 //!
 //! Independent implementation written from the public, documented S-expression file formats
 //! (`.kicad_sym` symbol libraries, `.kicad_mod` footprints); no KiCad source is used. Input is read

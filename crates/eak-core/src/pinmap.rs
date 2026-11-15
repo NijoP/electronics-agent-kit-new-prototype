@@ -128,7 +128,12 @@ mod tests {
     use crate::library::{PadDef, PadKind, PadShape, SymbolPin};
 
     fn pin(n: &str, t: PinType) -> SymbolPin {
-        SymbolPin { number: n.into(), name: n.into(), electrical_type: t, position: Point::new(0, 0) }
+        SymbolPin {
+            number: n.into(),
+            name: n.into(),
+            electrical_type: t,
+            position: Point::new(0, 0),
+        }
     }
 
     fn pad(n: &str) -> PadDef {

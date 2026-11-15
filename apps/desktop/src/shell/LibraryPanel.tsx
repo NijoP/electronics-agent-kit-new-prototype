@@ -288,7 +288,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
               )}
               <p className="muted">Refused while PCB footprints of this part exist.</p>
               <h3>3D model</h3>
-              <p className="muted">Models are not bundled: point at a file in your own library (for example a local KiCad 3D library). Without a model the viewer draws an approximate box and marks the part as missing.</p>
+              <p className="muted">Models are not bundled: point at a STEP, WRL or GLB file you own. Without a model the viewer draws an approximate box and marks the part as missing.</p>
               <label className="field">
                 <span>Model file</span>
                 <input aria-label="3D model path" value={mf.path} onChange={(e) => setMf({ ...mf, path: e.target.value })} placeholder="Absolute path to .step, .stp, .wrl or .glb" />
