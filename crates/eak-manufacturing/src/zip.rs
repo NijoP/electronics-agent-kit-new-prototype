@@ -1,6 +1,6 @@
 //! Minimal store-only (uncompressed) ZIP writer and verifying reader.
 //!
-//! JLCPCB takes the Gerber and drill files as one `.zip`. Gerber text compresses well, but
+//! Fabricator takes the Gerber and drill files as one `.zip`. Gerber text compresses well, but
 //! these files are small and a dependency-free writer keeps the build identical on every OS.
 //! Entries use a fixed DOS timestamp (1980-01-01) so the archive is byte-for-byte
 //! reproducible from the same inputs.

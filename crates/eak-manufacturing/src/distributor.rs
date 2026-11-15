@@ -1,12 +1,12 @@
-//! LCSC provider: read-only part lookup and import into the EAK library.
+//! Distributor provider: read-only part lookup and import into the EAK library.
 //!
-//! * [`LcscProvider::lookup`] fetches one public product-detail document by LCSC part number
+//! * [`DistributorProvider::lookup`] fetches one public product-detail document by Distributor part number
 //!   and turns it into a [`SourcingRecord`] through the audited
 //!   [`ingest_product_detail`] boundary (bounded, untrusted-input handling, SHA-256 of the
 //!   raw bytes, search-hit state).
-//! * [`LcscProvider::search`] resolves an LCSC part number directly. A keyword query is sent
-//!   to LCSC's public search endpoint; if LCSC refuses automated access (it currently
-//!   answers HTTP 403 "Access Denied") the failure is returned as [`LcscError::Blocked`]
+//! * [`DistributorProvider::search`] resolves an Distributor part number directly. A keyword query is sent
+//!   to Distributor's public search endpoint; if Distributor refuses automated access (it currently
+//!   answers HTTP 403 "Access Denied") the failure is returned as [`DistributorError::Blocked`]
 //!   and is never replaced by invented results.
 //! * [`import_plan`] maps a record onto a symbol + footprint template that already exists in
 //!   the library, for submission through `Command::UpsertComponentDefinition`. A part with no
@@ -18,13 +18,13 @@
 
 use crate::sourcing::{ingest_product_detail, SourcingError, SourcingRecord};
 use eak_core::{builtin, ComponentDef};
-use eak_validation::sourcing::is_lcsc_part_number;
+use eak_validation::sourcing::is_distributor_part_number;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// LCSC's public catalogue host (the endpoints used are the ones its own web shop calls).
-pub const DEFAULT_BASE: &str = "https://wmsc.lcsc.com";
+/// Distributor's public catalogue host (the endpoints used are the ones its own web shop calls).
+pub const DEFAULT_BASE: &str = "https://distributor.invalid";
 /// Most hits a keyword search returns (each hit costs one detail request).
 pub const MAX_HITS: usize = 10;
 #[cfg(feature = "live-http")]
@@ -39,7 +39,7 @@ pub struct HttpResponse {
 /// One blocking HTTP GET. `Err` is a transport failure (DNS, TLS, timeout, oversize).
 pub trait Fetch: Send + Sync {
     fn get(&self, url: &str) -> Result<HttpResponse, String>;
-    /// GET with extra request headers (the signed LCSC OpenAPI client needs them). An
+    /// GET with extra request headers (the signed Distributor OpenAPI client needs them). An
     /// implementation that cannot send headers must fail rather than drop them silently.
     fn get_with_headers(
         &self,
@@ -104,27 +104,27 @@ impl Fetch for UreqFetch {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "detail", rename_all = "snake_case")]
-pub enum LcscError {
+pub enum DistributorError {
     /// The query is empty or unusable.
     BadQuery(String),
-    /// No network path to LCSC (DNS, TLS, timeout).
+    /// No network path to Distributor (DNS, TLS, timeout).
     Transport(String),
-    /// LCSC refused automated access (HTTP 401/403/429). Reported as-is; no fallback data.
+    /// Distributor refused automated access (HTTP 401/403/429). Reported as-is; no fallback data.
     Blocked { status: u16, note: String },
-    /// LCSC answered, but with no such part.
+    /// Distributor answered, but with no such part.
     NotFound(String),
-    /// LCSC answered with something that is not a usable product document.
+    /// Distributor answered with something that is not a usable product document.
     Unusable(String),
 }
 
-impl std::fmt::Display for LcscError {
+impl std::fmt::Display for DistributorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LcscError::BadQuery(m) => write!(f, "bad query: {m}"),
-            LcscError::Transport(m) => write!(f, "could not reach LCSC: {m}"),
-            LcscError::Blocked { status, note } => write!(
+            DistributorError::BadQuery(m) => write!(f, "bad query: {m}"),
+            DistributorError::Transport(m) => write!(f, "could not reach Distributor: {m}"),
+            DistributorError::Blocked { status, note } => write!(
                 f,
-                "LCSC refused automated access (HTTP {status}{}). No results are shown \
+                "Distributor refused automated access (HTTP {status}{}). No results are shown \
                  rather than inventing any.",
                 if note.is_empty() {
                     String::new()
@@ -132,15 +132,15 @@ impl std::fmt::Display for LcscError {
                     format!(": {note}")
                 }
             ),
-            LcscError::NotFound(m) => write!(f, "not found: {m}"),
-            LcscError::Unusable(m) => write!(f, "unusable LCSC response: {m}"),
+            DistributorError::NotFound(m) => write!(f, "not found: {m}"),
+            DistributorError::Unusable(m) => write!(f, "unusable Distributor response: {m}"),
         }
     }
 }
 
-impl std::error::Error for LcscError {}
+impl std::error::Error for DistributorError {}
 
-pub struct LcscProvider<F: Fetch> {
+pub struct DistributorProvider<F: Fetch> {
     fetch: F,
     base: String,
     /// Pause between the detail requests of one keyword search.
@@ -148,9 +148,9 @@ pub struct LcscProvider<F: Fetch> {
 }
 
 #[cfg(feature = "live-http")]
-impl LcscProvider<UreqFetch> {
+impl DistributorProvider<UreqFetch> {
     pub fn live() -> Self {
-        LcscProvider::new(UreqFetch::default(), DEFAULT_BASE)
+        DistributorProvider::new(UreqFetch::default(), DEFAULT_BASE)
     }
 }
 
@@ -174,37 +174,37 @@ fn encode(s: &str) -> String {
     out
 }
 
-impl<F: Fetch> LcscProvider<F> {
+impl<F: Fetch> DistributorProvider<F> {
     /// `base` is the host serving `/ftps/wm/...` (no trailing slash). Provenance URLs always
     /// name [`DEFAULT_BASE`], the host the records are about, even when a test server
     /// stands in for it.
     pub fn new(fetch: F, base: &str) -> Self {
-        LcscProvider {
+        DistributorProvider {
             fetch,
             base: base.trim_end_matches('/').to_string(),
             pause: Duration::from_millis(250),
         }
     }
 
-    fn get_checked(&self, url: &str) -> Result<Vec<u8>, LcscError> {
-        let r = self.fetch.get(url).map_err(LcscError::Transport)?;
+    fn get_checked(&self, url: &str) -> Result<Vec<u8>, DistributorError> {
+        let r = self.fetch.get(url).map_err(DistributorError::Transport)?;
         match r.status {
             200 => Ok(r.body),
-            s @ (401 | 403 | 429) => Err(LcscError::Blocked {
+            s @ (401 | 403 | 429) => Err(DistributorError::Blocked {
                 status: s,
                 note: strip_tags(&String::from_utf8_lossy(&r.body)),
             }),
-            404 => Err(LcscError::NotFound(url.to_string())),
-            s => Err(LcscError::Unusable(format!("HTTP {s}"))),
+            404 => Err(DistributorError::NotFound(url.to_string())),
+            s => Err(DistributorError::Unusable(format!("HTTP {s}"))),
         }
     }
 
-    /// Fetch one product by LCSC part number (`C` + digits).
-    pub fn lookup(&self, part: &str) -> Result<SourcingRecord, LcscError> {
+    /// Fetch one product by Distributor part number (`C` + digits).
+    pub fn lookup(&self, part: &str) -> Result<SourcingRecord, DistributorError> {
         let code = part.trim().to_ascii_uppercase();
-        if !is_lcsc_part_number(&code) {
-            return Err(LcscError::BadQuery(format!(
-                "{part:?} is not an LCSC part number (C followed by digits)"
+        if !is_distributor_part_number(&code) {
+            return Err(DistributorError::BadQuery(format!(
+                "{part:?} is not an Distributor part number (C followed by digits)"
             )));
         }
         let body = self.get_checked(&format!(
@@ -213,31 +213,31 @@ impl<F: Fetch> LcscProvider<F> {
         ))?;
         let provenance = format!("{DEFAULT_BASE}/ftps/wm/product/detail?productCode={code}");
         match ingest_product_detail(&body, &provenance, now_s()) {
-            Ok(r) if r.lcsc_part.as_deref() == Some(code.as_str()) => Ok(r),
-            Ok(r) => Err(LcscError::Unusable(format!(
-                "asked for {code}, LCSC returned {:?}",
-                r.lcsc_part
+            Ok(r) if r.distributor_part.as_deref() == Some(code.as_str()) => Ok(r),
+            Ok(r) => Err(DistributorError::Unusable(format!(
+                "asked for {code}, Distributor returned {:?}",
+                r.distributor_part
             ))),
-            // LCSC answers an unknown part number with `{"code":200,"result":null}`.
+            // Distributor answers an unknown part number with `{"code":200,"result":null}`.
             Err(SourcingError::Provider(m)) if m.contains("without a result") => {
-                Err(LcscError::NotFound(format!("LCSC has no part {code}")))
+                Err(DistributorError::NotFound(format!("Distributor has no part {code}")))
             }
-            Err(e) => Err(LcscError::Unusable(e.to_string())),
+            Err(e) => Err(DistributorError::Unusable(e.to_string())),
         }
     }
 
-    /// Search by LCSC part number (exact lookup) or keyword/MPN (LCSC public search).
-    pub fn search(&self, query: &str) -> Result<Vec<SourcingRecord>, LcscError> {
+    /// Search by Distributor part number (exact lookup) or keyword/MPN (Distributor public search).
+    pub fn search(&self, query: &str) -> Result<Vec<SourcingRecord>, DistributorError> {
         let q = query.trim();
         if q.is_empty() {
-            return Err(LcscError::BadQuery("empty query".into()));
+            return Err(DistributorError::BadQuery("empty query".into()));
         }
         if q.chars().count() > 120 || q.chars().any(char::is_control) {
-            return Err(LcscError::BadQuery(
+            return Err(DistributorError::BadQuery(
                 "query too long or contains control characters".into(),
             ));
         }
-        if is_lcsc_part_number(&q.to_ascii_uppercase()) {
+        if is_distributor_part_number(&q.to_ascii_uppercase()) {
             return self.lookup(q).map(|r| vec![r]);
         }
         let body = self.get_checked(&format!(
@@ -249,7 +249,7 @@ impl<F: Fetch> LcscProvider<F> {
         // so only product codes are taken from it; every hit is then fetched through the
         // verified detail path.
         let doc: Value = serde_json::from_slice(&body)
-            .map_err(|e| LcscError::Unusable(format!("search response is not JSON: {e}")))?;
+            .map_err(|e| DistributorError::Unusable(format!("search response is not JSON: {e}")))?;
         let mut codes = vec![];
         collect_product_codes(&doc, 0, &mut codes);
         let mut seen = std::collections::BTreeSet::new();
@@ -261,7 +261,7 @@ impl<F: Fetch> LcscProvider<F> {
             }
             match self.lookup(&code) {
                 Ok(r) => out.push(r),
-                Err(LcscError::NotFound(_)) => {}
+                Err(DistributorError::NotFound(_)) => {}
                 Err(e) => return Err(e),
             }
         }
@@ -276,7 +276,7 @@ fn collect_product_codes(v: &Value, depth: usize, out: &mut Vec<String>) {
     match v {
         Value::Object(m) => {
             if let Some(c) = m.get("productCode").and_then(Value::as_str) {
-                if is_lcsc_part_number(c) {
+                if is_distributor_part_number(c) {
                     out.push(c.to_string());
                     return;
                 }
@@ -306,8 +306,8 @@ pub struct ImportPlan {
 }
 
 /// Library id a part is imported under.
-pub fn import_id(lcsc: &str) -> String {
-    format!("LCSC_{lcsc}")
+pub fn import_id(distributor: &str) -> String {
+    format!("DISTRIBUTOR_{distributor}")
 }
 
 fn spec<'a>(rec: &'a SourcingRecord, names: &[&str]) -> Option<&'a str> {
@@ -317,7 +317,7 @@ fn spec<'a>(rec: &'a SourcingRecord, names: &[&str]) -> Option<&'a str> {
         .map(|s| s.value.as_str())
 }
 
-/// Convert an LCSC display value (`10kΩ`, `100nF`, `4.7µF`) into the short form the EAK
+/// Convert an Distributor display value (`10kΩ`, `100nF`, `4.7µF`) into the short form the EAK
 /// library uses (`10k`, `100n`, `4.7u`).
 fn short_value(raw: &str, unit_suffixes: &[&str]) -> String {
     let mut s = raw.trim().to_string();
@@ -336,10 +336,10 @@ fn passive_template(prefix: &str, package: &str) -> Option<ComponentDef> {
 
 /// Decide how a record maps into the library, or refuse with the reason.
 pub fn import_plan(rec: &SourcingRecord) -> Result<ImportPlan, String> {
-    let lcsc = rec
-        .lcsc_part
+    let distributor = rec
+        .distributor_part
         .as_deref()
-        .ok_or("the record has no LCSC part number")?;
+        .ok_or("the record has no Distributor part number")?;
     let mpn = rec.mpn.as_deref().ok_or("the record has no MPN")?;
     let package = rec
         .package
@@ -381,13 +381,13 @@ pub fn import_plan(rec: &SourcingRecord) -> Result<ImportPlan, String> {
                  (category {:?}). Supported: chip resistors, MLCC capacitors and LEDs in a \
                  package the library holds, and parts whose MPN already exists in the \
                  library. Author the symbol and footprint in the editors, then attach \
-                 {lcsc} to it. Nothing was imported and no footprint was guessed.",
+                 {distributor} to it. Nothing was imported and no footprint was guessed.",
                 rec.category.as_deref().unwrap_or("not stated")
             )
         })?;
 
     let mut def = template.clone();
-    def.id = import_id(lcsc);
+    def.id = import_id(distributor);
     def.name = format!("{mpn} ({package})");
     if let Some(v) = value.filter(|v| !v.is_empty()) {
         def.default_value = v;
@@ -400,15 +400,15 @@ pub fn import_plan(rec: &SourcingRecord) -> Result<ImportPlan, String> {
     def.supplier_offers.clear();
     def.set_offer(
         rec.offer()
-            .unwrap_or_else(|| eak_core::SupplierOffer::bare("lcsc", lcsc)),
+            .unwrap_or_else(|| eak_core::SupplierOffer::bare("distributor", distributor)),
     );
     def.datasheet = rec.datasheet_url.clone();
     def.provenance = format!(
-        "LCSC {lcsc} (sourcing record sha256 {}, state {:?}); symbol and footprint reused from library template {}",
+        "Distributor {distributor} (sourcing record sha256 {}, state {:?}); symbol and footprint reused from library template {}",
         rec.raw_sha256, rec.state, template.id
     );
     notes.push(format!(
-        "symbol, footprint and pin map reused from {}; electrical ratings were NOT taken from LCSC and stay unverified",
+        "symbol, footprint and pin map reused from {}; electrical ratings were NOT taken from Distributor and stay unverified",
         template.id
     ));
     let problems = def.validate();

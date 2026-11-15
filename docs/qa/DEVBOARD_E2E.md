@@ -41,7 +41,7 @@ No crash.
 18 parts (symbols and footprints), 4-point outline, 536 tracks, 41 vias, 0 zones, 1 sheet.
 - ERC: `NO_ERRORS_IN_IMPLEMENTED_CHECKS`. MECH: same, but MECH-001 not evaluated (no height limit declared).
 - DRC: `ERRORS`, 4 findings, all DRC-004 unrouted nets (IO0, IO1, IO4, UART_TX), 7 `not_implemented`.
-- `run_gates jlcpcb_standard`: `required_pads_connected` Fail, `fabricator_capability` Unknown
+- `run_gates fabricator_standard`: `required_pads_connected` Fail, `fabricator_capability` Unknown
   (profile is an unverified transcription).
 - Export manifest status: **DRAFT** (blocking: 4 DRC errors, MECH-001 unevaluated, required_pads_connected fail).
   The package is not manufacturing-ready and EAK does not claim it is.
@@ -100,7 +100,7 @@ Resources: app RSS 74-101 MB, ~2% CPU; claude RSS 330-410 MB, 9-38% CPU. No cras
   (DRC-019 x6, DRC-013 x1 zone islands, DRC-020 x1); 7 `not_implemented`.
 - MECH: `NO_ERRORS_IN_IMPLEMENTED_CHECKS`, 2 `not_implemented`; MECH-001 not evaluated (no height limit).
 - DFM: 6 warnings (DFM-005), 7 `not_implemented`.
-- `run_gates jlcpcb_standard`: `required_pads_connected` Fail, `copper_continuity` Fail (zone has 43
+- `run_gates fabricator_standard`: `required_pads_connected` Fail, `copper_continuity` Fail (zone has 43
   isolated copper islands), `fabricator_capability` Unknown, `electrical_constraints` Unknown (3V3, VBUS
   have no declared current).
 - Export manifest status: **DRAFT** (16 files in `output/rev-21/`). Not manufacturing-ready; EAK does not claim it.

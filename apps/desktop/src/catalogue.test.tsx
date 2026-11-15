@@ -1,22 +1,22 @@
-// LCSC catalogue panel against a mocked Tauri IPC: credentials never come back to the UI, a
-// failed LCSC call shows the reason and no rows, results show how they matched and whether they
+// Distributor catalogue panel against a mocked Tauri IPC: credentials never come back to the UI, a
+// failed Distributor call shows the reason and no rows, results show how they matched and whether they
 // are live/cached/stale, paging uses the page the backend reported. The Rust side is tested
-// headless in src-tauri/tests/catalogue_ipc.rs and crates/eak-manufacturing/src/lcsc_api.rs.
+// headless in src-tauri/tests/catalogue_ipc.rs and crates/eak-manufacturing/src/distributor_api.rs.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CataloguePanel, servedLabel } from "./CataloguePanel";
-import type { CatalogueReply, CatalogueResults, Candidate, LcscView, SourcingRecord } from "./types";
+import type { CatalogueReply, CatalogueResults, Candidate, DistributorView, SourcingRecord } from "./types";
 
 type Call = { cmd: string; args: Record<string, unknown> };
 let calls: Call[];
 
-const rec = (lcsc: string, mpn: string, maker: string): SourcingRecord => ({
-  provider: "LCSC",
-  source_url: "https://api.lcsc.com/rest/api/agent/product/v1/keywordsearch",
+const rec = (distributor: string, mpn: string, maker: string): SourcingRecord => ({
+  provider: "Distributor",
+  source_url: "https://distributor.invalid/rest/api/agent/product/v1/keywordsearch",
   retrieved_at_unix_s: 1,
-  raw_sha256: `sha-${lcsc}`,
-  lcsc_part: lcsc,
+  raw_sha256: `sha-${distributor}`,
+  distributor_part: distributor,
   mpn,
   manufacturer: maker,
   package: "0603",
@@ -42,15 +42,15 @@ const cand = (r: SourcingRecord, kind: Candidate["kind"], reasons: string[]): Ca
   engineering_status: "supplier_listing_only",
 });
 
-const view = (over: Partial<LcscView> = {}): LcscView => ({
+const view = (over: Partial<DistributorView> = {}): DistributorView => ({
   has_credentials: false,
   key_hint: null,
   store_error: null,
   status: { state: "untested", message: "", tested_at_unix_s: null, last_success_unix_s: null },
   requests_this_session: 0,
-  apply_url: "https://www.lcsc.com/agent/apply",
-  host: "https://api.lcsc.com",
-  needs: "LCSC API credentials are not configured.",
+  apply_url: "https://distributor.invalid/agent/apply",
+  host: "https://distributor.invalid",
+  needs: "Distributor API credentials are not configured.",
   ...over,
 });
 
@@ -86,15 +86,15 @@ beforeEach(() => {
     const args = (payload ?? {}) as Record<string, unknown>;
     calls.push({ cmd, args });
     switch (cmd) {
-      case "lcsc_settings_get":
+      case "distributor_settings_get":
         return view();
-      case "lcsc_settings_save":
+      case "distributor_settings_save":
         return view({ has_credentials: true, key_hint: "1234", needs: null });
       case "catalogue_search":
         return searchReply;
       case "parts_save_record":
         return {
-          record: rec(String(args.lcsc), "X", "Y"),
+          record: rec(String(args.distributor), "X", "Y"),
           path: "/p/sourcing/C99.json",
           link: { standing: "needs_authoring", matches: [], unverified: true, import_template: null, explanation: "Author the symbol and footprint later." },
         };
@@ -119,7 +119,7 @@ describe("CataloguePanel", () => {
     render(<CataloguePanel busy={false} onImport={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Show credential status" }));
     await screen.findByText(/No credentials stored/);
-    expect(screen.getByText(/LCSC API credentials are not configured/)).toBeTruthy();
+    expect(screen.getByText(/Distributor API credentials are not configured/)).toBeTruthy();
 
     const secret = screen.getByLabelText("API secret") as HTMLInputElement;
     expect(secret.type).toBe("password");
@@ -127,15 +127,15 @@ describe("CataloguePanel", () => {
     fireEvent.change(secret, { target: { value: "s3cret-value" } });
     fireEvent.click(screen.getByRole("button", { name: "Save credentials" }));
     await screen.findByText(/key …1234/);
-    expect(calls.at(-1)).toEqual({ cmd: "lcsc_settings_save", args: { key: "KEY-ABCD1234", secret: "s3cret-value" } });
+    expect(calls.at(-1)).toEqual({ cmd: "distributor_settings_save", args: { key: "KEY-ABCD1234", secret: "s3cret-value" } });
     expect((screen.getByLabelText("API secret") as HTMLInputElement).value).toBe("");
     expect(document.body.textContent).not.toContain("s3cret-value");
   });
 
-  it("shows ranked results with why they matched, cache age and the LCSC data time, and pages", async () => {
+  it("shows ranked results with why they matched, cache age and the Distributor data time, and pages", async () => {
     const onImport = vi.fn();
     render(<CataloguePanel busy={false} onImport={onImport} />);
-    fireEvent.change(screen.getByLabelText(/LCSC #, MPN or keyword/), { target: { value: "0603WAF1002T5E" } });
+    fireEvent.change(screen.getByLabelText(/Distributor #, MPN or keyword/), { target: { value: "0603WAF1002T5E" } });
     fireEvent.change(screen.getByLabelText("Package"), { target: { value: "0603" } });
     fireEvent.click(screen.getByRole("button", { name: "Search catalogue" }));
     await screen.findByRole("table", { name: "Catalogue results" });
@@ -166,26 +166,26 @@ describe("CataloguePanel", () => {
     expect(screen.queryByRole("button", { name: "Import C99" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Save record C99" }));
     await screen.findByText(/Saved supplier record C99 to \/p\/sourcing\/C99.json/);
-    expect(calls.at(-1)).toEqual({ cmd: "parts_save_record", args: { lcsc: "C99" } });
+    expect(calls.at(-1)).toEqual({ cmd: "parts_save_record", args: { distributor: "C99" } });
 
     searchReply = results(2, false);
     fireEvent.click(screen.getByRole("button", { name: "Next page" }));
     await waitFor(() => expect(calls.at(-1)?.args).toMatchObject({ query: { page: 2 } }));
   });
 
-  it("shows the reason and no rows when LCSC cannot be asked", async () => {
+  it("shows the reason and no rows when Distributor cannot be asked", async () => {
     searchReply = {
       status: "needs_credentials",
-      message: "LCSC API credentials are not configured.",
+      message: "Distributor API credentials are not configured.",
       served: null,
       fetched_at_unix_s: null,
       data: null,
     };
     render(<CataloguePanel busy={false} onImport={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText(/LCSC #, MPN or keyword/), { target: { value: "C25804" } });
+    fireEvent.change(screen.getByLabelText(/Distributor #, MPN or keyword/), { target: { value: "C25804" } });
     fireEvent.click(screen.getByRole("button", { name: "Search catalogue" }));
     await screen.findByText(/needs credentials/);
-    expect(screen.getByText(/LCSC API credentials are not configured/)).toBeTruthy();
+    expect(screen.getByText(/Distributor API credentials are not configured/)).toBeTruthy();
     expect(screen.queryByRole("table", { name: "Catalogue results" })).toBeNull();
   });
 

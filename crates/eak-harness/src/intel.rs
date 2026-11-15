@@ -35,7 +35,7 @@ pub fn tool_specs() -> Vec<(&'static str, &'static str, Value)> {
         ("intel_conflicts", "Constraint conflicts (with engineering trade-offs) and attempts to weaken safety or approved limits.", obj(json!({}), &[])),
         ("intel_impact", "Impact set of changing a requirement, constraint or profile node: every downstream constraint, node, calculation, check and cross-domain review, with the edge that explains each.", obj(json!({"id": s("requirement, constraint or node id, e.g. spec.rail.VIN.voltage, C.spec.rail.3V3.current, block:rail:3V3")}), &["id"])),
         ("intel_applicable", "Constraints that apply to a profile node: its own and every inherited one (with the ancestor it comes from).", obj(json!({"node": s("profile node id, e.g. block:rail:3V3")}), &["node"])),
-        ("intel_lifecycle", "The 13-stage engineering lifecycle as a phase state machine: per stage whether it was entered, its exit criteria (from requirements, constraints and the fail-closed gates) and the current stage. Without fab_profile every gate criterion is Unknown.", obj(json!({"fab_profile": {"type": "string", "enum": ["none", "jlcpcb_standard"], "description": "evaluate the gates with this fabrication profile"}}), &[])),
+        ("intel_lifecycle", "The 13-stage engineering lifecycle as a phase state machine: per stage whether it was entered, its exit criteria (from requirements, constraints and the fail-closed gates) and the current stage. Without fab_profile every gate criterion is Unknown.", obj(json!({"fab_profile": {"type": "string", "enum": ["none", "fabricator_standard"], "description": "evaluate the gates with this fabrication profile"}}), &[])),
     ]
 }
 

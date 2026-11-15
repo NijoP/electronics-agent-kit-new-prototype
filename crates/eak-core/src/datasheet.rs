@@ -147,7 +147,7 @@ impl DatasheetValue {
 /// A supplier listing for a part. Not engineering identity and not proof of suitability.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SupplierRef {
-    /// `lcsc`, ...
+    /// `distributor`, ...
     pub supplier: String,
     pub supplier_part: String,
     #[serde(default)]

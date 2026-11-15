@@ -12,9 +12,9 @@ pub mod bom;
 pub mod drill;
 pub mod fabpack;
 pub mod gerber;
-pub mod jlcpcb;
-pub mod lcsc;
-pub mod lcsc_api;
+pub mod fabricator;
+pub mod distributor;
+pub mod distributor_api;
 pub mod library_link;
 pub mod matching;
 pub mod provider;
@@ -78,7 +78,7 @@ fn sha(data: &[u8]) -> String {
 }
 
 /// BOM grouped by value, footprint and MPN: one line per distinct part to buy and place.
-/// LCSC and manufacturer come from the first component definition of each group.
+/// Distributor and manufacturer come from the first component definition of each group.
 pub fn bom_csv(p: &Project) -> String {
     type Row = (Vec<String>, String, String);
     let mut groups: BTreeMap<(String, String, String), Row> = BTreeMap::new();
@@ -91,7 +91,7 @@ pub fn bom_csv(p: &Project) -> String {
             .or_insert_with(|| {
                 (
                     vec![],
-                    def.and_then(|d| d.lcsc.clone()).unwrap_or_default(),
+                    def.and_then(|d| d.distributor.clone()).unwrap_or_default(),
                     def.and_then(|d| d.manufacturer.clone()).unwrap_or_default(),
                 )
             });
@@ -99,15 +99,15 @@ pub fn bom_csv(p: &Project) -> String {
     }
     let q = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
     let mut out =
-        String::from("Comment,Designator,Footprint,LCSC Part #,Manufacturer,MPN,Quantity\n");
-    for ((value, footprint, mpn), (mut refs, lcsc, manufacturer)) in groups {
+        String::from("Comment,Designator,Footprint,Distributor Part #,Manufacturer,MPN,Quantity\n");
+    for ((value, footprint, mpn), (mut refs, distributor, manufacturer)) in groups {
         refs.sort_by_key(|a| natural(a));
         out.push_str(&format!(
             "{},{},{},{},{},{},{}\n",
             q(&value),
             q(&refs.join(",")),
             q(&footprint),
-            q(&lcsc),
+            q(&distributor),
             q(&manufacturer),
             q(&mpn),
             refs.len()

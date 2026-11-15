@@ -1,4 +1,4 @@
-//! LCSC sourcing records, offline-first.
+//! Distributor sourcing records, offline-first.
 //!
 //! This module performs no network access. The fetch boundary is [`ingest_product_detail`]:
 //! it takes the raw response bytes, the URL they came from and the retrieval time, and
@@ -18,7 +18,7 @@
 
 use eak_core::{ComponentDef, OfferPrice, SupplierOffer};
 use eak_runtime::{Actor, ActorKind};
-use eak_validation::sourcing::is_lcsc_part_number;
+use eak_validation::sourcing::is_distributor_part_number;
 pub use eak_validation::sourcing::{SupplierPart, VerificationState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -114,11 +114,11 @@ pub struct SourcingRecord {
     /// SHA-256 of the raw response bytes exactly as received.
     pub raw_sha256: String,
     pub raw_bytes: u64,
-    pub lcsc_part: Option<String>,
+    pub distributor_part: Option<String>,
     pub mpn: Option<String>,
     pub manufacturer: Option<String>,
     pub package: Option<String>,
-    /// Catalogue path as LCSC wrote it (`parent / sub` category), when stated.
+    /// Catalogue path as Distributor wrote it (`parent / sub` category), when stated.
     #[serde(default)]
     pub category: Option<String>,
     pub description: Option<String>,
@@ -162,9 +162,9 @@ fn https_host(url: &str) -> Result<&str, String> {
     Ok(host)
 }
 
-fn is_lcsc_host(host: &str) -> bool {
+fn is_distributor_host(host: &str) -> bool {
     let h = host.to_ascii_lowercase();
-    h == "lcsc.com" || h.ends_with(".lcsc.com")
+    h == "distributor.invalid" || h.ends_with(".distributor.invalid")
 }
 
 /// A bounded, printable, non-empty text field, returned exactly as written.
@@ -272,22 +272,22 @@ fn list<T>(
     out
 }
 
-/// The fetch boundary: turn one raw LCSC product-detail response into a record.
+/// The fetch boundary: turn one raw Distributor product-detail response into a record.
 ///
 /// `raw` is the response body exactly as received, `source_url` the https URL on
-/// `lcsc.com` it came from, `retrieved_at_unix_s` when it was retrieved. Accepted shapes
+/// `distributor.invalid` it came from, `retrieved_at_unix_s` when it was retrieved. Accepted shapes
 /// are the product object itself or the `{"code": 200, "result": {...}}` envelope. The
 /// field mapping is listed in `docs/engineering/sourcing.md`; it has not been checked
-/// against LCSC's own API documentation.
+/// against Distributor's own API documentation.
 pub fn ingest_product_detail(
     raw: &[u8],
     source_url: &str,
     retrieved_at_unix_s: u64,
 ) -> Result<SourcingRecord, SourcingError> {
     let host = https_host(source_url).map_err(SourcingError::BadSourceUrl)?;
-    if !is_lcsc_host(host) {
+    if !is_distributor_host(host) {
         return Err(SourcingError::BadSourceUrl(format!(
-            "{host} is not an lcsc.com host"
+            "{host} is not an distributor.invalid host"
         )));
     }
     if raw.len() > MAX_RESPONSE_BYTES {
@@ -320,12 +320,12 @@ pub fn ingest_product_detail(
         missing: vec![],
         rejected: vec![],
     };
-    let lcsc_part = f.get("productCode", Some("lcsc_part"), |v| {
+    let distributor_part = f.get("productCode", Some("distributor_part"), |v| {
         text(v).and_then(|s| {
-            if is_lcsc_part_number(&s) {
+            if is_distributor_part_number(&s) {
                 Ok(s)
             } else {
-                Err("not an LCSC part number (C followed by digits)".into())
+                Err("not an Distributor part number (C followed by digits)".into())
             }
         })
     });
@@ -371,12 +371,12 @@ pub fn ingest_product_detail(
     f.rejected.extend(list_rejects);
 
     Ok(SourcingRecord {
-        provider: "LCSC".into(),
+        provider: "Distributor".into(),
         source_url: source_url.to_string(),
         retrieved_at_unix_s,
         raw_sha256: sha(raw),
         raw_bytes: raw.len() as u64,
-        lcsc_part,
+        distributor_part,
         mpn,
         manufacturer,
         package,
@@ -492,12 +492,12 @@ impl SourcingRecord {
         Ok(())
     }
 
-    /// This record's commercial side as a [`SupplierOffer`] (ADR-0028): LCSC number, stock,
-    /// price breaks and fetch time, none of it identity. `None` without an LCSC number. The
+    /// This record's commercial side as a [`SupplierOffer`] (ADR-0028): Distributor number, stock,
+    /// price breaks and fetch time, none of it identity. `None` without an Distributor number. The
     /// record carries no lifecycle field, so the offer's `lifecycle` stays `None` (not reported).
     pub fn offer(&self) -> Option<SupplierOffer> {
-        let part = self.lcsc_part.clone()?;
-        let mut offer = SupplierOffer::bare("lcsc", &part);
+        let part = self.distributor_part.clone()?;
+        let mut offer = SupplierOffer::bare("distributor", &part);
         offer.url = Some(self.source_url.clone());
         offer.stock = self.stock;
         offer.price_breaks = self
@@ -514,10 +514,10 @@ impl SourcingRecord {
         Some(offer)
     }
 
-    /// The facts the `SOURCING` verification report consumes. `None` without an LCSC number.
+    /// The facts the `SOURCING` verification report consumes. `None` without an Distributor number.
     pub fn supplier_part(&self) -> Option<SupplierPart> {
         Some(SupplierPart {
-            lcsc: self.lcsc_part.clone()?,
+            distributor: self.distributor_part.clone()?,
             mpn: self.mpn.clone(),
             package: self.package.clone(),
             datasheet_sha256: self.datasheet.as_ref().map(|d| d.sha256.clone()),
@@ -526,17 +526,17 @@ impl SourcingRecord {
     }
 }
 
-/// Copy a record's identity (manufacturer, MPN, LCSC part number, datasheet URL) into a
+/// Copy a record's identity (manufacturer, MPN, Distributor part number, datasheet URL) into a
 /// copy of a library definition, for submission through `Command::UpsertComponentDefinition`.
 ///
 /// Ratings, pins, pads and the pin map are never touched: supplier data does not override
 /// library engineering data. An identity field the definition already holds with a
 /// different value is a conflict and is refused, not overwritten.
 pub fn apply_identity(def: &ComponentDef, rec: &SourcingRecord) -> Result<ComponentDef, String> {
-    let lcsc = rec
-        .lcsc_part
+    let distributor = rec
+        .distributor_part
         .as_ref()
-        .ok_or("sourcing record has no LCSC part number")?;
+        .ok_or("sourcing record has no Distributor part number")?;
     let mpn = rec.mpn.as_ref().ok_or("sourcing record has no MPN")?;
     let held = |slot: &Option<String>| {
         slot.as_deref()
@@ -546,15 +546,15 @@ pub fn apply_identity(def: &ComponentDef, rec: &SourcingRecord) -> Result<Compon
     };
     for (name, old, new) in [
         (
-            "LCSC part number",
-            &def.supplier_part("lcsc").map(String::from),
-            lcsc,
+            "Distributor part number",
+            &def.supplier_part("distributor").map(String::from),
+            distributor,
         ),
         ("MPN", &def.mpn, mpn),
     ] {
         if let Some(old) = held(old).filter(|old| !old.eq_ignore_ascii_case(new)) {
             return Err(format!(
-                "{}: {name} is already {old:?}; refusing to replace it with {new:?} from {lcsc}",
+                "{}: {name} is already {old:?}; refusing to replace it with {new:?} from {distributor}",
                 def.id
             ));
         }
@@ -562,14 +562,14 @@ pub fn apply_identity(def: &ComponentDef, rec: &SourcingRecord) -> Result<Compon
     let mut out = def.clone();
     out.set_offer(
         rec.offer()
-            .ok_or("sourcing record has no LCSC part number")?,
+            .ok_or("sourcing record has no Distributor part number")?,
     );
     out.mpn = held(&def.mpn).or_else(|| Some(mpn.clone()));
     // Manufacturer and datasheet only fill a gap; an existing library value is kept.
     out.manufacturer = held(&def.manufacturer).or_else(|| rec.manufacturer.clone());
     out.datasheet = held(&def.datasheet).or_else(|| rec.datasheet_url.clone());
     out.provenance = format!(
-        "{}; sourcing identity from LCSC record {lcsc} (sha256 {}, state {:?})",
+        "{}; sourcing identity from Distributor record {distributor} (sha256 {}, state {:?})",
         def.provenance,
         rec.raw_sha256,
         rec.evidence_state()
@@ -578,7 +578,7 @@ pub fn apply_identity(def: &ComponentDef, rec: &SourcingRecord) -> Result<Compon
 }
 
 /// Case-insensitive offline search over records already held locally: every
-/// whitespace-separated term must occur in the LCSC number, MPN, manufacturer, package or
+/// whitespace-separated term must occur in the Distributor number, MPN, manufacturer, package or
 /// description. Results are search hits in whatever state their evidence supports.
 pub fn search<'a>(records: &'a [SourcingRecord], query: &str) -> Vec<&'a SourcingRecord> {
     let terms: Vec<String> = query
@@ -592,7 +592,7 @@ pub fn search<'a>(records: &'a [SourcingRecord], query: &str) -> Vec<&'a Sourcin
         .iter()
         .filter(|r| {
             let hay = [
-                &r.lcsc_part,
+                &r.distributor_part,
                 &r.mpn,
                 &r.manufacturer,
                 &r.package,
@@ -608,16 +608,16 @@ pub fn search<'a>(records: &'a [SourcingRecord], query: &str) -> Vec<&'a Sourcin
         .collect()
 }
 
-/// Store a record as `<dir>/<LCSC part number>.json` (atomic write).
+/// Store a record as `<dir>/<Distributor part number>.json` (atomic write).
 pub fn write_record(dir: &Path, rec: &SourcingRecord) -> Result<PathBuf, SourcingError> {
-    let lcsc = rec
-        .lcsc_part
+    let distributor = rec
+        .distributor_part
         .as_deref()
-        .filter(|l| is_lcsc_part_number(l))
-        .ok_or_else(|| SourcingError::Io("record has no LCSC part number to store under".into()))?;
+        .filter(|l| is_distributor_part_number(l))
+        .ok_or_else(|| SourcingError::Io("record has no Distributor part number to store under".into()))?;
     let io = |e: std::io::Error| SourcingError::Io(e.to_string());
     std::fs::create_dir_all(dir).map_err(io)?;
-    let path = dir.join(format!("{lcsc}.json"));
+    let path = dir.join(format!("{distributor}.json"));
     let json = serde_json::to_string_pretty(rec).map_err(|e| SourcingError::Io(e.to_string()))?;
     eak_runtime::store::atomic_write(&path, json.as_bytes()).map_err(io)?;
     Ok(path)

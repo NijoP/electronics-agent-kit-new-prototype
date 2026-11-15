@@ -1,4 +1,4 @@
-//! Bill of materials derived from the EAK-IR, joined with locally stored LCSC sourcing
+//! Bill of materials derived from the EAK-IR, joined with locally stored Distributor sourcing
 //! records.
 //!
 //! The BOM is computed, never stored: it is a view of the schematic symbols, the library
@@ -8,28 +8,28 @@
 
 use crate::sourcing::SourcingRecord;
 use eak_core::{PadKind, Project};
-use eak_validation::sourcing::is_lcsc_part_number;
+use eak_validation::sourcing::is_distributor_part_number;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BomLine {
     pub component_id: String,
-    /// Value as placed on the symbol (JLCPCB "Comment").
+    /// Value as placed on the symbol (Fabricator "Comment").
     pub value: String,
     pub designators: Vec<String>,
     pub quantity: usize,
     pub footprint: String,
-    pub lcsc: Option<String>,
+    pub distributor: Option<String>,
     pub manufacturer: Option<String>,
     pub mpn: Option<String>,
     /// Every pad of the footprint is surface mount.
     pub smd: bool,
     /// Designators that have a footprint placed on the PCB.
     pub placed: usize,
-    /// Stock at the time the stored LCSC record was retrieved.
+    /// Stock at the time the stored Distributor record was retrieved.
     pub stock: Option<u64>,
-    /// Unit price (USD, decimal text from LCSC) at this line's quantity.
+    /// Unit price (USD, decimal text from Distributor) at this line's quantity.
     pub unit_price_usd: Option<String>,
     /// Unix seconds the stored record was retrieved.
     pub price_as_of_unix_s: Option<u64>,
@@ -37,7 +37,7 @@ pub struct BomLine {
 }
 
 impl BomLine {
-    /// The line belongs in the JLCPCB assembly BOM: surface mount and placed on the board.
+    /// The line belongs in the Fabricator assembly BOM: surface mount and placed on the board.
     pub fn assembled(&self) -> bool {
         self.smd && self.placed > 0
     }
@@ -79,7 +79,7 @@ pub fn build(p: &Project, records: &[SourcingRecord]) -> Vec<BomLine> {
                 placed: n_placed,
                 designators: refs,
                 footprint: String::new(),
-                lcsc: None,
+                distributor: None,
                 manufacturer: None,
                 mpn: None,
                 smd: false,
@@ -89,23 +89,23 @@ pub fn build(p: &Project, records: &[SourcingRecord]) -> Vec<BomLine> {
             });
             continue;
         };
-        let lcsc = def
-            .lcsc
+        let distributor = def
+            .distributor
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(String::from);
         let mut issues = vec![];
-        match &lcsc {
-            None => issues.push("no LCSC part number".to_string()),
-            Some(c) if !is_lcsc_part_number(c) => {
-                issues.push(format!("{c:?} is not an LCSC part number"))
+        match &distributor {
+            None => issues.push("no Distributor part number".to_string()),
+            Some(c) if !is_distributor_part_number(c) => {
+                issues.push(format!("{c:?} is not an Distributor part number"))
             }
             _ => {}
         }
-        let record = lcsc.as_ref().and_then(|c| {
+        let record = distributor.as_ref().and_then(|c| {
             records.iter().find(|r| {
-                r.lcsc_part
+                r.distributor_part
                     .as_deref()
                     .is_some_and(|x| x.eq_ignore_ascii_case(c))
             })
@@ -114,7 +114,7 @@ pub fn build(p: &Project, records: &[SourcingRecord]) -> Vec<BomLine> {
         let (stock, unit_price_usd, as_of) = match record {
             Some(r) => {
                 if let Some(s) = r.stock.filter(|s| *s < qty) {
-                    issues.push(format!("stored LCSC stock {s} is below the quantity {qty}"));
+                    issues.push(format!("stored Distributor stock {s} is below the quantity {qty}"));
                 }
                 let price = r
                     .price_breaks
@@ -143,7 +143,7 @@ pub fn build(p: &Project, records: &[SourcingRecord]) -> Vec<BomLine> {
             placed: n_placed,
             designators: refs,
             footprint: def.footprint.name.clone(),
-            lcsc,
+            distributor,
             manufacturer: def.manufacturer.clone(),
             mpn: def.mpn.clone(),
             smd,
@@ -166,17 +166,17 @@ fn q(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
-/// JLCPCB assembly BOM: the four columns of JLCPCB's own template, surface-mount lines that
+/// Fabricator assembly BOM: the four columns of Fabricator's own template, surface-mount lines that
 /// are placed on the board.
-pub fn jlcpcb_csv(lines: &[BomLine]) -> String {
-    let mut out = String::from("Comment,Designator,Footprint,LCSC Part #\n");
+pub fn fabricator_csv(lines: &[BomLine]) -> String {
+    let mut out = String::from("Comment,Designator,Footprint,Distributor Part #\n");
     for l in lines.iter().filter(|l| l.assembled()) {
         out.push_str(&format!(
             "{},{},{},{}\n",
             q(&l.value),
             q(&l.designators.join(",")),
             q(&l.footprint),
-            q(l.lcsc.as_deref().unwrap_or(""))
+            q(l.distributor.as_deref().unwrap_or(""))
         ));
     }
     out
@@ -186,7 +186,7 @@ pub fn jlcpcb_csv(lines: &[BomLine]) -> String {
 /// snapshot and issues. Not for upload.
 pub fn detail_csv(lines: &[BomLine]) -> String {
     let mut out = String::from(
-        "Comment,Designator,Footprint,LCSC Part #,Manufacturer,MPN,Quantity,Assembled by JLCPCB,Stock (stored record),Unit price USD (stored record),Issues\n",
+        "Comment,Designator,Footprint,Distributor Part #,Manufacturer,MPN,Quantity,Assembled by Fabricator,Stock (stored record),Unit price USD (stored record),Issues\n",
     );
     for l in lines {
         out.push_str(&format!(
@@ -194,7 +194,7 @@ pub fn detail_csv(lines: &[BomLine]) -> String {
             q(&l.value),
             q(&l.designators.join(",")),
             q(&l.footprint),
-            q(l.lcsc.as_deref().unwrap_or("")),
+            q(l.distributor.as_deref().unwrap_or("")),
             q(l.manufacturer.as_deref().unwrap_or("")),
             q(l.mpn.as_deref().unwrap_or("")),
             l.quantity,

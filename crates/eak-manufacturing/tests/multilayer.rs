@@ -52,12 +52,12 @@ fn four_layer_board_passes_drc_and_exports_every_layer() {
 
     let dir = std::env::temp_dir().join(format!("eak-ml4-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    // The built-in JLCPCB profile is 1-2 layer; this board needs a 4-layer profile, else DFM-008.
-    assert!(dfm::run(p, &dfm::jlcpcb_standard())
+    // The built-in Fabricator profile is 1-2 layer; this board needs a 4-layer profile, else DFM-008.
+    assert!(dfm::run(p, &dfm::fabricator_standard())
         .findings
         .iter()
         .any(|f| f.rule_id == "DFM-008"));
-    let mut fab4 = dfm::jlcpcb_standard();
+    let mut fab4 = dfm::fabricator_standard();
     fab4.max_layers = 4;
     let dfm_r = dfm::run(p, &fab4);
     assert_eq!(dfm_r.errors, 0, "{:?}", dfm_r.findings);
@@ -109,13 +109,13 @@ fn four_layer_board_passes_drc_and_exports_every_layer() {
 }
 
 #[test]
-fn jlcpcb_check_reports_blind_vias_and_unverified_limits() {
+fn fabricator_check_reports_blind_vias_and_unverified_limits() {
     let e = board(4);
-    let c = stackup::jlcpcb_check(e.project());
+    let c = stackup::fabricator_check(e.project());
     assert!(c.limits_unverified && !c.not_checked.is_empty());
     assert_eq!(c.copper_layers, 4);
     assert!(
-        c.findings.iter().any(|f| f.id == "JLC-STK-005"),
+        c.findings.iter().any(|f| f.id == "Fab-STK-005"),
         "{:?}",
         c.findings
     );

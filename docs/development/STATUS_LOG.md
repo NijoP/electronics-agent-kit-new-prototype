@@ -50,24 +50,24 @@ override. Only `rustfmt` (syntax) ran. Treat everything below as unverified unti
   stale revision, project mismatch, approval; MCP stdio round trip; routing through the app endpoint + token rejection).
 - **Not done:** autonomous design loop; per-call human approval UI for agent edits; Windows named pipes.
 
-## LCSC parts search, BOM and JLCPCB preparation (2026-11-14, branch fm/eak-o2-lcsc-jlcpcb)
+## Distributor parts search, BOM and Fabricator preparation (2026-11-14, branch fm/eak-o2-distributor-fabricator)
 
 **Platform tested:** Linux, Rust stable, Node. No window was opened: the panels are verified by vitest (jsdom, mocked
 IPC) and by headless Rust IPC tests only. Not verified in a real WebView. Exact command results are in the PR body.
 
 - **Implemented and tested:**
-  - `eak-manufacturing::lcsc`: read-only product lookup by LCSC part number (`/ftps/wm/product/detail`) over ureq + rustls,
+  - `eak-manufacturing::distributor`: read-only product lookup by Distributor part number (`/ftps/wm/product/detail`) over ureq + rustls,
     ingested through the audited `ingest_product_detail` boundary (state stays `SearchHit`). Tests run over real HTTP against a
     local test server, never the live site.
   - Import into the library: `import_plan` reuses the symbol, footprint and pin map of an existing library template
     (chip resistor, MLCC capacitor or LED in a package the library holds, or an exact MPN match) and the desktop submits
-    `Command::UpsertComponentDefinition` as the Human actor with the rendered revision. LCSC supplies identity only
-    (manufacturer, MPN, LCSC number, datasheet URL); ratings stay unverified. The record is stored in `<project>/sourcing/`.
+    `Command::UpsertComponentDefinition` as the Human actor with the rendered revision. Distributor supplies identity only
+    (manufacturer, MPN, Distributor number, datasheet URL); ratings stay unverified. The record is stored in `<project>/sourcing/`.
   - `eak-manufacturing::bom`: BOM view joined with stored records (stock and price shown as a snapshot with its retrieval time),
-    JLCPCB-format BOM (`Comment, Designator, Footprint, LCSC Part #`) and a review BOM.
-  - `eak-manufacturing::jlcpcb`: JLCPCB CPL (`Designator, Mid X, Mid Y, Layer, Rotation`, surface-mount only), Gerber + Excellon
+    Fabricator-format BOM (`Comment, Designator, Footprint, Distributor Part #`) and a review BOM.
+  - `eak-manufacturing::fabricator`: Fabricator CPL (`Designator, Mid X, Mid Y, Layer, Rotation`, surface-mount only), Gerber + Excellon
     `.zip` (dependency-free store-only writer, CRC-checked in tests), a DFM check against the 2-layer 1 oz limits read from
-    JLCPCB's published capability page on 2026-11-14 (14 evaluated rules, 6 listed as `not_checked`), and a manifest labelled
+    Fabricator's published capability page on 2026-11-14 (14 evaluated rules, 6 listed as `not_checked`), and a manifest labelled
     "PREPARED FOR REVIEW". Nothing is uploaded, quoted or ordered.
   - Desktop: Parts panel (search, results with stock/price/package/datasheet link, import) and Manufacturing panel (BOM view,
     DFM results, bundle written to a folder the user types; foreign non-empty folders and relative paths are refused).
@@ -79,10 +79,10 @@ IPC) and by headless Rust IPC tests only. Not verified in a real WebView. Exact 
   reads product codes from it and then fetches each through the verified detail path, and the one test of that path uses an
   assumed shape.
 - **Limitations (unsupported / unverified):** no EasyEDA footprint import, so a part with no template in the library is refused
-  with the reason rather than guessed; CPL rotation/polarity is not corrected per package (JLC-051 `not_checked`); basic vs
-  extended assembly classification and fees are not known (JLC-050); silkscreen, soldermask, slot and pour rules are not
-  evaluated; pad shapes are measured as their bounding rectangle; JLCPCB's limits can change and its own DFM is authoritative;
-  no real JLCPCB upload of the bundle was attempted; the Gerber zip has not been opened by a fabricator's viewer.
+  with the reason rather than guessed; CPL rotation/polarity is not corrected per package (Fab-051 `not_checked`); basic vs
+  extended assembly classification and fees are not known (Fab-050); silkscreen, soldermask, slot and pour rules are not
+  evaluated; pad shapes are measured as their bounding rectangle; Fabricator's limits can change and its own DFM is authoritative;
+  no real Fabricator upload of the bundle was attempted; the Gerber zip has not been opened by a fabricator's viewer.
 
 
 ## AI panel on the real agent loop (2026-11-14)
@@ -97,7 +97,7 @@ IPC) and by headless Rust IPC tests only. Not verified in a real WebView. Exact 
 ### Implemented and tested
 - ERC-014 pin-conflict matrix (Output/OpenCollector, PowerOut/OpenCollector errors; Bidirectional/PowerOut, Output/PowerIn warnings), ERC-015 undriven input nets, ERC-016 power-net checks (PowerOut on ground = error; power net without a declared voltage = warning).
 - DRC-018 copper-to-hole (other-net copper vs drill edge, project min clearance), DRC-019 hole-to-hole (0.5 mm EAK default, unverified), DRC-020 silkscreen-to-board-edge (0.2 mm EAK default, unverified).
-- DFM (`eak-validation/src/dfm.rs`, DFM-001..010) against `data/fab-jlcpcb-standard.json` (JLCPCB standard 1-2 layer; source URL recorded; `verified: false`). DFM is now a release gate (ADR-0014).
+- DFM (`eak-validation/src/dfm.rs`, DFM-001..010) against `data/fab-fabricator-standard.json` (Fabricator standard 1-2 layer; source URL recorded; `verified: false`). DFM is now a release gate (ADR-0014).
 - Manufacturing: BOM grouped by value/footprint/MPN, CPL (pick-and-place), `<stem>-fab-pack.zip` (Gerber + drill + README of layers, CRC-checked by `verify_package`) and the README beside it.
 - Desktop: `run_check("dfm")` (palette "Run DFM", Design menu), DFM section in the Engineering Monitor, export runs and lists ERC/DRC/MECH/DFM in the export panel.
 - Tests executed (Linux, debug): fmt and clippy clean for eak-validation, eak-manufacturing and eak-engineering; eak-validation lib 5, actionable_findings 15, phase4 8, stackup 1; eak-manufacturing lib 3, end_to_end 5, multilayer 4; eak-engineering lib 27; desktop tsc clean and vitest 102/102.
@@ -131,7 +131,7 @@ files `FEATURE_MATRIX.md`, `IMPLEMENTATION_LOG.md` and `TEST_RESULTS.md`. The te
 - Maturity ceiling (`Maturity::ceiling`): guidance for a class is shown as "Review prompts (unverified)" unless its DESK label is VERIFIED_AGAINST_SOURCE or LIVE_VERIFIED; BLOCKED shows nothing. EAK adds no evidence of its own.
 - Tests: `tests/domain.rs` (11: registry counts and consistency against DESK, every one of the 100 classes ranks first for a design naming its own keywords, ESP32 dashboard, buck power supply, brushed motor driver, mains-plus-controller needs review, empty design unclassified, determinism, maturity ceilings, not-implemented lists), unit tests in `domain/features.rs`, `ipc.rs::domain_classification_is_revision_bound_and_needs_no_model`, vitest `DomainPanel.test.tsx` (5).
 
-- **Library panel (Phase 5 slice, ADR-0015):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/LCSC editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
+- **Library panel (Phase 5 slice, ADR-0015):** search/filter, symbol and footprint preview, provenance, place, MPN/manufacturer/Distributor editing and footprint assignment over typed commands. Not yet: licence field and per-field evidence (schema bump), user library folder, symbol/footprint editors, supplier search (PR #17).
 
 ### Not verified / not implemented
 - DESK's rule engine is not ported: per-class rule ids are listed, **no DESK rule is evaluated**, and required component roles are not checked against the design. Every result says so (`not_implemented`, `limitations`).
@@ -342,7 +342,7 @@ the command API:
 4. Package status: InternallyVerifiedReleaseCandidate; the package re-verifies and tampering is detected.
 Injected short and clearance violations are detected (`drc_detects_injected_short_and_clearance_violation`).
 
-### LCSC sourcing, offline only (2026-11-13)
+### Distributor sourcing, offline only (2026-11-13)
 Implemented and tested on Windows 11 only. Details: `docs/engineering/sourcing.md`; test
 matrix: `docs/engineering/INTEGRATION_TEST_MATRIX.md`.
 - Sourcing records (`eak-manufacturing/src/sourcing.rs`): built from raw response bytes, a source
@@ -350,8 +350,8 @@ matrix: `docs/engineering/INTEGRATION_TEST_MATRIX.md`.
   as parsed, and lists of missing and rejected fields.
 - Verification states: search hit, datasheet-matched (hashed PDF that names the MPN), verified
   (named human reviewer against that datasheet hash). A search hit is never a verified part.
-- `SOURCING` report (`eak-validation/src/sourcing.rs`): 12 rules covering missing MPN, LCSC number,
-  datasheet and ratings, BOM-to-LCSC mapping, record state, and symbol, footprint and package
+- `SOURCING` report (`eak-validation/src/sourcing.rs`): 12 rules covering missing MPN, Distributor number,
+  datasheet and ratings, BOM-to-Distributor mapping, record state, and symbol, footprint and package
   consistency. It is not part of the manufacturing release gate.
 - Tests: 9 offline fixture tests and 6 unit tests, all passing. Fixtures are synthetic.
   Full run with these added, `cargo test --workspace --release`: **50 passed, 0 failed**
@@ -359,10 +359,10 @@ matrix: `docs/engineering/INTEGRATION_TEST_MATRIX.md`.
   eak-manufacturing 3 end-to-end + 9 sourcing). Clippy with `-D warnings` and `cargo fmt --check`: clean.
 
 Not done, and not to be read as done:
-- **No network access exists.** No live LCSC search, stock, price or datasheet retrieval, and no
-  network-dependent test. Neither LCSC nor JLCPCB offers documented machine access without
+- **No network access exists.** No live Distributor search, stock, price or datasheet retrieval, and no
+  network-dependent test. Neither Distributor nor Fabricator offers documented machine access without
   private credentials; the choice of access route is an open product-owner decision.
-- **The LCSC field mapping is unverified.** LCSC's site refused the automated browser, so its
+- **The Distributor field mapping is unverified.** Distributor's site refused the automated browser, so its
   API documentation could not be read; the mapping follows third-party reports.
 - Datasheet matching reads uncompressed PDF bytes only. Ratings, pinouts and land patterns are
   not extracted from datasheets.
@@ -372,7 +372,7 @@ Not done, and not to be read as done:
 - Desktop application: superseded. See "Desktop shell" above (read-only views; editors not started).
 - Intelligence Engine: core crate exists (see below); no live-provider run, no context engine/skills.
 - Symbol/footprint editors, 3D viewport UI, Terminal Center UI, research browser.
-- Live LCSC keyword search (HTTP 403 observed), basic/extended assembly classification, EasyEDA footprint import; JLCPCB multilayer checks (see the LCSC section above).
+- Live Distributor keyword search (HTTP 403 observed), basic/extended assembly classification, EasyEDA footprint import; Fabricator multilayer checks (see the Distributor section above).
 - Differential pairs, impedance, inner-layer autorouting.
 - Per-zone / per-pad thermal-relief settings (needs an IR change and an ADR); silkscreen
   legibility, overlap and board-edge checks; user-placed silkscreen text and graphics.
@@ -435,7 +435,7 @@ installed. Development is proceeding directly in this repository.
 - Not done: top menus, document tabs bound to backend document identity (dirty/save-before-close), dockable/resizable/persisted panel layout, per-net highlight, 60 fps pan/zoom measurement, real-window tests.
 
 ## Multilayer boards (2026-11-14)
-- Stackup 2-16 copper layers (signal/plane, per-layer copper and dielectric), `SetLayerCount`, inner-layer tracks and zones, through/blind/buried vias, plane zones with thermal reliefs, DRC-016/017, one Gerber per copper layer, per-span drill files, `stackup.json`, JLCPCB stackup check (limits unverified). PCB editor: layer count, visibility, active layer, via span, plane fill. See ADR-0012.
+- Stackup 2-16 copper layers (signal/plane, per-layer copper and dielectric), `SetLayerCount`, inner-layer tracks and zones, through/blind/buried vias, plane zones with thermal reliefs, DRC-016/017, one Gerber per copper layer, per-span drill files, `stackup.json`, Fabricator stackup check (limits unverified). PCB editor: layer count, visibility, active layer, via span, plane fill. See ADR-0012.
 - Not done: autorouting on inner layers, per-via plane relief settings, impedance, fabricator-verified limits.
 
 ## Desktop workspace, Part 4 slice: menus, document tabs, persisted layout (2026-11-14)

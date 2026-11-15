@@ -12,7 +12,7 @@ use crate::copper::{pad_shape, Core, Shape};
 use eak_core::geom::point_segment_distance;
 use eak_core::{CopperLayer, Id, Nm, PadKind, Point, Project, Rect, Side};
 
-/// Legend stroke width: 0.16 mm, above the 0.153 mm JLCPCB minimum (DFM-010).
+/// Legend stroke width: 0.16 mm, above the 0.153 mm Fabricator minimum (DFM-010).
 pub const LINE_WIDTH: Nm = 160_000;
 /// Cap height of reference-designator text.
 pub const TEXT_HEIGHT: Nm = 1_000_000;

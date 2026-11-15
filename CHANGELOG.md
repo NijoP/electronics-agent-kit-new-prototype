@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased - LCSC parts search and JLCPCB preparation
-- `eak-manufacturing`: `lcsc` (read-only LCSC product lookup over ureq + rustls, keyword search that reports LCSC's HTTP 403
+## Unreleased - Distributor parts search and Fabricator preparation
+- `eak-manufacturing`: `distributor` (read-only Distributor product lookup over ureq + rustls, keyword search that reports Distributor's HTTP 403
   instead of faking results, import plan onto existing library templates), `bom` (BOM view joined with stored sourcing
-  records, JLCPCB-format BOM), `jlcpcb` (CPL, DFM check against JLCPCB's published 2-layer limits, "prepared for review"
+  records, Fabricator-format BOM), `fabricator` (CPL, DFM check against Fabricator's published 2-layer limits, "prepared for review"
   bundle) and `zip` (dependency-free store-only writer). `SourcingRecord` gains an optional `category`.
-- Desktop: `parts_search`, `parts_import`, `manufacturing_preview`, `jlcpcb_prepare` IPC commands; Parts and Manufacturing
+- Desktop: `parts_search`, `parts_import`, `manufacturing_preview`, `fabricator_prepare` IPC commands; Parts and Manufacturing
   panels; imported parts appear in the editors' part picker. No new `Command` (import uses `UpsertComponentDefinition`).
 - New dependency (feature `live-http`, on by default): `ureq` 3 with rustls, the client already approved for model providers.
 
@@ -62,10 +62,10 @@
   process supervisor, task model, SQLite index.
 - Manufacturing compiler: Gerber, Excellon, BOM, CPL, SHA-256 manifest, release gate, package verification.
 - Three-OS CI workflow and Python-free policy scan.
-- LCSC sourcing, offline only: provenance-carrying sourcing records with search-hit, datasheet-matched
-  and verified states; `SOURCING` report (12 rules) for missing data, BOM-to-LCSC mapping and
+- Distributor sourcing, offline only: provenance-carrying sourcing records with search-hit, datasheet-matched
+  and verified states; `SOURCING` report (12 rules) for missing data, BOM-to-Distributor mapping and
   symbol, footprint and package consistency; synthetic offline fixtures. No network client.
-- Access and terms research for LCSC and JLCPCB (`docs/engineering/sourcing.md`) and a separate
+- Access and terms research for Distributor and Fabricator (`docs/engineering/sourcing.md`) and a separate
   integration test matrix (`docs/engineering/INTEGRATION_TEST_MATRIX.md`).
 
 ## Unreleased - Intelligence Engine core (`eak-intelligence`)

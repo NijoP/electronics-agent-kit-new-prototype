@@ -435,7 +435,7 @@ pub struct BrowseQuery {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SupplierInfo {
-    pub lcsc: String,
+    pub distributor: String,
     pub stock: Option<u64>,
     pub as_of_unix_s: u64,
 }
@@ -568,16 +568,16 @@ pub fn browse(
         if !pass {
             continue;
         }
-        let supplier = def.supplier_part("lcsc").and_then(|part| {
+        let supplier = def.supplier_part("distributor").and_then(|part| {
             records
                 .iter()
                 .find(|r| {
-                    r.lcsc_part
+                    r.distributor_part
                         .as_deref()
                         .is_some_and(|x| x.eq_ignore_ascii_case(part))
                 })
                 .map(|r| SupplierInfo {
-                    lcsc: part.to_string(),
+                    distributor: part.to_string(),
                     stock: r.stock,
                     as_of_unix_s: r.retrieved_at_unix_s,
                 })

@@ -32,7 +32,7 @@ pub enum Command {
         component_id: String,
         manufacturer: Option<String>,
         mpn: Option<String>,
-        lcsc: Option<String>,
+        distributor: Option<String>,
         datasheet: Option<String>,
     },
     /// Assign a different footprint (with its symbol-pin -> pad map) to a project library
@@ -551,7 +551,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             component_id,
             manufacturer,
             mpn,
-            lcsc,
+            distributor,
             datasheet,
         } => {
             let def = p.library.get_mut(component_id).ok_or_else(|| {
@@ -565,12 +565,12 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             };
             def.manufacturer = clean(manufacturer);
             def.mpn = clean(mpn);
-            let new_lcsc = clean(lcsc);
-            if new_lcsc != def.lcsc {
+            let new_distributor = clean(distributor);
+            if new_distributor != def.distributor {
                 // Keep the offer list in step; a different part number drops the old offer's
                 // stock/price, which described another part.
-                def.supplier_offers.retain(|o| o.supplier != "lcsc");
-                def.lcsc = new_lcsc;
+                def.supplier_offers.retain(|o| o.supplier != "distributor");
+                def.distributor = new_distributor;
                 def.migrate_offers();
             }
             def.datasheet = clean(datasheet);

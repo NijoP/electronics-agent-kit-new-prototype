@@ -6,7 +6,7 @@ No dates. States: DONE (implemented and tested when last run), PARTIAL, CODE-REV
 |---|---|---|
 | Core engineering foundation (EAK-IR, commands, journal, recovery) | DONE | |
 | Validation (ERC, DRC, MECH, sourcing) | DONE | more rules and external review TODO |
-| Manufacturing outputs (Gerber, drill, BOM, CPL, JLCPCB prep) | PARTIAL | no external viewer or fabricator check |
+| Manufacturing outputs (Gerber, drill, BOM, CPL, Fabricator prep) | PARTIAL | no external viewer or fabricator check |
 | Integrated EDA workspace (schematic, PCB, explorer, projects) | PARTIAL | real-window testing TODO; 3D viewer, free-form zones TODO |
 | Terminal workspace | CODE-REVIEWED | engine PTY-tested on Linux; UI and Windows/macOS unverified |
 | Engineering harness (`eak` CLI, MCP, app endpoint) | CODE-REVIEWED | compile, run, agent trials TODO |

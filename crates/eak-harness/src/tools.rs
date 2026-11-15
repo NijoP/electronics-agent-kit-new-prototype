@@ -199,7 +199,7 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         "run_gates",
         Validation,
         "Fail-closed engineering gates on the current revision: shorts, required pads connected, net connectivity, clearances, annular ring, outline, stackup, copper continuity, fabricator capability, electrical constraints, return path. Each gate is PASS, FAIL, UNKNOWN or NOT_RUN with evidence; only PASS passes and unknown is never a pass. Stored as evidence. Not a manufacturing-ready claim.",
-        props(json!({"fab_profile": {"type": "string", "enum": ["none", "jlcpcb_standard"], "description": "fabricator capability profile; none leaves the capability gate UNKNOWN"}}), &["fab_profile"]),
+        props(json!({"fab_profile": {"type": "string", "enum": ["none", "fabricator_standard"], "description": "fabricator capability profile; none leaves the capability gate UNKNOWN"}}), &["fab_profile"]),
     ));
     let num = |d: &str| json!({"type": "number", "description": d});
     v.push(spec(
@@ -278,7 +278,7 @@ pub fn tool_specs() -> Vec<ToolSpec> {
                 "query": str_schema("keywords"),
                 "limit": {"type": "integer", "minimum": 1, "maximum": 20},
                 "kind": {"type": "string", "enum": ["desk_rule", "eak_doc", "user_document"]},
-                "part": str_schema("restrict to chunks about this MPN or LCSC id"),
+                "part": str_schema("restrict to chunks about this MPN or Distributor id"),
             }),
             &["query"],
         ),
@@ -286,8 +286,8 @@ pub fn tool_specs() -> Vec<ToolSpec> {
     v.push(spec(
         "knowledge_lookup",
         Category::Knowledge,
-        "Exact lookup by MPN (given at import) or LCSC id (found in imported text): every chunk about that part with provenance and trust label. Advisory only.",
-        props(json!({"part": str_schema("MPN or LCSC id")}), &["part"]),
+        "Exact lookup by MPN (given at import) or Distributor id (found in imported text): every chunk about that part with provenance and trust label. Advisory only.",
+        props(json!({"part": str_schema("MPN or Distributor id")}), &["part"]),
     ));
     v.push(spec(
         "knowledge_cite",
@@ -773,7 +773,7 @@ pub(crate) fn all_reports(p: &Project) -> Vec<eak_validation::Report> {
         eak_validation::erc::run(p),
         eak_validation::drc::run(p),
         eak_validation::mech::run(p),
-        eak_validation::dfm::run(p, &eak_validation::dfm::jlcpcb_standard()),
+        eak_validation::dfm::run(p, &eak_validation::dfm::fabricator_standard()),
     ]
 }
 
@@ -785,7 +785,7 @@ pub(crate) fn run_checks(engine: &mut Engine, check: &str) -> Result<Value, Fail
         "mech" => vec![eak_validation::mech::run(p)],
         "dfm" => vec![eak_validation::dfm::run(
             p,
-            &eak_validation::dfm::jlcpcb_standard(),
+            &eak_validation::dfm::fabricator_standard(),
         )],
         "all" => all_reports(p),
         other => {

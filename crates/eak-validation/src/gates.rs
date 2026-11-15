@@ -478,7 +478,7 @@ mod tests {
     #[test]
     fn unverified_fab_profile_is_never_pass() {
         let p = Project::new("x");
-        let fab = dfm::jlcpcb_standard();
+        let fab = dfm::fabricator_standard();
         let r = evaluate(&p, Some(&fab));
         if !fab.verified {
             assert_ne!(state(&r, "fabricator_capability"), GateState::Pass);

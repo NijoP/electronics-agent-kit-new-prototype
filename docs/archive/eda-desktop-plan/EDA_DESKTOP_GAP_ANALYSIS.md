@@ -27,7 +27,7 @@ bodies and the diff file list, not from reading or running the code:
 - [PR #22](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/22) (merge `21dfe5e`),
   "multilayer boards": its body reports `CopperLayer::Inner(n)`, a 2-16 copper-layer stack-up with
   signal/plane kinds, a `SetLayerCount` command, through/blind/buried via spans, inner plane zones with
-  thermal reliefs, DRC-016/017, per-layer Gerber and per-span drill export, a JLCPCB stack-up check
+  thermal reliefs, DRC-016/017, per-layer Gerber and per-span drill export, a Fabricator stack-up check
   (limits unverified), and PCB editor layer controls; it merges and extends PRs #4 and #5 (ADR-0012). Its own
   listed gaps: layer name/colour not stored per layer, no microvias, layer manager lists copper only,
   autorouter outer layers and through vias only.
@@ -54,7 +54,7 @@ nothing here assumes they land:
 |---|---|---|
 | Desktop workspace shell (`apps/desktop`) | another worker | in progress, no PR opened yet when this was read |
 | Multi-layer engine (EAK-IR layers) | another worker | in progress, no PR opened yet when this was read |
-| Supplier integrations | another worker; earlier [PR #17](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/17) (LCSC + JLCPCB prep) open, conflicting | pending |
+| Supplier integrations | another worker; earlier [PR #17](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/17) (Distributor + Fabricator prep) open, conflicting | pending |
 | Install scripts | branch `fm/eak-install-scripts` on origin | pending, no PR yet |
 
 Older open PRs, all conflicting with `main` unless noted:
@@ -64,7 +64,7 @@ Older open PRs, all conflicting with `main` unless noted:
 [#5](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/5) thermal reliefs, silkscreen refdes, DRC-014/015,
 [#6](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/6) buck power calculations,
 [#7](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/7) library expansion,
-[#8](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/8) offline LCSC sourcing records,
+[#8](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/8) offline Distributor sourcing records,
 [#9](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/9) ESP32-C3 validation board,
 [#10](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/10) buck validation board (mergeable),
 [#11](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/11) `eak` CLI and CI fixes.
@@ -143,7 +143,7 @@ board outline (rectangle/polygon), two-click move, rotate, flip side, route trac
 |---|---|---|
 | Built-in library | works (small) | 7 generic components in `eak-core/src/builtin.rs`; `library_components` IPC; place tool picker. PR #7 (more parts) unmerged. |
 | Device/symbol/footprint/3D/simulation-model categories, search, filters, previews | missing | |
-| Provenance and evidence per field (MPN, datasheet revision, pins, pad geometry) | partial | `ComponentDef` has `manufacturer`, `mpn`, `lcsc`, `datasheet`, `provenance: String`, `Rating { source, verified }`. No per-field evidence structure, no verification state for pins/pads/package. |
+| Provenance and evidence per field (MPN, datasheet revision, pins, pad geometry) | partial | `ComponentDef` has `manufacturer`, `mpn`, `distributor`, `datasheet`, `provenance: String`, `Rating { source, verified }`. No per-field evidence structure, no verification state for pins/pads/package. |
 | Symbol and footprint editors | missing | `UpsertComponentDefinition` exists as the write path. |
 | Project / user / built-in library separation | partial | Project-local copy in `Project.library`; no user library. |
 | AI datasheet-to-library workflow | missing | |

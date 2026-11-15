@@ -33,7 +33,7 @@ Not covered: schematic/PCB canvas editing (place, wire, move, route, zones, undo
 | View > Show Library / Parts | EDA menu | menu item | AT-SPI action + tree diff | PASS | entry:Search library; combo box:Category filter; menu item:All categories |
 | View > Show PCB Layers | EDA menu | menu item | AT-SPI action + tree diff | PASS | heading:COPPER LAYERS; combo box:Layer count; menu item:2 layers |
 | View > Show Domain | EDA menu | menu item | AT-SPI action + tree diff | PASS | landmark:Domain intelligence |
-| View > Show Manufacturing | EDA menu | menu item | AT-SPI action + tree diff | PASS | push button:Export Gerbers + drill; landmark:Manufacturing prep; heading:Manufacturing prep · JLCPCB |
+| View > Show Manufacturing | EDA menu | menu item | AT-SPI action + tree diff | PASS | push button:Export Gerbers + drill; landmark:Manufacturing prep; heading:Manufacturing prep · Fabricator |
 | View > Light theme | EDA menu | menu item |  | NOT TESTED |  |
 | View > Reset panel layout | EDA menu | menu item |  | NOT TESTED |  |
 | Menu Project | EDA menu bar | menu |  | NOT TESTED |  |
@@ -61,7 +61,7 @@ Not covered: schematic/PCB canvas editing (place, wire, move, route, zones, undo
 | Menu Design | EDA menu bar | menu |  | NOT TESTED |  |
 | Design > Run ERC | EDA menu | menu item | AT-SPI action + tree diff | PASS | document web:EAK; combo box:Design; page tab:Findings |
 | Design > Run DRC | EDA menu | menu item | AT-SPI action + tree diff | PASS | document web:EAK; combo box:Design; heading:DRC · revision 0 |
-| Design > Run DFM (JLCPCB standard) | EDA menu | menu item |  | NOT TESTED |  |
+| Design > Run DFM (Fabricator standard) | EDA menu | menu item |  | NOT TESTED |  |
 | Design > Auto-place footprints | EDA menu | menu item |  | NOT TESTED |  |
 | Design > Design rules… | EDA menu | menu item |  | NOT TESTED |  |
 | Menu Tools | EDA menu bar | menu |  | NOT TESTED |  |

@@ -1,9 +1,9 @@
-//! LCSC provider, BOM and JLCPCB preparation tests.
+//! Distributor provider, BOM and Fabricator preparation tests.
 //!
-//! The LCSC provider is exercised over real HTTP against a local test server on 127.0.0.1;
+//! The Distributor provider is exercised over real HTTP against a local test server on 127.0.0.1;
 //! the live site is never contacted. The product-detail fixture has the shape of a real
-//! response captured from LCSC's public endpoint on 2026-11-14 (trimmed to the fields the
-//! ingest boundary reads). The keyword-search response shape could not be observed (LCSC
+//! response captured from Distributor's public endpoint on 2026-11-14 (trimmed to the fields the
+//! ingest boundary reads). The keyword-search response shape could not be observed (Distributor
 //! answers 403), so the only keyword-search success test uses an assumed shape and says so.
 //!
 //! `UreqFetch` exists only with the `live-http` feature, so this file builds only with it.
@@ -11,8 +11,8 @@
 
 use eak_core::{builtin, Point, Project};
 use eak_manufacturing::bom;
-use eak_manufacturing::jlcpcb::{self, Status};
-use eak_manufacturing::lcsc::{self, LcscError, LcscProvider, UreqFetch};
+use eak_manufacturing::fabricator::{self, Status};
+use eak_manufacturing::distributor::{self, DistributorError, DistributorProvider, UreqFetch};
 use eak_manufacturing::sourcing::SourcingRecord;
 use eak_runtime::{fixtures, Actor, Command, Engine};
 use eak_validation::{drc, erc, mech};
@@ -67,19 +67,19 @@ fn serve(routes: Vec<Route>) -> String {
     format!("http://{addr}")
 }
 
-fn provider(base: &str) -> LcscProvider<UreqFetch> {
-    let mut p = LcscProvider::new(UreqFetch::default(), base);
+fn provider(base: &str) -> DistributorProvider<UreqFetch> {
+    let mut p = DistributorProvider::new(UreqFetch::default(), base);
     p.pause = Duration::from_millis(1);
     p
 }
 
-fn lcsc_site() -> String {
+fn distributor_site() -> String {
     serve(vec![
         (
             "/ftps/wm/product/detail?productCode=C25804",
             200,
             "application/json",
-            fixture("lcsc/live_shape_C25804.json"),
+            fixture("distributor/live_shape_C25804.json"),
         ),
         (
             "/ftps/wm/product/detail?productCode=C0",
@@ -94,7 +94,7 @@ fn lcsc_site() -> String {
             b"<HTML><HEAD><TITLE>Access Denied</TITLE></HEAD><BODY>Access Denied</BODY></HTML>"
                 .to_vec(),
         ),
-        // ASSUMED shape (LCSC refuses the real endpoint): product objects under result.
+        // ASSUMED shape (Distributor refuses the real endpoint): product objects under result.
         (
             "/ftps/wm/search/global?keyword=10k",
             200,
@@ -105,13 +105,13 @@ fn lcsc_site() -> String {
 }
 
 fn resistor_record() -> SourcingRecord {
-    provider(&lcsc_site()).lookup("c25804").expect("lookup")
+    provider(&distributor_site()).lookup("c25804").expect("lookup")
 }
 
 #[test]
 fn lookup_by_part_number_returns_a_search_hit_with_provenance() {
     let r = resistor_record();
-    assert_eq!(r.lcsc_part.as_deref(), Some("C25804"));
+    assert_eq!(r.distributor_part.as_deref(), Some("C25804"));
     assert_eq!(r.mpn.as_deref(), Some("0603WAF1002T5E"));
     assert_eq!(r.package.as_deref(), Some("0603"));
     assert_eq!(r.stock, Some(1_004_300));
@@ -124,42 +124,42 @@ fn lookup_by_part_number_returns_a_search_hit_with_provenance() {
         .datasheet_url
         .as_deref()
         .unwrap()
-        .starts_with("https://datasheet.lcsc.com/"));
-    // Provenance names LCSC even though a local server answered; the raw bytes are hashed.
-    assert!(r.source_url.starts_with("https://wmsc.lcsc.com/"));
+        .starts_with("https://distributor.invalid/"));
+    // Provenance names Distributor even though a local server answered; the raw bytes are hashed.
+    assert!(r.source_url.starts_with("https://distributor.invalid/"));
     assert_eq!(r.raw_sha256.len(), 64);
     assert_eq!(format!("{:?}", r.state), "SearchHit");
 }
 
 #[test]
 fn unknown_part_is_not_found_and_bad_queries_never_reach_the_network() {
-    let p = provider(&lcsc_site());
-    assert!(matches!(p.lookup("C0"), Err(LcscError::NotFound(_))));
+    let p = provider(&distributor_site());
+    assert!(matches!(p.lookup("C0"), Err(DistributorError::NotFound(_))));
     for bad in ["", "  ", "C25804;DROP", "25804", "C"] {
         assert!(
-            matches!(p.lookup(bad), Err(LcscError::BadQuery(_))),
+            matches!(p.lookup(bad), Err(DistributorError::BadQuery(_))),
             "{bad:?}"
         );
     }
-    assert!(matches!(p.search("   "), Err(LcscError::BadQuery(_))));
+    assert!(matches!(p.search("   "), Err(DistributorError::BadQuery(_))));
     assert!(matches!(
         p.search(&"x".repeat(500)),
-        Err(LcscError::BadQuery(_))
+        Err(DistributorError::BadQuery(_))
     ));
     // Nothing listening: a transport error, not an empty result.
     let dead = provider("http://127.0.0.1:1");
     assert!(matches!(
         dead.lookup("C25804"),
-        Err(LcscError::Transport(_))
+        Err(DistributorError::Transport(_))
     ));
 }
 
 #[test]
 fn blocked_keyword_search_is_reported_not_faked() {
-    let p = provider(&lcsc_site());
+    let p = provider(&distributor_site());
     let err = p.search("blocked").unwrap_err();
     match &err {
-        LcscError::Blocked { status, note } => {
+        DistributorError::Blocked { status, note } => {
             assert_eq!(*status, 403);
             assert!(note.contains("Access Denied"), "{note}");
         }
@@ -170,26 +170,26 @@ fn blocked_keyword_search_is_reported_not_faked() {
 
 #[test]
 fn keyword_search_resolves_codes_through_the_detail_path_and_dedups() {
-    let hits = provider(&lcsc_site()).search("10k").unwrap();
+    let hits = provider(&distributor_site()).search("10k").unwrap();
     // C25804 appears twice in the (assumed-shape) response, C0 does not exist: one record.
     assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].lcsc_part.as_deref(), Some("C25804"));
+    assert_eq!(hits[0].distributor_part.as_deref(), Some("C25804"));
     // A part number needs no search endpoint at all.
-    let direct = provider(&lcsc_site()).search(" c25804 ").unwrap();
+    let direct = provider(&distributor_site()).search(" c25804 ").unwrap();
     assert_eq!(direct.len(), 1);
 }
 
 #[test]
 fn import_goes_through_the_command_engine_and_reaches_the_bom() {
     let rec = resistor_record();
-    let plan = lcsc::import_plan(&rec).unwrap();
-    assert_eq!(plan.definition.id, "LCSC_C25804");
+    let plan = distributor::import_plan(&rec).unwrap();
+    assert_eq!(plan.definition.id, "DISTRIBUTOR_C25804");
     assert_eq!(plan.template_id, "R_0603");
     assert_eq!(plan.definition.default_value, "10k");
-    assert_eq!(plan.definition.lcsc.as_deref(), Some("C25804"));
+    assert_eq!(plan.definition.distributor.as_deref(), Some("C25804"));
     assert_eq!(plan.definition.mpn.as_deref(), Some("0603WAF1002T5E"));
     assert!(plan.definition.provenance.contains(&rec.raw_sha256));
-    // LCSC supplies identity only: ratings stay exactly the template's, unverified.
+    // Distributor supplies identity only: ratings stay exactly the template's, unverified.
     let tpl = builtin::get("R_0603").unwrap();
     assert_eq!(plan.definition.footprint, tpl.footprint);
     assert_eq!(plan.definition.pin_map, tpl.pin_map);
@@ -206,7 +206,7 @@ fn import_goes_through_the_command_engine_and_reaches_the_bom() {
     .unwrap();
     b.run(Command::PlaceSymbol {
         sheet_id: None,
-        component_id: "LCSC_C25804".into(),
+        component_id: "DISTRIBUTOR_C25804".into(),
         position: Point::mm(50.0, 50.0),
         rotation: eak_core::Rotation::R0,
         refdes: None,
@@ -215,7 +215,7 @@ fn import_goes_through_the_command_engine_and_reaches_the_bom() {
     .unwrap();
     let lines = bom::build(e.project(), &[rec]);
     assert_eq!(lines.len(), 1);
-    assert_eq!(lines[0].lcsc.as_deref(), Some("C25804"));
+    assert_eq!(lines[0].distributor.as_deref(), Some("C25804"));
     assert_eq!(lines[0].value, "10k");
     assert_eq!(lines[0].stock, Some(1_004_300));
     assert_eq!(lines[0].unit_price_usd.as_deref(), Some("0.0022")); // MOQ break, qty 1
@@ -231,14 +231,14 @@ fn import_refuses_parts_without_a_template_and_guesses_nothing() {
     rec.package = Some("QFN-48".into());
     rec.category = Some("Embedded Processors & Controllers / Microcontrollers".into());
     rec.mpn = Some("NOT-IN-LIBRARY".into());
-    let err = lcsc::import_plan(&rec).unwrap_err();
+    let err = distributor::import_plan(&rec).unwrap_err();
     assert!(err.contains("no EAK symbol/footprint template"), "{err}");
     assert!(err.contains("no footprint was guessed"));
     // A resistor in a package the library lacks is refused too.
     let mut odd = resistor_record();
     odd.package = Some("0201".into());
     odd.mpn = Some("NOT-IN-LIBRARY-2".into());
-    assert!(lcsc::import_plan(&odd).is_err());
+    assert!(distributor::import_plan(&odd).is_err());
 }
 
 fn reference() -> (Engine, Vec<eak_validation::Report>) {
@@ -254,15 +254,15 @@ fn reference() -> (Engine, Vec<eak_validation::Report>) {
 }
 
 #[test]
-fn bom_marks_missing_lcsc_numbers_and_never_invents_them() {
+fn bom_marks_missing_distributor_numbers_and_never_invents_them() {
     let (e, _) = reference();
     let lines = bom::build(e.project(), &[]);
     assert!(!lines.is_empty());
-    for l in lines.iter().filter(|l| l.lcsc.is_none()) {
-        assert!(l.issues.iter().any(|i| i.contains("no LCSC part number")));
+    for l in lines.iter().filter(|l| l.distributor.is_none()) {
+        assert!(l.issues.iter().any(|i| i.contains("no Distributor part number")));
     }
-    let csv = bom::jlcpcb_csv(&lines);
-    assert!(csv.starts_with("Comment,Designator,Footprint,LCSC Part #\n"));
+    let csv = bom::fabricator_csv(&lines);
+    assert!(csv.starts_with("Comment,Designator,Footprint,Distributor Part #\n"));
     assert_eq!(
         csv.lines().count() - 1,
         lines.iter().filter(|l| l.assembled()).count()
@@ -295,12 +295,12 @@ fn bom_csv_neutralises_formula_injection() {
 }
 
 #[test]
-fn prepared_bundle_has_jlcpcb_formats_a_valid_zip_and_honest_labels() {
+fn prepared_bundle_has_fabricator_formats_a_valid_zip_and_honest_labels() {
     let (e, reports) = reference();
     let refs: Vec<&eak_validation::Report> = reports.iter().collect();
-    let dir = std::env::temp_dir().join(format!("eak-jlc-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("eak-fab-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let r = jlcpcb::prepare(e.project(), &refs, &[], &dir).expect("prepare");
+    let r = fabricator::prepare(e.project(), &refs, &[], &dir).expect("prepare");
 
     let stem: String = e
         .project()
@@ -309,9 +309,9 @@ fn prepared_bundle_has_jlcpcb_formats_a_valid_zip_and_honest_labels() {
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
     let read = |n: &str| std::fs::read_to_string(dir.join(n)).unwrap();
-    let bom = read(&format!("{stem}-JLCPCB-BOM.csv"));
-    assert!(bom.starts_with("Comment,Designator,Footprint,LCSC Part #\n"));
-    let cpl = read(&format!("{stem}-JLCPCB-CPL.csv"));
+    let bom = read(&format!("{stem}-Fabricator-BOM.csv"));
+    assert!(bom.starts_with("Comment,Designator,Footprint,Distributor Part #\n"));
+    let cpl = read(&format!("{stem}-Fabricator-CPL.csv"));
     assert!(cpl.starts_with("Designator,Mid X,Mid Y,Layer,Rotation\n"));
     assert!(cpl
         .lines()
@@ -320,7 +320,7 @@ fn prepared_bundle_has_jlcpcb_formats_a_valid_zip_and_honest_labels() {
     // Surface-mount only: the through-hole header must not be in the placement file.
     assert!(!cpl.lines().any(|l| l.starts_with("J1,")));
 
-    let zip = std::fs::read(dir.join(format!("{stem}-JLCPCB-gerbers.zip"))).unwrap();
+    let zip = std::fs::read(dir.join(format!("{stem}-Fabricator-gerbers.zip"))).unwrap();
     let entries = eak_manufacturing::zip::read_stored(&zip).expect("valid zip");
     let names: Vec<_> = entries.iter().map(|(n, _)| n.as_str()).collect();
     for ext in [
@@ -338,7 +338,7 @@ fn prepared_bundle_has_jlcpcb_formats_a_valid_zip_and_honest_labels() {
         let data = std::fs::read(dir.join(&f.name)).unwrap();
         assert_eq!(f.bytes, data.len() as u64);
     }
-    let m = read("jlcpcb-prep-manifest.json");
+    let m = read("fabricator-prep-manifest.json");
     assert!(m.contains("PREPARED FOR REVIEW"));
     let lower = r
         .manifest
@@ -354,9 +354,9 @@ fn prepared_bundle_has_jlcpcb_formats_a_valid_zip_and_honest_labels() {
         .manifest
         .not_verified
         .iter()
-        .any(|s| s.contains("JLCPCB's own DFM")));
-    // The reference design carries no LCSC numbers, so the assembly rule must fail loudly.
-    let c = r.dfm.checks.iter().find(|c| c.id == "JLC-040").unwrap();
+        .any(|s| s.contains("Fabricator's own DFM")));
+    // The reference design carries no Distributor numbers, so the assembly rule must fail loudly.
+    let c = r.dfm.checks.iter().find(|c| c.id == "Fab-040").unwrap();
     assert_eq!(c.status, Status::Fail);
     assert!(r.manifest.statement.contains("BLOCKED"));
     let _ = std::fs::remove_dir_all(&dir);
@@ -365,14 +365,14 @@ fn prepared_bundle_has_jlcpcb_formats_a_valid_zip_and_honest_labels() {
 #[test]
 fn dfm_flags_violations_and_never_reports_unchecked_rules_as_passing() {
     let (e, _) = reference();
-    let profile = jlcpcb::Profile::two_layer_1oz();
+    let profile = fabricator::Profile::two_layer_1oz();
     assert!(!profile.source_url.is_empty() && !profile.verified_on.is_empty());
-    let base = jlcpcb::dfm(e.project(), &bom::build(e.project(), &[]), &profile);
+    let base = fabricator::dfm(e.project(), &bom::build(e.project(), &[]), &profile);
     let get =
-        |r: &jlcpcb::DfmReport, id: &str| r.checks.iter().find(|c| c.id == id).unwrap().status;
+        |r: &fabricator::DfmReport, id: &str| r.checks.iter().find(|c| c.id == id).unwrap().status;
     // The routed reference board satisfies the measurable geometry rules.
     for id in [
-        "JLC-001", "JLC-002", "JLC-010", "JLC-011", "JLC-012", "JLC-030",
+        "Fab-001", "Fab-002", "Fab-010", "Fab-011", "Fab-012", "Fab-030",
     ] {
         assert_eq!(
             get(&base, id),
@@ -382,7 +382,7 @@ fn dfm_flags_violations_and_never_reports_unchecked_rules_as_passing() {
         );
     }
     for id in [
-        "JLC-050", "JLC-051", "JLC-052", "JLC-053", "JLC-054", "JLC-055",
+        "Fab-050", "Fab-051", "Fab-052", "Fab-053", "Fab-054", "Fab-055",
     ] {
         assert_eq!(get(&base, id), Status::NotChecked, "{id}");
     }
@@ -409,21 +409,21 @@ fn dfm_flags_violations_and_never_reports_unchecked_rules_as_passing() {
         v.diameter = 150_000; // ring 0.025 mm
     }
     bad.pcb.board.stackup.layers[0].copper_oz = 2.0;
-    let r = jlcpcb::dfm(&bad, &bom::build(&bad, &[]), &profile);
-    assert_eq!(get(&r, "JLC-010"), Status::Fail);
-    assert_eq!(get(&r, "JLC-002"), Status::Fail);
+    let r = fabricator::dfm(&bad, &bom::build(&bad, &[]), &profile);
+    assert_eq!(get(&r, "Fab-010"), Status::Fail);
+    assert_eq!(get(&r, "Fab-002"), Status::Fail);
     if v_id.is_some() {
-        assert_eq!(get(&r, "JLC-020"), Status::Fail);
-        assert_eq!(get(&r, "JLC-021"), Status::Fail);
+        assert_eq!(get(&r, "Fab-020"), Status::Fail);
+        assert_eq!(get(&r, "Fab-021"), Status::Fail);
     }
     assert!(r.failures >= 2);
 
     // No outline: the size rule fails and edge clearance is not claimed as measured.
     let mut none = e.project().clone();
     none.pcb.board.outline.clear();
-    let r = jlcpcb::dfm(&none, &[], &profile);
-    assert_eq!(get(&r, "JLC-001"), Status::Fail);
-    assert_eq!(get(&r, "JLC-030"), Status::NotChecked);
+    let r = fabricator::dfm(&none, &[], &profile);
+    assert_eq!(get(&r, "Fab-001"), Status::Fail);
+    assert_eq!(get(&r, "Fab-030"), Status::NotChecked);
 }
 
 #[test]
@@ -431,9 +431,9 @@ fn dfm_refuses_to_pass_a_multilayer_board_against_the_two_layer_profile() {
     let mut e = Engine::in_memory(Project::new("ml"));
     fixtures::build_schematic(&mut e).expect("schematic");
     fixtures::build_pcb_layers(&mut e, 4).expect("pcb");
-    let profile = jlcpcb::Profile::two_layer_1oz();
-    let r = jlcpcb::dfm(e.project(), &bom::build(e.project(), &[]), &profile);
-    let c = r.checks.iter().find(|c| c.id == "JLC-002").unwrap();
+    let profile = fabricator::Profile::two_layer_1oz();
+    let r = fabricator::dfm(e.project(), &bom::build(e.project(), &[]), &profile);
+    let c = r.checks.iter().find(|c| c.id == "Fab-002").unwrap();
     assert_eq!(c.status, Status::Fail);
     assert!(c.measured.starts_with("4 layers"), "{}", c.measured);
     assert!(

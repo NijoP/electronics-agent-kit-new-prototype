@@ -2,7 +2,7 @@
 //!
 //! Order of confidence (best first), each candidate carrying the reasons that put it there:
 //!
-//! 1. [`MatchKind::ExactLcsc`]: the query is an LCSC part number and the listing has it.
+//! 1. [`MatchKind::ExactDistributor`]: the query is an Distributor part number and the listing has it.
 //! 2. [`MatchKind::ExactMpnManufacturer`]: the MPN is equal after normalisation **and** the
 //!    manufacturer hint is equal after normalisation.
 //! 3. [`MatchKind::ExactMpn`]: the MPN is equal after normalisation; the manufacturer was not
@@ -17,7 +17,7 @@
 //! stored on a record is never rewritten.
 
 use crate::sourcing::SourcingRecord;
-use eak_validation::sourcing::is_lcsc_part_number;
+use eak_validation::sourcing::is_distributor_part_number;
 use serde::Serialize;
 
 /// Comparison key: folds case and drops whitespace and the separators `-`, `_`, `/`, `.`
@@ -48,7 +48,7 @@ pub fn normalize_manufacturer(s: &str) -> String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MatchKind {
-    ExactLcsc,
+    ExactDistributor,
     ExactMpnManufacturer,
     ExactMpn,
     Fuzzy,
@@ -79,11 +79,11 @@ pub struct Candidate {
     pub engineering_status: &'static str,
 }
 
-/// Rank `records` for `query` (an LCSC number, an MPN or free text; empty = browsing).
-/// Records with the same LCSC number are kept once. The order is total and deterministic.
+/// Rank `records` for `query` (an Distributor number, an MPN or free text; empty = browsing).
+/// Records with the same Distributor number are kept once. The order is total and deterministic.
 pub fn rank(query: &str, hints: &Hints, records: Vec<SourcingRecord>) -> Vec<Candidate> {
     let q = query.trim();
-    let q_lcsc = is_lcsc_part_number(&q.to_ascii_uppercase()).then(|| q.to_ascii_uppercase());
+    let q_distributor = is_distributor_part_number(&q.to_ascii_uppercase()).then(|| q.to_ascii_uppercase());
     let q_norm = normalize_mpn(q);
     let hint_maker = hints
         .manufacturer
@@ -93,7 +93,7 @@ pub fn rank(query: &str, hints: &Hints, records: Vec<SourcingRecord>) -> Vec<Can
     let mut seen = std::collections::BTreeSet::new();
     let mut out: Vec<Candidate> = vec![];
     for record in records {
-        if let Some(l) = &record.lcsc_part {
+        if let Some(l) = &record.distributor_part {
             if !seen.insert(l.clone()) {
                 continue;
             }
@@ -106,12 +106,12 @@ pub fn rank(query: &str, hints: &Hints, records: Vec<SourcingRecord>) -> Vec<Can
         let kind = if q.is_empty() {
             reasons.push("category browse: no query to match".to_string());
             MatchKind::Browse
-        } else if q_lcsc.is_some() && record.lcsc_part == q_lcsc {
+        } else if q_distributor.is_some() && record.distributor_part == q_distributor {
             reasons.push(format!(
-                "LCSC part number {} matches exactly",
+                "Distributor part number {} matches exactly",
                 q.to_ascii_uppercase()
             ));
-            MatchKind::ExactLcsc
+            MatchKind::ExactDistributor
         } else if mpn_norm.as_deref() == Some(q_norm.as_str()) {
             let literal = record.mpn.as_deref() == Some(q);
             reasons.push(if literal {
@@ -119,7 +119,7 @@ pub fn rank(query: &str, hints: &Hints, records: Vec<SourcingRecord>) -> Vec<Can
             } else {
                 format!(
                     "manufacturer part number equals the query after case/space/dash \
-                     normalisation (LCSC text {:?} kept unchanged)",
+                     normalisation (Distributor text {:?} kept unchanged)",
                     record.mpn.as_deref().unwrap_or("")
                 )
             });
@@ -169,7 +169,7 @@ pub fn rank(query: &str, hints: &Hints, records: Vec<SourcingRecord>) -> Vec<Can
                     record.mpn.as_deref().unwrap_or("")
                 )),
                 _ => reasons.push(
-                    "returned by LCSC's keyword search on its listing text; the manufacturer \
+                    "returned by Distributor's keyword search on its listing text; the manufacturer \
                      part number does not match the query"
                         .to_string(),
                 ),
@@ -226,7 +226,7 @@ pub fn rank(query: &str, hints: &Hints, records: Vec<SourcingRecord>) -> Vec<Can
             c.package_match == Some(false),
             c.category_match == Some(false),
             c.record.manufacturer.clone().unwrap_or_default(),
-            c.record.lcsc_part.clone().unwrap_or_default(),
+            c.record.distributor_part.clone().unwrap_or_default(),
             c.record.raw_sha256.clone(),
         )
     });
@@ -238,14 +238,14 @@ mod tests {
     use super::*;
     use crate::sourcing::VerificationState;
 
-    fn rec(lcsc: &str, mpn: &str, maker: &str, package: &str) -> SourcingRecord {
+    fn rec(distributor: &str, mpn: &str, maker: &str, package: &str) -> SourcingRecord {
         SourcingRecord {
-            provider: "LCSC".into(),
-            source_url: "https://api.lcsc.com/x".into(),
+            provider: "Distributor".into(),
+            source_url: "https://distributor.invalid/x".into(),
             retrieved_at_unix_s: 1,
-            raw_sha256: format!("sha-{lcsc}"),
+            raw_sha256: format!("sha-{distributor}"),
             raw_bytes: 1,
-            lcsc_part: Some(lcsc.into()),
+            distributor_part: Some(distributor.into()),
             mpn: Some(mpn.into()),
             manufacturer: Some(maker.into()),
             package: Some(package.into()),
@@ -281,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn an_lcsc_number_beats_everything() {
+    fn an_distributor_number_beats_everything() {
         let c = rank(
             "c25804",
             &Hints::default(),
@@ -290,8 +290,8 @@ mod tests {
                 rec("C25804", "R1", "B", "0603"),
             ],
         );
-        assert_eq!(c[0].kind, MatchKind::ExactLcsc);
-        assert_eq!(c[0].record.lcsc_part.as_deref(), Some("C25804"));
+        assert_eq!(c[0].kind, MatchKind::ExactDistributor);
+        assert_eq!(c[0].record.distributor_part.as_deref(), Some("C25804"));
         assert!(c[0].exact);
         assert_eq!(c[1].kind, MatchKind::Fuzzy);
         assert!(!c[1].exact);
@@ -312,7 +312,7 @@ mod tests {
             ],
         );
         assert_eq!(c[0].kind, MatchKind::ExactMpnManufacturer);
-        assert_eq!(c[0].record.lcsc_part.as_deref(), Some("C1"));
+        assert_eq!(c[0].record.distributor_part.as_deref(), Some("C1"));
         assert_eq!(c[1].kind, MatchKind::ExactMpn);
         assert!(c[1].manufacturer_conflict);
         assert!(c[1].reasons.iter().any(|r| r.contains("different product")));
@@ -359,7 +359,7 @@ mod tests {
             &hints,
             vec![rec("C2", "R1", "A", "0603"), rec("C1", "R1", "A", "0805")],
         );
-        assert_eq!(c[0].record.lcsc_part.as_deref(), Some("C1"));
+        assert_eq!(c[0].record.distributor_part.as_deref(), Some("C1"));
         assert_eq!(c[0].package_match, Some(true));
         assert_eq!(c[1].package_match, Some(false));
         assert_eq!(c[1].category_match, Some(false));
@@ -379,7 +379,7 @@ mod tests {
         );
         assert_eq!(c.len(), 2);
         assert!(c.iter().all(|x| x.kind == MatchKind::Browse && !x.exact));
-        assert_eq!(c[0].record.lcsc_part.as_deref(), Some("C1"));
+        assert_eq!(c[0].record.distributor_part.as_deref(), Some("C1"));
     }
 
     #[test]
@@ -393,7 +393,7 @@ mod tests {
         b.reverse();
         let ids = |v: Vec<Candidate>| {
             v.into_iter()
-                .map(|c| c.record.lcsc_part.unwrap())
+                .map(|c| c.record.distributor_part.unwrap())
                 .collect::<Vec<_>>()
         };
         assert_eq!(

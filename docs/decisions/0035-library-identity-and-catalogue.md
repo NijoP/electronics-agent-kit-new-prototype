@@ -19,3 +19,11 @@ Supplier data stays generic metadata; nothing here depends on any supplier.
 Relation to ADR-0033: that ADR defines the desktop-side scope views (builtin, project, personal,
 imported) and the browser; this ADR adds the core identity/version/hash/drift types underneath them.
 The desktop scopes are not yet wired to `LibraryCatalog`; that is the next slice.
+
+## Vendor-neutral rename (migration note)
+All supplier-specific names were replaced by generic ones (distributor offers/SKU, fabricator
+profile). Project files written before this change stored the single legacy part-number key and a
+supplier key under the former vendor-specific spelling; those keys are no longer read. Re-enter the
+distributor SKU (or re-run supplier discovery) on affected components. Git history before this commit
+still contains the former names (history is not rewritten). The optional distributor and fabricator
+adapters point at placeholder `.invalid` hosts and are non-functional until a real endpoint is configured.

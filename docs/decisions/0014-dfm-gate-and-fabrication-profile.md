@@ -7,7 +7,7 @@ Phase 4 (DFM report) and Phase 7 (manufacturing outputs).
 ## Decision
 1. `eak-validation::dfm::run(project, profile)` produces a revision-bound `Report` with
    `check = "DFM"`, rules DFM-001..010, and the same `not_implemented` / `limitations` lists as
-   ERC/DRC. The profile is data (`crates/eak-validation/data/fab-jlcpcb-standard.json`) with its
+   ERC/DRC. The profile is data (`crates/eak-validation/data/fab-fabricator-standard.json`) with its
    public source URL, retrieval date and `verified: false`; every rule's `source` names it.
 2. The manufacturing release gate (`eak_manufacturing::compile`) now requires ERC, DRC, MECH
    **and DFM** reports bound to the revision. A missing DFM report makes the package DRAFT.

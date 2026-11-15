@@ -67,8 +67,8 @@ pub fn power_analysis(p: &Project) -> Result<Value, String> {
 pub fn run_gates(p: &Project, args: &Value) -> Result<GateReport, String> {
     let fab = match args.get("fab_profile").and_then(Value::as_str) {
         Some("none") => None,
-        Some("jlcpcb_standard") => Some(dfm::jlcpcb_standard()),
-        _ => return Err("fab_profile is required: \"none\" or \"jlcpcb_standard\"".into()),
+        Some("fabricator_standard") => Some(dfm::fabricator_standard()),
+        _ => return Err("fab_profile is required: \"none\" or \"fabricator_standard\"".into()),
     };
     Ok(gates::evaluate(p, fab.as_ref()))
 }

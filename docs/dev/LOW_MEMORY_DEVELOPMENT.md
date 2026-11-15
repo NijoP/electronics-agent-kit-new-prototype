@@ -16,7 +16,7 @@ open source: no GitHub Actions, no paid services. Linux only (the monitor reads 
 ## Batch order (`scripts/test-batches.sh`)
 
 1. **light** (`light:fmt`, `light:no-python`, `light:tsc`, `light:vitest`): formatting, Python-free policy, frontend types and unit tests.
-2. **per-crate Rust tests**, one crate at a time with `--release`: `eak-core`, `eak-engineering`, `eak-validation`, `eak-manufacturing`, `eak-intelligence` (includes the LCSC/JLCPCB provider tests), `eak-runtime` (`--test-threads=2`), `eak-desktop`.
+2. **per-crate Rust tests**, one crate at a time with `--release`: `eak-core`, `eak-engineering`, `eak-validation`, `eak-manufacturing`, `eak-intelligence` (includes the Distributor/Fabricator provider tests), `eak-runtime` (`--test-threads=2`), `eak-desktop`.
 3. **clippy**: `cargo clippy --workspace --all-targets -- -D warnings`.
 4. **package:tauri** (`npx tauri build --no-bundle`): only with `--package`; otherwise the summary says it was not run.
 

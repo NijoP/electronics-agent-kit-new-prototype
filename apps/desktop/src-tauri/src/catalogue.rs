@@ -1,14 +1,14 @@
-//! LCSC catalogue browsing and API-credential settings for the desktop shell (ADR-0032).
+//! Distributor catalogue browsing and API-credential settings for the desktop shell (ADR-0032).
 //!
 //! * Credentials (API key and secret) live **only** in the operating-system credential store
-//!   (service `eak-desktop.lcsc`), never in a file, the IR, a log, a search record or the
+//!   (service `eak-desktop.distributor`), never in a file, the IR, a log, a search record or the
 //!   frontend; the UI only ever sees `has_credentials` and the last four characters of the key.
 //! * The non-secret connection status (last test result and time, last success) is plain JSON
 //!   next to the model-provider settings.
-//! * Browsing is lazy and bounded (`eak_manufacturing::lcsc_api::Catalogue`): the category tree
+//! * Browsing is lazy and bounded (`eak_manufacturing::distributor_api::Catalogue`): the category tree
 //!   and manufacturer list are fetched when first opened and cached; a page of products is
 //!   fetched only when asked for. Nothing is crawled in the background.
-//! * Every reply says how it was obtained (`live`, `cache`, `stale_cache`) and when LCSC produced
+//! * Every reply says how it was obtained (`live`, `cache`, `stale_cache`) and when Distributor produced
 //!   the data. Without credentials the reply says exactly what is needed and carries no rows.
 //!
 //! Plain functions over a [`Catalogue`] and [`Settings`], tested headless; [`cmd`] holds the
@@ -16,9 +16,9 @@
 
 use crate::models::KeyStore;
 use eak_core::ComponentDef;
-use eak_manufacturing::lcsc::{Fetch, UreqFetch};
-use eak_manufacturing::lcsc_api::{
-    ApiError, Catalogue, CategoryNode, CredentialSource, Credentials, Fetched, LcscApi,
+use eak_manufacturing::distributor::{Fetch, UreqFetch};
+use eak_manufacturing::distributor_api::{
+    ApiError, Catalogue, CategoryNode, CredentialSource, Credentials, Fetched, DistributorApi,
     Manufacturer, SearchRequest, APPLY_URL, DEFAULT_LIMIT, MAX_LIMIT, PRODUCTION_BASE,
 };
 use eak_manufacturing::library_link::{link_record, Link, Scope};
@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const KEYRING_SERVICE: &str = "eak-desktop.lcsc";
+const KEYRING_SERVICE: &str = "eak-desktop.distributor";
 const ID_KEY: &str = "api-key";
 const ID_SECRET: &str = "api-secret";
 
@@ -44,14 +44,14 @@ fn now_s() -> u64 {
 // Credential storage
 // ---------------------------------------------------------------------------------------
 
-/// The operating-system credential store under the LCSC service name.
-pub struct LcscKeyStore;
+/// The operating-system credential store under the Distributor service name.
+pub struct DistributorKeyStore;
 
 fn entry(id: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(KEYRING_SERVICE, id).map_err(|e| format!("credential store: {e}"))
 }
 
-impl KeyStore for LcscKeyStore {
+impl KeyStore for DistributorKeyStore {
     fn set(&self, id: &str, secret: &str) -> Result<(), String> {
         entry(id)?
             .set_password(secret)
@@ -115,13 +115,13 @@ impl Default for StatusFile {
 
 /// What the settings panel shows. Never contains the secret or the full key.
 #[derive(Debug, Clone, Serialize)]
-pub struct LcscView {
+pub struct DistributorView {
     pub has_credentials: bool,
     /// Last four characters of the key.
     pub key_hint: Option<String>,
     pub store_error: Option<String>,
     pub status: StatusFile,
-    /// Requests that reached LCSC in this session (documented quotas are per account).
+    /// Requests that reached Distributor in this session (documented quotas are per account).
     pub requests_this_session: u64,
     pub apply_url: &'static str,
     pub host: &'static str,
@@ -174,13 +174,13 @@ impl Settings {
         self.persist(&g);
     }
 
-    pub fn view(&self, requests: u64) -> LcscView {
+    pub fn view(&self, requests: u64) -> DistributorView {
         let (creds, store_error) = match self.source().credentials() {
             Ok(c) => (c, None),
             Err(e) => (None, Some(e)),
         };
         let has_credentials = creds.is_some();
-        LcscView {
+        DistributorView {
             has_credentials,
             key_hint: creds.as_ref().map(Credentials::key_hint),
             store_error,
@@ -220,7 +220,7 @@ impl Settings {
             match result {
                 Ok(()) => {
                     s.state = "ok".into();
-                    s.message = "LCSC accepted the credentials".into();
+                    s.message = "Distributor accepted the credentials".into();
                     s.last_success_unix_s = Some(now);
                 }
                 Err(e) => {
@@ -233,7 +233,7 @@ impl Settings {
 }
 
 /// Run the authentication test (one small signed search) and record the outcome.
-pub fn test_connection<F: Fetch>(settings: &Settings, cat: &Catalogue<F>) -> LcscView {
+pub fn test_connection<F: Fetch>(settings: &Settings, cat: &Catalogue<F>) -> DistributorView {
     let result = cat.api().test_connection();
     settings.record_test(&result);
     settings.view(cat.requests_made())
@@ -267,7 +267,7 @@ pub fn reply<T>(r: Result<Fetched<T>, ApiError>) -> Reply<T> {
                 Served::StaleCache { age_s, because } => (
                     "stale",
                     format!(
-                        "LCSC is not answering ({because:?}); showing an earlier answer from \
+                        "Distributor is not answering ({because:?}); showing an earlier answer from \
                          {age_s} s ago. Stock and prices may have changed."
                     ),
                 ),
@@ -304,11 +304,11 @@ pub fn manufacturers<F: Fetch>(cat: &Catalogue<F>, refresh: bool) -> Reply<Vec<M
 }
 
 /// A browse/search request from the UI. `manufacturer` and `package` are hard filters applied
-/// to the loaded page (LCSC's documented search has no such parameters) and also drive the
+/// to the loaded page (Distributor's documented search has no such parameters) and also drive the
 /// ranking hints; `category` is a hint only.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct CatalogueQuery {
-    /// An LCSC number, an MPN or free text. Empty with `category_id` = browse a category.
+    /// An Distributor number, an MPN or free text. Empty with `category_id` = browse a category.
     pub keyword: Option<String>,
     pub category_id: Option<i64>,
     pub category_name: Option<String>,
@@ -327,7 +327,7 @@ pub struct CatalogueQuery {
 pub struct Results {
     /// Ranked, each with the reasons it matched; exact results come before fuzzy ones.
     pub candidates: Vec<Candidate>,
-    /// Total matches LCSC reports for the whole query (all pages), when stated.
+    /// Total matches Distributor reports for the whole query (all pages), when stated.
     pub total: Option<u64>,
     pub page: u32,
     pub limit: u32,
@@ -336,7 +336,7 @@ pub struct Results {
     pub via: String,
     /// Rows of this page removed by the manufacturer/package filters.
     pub filtered_out: usize,
-    /// What each listing is relative to the libraries, by LCSC number (existing part, supplier-only,
+    /// What each listing is relative to the libraries, by Distributor number (existing part, supplier-only,
     /// needs a new symbol/footprint). A listing is never rejected for lacking a definition.
     pub links: std::collections::BTreeMap<String, Link>,
 }
@@ -383,7 +383,7 @@ pub fn search_linked<F: Fetch>(
             refresh,
         ),
         (None, None) => Err(ApiError::BadRequest(
-            "enter an LCSC part number, an MPN or a keyword, or choose a category".into(),
+            "enter an Distributor part number, an MPN or a keyword, or choose a category".into(),
         )),
     };
     reply(fetched.map(|f| {
@@ -424,7 +424,7 @@ pub fn search_linked<F: Fetch>(
         let query = keyword.clone().unwrap_or_default();
         let links = kept
             .iter()
-            .filter_map(|r| r.lcsc_part.clone().map(|l| (l, link_record(r, defs))))
+            .filter_map(|r| r.distributor_part.clone().map(|l| (l, link_record(r, defs))))
             .collect();
         Fetched {
             served: f.served,
@@ -447,24 +447,24 @@ pub fn search_linked<F: Fetch>(
 // Process-wide wiring
 // ---------------------------------------------------------------------------------------
 
-pub struct Lcsc {
+pub struct Distributor {
     pub settings: Settings,
     pub catalogue: Catalogue<UreqFetch>,
 }
 
 static STATUS_FILE: OnceLock<PathBuf> = OnceLock::new();
-static LCSC: OnceLock<Lcsc> = OnceLock::new();
+static Distributor: OnceLock<Distributor> = OnceLock::new();
 
 /// Set where the non-secret status JSON lives. Call once at start-up, before first use.
 pub fn init(dir: &Path) {
-    let _ = STATUS_FILE.set(dir.join("lcsc-connection.json"));
+    let _ = STATUS_FILE.set(dir.join("distributor-connection.json"));
 }
 
-pub fn lcsc() -> &'static Lcsc {
-    LCSC.get_or_init(|| {
-        let settings = Settings::new(Arc::new(LcscKeyStore), STATUS_FILE.get().cloned());
-        let api = LcscApi::new(UreqFetch::default(), PRODUCTION_BASE, settings.source());
-        Lcsc {
+pub fn distributor() -> &'static Distributor {
+    Distributor.get_or_init(|| {
+        let settings = Settings::new(Arc::new(DistributorKeyStore), STATUS_FILE.get().cloned());
+        let api = DistributorApi::new(UreqFetch::default(), PRODUCTION_BASE, settings.source());
+        Distributor {
             settings,
             catalogue: Catalogue::new(api),
         }
@@ -472,11 +472,11 @@ pub fn lcsc() -> &'static Lcsc {
 }
 
 /// A second client sharing the same credential source, for the single-part lookup/import path.
-pub fn lookup_api() -> LcscApi<UreqFetch> {
-    LcscApi::new(
+pub fn lookup_api() -> DistributorApi<UreqFetch> {
+    DistributorApi::new(
         UreqFetch::default(),
         PRODUCTION_BASE,
-        lcsc().settings.source(),
+        distributor().settings.source(),
     )
 }
 
@@ -488,24 +488,24 @@ pub mod cmd {
     use crate::resources::Priority;
     use tauri::AppHandle;
 
-    fn view() -> LcscView {
-        let l = lcsc();
+    fn view() -> DistributorView {
+        let l = distributor();
         l.settings.view(l.catalogue.requests_made())
     }
 
     #[tauri::command(rename_all = "snake_case")]
-    pub async fn lcsc_settings_get(app: AppHandle) -> Result<LcscView, String> {
+    pub async fn distributor_settings_get(app: AppHandle) -> Result<DistributorView, String> {
         blocking(app, Priority::P4, |_| Ok(view())).await
     }
 
     #[tauri::command(rename_all = "snake_case")]
-    pub async fn lcsc_settings_save(
+    pub async fn distributor_settings_save(
         app: AppHandle,
         key: String,
         secret: String,
-    ) -> Result<LcscView, String> {
+    ) -> Result<DistributorView, String> {
         blocking(app, Priority::P4, move |_| {
-            let l = lcsc();
+            let l = distributor();
             l.settings.save(&key, &secret)?;
             l.catalogue.clear();
             Ok(view())
@@ -514,9 +514,9 @@ pub mod cmd {
     }
 
     #[tauri::command(rename_all = "snake_case")]
-    pub async fn lcsc_settings_clear(app: AppHandle) -> Result<LcscView, String> {
+    pub async fn distributor_settings_clear(app: AppHandle) -> Result<DistributorView, String> {
         blocking(app, Priority::P4, |_| {
-            let l = lcsc();
+            let l = distributor();
             l.settings.clear()?;
             l.catalogue.clear();
             Ok(view())
@@ -525,9 +525,9 @@ pub mod cmd {
     }
 
     #[tauri::command(rename_all = "snake_case")]
-    pub async fn lcsc_test_connection(app: AppHandle) -> Result<LcscView, String> {
+    pub async fn distributor_test_connection(app: AppHandle) -> Result<DistributorView, String> {
         blocking(app, Priority::P4, |_| {
-            let l = lcsc();
+            let l = distributor();
             Ok(test_connection(&l.settings, &l.catalogue))
         })
         .await
@@ -539,7 +539,7 @@ pub mod cmd {
         refresh: bool,
     ) -> Result<Reply<Vec<CategoryNode>>, String> {
         blocking(app, Priority::P4, move |_| {
-            Ok(categories(&lcsc().catalogue, refresh))
+            Ok(categories(&distributor().catalogue, refresh))
         })
         .await
     }
@@ -550,7 +550,7 @@ pub mod cmd {
         refresh: bool,
     ) -> Result<Reply<Vec<Manufacturer>>, String> {
         blocking(app, Priority::P4, move |_| {
-            Ok(manufacturers(&lcsc().catalogue, refresh))
+            Ok(manufacturers(&distributor().catalogue, refresh))
         })
         .await
     }
@@ -566,7 +566,7 @@ pub mod cmd {
                 &crate::libstore::project_library(s),
             );
             let refs: Vec<_> = defs.iter().map(|(sc, d)| (sc.clone(), d)).collect();
-            Ok(search_linked(&lcsc().catalogue, &query, &refs))
+            Ok(search_linked(&distributor().catalogue, &query, &refs))
         })
         .await
     }

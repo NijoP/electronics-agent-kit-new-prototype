@@ -19,7 +19,7 @@ under a fresh Firstmate crew. This folder is the complete handoff:
 - `main` @ `b6bfb92`: M1 engineering foundation (EAK-IR, typed command engine, engineering, validation,
   manufacturing crates; 35 tests passing), tool-attribution settings, and executable `scripts/*.sh` (PR #2).
 - No uncommitted or unpushed code existed in any worktree at shutdown (every local clone and worktree was checked).
-  Branches `fm/eak-jlcpcb-prep` and `fm/devdash-mvp` had no commits beyond `main` and were never pushed;
+  Branches `fm/eak-fabricator-prep` and `fm/devdash-mvp` had no commits beyond `main` and were never pushed;
   that work had not started.
 - Firstmate's private state (backlogs, charters, rules, reports) is copied into this folder.
 
@@ -37,7 +37,7 @@ under a fresh Firstmate crew. This folder is the complete handoff:
 | [#5](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/5) Thermal reliefs, silkscreen refdes, DRC-014/015, IPC register | `fm/eak-fab-detail` | eak-electronics | red (pre-#2 exec-bit failure) | Rebase on `main`, re-run. |
 | [#6](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/6) Synchronous-buck power calculations, ERC rating checks | `fm/eak-power-calc` | eak-electronics | red (pre-#2 exec-bit failure) | Rebase; check the audit's warning that it narrows the calculation API to the buck project. |
 | [#7](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/7) Validation-board parts with datasheet provenance | `fm/eak-lib-expand` | eak-electronics | red (pre-#2 exec-bit failure) | Rebase on `main`, re-run. |
-| [#8](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/8) Offline LCSC sourcing records and SOURCING report | `fm/eak-lcsc-sourcing` | eak-electronics | red (pre-#2 exec-bit failure) | Rebase; extend into the full LCSC integration (directive §5). |
+| [#8](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/8) Offline Distributor sourcing records and SOURCING report | `fm/eak-distributor-sourcing` | eak-electronics | red (pre-#2 exec-bit failure) | Rebase; extend into the full Distributor integration (directive §5). |
 
 Most red PRs failed only because `scripts/*.sh` lacked the executable bit on Linux/macOS, which #2
 fixed on `main`; a rebase is expected to turn them green.
@@ -57,8 +57,8 @@ fixed on `main`; a rebase is expected to turn them green.
    - editor-enabling typed commands (`eak-editor-cmds`, eak-core);
    - actionable ERC/DRC findings (`eak-actionable-findings`, eak-electronics);
    - interactive schematic editor (`eak-desktop-schematic-edit`) and PCB editor (`eak-desktop-pcb-edit`);
-   - full LCSC integration (`eak-lcsc-integration`);
-   - JLCPCB prep (`eak-jlcpcb-prep`);
+   - full Distributor integration (`eak-distributor-integration`);
+   - Fabricator prep (`eak-fabricator-prep`);
    - universal providers (`universal-provider-system`);
    - release packaging (`eak-release-pkg`, `eak-desktop-mfg-release`);
    - AI assistant dock (`eak-desktop-agent-studio`).
@@ -109,7 +109,7 @@ to this Linux laptop on 2026-11-13. Take the helm and continue it.
    eak-ux, eak-clock (deadline monitor; reset its checkpoints to the directive). Do NOT recreate
    eak-dashboard or eak-windows-optimizer unless the owner asks. Hand each secondmate its open items from
    BACKLOGS.md plus the directive work for its domain (directive priority: UI/UX design system ->
-   schematic editor -> 2-layer PCB editor -> LCSC -> AI assistant -> JLCPCB prep -> 3-OS packages ->
+   schematic editor -> 2-layer PCB editor -> Distributor -> AI assistant -> Fabricator prep -> 3-OS packages ->
    both acceptance projects through the app; 3D deferred).
 6. Unblock first: tell the owner if GitHub Actions still refuses jobs over billing, and ask the owner once
    for approval of docs/handoff/DESKTOP_DEPENDENCY_REQUEST.md (minus the 3D packages); never add an

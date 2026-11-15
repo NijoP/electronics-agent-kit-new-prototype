@@ -107,7 +107,7 @@ and against the manufacturers' recommended land patterns.
 | Thermal-relief spoke width | zone net-class track width (≥ minimum track width). The raster spoke is never narrower and is less than 2 × 0.1 mm wider. | `copper::relief_rule` | EAK DEFAULT |
 | Spokes per relief / minimum landed | 4 axis spokes / 2 | `copper::SPOKE_DIRS`, `drc::MIN_SPOKES` | EAK DEFAULT |
 | Zone fill raster pitch | 0.1 mm, plus a 0.071 mm halo on every keep-out | `copper::ZONE_FILL_PITCH` | EAK DEFAULT |
-| Silkscreen line width | 0.16 mm | `silk::LINE_WIDTH` | EAK DEFAULT (above the 0.153 mm JLCPCB minimum checked by DFM-010; unverified) |
+| Silkscreen line width | 0.16 mm | `silk::LINE_WIDTH` | EAK DEFAULT (above the 0.153 mm Fabricator minimum checked by DFM-010; unverified) |
 | Reference-designator cap height | 1.0 mm | `silk::TEXT_HEIGHT` | EAK DEFAULT |
 | Silkscreen-to-soldermask-opening clearance | 0.1 mm | `silk::MASK_CLEARANCE`, DRC-015 | EAK DEFAULT |
 | Soldermask expansion | 0.05 mm | `ManufacturingConfig::mask_expansion` | EAK DEFAULT |

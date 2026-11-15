@@ -589,7 +589,7 @@ fn library_search_merges_builtin_and_project_and_keeps_provenance() {
             component_id: "R_0603".into(),
             manufacturer: Some("Yageo".into()),
             mpn: Some("RC0603FR-0710KL".into()),
-            lcsc: Some("C25804".into()),
+            distributor: Some("C25804".into()),
             datasheet: None,
         },
     )

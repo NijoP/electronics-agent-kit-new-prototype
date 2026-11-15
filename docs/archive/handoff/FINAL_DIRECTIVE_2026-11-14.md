@@ -102,7 +102,7 @@ No Python anywhere in the EAK product or toolchain. Do not replace Tauri with El
 
 UI first means establishing the real design system and working interaction architecture first—not creating disconnected mockups and postponing integration.
 
-## 5. LCSC ELECTRONICS — MANDATORY
+## 5. Distributor ELECTRONICS — MANDATORY
 
 Study the existing DESK repository:
 
@@ -111,14 +111,14 @@ https://github.com/NijoP/DESK
 Especially:
 - `desk/component_intelligence/`
 - `library/`
-- `docs/ecosystem/LCSC_INTEGRATION_ARCHITECTURE.md`
-- `docs/ecosystem/JLCPCB_MANUFACTURING_ARCHITECTURE.md`
+- `docs/ecosystem/DISTRIBUTOR_INTEGRATION_ARCHITECTURE.md`
+- `docs/ecosystem/FABRICATOR_MANUFACTURING_ARCHITECTURE.md`
 
-Implement LCSC component sourcing and library integration.
+Implement Distributor component sourcing and library integration.
 
 Required functionality:
 - Component search.
-- LCSC part-number identification.
+- Distributor part-number identification.
 - Manufacturer part-number mapping.
 - Datasheet retrieval.
 - Electrical specification inspection.
@@ -130,9 +130,9 @@ Required functionality:
 
 Never invent component specifications or claim that a component is verified without evidence.
 
-Keep LCSC sourcing separate from the native EDA engine.
+Keep Distributor sourcing separate from the native EDA engine.
 
-JLCPCB manufacturing preparation should remain available through the previously defined integration architecture. Do not confuse LCSC component sourcing with JLCPCB fabrication and assembly.
+Fabricator manufacturing preparation should remain available through the previously defined integration architecture. Do not confuse Distributor component sourcing with Fabricator fabrication and assembly.
 
 ## 6. AI MODEL AND AGENT INTEGRATION
 
@@ -197,7 +197,7 @@ Do not spend the delivery window building a 3D engine.
 
 Preserve the architecture so it can be added later without redesigning the schematic and PCB editors.
 
-Do not defer schematic editing, PCB editing, UI/UX, LCSC integration or cross-platform packaging.
+Do not defer schematic editing, PCB editing, UI/UX, Distributor integration or cross-platform packaging.
 
 ## 10. EXECUTION AND RESOURCE MANAGEMENT
 
@@ -225,8 +225,8 @@ At 7:00 AM, I expect:
 4. A functional native PCB editor.
 5. Real EAK-IR integration and Rust engineering commands.
 6. Working ERC and DRC capabilities for the supported scope.
-7. LCSC component sourcing and library integration.
-8. Applicable JLCPCB manufacturing preparation.
+7. Distributor component sourcing and library integration.
+8. Applicable Fabricator manufacturing preparation.
 9. Both acceptance projects with engineering evidence.
 10. Windows, Linux and macOS packages with verified status.
 11. A complete requirements and maturity matrix.

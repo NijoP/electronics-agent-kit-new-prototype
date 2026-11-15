@@ -130,7 +130,7 @@ export interface Project {
       category: string;
       refdes_prefix: string;
       default_value: string;
-      lcsc?: string | null;
+      distributor?: string | null;
       symbol: { pins: { number: string; name: string }[] };
     }
   >;
@@ -186,7 +186,7 @@ export interface Snapshot {
 export type Command =
   | { type: "ImportLibraryComponent"; component_id: string }
   | { type: "UpsertComponentDefinition"; definition: ComponentDef }
-  | { type: "SetComponentProperties"; component_id: string; manufacturer: string | null; mpn: string | null; lcsc: string | null; datasheet: string | null }
+  | { type: "SetComponentProperties"; component_id: string; manufacturer: string | null; mpn: string | null; distributor: string | null; datasheet: string | null }
   | { type: "AssignComponentFootprint"; component_id: string; footprint: FootprintDef; pin_map: Record<string, string[]> }
   | { type: "PlaceSymbol"; sheet_id: Id | null; component_id: string; position: Point; rotation: Rotation; refdes: string | null; value: string | null }
   | { type: "MoveSymbol"; symbol_id: Id; position: Point }
@@ -460,14 +460,14 @@ export interface ExportResult {
   reports: Report[];
 }
 
-// ---- parts search, BOM and JLCPCB preparation (src-tauri/src/parts.rs) ----
+// ---- parts search, BOM and Fabricator preparation (src-tauri/src/parts.rs) ----
 
 export interface SourcingRecord {
   provider: string;
   source_url: string;
   retrieved_at_unix_s: number;
   raw_sha256: string;
-  lcsc_part: string | null;
+  distributor_part: string | null;
   mpn: string | null;
   manufacturer: string | null;
   package: string | null;
@@ -486,7 +486,7 @@ export interface LibraryHit {
   id: string;
   name: string;
   category: string;
-  lcsc: string | null;
+  distributor: string | null;
   mpn: string | null;
 }
 
@@ -510,7 +510,7 @@ export interface PartsSearch {
     status: LiveStatus;
     message: string;
     records: SourcingRecord[];
-    /** How the records were obtained; a `stale_cache` answer is an older snapshot shown because LCSC is down. */
+    /** How the records were obtained; a `stale_cache` answer is an older snapshot shown because Distributor is down. */
     served?: { source: "live" | "cache" | "stale_cache"; age_s?: number; because?: string } | null;
   };
 }
@@ -528,7 +528,7 @@ export interface BomLine {
   designators: string[];
   quantity: number;
   footprint: string;
-  lcsc: string | null;
+  distributor: string | null;
   manufacturer: string | null;
   mpn: string | null;
   smd: boolean;
@@ -570,7 +570,7 @@ export interface AssemblyWarning {
 }
 
 export interface AssemblyReport {
-  rows: { lcsc: string; class: AssemblyClass | null; source: string | null; verified_at_unix_s: number | null }[];
+  rows: { distributor: string; class: AssemblyClass | null; source: string | null; verified_at_unix_s: number | null }[];
   warnings: AssemblyWarning[];
 }
 
@@ -578,7 +578,7 @@ export interface ManufacturingPreview {
   revision: number;
   bom: BomLine[];
   dfm: DfmReport;
-  /** JLCPCB assembly classification and fail-closed BOM warnings (ADR-0034). */
+  /** Fabricator assembly classification and fail-closed BOM warnings (ADR-0034). */
   assembly: AssemblyReport;
   default_out_dir: string | null;
 }
@@ -722,7 +722,7 @@ export interface ComponentDef {
   default_value: string;
   manufacturer: string | null;
   mpn: string | null;
-  lcsc: string | null;
+  distributor: string | null;
   datasheet: string | null;
   symbol: { pins: SymbolPin[]; body_half_w: number; body_half_h: number };
   footprint: FootprintDef;
@@ -973,20 +973,20 @@ export interface IntelligenceSummary {
   limitations: string[];
 }
 
-// LCSC OpenAPI catalogue (ADR-0032). The API secret never reaches the frontend: only the last
+// Distributor OpenAPI catalogue (ADR-0032). The API secret never reaches the frontend: only the last
 // four characters of the key are returned.
-export interface LcscStatusFile {
+export interface DistributorStatusFile {
   state: "untested" | "ok" | "failed";
   message: string;
   tested_at_unix_s: number | null;
   last_success_unix_s: number | null;
 }
 
-export interface LcscView {
+export interface DistributorView {
   has_credentials: boolean;
   key_hint: string | null;
   store_error: string | null;
-  status: LcscStatusFile;
+  status: DistributorStatusFile;
   requests_this_session: number;
   apply_url: string;
   host: string;
@@ -1016,7 +1016,7 @@ export interface Manufacturer {
   product_count: number | null;
 }
 
-export type MatchKind = "exact_lcsc" | "exact_mpn_manufacturer" | "exact_mpn" | "fuzzy" | "browse";
+export type MatchKind = "exact_distributor" | "exact_mpn_manufacturer" | "exact_mpn" | "fuzzy" | "browse";
 
 export interface Candidate {
   record: SourcingRecord;
@@ -1031,7 +1031,7 @@ export interface Candidate {
 
 export interface CatalogueResults {
   candidates: Candidate[];
-  /** What each listing is relative to the libraries, by LCSC number. */
+  /** What each listing is relative to the libraries, by Distributor number. */
   links: Record<string, LibraryLink>;
   total: number | null;
   page: number;
@@ -1094,7 +1094,7 @@ export interface LibraryEntry2 {
   unverified_ratings: number;
   has_datasheet: boolean;
   in_project: boolean;
-  supplier: { lcsc: string; stock: number | null; as_of_unix_s: number } | null;
+  supplier: { distributor: string; stock: number | null; as_of_unix_s: number } | null;
 }
 
 export interface Facet {

@@ -26,7 +26,7 @@ one ECAD-to-viewer transform and lazy loading, without a second design represent
   format+path so unrelated edits never reload models. Footprint offsets are stored in footprint
   coordinates (y down); a KiCad `(offset (xyz ..))` y value must be negated when transcribed.
 - Limits: WRL units are the file's own (KiCad .wrl is 0.1 inch; set scale); no collision or
-  model-vs-footprint verification yet; no EasyEDA/LCSC model fetching yet.
+  model-vs-footprint verification yet; no EasyEDA/Distributor model fetching yet.
 
 ## Consequences
 `eak-intelligence` component schema and `scene3d::Body` carry the reference. CSP gains

@@ -6,8 +6,8 @@
 //!
 //! * [`Standing::ExistingEak`]: a library definition (built-in, project, personal or imported
 //!   open-source) already carries this supplier part number, or the same normalised MPN;
-//! * [`Standing::ImportedDefinition`]: that definition was itself created from an LCSC listing
-//!   (id `LCSC_<number>`), i.e. its symbol/footprint were reused from a template;
+//! * [`Standing::ImportedDefinition`]: that definition was itself created from an Distributor listing
+//!   (id `DISTRIBUTOR_<number>`), i.e. its symbol/footprint were reused from a template;
 //! * [`Standing::SupplierOnly`]: no definition yet, but an existing symbol/footprint template can
 //!   carry it ([`Link::import_template`]); the listing can be saved as a supplier record now
 //!   and imported later;
@@ -19,7 +19,7 @@
 //! as approved. Two manufacturers' parts with the same MPN text are matched separately: a
 //! manufacturer mismatch is flagged (`manufacturer_conflict`), never merged.
 
-use crate::lcsc::import_plan;
+use crate::distributor::import_plan;
 use crate::matching::{normalize_manufacturer, normalize_mpn};
 use crate::sourcing::SourcingRecord;
 use eak_core::ComponentDef;
@@ -91,8 +91,8 @@ pub struct Link {
     pub explanation: String,
 }
 
-fn is_lcsc_import(def: &ComponentDef) -> bool {
-    def.id.starts_with("LCSC_")
+fn is_distributor_import(def: &ComponentDef) -> bool {
+    def.id.starts_with("DISTRIBUTOR_")
 }
 
 fn unverified(def: &ComponentDef) -> bool {
@@ -107,21 +107,21 @@ fn unverified(def: &ComponentDef) -> bool {
 /// How one definition relates to the listing, if at all.
 fn relate(
     rec: &SourcingRecord,
-    lcsc: &Option<String>,
+    distributor: &Option<String>,
     mpn: &Option<String>,
     maker: &Option<String>,
     def: &ComponentDef,
 ) -> Option<(LinkKind, Vec<String>, bool)> {
-    let by_part = lcsc.as_ref().is_some_and(|l| {
-        def.supplier_part("lcsc")
+    let by_part = distributor.as_ref().is_some_and(|l| {
+        def.supplier_part("distributor")
             .is_some_and(|p| p.eq_ignore_ascii_case(l))
     });
     if by_part {
         return Some((
             LinkKind::ExactSupplierPart,
             vec![format!(
-                "the definition carries LCSC part number {}",
-                lcsc.as_deref().unwrap_or("")
+                "the definition carries Distributor part number {}",
+                distributor.as_deref().unwrap_or("")
             )],
             false,
         ));
@@ -161,7 +161,7 @@ fn relate(
 
 /// Classify `rec` against `defs` (each tagged with its scope).
 pub fn link_record(rec: &SourcingRecord, defs: &[(Scope, &ComponentDef)]) -> Link {
-    let lcsc = rec.lcsc_part.as_deref().map(str::to_ascii_uppercase);
+    let distributor = rec.distributor_part.as_deref().map(str::to_ascii_uppercase);
     let mpn = rec
         .mpn
         .as_deref()
@@ -175,7 +175,7 @@ pub fn link_record(rec: &SourcingRecord, defs: &[(Scope, &ComponentDef)]) -> Lin
 
     let mut found: Vec<(LinkMatch, &ComponentDef)> = vec![];
     for (scope, def) in defs {
-        if let Some((kind, reasons, conflict)) = relate(rec, &lcsc, &mpn, &maker, def) {
+        if let Some((kind, reasons, conflict)) = relate(rec, &distributor, &mpn, &maker, def) {
             found.push((
                 LinkMatch {
                     component_id: def.id.clone(),
@@ -207,7 +207,7 @@ pub fn link_record(rec: &SourcingRecord, defs: &[(Scope, &ComponentDef)]) -> Lin
         .find(|(m, _)| !m.manufacturer_conflict)
         .map(|(m, d)| (m.component_id.clone(), m.scope.clone(), *d));
     if let Some((id, scope, def)) = best {
-        let imported = is_lcsc_import(def);
+        let imported = is_distributor_import(def);
         let unv = unverified(def);
         let explanation = format!(
             "{} {} in the {} library{}.",
@@ -272,14 +272,14 @@ mod tests {
     use crate::sourcing::{Spec, VerificationState};
     use eak_core::builtin;
 
-    fn rec(lcsc: &str, mpn: &str, maker: &str, package: &str, category: &str) -> SourcingRecord {
+    fn rec(distributor: &str, mpn: &str, maker: &str, package: &str, category: &str) -> SourcingRecord {
         SourcingRecord {
-            provider: "LCSC".into(),
-            source_url: "https://api.lcsc.com/x".into(),
+            provider: "Distributor".into(),
+            source_url: "https://distributor.invalid/x".into(),
             retrieved_at_unix_s: 1,
             raw_sha256: "00".into(),
             raw_bytes: 1,
-            lcsc_part: Some(lcsc.into()),
+            distributor_part: Some(distributor.into()),
             mpn: Some(mpn.into()),
             manufacturer: Some(maker.into()),
             package: Some(package.into()),
@@ -346,12 +346,12 @@ mod tests {
     }
 
     #[test]
-    fn an_existing_definition_matches_by_lcsc_number() {
+    fn an_existing_definition_matches_by_distributor_number() {
         let mut d = lib().remove(0);
         d.id = "MY_RES".into();
         d.mpn = Some("0603WAF1002T5E".into());
         d.manufacturer = Some("UNI-ROYAL".into());
-        d.set_offer(eak_core::SupplierOffer::bare("lcsc", "C25804"));
+        d.set_offer(eak_core::SupplierOffer::bare("distributor", "C25804"));
         let defs = [d];
         let r = rec("C25804", "other text", "X", "0603", "Resistors");
         let l = link_record(&r, &[(Scope::Project, &defs[0])]);
@@ -366,7 +366,7 @@ mod tests {
         d.id = "THEIRS".into();
         d.mpn = Some("ABC-123".into());
         d.manufacturer = Some("Maker One".into());
-        d.lcsc = None;
+        d.distributor = None;
         d.supplier_offers.clear();
         let defs = [d];
         let r = rec("C7", "abc 123", "Maker Two", "0603", "Resistors");
@@ -385,10 +385,10 @@ mod tests {
     }
 
     #[test]
-    fn a_definition_imported_from_lcsc_is_labelled_and_unverified_without_a_datasheet() {
+    fn a_definition_imported_from_distributor_is_labelled_and_unverified_without_a_datasheet() {
         let mut d = lib().remove(0);
-        d.id = "LCSC_C25804".into();
-        d.set_offer(eak_core::SupplierOffer::bare("lcsc", "C25804"));
+        d.id = "DISTRIBUTOR_C25804".into();
+        d.set_offer(eak_core::SupplierOffer::bare("distributor", "C25804"));
         d.datasheet = None;
         let defs = [d];
         let r = rec("C25804", "x", "y", "0603", "Resistors");
@@ -401,7 +401,7 @@ mod tests {
     fn an_imported_open_source_scope_is_named_in_the_explanation() {
         let mut d = lib().remove(0);
         d.id = "OSS_1".into();
-        d.set_offer(eak_core::SupplierOffer::bare("lcsc", "C1"));
+        d.set_offer(eak_core::SupplierOffer::bare("distributor", "C1"));
         let defs = [d];
         let r = rec("C1", "m", "k", "0603", "Resistors");
         let l = link_record(&r, &[(Scope::Imported("kicad-lite".into()), &defs[0])]);

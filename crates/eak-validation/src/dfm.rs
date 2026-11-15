@@ -38,9 +38,9 @@ pub struct FabProfile {
     pub min_silk_text_height_mm: f64,
 }
 
-/// JLCPCB standard 1-2 layer capabilities (`data/fab-jlcpcb-standard.json`).
-pub fn jlcpcb_standard() -> FabProfile {
-    serde_json::from_str(include_str!("../data/fab-jlcpcb-standard.json"))
+/// Fabricator standard 1-2 layer capabilities (`data/fab-fabricator-standard.json`).
+pub fn fabricator_standard() -> FabProfile {
+    serde_json::from_str(include_str!("../data/fab-fabricator-standard.json"))
         .expect("built-in fabrication profile is valid JSON")
 }
 

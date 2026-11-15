@@ -31,7 +31,7 @@ Frontend: vitest 122 tests passed (an earlier run on the older base counted 65).
 
 Peak tree RSS is the command's own process tree; swap and MemAvailable are whole-host and include other
 jobs. The largest single batch peak was 1437 MB (clippy), well under the 2 GB / 2.5 GB figures that
-originally triggered this work, but those figures were for the LCSC tests and packaging, and packaging was
+originally triggered this work, but those figures were for the Distributor tests and packaging, and packaging was
 not run here. An earlier attempt on `c1709ff` used a shared target dir that other worktrees also wrote to;
 it was discarded and nothing from it is reported as a result.
 

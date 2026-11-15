@@ -50,7 +50,7 @@ export function designFacts(s: Snapshot) {
     outline: pcb.board.outline.length >= 3,
     copperLayers: pcb.board.stackup ? pcb.board.stackup.layers.length : null,
     bomLines: new Set(symbols.map((sym) => `${sym.component_id}|${sym.value}`)).size,
-    withLcsc: symbols.filter((sym) => !!library?.[sym.component_id]?.lcsc).length,
+    withDistributor: symbols.filter((sym) => !!library?.[sym.component_id]?.distributor).length,
   };
 }
 
@@ -161,7 +161,7 @@ export function ProjectOverview({ snapshot, results, conn, domain, events, busy,
       <Section title="Components / BOM" aside={<button type="button" className="linkish" onClick={onParts}>Library</button>}>
         <dl className="facts">
           <Fact name="BOM lines">{f.bomLines}</Fact>
-          <Fact name="With LCSC part">{f.parts === 0 ? "—" : `${f.withLcsc} of ${f.parts}`}</Fact>
+          <Fact name="With Distributor part">{f.parts === 0 ? "—" : `${f.withDistributor} of ${f.parts}`}</Fact>
         </dl>
       </Section>
 

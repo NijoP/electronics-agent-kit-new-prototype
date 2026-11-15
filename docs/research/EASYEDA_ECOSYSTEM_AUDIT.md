@@ -42,7 +42,7 @@ interactive EDA desktop application", Part 2). Companion documents:
 2. **The most valuable material is design knowledge:** the Pro file format and document hierarchy
    (`easyeda-format-skill`, `easyeda-file-format`, `easyeda-api-skill`), a 2-32 copper-layer model with
    an ordered stack-up and via spans, rule taxonomies (net class, differential pair, equal-length group,
-   region rules), coded ERC/DRC/DFM rule tables (`easyeda-eprj3-skill`, `eext-jlc-order-dfm-checker`),
+   region rules), coded ERC/DRC/DFM rule tables (`easyeda-eprj3-skill`, `eext-fab-order-dfm-checker`),
    and interaction patterns from the viewers (cursor-anchored zoom, layer-exclusive picking,
    dim-others highlighting, BOM-to-board cross-probing).
 3. **EasyEDA's extension API is a weaker boundary than EAK's command engine:** per-primitive
@@ -69,7 +69,7 @@ interactive EDA desktop application", Part 2). Companion documents:
 | # | Group | Repository | Commit inspected | Licence file | Nature |
 |---|---|---|---|---|---|
 | 1 | A | [easyeda-api-skill](https://github.com/easyeda/easyeda-api-skill) | `ed922cd6a4ba` | none | LLM skill: generated `eda.*` API reference, format docs, one Node bridge script |
-| 2 | A | [easyeda-api-sdk](https://github.com/easyeda/easyeda-api-sdk) | `f83525eb54f8` | Apache-2.0 | Extension project template and build tooling (typings live in npm `@jlceda/pro-api-types`, not here) |
+| 2 | A | [easyeda-api-sdk](https://github.com/easyeda/easyeda-api-sdk) | `f83525eb54f8` | Apache-2.0 | Extension project template and build tooling (typings live in npm `@fabeda/pro-api-types`, not here) |
 | 3 | A | [easyeda-format-skill](https://github.com/easyeda/easyeda-format-skill) | `4fcab1747d47` | MIT | Pro format spec ("V4") as an LLM skill: 297 JSON Schemas, AJV validator |
 | 4 | A | [easyeda-eprj3-skill](https://github.com/easyeda/easyeda-eprj3-skill) | `8ff62c549c81` | MIT | Real code (~24k lines Node): offline `.eprj3` project builder with ERC/DRC/layout gates and tests |
 | 5 | A | [easyeda-file-format](https://github.com/easyeda/easyeda-file-format) | `9186c4ac43e6` | none | Docs only: V3 Pro file-format spec |
@@ -83,7 +83,7 @@ interactive EDA desktop application", Part 2). Companion documents:
 | 13 | B | [eext-interactive-html-bom](https://github.com/easyeda/eext-interactive-html-bom) | `430ea9d06a1c` | Apache-2.0 | Interactive HTML BOM (InteractiveHtmlBom-derived viewer) |
 | 14 | C | [eext-ai-library-builder](https://github.com/easyeda/eext-ai-library-builder) | `27731deb50a3` | Apache-2.0 | Datasheet page -> vision model -> parametric symbol/footprint |
 | 15 | C | [eext-ai-symbol-builder](https://github.com/easyeda/eext-ai-symbol-builder) | `e9fb3b167356` | Apache-2.0 | Pinout image -> vision model -> symbol |
-| 16 | C | [eext-ai-device-standardization](https://github.com/easyeda/eext-ai-device-standardization) | `89abac48075b` | Apache-2.0 | BOM/schematic part matching to the LCSC library, optional LLM choice |
+| 16 | C | [eext-ai-device-standardization](https://github.com/easyeda/eext-ai-device-standardization) | `89abac48075b` | Apache-2.0 | BOM/schematic part matching to the Distributor library, optional LLM choice |
 | 17 | C | [eext-datasheet-helper](https://github.com/easyeda/eext-datasheet-helper) | `6be8cf0b8e28` | Apache-2.0 | Datasheet Q&A (online LLM or local in-browser models) |
 | 18 | C | [eext-component-box](https://github.com/easyeda/eext-component-box) | `0390a4c0e9db` | Apache-2.0 | Personal parts inventory plus ESP32 storage-box hardware (no AI) |
 | 19 | D | [eext-open-auto-router](https://github.com/easyeda/eext-open-auto-router) | `2a308fdd2deb` | GPL-3.0 | Island placement + PathFinder negotiated-congestion router (OpenAutoRouter port) |
@@ -96,7 +96,7 @@ interactive EDA desktop application", Part 2). Companion documents:
 | 26 | D | [eext-pad-fanout](https://github.com/easyeda/eext-pad-fanout) | `7c88e571457e` | Apache-2.0 | Octilinear pad fanout planner with unit tests |
 | 27 | D | [eext-pcb-component-grouping](https://github.com/easyeda/eext-pcb-component-grouping) | `95421773a018` | Apache-2.0 | PCB placement grouped by schematic regions |
 | 28 | D | [eext-balance-copper](https://github.com/easyeda/eext-balance-copper) | `4a52f9021a9d` | Apache-2.0 | Copper-thieving pattern fill |
-| 29 | E | [eext-jlc-order-dfm-checker](https://github.com/easyeda/eext-jlc-order-dfm-checker) | `afd538786d51` | Apache-2.0 | JLCPCB capability DFM checks (18 PCB + 7 SMT) |
+| 29 | E | [eext-fab-order-dfm-checker](https://github.com/easyeda/eext-fab-order-dfm-checker) | `afd538786d51` | Apache-2.0 | Fabricator capability DFM checks (18 PCB + 7 SMT) |
 | 30 | E | [eext-design-rule-generator](https://github.com/easyeda/eext-design-rule-generator) | `2cf9635b335b` | Apache-2.0 | Net classification, stack-up choice, impedance surrogate model |
 | 31 | E | [eext-netlist-explorer](https://github.com/easyeda/eext-netlist-explorer) | `6661961fc878` | Apache-2.0 | Netlist browser and diagrams |
 | 32 | E | [eext-bom-compare](https://github.com/easyeda/eext-bom-compare) | `4489dd9b857e` | Apache-2.0 | File-vs-file BOM diff with a multi-vendor test corpus |
@@ -112,7 +112,7 @@ Paths in the sections below are relative to the root of the repository being des
 
 ## Group A - Editor API and document architecture (EasyEDA repos 1-8)
 
-Method: read-only inspection of the shallow clones (and `git ls-tree`/`git show` for easyeda-documents) plus `gh api repos/easyeda/<repo>` for licence/archive flags. No builds or installs. Important caveat for repo 2: the `@jlceda/pro-api-types` typings (the real `index.d.ts`, ~659 KB per extension-dev-skill SKILL.md) are NOT contained in easyeda-api-sdk; the API class/enum/interface names cited below come from the generated reference docs in easyeda-api-skill `references/` (same API Extractor-style names: `class X`, `enum E...`, `interface I...`) and are labelled as such.
+Method: read-only inspection of the shallow clones (and `git ls-tree`/`git show` for easyeda-documents) plus `gh api repos/easyeda/<repo>` for licence/archive flags. No builds or installs. Important caveat for repo 2: the `@fabeda/pro-api-types` typings (the real `index.d.ts`, ~659 KB per extension-dev-skill SKILL.md) are NOT contained in easyeda-api-sdk; the API class/enum/interface names cited below come from the generated reference docs in easyeda-api-skill `references/` (same API Extractor-style names: `class X`, `enum E...`, `interface I...`) and are labelled as such.
 
 Repo-type summary (docs/skill prompts vs real code):
 
@@ -154,7 +154,7 @@ Repo-type summary (docs/skill prompts vs real code):
   - Net classes / rules (`PCB_Drc`): createNetClass/addNetToNetClass, differential pairs, equal-length net groups, pad-pair groups, rule configurations (get/save/overwrite/rename/setAsDefault, `getNetRules`, `getRegionRules`, `getNetByNetRules`).
   - Validation APIs: `PCB_Drc.check(strict, userInterface, includeVerboseError)` returns boolean, or `Array<any>` when verbose (note: verbose result is untyped); `startRealTimeDrc/stopRealTimeDrc/getRealTimeDrcStatus`; `SCH_Drc.check(...)` verbose returns `Array<ISCH_DrcError>` with `{type: 'fatalError'|'error'|'warn', rule: string key like 'IN-IN', net?, primitives: ISCH_DrcErrorPrimitive[]}`. No ERC/DRC rule catalogue is documented in the API refs.
   - Selection and events: `DMT_SelectControl.getCurrentDocumentInfo()` (the only current-document query), `PCB_SelectControl`/`SCH_SelectControl` (getAllSelectedPrimitives(_PrimitiveId), doSelectPrimitives, clearSelected, doCrossProbeSelect(components, pins, nets, highlight, select), getCurrentMousePosition); events via `PCB_Event`/`SCH_Event`/`DMT_Event`: addMouseEventListener (`EPCB_MouseEventType`), addPrimitiveEventListener (`EPCB_PrimitiveEventType` = add/delete/modify), addNetEventListener, addCrossProbeSelectEventListener, addRealTimeDrcResultEventListener, DMT `addEditorTabEventListener`. Listener ids are caller-chosen strings (`removeEventListener(id)`).
-  - Component/symbol/footprint/device: library classes `LIB_Device` (create/modify/get/search/searchByProperties/getByLcscIds), `LIB_Symbol`, `LIB_Footprint` (each with getDocumentSource/updateDocumentSource, i.e. raw log-format source round-trip), `LIB_3DModel`, `LIB_Cbb`, `LIB_Classification`, `LIB_SimulationModel`; `ELIB_LibraryType`: CBB 1, SYMBOL 2, DEVICE 3, FOOTPRINT 4, MODEL 5, PANEL_LIBRARY 29, simulation models. `LIB_LibrariesList` exposes system/personal/project/favorite library uuids (`getProjectLibraryUuid`) and `registerExtendLibrary`. A schematic part is placed from a Device (`sch_PrimitiveComponent.create(component, x, y, subPartName?, rotation?, mirror?, addIntoBom?, addIntoPcb?)`); the Device links Symbol + Footprint (+3D model).
+  - Component/symbol/footprint/device: library classes `LIB_Device` (create/modify/get/search/searchByProperties/getByDistributorIds), `LIB_Symbol`, `LIB_Footprint` (each with getDocumentSource/updateDocumentSource, i.e. raw log-format source round-trip), `LIB_3DModel`, `LIB_Cbb`, `LIB_Classification`, `LIB_SimulationModel`; `ELIB_LibraryType`: CBB 1, SYMBOL 2, DEVICE 3, FOOTPRINT 4, MODEL 5, PANEL_LIBRARY 29, simulation models. `LIB_LibrariesList` exposes system/personal/project/favorite library uuids (`getProjectLibraryUuid`) and `registerExtendLibrary`. A schematic part is placed from a Device (`sch_PrimitiveComponent.create(component, x, y, subPartName?, rotation?, mirror?, addIntoBom?, addIntoPcb?)`); the Device links Symbol + Footprint (+3D model).
   - Properties/attributes: primitives expose `getState_*` getters; PCB primitives chain `setState_*` then `.done()`; `PCB_PrimitiveAttribute`/`ISCH_PrimitiveAttribute` are separate attribute primitives (see repo 7 pitfalls for the SCH/PCB asymmetry).
   - Undo/redo: NO undo/redo API appears anywhere in the references (grep for undo/redo only matches `format/index.md`, which is about log-format "revoke" semantics). The API exposes `PCB_Document.save()`, `importChanges` (sync schematic->PCB), `autoLayout`/`autoRouting`/`clearRouting`, import of autoroute `.ses`/JSON files.
   - Units: PCB data unit = mil; schematic data unit = 10 mil (0.01 inch) (`references/classes/SYS_Unit.md`). Floating-point numbers, not integers.
@@ -185,8 +185,8 @@ Repo-type summary (docs/skill prompts vs real code):
 - URL: https://github.com/easyeda/easyeda-api-sdk
 - Commit inspected: f83525eb54f86f131cf90780ed3fa0237dbb75aa
 - Licence: `LICENSE` = Apache License 2.0 (Version 2.0, January 2004); `package.json` `license: Apache-2.0`; `extension.json` `license: Apache-2.0` ; reusable in EAK: yes-with-attribution (but little of value to reuse)
-- Language / size: TypeScript, 36 files (8 .ts, 11 .json, 6 .md). devDependencies: `@jlceda/pro-api-types ^0.4.26`, esbuild, ts-node, eslint (`@antfu/eslint-config`), jszip, ws. package version 1.6.29.
-- What it is: A project template/scaffold (`npx github:easyeda/easyeda-api-sdk my-extension` via `build/create.js`) for building EasyEDA Pro extensions: esbuild bundling to an IIFE, `extension.json` manifest, packaging into `.eext` (zip via jszip), and a dev mode that pushes the rebuilt `.eext` to the client over WebSocket (port 59394). It does NOT contain API typings; those are pulled from the npm package `@jlceda/pro-api-types` (referenced in `tsconfig.json` `include`).
+- Language / size: TypeScript, 36 files (8 .ts, 11 .json, 6 .md). devDependencies: `@fabeda/pro-api-types ^0.4.26`, esbuild, ts-node, eslint (`@antfu/eslint-config`), jszip, ws. package version 1.6.29.
+- What it is: A project template/scaffold (`npx github:easyeda/easyeda-api-sdk my-extension` via `build/create.js`) for building EasyEDA Pro extensions: esbuild bundling to an IIFE, `extension.json` manifest, packaging into `.eext` (zip via jszip), and a dev mode that pushes the rebuilt `.eext` to the client over WebSocket (port 59394). It does NOT contain API typings; those are pulled from the npm package `@fabeda/pro-api-types` (referenced in `tsconfig.json` `include`).
 - Key source paths:
   - `.../easyeda-api-sdk/src/index.ts` - entry: exports `activate(status?: 'onStartupFinished', arg?)` and menu handler `about()` using `eda.sys_Dialog.showInformationMessage` and `eda.sys_I18n.text`
   - `.../extension.json` - manifest: `engines.eda ^3.2.0`, `entry ./dist/index`, `headerMenus` keyed per editor (`home`, `sch`, `pcb`) with `registerFn`, `activationEvents`, `dependentExtensions`
@@ -203,9 +203,9 @@ Repo-type summary (docs/skill prompts vs real code):
 |---|---|---|---|
 | Extension manifest with per-editor `headerMenus`, `activationEvents`, `engines.eda` range | future capability | `extension.json` | If EAK adds plugins, a manifest with editor-scoped menu contributions and an engine-version range is a sound minimal design |
 | Dev mode hot-push of packaged extension over local WebSocket | not applicable | `build/dev.ts` | Tauri dev loop covers this |
-| Typings as separate npm package versioned independently of the app | requires adaptation | `package.json` (`@jlceda/pro-api-types`) | For an EAK plugin/agent SDK, generate TS types from Rust `Command` schemas (e.g. via a schema export) rather than hand-written |
+| Typings as separate npm package versioned independently of the app | requires adaptation | `package.json` (`@fabeda/pro-api-types`) | For an EAK plugin/agent SDK, generate TS types from Rust `Command` schemas (e.g. via a schema export) rather than hand-written |
 
-- Gaps/unknowns: The typings (`@jlceda/pro-api-types`) were not available in this clone, so class/type listings for "SDK typings" come from repo 1 references and repo 7's description of `index.d.ts` (single declaration file, `@public/@beta/@alpha/@internal` JSDoc tags, `eda` mount union types such as `sch_PrimitiveComponent: SCH_PrimitiveComponent | SCH_PrimitiveComponent3`).
+- Gaps/unknowns: The typings (`@fabeda/pro-api-types`) were not available in this clone, so class/type listings for "SDK typings" come from repo 1 references and repo 7's description of `index.d.ts` (single declaration file, `@public/@beta/@alpha/@internal` JSDoc tags, `eda` mount union types such as `sch_PrimitiveComponent: SCH_PrimitiveComponent | SCH_PrimitiveComponent3`).
 
 ---
 
@@ -336,7 +336,7 @@ Repo-type summary (docs/skill prompts vs real code):
 
 | Feature | Classification | Evidence (path) | Recommendation for EAK |
 |---|---|---|---|
-| Std (v1.x) JSON-with-tilde-delimited-strings format | not applicable | `Open-File-Format/common.md` | Only relevant if EAK wants legacy Std import (LCSC/OSHWHub parts still exist in Std format); would be native work |
+| Std (v1.x) JSON-with-tilde-delimited-strings format | not applicable | `Open-File-Format/common.md` | Only relevant if EAK wants legacy Std import (Distributor/OSHWHub parts still exist in Std format); would be native work |
 | Whole-document getSource/applySource scripting | not applicable | `API/example/modifyTrackVia.js` | Contrasts with EAK's typed commands |
 | Std vs Pro layer numbering mismatch | requires native EAK implementation | `Open-File-Format/PCB.md` | If EAK imports either format, maintain separate layer-id maps per source format |
 
@@ -349,7 +349,7 @@ Repo-type summary (docs/skill prompts vs real code):
 - Commit inspected: d9148cba524149d17afcbfd196fab3226a8df5da
 - Licence: NO LICENSE file in repo (GitHub: no SPDX); SKILL.md front matter says `license: MIT` ; reusable in EAK: NO for copying (no licence file). Concepts only.
 - Language / size: 69 files: 64 Markdown (49 scenario `recipes/*.md`, `resources/guide/*`, `resources/experience.md`), 4 JS in `scripts/` (`eda-api.js` 928 lines, `eda-api.test.js` 118 lines, `lint-eda-api.js`, `build-registry.js`). Skill version 2.0.0.
-- What it is: A skill for writing EasyEDA Pro extensions where the authoritative API source is the target project's installed `node_modules/@jlceda/pro-api-types/index.d.ts` rather than docs. Its CLI `scripts/eda-api.js` loads the typings via the TypeScript compiler API, builds a cached type graph (keyed by package version + declaration SHA-256 + TS version), and offers `doctor`, `search`, `inspect --mount ... --member ... --closure`, and `lint` (type-check plus policy checks for runtime restrictions and `extension.json`).
+- What it is: A skill for writing EasyEDA Pro extensions where the authoritative API source is the target project's installed `node_modules/@fabeda/pro-api-types/index.d.ts` rather than docs. Its CLI `scripts/eda-api.js` loads the typings via the TypeScript compiler API, builds a cached type graph (keyed by package version + declaration SHA-256 + TS version), and offers `doctor`, `search`, `inspect --mount ... --member ... --closure`, and `lint` (type-check plus policy checks for runtime restrictions and `extension.json`).
 - Key source paths:
   - `.../extension-dev-skill/SKILL.md` - evidence priority, type-driven rules, recipe index
   - `.../scripts/eda-api.js` (functions `buildGraph`, `extractEdaMounts`, `inspectGraph`, `closureFor`, `lintProject`, `runPolicyChecks`, `lintExtensionJson`), `scripts/eda-api.test.js`
@@ -547,7 +547,7 @@ reusable with attribution, but EAK policy is to learn concepts and re-implement 
 - Commit inspected: 085eb879b61ee84dfc7288852b490990282327e5
 - Licence: Apache License 2.0 (LICENSE); README says "licensed under Apache-2.0". The bundled viewer's About dialog strings say "Open Source License: MIT" and credit "tracespace v5" for parsing logic (a licence statement inconsistent with the repo LICENSE; tracespace is the third-party origin). Reusable in EAK: yes-with-attribution for concepts; do not copy the bundle because provenance of the ported code is ambiguous.
 - Language / size: TypeScript wrapper (72 lines) + two readable-but-bundled HTML viewers (`src/online-gerber-viewer.html` 11,715 lines, `online-gerber-viewer1.html` 11,325 lines, differing files). 36 files. 
-- What it is: An EasyEDA Pro extension that obtains the Gerber ZIP of the current PCB and opens it in a built-in multi-layer Gerber/Excellon viewer, or opens a blank viewer, or links to external viewers. README advises using JLCPCB DFM for authoritative review because "this viewer is for reference only and may not display everything correctly".
+- What it is: An EasyEDA Pro extension that obtains the Gerber ZIP of the current PCB and opens it in a built-in multi-layer Gerber/Excellon viewer, or opens a blank viewer, or links to external viewers. README advises using Fabricator DFM for authoritative review because "this viewer is for reference only and may not display everything correctly".
 - Key source paths:
   - `src/index.ts` - `viewPcbGerber` (calls `eda.pcb_ManufactureData.getGerberFile()` per `CLAUDE.md`, passes data via `eda.sys_MessageBus`), `openGerberViewer`, `openOnlineGerberViewer`, `openEasyEDAGerberViewer`.
   - `CLAUDE.md` - build pipeline (esbuild + HTML injection of a MessageBus listener).
@@ -686,14 +686,14 @@ Cross-cutting finding for group C: in all five repositories the AI (or heuristic
 - Commit inspected: 89abac48075bd4e0ebc2a30bee55939251f8660f
 - Licence: Apache License 2.0 (LICENSE) ; reusable in EAK: yes-with-attribution (concepts only). `iframe/vendor/jszip.min.js` vendored (MIT-or-GPLv3 upstream).
 - Language / size: TypeScript (`src/bom-service.ts` 643, `src/index.ts` 43) + plain JS (`iframe/app.js` 5,165, `core.js` 81); 38 files. Tests: `tests/core.test.cjs` (31 lines, node:test).
-- What it is: Matches schematic components or an imported BOM (CSV/XLS/XLSX) to devices in the EasyEDA/LCSC library, optionally with an OpenAI-compatible LLM, then binds the chosen device/footprint/symbol back to the schematic components (replace device, footprint only, symbol only, or data only), with an unbind to restore.
+- What it is: Matches schematic components or an imported BOM (CSV/XLS/XLSX) to devices in the EasyEDA/Distributor library, optionally with an OpenAI-compatible LLM, then binds the chosen device/footprint/symbol back to the schematic components (replace device, footprint only, symbol only, or data only), with an unbind to restore.
 - Key source paths:
-  - `src/bom-service.ts` - BOM parsing: encoding detection, CSV parser, header-row detection, own XLSX unzip/parse, column-role mapping, designator normalisation (ranges, lists), grouping, LCSC id extraction (`extractLcsc`).
+  - `src/bom-service.ts` - BOM parsing: encoding detection, CSV parser, header-row detection, own XLSX unzip/parse, column-role mapping, designator normalisation (ranges, lists), grouping, Distributor id extraction (`extractDistributor`).
   - `iframe/app.js` - `calcMatchScore` (3057), `extractCoreValue`, `aiMatchSingle` (2146), `aiMatchAll` (2395), `callAI` (2105), `searchDevice` (1778), `findFootprintFallback` / `findFootprintFallbackAI`, `bindComponent` (2780), `getOrCreateBindingVariant`, `unbindGroup`.
   - `iframe/core.js`, `tests/core.test.cjs` - HTML-escape, safe image URL, LRU cache, stable hash; the only tested code.
   - `README.en.md`.
 - Implementation observations:
-  - Library search: real EDA library APIs `eda.lib_Device.search`, `lib_Symbol.search`, `lib_Footprint.search`, and `lib_Device.getByLcscIds` for LCSC part-number lookup; results cached in an LRU keyed by target+library+keyword.
+  - Library search: real EDA library APIs `eda.lib_Device.search`, `lib_Symbol.search`, `lib_Footprint.search`, and `lib_Device.getByDistributorIds` for Distributor part-number lookup; results cached in an LRU keyed by target+library+keyword.
   - Standard matching: keywords built from user-selected BOM columns, then `calcMatchScore`: per selected column, exact equals scores 1, substring containment 0.5, score = percent of compared columns; tolerance suffix such as "5%" is stripped (`extractCoreValue`). With no columns selected: MPN/value equals device name = 100, containment = 85, else 60.
   - AI matching: an OpenAI-compatible chat completions call (`temperature: 0.3`, user-configured URL, key and model). Two prompt stages: (1) the model produces a search keyword JSON `{"keyword": ...}` with up to 3 retries if the format is wrong or search returns nothing (it must supply a different keyword each time); (2) the model is shown up to 10 library candidates (name, package, manufacturer, description) and must return `{"idx": n, "reason": ...}` or an empty array for no match, with retries on re-search. The model therefore selects among real library entries and cannot invent a part; if the model response fails to parse, the code falls back to the top deterministic score.
   - Batch AI merges several devices per request by context size; footprint fallback matches by footprint column text, with an AI variant.
@@ -705,7 +705,7 @@ Cross-cutting finding for group C: in all five repositories the AI (or heuristic
 | Feature | Classification | Evidence (path) | Recommendation for EAK |
 |---|---|---|---|
 | BOM import (CSV/XLS/XLSX), header detection, designator range expansion, column-role mapping | requires adaptation | `src/bom-service.ts` | Re-implement in Rust for importing external BOMs into EAK component list |
-| MPN / LCSC-id / value matching to a library with scoring | requires adaptation | `calcMatchScore`, `findMatches` | Keep deterministic scoring; add numeric parsing of values/tolerances and package equivalence |
+| MPN / Distributor-id / value matching to a library with scoring | requires adaptation | `calcMatchScore`, `findMatches` | Keep deterministic scoring; add numeric parsing of values/tolerances and package equivalence |
 | LLM chooses among real library search results (closed candidate set) | applicable directly | `aiMatchSingle` | Right pattern: AI ranks only candidates produced by the library index; deterministic gates after |
 | LLM generates search keywords with retry on empty result | applicable directly | `aiMatchSingle` | Fine for retrieval, as long as results are re-checked |
 | Bind modes (device/footprint/symbol/data) with unbind/restore | requires adaptation | `bindComponent`, `unbindGroup` | Map to typed commands with diff-based undo in `eak-runtime` |
@@ -721,10 +721,10 @@ Cross-cutting finding for group C: in all five repositories the AI (or heuristic
 - Commit inspected: 6be8cf0b8e28131e011ba11bf887dab4f027bed9
 - Licence: Apache License 2.0 (LICENSE) ; reusable in EAK: yes-with-attribution (concepts only). Depends on third-party models with their own licences (Qwen3-0.6B, granite-docling-258M, multilingual-e5-small, Helsinki-NLP opus-mt) and on Transformers.js, pdf.js, tesseract.js; model files are downloaded at runtime, not vendored.
 - Language / size: TypeScript + JS, 61 files, ~6.7k lines in `iframe/`. Deps: `@huggingface/transformers 4.0.1` (and 3.7.5 aliased as `transformers-vlm`), `pdfjs-dist 3.11.174`, `tesseract.js 5.1.0` with eng and chi_sim data. No test directory.
-- What it is: A datasheet Q&A assistant opened for the selected schematic component. It obtains the datasheet PDF (from the component's LCSC/JLC datasheet link), extracts text, and answers questions either via an online OpenAI-compatible chat API or via a fully local pipeline (WebGPU/CPU in-browser VLM + embedding + LLM). It also has a PDF reader with local translation.
+- What it is: A datasheet Q&A assistant opened for the selected schematic component. It obtains the datasheet PDF (from the component's Distributor/Fab datasheet link), extracts text, and answers questions either via an online OpenAI-compatible chat API or via a fully local pipeline (WebGPU/CPU in-browser VLM + embedding + LLM). It also has a PDF reader with local translation.
 - Key source paths:
   - `src/index.ts` - reads selected component via `eda.sch_SelectControl.getAllSelectedPrimitives_PrimitiveId()` and `eda.sch_PrimitiveComponent.get`, stores device info (designator, manufacturerId, manufacturer, supplierId) with `eda.sys_Storage`, opens `local.html` / chat iframes.
-  - `iframe/chat.js` (1,447 lines, online mode) - datasheet URL resolution (including `r.jina.ai` reader and `atta.szlcsc.com`, `datasheet.lcsc.com` patterns), pdf.js text extraction, OCR fallback with tesseract when text per page is low, keyword scoring retrieval, `buildSystemPrompt`, chat completions fetch.
+  - `iframe/chat.js` (1,447 lines, online mode) - datasheet URL resolution (including `r.jina.ai` reader and `atta.szdistributor.invalid`, `distributor.invalid` patterns), pdf.js text extraction, OCR fallback with tesseract when text per page is low, keyword scoring retrieval, `buildSystemPrompt`, chat completions fetch.
   - `iframe/src/main.ts` (1,073 lines, local mode), `pdf.ts` (text blocks with coordinates, page canvas rendering), `vlm.ts` (tiled page recognition), `inference.ts`, `inference-worker.ts` (Web Worker), `inference-device.ts`, `ort-runtime.ts`, `document.ts`, `model-store.ts` (imported-model cache in browser Cache Storage), `model-response.ts`.
 - Implementation observations:
   - PDF parsing: pdf.js `getTextContent` with per-item transform to build lines and blocks with x/y/width/height; if average text per page is low, OCR with Tesseract at a configurable scale in English or Chinese+English. Page rasters bounded to ~2200 px on the long side.
@@ -743,7 +743,7 @@ Cross-cutting finding for group C: in all five repositories the AI (or heuristic
 | Retrieval with embeddings (local) or keyword scoring (online) | requires adaptation | `main.ts`, `chat.js` | Page-cited retrieval is the right shape for evidence for ratings/pins |
 | Prompt: "answer only from excerpts, say if absent" | applicable directly | `chat.js` `buildSystemPrompt` | Necessary but not sufficient; EAK must recompute numbers and verify quotes |
 | Local in-browser model inference (WebGPU) | future capability | `inference-worker.ts` | Privacy option for confidential datasheets; heavy |
-| Datasheet link resolution via LCSC patterns and jina reader proxy | not applicable | `chat.js` | Do not depend on third-party proxies; user-supplied PDFs and explicit fetch |
+| Datasheet link resolution via Distributor patterns and jina reader proxy | not applicable | `chat.js` | Do not depend on third-party proxies; user-supplied PDFs and explicit fetch |
 | Structured extraction (pin table, package dims, ratings) with provenance | requires native EAK implementation (absent here) | no code | This repo only answers questions; EAK's ratings-with-provenance needs structured extraction plus verification |
 
 - Gaps/unknowns: Read the PDF, VLM, retrieval and prompt code; did not read the rest of `main.ts` or settings pages. No accuracy evaluation or tests exist.
@@ -755,15 +755,15 @@ Cross-cutting finding for group C: in all five repositories the AI (or heuristic
 - Commit inspected: 0390a4c0e9dba6643ca2d18f8ff78328548efa70
 - Licence: Apache License 2.0 (LICENSE; `Hardware/` firmware has no separate licence file found). Dependency `xlsx ^0.18.5` plus vendored `iframe/xlsx.full.min.js`. Reusable in EAK: yes-with-attribution (but low relevance).
 - Language / size: JavaScript (`iframe/app.js` 506, `box.js` 990) + `src/index.ts` (118) + ESP32-S3 C++ firmware under `Hardware/` (BLE, OLED, LED grid, buttons, serial comm). 64 files; no tests.
-- What it is: A personal component inventory ("component library") plus a 5x7 physical storage box mapped to inventory entries. It imports LCSC order spreadsheets, looks up each LCSC C-number through `eda.lib_Device.getByLcscIds`, tracks quantities, lets the user place a stored component onto the schematic or PCB, and syncs with ESP32-S3 hardware over USB serial or BLE. README: browser environment only, not client.
+- What it is: A personal component inventory ("component library") plus a 5x7 physical storage box mapped to inventory entries. It imports Distributor order spreadsheets, looks up each Distributor C-number through `eda.lib_Device.getByDistributorIds`, tracks quantities, lets the user place a stored component onto the schematic or PCB, and syncs with ESP32-S3 hardware over USB serial or BLE. README: browser environment only, not client.
 - Key source paths:
   - `src/index.ts` - `openLibrary`, `openBox`, `connectBox`, `findSelectedComponent` (via `eda.sch_SelectControl` / `eda.pcb_SelectControl`, `eda.sys_Storage`).
-  - `iframe/app.js` - import (`.xls/.xlsx`, header cells like "LCSC Part Number", "立创商城编号"), batch lookup `eda.lib_Device.getByLcscIds`, match by `supplierId`, search filter on name/C-number/description, edit, `eda.sch_PrimitiveComponent.placeComponentWithMouse`.
+  - `iframe/app.js` - import (`.xls/.xlsx`, header cells like "Distributor Part Number", "立创商城编号"), batch lookup `eda.lib_Device.getByDistributorIds`, match by `supplierId`, search filter on name/C-number/description, edit, `eda.sch_PrimitiveComponent.placeComponentWithMouse`.
   - `iframe/box.js` - 5x7 grid mapping, serial/BLE sync.
   - `Hardware/src/*.cpp` - firmware.
 - Implementation observations:
   - No AI or LLM involved despite the "AI component" group heading (grep found none in the files read); the "intelligence" is order-sheet parsing and exact C-number lookup.
-  - Library provenance: devices come from the LCSC library API by supplier id; fields kept include LCSC id, name, package, description, manufacturer, quantity and notes. Persistence is `eda.sys_Storage` user config keys (`myComponentLibDevices`, `myComponentLibBox`) - browser-local, not a portable file.
+  - Library provenance: devices come from the Distributor library API by supplier id; fields kept include Distributor id, name, package, description, manufacturer, quantity and notes. Persistence is `eda.sys_Storage` user config keys (`myComponentLibDevices`, `myComponentLibBox`) - browser-local, not a portable file.
   - Search: case-insensitive substring over name, C-number and description; no fuzzy ranking despite the README word "fuzzy".
   - Inventory/hardware sync is about physical stock, not design correctness.
 - Features and classification:
@@ -772,7 +772,7 @@ Cross-cutting finding for group C: in all five repositories the AI (or heuristic
 |---|---|---|---|
 | Personal parts inventory with quantities, filter and edit | future capability | `iframe/app.js` | Possible later link between BOM and stock; outside Phase 1-4 |
 | Order-sheet import to part numbers + quantities | requires adaptation | `iframe/app.js` | Same BOM/order import idea as #16 |
-| Exact lookup by supplier part number (`getByLcscIds`) | requires native EAK implementation | `app.js` | EAK needs its own supplier-id/MPN index with provenance |
+| Exact lookup by supplier part number (`getByDistributorIds`) | requires native EAK implementation | `app.js` | EAK needs its own supplier-id/MPN index with provenance |
 | Physical storage box over BLE/serial | not applicable | `Hardware/`, `box.js` | Unrelated to EAK scope |
 | Place stored component into design | requires adaptation | `placeComponentWithMouse` | EAK equivalent is a typed place-component Command |
 
@@ -793,7 +793,7 @@ Cross-cutting finding for group C: in all five repositories the AI (or heuristic
 - **Best AI pattern seen: model picks from a closed candidate set.** The device-standardisation matcher has the LLM propose search keywords and then choose an index among real library results, with a deterministic percentage score and a fallback to the top score if the AI reply is unparsable. Its score is still only string similarity (no electrical or package equivalence), and its tests cover only helper functions. (eext-ai-device-standardization)
 - **Datasheet helper is Q&A, not structured extraction.** It does page-cited retrieval (keyword or embeddings), OCR fallback, tiled VLM reading, and prompts the model to avoid invention, but extracts no typed pin/package/rating data and does no verification; it also routes URL resolution through a third-party reader proxy. EAK needs structured extraction with page+bbox provenance and recomputed values. (eext-datasheet-helper)
 - **Licensing is clean at repo level, messy inside bundles.** All ten are Apache-2.0 with no NOTICE files; bundled viewers embed third-party code (LeaferJS, tracespace port, Split.js, LZString, pdf.js, JSZip) and one claims MIT in its UI while the repo is Apache-2.0. Do not copy any bundled code into EAK; learn the concepts only. (eext-gerber-viewer, eext-interactive-html-bom, eext-ai-library-builder, eext-gencad-viewer)
-- **eext-component-box is out of scope for AI intelligence**: no AI, just LCSC order import, inventory and ESP32 hardware sync. Only the order-import / supplier-id lookup idea transfers. (eext-component-box)
+- **eext-component-box is out of scope for AI intelligence**: no AI, just Distributor order import, inventory and ESP32 hardware sync. Only the order-import / supplier-id lookup idea transfers. (eext-component-box)
 
 ## Groups D and E - PCB routing/engineering, design rules, manufacturing and simulation
 
@@ -1125,14 +1125,14 @@ API, so the *glue* is never reusable in EAK; only the algorithms/concepts are of
 
 ---
 
-### 29. eext-jlc-order-dfm-checker
-- URL: https://github.com/easyeda/eext-jlc-order-dfm-checker
+### 29. eext-fab-order-dfm-checker
+- URL: https://github.com/easyeda/eext-fab-order-dfm-checker
 - Commit inspected: afd538786d510f537ad4fa47c6329e6a99dc7625
-- Licence: LICENSE = "Apache License Version 2.0"; package.json Apache-2.0; reusable in EAK: yes-with-attribution for the code. The *capability numbers* are derived from JLCPCB public process pages (cited in `standards.ts` comments); EAK must not hard-code them as universal DRC and must record provenance. Also: README.en.md is an unedited SDK template; the real README is in Chinese (`README.md`).
+- Licence: LICENSE = "Apache License Version 2.0"; package.json Apache-2.0; reusable in EAK: yes-with-attribution for the code. The *capability numbers* are derived from Fabricator public process pages (cited in `standards.ts` comments); EAK must not hard-code them as universal DRC and must record provenance. Also: README.en.md is an unedited SDK template; the real README is in Chinese (`README.md`).
 - Language / size: TypeScript, 55 files; `src/index.ts` is 3,566 lines (all 18 PCB + 7 SMT checks), `src/dfm/{standards,geometry,pad-spacing,locate,xlsx,types}.ts`; `doc/` planning notes. Dependency JSZip (xlsx writer).
-- What it is: Checks the current PCB against JLCPCB process capability: 18 PCB DFM items, 7 SMT-assembly items, plus same-net pad spacing; shows an overview table, clickable violations that locate/zoom to the primitive, and exports TXT/XLSX reports.
+- What it is: Checks the current PCB against Fabricator process capability: 18 PCB DFM items, 7 SMT-assembly items, plus same-net pad spacing; shows an overview table, clickable violations that locate/zoom to the primitive, and exports TXT/XLSX reports.
 - Key source paths:
-  - `src/dfm/standards.ts` - `JLC_MATERIAL_STANDARDS` (FR4, HDI, high-frequency, aluminium, copper-core), `SMT_STANDARDS` (`economy`, `standard`), `resolveMaxSize/ViaSpec/SlotWithCopper/MinTrace/OuterCopper`, `COMMON_PACKAGES`, `normalizeEiaPackage`.
+  - `src/dfm/standards.ts` - `FAB_MATERIAL_STANDARDS` (FR4, HDI, high-frequency, aluminium, copper-core), `SMT_STANDARDS` (`economy`, `standard`), `resolveMaxSize/ViaSpec/SlotWithCopper/MinTrace/OuterCopper`, `COMMON_PACKAGES`, `normalizeEiaPackage`.
   - `src/dfm/types.ts` - `CheckResult`, `ViolationCoord`, `PcbDfmResult`, `SmtDfmResult`, `MaterialStandard`.
   - `src/index.ts` - `checkMaterialType, checkLayerCount, checkBoardSize, checkBoardThickness, checkOuterCopperThickness, checkInnerCopperThickness, checkViaType, checkHoleDiameter, checkViaPadDiameter, checkSlotWithCopper, checkSlotWithoutCopper, checkMinTraceWidth, checkMinTraceSpacing, checkPadToLineSpacing, checkPluginPadRingWith/WithoutCopper, checkBgaPad, checkString` (silkscreen) and SMT: `checkSolderingSides, checkSmtLayerCount, checkSmtBoardThickness, checkSmtBoardSize, checkSmtMinPackage, checkSmtIcPinPitch, checkSmtBgaPitch`.
   - `src/dfm/geometry.ts` (point/segment/parallel-line distances, pad ring width), `pad-spacing.ts`, `locate.ts`, `xlsx.ts`.
@@ -1141,7 +1141,7 @@ API, so the *glue* is never reusable in EAK; only the algorithms/concepts are of
   - **Capability tables: yes.** Typed tables keyed by board material, with layer-count tiers, copper-weight tiers (1/2/2.5/3.5/4.5/5/6 oz) giving min trace width/spacing (e.g. 1 oz: 0.10/0.10 mm, multilayer 0.09/0.09), via drill and pad ring minima by layer tier, slot minima with/without copper, max board size by layer count, thickness range. SMT: economy vs standard (min package 0402 vs 0201, IC pitch 0.4 vs 0.35, BGA pitch 0.5 vs 0.3).
   - **Geometry**: line-to-line and point-to-segment distance, parallel-line distance, pad bounding circle, oblong holes; copper-to-copper spacing is computed from primitives pulled via the EasyEDA API, not from a net/zone model (pours and fills only partly handled).
   - **Output**: results typed `success/warning/error`, each with primitive IDs and coordinates for locate; XLSX built by hand with JSZip; log written with `eda.sys_Log.add` (57 calls) to the bottom log panel.
-  - **Limits**: JLC-only; no Gerber-based checks (works on the design database); the author notes custom parameters are provided natively in EasyEDA V4. Checks count 18+7 is as the README claims; not individually validated here. No tests.
+  - **Limits**: Fab-only; no Gerber-based checks (works on the design database); the author notes custom parameters are provided natively in EasyEDA V4. Checks count 18+7 is as the README claims; not individually validated here. No tests.
 - Features and classification:
 
   | Feature | Classification | Evidence (path) | Recommendation for EAK |
@@ -1153,24 +1153,24 @@ API, so the *glue* is never reusable in EAK; only the algorithms/concepts are of
   | SMT assembly (min package, pitch) from BOM/CPL | future capability | `checkSmt*` | Tie to BOM/CPL release gate; keep "not manufacturing-ready" wording |
   | XLSX/TXT report | requires adaptation | `src/dfm/xlsx.ts` | EAK report formats should be JSON + CSV/PDF later |
 
-- Gaps/unknowns: Individual check thresholds and the 3.5k-line index.ts were not read line by line. Currency of JLC numbers is unknown (no date stamp inspected).
+- Gaps/unknowns: Individual check thresholds and the 3.5k-line index.ts were not read line by line. Currency of Fab numbers is unknown (no date stamp inspected).
 
 ---
 
 ### 30. eext-design-rule-generator
 - URL: https://github.com/easyeda/eext-design-rule-generator
 - Commit inspected: 2cf9635b335bf8c15cd046a1c2cf08f8b9118f88
-- Licence: LICENSE = "Apache License Version 2.0"; package.json Apache-2.0; reusable in EAK: yes-with-attribution for code. **Caveat**: the impedance model is a surrogate trained on samples from the JLCPCB web calculator (jlcpcb.com) snapshots, so the fixtures (46k-line `fixtures/calibration/template-process.json`, golden files) are derived from a third-party service whose terms were not checked; do not import the data without legal review.
-- Language / size: TypeScript, 92 files; many test files in `src/core/*.test.ts` (rules, stackup, impedance, JLC surrogate/solver/oracle/W1-accuracy/holdout); large JSON fixtures; `requirements-calibration.txt` (numpy 2.5.2, scipy 1.18.1) and docs that reference `python scripts/train-jlc-calibration.py`. The training scripts are not in the clone (only `scripts/build-jlc-core.mjs` is), so that pipeline is not reproducible from this checkout.
-- What it is: Classifies nets by naming (ground, power, impedance, differential, signal), picks a JLC stackup, solves trace width/spacing for target impedance with an offline model, and saves a *new* named design-rule configuration (not activated, existing rules untouched).
+- Licence: LICENSE = "Apache License Version 2.0"; package.json Apache-2.0; reusable in EAK: yes-with-attribution for code. **Caveat**: the impedance model is a surrogate trained on samples from the Fabricator web calculator (fabricator.invalid) snapshots, so the fixtures (46k-line `fixtures/calibration/template-process.json`, golden files) are derived from a third-party service whose terms were not checked; do not import the data without legal review.
+- Language / size: TypeScript, 92 files; many test files in `src/core/*.test.ts` (rules, stackup, impedance, Fab surrogate/solver/oracle/W1-accuracy/holdout); large JSON fixtures; `requirements-calibration.txt` (numpy 2.5.2, scipy 1.18.1) and docs that reference `python scripts/train-fab-calibration.py`. The training scripts are not in the clone (only `scripts/build-fab-core.mjs` is), so that pipeline is not reproducible from this checkout.
+- What it is: Classifies nets by naming (ground, power, impedance, differential, signal), picks a Fab stackup, solves trace width/spacing for target impedance with an offline model, and saves a *new* named design-rule configuration (not activated, existing rules untouched).
 - Key source paths:
   - `src/core/rules.ts` - `classifyNets`, `buildRulePlan`, `mergeRuleConfiguration`, `mergeNetRules`, `mergeDifferentialPairs`, `summarizePlan`.
   - `src/core/stackup.ts` - `StackupTemplate`, `matchingStackups`, `templateToStack`, `evaluateStackups`, `selectStackup`, `resolveDifferentialGap`.
-  - `src/core/impedance.ts` (analytic types/inputs), `jlc-surrogate.ts` (`JlcGeometry`, `JlcRbfModel` with RBF centres/weights), `jlc-offline.ts`, `jlc-impedance-solver.ts`, `jlc-modes.ts` (12 calculator modes), `jlc-current.ts` (trace current).
+  - `src/core/impedance.ts` (analytic types/inputs), `fab-surrogate.ts` (`FabGeometry`, `FabRbfModel` with RBF centres/weights), `fab-offline.ts`, `fab-impedance-solver.ts`, `fab-modes.ts` (12 calculator modes), `fab-current.ts` (trace current).
   - `src/eda/runtime.ts` - `createSnapshot`, `applyPlan`, `restoreBackup`, `readBackupSummary` (backup of rule configuration).
-  - `docs/offline-impedance-calibration.md`; `iframe/stackups.json` (JLC stackup templates).
+  - `docs/offline-impedance-calibration.md`; `iframe/stackups.json` (Fab stackup templates).
 - Implementation observations:
-  - **Impedance**: not a closed-form IPC/Hammerstad solver: an RBF (radial basis function) surrogate per mode, fitted to JLC calculator outputs, with a bisection width solver (stop when |dZ| <= 0.5 ohm) and exact-match "anchor" widths from independently sampled website results. Doc states verified schemes can be auto-recommended; unverified ones are estimate-only and cannot be applied; "verified" means only consistency with the website model, not a manufacturing tolerance guarantee. Er uses calculator defaults.
+  - **Impedance**: not a closed-form IPC/Hammerstad solver: an RBF (radial basis function) surrogate per mode, fitted to Fab calculator outputs, with a bisection width solver (stop when |dZ| <= 0.5 ohm) and exact-match "anchor" widths from independently sampled website results. Doc states verified schemes can be auto-recommended; unverified ones are estimate-only and cannot be applied; "verified" means only consistency with the website model, not a manufacturing tolerance guarantee. Er uses calculator defaults.
   - **Stack-up**: template DB by layer count/thickness/copper weight (`stackups.json`) matched to a filter, with visual preview; stack model converts to H1/H2/T1/W1/W2 geometry.
   - **Rule application**: via `eda.pcb_Drc.overwriteNetRules` plus saving a new rule configuration; backup/restore snapshot; differential-pair merge.
   - **AI**: README mentions "AI scan" of nets as an alternative to naming rules; not examined.
@@ -1181,7 +1181,7 @@ API, so the *glue* is never reusable in EAK; only the algorithms/concepts are of
   | Feature | Classification | Evidence (path) | Recommendation for EAK |
   |---|---|---|---|
   | Net classification by naming (ground/power/diff/impedance/signal) | requires adaptation | `src/core/rules.ts` | Use as a seed for net-class proposals; AI proposals must be re-verified by `eak-engineering` |
-  | Impedance-driven width/spacing from stackup | requires native EAK implementation | `src/core/jlc-surrogate.ts`, `jlc-impedance-solver.ts` | Implement native analytic models; label estimates and tolerances; never claim verification against a fab |
+  | Impedance-driven width/spacing from stackup | requires native EAK implementation | `src/core/fab-surrogate.ts`, `fab-impedance-solver.ts` | Implement native analytic models; label estimates and tolerances; never claim verification against a fab |
   | Stackup template DB tied to fab | future capability | `iframe/stackups.json` | Stack-up data model in EAK-IR is a prerequisite (multi-layer upgrade) |
   | Save as new rule profile, do not activate, backup/restore | applicable directly | `src/eda/runtime.ts` | Matches EAK approval-gated Command model; propose rules as a draft revision |
   | RBF surrogate trained from scraped web calculator | not applicable | `docs/offline-impedance-calibration.md` | Avoid (provenance/licence, and Python training pipeline conflicts with EAK rules) |
@@ -1220,7 +1220,7 @@ API, so the *glue* is never reusable in EAK; only the algorithms/concepts are of
 - URL: https://github.com/easyeda/eext-bom-compare
 - Commit inspected: 4489dd9b857e19505a2f5a0dd383342bb77923d6
 - Licence: LICENSE = "Apache License Version 2.0"; package.json Apache-2.0; deps `jschardet`, `papaparse`, `xlsx ^0.18.5`; reusable in EAK: yes-with-attribution (concepts only).
-- Language / size: TypeScript (iframe app under `iframe/src/{core,ui,utils,locales}`), 77 files, vitest tests (`tests/comparator.test.ts`, `csv-parser.test.ts`) with real BOM samples from JLCPCB, KiCad, Altium, OrCAD, PADS, EasyEDA, with `tests/data/SOURCES.md` recording origins.
+- Language / size: TypeScript (iframe app under `iframe/src/{core,ui,utils,locales}`), 77 files, vitest tests (`tests/comparator.test.ts`, `csv-parser.test.ts`) with real BOM samples from Fabricator, KiCad, Altium, OrCAD, PADS, EasyEDA, with `tests/data/SOURCES.md` recording origins.
 - What it is: Compares two BOM files (CSV/TXT/XLS/XLSX; encoding auto-detect UTF-8/GBK/GB2312; header/delimiter auto-detect; column mapping) keyed by designator and shows added/removed/changed/same rows in side-by-side virtual-scrolled tables, with CSV/XLSX export.
 - Key source paths:
   - `iframe/src/core/comparator.ts` - `compare(oldFile, newFile)`; fields compared: footprint, quantity, manufacturer, partNumber, value, description (mapped-column intersection).
@@ -1273,7 +1273,7 @@ API, so the *glue* is never reusable in EAK; only the algorithms/concepts are of
 - Licence: `LICENSE` = "BSD 3-Clause License, Copyright (c) 2026, chensiyu and contributors" (the text is BSD-3-Clause; the reason GitHub reports NOASSERTION was not determined, possibly the non-standard "Copyright ... chensiyu and contributors" header or the mixed bundle). **But the package is a mixed-licence bundle**:
   - `THIRD_PARTY_NOTICES.md` states plugin code is BSD-3-Clause and bundled components keep their own terms: ngspice 46 WASM + XSPICE code models; Apache ECharts 5.6.0 (Apache-2.0); zrender (BSD-3); Lucide (ISC); JSZip 3.10.1 (MIT or GPL-3.0-or-later); pako (MIT and Zlib); lie, etc. (`licenses/` folder holds 16 licence texts: ECharts, zrender, Lucide, JSZip, pako, lie, readable-stream, safe-buffer, inherits, immediate, setimmediate, string_decoder, util-deprecate, core-util-is, process-nextick-args).
   - `wasm-lib/NGSPICE-COPYING.txt` (also under `iframe/wasm/`): main ngspice licence "Modified BSD", with listed exceptions: `src/maths/KLU` LGPLv2, `tclspice.c` LGPLv2, `frontend/numparam` LGPLv2-or-newer, `src/osdi` MPLv2.0, `src/maths/sparse` MIT-like, `ndev` and `xspice` public domain **except `xspice/icm/table` which is GPLv2-or-newer**. The loader's code-model list includes `table.cm`, so the shipped bundle contains the GPLv2+ table model.
-  - `wasm-build/sharedspice-wrapper/{main_stub.c, ngspice_wasm_stubs.c, ngspice_de_cpp.cpp, ngspice_de_h.h}` carry headers "Modified (C) 2026 by EasyEDA & JLC Technology Group ... GNU General Public License ... version 3 or (at your option) any later version" - **so the compiled `ngspice.wasm` contains GPL-3.0-or-later wrapper code** while the repo LICENSE and README claim BSD-3-Clause for the whole. This is an internal inconsistency to flag.
+  - `wasm-build/sharedspice-wrapper/{main_stub.c, ngspice_wasm_stubs.c, ngspice_de_cpp.cpp, ngspice_de_h.h}` carry headers "Modified (C) 2026 by EasyEDA & Fab Technology Group ... GNU General Public License ... version 3 or (at your option) any later version" - **so the compiled `ngspice.wasm` contains GPL-3.0-or-later wrapper code** while the repo LICENSE and README claim BSD-3-Clause for the whole. This is an internal inconsistency to flag.
   - `third_party/ngspice-46.tar.gz` and `third_party/emsdk` (Emscripten SDK) are vendored.
   - Reusable in EAK: **do not copy any of it** (mixed GPL/LGPL/MPL); using upstream ngspice (BSD core) is a separate decision to be made on the ngspice project's own licence, and EAK should study this repo for architecture only.
 - Language / size: TypeScript, 303 files incl. ~17 MB of bundled WASM (`ngspice.wasm` 6.6 MB, base64 copy 8.8 MB, XSPICE code models 0.5 MB, ngspice.js 1 MB). Clean layered `src/` (app, application/analysis, core, features, infrastructure/ngspice, integrations/eda, presentation, shared; 85 TS files).
@@ -1285,7 +1285,7 @@ API, so the *glue* is never reusable in EAK; only the algorithms/concepts are of
   - `wasm-build/*` (build scripts, sharedspice wrapper), `NGSPICE_WASM_BUILD.md`, `tools/*` (Windows launcher for an optional local engine on port 51115).
 - Implementation observations:
   - **Invocation**: WASM, in-iframe (no shared library, no subprocess). The wrapper emulates the `sharedspice` API; a JS bridge returns a JSON raw result (plots, vectors, measurements, diagnostics). A fresh module is created per analysis in `wasm-loader.ts` (comment says env logs are logged once because modules are rebuilt each run) but `NgspiceSession` reuses one engine for repeated sweeps. `timeoutMs` option exists.
-  - **Netlist generation and model association are NOT in this repo**: the netlist and probe list arrive from the EasyEDA host through MessageBus events (v3 protocol); the repo only normalises dialects (selectable LTspice/PSpice/HSPICE compatibility via ngspice `ngbehavior`) and AC frequency suffixes (`1M` to `1Meg`). A separate Windows launcher (`jlc-ngspice-launch://start`, port 51115) refers to a local engine service (the other repo 36), but it is not called from `src/` (only tools scripts reference the port).
+  - **Netlist generation and model association are NOT in this repo**: the netlist and probe list arrive from the EasyEDA host through MessageBus events (v3 protocol); the repo only normalises dialects (selectable LTspice/PSpice/HSPICE compatibility via ngspice `ngbehavior`) and AC frequency suffixes (`1M` to `1Meg`). A separate Windows launcher (`fab-ngspice-launch://start`, port 51115) refers to a local engine service (the other repo 36), but it is not called from `src/` (only tools scripts reference the port).
   - **Analyses**: `.tran`, `.ac`, `.dc`, Monte Carlo (per-sample resampling, mean/std/quantiles/yield with spec limits, histograms), worst-case (sensitivity sweeps and synthesised Worst Low/High corners; an exhaustive corner oracle `evaluateExhaustiveCornerOracle` exists for checking), logic analysis from XSPICE event nodes (0/1/U).
   - **Responsiveness**: runs yield to the event loop via `MessageChannel` between Monte Carlo samples, cooperative abort signal; memory budget thinning for waveform store.
   - **Waveform UI**: legend toggles, cursors (follow/fixed, snap), zoom/pan, peak-preserving downsampling with shared render-point budget, CSV/ZIP export, current probes synthesised from voltage difference (`XAM`).
@@ -1326,7 +1326,7 @@ API, so the *glue* is never reusable in EAK; only the algorithms/concepts are of
 ### 36. easyeda-simulation-engine
 - URL: https://github.com/easyeda/easyeda-simulation-engine
 - Commit inspected: f06a1dd20b60ea37284ab8033269ddf1212f31af
-- Licence: LICENSE = "GNU AFFERO GENERAL PUBLIC LICENSE Version 3, 19 November 2007"; `copyright.txt`: files by Santiago Gonzalez (SimulIDE) are AGPL-3.0; code by others is GPL-3.0; source headers say "Modified (C) 2025/2026 by EasyEDA & JLC Technology Group ... GPL v3"; README says ngspice is BSD-3-Clause; reusable in EAK: **NO (AGPL-3.0 + GPL-3.0). Map structure only.**
+- Licence: LICENSE = "GNU AFFERO GENERAL PUBLIC LICENSE Version 3, 19 November 2007"; `copyright.txt`: files by Santiago Gonzalez (SimulIDE) are AGPL-3.0; code by others is GPL-3.0; source headers say "Modified (C) 2025/2026 by EasyEDA & Fab Technology Group ... GPL v3"; README says ngspice is BSD-3-Clause; reusable in EAK: **NO (AGPL-3.0 + GPL-3.0). Map structure only.**
 - Language / size: C++20, CMake, 18,482 files of which ~317 are project `.h/.cpp` under `src/`; the rest is vendored third-party (`external/boost` 15,106 files, `asio` 633, `websocketpp` 94, `nlohmann` 45, `tinyxml`), plus **committed Windows binaries** (`config/ngspice.dll`, `libgcc_s_seh-1.dll`, `libstdc++-6.dll`, `libwinpthread-1.dll`, `libomp140.x86_64.dll`, `external/ngspice/ngspice.lib/.exp`) and ngspice runtime data (`config/spinit`, `config/ngspice`, `config/data` with 33 entries incl. AVR/Arduino XML, `diodes.model`).
 - What it is: "LCEDA circuit simulation tool", a dual-engine local simulation server ("EasyEDA Simulation Engine" v1.12.x): (1) NGspice via the `sharedspice.h` shared-library API (`ngSpice_Init`, `ngSpice_Init_Evt`, `ngSpice_Circ`, `ngSpice_Command("run")` in `src/cirSim/src/ngspice_de.cpp`), (2) a modified SimulIDE event-driven simulator core (circuit element classes, matrix solver) with multithreading and real-time interaction. The editor talks to it over WebSocket (websocketpp, port 51115, console banner `LC_PRO_SIM:1.12.3` ... `STATE:READY` ... `PORT:`), matching the launcher in repo 34.
 - Key source paths (structure only):
@@ -1408,7 +1408,7 @@ licence-file lookup (`gh api repos/easyeda/<repo>/license`). Descriptions are th
 | [easyeda-std-i18n](https://github.com/easyeda/easyeda-std-i18n) | no licence file | JavaScript | true | false | This is EasyEDA editor and website i18n/tranlastion/locale files, the more language translation contribution will be welcome. -:) |
 | [eext-ai-reuse-block-placement](https://github.com/easyeda/eext-ai-reuse-block-placement) | Apache-2.0 | TypeScript | false | false | 嘉立创EDA专业版扩展：AI复用模块放置 - 支持根据已有复用模块库数据，通过AI自动帮你放置适合的模块电路并生成原理图。EasyEDA Pro Extension: AI Reusable Module Placement - Supports automatically pl... |
 | [eext-api-debug-tool](https://github.com/easyeda/eext-api-debug-tool) | Apache-2.0 | JavaScript | false | false | 嘉立创EDA专业版扩展：扩展API调试工具；EasyEDA Pro extension api debug tool |
-| [eext-api-test-tool](https://github.com/easyeda/eext-api-test-tool) | Apache-2.0 | HTML | false | false | 嘉立创EDA专业版扩展：JLCEDA & EasyEDA 专业版扩展 API 开发和调试工具。EasyEDA Pro extension: JLCEDA & EasyEDA Professional Edition Extended API Development and Deb... |
+| [eext-api-test-tool](https://github.com/easyeda/eext-api-test-tool) | Apache-2.0 | HTML | false | false | 嘉立创EDA专业版扩展：FabEDA & EasyEDA 专业版扩展 API 开发和调试工具。EasyEDA Pro extension: FabEDA & EasyEDA Professional Edition Extended API Development and Deb... |
 | [eext-auto-copper-shape](https://github.com/easyeda/eext-auto-copper-shape) | Apache-2.0 | JavaScript | false | false | 嘉立创EDA专业版扩展：根据 PCB 中选中的过孔、焊盘或器件焊盘，自动生成局部铺铜或填充区域。EasyEDA Pro extension:Based on the selected vias, pads, or component pads in the PCB, automa... |
 | [eext-batch-data-export](https://github.com/easyeda/eext-batch-data-export) | Apache-2.0 | TypeScript | false | false | 嘉立创EDA专业版扩展：用于批量导出工程数据。EasyEDA Pro extension: Used for batch exporting project data |
 | [eext-batch-place-components](https://github.com/easyeda/eext-batch-place-components) | Apache-2.0 | TypeScript | false | false | 嘉立创EDA专业版扩展：通过导入一个坐标文件批量放置元件在原理图或PCB中。EasyEDA Pro extension:Batch place components in schematics or PCB by importing a coordinate file |
@@ -1462,6 +1462,6 @@ licence-file lookup (`gh api repos/easyeda/<repo>/license`). Descriptions are th
 | [eext-timing-diagram-tool](https://github.com/easyeda/eext-timing-diagram-tool) | Apache-2.0 | JavaScript | false | false | 嘉立创EDA专业版扩展：时序图工具 - 基于 WaveDrom 的时序图绘制工具，支持在原理图中创建和放置专业的数字时序图。 EasyEDA proA timing diagram tool based on WaveDrom, supporting creation and p... |
 | [eext-update-components-attributes](https://github.com/easyeda/eext-update-components-attributes) | Apache-2.0 | JavaScript | false | false | 嘉立创EDA专业版扩展：更新原理图元件属性参数。EasyEDA Pro extension：Update components attributes from library |
 | [extension-dev-mcp-tools](https://github.com/easyeda/extension-dev-mcp-tools) | no licence file | TypeScript | false | false | 用于AI Agent自动调试扩展的MCP服务。MCP service for automated debugging extension of AI Agent |
-| [jlc-mcli](https://github.com/easyeda/jlc-mcli) | MIT | TypeScript | false | false | A Node.js command-framework that serves one command tree through both shell execution and MCP protocol, giving AI agents progressive discove... |
+| [fab-mcli](https://github.com/easyeda/fab-mcli) | MIT | TypeScript | false | false | A Node.js command-framework that serves one command tree through both shell execution and MCP protocol, giving AI agents progressive discove... |
 | [kicad-to-easyeda-eprj3](https://github.com/easyeda/kicad-to-easyeda-eprj3) | Apache-2.0 | JavaScript | false | false | 将KiCAD工程文件转换为嘉立创EDA的eprj3工程格式，支持批量操作。Convert KiCAD project files to the eprj3 project format of EasyEDA Pro, supporting batch operations. |
 | [spice-model-skill](https://github.com/easyeda/spice-model-skill) | Apache-2.0 | Python | false | false | Using this skill you can create component spice model to do simulation by AI. 通过使用这个skill可以让AI创建元器件的spice模型进行仿真。 |

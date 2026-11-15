@@ -1,8 +1,8 @@
 # Integration test matrix: research, sourcing and manufacturing preparation
 
 This matrix is separate from the unit and end-to-end tests listed in `TESTING.md`. It
-covers the supplier-facing workflow: browser research, LCSC sourcing, library integrity,
-JLCPCB preparation, failure handling and offline operation.
+covers the supplier-facing workflow: browser research, Distributor sourcing, library integrity,
+Fabricator preparation, failure handling and offline operation.
 
 **Kinds**
 
@@ -35,21 +35,21 @@ Test locations: **M** = `crates/eak-manufacturing/tests/sourcing.rs`,
 
 The access research recorded in `sourcing.md` was done by hand. It is not a test.
 
-## 2. LCSC sourcing
+## 2. Distributor sourcing
 
 | ID | What is tested | Test | Kind | Status |
 |---|---|---|---|---|
 | LS-01 | Record carries source URL, retrieval time, SHA-256 and size of the raw response | M `ingest_records_provenance_and_fields_exactly_as_parsed` | offline-fixture | PASS |
-| LS-02 | LCSC number, MPN, manufacturer, package, datasheet URL, specs, stock and price are recorded exactly as parsed | M `ingest_records_provenance_and_fields_exactly_as_parsed` | offline-fixture | PASS |
+| LS-02 | Distributor number, MPN, manufacturer, package, datasheet URL, specs, stock and price are recorded exactly as parsed | M `ingest_records_provenance_and_fields_exactly_as_parsed` | offline-fixture | PASS |
 | LS-03 | Stock and price are recorded only when present | M `stock_and_price_are_recorded_only_when_present` | offline-fixture | PASS |
 | LS-04 | Absent fields are listed as missing and never invented | M `missing_fields_are_reported_and_never_invented` | offline-fixture | PASS |
 | LS-05 | A new record is a search hit; a datasheet naming the MPN makes it datasheet-matched; only a named human reviewer makes it verified | M `datasheet_hash_matching_and_human_verification` | offline-fixture | PASS |
 | LS-06 | Datasheet SHA-256 is recorded; replacing the datasheet voids the attestation | M `datasheet_hash_matching_and_human_verification` | offline-fixture | PASS |
 | LS-07 | Provenance URL must be https on the provider domain | M `source_url_must_be_https_on_the_provider_domain` | offline-fixture | PASS |
-| LS-08 | Live keyword search against LCSC | none | network-dependent | NOT IMPLEMENTED |
+| LS-08 | Live keyword search against Distributor | none | network-dependent | NOT IMPLEMENTED |
 | LS-09 | Live product detail, stock and price retrieval | none | network-dependent | NOT IMPLEMENTED |
 | LS-10 | Live datasheet retrieval | none | network-dependent | NOT IMPLEMENTED |
-| LS-11 | Field mapping checked against a real LCSC response | none | network-dependent | NOT IMPLEMENTED (mapping is unverified) |
+| LS-11 | Field mapping checked against a real Distributor response | none | network-dependent | NOT IMPLEMENTED (mapping is unverified) |
 | LS-12 | Datasheet content (ratings, pinout, land pattern) compared with the library | none | offline-fixture | NOT IMPLEMENTED |
 
 ## 3. Library integrity
@@ -57,24 +57,24 @@ The access research recorded in `sourcing.md` was done by hand. It is not a test
 | ID | What is tested | Test | Kind | Status |
 |---|---|---|---|---|
 | LI-01 | Built-in library definitions are structurally valid | C `builtin_library_is_structurally_valid` | offline-fixture | PASS |
-| LI-02 | Missing MPN, LCSC number, datasheet and ratings are errors; unverified ratings are warnings | V `missing_data_is_reported_and_rows_are_unmapped` | offline-fixture | PASS |
+| LI-02 | Missing MPN, Distributor number, datasheet and ratings are errors; unverified ratings are warnings | V `missing_data_is_reported_and_rows_are_unmapped` | offline-fixture | PASS |
 | LI-03 | A mapped part with no record, or with only a search hit, is an error | V `a_mapped_part_without_a_record_or_with_a_search_hit_is_an_error` | offline-fixture | PASS |
 | LI-04 | MPN, package and pad-count mismatches between library and record are errors | V `identity_package_and_pad_count_mismatches_are_errors` | offline-fixture | PASS |
-| LI-05 | Symbol pin to footprint pad inconsistency is reported; one LCSC number shared by several values is an error | V `symbol_footprint_inconsistency_and_shared_part_numbers_are_reported` | offline-fixture | PASS |
+| LI-05 | Symbol pin to footprint pad inconsistency is reported; one Distributor number shared by several values is an error | V `symbol_footprint_inconsistency_and_shared_part_numbers_are_reported` | offline-fixture | PASS |
 | LI-06 | Package designations are compared textually; aliases are not assumed equal | V `package_designations_are_compared_textually` | offline-fixture | PASS |
-| LI-07 | LCSC part number format | V `lcsc_part_number_format` | offline-fixture | PASS |
-| LI-08 | Selecting a record into the library goes through the command engine, leaves ratings, pins and pads unchanged, and refuses to replace an existing identity | M `lcsc_selection_reaches_the_library_bom_and_report_through_commands` | offline-fixture | PASS |
+| LI-07 | Distributor part number format | V `distributor_part_number_format` | offline-fixture | PASS |
+| LI-08 | Selecting a record into the library goes through the command engine, leaves ratings, pins and pads unchanged, and refuses to replace an existing identity | M `distributor_selection_reaches_the_library_bom_and_report_through_commands` | offline-fixture | PASS |
 
-## 4. JLCPCB preparation
+## 4. Fabricator preparation
 
 | ID | What is tested | Test | Kind | Status |
 |---|---|---|---|---|
 | JP-01 | Gerber, drill, BOM and CPL are generated, self-validated and re-verified from disk | E `reference_design_end_to_end` | offline-fixture | PASS |
-| JP-02 | BOM rows map to LCSC part numbers and unmapped rows are listed | M `lcsc_selection_reaches_the_library_bom_and_report_through_commands`, V `missing_data_is_reported_and_rows_are_unmapped` | offline-fixture | PASS |
-| JP-03 | Board dimensions, layer count, thickness and copper weight checked against a JLCPCB profile | none here | offline-fixture | NOT ON THIS BRANCH |
+| JP-02 | BOM rows map to Distributor part numbers and unmapped rows are listed | M `distributor_selection_reaches_the_library_bom_and_report_through_commands`, V `missing_data_is_reported_and_rows_are_unmapped` | offline-fixture | PASS |
+| JP-03 | Board dimensions, layer count, thickness and copper weight checked against a Fabricator profile | none here | offline-fixture | NOT ON THIS BRANCH |
 | JP-04 | Assembly compatibility and listing of unsupported parts | none here | offline-fixture | NOT ON THIS BRANCH |
 | JP-05 | DFM and readiness report | none here | offline-fixture | NOT ON THIS BRANCH |
-| JP-06 | Live JLCPCB assembly-library availability | none | network-dependent | NOT IMPLEMENTED |
+| JP-06 | Live Fabricator assembly-library availability | none | network-dependent | NOT IMPLEMENTED |
 
 JP-01 shows the standard outputs are produced without any supplier data: they serve any fabricator.
 
@@ -96,6 +96,6 @@ JP-01 shows the standard outputs are produced without any supplier data: they se
 | ID | What is tested | Test | Kind | Status |
 |---|---|---|---|---|
 | OF-01 | Records are stored, reloaded and searched with no network | M `records_work_offline_and_a_stored_state_claim_is_not_trusted` | offline-fixture | PASS |
-| OF-02 | The `SOURCING` report runs from stored records alone and is bound to the project revision | M `lcsc_selection_reaches_the_library_bom_and_report_through_commands` | offline-fixture | PASS |
+| OF-02 | The `SOURCING` report runs from stored records alone and is bound to the project revision | M `distributor_selection_reaches_the_library_bom_and_report_through_commands` | offline-fixture | PASS |
 | OF-03 | The whole test suite runs without network access | all of the above | offline-fixture | PASS (no network client exists in the dependency tree) |
 | OF-04 | Behaviour when cached records are stale | none | offline-fixture | NOT IMPLEMENTED (no freshness policy yet) |

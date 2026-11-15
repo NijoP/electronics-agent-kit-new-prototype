@@ -95,7 +95,7 @@ function Detail({ e }: { e: LibraryEntry2 }) {
         <li>
           Supplier snapshot:{" "}
           {e.supplier
-            ? `${e.supplier.lcsc}, stock ${e.supplier.stock ?? "not stated"}, retrieved ${new Date(e.supplier.as_of_unix_s * 1000).toLocaleString()} — a snapshot, not a suitability check`
+            ? `${e.supplier.distributor}, stock ${e.supplier.stock ?? "not stated"}, retrieved ${new Date(e.supplier.as_of_unix_s * 1000).toLocaleString()} — a snapshot, not a suitability check`
             : "none stored with this project"}
         </li>
       </ul>
@@ -157,7 +157,7 @@ export function LibraryBrowser() {
       >
         <label>
           Search library
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="id, name, MPN, LCSC #, package" />
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="id, name, MPN, Distributor #, package" />
         </label>
         <button type="submit" disabled={busy}>
           Search library
@@ -241,7 +241,7 @@ export function LibraryBrowser() {
                   {e.unverified_ratings > 0 ? `${e.unverified_ratings} rating(s) unverified` : "ratings verified or none"}
                   {e.has_datasheet ? "" : " · no datasheet"}
                 </td>
-                <td>{e.supplier ? `${e.supplier.lcsc} · stock ${e.supplier.stock ?? "?"}` : "—"}</td>
+                <td>{e.supplier ? `${e.supplier.distributor} · stock ${e.supplier.stock ?? "?"}` : "—"}</td>
                 <td>
                   {e.scope.kind !== "personal" && (
                     <button type="button" disabled={busy} onClick={() => void act(() => api.libraryPersonalSave(e.id), `Saved ${e.id} to the personal library`)}>

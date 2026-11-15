@@ -1,8 +1,8 @@
-//! LCSC OpenAPI client (the documented "agent" API, v1 product module) — ADR-0032.
+//! Distributor OpenAPI client (the documented "agent" API, v1 product module) — ADR-0032.
 //!
 //! One API, one authentication scheme: the header-signed REST API described at
-//! <https://www.lcsc.com/agent/authentication> and `.../agent/basic-rules` (production host
-//! `https://api.lcsc.com`, paths `/rest/api/agent/product/v1/...`). Every request carries the
+//! <https://distributor.invalid/agent/authentication> and `.../agent/basic-rules` (production host
+//! `https://distributor.invalid`, paths `/rest/api/agent/product/v1/...`). Every request carries the
 //! headers `key`, `nonce`, `timestamp` (Unix seconds, valid for 60 s) and `signature`, where
 //!
 //! ```text
@@ -15,8 +15,8 @@
 //! `A-Za-z0-9_.-~` unescaped). The secret never leaves the process: it is not sent, not
 //! logged, not part of `Debug` output and not stored in any record.
 //!
-//! The older `ips.lcsc.com/rest/wmsc2agent` OpenAPI (key/signature as *query* parameters, no
-//! documented signing rule) and the website's `wmsc.lcsc.com` endpoints (HTTP 403) are not
+//! The older `distributor.invalid/rest/wmsc2agent` OpenAPI (key/signature as *query* parameters, no
+//! documented signing rule) and the website's `distributor.invalid` endpoints (HTTP 403) are not
 //! used and are not mixed in.
 //!
 //! What is and is not known about the wire format (see ADR-0032): the authentication rule,
@@ -24,15 +24,15 @@
 //! `offset` starting at 1), the status/error-code table and the keyword-search parameters
 //! (`keyword`, `offset`, `limit`, `returnInformation`, `currency`, `inStockOnly`) are public.
 //! The per-product and per-category field names are not retrievable without an API account, so
-//! the parsers accept the documented LCSC field-name variants, record what is absent as
+//! the parsers accept the documented Distributor field-name variants, record what is absent as
 //! `missing`, and refuse (never guess) a response shape they do not recognise.
 //!
 //! Network access is the [`Fetch`] trait, so everything here is tested without a network.
 
-use crate::lcsc::{Fetch, HttpResponse};
+use crate::distributor::{Fetch, HttpResponse};
 use crate::provider::{ErrorKind, ProviderError, Served, SupplierProvider};
 use crate::sourcing::{PriceBreak, SourcingRecord, Spec, VerificationState};
-use eak_validation::sourcing::is_lcsc_part_number;
+use eak_validation::sourcing::is_distributor_part_number;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -43,9 +43,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Production host of the documented API.
-pub const PRODUCTION_BASE: &str = "https://api.lcsc.com";
+pub const PRODUCTION_BASE: &str = "https://distributor.invalid";
 /// Documented sandbox host (used by tests and by anyone holding sandbox keys).
-pub const SANDBOX_BASE: &str = "https://sandbox-api.lcsc.com";
+pub const SANDBOX_BASE: &str = "https://distributor.invalid";
 pub const PATH_CATEGORIES: &str = "/rest/api/agent/product/v1/categories";
 pub const PATH_CATEGORY_ITEMS: &str = "/rest/api/agent/product/v1/categoricalitemlist";
 pub const PATH_KEYWORD_SEARCH: &str = "/rest/api/agent/product/v1/keywordsearch";
@@ -54,7 +54,7 @@ pub const PATH_MANUFACTURERS: &str = "/rest/api/agent/product/v1/manufacturers";
 pub const MAX_LIMIT: u32 = 500;
 pub const DEFAULT_LIMIT: u32 = 50;
 /// Where a user applies for credentials and whitelists an IP address.
-pub const APPLY_URL: &str = "https://www.lcsc.com/agent/apply";
+pub const APPLY_URL: &str = "https://distributor.invalid/agent/apply";
 
 const MAX_TEXT: usize = 256;
 const MAX_DESCRIPTION: usize = 1024;
@@ -76,7 +76,7 @@ pub struct Credentials {
 
 impl Credentials {
     /// Trim and sanity-check a key/secret pair (non-empty, no whitespace or control
-    /// characters, bounded length). The pair is not verified against LCSC here.
+    /// characters, bounded length). The pair is not verified against Distributor here.
     pub fn new(key: &str, secret: &str) -> Result<Credentials, String> {
         let check = |what: &str, v: &str| -> Result<String, String> {
             let v = v.trim();
@@ -264,17 +264,17 @@ impl std::fmt::Display for ApiError {
         match self {
             ApiError::NeedsCredentials => write!(
                 f,
-                "LCSC API credentials are not configured. The LCSC catalogue needs an approved \
+                "Distributor API credentials are not configured. The Distributor catalogue needs an approved \
                  API key and secret ({APPLY_URL}; review takes 5-7 business days) and this \
                  machine's public IP on the account's whitelist. Enter them under Settings → \
-                 LCSC. No results are shown rather than inventing any."
+                 Distributor. No results are shown rather than inventing any."
             ),
             ApiError::CredentialStore(m) => write!(f, "the credential store failed: {m}"),
-            ApiError::BadRequest(m) => write!(f, "LCSC rejected the request as malformed: {m}"),
-            ApiError::Transport(m) => write!(f, "could not reach LCSC: {m}"),
+            ApiError::BadRequest(m) => write!(f, "Distributor rejected the request as malformed: {m}"),
+            ApiError::Transport(m) => write!(f, "could not reach Distributor: {m}"),
             ApiError::HttpRefused { status, note } => write!(
                 f,
-                "LCSC's gateway refused the request (HTTP {status}{}). This is usually a wrong \
+                "Distributor's gateway refused the request (HTTP {status}{}). This is usually a wrong \
                  host or an IP that is not whitelisted.",
                 if note.is_empty() {
                     String::new()
@@ -284,27 +284,27 @@ impl std::fmt::Display for ApiError {
             ),
             ApiError::Unauthorized { code, message } => write!(
                 f,
-                "LCSC rejected the credentials (code {code}: {message}). Check the API key and \
+                "Distributor rejected the credentials (code {code}: {message}). Check the API key and \
                  secret."
             ),
             ApiError::ClockSkew(m) => write!(
                 f,
-                "LCSC rejected the request timestamp ({m}). Requests are valid for 60 seconds, \
+                "Distributor rejected the request timestamp ({m}). Requests are valid for 60 seconds, \
                  so this computer's clock must be accurate."
             ),
             ApiError::IpNotAuthorized(m) => write!(
                 f,
-                "this machine's IP address is not authorised for the LCSC API (code 5002: {m}). \
-                 Add its public IP to the whitelist on your LCSC API account page."
+                "this machine's IP address is not authorised for the Distributor API (code 5002: {m}). \
+                 Add its public IP to the whitelist on your Distributor API account page."
             ),
             ApiError::NoPermission(m) => write!(
                 f,
-                "this LCSC account has no access to that API (code 5003: {m}). Ask LCSC to \
+                "this Distributor account has no access to that API (code 5003: {m}). Ask Distributor to \
                  enable the Products module."
             ),
             ApiError::RateLimited { daily, message } => write!(
                 f,
-                "LCSC rate limit reached ({}; {message}). Nothing was retried; wait before \
+                "Distributor rate limit reached ({}; {message}). Nothing was retried; wait before \
                  searching again.",
                 if *daily {
                     "daily quota"
@@ -313,12 +313,12 @@ impl std::fmt::Display for ApiError {
                 }
             ),
             ApiError::Busy(m) => {
-                write!(f, "LCSC is busy with a previous operation (code 5004: {m})")
+                write!(f, "Distributor is busy with a previous operation (code 5004: {m})")
             }
             ApiError::NotFound(m) => write!(f, "not found: {m}"),
-            ApiError::Business { code, message } => write!(f, "LCSC error {code}: {message}"),
-            ApiError::Server(m) => write!(f, "LCSC reported an internal error (code 5001: {m})"),
-            ApiError::Unusable(m) => write!(f, "unusable LCSC response: {m}"),
+            ApiError::Business { code, message } => write!(f, "Distributor error {code}: {message}"),
+            ApiError::Server(m) => write!(f, "Distributor reported an internal error (code 5001: {m})"),
+            ApiError::Unusable(m) => write!(f, "unusable Distributor response: {m}"),
         }
     }
 }
@@ -347,7 +347,7 @@ impl ApiError {
 
     pub fn to_provider_error(&self) -> ProviderError {
         ProviderError {
-            provider: "lcsc".into(),
+            provider: "distributor".into(),
             kind: self.kind(),
             message: self.to_string(),
         }
@@ -502,7 +502,7 @@ pub fn offset_for(page: u32, limit: u32) -> u64 {
 // Client
 // ---------------------------------------------------------------------------------------
 
-pub struct LcscApi<F: Fetch> {
+pub struct DistributorApi<F: Fetch> {
     fetch: F,
     base: String,
     creds: Arc<dyn CredentialSource>,
@@ -516,9 +516,9 @@ struct Answer {
     url: String,
 }
 
-impl<F: Fetch> LcscApi<F> {
+impl<F: Fetch> DistributorApi<F> {
     pub fn new(fetch: F, base: &str, creds: Arc<dyn CredentialSource>) -> Self {
-        LcscApi {
+        DistributorApi {
             fetch,
             base: base.trim_end_matches('/').to_string(),
             creds,
@@ -598,7 +598,7 @@ impl<F: Fetch> LcscApi<F> {
         })
     }
 
-    /// Keyword / MPN / LCSC-number / manufacturer / category search, one page.
+    /// Keyword / MPN / Distributor-number / manufacturer / category search, one page.
     pub fn search(&self, req: &SearchRequest) -> Result<ProductPage, ApiError> {
         let kw = req.keyword.trim();
         if kw.is_empty() {
@@ -622,7 +622,7 @@ impl<F: Fetch> LcscApi<F> {
         page_from(&a, req.page, req.limit, &req.currency, "keyword")
     }
 
-    /// One page of a category by its id (`categoricalitemlist`). If LCSC rejects the
+    /// One page of a category by its id (`categoricalitemlist`). If Distributor rejects the
     /// parameters (4001/4002) the documented fallback is used: the category *name* as a
     /// keyword, which the Categories API documents as directly searchable; the page says so
     /// in `via`.
@@ -676,13 +676,13 @@ impl<F: Fetch> LcscApi<F> {
         manufacturers_from(&a.result)
     }
 
-    /// Exact lookup of one LCSC part number: the documented keyword search ("matches LCSC
+    /// Exact lookup of one Distributor part number: the documented keyword search ("matches Distributor
     /// part #") filtered to the record whose number is exactly `part`.
     pub fn product(&self, part: &str, currency: &str) -> Result<SourcingRecord, ApiError> {
         let code = part.trim().to_ascii_uppercase();
-        if !is_lcsc_part_number(&code) {
+        if !is_distributor_part_number(&code) {
             return Err(ApiError::BadRequest(format!(
-                "{part:?} is not an LCSC part number (C followed by digits)"
+                "{part:?} is not an Distributor part number (C followed by digits)"
             )));
         }
         let mut r = SearchRequest::new(&code);
@@ -691,8 +691,8 @@ impl<F: Fetch> LcscApi<F> {
         let page = self.search(&r)?;
         page.records
             .into_iter()
-            .find(|rec| rec.lcsc_part.as_deref() == Some(code.as_str()))
-            .ok_or_else(|| ApiError::NotFound(format!("LCSC has no part {code}")))
+            .find(|rec| rec.distributor_part.as_deref() == Some(code.as_str()))
+            .ok_or_else(|| ApiError::NotFound(format!("Distributor has no part {code}")))
     }
 
     /// The cheapest authenticated call: one record of a keyword search. Success means the
@@ -886,28 +886,28 @@ fn record_from_product(
     let mut missing = vec![];
     let mut rejected = vec![];
 
-    let lcsc_raw = text_field(
+    let distributor_raw = text_field(
         o,
         &[
             "productCode",
-            "lcscPartNumber",
+            "distributorPartNumber",
             "productNumber",
             "number",
-            "lcscNumber",
+            "distributorNumber",
         ],
         32,
     )
     .map(|s| s.to_ascii_uppercase());
-    let lcsc_part = match lcsc_raw {
-        Some(s) if is_lcsc_part_number(&s) => Some(s),
+    let distributor_part = match distributor_raw {
+        Some(s) if is_distributor_part_number(&s) => Some(s),
         Some(_) => {
-            rejected.push("lcsc part number: not C followed by digits".to_string());
+            rejected.push("distributor part number: not C followed by digits".to_string());
             None
         }
         None => None,
     };
-    if lcsc_part.is_none() {
-        missing.push("lcsc_part".to_string());
+    if distributor_part.is_none() {
+        missing.push("distributor_part".to_string());
     }
     let mut field = |names: &[&str], what: &str, max: usize| {
         let v = text_field(o, names, max);
@@ -978,12 +978,12 @@ fn record_from_product(
 
     let canonical = serde_json::to_vec(product).ok()?;
     Some(SourcingRecord {
-        provider: "LCSC".into(),
+        provider: "Distributor".into(),
         source_url: source_url.to_string(),
         retrieved_at_unix_s: now,
         raw_sha256: format!("{:x}", Sha256::digest(&canonical)),
         raw_bytes: canonical.len() as u64,
-        lcsc_part,
+        distributor_part,
         mpn,
         manufacturer,
         package,
@@ -1158,15 +1158,15 @@ fn manufacturers_from(result: &Value) -> Result<Vec<Manufacturer>, ApiError> {
 // SupplierProvider adapter (the existing Resilient lookup/import path)
 // ---------------------------------------------------------------------------------------
 
-impl<F: Fetch> SupplierProvider for LcscApi<F> {
+impl<F: Fetch> SupplierProvider for DistributorApi<F> {
     fn name(&self) -> &str {
-        "lcsc"
+        "distributor"
     }
     fn lookup(&self, part: &str) -> Result<SourcingRecord, ProviderError> {
         self.product(part, "USD").map_err(|e| e.to_provider_error())
     }
     fn search(&self, query: &str) -> Result<Vec<SourcingRecord>, ProviderError> {
-        LcscApi::search(self, &SearchRequest::new(query))
+        DistributorApi::search(self, &SearchRequest::new(query))
             .map(|p| p.records)
             .map_err(|e| e.to_provider_error())
     }
@@ -1176,11 +1176,11 @@ impl<F: Fetch> SupplierProvider for LcscApi<F> {
 // Catalogue service: bounded cache, pacing, retry, stale labelling
 // ---------------------------------------------------------------------------------------
 
-/// A typed answer with how it was obtained and when LCSC produced it.
+/// A typed answer with how it was obtained and when Distributor produced it.
 #[derive(Debug, Clone, Serialize)]
 pub struct Fetched<T> {
     pub served: Served,
-    /// Unix seconds at which the data was retrieved from LCSC (not when it was served).
+    /// Unix seconds at which the data was retrieved from Distributor (not when it was served).
     pub fetched_at_unix_s: u64,
     pub data: T,
 }
@@ -1206,7 +1206,7 @@ pub const TTL_PAGE: Duration = Duration::from_secs(15 * 60);
 /// the documented 200 calls/minute), only transport failures are retried, and a rate-limit
 /// answer is never retried.
 pub struct Catalogue<F: Fetch> {
-    api: LcscApi<F>,
+    api: DistributorApi<F>,
     pub min_interval: Duration,
     pub max_attempts: u32,
     pub base_backoff: Duration,
@@ -1215,7 +1215,7 @@ pub struct Catalogue<F: Fetch> {
 }
 
 impl<F: Fetch> Catalogue<F> {
-    pub fn new(api: LcscApi<F>) -> Self {
+    pub fn new(api: DistributorApi<F>) -> Self {
         Catalogue {
             api,
             min_interval: Duration::from_millis(350),
@@ -1235,7 +1235,7 @@ impl<F: Fetch> Catalogue<F> {
         self
     }
 
-    pub fn api(&self) -> &LcscApi<F> {
+    pub fn api(&self) -> &DistributorApi<F> {
         &self.api
     }
 
@@ -1245,7 +1245,7 @@ impl<F: Fetch> Catalogue<F> {
         s.entries.clear();
     }
 
-    /// Requests that reached LCSC in this process (for the quota display).
+    /// Requests that reached Distributor in this process (for the quota display).
     pub fn requests_made(&self) -> u64 {
         self.state
             .lock()
@@ -1271,14 +1271,14 @@ impl<F: Fetch> Catalogue<F> {
         }
     }
 
-    /// Serve `key` from cache when fresh, else call LCSC (retrying transport failures), else
+    /// Serve `key` from cache when fresh, else call Distributor (retrying transport failures), else
     /// fall back to an older cached answer, labelled stale, for outages and rate limits.
     pub fn cached<T: Serialize + DeserializeOwned>(
         &self,
         key: &str,
         ttl: Duration,
         refresh: bool,
-        f: impl Fn(&LcscApi<F>) -> Result<T, ApiError>,
+        f: impl Fn(&DistributorApi<F>) -> Result<T, ApiError>,
     ) -> Result<Fetched<T>, ApiError> {
         let cached = {
             let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -1429,7 +1429,7 @@ mod tests {
     use std::sync::Mutex as StdMutex;
 
     // Test vectors: derived from the documented rule with an independent SHA-256
-    // (`printf '%s' "$string" | sha256sum`), not copied from LCSC.
+    // (`printf '%s' "$string" | sha256sum`), not copied from Distributor.
     const BASE: &str = "key=testkey&nonce=0123456789abcdef&secret=testsecret&timestamp=1700000000";
 
     fn params(kv: &[(&str, &str)]) -> BTreeMap<String, String> {
@@ -1599,9 +1599,9 @@ mod tests {
         })
     }
 
-    fn api(script: &Arc<Script>, creds: bool) -> LcscApi<Shared> {
+    fn api(script: &Arc<Script>, creds: bool) -> DistributorApi<Shared> {
         let c = creds.then(|| Credentials::new("testkey", "testsecret").unwrap());
-        LcscApi::new(
+        DistributorApi::new(
             Shared(script.clone()),
             "https://api.example.invalid",
             Arc::new(FixedCredentials(c)),
@@ -1619,7 +1619,7 @@ mod tests {
     const PRODUCTS: &str = r#"{"code":200,"message":"ok","success":true,"result":{"productCount":3,"products":[
       {"productCode":"C25804","productModel":"0603WAF1002T5E","brandNameEn":"UNI-ROYAL(Uniroyal Elec)",
        "encapStandard":"0603","catalogName":"Chip Resistor - Surface Mount","parentCatalogName":"Resistors",
-       "stockNumber":1200000,"pdfUrl":"https://datasheet.lcsc.com/x.pdf",
+       "stockNumber":1200000,"pdfUrl":"https://distributor.invalid/x.pdf",
        "productPriceList":[{"startNumber":1,"productPrice":0.0123}],
        "paramVOList":[{"paramNameEn":"Resistance","paramValueEn":"10kΩ"}]},
       {"productCode":"C99999","productModel":"0603WAF1002T5E","brandNameEn":"OTHER CO","encapStandard":"0603","stockNumber":0}
@@ -1675,7 +1675,7 @@ mod tests {
         let s = Script::new(vec![ok(PRODUCTS)]);
         let page = api(&s, true).search(&SearchRequest::new("x")).unwrap();
         let r = &page.records[0];
-        assert_eq!(r.lcsc_part.as_deref(), Some("C25804"));
+        assert_eq!(r.distributor_part.as_deref(), Some("C25804"));
         assert_eq!(r.mpn.as_deref(), Some("0603WAF1002T5E"));
         assert_eq!(r.package.as_deref(), Some("0603"));
         assert_eq!(
@@ -1837,10 +1837,10 @@ mod tests {
     }
 
     #[test]
-    fn product_lookup_returns_only_the_exact_lcsc_number() {
+    fn product_lookup_returns_only_the_exact_distributor_number() {
         let s = Script::new(vec![ok(PRODUCTS)]);
         let r = api(&s, true).product("c25804", "USD").unwrap();
-        assert_eq!(r.lcsc_part.as_deref(), Some("C25804"));
+        assert_eq!(r.distributor_part.as_deref(), Some("C25804"));
         let s2 = Script::new(vec![ok(PRODUCTS)]);
         assert!(matches!(
             api(&s2, true).product("C1", "USD"),

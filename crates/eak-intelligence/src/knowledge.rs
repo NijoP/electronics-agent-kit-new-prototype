@@ -63,7 +63,7 @@ pub struct Chunk {
     /// existed reads as `unverified`.
     #[serde(default)]
     pub label: FactLabel,
-    /// Part numbers this chunk is about (MPNs given at import, LCSC ids found in the text), upper
+    /// Part numbers this chunk is about (MPNs given at import, Distributor ids found in the text), upper
     /// case; used for exact lookup and filtering.
     #[serde(default)]
     pub part_ids: Vec<String>,
@@ -101,8 +101,8 @@ fn rerank_factor(q_lower: &str, q_tokens: &[String], c: &Chunk) -> f64 {
     f
 }
 
-/// LCSC part numbers (`C` + 3..9 digits) in free text, upper case.
-fn lcsc_ids(text: &str) -> Vec<String> {
+/// Distributor part numbers (`C` + 3..9 digits) in free text, upper case.
+fn distributor_ids(text: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for t in text.split(|c: char| !c.is_alphanumeric()) {
         let u = t.to_ascii_uppercase();
@@ -296,7 +296,7 @@ impl KnowledgeIndex {
     }
 
     /// As `add_source`, tagging every chunk with the given part numbers (MPNs) in addition to the
-    /// LCSC ids found in each chunk's text. Re-adding a source replaces it (incremental ingestion).
+    /// Distributor ids found in each chunk's text. Re-adding a source replaces it (incremental ingestion).
     pub fn add_source_for_part(
         &mut self,
         kind: SourceKind,
@@ -318,7 +318,7 @@ impl KnowledgeIndex {
                 .iter()
                 .map(|p| p.trim().to_ascii_uppercase())
                 .collect();
-            for id in lcsc_ids(&passage) {
+            for id in distributor_ids(&passage) {
                 if !part_ids.contains(&id) {
                     part_ids.push(id);
                 }
@@ -355,7 +355,7 @@ impl KnowledgeIndex {
         self.search_filtered(query, limit, kind, None)
     }
 
-    /// `search` restricted to chunks about one part number (MPN or LCSC id, case-insensitive).
+    /// `search` restricted to chunks about one part number (MPN or Distributor id, case-insensitive).
     pub fn search_filtered(
         &self,
         query: &str,
@@ -391,7 +391,7 @@ impl KnowledgeIndex {
         hits
     }
 
-    /// Exact part-number lookup (MPN given at import, or LCSC id in the text): every chunk about
+    /// Exact part-number lookup (MPN given at import, or Distributor id in the text): every chunk about
     /// that part, in source order. No scoring, so no lexical-match requirement.
     pub fn by_part(&self, part: &str) -> Vec<&Chunk> {
         let p = part.trim().to_ascii_uppercase();

@@ -1,7 +1,7 @@
 {
-  "id": "jlcpcb-standard-2layer",
-  "name": "JLCPCB standard PCB (1-2 layer, FR-4)",
-  "source_url": "https://jlcpcb.com/capabilities/pcb-capabilities",
+  "id": "fabricator-standard-2layer",
+  "name": "Fabricator standard PCB (1-2 layer, FR-4)",
+  "source_url": "https://fabricator.invalid/capabilities/pcb-capabilities",
   "retrieved": "2026-11-14",
   "verified": false,
   "note": "Values transcribed from the fabricator's public capabilities page for standard 1-2 layer FR-4 orders. Not verified against a quotation; the fabricator's current page and DFM review are authoritative.",

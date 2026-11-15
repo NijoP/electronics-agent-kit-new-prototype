@@ -2,8 +2,8 @@
 //! reporting, offline fallback and provenance (directive part 2 §7.2).
 //!
 //! * [`SupplierProvider`] is the trait a supplier lookup implements; the signed OpenAPI client
-//!   (`lcsc_api::LcscApi`) and the legacy [`LcscProvider`] do.
-//!   JLCPCB is a manufacturing-preparation adapter (`jlcpcb.rs`), not a part-lookup supplier, so it
+//!   (`distributor_api::DistributorApi`) and the legacy [`DistributorProvider`] do.
+//!   Fabricator is a manufacturing-preparation adapter (`fabricator.rs`), not a part-lookup supplier, so it
 //!   does not implement this trait; further suppliers add an impl.
 //! * [`Resilient`] wraps any provider. Calls are blocking: run them off the UI thread (the desktop's
 //!   `parts_*` commands already do). A supplier outage returns a typed [`ProviderError`]; it never
@@ -16,7 +16,7 @@
 //!
 //! The cache is per process (not persisted). Code-reviewed only; tests are written, unrun.
 
-use crate::lcsc::{Fetch, LcscError, LcscProvider};
+use crate::distributor::{Fetch, DistributorError, DistributorProvider};
 use crate::sourcing::SourcingRecord;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -33,7 +33,7 @@ pub enum ErrorKind {
     Blocked,
     NotFound,
     Unusable,
-    /// No API credentials are configured (LCSC OpenAPI). Never retried, never stale.
+    /// No API credentials are configured (Distributor OpenAPI). Never retried, never stale.
     NeedsCredentials,
     /// Credentials, signature or clock rejected. Never retried, never stale.
     Unauthorized,
@@ -88,30 +88,30 @@ pub trait SupplierProvider: Send + Sync {
     fn search(&self, query: &str) -> Result<Vec<SourcingRecord>, ProviderError>;
 }
 
-fn map_lcsc(e: LcscError) -> ProviderError {
+fn map_distributor(e: DistributorError) -> ProviderError {
     let kind = match &e {
-        LcscError::BadQuery(_) => ErrorKind::BadQuery,
-        LcscError::Transport(_) => ErrorKind::Offline,
-        LcscError::Blocked { .. } => ErrorKind::Blocked,
-        LcscError::NotFound(_) => ErrorKind::NotFound,
-        LcscError::Unusable(_) => ErrorKind::Unusable,
+        DistributorError::BadQuery(_) => ErrorKind::BadQuery,
+        DistributorError::Transport(_) => ErrorKind::Offline,
+        DistributorError::Blocked { .. } => ErrorKind::Blocked,
+        DistributorError::NotFound(_) => ErrorKind::NotFound,
+        DistributorError::Unusable(_) => ErrorKind::Unusable,
     };
     ProviderError {
-        provider: "lcsc".into(),
+        provider: "distributor".into(),
         kind,
         message: e.to_string(),
     }
 }
 
-impl<F: Fetch> SupplierProvider for LcscProvider<F> {
+impl<F: Fetch> SupplierProvider for DistributorProvider<F> {
     fn name(&self) -> &str {
-        "lcsc"
+        "distributor"
     }
     fn lookup(&self, part: &str) -> Result<SourcingRecord, ProviderError> {
-        LcscProvider::lookup(self, part).map_err(map_lcsc)
+        DistributorProvider::lookup(self, part).map_err(map_distributor)
     }
     fn search(&self, query: &str) -> Result<Vec<SourcingRecord>, ProviderError> {
-        LcscProvider::search(self, query).map_err(map_lcsc)
+        DistributorProvider::search(self, query).map_err(map_distributor)
     }
 }
 
@@ -265,7 +265,7 @@ mod tests {
         serde_json::from_value(serde_json::json!({
             "provider": "fake", "source_url": "https://example.invalid/x",
             "retrieved_at_unix_s": 1, "raw_sha256": "00", "raw_bytes": 0,
-            "lcsc_part": part, "mpn": null, "manufacturer": null, "package": null,
+            "distributor_part": part, "mpn": null, "manufacturer": null, "package": null,
             "description": null, "datasheet_url": null, "specs": [], "stock": null,
             "price_breaks": [], "missing": [], "rejected": [], "datasheet": null,
             "attestation": null, "state": "search_hit"

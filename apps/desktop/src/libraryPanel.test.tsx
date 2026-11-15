@@ -14,7 +14,7 @@ const def = (id: string, name: string, extra: Partial<ComponentDef> = {}): Compo
   default_value: "10k",
   manufacturer: null,
   mpn: null,
-  lcsc: null,
+  distributor: null,
   datasheet: null,
   symbol: { pins: [{ number: "1", name: "~", electrical_type: "passive", position: { x: -5_000_000, y: 0 } }, { number: "2", name: "~", electrical_type: "passive", position: { x: 5_000_000, y: 0 } }], body_half_w: 2_000_000, body_half_h: 1_000_000 },
   footprint: { name: "R_0603", pads: [{ number: "1", kind: "smd", shape: "rect", position: { x: -800_000, y: 0 }, size_x: 800_000, size_y: 900_000, drill: null }, { number: "2", kind: "smd", shape: "rect", position: { x: 800_000, y: 0 }, size_x: 800_000, size_y: 900_000, drill: null }], courtyard_half_w: 1_500_000, courtyard_half_h: 800_000, body_height: null },
@@ -83,16 +83,16 @@ describe("LibraryPanel", () => {
     expect(screen.queryByLabelText("MPN")).toBeNull();
   });
 
-  it("edits MPN / manufacturer / LCSC as one typed command, blank clears", async () => {
+  it("edits MPN / manufacturer / Distributor as one typed command, blank clears", async () => {
     const { execute } = mount();
     fireEvent.click(await screen.findByText("Resistor 0603"));
     const save = screen.getByRole("button", { name: "Save properties" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("MPN"), { target: { value: " RC0603FR-0710KL " } });
     fireEvent.change(screen.getByLabelText("Manufacturer"), { target: { value: "Yageo" } });
-    fireEvent.change(screen.getByLabelText("LCSC id"), { target: { value: "C25804" } });
+    fireEvent.change(screen.getByLabelText("Distributor id"), { target: { value: "C25804" } });
     fireEvent.click(save);
-    expect(execute).toHaveBeenCalledWith({ type: "SetComponentProperties", component_id: "R_0603", manufacturer: "Yageo", mpn: "RC0603FR-0710KL", lcsc: "C25804", datasheet: null });
+    expect(execute).toHaveBeenCalledWith({ type: "SetComponentProperties", component_id: "R_0603", manufacturer: "Yageo", mpn: "RC0603FR-0710KL", distributor: "C25804", datasheet: null });
   });
 
   it("attaches a 3D model through UpsertComponentDefinition and refuses without provenance", async () => {

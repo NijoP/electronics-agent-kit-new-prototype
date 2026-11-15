@@ -94,7 +94,7 @@ interface Props {
 }
 
 const emptyToNull = (s: string) => (s.trim() === "" ? null : s.trim());
-const LABELS = { manufacturer: "Manufacturer", mpn: "MPN", lcsc: "LCSC id", datasheet: "Datasheet URL" } as const;
+const LABELS = { manufacturer: "Manufacturer", mpn: "MPN", distributor: "Distributor id", datasheet: "Datasheet URL" } as const;
 
 export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
   const [query, setQuery] = useState("");
@@ -104,7 +104,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
   const [categories, setCategories] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
-  const [form, setForm] = useState({ manufacturer: "", mpn: "", lcsc: "", datasheet: "" });
+  const [form, setForm] = useState({ manufacturer: "", mpn: "", distributor: "", datasheet: "" });
   const [candidates, setCandidates] = useState<FootprintCandidate[]>([]);
   const [fpChoice, setFpChoice] = useState("");
   const [mf, setMf] = useState<ModelForm>(emptyModelForm);
@@ -139,7 +139,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
 
   useEffect(() => {
     if (!sel) return;
-    setForm({ manufacturer: sel.def.manufacturer ?? "", mpn: sel.def.mpn ?? "", lcsc: sel.def.lcsc ?? "", datasheet: sel.def.datasheet ?? "" });
+    setForm({ manufacturer: sel.def.manufacturer ?? "", mpn: sel.def.mpn ?? "", distributor: sel.def.distributor ?? "", datasheet: sel.def.datasheet ?? "" });
     setFpChoice("");
     setMf(modelFormOf(sel.def.model3d?.model_ref));
     let live = true;
@@ -159,7 +159,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
       component_id: sel.id,
       manufacturer: emptyToNull(form.manufacturer),
       mpn: emptyToNull(form.mpn),
-      lcsc: emptyToNull(form.lcsc),
+      distributor: emptyToNull(form.distributor),
       datasheet: emptyToNull(form.datasheet),
     });
   const assign = () => {
@@ -183,11 +183,11 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
   };
   const setXyz = (k: "offset" | "rotation" | "scale", i: number, v: string) =>
     setMf((f) => ({ ...f, [k]: f[k].map((x, j) => (j === i ? v : x)) as Xyz }));
-  const dirty = sel && (form.manufacturer !== (sel.def.manufacturer ?? "") || form.mpn !== (sel.def.mpn ?? "") || form.lcsc !== (sel.def.lcsc ?? "") || form.datasheet !== (sel.def.datasheet ?? ""));
+  const dirty = sel && (form.manufacturer !== (sel.def.manufacturer ?? "") || form.mpn !== (sel.def.mpn ?? "") || form.distributor !== (sel.def.distributor ?? "") || form.datasheet !== (sel.def.datasheet ?? ""));
 
   return (
     <div className="panel-body library-panel">
-      <input aria-label="Search library" placeholder="Search name, MPN, LCSC, footprint…" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <input aria-label="Search library" placeholder="Search name, MPN, Distributor, footprint…" value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="row">
         <select aria-label="Category filter" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">All categories</option>

@@ -1,4 +1,4 @@
-// JLCPCB manufacturing preparation: BOM view, DFM rule check against JLCPCB's published
+// Fabricator manufacturing preparation: BOM view, DFM rule check against Fabricator's published
 // 2-layer limits, and a bundle written to a folder the user names. Everything shown is
 // "prepared for review"; nothing is uploaded or ordered, and rules this software cannot
 // evaluate are listed as not checked, never as passing.
@@ -40,9 +40,9 @@ export function ManufacturingPanel({ revision, onPrepared }: { revision: number;
     setBusy(true);
     try {
       setError(null);
-      const r = await api.jlcpcbPrepare(outDir);
+      const r = await api.fabricatorPrepare(outDir);
       setResult(r);
-      onPrepared(`JLCPCB bundle prepared for review in ${r.prep.out_dir}`);
+      onPrepared(`Fabricator bundle prepared for review in ${r.prep.out_dir}`);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -52,7 +52,7 @@ export function ManufacturingPanel({ revision, onPrepared }: { revision: number;
 
   return (
     <section className="mfg" aria-label="Manufacturing prep">
-      <h2>Manufacturing prep · JLCPCB</h2>
+      <h2>Manufacturing prep · Fabricator</h2>
       <p className="muted">
         Prepared for review only. Not manufacturing-ready, nothing is uploaded, quoted or ordered.
       </p>
@@ -71,7 +71,7 @@ export function ManufacturingPanel({ revision, onPrepared }: { revision: number;
                 <th>Designators</th>
                 <th>Value</th>
                 <th>Footprint</th>
-                <th>LCSC #</th>
+                <th>Distributor #</th>
                 <th>Stock</th>
                 <th>Unit $</th>
               </tr>
@@ -83,17 +83,17 @@ export function ManufacturingPanel({ revision, onPrepared }: { revision: number;
                   <td>{l.designators.join(", ")}</td>
                   <td>{l.value}</td>
                   <td>{l.footprint}</td>
-                  <td>{l.lcsc ?? <span className="error">missing</span>}</td>
+                  <td>{l.distributor ?? <span className="error">missing</span>}</td>
                   <td>{l.stock === null ? "—" : l.stock.toLocaleString("en-US")}</td>
                   <td>{l.unit_price_usd ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <h3>JLCPCB assembly classification and BOM warnings</h3>
+          <h3>Fabricator assembly classification and BOM warnings</h3>
           <p className="muted">
-            A part listed at LCSC is not thereby assemblable by JLCPCB. Basic/extended class is never inferred; it comes only from
-            your attestation or a JLCPCB parts file you provide, and stays unknown otherwise.
+            A part listed at Distributor is not thereby assemblable by Fabricator. Basic/extended class is never inferred; it comes only from
+            your attestation or a Fabricator parts file you provide, and stays unknown otherwise.
           </p>
           {preview.assembly.warnings.length === 0 ? (
             <p role="status">No BOM/assembly warnings.</p>
@@ -110,17 +110,17 @@ export function ManufacturingPanel({ revision, onPrepared }: { revision: number;
             <table aria-label="Assembly classes">
               <tbody>
                 {preview.assembly.rows.map((r) => (
-                  <tr key={r.lcsc}>
-                    <td>{r.lcsc}</td>
+                  <tr key={r.distributor}>
+                    <td>{r.distributor}</td>
                     <td>{r.class ?? "unknown (no record)"}</td>
                     <td>{r.source ?? "—"}</td>
                     <td>
                       <select
-                        aria-label={`Attest assembly class of ${r.lcsc}`}
+                        aria-label={`Attest assembly class of ${r.distributor}`}
                         value=""
                         onChange={(e) => {
                           const v = e.target.value as AssemblyClass;
-                          if (v) void api.assemblyAttest(r.lcsc, v).then(load).catch((x) => setError(String(x)));
+                          if (v) void api.assemblyAttest(r.distributor, v).then(load).catch((x) => setError(String(x)));
                         }}
                       >
                         <option value="">attest…</option>
@@ -136,7 +136,7 @@ export function ManufacturingPanel({ revision, onPrepared }: { revision: number;
             </table>
           )}
           <label>
-            JLCPCB parts file (CSV, absolute path)
+            Fabricator parts file (CSV, absolute path)
             <input value={partsFile} onChange={(e) => setPartsFile(e.target.value)} />
           </label>
           <button
@@ -156,7 +156,7 @@ export function ManufacturingPanel({ revision, onPrepared }: { revision: number;
           </button>
           {asmNote && <p role="status">{asmNote}</p>}
           <h3>
-            JLCPCB capability check{" "}
+            Fabricator capability check{" "}
             <span className="muted">
               {preview.dfm.profile.id} · limits read {preview.dfm.profile.verified_on}
             </span>
@@ -184,7 +184,7 @@ export function ManufacturingPanel({ revision, onPrepared }: { revision: number;
         <input value={outDir} onChange={(e) => setOutDir(e.target.value)} placeholder={preview?.default_out_dir ?? ""} />
       </label>
       <button type="button" onClick={prepare} disabled={busy || !preview}>
-        Generate JLCPCB bundle
+        Generate Fabricator bundle
       </button>
       {result && (
         <div aria-label="Prepared bundle">

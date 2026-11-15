@@ -240,9 +240,9 @@ pub struct OfferPrice {
 /// electrical checks. `lifecycle` is the supplier's own wording, not an EAK judgement.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SupplierOffer {
-    /// Lower-case supplier key, for example `lcsc`.
+    /// Lower-case supplier key, for example `distributor`.
     pub supplier: String,
-    /// The supplier's own identifier (an LCSC `C` number for `lcsc`).
+    /// The supplier's own identifier (an Distributor `C` number for `distributor`).
     pub supplier_part: String,
     #[serde(default)]
     pub url: Option<String>,
@@ -289,11 +289,11 @@ pub struct ComponentDef {
     pub manufacturer: Option<String>,
     #[serde(default)]
     pub mpn: Option<String>,
-    /// Legacy single LCSC part number kept so older project files and the BOM/JLCPCB code
+    /// Legacy single Distributor part number kept so older project files and the BOM/Fabricator code
     /// keep working. Supplier data lives in `supplier_offers`; read it through
     /// [`ComponentDef::supplier_part`], which prefers the offer and falls back to this field.
     #[serde(default)]
-    pub lcsc: Option<String>,
+    pub distributor: Option<String>,
     /// Supplier-specific offers, separate from the component's identity (ADR-0028).
     /// Absent in older files (loads as empty).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -313,7 +313,7 @@ pub struct ComponentDef {
 
 impl ComponentDef {
     /// The part number `supplier` uses for this component: its offer if present, else (for
-    /// `lcsc` only) the legacy `lcsc` field. A part number is an identifier, never evidence of
+    /// `distributor` only) the legacy `distributor` field. A part number is an identifier, never evidence of
     /// electrical suitability.
     pub fn supplier_part(&self, supplier: &str) -> Option<&str> {
         let key = supplier.trim().to_ascii_lowercase();
@@ -322,18 +322,18 @@ impl ComponentDef {
             .find(|o| o.supplier == key && !o.supplier_part.trim().is_empty())
             .map(|o| o.supplier_part.as_str())
             .or_else(|| {
-                if key == "lcsc" {
-                    self.lcsc.as_deref().filter(|s| !s.trim().is_empty())
+                if key == "distributor" {
+                    self.distributor.as_deref().filter(|s| !s.trim().is_empty())
                 } else {
                     None
                 }
             })
     }
 
-    /// Insert or replace this supplier's offer and keep the legacy `lcsc` mirror in step.
+    /// Insert or replace this supplier's offer and keep the legacy `distributor` mirror in step.
     pub fn set_offer(&mut self, offer: SupplierOffer) {
-        if offer.supplier == "lcsc" {
-            self.lcsc = Some(offer.supplier_part.clone());
+        if offer.supplier == "distributor" {
+            self.distributor = Some(offer.supplier_part.clone());
         }
         match self
             .supplier_offers
@@ -345,13 +345,13 @@ impl ComponentDef {
         }
     }
 
-    /// Migrate a legacy definition: a bare `lcsc` id with no matching offer becomes a bare
-    /// `lcsc` offer. Idempotent. Identity fields are not touched.
+    /// Migrate a legacy definition: a bare `distributor` id with no matching offer becomes a bare
+    /// `distributor` offer. Idempotent. Identity fields are not touched.
     pub fn migrate_offers(&mut self) {
-        if let Some(part) = self.lcsc.clone().filter(|s| !s.trim().is_empty()) {
-            if !self.supplier_offers.iter().any(|o| o.supplier == "lcsc") {
+        if let Some(part) = self.distributor.clone().filter(|s| !s.trim().is_empty()) {
+            if !self.supplier_offers.iter().any(|o| o.supplier == "distributor") {
                 self.supplier_offers
-                    .push(SupplierOffer::bare("lcsc", &part));
+                    .push(SupplierOffer::bare("distributor", &part));
             }
         }
     }
@@ -436,7 +436,7 @@ impl ComponentDef {
 
 impl ComponentDef {
     /// Case-insensitive AND-match of whitespace-separated terms against the fields a user
-    /// searches by (id, name, category, footprint, manufacturer, MPN, LCSC number, refdes
+    /// searches by (id, name, category, footprint, manufacturer, MPN, Distributor number, refdes
     /// prefix). An empty query matches everything.
     pub fn matches_query(&self, query: &str) -> bool {
         let hay = format!(
@@ -447,7 +447,7 @@ impl ComponentDef {
             self.footprint.name,
             self.manufacturer.as_deref().unwrap_or(""),
             self.mpn.as_deref().unwrap_or(""),
-            self.lcsc.as_deref().unwrap_or(""),
+            self.distributor.as_deref().unwrap_or(""),
             self.refdes_prefix
         )
         .to_lowercase();
@@ -511,12 +511,12 @@ mod search_tests {
         assert!(hits("resistor") >= 1);
         assert!(hits("RESISTOR 0603") >= 1);
         assert_eq!(hits("resistor no-such-term"), 0);
-        // LCSC number and MPN are searchable.
-        let with_lcsc = all
+        // Distributor number and MPN are searchable.
+        let with_distributor = all
             .iter()
-            .find(|c| c.lcsc.is_some())
-            .expect("a part with LCSC");
-        assert!(with_lcsc.matches_query(with_lcsc.lcsc.as_deref().unwrap()));
+            .find(|c| c.distributor.is_some())
+            .expect("a part with Distributor");
+        assert!(with_distributor.matches_query(with_distributor.distributor.as_deref().unwrap()));
     }
 }
 
@@ -536,15 +536,15 @@ mod supplier_offer_tests {
     fn legacy_json_without_offers_loads_and_migrates() {
         let mut v = serde_json::to_value(part()).unwrap();
         v.as_object_mut().unwrap().remove("supplier_offers");
-        v["lcsc"] = serde_json::json!("C25804");
+        v["distributor"] = serde_json::json!("C25804");
         let mut def: ComponentDef = serde_json::from_value(v).unwrap();
         assert!(def.supplier_offers.is_empty());
-        assert_eq!(def.supplier_part("LCSC"), Some("C25804"));
+        assert_eq!(def.supplier_part("Distributor"), Some("C25804"));
         def.migrate_offers();
         def.migrate_offers();
         assert_eq!(
             def.supplier_offers,
-            vec![SupplierOffer::bare("lcsc", "C25804")]
+            vec![SupplierOffer::bare("distributor", "C25804")]
         );
     }
 
@@ -554,8 +554,8 @@ mod supplier_offer_tests {
         let v = serde_json::to_value(&def).unwrap();
         assert!(v.get("supplier_offers").is_none());
         let mut with = def.clone();
-        with.set_offer(SupplierOffer::bare("lcsc", "C1"));
-        assert_eq!(with.lcsc.as_deref(), Some("C1"));
+        with.set_offer(SupplierOffer::bare("distributor", "C1"));
+        assert_eq!(with.distributor.as_deref(), Some("C1"));
         assert_eq!(
             (&with.mpn, &with.manufacturer),
             (&def.mpn, &def.manufacturer)
@@ -568,11 +568,11 @@ mod supplier_offer_tests {
     #[test]
     fn set_offer_replaces_the_same_supplier_only() {
         let mut def = part();
-        def.set_offer(SupplierOffer::bare("lcsc", "C1"));
+        def.set_offer(SupplierOffer::bare("distributor", "C1"));
         def.set_offer(SupplierOffer::bare("mouser", "M9"));
-        def.set_offer(SupplierOffer::bare("lcsc", "C2"));
+        def.set_offer(SupplierOffer::bare("distributor", "C2"));
         assert_eq!(def.supplier_offers.len(), 2);
-        assert_eq!(def.supplier_part("lcsc"), Some("C2"));
+        assert_eq!(def.supplier_part("distributor"), Some("C2"));
         assert_eq!(def.supplier_part("mouser"), Some("M9"));
         assert_eq!(def.supplier_part("digikey"), None);
     }

@@ -81,14 +81,14 @@ fn search(engine: &Engine, args: &Value) -> Result<Value, Fail> {
     }))
 }
 
-/// Exact MPN / LCSC-id lookup: every chunk about the part, no lexical match needed.
+/// Exact MPN / Distributor-id lookup: every chunk about the part, no lexical match needed.
 fn lookup(engine: &Engine, args: &Value) -> Result<Value, Fail> {
     let part = arg_str(args, "part")?;
     let idx = index(engine)?;
     let chunks = idx.by_part(part);
     Ok(json!({
         "advisory": ADVISORY,
-        "note": "Chunks tagged with this part number at import or mentioning this LCSC id. Advisory only; an empty list means nothing was imported for it, not that the part is unsuitable or unknown.",
+        "note": "Chunks tagged with this part number at import or mentioning this Distributor id. Advisory only; an empty list means nothing was imported for it, not that the part is unsuitable or unknown.",
         "part": part,
         "chunks": chunks,
     }))

@@ -24,7 +24,7 @@ Branch → pull request (referred to by branch name below):
 | `fm/eak-fab-detail` | https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/5 | 1 pass, 2 fail |
 | `fm/eak-power-calc` | https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/6 | Windows pass; Ubuntu and macOS fail |
 | `fm/eak-lib-expand` | https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/7 | 1 pass, 2 fail |
-| `fm/eak-lcsc-sourcing` | https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/8 | 1 pass, 2 fail |
+| `fm/eak-distributor-sourcing` | https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/8 | 1 pass, 2 fail |
 | `fm/eak-val-esp32` (draft) | https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/9 | 1 pass, 2 fail |
 | `fm/eak-val-power` | https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/10 | 1 pass, 2 fail |
 | `fm/eak-cli-ci` | https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/11 | 4 of 4 pass |

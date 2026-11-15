@@ -232,8 +232,8 @@ fn drc_silkscreen_to_board_edge() {
 
 #[test]
 fn dfm_profile_is_sourced_and_reference_board_passes() {
-    let fab = dfm::jlcpcb_standard();
-    assert!(fab.source_url.starts_with("https://jlcpcb.com/"));
+    let fab = dfm::fabricator_standard();
+    assert!(fab.source_url.starts_with("https://fabricator.invalid/"));
     assert!(!fab.verified);
     let p = reference();
     let r = dfm::run(&p, &fab);
@@ -249,7 +249,7 @@ fn dfm_profile_is_sourced_and_reference_board_passes() {
 #[test]
 fn dfm_rules_fire_on_failing_fixtures() {
     let p = reference();
-    let fab = dfm::jlcpcb_standard();
+    let fab = dfm::fabricator_standard();
     let check = |q: &Project, rule: &str| {
         let f = fired(&dfm::run(q, &fab), rule);
         assert!(!f.is_empty(), "{rule} did not fire");

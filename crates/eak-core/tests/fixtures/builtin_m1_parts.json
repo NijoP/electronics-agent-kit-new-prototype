@@ -7,7 +7,7 @@
     "default_value": "10k",
     "manufacturer": null,
     "mpn": null,
-    "lcsc": null,
+    "distributor": null,
     "datasheet": null,
     "symbol": {
       "pins": [
@@ -97,7 +97,7 @@
     "default_value": "100n",
     "manufacturer": null,
     "mpn": null,
-    "lcsc": null,
+    "distributor": null,
     "datasheet": null,
     "symbol": {
       "pins": [
@@ -187,7 +187,7 @@
     "default_value": "10u",
     "manufacturer": null,
     "mpn": null,
-    "lcsc": null,
+    "distributor": null,
     "datasheet": null,
     "symbol": {
       "pins": [
@@ -277,7 +277,7 @@
     "default_value": "Green",
     "manufacturer": null,
     "mpn": null,
-    "lcsc": null,
+    "distributor": null,
     "datasheet": null,
     "symbol": {
       "pins": [
@@ -367,7 +367,7 @@
     "default_value": "CONN_1x02",
     "manufacturer": null,
     "mpn": null,
-    "lcsc": null,
+    "distributor": null,
     "datasheet": null,
     "symbol": {
       "pins": [
@@ -457,7 +457,7 @@
     "default_value": "CONN_1x04",
     "manufacturer": null,
     "mpn": null,
-    "lcsc": null,
+    "distributor": null,
     "datasheet": null,
     "symbol": {
       "pins": [
@@ -587,7 +587,7 @@
     "default_value": "AMS1117-3.3",
     "manufacturer": "Advanced Monolithic Systems",
     "mpn": "AMS1117-3.3",
-    "lcsc": "C6186",
+    "distributor": "C6186",
     "datasheet": null,
     "symbol": {
       "pins": [
@@ -718,7 +718,7 @@
       "color": "#2a2a2a",
       "external_ref": null
     },
-    "provenance": "Pinout from widely published AMS1117 datasheet; land pattern generic; LCSC part number from public catalogue listing, not re-verified in this build"
+    "provenance": "Pinout from widely published AMS1117 datasheet; land pattern generic; Distributor part number from public catalogue listing, not re-verified in this build"
   },
   {
     "id": "ATTINY85_SOIC-8",
@@ -728,7 +728,7 @@
     "default_value": "ATtiny85",
     "manufacturer": "Microchip",
     "mpn": "ATTINY85-20SU",
-    "lcsc": null,
+    "distributor": null,
     "datasheet": null,
     "symbol": {
       "pins": [

@@ -1,4 +1,4 @@
-//! Offline LCSC sourcing tests. Every input is a synthetic fixture under `tests/fixtures`
+//! Offline Distributor sourcing tests. Every input is a synthetic fixture under `tests/fixtures`
 //! (see its README); nothing here touches the network.
 
 use eak_core::{builtin, Point, Project, Rotation};
@@ -12,7 +12,7 @@ use eak_validation::{sourcing as check, Report, Severity};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
-const URL: &str = "https://www.lcsc.com/fixture/product-detail/C990000001";
+const URL: &str = "https://distributor.invalid/fixture/product-detail/C990000001";
 const T0: u64 = 1_794_571_200;
 
 fn fixture(rel: &str) -> Vec<u8> {
@@ -45,9 +45,9 @@ fn count(r: &Report, component: &str, rule: &str, sev: Severity) -> usize {
 
 #[test]
 fn ingest_records_provenance_and_fields_exactly_as_parsed() {
-    let raw = fixture("lcsc/product_detail_resistor.json");
+    let raw = fixture("distributor/product_detail_resistor.json");
     let r = ingest_product_detail(&raw, URL, T0).unwrap();
-    assert_eq!(r.provider, "LCSC");
+    assert_eq!(r.provider, "Distributor");
     assert_eq!(r.source_url, URL);
     assert_eq!(r.retrieved_at_unix_s, T0);
     assert_eq!(r.raw_bytes, raw.len() as u64);
@@ -57,13 +57,13 @@ fn ingest_records_provenance_and_fields_exactly_as_parsed() {
         "a7591da9bdab5c5ba6c4789db7d9ad0b7bcdef0107f5f782aa99c86e0bb0543c"
     );
     assert_eq!(r.raw_sha256, sha(&raw));
-    assert_eq!(r.lcsc_part.as_deref(), Some("C990000001"));
+    assert_eq!(r.distributor_part.as_deref(), Some("C990000001"));
     assert_eq!(r.mpn.as_deref(), Some("EAKFIX-R0603-10K"));
     assert_eq!(r.manufacturer.as_deref(), Some("EAK Test Fixtures"));
     assert_eq!(r.package.as_deref(), Some("0603"));
     assert_eq!(
         r.datasheet_url.as_deref(),
-        Some("https://datasheet.lcsc.com/fixture/EAKFIX-R0603-10K.pdf")
+        Some("https://distributor.invalid/fixture/EAKFIX-R0603-10K.pdf")
     );
     assert_eq!(r.stock, Some(12000));
     let prices: Vec<(u64, &str, &str)> = r
@@ -97,8 +97,8 @@ fn ingest_records_provenance_and_fields_exactly_as_parsed() {
 
 #[test]
 fn stock_and_price_are_recorded_only_when_present() {
-    let r = ingest("lcsc/product_detail_bare_mcu.json");
-    assert_eq!(r.lcsc_part.as_deref(), Some("C990000002"));
+    let r = ingest("distributor/product_detail_bare_mcu.json");
+    assert_eq!(r.distributor_part.as_deref(), Some("C990000002"));
     assert_eq!(r.package.as_deref(), Some("SOIC-8"));
     assert_eq!(r.stock, None);
     assert!(r.price_breaks.is_empty());
@@ -107,7 +107,7 @@ fn stock_and_price_are_recorded_only_when_present() {
 
 #[test]
 fn missing_fields_are_reported_and_never_invented() {
-    let mut r = ingest("lcsc/product_detail_missing_fields.json");
+    let mut r = ingest("distributor/product_detail_missing_fields.json");
     assert_eq!(
         r.missing,
         ["manufacturer", "package", "datasheet_url", "specs"]
@@ -131,9 +131,9 @@ fn missing_fields_are_reported_and_never_invented() {
 
 #[test]
 fn hostile_input_is_treated_as_data_and_cannot_raise_the_state() {
-    let mut r = ingest("lcsc/product_detail_hostile.json");
+    let mut r = ingest("distributor/product_detail_hostile.json");
     // Invalid identity fields are rejected, not repaired or truncated.
-    assert_eq!(r.lcsc_part, None, "shell-injection part number");
+    assert_eq!(r.distributor_part, None, "shell-injection part number");
     assert_eq!(r.mpn, None, "control characters in the MPN");
     assert_eq!(r.package, None, "numeric package");
     assert_eq!(r.datasheet_url, None, "javascript: URL");
@@ -166,7 +166,7 @@ fn hostile_input_is_treated_as_data_and_cannot_raise_the_state() {
             r.rejected
         );
     }
-    assert_eq!(r.missing, ["lcsc_part", "mpn", "package", "datasheet_url"]);
+    assert_eq!(r.missing, ["distributor_part", "mpn", "package", "datasheet_url"]);
     // `state`, `verified`, `attestation` and `datasheet` keys in the input are ignored.
     assert_eq!(r.state, VerificationState::SearchHit);
     assert!(r.datasheet.is_none() && r.attestation.is_none());
@@ -184,15 +184,15 @@ fn malformed_oversized_and_error_responses_are_rejected() {
             Err(SourcingError::Malformed(_))
         )
     };
-    assert!(malformed(&fixture("lcsc/malformed_truncated.json")));
-    assert!(malformed(&fixture("lcsc/access_denied.html")));
+    assert!(malformed(&fixture("distributor/malformed_truncated.json")));
+    assert!(malformed(&fixture("distributor/access_denied.html")));
     assert!(malformed(b""));
     assert!(malformed(&[0xff, 0xfe, 0x00, 0x7b]));
     assert!(malformed(br#"{"productCode": "C1", "stockNumber": 1e999}"#));
     // Nesting bomb: refused by the parser's depth limit instead of exhausting the stack.
     assert!(malformed("[".repeat(100_000).as_bytes()));
     assert_eq!(
-        ingest_product_detail(&fixture("lcsc/provider_error.json"), URL, T0),
+        ingest_product_detail(&fixture("distributor/provider_error.json"), URL, T0),
         Err(SourcingError::Provider("code 404".into()))
     );
     for shape in [&b"[]"[..], b"\"C1\"", b"{}", br#"{"result": {}}"#] {
@@ -218,18 +218,18 @@ fn malformed_oversized_and_error_responses_are_rejected() {
 
 #[test]
 fn source_url_must_be_https_on_the_provider_domain() {
-    let raw = fixture("lcsc/product_detail_resistor.json");
-    for ok in ["https://lcsc.com/x", "https://WWW.LCSC.COM:443/x?y#z"] {
+    let raw = fixture("distributor/product_detail_resistor.json");
+    for ok in ["https://distributor.invalid/x", "https://WWW.Distributor.COM:443/x?y#z"] {
         assert!(ingest_product_detail(&raw, ok, T0).is_ok(), "{ok}");
     }
     for bad in [
         "",
-        "http://www.lcsc.com/x",
+        "http://distributor.invalid/x",
         "file:///etc/passwd",
-        "https://lcsc.com.evil.example/x",
-        "https://evil-lcsc.com/x",
-        "https://www.lcsc.com@evil.example/x",
-        "https://www.lcsc.com/x\nInjected: header",
+        "https://distributor.invalid.evil.example/x",
+        "https://evil-distributor.invalid/x",
+        "https://distributor.invalid@evil.example/x",
+        "https://distributor.invalid/x\nInjected: header",
         "https:///x",
     ] {
         assert!(
@@ -244,11 +244,11 @@ fn source_url_must_be_https_on_the_provider_domain() {
 
 #[test]
 fn datasheet_hash_matching_and_human_verification() {
-    let mut r = ingest("lcsc/product_detail_resistor.json");
+    let mut r = ingest("distributor/product_detail_resistor.json");
     let ds_url = r.datasheet_url.clone().unwrap();
 
     // A non-PDF body (an error page) or a non-https URL is refused and records nothing.
-    let html = fixture("lcsc/access_denied.html");
+    let html = fixture("distributor/access_denied.html");
     assert!(matches!(
         r.attach_datasheet(&html, &ds_url, T0),
         Err(SourcingError::BadDatasheet(_))
@@ -322,18 +322,18 @@ fn datasheet_hash_matching_and_human_verification() {
 #[test]
 fn records_work_offline_and_a_stored_state_claim_is_not_trusted() {
     let dir = temp_dir("store");
-    let mut resistor = ingest("lcsc/product_detail_resistor.json");
+    let mut resistor = ingest("distributor/product_detail_resistor.json");
     let pdf = fixture("datasheets/EAKFIX-R0603-10K.pdf");
     let ds_url = resistor.datasheet_url.clone().unwrap();
     resistor.attach_datasheet(&pdf, &ds_url, T0).unwrap();
-    let mcu = ingest("lcsc/product_detail_bare_mcu.json");
+    let mcu = ingest("distributor/product_detail_bare_mcu.json");
     let path = write_record(&dir, &resistor).unwrap();
     assert!(path.ends_with("C990000001.json"));
     write_record(&dir, &mcu).unwrap();
 
     // A hand-edited file claiming `verified` with no evidence behind it.
     let mut forged = mcu.clone();
-    forged.lcsc_part = Some("C990000009".into());
+    forged.distributor_part = Some("C990000009".into());
     forged.state = VerificationState::Verified;
     std::fs::write(
         dir.join("C990000009.json"),
@@ -353,7 +353,7 @@ fn records_work_offline_and_a_stored_state_claim_is_not_trusted() {
     let hits = |q: &str| -> Vec<String> {
         search(&loaded, q)
             .iter()
-            .map(|r| r.lcsc_part.clone().unwrap())
+            .map(|r| r.distributor_part.clone().unwrap())
             .collect()
     };
     assert_eq!(hits("eakfix 0603"), ["C990000001"]);
@@ -371,7 +371,7 @@ fn records_work_offline_and_a_stored_state_claim_is_not_trusted() {
 }
 
 #[test]
-fn lcsc_selection_reaches_the_library_bom_and_report_through_commands() {
+fn distributor_selection_reaches_the_library_bom_and_report_through_commands() {
     let mut e = Engine::in_memory(Project::new("src"));
     fixtures::build_schematic(&mut e).expect("schematic");
 
@@ -379,18 +379,18 @@ fn lcsc_selection_reaches_the_library_bom_and_report_through_commands() {
     let rows = check::bom_rows(e.project());
     assert!(rows
         .iter()
-        .any(|r| r.component_id == "R_0603" && r.lcsc.is_none()));
+        .any(|r| r.component_id == "R_0603" && r.distributor.is_none()));
     let base = check::run(e.project(), &[]);
     assert!(count(&base, "R_0603", "SRC-002", Severity::Error) == 1);
     assert!(count(&base, "AMS1117-3.3_SOT-223", "SRC-005", Severity::Error) == 1);
 
     // Select the fixture resistor into a value-specific library definition.
-    let mut rec = ingest("lcsc/product_detail_resistor.json");
+    let mut rec = ingest("distributor/product_detail_resistor.json");
     let generic = builtin::get("R_0603").unwrap();
     let mut specific = generic.clone();
     specific.id = "R_0603_EAKFIX_10K".into();
     let specific = apply_identity(&specific, &rec).unwrap();
-    assert_eq!(specific.lcsc.as_deref(), Some("C990000001"));
+    assert_eq!(specific.distributor.as_deref(), Some("C990000001"));
     assert_eq!(specific.mpn.as_deref(), Some("EAKFIX-R0603-10K"));
     assert_eq!(specific.manufacturer.as_deref(), Some("EAK Test Fixtures"));
     assert_eq!(specific.datasheet, rec.datasheet_url);
@@ -408,7 +408,7 @@ fn lcsc_selection_reaches_the_library_bom_and_report_through_commands() {
         .contains("MPN"));
     assert!(apply_identity(&project_lib["AMS1117-3.3_SOT-223"], &rec)
         .unwrap_err()
-        .contains("LCSC part number"));
+        .contains("Distributor part number"));
 
     // The library and schematic change only through the shared command engine.
     let mut b = fixtures::Builder {
@@ -434,7 +434,7 @@ fn lcsc_selection_reaches_the_library_bom_and_report_through_commands() {
         .iter()
         .find(|r| r.component_id == "R_0603_EAKFIX_10K")
         .unwrap();
-    assert_eq!(row.lcsc.as_deref(), Some("C990000001"));
+    assert_eq!(row.distributor.as_deref(), Some("C990000001"));
     assert!(
         bom_csv(e.project()).contains("\"C990000001\",\"EAK Test Fixtures\",\"EAKFIX-R0603-10K\"")
     );

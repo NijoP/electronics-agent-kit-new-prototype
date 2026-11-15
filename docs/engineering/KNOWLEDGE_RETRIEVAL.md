@@ -38,7 +38,7 @@ Licences are noted for awareness only; no code from any of them is used.
 
 ## Retrieval features (part 2 §8.3)
 
-* **Exact lookup**: `by_part` / `knowledge_lookup` by MPN (given as `mpn` at import) or LCSC id (found in text).
+* **Exact lookup**: `by_part` / `knowledge_lookup` by MPN (given as `mpn` at import) or Distributor id (found in text).
 * **Metadata filter**: `kind`, `part` on `knowledge_search`.
 * **Engineering-aware rerank** (`rerank_factor`, deterministic): x2 for an exact part match, x1.25 when the
   query asks for "absolute maximum" / "recommended" / "typical" and the chunk states that class.
@@ -61,6 +61,6 @@ Licences are noted for awareness only; no code from any of them is used.
 * The dense scorer itself (only the hook exists).
 * Labels other than chunk-level `source_extracted` / `unverified`: model-interpretation, calculated,
   assumption and human-approved are defined but nothing assigns them yet.
-* LCSC-id detection also matches footprint-like tokens such as `C0805` (affects exact lookup only).
+* Distributor-id detection also matches footprint-like tokens such as `C0805` (affects exact lookup only).
 * File-change detection (re-import is explicit); synonyms (lexical match only: an empty result is not
   evidence that a topic is unaddressed).

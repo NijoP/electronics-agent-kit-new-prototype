@@ -1,9 +1,9 @@
-//! Parts search / import / BOM / JLCPCB preparation through the desktop command layer,
-//! headless. LCSC is replaced by a local HTTP server; the live site is never contacted.
+//! Parts search / import / BOM / Fabricator preparation through the desktop command layer,
+//! headless. Distributor is replaced by a local HTTP server; the live site is never contacted.
 
-use eak_desktop::parts::{jlcpcb_prepare, manufacturing_preview, parts_import, parts_search};
+use eak_desktop::parts::{fabricator_prepare, manufacturing_preview, parts_import, parts_search};
 use eak_desktop::*;
-use eak_manufacturing::lcsc::{LcscProvider, UreqFetch};
+use eak_manufacturing::distributor::{DistributorProvider, UreqFetch};
 use eak_manufacturing::provider::Resilient;
 use eak_runtime::index::Index;
 use eak_runtime::{fixtures, Engine};
@@ -24,11 +24,11 @@ fn session() -> Session {
 
 fn resistor_json() -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../crates/eak-manufacturing/tests/fixtures/lcsc/live_shape_C25804.json");
+        .join("../../../crates/eak-manufacturing/tests/fixtures/distributor/live_shape_C25804.json");
     std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
-fn lcsc_site() -> Resilient<LcscProvider<UreqFetch>> {
+fn distributor_site() -> Resilient<DistributorProvider<UreqFetch>> {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     let detail = resistor_json();
@@ -72,7 +72,7 @@ fn lcsc_site() -> Resilient<LcscProvider<UreqFetch>> {
             });
         }
     });
-    let mut p = LcscProvider::new(UreqFetch::default(), &format!("http://{addr}"));
+    let mut p = DistributorProvider::new(UreqFetch::default(), &format!("http://{addr}"));
     p.pause = Duration::from_millis(1);
     Resilient::new(p).with_sleep(|_| {})
 }
@@ -87,7 +87,7 @@ fn open_empty(name: &str) -> (Session, PathBuf) {
 #[test]
 fn search_reports_a_blocked_live_search_and_still_returns_library_hits() {
     let (s, _d) = open_empty("search");
-    let p = lcsc_site();
+    let p = distributor_site();
     let r = parts_search(&s, &p, "resistor").unwrap();
     assert_eq!(r.live.status, "blocked");
     assert!(
@@ -116,7 +116,7 @@ fn search_reports_a_blocked_live_search_and_still_returns_library_hits() {
 #[test]
 fn import_is_one_engine_command_with_a_revision_check_and_stores_the_record() {
     let (s, d) = open_empty("import");
-    let p = lcsc_site();
+    let p = distributor_site();
     let rev = current_project(&s).unwrap().project.revision;
 
     // A stale revision is rejected by the engine; nothing is stored.
@@ -126,13 +126,13 @@ fn import_is_one_engine_command_with_a_revision_check_and_stores_the_record() {
 
     let ok = parts_import(&s, &p, rev, "C25804").unwrap();
     assert!(ok.response.accepted, "{:?}", ok.response.error);
-    assert_eq!(ok.component_id, "LCSC_C25804");
+    assert_eq!(ok.component_id, "DISTRIBUTOR_C25804");
     assert_eq!(ok.response.revision_after, rev + 1);
     let snap = current_project(&s).unwrap();
-    let def = &snap.project.library["LCSC_C25804"];
-    assert_eq!(def.lcsc.as_deref(), Some("C25804"));
+    let def = &snap.project.library["DISTRIBUTOR_C25804"];
+    assert_eq!(def.distributor.as_deref(), Some("C25804"));
     // Commercial data is a supplier offer, separate from identity (ADR-0028).
-    assert_eq!(def.supplier_part("lcsc"), Some("C25804"));
+    assert_eq!(def.supplier_part("distributor"), Some("C25804"));
     assert_eq!(def.supplier_offers.len(), 1);
     assert!(def.supplier_offers[0].fetched_at_unix_s.is_some());
     assert_eq!(def.mpn.as_deref(), Some("0603WAF1002T5E"));
@@ -166,7 +166,7 @@ fn preview_lists_bom_and_dfm_without_writing_anything() {
     let (s, d) = routed_project("preview");
     let pv = manufacturing_preview(&s).unwrap();
     assert!(!pv.bom.is_empty());
-    assert!(pv.dfm.checks.iter().any(|c| c.id == "JLC-010"));
+    assert!(pv.dfm.checks.iter().any(|c| c.id == "Fab-010"));
     assert!(pv.dfm.statement.contains("PREPARED FOR REVIEW"));
     assert!(!d.join("output").exists());
 }
@@ -175,13 +175,13 @@ fn preview_lists_bom_and_dfm_without_writing_anything() {
 fn prepare_writes_the_bundle_only_to_a_safe_user_folder() {
     let (s, _d) = routed_project("prepare");
     // Relative and foreign non-empty folders are refused.
-    assert!(jlcpcb_prepare(&s, "relative/dir")
+    assert!(fabricator_prepare(&s, "relative/dir")
         .unwrap_err()
         .contains("absolute"));
     let foreign = tmpdir("foreign");
     std::fs::create_dir_all(&foreign).unwrap();
     std::fs::write(foreign.join("keep.txt"), "mine").unwrap();
-    let err = jlcpcb_prepare(&s, &foreign.display().to_string()).unwrap_err();
+    let err = fabricator_prepare(&s, &foreign.display().to_string()).unwrap_err();
     assert!(err.contains("not empty"), "{err}");
     assert_eq!(
         std::fs::read_to_string(foreign.join("keep.txt")).unwrap(),
@@ -189,26 +189,26 @@ fn prepare_writes_the_bundle_only_to_a_safe_user_folder() {
     );
 
     let out = tmpdir("bundle");
-    let r = jlcpcb_prepare(&s, &out.display().to_string()).unwrap();
-    assert!(out.join("jlcpcb-prep-manifest.json").is_file());
+    let r = fabricator_prepare(&s, &out.display().to_string()).unwrap();
+    assert!(out.join("fabricator-prep-manifest.json").is_file());
     assert!(r.prep.manifest.statement.contains("PREPARED FOR REVIEW"));
     assert!(r
         .prep
         .manifest
         .files
         .iter()
-        .any(|f| f.name.ends_with("-JLCPCB-gerbers.zip")));
+        .any(|f| f.name.ends_with("-Fabricator-gerbers.zip")));
     assert_eq!(r.reports.len(), 3);
     // Re-running into an earlier bundle is allowed.
-    jlcpcb_prepare(&s, &out.display().to_string()).unwrap();
+    fabricator_prepare(&s, &out.display().to_string()).unwrap();
     // The default folder is inside the project.
-    let dflt = jlcpcb_prepare(&s, "").unwrap();
-    assert!(dflt.prep.out_dir.contains("jlcpcb-rev-"));
+    let dflt = fabricator_prepare(&s, "").unwrap();
+    assert!(dflt.prep.out_dir.contains("fabricator-rev-"));
 }
 
 #[test]
 fn nothing_is_prepared_without_an_open_project() {
     let s = session();
     assert!(manufacturing_preview(&s).is_err());
-    assert!(jlcpcb_prepare(&s, "").is_err());
+    assert!(fabricator_prepare(&s, "").is_err());
 }

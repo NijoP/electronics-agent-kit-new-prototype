@@ -1,21 +1,21 @@
-//! JLCPCB assembly availability, kept separate from the general LCSC listing (ADR-0034).
+//! Fabricator assembly availability, kept separate from the general Distributor listing (ADR-0034).
 //!
-//! A part being listed at LCSC does not make it assemblable by JLCPCB, and the classification
+//! A part being listed at Distributor does not make it assemblable by Fabricator, and the classification
 //! (basic / extended / preferred extended) is **never inferred** from a category or from the
-//! part's presence in the LCSC catalogue. LCSC's documented OpenAPI carries no such field, so a
+//! part's presence in the Distributor catalogue. Distributor's documented OpenAPI carries no such field, so a
 //! classification only enters EAK as an explicit [`AssemblyRecord`] with its source and
 //! verification time: either attested by the user, or read from a parts-library CSV the user
-//! obtained from JLCPCB ([`parse_parts_csv`]). Without a record the class is `Unknown` and the
+//! obtained from Fabricator ([`parse_parts_csv`]). Without a record the class is `Unknown` and the
 //! BOM warns; nothing here orders, quotes or uploads anything.
 //!
-//! [`warnings`] turns a BOM into structured, fail-closed warnings: missing LCSC number, missing
+//! [`warnings`] turns a BOM into structured, fail-closed warnings: missing Distributor number, missing
 //! manufacturer, ambiguous MPN matching, missing footprint, unverified assembly compatibility
 //! and missing or stale supplier data.
 
 use crate::bom::BomLine;
 use crate::matching::normalize_mpn;
 use crate::sourcing::SourcingRecord;
-use eak_validation::sourcing::is_lcsc_part_number;
+use eak_validation::sourcing::is_distributor_part_number;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -32,15 +32,15 @@ pub enum AssemblyClass {
     Basic,
     Extended,
     PreferredExtended,
-    /// A record states JLCPCB cannot assemble it.
+    /// A record states Fabricator cannot assemble it.
     NotAssemblable,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AssemblyRecord {
-    pub lcsc: String,
+    pub distributor: String,
     pub class: AssemblyClass,
-    /// `user_attested` or `jlcpcb_parts_file:<file name>`.
+    /// `user_attested` or `fabricator_parts_file:<file name>`.
     pub source: String,
     pub verified_at_unix_s: u64,
     pub stock: Option<u64>,
@@ -95,10 +95,10 @@ fn class_of(value: &str, preferred: bool) -> AssemblyClass {
     }
 }
 
-/// Read a JLCPCB parts-library CSV. The header row is located by column names (any of:
-/// `LCSC Part` / `LCSC Part #`, `Library Type` / `Basic/Extended` / `Type`, optional `Preferred`,
-/// `Stock`, `Price`); a file without an LCSC column and a type column is refused rather than
-/// guessed. Only rows whose LCSC number is in `wanted` are kept (when given). A row whose type
+/// Read a Fabricator parts-library CSV. The header row is located by column names (any of:
+/// `Distributor Part` / `Distributor Part #`, `Library Type` / `Basic/Extended` / `Type`, optional `Preferred`,
+/// `Stock`, `Price`); a file without an Distributor column and a type column is refused rather than
+/// guessed. Only rows whose Distributor number is in `wanted` are kept (when given). A row whose type
 /// text is not recognised becomes `Unknown`, never a guess.
 pub fn parse_parts_csv(
     text: &str,
@@ -113,8 +113,8 @@ pub fn parse_parts_csv(
         .map(|h| key(h))
         .collect();
     let find = |names: &[&str]| cols.iter().position(|c| names.contains(&c.as_str()));
-    let lcsc_col = find(&["lcscpart", "lcscpartnumber", "lcsc"])
-        .ok_or("no LCSC part column (expected `LCSC Part` or `LCSC Part #`)")?;
+    let distributor_col = find(&["distributorpart", "distributorpartnumber", "distributor"])
+        .ok_or("no Distributor part column (expected `Distributor Part` or `Distributor Part #`)")?;
     let type_col = find(&["librarytype", "basicextended", "type", "partclass"])
         .ok_or("no library-type column (expected `Library Type` or `Basic/Extended`)")?;
     let preferred_col = find(&["preferred", "ispreferred"]);
@@ -129,10 +129,10 @@ pub fn parse_parts_csv(
             continue;
         }
         let f = split_csv(line);
-        let Some(lcsc) = f.get(lcsc_col).map(|s| s.to_ascii_uppercase()) else {
+        let Some(distributor) = f.get(distributor_col).map(|s| s.to_ascii_uppercase()) else {
             continue;
         };
-        if !is_lcsc_part_number(&lcsc) || wanted.is_some_and(|w| !w.contains(&lcsc)) {
+        if !is_distributor_part_number(&distributor) || wanted.is_some_and(|w| !w.contains(&distributor)) {
             continue;
         }
         let preferred = preferred_col
@@ -140,8 +140,8 @@ pub fn parse_parts_csv(
             .is_some_and(|v| matches!(key(v).as_str(), "yes" | "true" | "1" | "y"));
         out.push(AssemblyRecord {
             class: class_of(f.get(type_col).map_or("", String::as_str), preferred),
-            lcsc,
-            source: format!("jlcpcb_parts_file:{source_name}"),
+            distributor,
+            source: format!("fabricator_parts_file:{source_name}"),
             verified_at_unix_s: now,
             stock: stock_col
                 .and_then(|c| f.get(c))
@@ -156,7 +156,7 @@ pub fn parse_parts_csv(
 }
 
 // ---------------------------------------------------------------------------------------
-// Store (`<project>/sourcing/assembly/<LCSC>.json`)
+// Store (`<project>/sourcing/assembly/<Distributor>.json`)
 // ---------------------------------------------------------------------------------------
 
 pub fn assembly_dir(sourcing_dir: &Path) -> PathBuf {
@@ -164,13 +164,13 @@ pub fn assembly_dir(sourcing_dir: &Path) -> PathBuf {
 }
 
 pub fn write_record(sourcing_dir: &Path, rec: &AssemblyRecord) -> Result<(), String> {
-    if !is_lcsc_part_number(&rec.lcsc) {
-        return Err(format!("{:?} is not an LCSC part number", rec.lcsc));
+    if !is_distributor_part_number(&rec.distributor) {
+        return Err(format!("{:?} is not an Distributor part number", rec.distributor));
     }
     let dir = assembly_dir(sourcing_dir);
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let text = serde_json::to_string_pretty(rec).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join(format!("{}.json", rec.lcsc)), text)
+    std::fs::write(dir.join(format!("{}.json", rec.distributor)), text)
         .map_err(|e| format!("cannot write assembly record: {e}"))
 }
 
@@ -186,7 +186,7 @@ pub fn read_records(sourcing_dir: &Path) -> Vec<AssemblyRecord> {
         .filter(|p| p.extension().is_some_and(|x| x == "json"))
         .filter_map(|p| std::fs::read_to_string(p).ok())
         .filter_map(|t| serde_json::from_str::<AssemblyRecord>(&t).ok())
-        .filter(|r| is_lcsc_part_number(&r.lcsc))
+        .filter(|r| is_distributor_part_number(&r.distributor))
         .collect()
 }
 
@@ -197,7 +197,7 @@ pub fn read_records(sourcing_dir: &Path) -> Vec<AssemblyRecord> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WarningKind {
-    MissingLcsc,
+    MissingDistributor,
     MissingManufacturer,
     AmbiguousMpn,
     MissingFootprint,
@@ -218,7 +218,7 @@ pub struct Warning {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct AssemblyRow {
-    pub lcsc: String,
+    pub distributor: String,
     pub class: Option<AssemblyClass>,
     pub source: Option<String>,
     pub verified_at_unix_s: Option<u64>,
@@ -230,7 +230,7 @@ pub struct AssemblyReport {
     pub warnings: Vec<Warning>,
 }
 
-/// Fail-closed warnings for the lines JLCPCB would assemble (surface mount, placed on the
+/// Fail-closed warnings for the lines Fabricator would assemble (surface mount, placed on the
 /// board) plus footprint problems for any line.
 pub fn warnings(
     lines: &[BomLine],
@@ -238,8 +238,8 @@ pub fn warnings(
     assembly: &[AssemblyRecord],
     now: u64,
 ) -> AssemblyReport {
-    let by_lcsc: BTreeMap<&str, &AssemblyRecord> =
-        assembly.iter().map(|a| (a.lcsc.as_str(), a)).collect();
+    let by_distributor: BTreeMap<&str, &AssemblyRecord> =
+        assembly.iter().map(|a| (a.distributor.as_str(), a)).collect();
     let mut out = vec![];
     let mut rows = BTreeMap::new();
     for l in lines {
@@ -278,53 +278,53 @@ pub fn warnings(
             let matches: BTreeSet<&str> = supplier
                 .iter()
                 .filter(|r| r.mpn.as_deref().map(normalize_mpn).as_deref() == Some(n.as_str()))
-                .filter_map(|r| r.lcsc_part.as_deref())
+                .filter_map(|r| r.distributor_part.as_deref())
                 .collect();
             if matches.len() > 1 {
                 push(
                     WarningKind::AmbiguousMpn,
                     format!(
-                        "MPN {mpn} matches {} stored LCSC listings ({}); the chosen number must be confirmed",
+                        "MPN {mpn} matches {} stored Distributor listings ({}); the chosen number must be confirmed",
                         matches.len(),
                         matches.iter().copied().collect::<Vec<_>>().join(", ")
                     ),
                 );
-            } else if l.lcsc.is_none() && matches.len() == 1 {
+            } else if l.distributor.is_none() && matches.len() == 1 {
                 push(
                     WarningKind::AmbiguousMpn,
                     format!(
-                        "MPN {mpn} matches stored LCSC listing {} but no LCSC number is set on the part",
+                        "MPN {mpn} matches stored Distributor listing {} but no Distributor number is set on the part",
                         matches.iter().next().copied().unwrap_or("")
                     ),
                 );
             }
         }
-        let Some(lcsc) = l.lcsc.as_deref() else {
+        let Some(distributor) = l.distributor.as_deref() else {
             push(
-                WarningKind::MissingLcsc,
-                "no LCSC part number: JLCPCB cannot match this line".into(),
+                WarningKind::MissingDistributor,
+                "no Distributor part number: Fabricator cannot match this line".into(),
             );
             continue;
         };
         match l.price_as_of_unix_s {
             None => push(
                 WarningKind::MissingSupplierData,
-                format!("no stored supplier record for {lcsc}: stock and price unknown"),
+                format!("no stored supplier record for {distributor}: stock and price unknown"),
             ),
             Some(t) if now.saturating_sub(t) > STALE_AFTER_S => push(
                 WarningKind::StaleSupplierData,
                 format!(
-                    "the stored supplier record for {lcsc} is {} days old",
+                    "the stored supplier record for {distributor} is {} days old",
                     now.saturating_sub(t) / 86_400
                 ),
             ),
             Some(_) => {}
         }
-        let rec = by_lcsc.get(lcsc);
+        let rec = by_distributor.get(distributor);
         rows.insert(
-            lcsc.to_string(),
+            distributor.to_string(),
             AssemblyRow {
-                lcsc: lcsc.to_string(),
+                distributor: distributor.to_string(),
                 class: rec.map(|r| r.class),
                 source: rec.map(|r| r.source.clone()),
                 verified_at_unix_s: rec.map(|r| r.verified_at_unix_s),
@@ -334,19 +334,19 @@ pub fn warnings(
             None | Some(AssemblyClass::Unknown) => push(
                 WarningKind::UnverifiedAssembly,
                 format!(
-                    "JLCPCB assembly compatibility of {lcsc} is not verified (basic/extended class unknown; \
-                     being listed at LCSC does not make a part assemblable)"
+                    "Fabricator assembly compatibility of {distributor} is not verified (basic/extended class unknown; \
+                     being listed at Distributor does not make a part assemblable)"
                 ),
             ),
             Some(AssemblyClass::NotAssemblable) => push(
                 WarningKind::NotAssemblable,
-                format!("a record states JLCPCB cannot assemble {lcsc}"),
+                format!("a record states Fabricator cannot assemble {distributor}"),
             ),
             Some(_) => {
                 if rec.is_some_and(|r| now.saturating_sub(r.verified_at_unix_s) > STALE_AFTER_S) {
                     push(
                         WarningKind::StaleAssemblyData,
-                        format!("the assembly record for {lcsc} is older than 30 days"),
+                        format!("the assembly record for {distributor} is older than 30 days"),
                     );
                 }
             }
@@ -363,14 +363,14 @@ mod tests {
     use super::*;
     use crate::sourcing::VerificationState;
 
-    fn line(id: &str, lcsc: Option<&str>) -> BomLine {
+    fn line(id: &str, distributor: Option<&str>) -> BomLine {
         BomLine {
             component_id: id.into(),
             value: "10k".into(),
             designators: vec!["R1".into(), "R2".into()],
             quantity: 2,
             footprint: "R_0603".into(),
-            lcsc: lcsc.map(String::from),
+            distributor: distributor.map(String::from),
             manufacturer: Some("UNI-ROYAL".into()),
             mpn: None,
             smd: true,
@@ -382,14 +382,14 @@ mod tests {
         }
     }
 
-    fn supplier(lcsc: &str, mpn: &str) -> SourcingRecord {
+    fn supplier(distributor: &str, mpn: &str) -> SourcingRecord {
         SourcingRecord {
-            provider: "LCSC".into(),
-            source_url: "https://api.lcsc.com/x".into(),
+            provider: "Distributor".into(),
+            source_url: "https://distributor.invalid/x".into(),
             retrieved_at_unix_s: 1_000,
-            raw_sha256: lcsc.into(),
+            raw_sha256: distributor.into(),
             raw_bytes: 1,
-            lcsc_part: Some(lcsc.into()),
+            distributor_part: Some(distributor.into()),
             mpn: Some(mpn.into()),
             manufacturer: None,
             package: None,
@@ -411,9 +411,9 @@ mod tests {
         r.warnings.iter().map(|w| w.kind).collect()
     }
 
-    fn rec(lcsc: &str, class: AssemblyClass, at: u64) -> AssemblyRecord {
+    fn rec(distributor: &str, class: AssemblyClass, at: u64) -> AssemblyRecord {
         AssemblyRecord {
-            lcsc: lcsc.into(),
+            distributor: distributor.into(),
             class,
             source: "user_attested".into(),
             verified_at_unix_s: at,
@@ -443,13 +443,13 @@ mod tests {
     }
 
     #[test]
-    fn missing_lcsc_manufacturer_footprint_and_supplier_data_each_warn() {
+    fn missing_distributor_manufacturer_footprint_and_supplier_data_each_warn() {
         let mut l = line("R", None);
         l.manufacturer = None;
         l.placed = 1;
         let r = warnings(&[l], &[], &[], 2_000);
         let k = kinds(&r);
-        assert!(k.contains(&WarningKind::MissingLcsc));
+        assert!(k.contains(&WarningKind::MissingDistributor));
         assert!(k.contains(&WarningKind::MissingManufacturer));
         assert!(k.contains(&WarningKind::MissingFootprint));
         let mut m = line("R", Some("C1"));
@@ -505,7 +505,7 @@ mod tests {
 
     #[test]
     fn the_parts_csv_is_read_by_column_name_and_filtered_to_wanted_parts() {
-        let csv = "\u{feff}LCSC Part,First Category,\"Library Type\",Preferred,Stock,Price\n\
+        let csv = "\u{feff}Distributor Part,First Category,\"Library Type\",Preferred,Stock,Price\n\
                    C25804,Resistors,Basic,No,\"1,200\",0.0021\n\
                    C99999,ICs,Extended,Yes,5,1.5\n\
                    C11111,ICs,Extended,No,7,abc\n\
@@ -516,7 +516,7 @@ mod tests {
             .map(|s| s.to_string())
             .collect();
         let r = parse_parts_csv(csv, "parts.csv", 5, Some(&wanted)).unwrap();
-        assert_eq!(r.len(), 4, "the malformed LCSC number is skipped");
+        assert_eq!(r.len(), 4, "the malformed Distributor number is skipped");
         assert_eq!(r[0].class, AssemblyClass::Basic);
         assert_eq!(r[0].stock, Some(1200));
         assert_eq!(r[1].class, AssemblyClass::PreferredExtended);
@@ -526,11 +526,11 @@ mod tests {
             AssemblyClass::Unknown,
             "unrecognised text is never guessed"
         );
-        assert_eq!(r[0].source, "jlcpcb_parts_file:parts.csv");
+        assert_eq!(r[0].source, "fabricator_parts_file:parts.csv");
         let only = BTreeSet::from(["C25804".to_string()]);
         assert_eq!(parse_parts_csv(csv, "p", 5, Some(&only)).unwrap().len(), 1);
         assert!(parse_parts_csv("Name,Value\na,b\n", "p", 1, None).is_err());
-        assert!(parse_parts_csv("LCSC Part\nC1\n", "p", 1, None).is_err());
+        assert!(parse_parts_csv("Distributor Part\nC1\n", "p", 1, None).is_err());
     }
 
     #[test]

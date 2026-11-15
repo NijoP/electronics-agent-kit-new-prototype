@@ -21,7 +21,7 @@ footprint for it, and must not be treated as engineering-approved either.
     contain `manifest.json` {name, licence, source_url}. **No licence, no import.** Only definitions that
     validate are kept; their provenance records library, licence and source and says "not verified by EAK".
     Nothing is downloaded or copied automatically, and no third-party (e.g. EasyEDA) asset is used.
-  - supplier records and LCSC sourcing records stay in `<project>/sourcing` (unchanged); JLCPCB assembly
+  - supplier records and Distributor sourcing records stay in `<project>/sourcing` (unchanged); Fabricator assembly
     data is a separate model (ADR-0034).
 - Entries are keyed by (scope, id) and never merged: the same id in two scopes is two rows; the same MPN
   text from two manufacturers is two products.
@@ -32,13 +32,13 @@ footprint for it, and must not be treated as engineering-approved either.
   `library_personal_save|remove`, `library_import_open_source`, `library_imported_remove`. Names that become
   file names are restricted to `[A-Za-z0-9_.-]`, no leading dot.
 - **Linking** (`eak-manufacturing::library_link`): `link_record(listing, defs)` says what a supplier listing is:
-  `existing_eak` (a definition carries the LCSC number, or the same normalised MPN + manufacturer),
-  `imported_definition` (an `LCSC_*` import), `supplier_only` (no definition, but a library template can
+  `existing_eak` (a definition carries the Distributor number, or the same normalised MPN + manufacturer),
+  `imported_definition` (an `DISTRIBUTOR_*` import), `supplier_only` (no definition, but a library template can
   carry it — named), or `needs_authoring` (no trustworthy symbol/footprint: keep the listing, author later).
   `unverified` is set independently when the matching definition has unverified ratings or no datasheet,
   and is always set for the last two. An MPN match from a different manufacturer is flagged and does not
   make the listing "existing".
-- **Supplier discovery ≠ engineering import**: new `parts_save_record` stores the LCSC listing in
+- **Supplier discovery ≠ engineering import**: new `parts_save_record` stores the Distributor listing in
   `<project>/sourcing` with no engine command, no revision change and no definition; the catalogue shows each
   listing's standing, offers "Save record" always, and offers "Import" only when a template can carry it
   (`supplier_only`). `parts_import` is unchanged (template reuse only; electrical ratings stay unverified).
@@ -58,6 +58,6 @@ footprint for it, and must not be treated as engineering-approved either.
   and explainable (ADR-0032 `matching`, this ADR's `link_record`).
 
 ## Consequences
-Components with valid LCSC listings are now classified against all four library scopes instead of being
+Components with valid Distributor listings are now classified against all four library scopes instead of being
 refused; a listing is never discarded for lacking an engineering definition; the engineering state
 (unverified / needs authoring) is explicit everywhere it is shown.

@@ -56,7 +56,7 @@ fn reference_design_end_to_end() {
     print(&mech_r);
     assert_eq!(drc_r.errors, 0, "DRC errors on reference board");
     assert_eq!(mech_r.errors, 0);
-    let dfm_r = dfm::run(e.project(), &dfm::jlcpcb_standard());
+    let dfm_r = dfm::run(e.project(), &dfm::fabricator_standard());
     print(&dfm_r);
     assert_eq!(dfm_r.errors, 0, "DFM errors on reference board");
     assert_eq!(drc_r.revision, e.project().revision);
@@ -148,7 +148,7 @@ fn stale_or_failing_reports_produce_only_a_draft() {
     fixtures::build_pcb(&mut e).unwrap();
     let erc_r = erc::run(e.project());
     let drc_r = drc::run(e.project());
-    let dfm_r = dfm::run(e.project(), &dfm::jlcpcb_standard());
+    let dfm_r = dfm::run(e.project(), &dfm::fabricator_standard());
     let mech_r = mech::run(e.project());
     // Change the design after verification: reports are now stale.
     let rev = e.project().revision;
@@ -208,12 +208,12 @@ fn bom_groups_by_value_footprint_and_mpn_and_cpl_lists_every_part() {
     let mut lines = bom.lines();
     assert_eq!(
         lines.next().unwrap(),
-        "Comment,Designator,Footprint,LCSC Part #,Manufacturer,MPN,Quantity"
+        "Comment,Designator,Footprint,Distributor Part #,Manufacturer,MPN,Quantity"
     );
     let mut keys = std::collections::BTreeSet::new();
     let mut total = 0;
     for l in lines {
-        // Quoted fields: Comment, Designator, Footprint, LCSC, Manufacturer, MPN; then qty.
+        // Quoted fields: Comment, Designator, Footprint, Distributor, Manufacturer, MPN; then qty.
         let f: Vec<&str> = l.split("\",\"").collect();
         assert_eq!(f.len(), 6, "{l}");
         let qty: usize = l.rsplit(',').next().unwrap().parse().unwrap();
@@ -259,7 +259,7 @@ fn unknown_mechanical_fit_keeps_the_package_draft() {
             erc::run(p),
             drc::run(p),
             mech::run(p),
-            dfm::run(p, &dfm::jlcpcb_standard()),
+            dfm::run(p, &dfm::fabricator_standard()),
         )
     };
     // No height limit: MECH-001 checked nothing, so the package stays DRAFT.

@@ -1,7 +1,7 @@
-//! Stackup description file and the JLCPCB multilayer stackup check.
+//! Stackup description file and the Fabricator multilayer stackup check.
 //!
 //! The stackup file is an informational record of the build-up the Gerbers assume; the
-//! fabricator's own stackup choice is authoritative. The JLCPCB limits below are the ones
+//! fabricator's own stackup choice is authoritative. The Fabricator limits below are the ones
 //! this project recorded from the public capability pages and are **not verified** against
 //! the current published capabilities; the check says so in every result and never reports
 //! an unknown as a pass.
@@ -104,15 +104,15 @@ impl FabStackupCheck {
 }
 
 /// Standard finished thicknesses (mm) offered for multilayer boards (unverified).
-const JLC_THICKNESS_MM: [f64; 7] = [0.4, 0.6, 0.8, 1.0, 1.2, 1.6, 2.0];
+const FAB_THICKNESS_MM: [f64; 7] = [0.4, 0.6, 0.8, 1.0, 1.2, 1.6, 2.0];
 /// Smallest plated via drill accepted (mm) and the smaller size recommended for multilayer.
-const JLC_MIN_VIA_DRILL_MM: f64 = 0.15;
-const JLC_RECOMMENDED_VIA_DRILL_MM: f64 = 0.2;
+const FAB_MIN_VIA_DRILL_MM: f64 = 0.15;
+const FAB_RECOMMENDED_VIA_DRILL_MM: f64 = 0.2;
 /// Thinnest dielectric between copper layers (µm) assumed available.
-const JLC_MIN_DIELECTRIC_UM: u32 = 70;
+const FAB_MIN_DIELECTRIC_UM: u32 = 70;
 
-/// Check the stackup (and the via spans in use) against JLCPCB multilayer capability.
-pub fn jlcpcb_check(p: &Project) -> FabStackupCheck {
+/// Check the stackup (and the via spans in use) against Fabricator multilayer capability.
+pub fn fabricator_check(p: &Project) -> FabStackupCheck {
     let st: &Stackup = &p.pcb.board.stackup;
     let mut f = Vec::new();
     let mut add = |id: &str, severity, message: String| {
@@ -125,17 +125,17 @@ pub fn jlcpcb_check(p: &Project) -> FabStackupCheck {
     let n = st.copper_layers();
     if !(2..=32).contains(&n) || !n.is_multiple_of(2) {
         add(
-            "JLC-STK-001",
+            "Fab-STK-001",
             Severity::Error,
-            format!("{n} copper layers: JLCPCB builds even layer counts from 2 to 32"),
+            format!("{n} copper layers: Fabricator builds even layer counts from 2 to 32"),
         );
     }
     let mm = to_mm(st.board_thickness);
-    if n >= 4 && !JLC_THICKNESS_MM.iter().any(|t| (t - mm).abs() < 1e-6) {
+    if n >= 4 && !FAB_THICKNESS_MM.iter().any(|t| (t - mm).abs() < 1e-6) {
         add(
-            "JLC-STK-002",
+            "Fab-STK-002",
             Severity::Warning,
-            format!("board thickness {mm} mm is not one of the standard multilayer thicknesses {JLC_THICKNESS_MM:?} mm"),
+            format!("board thickness {mm} mm is not one of the standard multilayer thicknesses {FAB_THICKNESS_MM:?} mm"),
         );
     }
     for (i, l) in st.layers.iter().enumerate() {
@@ -143,7 +143,7 @@ pub fn jlcpcb_check(p: &Project) -> FabStackupCheck {
         let ok: &[f64] = if outer { &[1.0, 2.0] } else { &[0.5, 1.0] };
         if n >= 4 && !ok.iter().any(|o| (o - l.copper_oz).abs() < 1e-9) {
             add(
-                "JLC-STK-003",
+                "Fab-STK-003",
                 Severity::Warning,
                 format!(
                     "{} copper is {} oz; the standard {} weights are {ok:?} oz",
@@ -153,15 +153,15 @@ pub fn jlcpcb_check(p: &Project) -> FabStackupCheck {
                 ),
             );
         }
-        if i + 1 < n && l.dielectric_after_um < JLC_MIN_DIELECTRIC_UM {
+        if i + 1 < n && l.dielectric_after_um < FAB_MIN_DIELECTRIC_UM {
             add(
-                "JLC-STK-004",
+                "Fab-STK-004",
                 Severity::Error,
                 format!(
                     "dielectric below {} is {} µm, thinner than the {} µm assumed available",
                     l.layer.name(),
                     l.dielectric_after_um,
-                    JLC_MIN_DIELECTRIC_UM
+                    FAB_MIN_DIELECTRIC_UM
                 ),
             );
         }
@@ -174,32 +174,32 @@ pub fn jlcpcb_check(p: &Project) -> FabStackupCheck {
         .count();
     if special > 0 {
         add(
-            "JLC-STK-005",
+            "Fab-STK-005",
             Severity::Warning,
             format!("{special} blind/buried via(s): not part of the standard multilayer service; confirm availability, extra process steps and cost with the fabricator"),
         );
     }
     for v in p.pcb.vias.values() {
         let d = to_mm(v.drill);
-        if d + 1e-9 < JLC_MIN_VIA_DRILL_MM {
+        if d + 1e-9 < FAB_MIN_VIA_DRILL_MM {
             add(
-                "JLC-STK-006",
+                "Fab-STK-006",
                 Severity::Error,
                 format!(
-                    "via {} drill {d:.3} mm is below the {JLC_MIN_VIA_DRILL_MM} mm minimum",
+                    "via {} drill {d:.3} mm is below the {FAB_MIN_VIA_DRILL_MM} mm minimum",
                     v.id
                 ),
             );
-        } else if n >= 4 && d + 1e-9 < JLC_RECOMMENDED_VIA_DRILL_MM {
+        } else if n >= 4 && d + 1e-9 < FAB_RECOMMENDED_VIA_DRILL_MM {
             add(
-                "JLC-STK-006",
+                "Fab-STK-006",
                 Severity::Warning,
-                format!("via {} drill {d:.3} mm is below the {JLC_RECOMMENDED_VIA_DRILL_MM} mm usually used on multilayer boards", v.id),
+                format!("via {} drill {d:.3} mm is below the {FAB_RECOMMENDED_VIA_DRILL_MM} mm usually used on multilayer boards", v.id),
             );
         }
     }
     FabStackupCheck {
-        fab: "JLCPCB".into(),
+        fab: "Fabricator".into(),
         limits_unverified: true,
         copper_layers: n,
         findings: f,

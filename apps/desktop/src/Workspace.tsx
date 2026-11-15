@@ -4,8 +4,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, describeError } from "./api";
 import { DomainPanel } from "./DomainPanel";
-import { ManufacturingPanel as JlcpcbPrepPanel } from "./ManufacturingPanel";
-import { PartsPanel as LcscPartsPanel } from "./PartsPanel";
+import { ManufacturingPanel as FabricatorPrepPanel } from "./ManufacturingPanel";
+import { PartsPanel as DistributorPartsPanel } from "./PartsPanel";
 import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
 import { PcbView } from "./PcbView";
@@ -137,7 +137,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     openProjects: projects,
     active,
   });
-  // Built-in parts plus parts imported into this project (e.g. from LCSC), so an imported
+  // Built-in parts plus parts imported into this project (e.g. from Distributor), so an imported
   // part can be placed from the part picker.
   const library = useMemo(() => {
     const known = new Set(baseLibrary.map((l) => l.id));
@@ -504,7 +504,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     { id: "export", label: "Export manufacturing files", run: () => setDialog("export"), group: "Manufacturing" },
     { id: "erc", label: "Run ERC", run: () => check("erc"), group: "Verify" },
     { id: "drc", label: "Run DRC", run: () => check("drc"), group: "Verify" },
-    { id: "dfm", label: "Run DFM (JLCPCB standard profile)", run: () => check("dfm"), group: "Verify" },
+    { id: "dfm", label: "Run DFM (Fabricator standard profile)", run: () => check("dfm"), group: "Verify" },
     { id: "annotate", label: "Annotate schematic", run: () => execute({ type: "Annotate" }), group: "Design" },
     { id: "sync", label: "Update PCB from schematic (sync)", run: syncPcb, group: "Design" },
     { id: "place", label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), group: "Design" },
@@ -675,7 +675,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       { id: "sync", group: "checks", label: "Update PCB", title: "Update PCB from schematic", run: syncPcb, disabled: busy ? "An engine command is running" : undefined },
       { id: "erc", group: "checks", label: "Run ERC", run: () => check("erc"), disabled: busy ? "An engine command is running" : undefined },
       { id: "drc", group: "checks", label: "Run DRC", run: () => check("drc"), disabled: busy ? "An engine command is running" : undefined },
-      { id: "dfm", group: "checks", label: "Run DFM", title: "Design for manufacture against the JLCPCB standard profile", run: () => check("dfm"), disabled: busy ? "An engine command is running" : undefined },
+      { id: "dfm", group: "checks", label: "Run DFM", title: "Design for manufacture against the Fabricator standard profile", run: () => check("dfm"), disabled: busy ? "An engine command is running" : undefined },
       { id: "route", group: "checks", label: "Auto-route", title: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), disabled: busy ? "An engine command is running" : undefined },
       { id: "sim", group: "checks", label: "Simulate", title: "Open the Simulation panel (ngspice)", run: () => (setBottomTab("sim"), setBottomOpen(true)) },
     ],
@@ -725,7 +725,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     { label: "Design", items: [
       { label: "Run ERC", run: () => check("erc"), disabled: noProject },
       { label: "Run DRC", run: () => check("drc"), disabled: noProject },
-      { label: "Run DFM (JLCPCB standard)", run: () => check("dfm"), disabled: noProject },
+      { label: "Run DFM (Fabricator standard)", run: () => check("dfm"), disabled: noProject },
       { label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), disabled: noProject, sep: true },
       { label: "Design rules…", run: () => setDialog("rules") },
     ] },
@@ -833,7 +833,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           {sideView === "parts" && (
             <>
               <LibraryPanel revision={revision} busy={busy} execute={edit.execute} onPlace={placePart} />
-              <LcscPartsPanel
+              <DistributorPartsPanel
                 revision={revision}
                 onImported={async (m) => {
                   setMessage(m);
@@ -850,7 +850,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           {sideView === "manufacturing" && (
             <div className="side-scroll">
               <ManufacturingPanel result={exported} busy={busy} onExport={() => setDialog("export")} />
-              <JlcpcbPrepPanel revision={revision} onPrepared={setMessage} />
+              <FabricatorPrepPanel revision={revision} onPrepared={setMessage} />
             </div>
           )}
         </aside>

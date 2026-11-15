@@ -19,8 +19,8 @@
   - DRC: copper-vs-copper checks already compare per layer; DRC-016 (copper on a missing layer or
     invalid via span) and DRC-017 (plane layer without a zone) are new.
   - Manufacturing: one copper Gerber per layer (`Copper,Ln,Top|Inr|Bot`), the through drill file,
-    one drill file per blind/buried span, and a `stackup.json`. A JLCPCB multilayer stackup check
-    (`eak_manufacturing::stackup::jlcpcb_check`) records every limit as unverified.
+    one drill file per blind/buried span, and a `stackup.json`. A Fabricator multilayer stackup check
+    (`eak_manufacturing::stackup::fabricator_check`) records every limit as unverified.
 - **Consequences:** The autorouter still routes the two outer layers with through vias; inner
   routing and blind/buried vias are placed by the user or AI through commands. Vias connect
   solidly into planes (no per-via relief setting). Impedance is not modelled.

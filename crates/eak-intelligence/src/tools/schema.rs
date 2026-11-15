@@ -304,7 +304,7 @@ pub fn component_def() -> Value {
             ("default_value", string("default value")),
             ("manufacturer", nullable(string("manufacturer"))),
             ("mpn", nullable(string("manufacturer part number"))),
-            ("lcsc", nullable(string("LCSC part number"))),
+            ("distributor", nullable(string("Distributor part number"))),
             ("datasheet", nullable(string("datasheet URL"))),
             ("symbol", symbol),
             ("footprint", footprint),

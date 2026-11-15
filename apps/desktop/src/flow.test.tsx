@@ -91,7 +91,7 @@ beforeEach(() => {
           source: "builtin",
           in_project: false,
           unverified_ratings: 0,
-          def: { ...c, manufacturer: null, mpn: null, lcsc: null, datasheet: null, symbol: { pins: [], body_half_w: 1_000_000, body_half_h: 1_000_000 }, footprint: { name: "R_0603", pads: [], courtyard_half_w: 1_000_000, courtyard_half_h: 1_000_000, body_height: null }, pin_map: {}, ratings: [], provenance: "test" },
+          def: { ...c, manufacturer: null, mpn: null, distributor: null, datasheet: null, symbol: { pins: [], body_half_w: 1_000_000, body_half_h: 1_000_000 }, footprint: { name: "R_0603", pads: [], courtyard_half_w: 1_000_000, courtyard_half_h: 1_000_000, body_height: null }, pin_map: {}, ratings: [], provenance: "test" },
         }));
       case "library_footprint_candidates":
         return [];

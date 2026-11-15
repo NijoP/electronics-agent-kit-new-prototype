@@ -41,7 +41,7 @@ fn names_that_could_escape_the_library_folder_are_refused() {
     for bad in ["", "../x", "a/b", "a\\b", ".hidden", "x y", "é"] {
         assert!(safe_name(bad).is_err(), "{bad:?}");
     }
-    assert_eq!(safe_name("LCSC_C25804").unwrap(), "LCSC_C25804");
+    assert_eq!(safe_name("DISTRIBUTOR_C25804").unwrap(), "DISTRIBUTOR_C25804");
 }
 
 #[test]
@@ -259,12 +259,12 @@ struct Fake;
 
 fn record() -> SourcingRecord {
     SourcingRecord {
-        provider: "LCSC".into(),
-        source_url: "https://api.lcsc.com/rest/api/agent/product/v1/keywordsearch".into(),
+        provider: "Distributor".into(),
+        source_url: "https://distributor.invalid/rest/api/agent/product/v1/keywordsearch".into(),
         retrieved_at_unix_s: 1_700_000_000,
         raw_sha256: "ab".repeat(32),
         raw_bytes: 10,
-        lcsc_part: Some("C99999".into()),
+        distributor_part: Some("C99999".into()),
         mpn: Some("STM32F103C8T6".into()),
         manufacturer: Some("ST".into()),
         package: Some("LQFP-48".into()),
@@ -320,7 +320,7 @@ fn a_supplier_listing_is_saved_without_an_engineering_definition_and_says_it_nee
     // The project itself did not change: no definition, no revision bump.
     let again = current_project(&s).unwrap();
     assert_eq!(again.project.revision, snap.project.revision);
-    assert!(!again.project.library.contains_key("LCSC_C99999"));
+    assert!(!again.project.library.contains_key("DISTRIBUTOR_C99999"));
 
     let e = parts_save_record(&s, &p, "C1").unwrap_err();
     assert!(e.contains("no such part"));

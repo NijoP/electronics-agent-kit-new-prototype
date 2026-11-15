@@ -1,22 +1,22 @@
-//! Parts search, library import, BOM view and JLCPCB preparation for the desktop shell.
+//! Parts search, library import, BOM view and Fabricator preparation for the desktop shell.
 //!
 //! Plain functions over [`Session`] (tested headless in `tests/parts_ipc.rs`); the Tauri
 //! wrappers in [`cmd`] only decode arguments. Rules:
-//! * the only network traffic is the LCSC part number or keyword the user typed, sent to the
-//!   documented, signed LCSC OpenAPI with the user's own credentials (ADR-0032); no design data
+//! * the only network traffic is the Distributor part number or keyword the user typed, sent to the
+//!   documented, signed Distributor OpenAPI with the user's own credentials (ADR-0032); no design data
 //!   is ever sent anywhere;
 //! * an import is a typed `UpsertComponentDefinition` command through the engine as the
 //!   Human actor, with the revision the UI last rendered;
-//! * JLCPCB output is written only to a folder the user names, is labelled "prepared for
+//! * Fabricator output is written only to a folder the user names, is labelled "prepared for
 //!   review", and nothing is uploaded or ordered.
 
 use crate::Session;
 use eak_core::builtin;
 use eak_manufacturing::assembly::{self, AssemblyClass, AssemblyRecord, AssemblyReport};
 use eak_manufacturing::bom::{self, BomLine};
-use eak_manufacturing::jlcpcb::{self, DfmReport, PrepResult};
-use eak_manufacturing::lcsc::{self, UreqFetch};
-use eak_manufacturing::lcsc_api::LcscApi;
+use eak_manufacturing::fabricator::{self, DfmReport, PrepResult};
+use eak_manufacturing::distributor::{self, UreqFetch};
+use eak_manufacturing::distributor_api::DistributorApi;
 use eak_manufacturing::provider::{Answer, ErrorKind, Resilient, Served, SupplierProvider};
 use eak_manufacturing::sourcing::{self, SourcingRecord};
 use eak_runtime::{Actor, Command, CommandRequest, CommandResponse};
@@ -31,11 +31,11 @@ pub struct LibraryHit {
     pub id: String,
     pub name: String,
     pub category: String,
-    pub lcsc: Option<String>,
+    pub distributor: Option<String>,
     pub mpn: Option<String>,
 }
 
-/// What happened when LCSC was asked.
+/// What happened when Distributor was asked.
 #[derive(Debug, Clone, Serialize)]
 pub struct LiveSearch {
     /// `ok`, `stale` (earlier cached answer, supplier down), `needs_credentials`,
@@ -88,7 +88,7 @@ fn library_hits(query: &str) -> Vec<LibraryHit> {
                 c.name,
                 c.category,
                 c.mpn.as_deref().unwrap_or(""),
-                c.lcsc.as_deref().unwrap_or("")
+                c.distributor.as_deref().unwrap_or("")
             )
             .to_ascii_lowercase();
             terms.iter().all(|t| hay.contains(t))
@@ -98,7 +98,7 @@ fn library_hits(query: &str) -> Vec<LibraryHit> {
             id: c.id,
             name: c.name,
             category: c.category,
-            lcsc: c.lcsc,
+            distributor: c.distributor,
             mpn: c.mpn,
         })
         .collect()
@@ -120,14 +120,14 @@ pub fn live_status(k: ErrorKind) -> &'static str {
 /// Supplier lookups shared by every `parts_*` command: one cache, rate limit and retry policy
 /// per process (ADR-0028). The wrapper never holds a lock while waiting on the network, so a
 /// slow or dead supplier cannot freeze other commands.
-pub type LcscResilient = Resilient<LcscApi<UreqFetch>>;
+pub type DistributorResilient = Resilient<DistributorApi<UreqFetch>>;
 
-pub fn live_provider() -> &'static LcscResilient {
-    static P: OnceLock<LcscResilient> = OnceLock::new();
+pub fn live_provider() -> &'static DistributorResilient {
+    static P: OnceLock<DistributorResilient> = OnceLock::new();
     P.get_or_init(|| Resilient::new(crate::catalogue::lookup_api()))
 }
 
-/// Search the built-in library and the project's stored records offline, then ask LCSC.
+/// Search the built-in library and the project's stored records offline, then ask Distributor.
 /// A failure of the live search is reported in `live`, never replaced by invented rows.
 pub fn parts_search<P: SupplierProvider>(
     s: &Session,
@@ -136,7 +136,7 @@ pub fn parts_search<P: SupplierProvider>(
 ) -> Result<PartsSearch, String> {
     let q = query.trim();
     if q.is_empty() {
-        return Err("enter an LCSC part number (C25804) or a keyword".into());
+        return Err("enter an Distributor part number (C25804) or a keyword".into());
     }
     let stored = sourcing::search(&stored_records(s), q)
         .into_iter()
@@ -150,7 +150,7 @@ pub fn parts_search<P: SupplierProvider>(
         }) => LiveSearch {
             status: "stale",
             message: format!(
-                "LCSC is not answering ({because:?}); showing an earlier answer from {age_s} s ago. \
+                "Distributor is not answering ({because:?}); showing an earlier answer from {age_s} s ago. \
                  Stock and prices may have changed."
             ),
             served: Some(served),
@@ -165,7 +165,7 @@ pub fn parts_search<P: SupplierProvider>(
                 "ok"
             },
             message: if records.is_empty() {
-                "LCSC returned no matching parts".into()
+                "Distributor returned no matching parts".into()
             } else {
                 String::new()
             },
@@ -196,21 +196,21 @@ pub struct SavedRecord {
     pub link: eak_manufacturing::library_link::Link,
 }
 
-/// Supplier discovery, separate from engineering import: fetch one LCSC listing and store it in
-/// `<project>/sourcing` so the MPN and LCSC number are kept and the engineering definition can
+/// Supplier discovery, separate from engineering import: fetch one Distributor listing and store it in
+/// `<project>/sourcing` so the MPN and Distributor number are kept and the engineering definition can
 /// be completed later. No engine command runs, the project revision does not change, and no
 /// symbol, footprint or rating is created.
 pub fn parts_save_record<P: SupplierProvider>(
     s: &Session,
     provider: &Resilient<P>,
-    lcsc_part: &str,
+    distributor_part: &str,
 ) -> Result<SavedRecord, String> {
-    let answer = provider.lookup(lcsc_part).map_err(|e| e.message)?;
+    let answer = provider.lookup(distributor_part).map_err(|e| e.message)?;
     let record = answer
         .records
         .into_iter()
         .next()
-        .ok_or("LCSC returned no record for that part number")?;
+        .ok_or("Distributor returned no record for that part number")?;
     let defs = crate::libstore::all_defs(
         crate::libstore::store(),
         &crate::libstore::project_library(s),
@@ -239,15 +239,15 @@ pub struct ImportResult {
     pub record: SourcingRecord,
 }
 
-/// Re-fetch `lcsc` from LCSC, store the record with the project and add the part to the
+/// Re-fetch `distributor` from Distributor, store the record with the project and add the part to the
 /// project library through `Command::UpsertComponentDefinition`.
 pub fn parts_import<P: SupplierProvider>(
     s: &Session,
     provider: &Resilient<P>,
     expected_revision: u64,
-    lcsc_part: &str,
+    distributor_part: &str,
 ) -> Result<ImportResult, String> {
-    let answer = provider.lookup(lcsc_part).map_err(|e| e.message)?;
+    let answer = provider.lookup(distributor_part).map_err(|e| e.message)?;
     let stale = match answer.served {
         Served::StaleCache { age_s, .. } => Some(age_s),
         _ => None,
@@ -256,12 +256,12 @@ pub fn parts_import<P: SupplierProvider>(
         .records
         .into_iter()
         .next()
-        .ok_or("LCSC returned no record for that part number")?;
-    let mut plan = lcsc::import_plan(&record)?;
+        .ok_or("Distributor returned no record for that part number")?;
+    let mut plan = distributor::import_plan(&record)?;
     if let Some(age_s) = stale {
         // The record keeps its original retrieval time and hash; say so in the notes.
         plan.notes.push(format!(
-            "LCSC was unreachable: this record is an earlier answer from {age_s} s ago, not a fresh fetch"
+            "Distributor was unreachable: this record is an earlier answer from {age_s} s ago, not a fresh fetch"
         ));
     }
     let component_id = plan.definition.id.clone();
@@ -298,19 +298,19 @@ pub struct ManufacturingPreview {
     pub revision: u64,
     pub bom: Vec<BomLine>,
     pub dfm: DfmReport,
-    /// JLCPCB assembly classification rows and fail-closed BOM warnings (ADR-0034).
+    /// Fabricator assembly classification rows and fail-closed BOM warnings (ADR-0034).
     pub assembly: AssemblyReport,
     pub default_out_dir: Option<String>,
 }
 
-/// The BOM (joined with stored LCSC records) and the JLCPCB DFM rule check for the
+/// The BOM (joined with stored Distributor records) and the Fabricator DFM rule check for the
 /// current revision. Writes nothing.
 pub fn manufacturing_preview(s: &Session) -> Result<ManufacturingPreview, String> {
     let records = stored_records(s);
     s.with_engine(|e| {
         let p = e.project();
         let lines = bom::build(p, &records);
-        let dfm = jlcpcb::dfm(p, &lines, &jlcpcb::Profile::two_layer_1oz());
+        let dfm = fabricator::dfm(p, &lines, &fabricator::Profile::two_layer_1oz());
         let stored = e
             .dir()
             .map(|d| assembly::read_records(&d.join("sourcing")))
@@ -323,7 +323,7 @@ pub fn manufacturing_preview(s: &Session) -> Result<ManufacturingPreview, String
             assembly,
             default_out_dir: e
                 .dir()
-                .map(|d| d.join("output").join(format!("jlcpcb-rev-{}", p.revision)))
+                .map(|d| d.join("output").join(format!("fabricator-rev-{}", p.revision)))
                 .map(|d| d.display().to_string()),
         }
     })
@@ -336,18 +336,18 @@ fn now_s() -> u64 {
         .unwrap_or(0)
 }
 
-/// Record the user's own statement of a part's JLCPCB assembly class (basic, extended, preferred
+/// Record the user's own statement of a part's Fabricator assembly class (basic, extended, preferred
 /// extended or not assemblable), with the time. `Unknown` is not an attestation and is refused.
 pub fn assembly_attest(
     s: &Session,
-    lcsc: &str,
+    distributor: &str,
     class: AssemblyClass,
 ) -> Result<AssemblyRecord, String> {
     if class == AssemblyClass::Unknown {
         return Err("choose basic, extended, preferred extended or not assemblable".into());
     }
     let rec = AssemblyRecord {
-        lcsc: lcsc.trim().to_ascii_uppercase(),
+        distributor: distributor.trim().to_ascii_uppercase(),
         class,
         source: "user_attested".into(),
         verified_at_unix_s: now_s(),
@@ -367,8 +367,8 @@ pub struct AssemblyImport {
     pub unknown_class: usize,
 }
 
-/// Read a JLCPCB parts-library CSV the user obtained (absolute path) and record the rows for the
-/// LCSC numbers on this project's BOM. Rows for other parts are ignored; unrecognised type text
+/// Read a Fabricator parts-library CSV the user obtained (absolute path) and record the rows for the
+/// Distributor numbers on this project's BOM. Rows for other parts are ignored; unrecognised type text
 /// stays `Unknown`.
 pub fn assembly_import_parts_file(s: &Session, path: &str) -> Result<AssemblyImport, String> {
     let p = Path::new(path.trim());
@@ -388,7 +388,7 @@ pub fn assembly_import_parts_file(s: &Session, path: &str) -> Result<AssemblyImp
     let wanted: std::collections::BTreeSet<String> = s.with_engine(|e| {
         bom::build(e.project(), &records)
             .into_iter()
-            .filter_map(|l| l.lcsc)
+            .filter_map(|l| l.distributor)
             .map(|c| c.to_ascii_uppercase())
             .collect()
     })?;
@@ -422,9 +422,9 @@ fn check_out_dir(dir: &Path) -> Result<(), String> {
             return Err(format!("{} is not a folder", dir.display()));
         }
         let mut entries = std::fs::read_dir(dir).map_err(|e| e.to_string())?;
-        if entries.next().is_some() && !dir.join("jlcpcb-prep-manifest.json").is_file() {
+        if entries.next().is_some() && !dir.join("fabricator-prep-manifest.json").is_file() {
             return Err(format!(
-                "{} is not empty and is not an earlier EAK JLCPCB bundle; choose an empty folder",
+                "{} is not empty and is not an earlier EAK Fabricator bundle; choose an empty folder",
                 dir.display()
             ));
         }
@@ -439,8 +439,8 @@ pub struct PrepareResult {
 }
 
 /// Run ERC, DRC and MECH on the current revision (saving evidence), then write the
-/// JLCPCB preparation bundle into `out_dir` (the default folder when empty).
-pub fn jlcpcb_prepare(s: &Session, out_dir: &str) -> Result<PrepareResult, String> {
+/// Fabricator preparation bundle into `out_dir` (the default folder when empty).
+pub fn fabricator_prepare(s: &Session, out_dir: &str) -> Result<PrepareResult, String> {
     let records = stored_records(s);
     s.with_engine(|e| {
         let target = if out_dir.trim().is_empty() {
@@ -448,7 +448,7 @@ pub fn jlcpcb_prepare(s: &Session, out_dir: &str) -> Result<PrepareResult, Strin
                 .dir()
                 .ok_or("preparing a bundle needs a saved project folder")?;
             d.join("output")
-                .join(format!("jlcpcb-rev-{}", e.project().revision))
+                .join(format!("fabricator-rev-{}", e.project().revision))
         } else {
             PathBuf::from(out_dir.trim())
         };
@@ -468,7 +468,7 @@ pub fn jlcpcb_prepare(s: &Session, out_dir: &str) -> Result<PrepareResult, Strin
             .dir()
             .map(|d| assembly::read_records(&d.join("sourcing")))
             .unwrap_or_default();
-        let prep = jlcpcb::prepare_with(e.project(), &refs, &records, &stored, &target)?;
+        let prep = fabricator::prepare_with(e.project(), &refs, &records, &stored, &target)?;
         Ok(PrepareResult { prep, reports })
     })?
 }
@@ -493,10 +493,10 @@ pub mod cmd {
     pub async fn parts_import(
         app: AppHandle,
         expected_revision: u64,
-        lcsc: String,
+        distributor: String,
     ) -> Result<super::ImportResult, String> {
         blocking(app, Priority::P1, move |s| {
-            super::parts_import(s, super::live_provider(), expected_revision, &lcsc)
+            super::parts_import(s, super::live_provider(), expected_revision, &distributor)
         })
         .await
     }
@@ -504,10 +504,10 @@ pub mod cmd {
     #[tauri::command(rename_all = "snake_case")]
     pub async fn parts_save_record(
         app: AppHandle,
-        lcsc: String,
+        distributor: String,
     ) -> Result<super::SavedRecord, String> {
         blocking(app, Priority::P1, move |s| {
-            super::parts_save_record(s, super::live_provider(), &lcsc)
+            super::parts_save_record(s, super::live_provider(), &distributor)
         })
         .await
     }
@@ -522,11 +522,11 @@ pub mod cmd {
     #[tauri::command(rename_all = "snake_case")]
     pub async fn assembly_attest(
         app: AppHandle,
-        lcsc: String,
+        distributor: String,
         class: super::AssemblyClass,
     ) -> Result<super::AssemblyRecord, String> {
         blocking(app, Priority::P1, move |s| {
-            super::assembly_attest(s, &lcsc, class)
+            super::assembly_attest(s, &distributor, class)
         })
         .await
     }
@@ -543,12 +543,12 @@ pub mod cmd {
     }
 
     #[tauri::command(rename_all = "snake_case")]
-    pub async fn jlcpcb_prepare(
+    pub async fn fabricator_prepare(
         app: AppHandle,
         out_dir: String,
     ) -> Result<super::PrepareResult, String> {
         blocking(app, Priority::P3, move |s| {
-            super::jlcpcb_prepare(s, &out_dir)
+            super::fabricator_prepare(s, &out_dir)
         })
         .await
     }

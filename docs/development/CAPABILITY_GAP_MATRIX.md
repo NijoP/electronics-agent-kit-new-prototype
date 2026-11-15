@@ -21,7 +21,7 @@ States: **V** implemented and verified · **U** implemented, not verified · **P
 | Project architecture | P | Product/board/block profiles and requirements (`eak-intelligence::systems`, ADR-0027) are code-reviewed only; no dedicated Requirements/Architecture workspace in the desktop beyond `intelligence_summary`. |
 | Multi-domain engineering | P | Domain registry and constraint graph exist as data and harness `intel_*` tools; domain-specific engines (RF, thermal, power integrity) are not implemented; gates fail closed to UNKNOWN. |
 | Component intelligence | P | Component identity vs supplier offers (ADR-0028), roles, placement heuristics. Heuristic, DESK-derived; no thermal/RF/escape analysis. Code-reviewed only. |
-| LCSC and JLCPCB | P | LCSC search/import with resilient cache (`parts.rs`), JLCPCB preparation output marked DRAFT. Never checked against the live service or a fabricator. |
+| Distributor and Fabricator | P | Distributor search/import with resilient cache (`parts.rs`), Fabricator preparation output marked DRAFT. Never checked against the live service or a fabricator. |
 | Datasheet retrieval | P | Knowledge import exists (`eak-intelligence::knowledge`, ADR-0024); no automatic datasheet fetch pipeline, PDF/table extraction missing. |
 | RAG and evidence provenance | P | BM25 over text with citations and evidence labels; no embeddings, rerank or MPN-exact lookup. Code-reviewed only. |
 | 3D component models | U | `viewer3d/` (STEP/WRL/GLB loader, quality states per ADR-0025, read-only board view). Never rendered; context-loss handling unrun. |
@@ -30,7 +30,7 @@ States: **V** implemented and verified · **U** implemented, not verified · **P
 | Terminal | U | `eak-terminal` real-PTY tests passed on Linux before the override (the one runtime-verified item in `STATUS.md`); later edits and the workspace UI (`terminal/`) unrun. Tabs/splits/launchers are code-reviewed only. |
 | Agent integration | U | `eak` CLI, MCP server and app endpoint (`eak-harness`) written; e2e tests never run; no agent trialled through it (`NEXT_ACTION.md` item 4). |
 | Agent approval workflow | P | TTY-only human approval for autonomous design (ADR-0020) and AI proposals/rollback commands; no per-call approval UI for agent edits in the desktop. |
-| Manufacturing | U | Gerber/drill/BOM/CPL export and JLCPCB preparation exist, labelled DRAFT; never validated by an external viewer or fabricator. Never called manufacturing-ready. |
+| Manufacturing | U | Gerber/drill/BOM/CPL export and Fabricator preparation exist, labelled DRAFT; never validated by an external viewer or fabricator. Never called manufacturing-ready. |
 | Cross-platform installation | P | Install scripts and a v0.1.4 Linux package exist; no install verified on real hardware; Windows/macOS packages unavailable (`docs/PLATFORM_SUPPORT.md`). |
 | Adaptive performance | U | ResourceProfile (AUTO/LOW/BALANCED/HIGH/CUSTOM), bounded blocking pool, frame coalescing. Nothing measured (`PERFORMANCE_VERIFICATION_PLAN.md` not performed). |
 | Recovery and reliability | U | Atomic writes, journal, crash reconciliation, typed lock state with takeover only for a provably gone holder (ADR-0029). Pending-operation recovery and unknown-outcome blocking pre-date the freeze; lock changes unrun. Stale pid reuse reads as alive (safe side). |

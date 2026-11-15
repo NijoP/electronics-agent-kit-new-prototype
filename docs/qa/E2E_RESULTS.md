@@ -10,7 +10,7 @@ snapshot, the status bar and the files on disk.
 
 **22 / 23 steps passed.** Screenshots: [`e2e-screenshots-v0.1.3/`](e2e-screenshots-v0.1.3/).
 S07 reads connectivity numbers over IPC (no connectivity/netlist view in the UI); every other
-step is pure UI. X1–X5 are new: Library, LCSC, JLCPCB/DFM, Simulation, AI assistant.
+step is pure UI. X1–X5 are new: Library, Distributor, Fabricator/DFM, Simulation, AI assistant.
 
 | Step | Workflow step | Driven via | Result | Evidence | Screenshot |
 |---|---|---|---|---|---|
@@ -29,8 +29,8 @@ step is pure UI. X1–X5 are new: Library, LCSC, JLCPCB/DFM, Simulation, AI assi
 | S13 | ERC (toolbar Run ERC) | UI | **PASS** | outcome NO_ERRORS_IN_IMPLEMENTED_CHECKS, 0 error(s), 0 warning(s); lists 4 not_implemented and 2 limitation(s) | [13-S13.png](e2e-screenshots-v0.1.3/13-S13.png) |
 | S14 | DRC (toolbar Run DRC) | UI | **PASS** | outcome NO_ERRORS_IN_IMPLEMENTED_CHECKS, 0 error(s), 3 warning(s); lists 7 not_implemented and 6 limitation(s) | [14-S14.png](e2e-screenshots-v0.1.3/14-S14.png) |
 | X1 | Library panel: open, search, previews | UI | **PASS** | Library / Parts panel open; query "0603" lists matching entries; 0 symbol/footprint preview(s) rendered | [15-X1.png](e2e-screenshots-v0.1.3/15-X1.png) |
-| X2 | LCSC part search (Parts panel, live public catalogue) | UI | **PASS** | LCSC returned 1 row(s) for C25804 | [16-X2.png](e2e-screenshots-v0.1.3/16-X2.png) |
-| X3 | JLCPCB prep: DFM check + BOM/DFM tables + bundle | UI | **PASS** | DFM outcome ERRORS (1 err, 0 warn, 7 not_implemented); panel BOM 1 row(s), DFM table 20 row(s); bundle on disk: E2E_Demo_Board-BOM-review.csv, E2E_Demo_Board-JLCPCB-BOM.csv, E2E_Demo_Board-JLCPCB-CPL.csv, E2E_Demo_Board-JLCPCB-gerbers.zip, eak-package, jlcpcb-dfm-report.json, jlcpcb-prep-manifest.json | [17-X3.png](e2e-screenshots-v0.1.3/17-X3.png) |
+| X2 | Distributor part search (Parts panel, live public catalogue) | UI | **PASS** | Distributor returned 1 row(s) for C25804 | [16-X2.png](e2e-screenshots-v0.1.3/16-X2.png) |
+| X3 | Fabricator prep: DFM check + BOM/DFM tables + bundle | UI | **PASS** | DFM outcome ERRORS (1 err, 0 warn, 7 not_implemented); panel BOM 1 row(s), DFM table 20 row(s); bundle on disk: E2E_Demo_Board-BOM-review.csv, E2E_Demo_Board-Fabricator-BOM.csv, E2E_Demo_Board-Fabricator-CPL.csv, E2E_Demo_Board-Fabricator-gerbers.zip, eak-package, fabricator-dfm-report.json, fabricator-prep-manifest.json | [17-X3.png](e2e-screenshots-v0.1.3/17-X3.png) |
 | X4 | Simulation panel (Simulation menu → Run simulation…) | UI | **FAIL** | WebDriverError: element click intercepted when running "element/node-47929609-4B22-4E73-A181-5AA79777E2C6/click" with method "POST" | [18-X4.png](e2e-screenshots-v0.1.3/18-X4.png) |
 | X5 | AI assistant with no model configured | UI | **PASS** | panel states "No AI model is configured"; offline interpreter answered "annotate": annotateOffline command (no AI)Annotate schematic. Assigns reference designators.Annotate schematic~ Annotate AcceptRejectPreviewed on the canvas | [19-X5.png](e2e-screenshots-v0.1.3/19-X5.png) |
 | S15 | Generate outputs + manufacturing checks (Export dialog) | UI | **PASS** | 18 files on disk, status DRAFT: E2E_Demo_Board-BOM.csv, E2E_Demo_Board-B_Cu.gbl, E2E_Demo_Board-B_Mask.gbs, E2E_Demo_Board-B_Paste.gbp, E2E_Demo_Board-B_Silkscreen.gbo, E2E_Demo_Board-CPL.csv, E2E_Demo_Board-Edge_Cuts.gm1, E2E_Demo_Board-F_Cu.gtl, …; ERC+DRC+mech reports run inside export (no separate manufacturing-check control) | [20-S15.png](e2e-screenshots-v0.1.3/20-S15.png) |
@@ -48,10 +48,10 @@ step is pure UI. X1–X5 are new: Library, LCSC, JLCPCB/DFM, Simulation, AI assi
 | Schematic place + connect (Connect pins, Wire) | **Verified** | S04–S05 by canvas clicks; needs zoom-in first (O3) |
 | PCB update, outline, auto-place, 4 layers, auto-route, zone | **Verified** | S06, S08–S12 |
 | Connectivity | **Partially working** | Engine connectivity + airwires work (S07); no netlist/connectivity view in UI |
-| ERC / DRC / DFM | **Verified** (as reported, with limits) | Reports list `not_implemented`/`limitations`; DFM shows 1 real error (BOM line without LCSC number) and "not checked" rows |
+| ERC / DRC / DFM | **Verified** (as reported, with limits) | Reports list `not_implemented`/`limitations`; DFM shows 1 real error (BOM line without Distributor number) and "not checked" rows |
 | Library panel | **Partially working** | Search lists entries (X1); 0 symbol/footprint previews rendered for the query without a selection (not investigated further) |
-| LCSC search | **Verified** (live, network) | X2: C25804 returned 1 row from LCSC's public catalogue |
-| JLCPCB bundle | **Verified** | X3: BOM, CPL, gerber ZIP and review BOM written to disk; panel says "Prepared for review only. Not manufacturing-ready" |
+| Distributor search | **Verified** (live, network) | X2: C25804 returned 1 row from Distributor's public catalogue |
+| Fabricator bundle | **Verified** | X3: BOM, CPL, gerber ZIP and review BOM written to disk; panel says "Prepared for review only. Not manufacturing-ready" |
 | Simulation | **Incomplete in split view** | X4 FAIL: panel opens and source controls work, but the **Run simulation** button is covered by the PCB view (click intercepted) |
 | AI assistant (no model) | **Verified** | X5: states "No AI model is configured"; offline interpreter returns a preview proposal (Accept/Reject), no invented model reply |
 | Manufacturing export | **Verified** | S15: 18 files on disk, status `DRAFT` |
@@ -62,7 +62,7 @@ step is pure UI. X1–X5 are new: Library, LCSC, JLCPCB/DFM, Simulation, AI assi
 |---|---|---|---|
 | F1 | **Simulation cannot be run from the default split layout**: the bottom-panel Simulation section's *Run simulation* button sits under the PCB view (same overlap as O2 below); WebDriver gets `element click intercepted`. | `18-X4.png` | desktop layout |
 | F2 | **Toolbar "Simulate" is disabled** with "Not implemented: no SPICE integration yet" while *Simulation › Run simulation…* opens a working ngspice panel. Contradictory UI. | `18-X4.png` toolbar; `Workspace.tsx` toolbar item `sim` | desktop shell |
-| F3 | **Manufacturing side panel overflows**: the JLCPCB DFM table spills past the panel header and the window, pushing the status bar out of the 900 px window. | `18-X4.png`, `21-S16.png` | desktop layout |
+| F3 | **Manufacturing side panel overflows**: the Fabricator DFM table spills past the panel header and the window, pushing the status bar out of the 900 px window. | `18-X4.png`, `21-S16.png` | desktop layout |
 | F4 | DRC reports `NO_ERRORS_IN_IMPLEMENTED_CHECKS` with 3 warnings and DRC-008 unchecked (no net currents declarable); see [EVALUATION.md](EVALUATION.md) C1. This run's export stayed `DRAFT` because DFM reported an error. | S14, S15, X3 | `eak-validation` |
 
 

@@ -1,4 +1,4 @@
-//! LCSC catalogue settings and browsing through the desktop command layer, headless. The LCSC
+//! Distributor catalogue settings and browsing through the desktop command layer, headless. The Distributor
 //! API is replaced by a scripted transport; the network is never contacted and no real
 //! credential store is touched.
 
@@ -6,8 +6,8 @@ use eak_desktop::catalogue::{
     categories, search, test_connection, CatalogueQuery, Settings, StoredCredentials,
 };
 use eak_desktop::models::{KeyStore, MemoryKeyStore};
-use eak_manufacturing::lcsc::{Fetch, HttpResponse};
-use eak_manufacturing::lcsc_api::{Catalogue, CredentialSource, LcscApi, PRODUCTION_BASE};
+use eak_manufacturing::distributor::{Fetch, HttpResponse};
+use eak_manufacturing::distributor_api::{Catalogue, CredentialSource, DistributorApi, PRODUCTION_BASE};
 use std::sync::{Arc, Mutex};
 
 const SECRET: &str = "very-secret-value-123";
@@ -65,7 +65,7 @@ fn rig(replies: Vec<Reply>, file: Option<std::path::PathBuf>) -> Rig {
     let keys = Arc::new(MemoryKeyStore::default());
     let settings = Settings::new(keys.clone(), file);
     let seen = Arc::new(Mutex::new(vec![]));
-    let api = LcscApi::new(
+    let api = DistributorApi::new(
         Canned {
             replies: Mutex::new(replies),
             seen: seen.clone(),
@@ -89,7 +89,7 @@ fn query(k: &str) -> CatalogueQuery {
 }
 
 fn tmp(name: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("eak-lcsc-{name}-{}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("eak-distributor-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     d
 }
@@ -114,7 +114,7 @@ fn without_credentials_the_reply_says_what_is_needed_and_carries_no_rows() {
 
 #[test]
 fn saved_credentials_live_only_in_the_key_store_and_never_in_the_view_or_status_file() {
-    let file = tmp("status").join("lcsc-connection.json");
+    let file = tmp("status").join("distributor-connection.json");
     let r = rig(vec![ok(PRODUCTS)], Some(file.clone()));
     r.settings.save("KEY-ABCD1234", SECRET).unwrap();
     assert_eq!(r.keys.get("api-secret").unwrap().as_deref(), Some(SECRET));
@@ -142,7 +142,7 @@ fn saved_credentials_live_only_in_the_key_store_and_never_in_the_view_or_status_
 
 #[test]
 fn a_connection_test_records_success_and_failure_with_the_reason() {
-    let file = tmp("test").join("lcsc-connection.json");
+    let file = tmp("test").join("distributor-connection.json");
     let bad = ok(
         r#"{"code":4003,"message":"Authentication failed: invalid signature","success":false,"result":null}"#,
     );
@@ -181,7 +181,7 @@ fn search_ranks_exact_matches_first_and_reports_why() {
     assert!(data.candidates[0].exact && data.candidates[1].exact);
     let mut exact: Vec<_> = data.candidates[..2]
         .iter()
-        .map(|c| c.record.lcsc_part.clone().unwrap())
+        .map(|c| c.record.distributor_part.clone().unwrap())
         .collect();
     exact.sort();
     assert_eq!(exact, ["C25804", "C77777"]);
@@ -216,7 +216,7 @@ fn manufacturer_and_package_filters_apply_to_the_loaded_page_and_are_counted() {
 }
 
 #[test]
-fn paging_arguments_reach_lcsc_using_the_documented_offset_rule() {
+fn paging_arguments_reach_distributor_using_the_documented_offset_rule() {
     let r = rig(vec![ok(PRODUCTS)], None);
     r.settings.save("KEY-ABCD1234", SECRET).unwrap();
     let mut q = query("resistor");

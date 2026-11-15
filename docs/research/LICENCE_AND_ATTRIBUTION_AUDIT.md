@@ -30,11 +30,11 @@ has been copied into this repository" remains true.
 4. **External tools stay external.** A GPL program (for example Freerouting) or a simulator is only ever
    run as a separate, optional, user-installed process through `eak-runtime/src/process.rs`; it is not
    linked, bundled or required. Bundling any such program needs a separate licence review.
-5. **Data needs provenance too.** Capability tables (JLCPCB limits), stack-up templates or calibration
+5. **Data needs provenance too.** Capability tables (Fabricator limits), stack-up templates or calibration
    data are facts with a source and a date; EAK records them as provenance-tagged data, and only after
    checking the source's terms (the impedance surrogate in `eext-design-rule-generator` was fitted to a
    third-party web calculator; see below).
-6. **No EasyEDA branding.** EAK does not use EasyEDA or JLC names, logos, icons, colour schemes or UI
+6. **No EasyEDA branding.** EAK does not use EasyEDA or Fab names, logos, icons, colour schemes or UI
    assets (directive Part 1, item 11; Part 4.2).
 
 ## The 37 directive repositories
@@ -46,7 +46,7 @@ repos/easyeda/<repo>/license` and in the clone). "Reusable in EAK" applies the p
 | # | Repository | Licence file | Reusable in EAK | Notes from the inspection |
 |---|---|---|---|---|
 | 1 | easyeda-api-skill | **none** | No (unlicensed) | `SKILL.md` front matter says `license: MIT`, but there is no licence file and `package.json` has no licence field |
-| 2 | easyeda-api-sdk | Apache-2.0 | Yes, with attribution | `package.json` and `extension.json` also say Apache-2.0; the typings it depends on (`@jlceda/pro-api-types`) were not inspected |
+| 2 | easyeda-api-sdk | Apache-2.0 | Yes, with attribution | `package.json` and `extension.json` also say Apache-2.0; the typings it depends on (`@fabeda/pro-api-types`) were not inspected |
 | 3 | easyeda-format-skill | MIT ("Copyright (c) 2026 EasyEDA") | Yes, with attribution | JSON Schemas and validator under MIT |
 | 4 | easyeda-eprj3-skill | MIT ("Copyright (c) 2026 easyeda-eprj3-skill contributors") | Yes, with attribution | `package.json` has no licence field |
 | 5 | easyeda-file-format | **none** | No (unlicensed) | Documentation only |
@@ -73,12 +73,12 @@ repos/easyeda/<repo>/license` and in the clone). "Reusable in EAK" applies the p
 | 26 | eext-pad-fanout | Apache-2.0 | Yes, with attribution | |
 | 27 | eext-pcb-component-grouping | Apache-2.0 | Yes, with attribution | |
 | 28 | eext-balance-copper | Apache-2.0 | Yes, with attribution | |
-| 29 | eext-jlc-order-dfm-checker | Apache-2.0 | Code: yes, with attribution. Data: provenance required | Capability numbers come from JLCPCB public process pages; EAK must record source and date and must not treat them as universal rules |
-| 30 | eext-design-rule-generator | Apache-2.0 | Code: yes, with attribution. Data: **do not import** | The impedance model is a surrogate fitted to samples of the JLCPCB web calculator; the terms of that source were not checked; the training pipeline references Python and is not in the repository |
+| 29 | eext-fab-order-dfm-checker | Apache-2.0 | Code: yes, with attribution. Data: provenance required | Capability numbers come from Fabricator public process pages; EAK must record source and date and must not treat them as universal rules |
+| 30 | eext-design-rule-generator | Apache-2.0 | Code: yes, with attribution. Data: **do not import** | The impedance model is a surrogate fitted to samples of the Fabricator web calculator; the terms of that source were not checked; the training pipeline references Python and is not in the repository |
 | 31 | eext-netlist-explorer | Apache-2.0 | Yes, with attribution | |
 | 32 | eext-bom-compare | Apache-2.0 | Yes, with attribution | Depends on `jschardet`, `papaparse`, `xlsx`; test BOM samples have recorded sources (`tests/data/SOURCES.md`) |
 | 33 | eext-export-gencad | Apache-2.0 | Yes, with attribution | Includes the GenCAD 1.4 specification (`docs/GenCAD-Specification-v1.4.{md,pdf}`) whose own licence is not stated |
-| 34 | eext-simulation-with-ngspice | BSD-3-Clause ("Copyright (c) 2026, chensiyu and contributors"); GitHub reports NOASSERTION | **No** (mixed bundle) | `THIRD_PARTY_NOTICES.md` and `licenses/` (16 texts) list ECharts, zrender, Lucide, JSZip, pako and others. The bundled ngspice 46 is "Modified BSD" with exceptions (`KLU`, `numparam`, `tclspice` LGPL; `osdi` MPL-2.0; `xspice/icm/table` GPLv2-or-newer, and `table.cm` is in the loader's code-model list). The sharedspice wrapper sources in `wasm-build/sharedspice-wrapper/` carry GPL-3.0-or-later headers ("Modified (C) 2026 by EasyEDA & JLC Technology Group"), so the compiled WebAssembly contains GPL code although the repository claims BSD-3-Clause overall (checked against the clone) |
+| 34 | eext-simulation-with-ngspice | BSD-3-Clause ("Copyright (c) 2026, chensiyu and contributors"); GitHub reports NOASSERTION | **No** (mixed bundle) | `THIRD_PARTY_NOTICES.md` and `licenses/` (16 texts) list ECharts, zrender, Lucide, JSZip, pako and others. The bundled ngspice 46 is "Modified BSD" with exceptions (`KLU`, `numparam`, `tclspice` LGPL; `osdi` MPL-2.0; `xspice/icm/table` GPLv2-or-newer, and `table.cm` is in the loader's code-model list). The sharedspice wrapper sources in `wasm-build/sharedspice-wrapper/` carry GPL-3.0-or-later headers ("Modified (C) 2026 by EasyEDA & Fab Technology Group"), so the compiled WebAssembly contains GPL code although the repository claims BSD-3-Clause overall (checked against the clone) |
 | 35 | eext-simulation-with-ltspice | Apache-2.0 | n/a | README only; LTspice is proprietary freeware |
 | 36 | easyeda-simulation-engine | **AGPL-3.0** | **No** | `copyright.txt`: SimulIDE-derived files AGPL-3.0, others GPL-3.0; commits Windows binaries (`ngspice.dll`, MinGW runtime DLLs) |
 | 37 | eext-export-design-report | Apache-2.0 | Yes, with attribution | |
@@ -119,7 +119,7 @@ The full list with metadata is the appendix of the [ecosystem audit](EASYEDA_ECO
 | tracespace | repo 12 | MIT per the bundled About dialog (not verified at the source) | Concepts only; EAK writes its own Gerber reader |
 | InteractiveHtmlBom | repo 13 | not reproduced in repo 13 | Concepts only |
 | LeaferJS | repos 9-13 | not inspected | Not used (EAK renders with SVG) |
-| JLCPCB capability data | repo 29 | public web pages; terms not checked | Provenance-tagged fabrication-profile data only after checking terms |
+| Fabricator capability data | repo 29 | public web pages; terms not checked | Provenance-tagged fabrication-profile data only after checking terms |
 
 ## Attribution in EAK
 

@@ -249,7 +249,7 @@ pub struct Snapshot {
 pub enum Check {
     Erc,
     Drc,
-    /// Design-for-manufacture against the built-in JLCPCB standard profile.
+    /// Design-for-manufacture against the built-in Fabricator standard profile.
     Dfm,
 }
 
@@ -611,7 +611,7 @@ pub fn run_check(s: &Session, check: Check) -> Result<CheckResult, String> {
     let report = match check {
         Check::Erc => erc::run(&p),
         Check::Drc => drc::run(&p),
-        Check::Dfm => eak_validation::dfm::run(&p, &eak_validation::dfm::jlcpcb_standard()),
+        Check::Dfm => eak_validation::dfm::run(&p, &eak_validation::dfm::fabricator_standard()),
     };
     let json = serde_json::to_string_pretty(&report).map_err(|err| err.to_string())?;
     s.with_engine_at(&key, |e| {
@@ -916,7 +916,7 @@ pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
         erc::run(&p),
         drc::run(&p),
         eak_validation::mech::run(&p),
-        eak_validation::dfm::run(&p, &eak_validation::dfm::jlcpcb_standard()),
+        eak_validation::dfm::run(&p, &eak_validation::dfm::fabricator_standard()),
     ];
     let mut evidence = Vec::with_capacity(reports.len());
     for r in &reports {
@@ -972,10 +972,10 @@ pub const IPC_COMMANDS: [&str; 72] = [
     "route_step",
     "parts_search",
     "parts_import",
-    "lcsc_settings_get",
-    "lcsc_settings_save",
-    "lcsc_settings_clear",
-    "lcsc_test_connection",
+    "distributor_settings_get",
+    "distributor_settings_save",
+    "distributor_settings_clear",
+    "distributor_test_connection",
     "catalogue_categories",
     "catalogue_manufacturers",
     "catalogue_search",
@@ -989,7 +989,7 @@ pub const IPC_COMMANDS: [&str; 72] = [
     "assembly_attest",
     "assembly_import_parts_file",
     "manufacturing_preview",
-    "jlcpcb_prepare",
+    "fabricator_prepare",
     "library_components",
     "domain_classification",
     "intelligence_summary",
@@ -1316,7 +1316,7 @@ pub fn run() {
             }
             app.manage(ai::AiState::default());
             app.manage(terminal_state(app));
-            // Non-secret LCSC connection status lives beside the model settings; the LCSC API
+            // Non-secret Distributor connection status lives beside the model settings; the Distributor API
             // key and secret go to the OS credential store only.
             if let Ok(dir) = app.path().app_config_dir() {
                 catalogue::init(&dir);
@@ -1381,10 +1381,10 @@ pub fn run() {
             ai::cmd::ai_rollback,
             parts::cmd::parts_search,
             parts::cmd::parts_import,
-            catalogue::cmd::lcsc_settings_get,
-            catalogue::cmd::lcsc_settings_save,
-            catalogue::cmd::lcsc_settings_clear,
-            catalogue::cmd::lcsc_test_connection,
+            catalogue::cmd::distributor_settings_get,
+            catalogue::cmd::distributor_settings_save,
+            catalogue::cmd::distributor_settings_clear,
+            catalogue::cmd::distributor_test_connection,
             catalogue::cmd::catalogue_categories,
             catalogue::cmd::catalogue_manufacturers,
             catalogue::cmd::catalogue_search,
@@ -1398,7 +1398,7 @@ pub fn run() {
             parts::cmd::assembly_attest,
             parts::cmd::assembly_import_parts_file,
             parts::cmd::manufacturing_preview,
-            parts::cmd::jlcpcb_prepare,
+            parts::cmd::fabricator_prepare,
             workspace::cmd::open_projects,
             workspace::cmd::switch_project,
             workspace::cmd::close_project_by_id,

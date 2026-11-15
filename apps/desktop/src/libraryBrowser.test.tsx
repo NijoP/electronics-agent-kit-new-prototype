@@ -20,7 +20,7 @@ const def = (id: string): ComponentDef => ({
   default_value: "10k",
   manufacturer: "Mine Co",
   mpn: "R-1",
-  lcsc: null,
+  distributor: null,
   datasheet: null,
   symbol: {
     pins: [
@@ -56,7 +56,7 @@ const entry = (id: string, scope: LibraryEntry2["scope"], favourite = false): Li
   unverified_ratings: 1,
   has_datasheet: false,
   in_project: false,
-  supplier: { lcsc: "C25804", stock: 42, as_of_unix_s: 1_700_000_000 },
+  supplier: { distributor: "C25804", stock: 42, as_of_unix_s: 1_700_000_000 },
 });
 
 const browse = (): LibraryBrowse => ({

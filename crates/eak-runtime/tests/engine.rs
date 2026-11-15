@@ -380,12 +380,12 @@ fn sqlite_index_records_projects_and_events() {
 
 // ---- Phase 5: library properties, footprint assignment, placement
 
-fn props(id: &str, mfr: Option<&str>, mpn: Option<&str>, lcsc: Option<&str>) -> C {
+fn props(id: &str, mfr: Option<&str>, mpn: Option<&str>, distributor: Option<&str>) -> C {
     C::SetComponentProperties {
         component_id: id.into(),
         manufacturer: mfr.map(Into::into),
         mpn: mpn.map(Into::into),
-        lcsc: lcsc.map(Into::into),
+        distributor: distributor.map(Into::into),
         datasheet: None,
     }
 }
@@ -426,7 +426,7 @@ fn set_component_properties_edits_fields_and_preserves_provenance() {
     let after = &e.project().library["R_0603"];
     assert_eq!(after.manufacturer.as_deref(), Some("Yageo"));
     assert_eq!(after.mpn.as_deref(), Some("RC0603FR-0710KL"));
-    assert_eq!(after.lcsc.as_deref(), Some("C25804"));
+    assert_eq!(after.distributor.as_deref(), Some("C25804"));
     // Provenance, ratings, geometry and pin map are untouched.
     assert_eq!(after.provenance, before.provenance);
     assert_eq!(after.ratings, before.ratings);

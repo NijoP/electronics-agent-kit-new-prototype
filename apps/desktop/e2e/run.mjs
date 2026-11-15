@@ -429,7 +429,7 @@ try {
     });
   }
 
-  // ---- Extended panels (v0.1.3): Library, LCSC, JLCPCB/DFM, Simulation, AI assistant ----
+  // ---- Extended panels (v0.1.3): Library, Distributor, Fabricator/DFM, Simulation, AI assistant ----
   const sideView = async (label) => {
     const b = await browser.$(`nav[aria-label="Activity bar"] button[aria-label="${label}"]`);
     await b.waitForClickable({ timeout: 10000 });
@@ -450,7 +450,7 @@ try {
     return `Library / Parts panel open; query "0603" lists matching entries; ${previews} symbol/footprint preview(s) rendered`;
   });
 
-  await step("X2", "LCSC part search (Parts panel, live public catalogue)", "UI", async () => {
+  await step("X2", "Distributor part search (Parts panel, live public catalogue)", "UI", async () => {
     const form = await browser.$('section[aria-label="Parts search"] form');
     await form.$("input").setValue("C25804");
     await form.$("button=Search").click();
@@ -459,22 +459,22 @@ try {
       async () => {
         state = await browser.execute(() => {
           const s = document.querySelector('section[aria-label="Parts search"]');
-          const rows = s?.querySelectorAll('table[aria-label="LCSC results"] tbody tr').length ?? 0;
+          const rows = s?.querySelectorAll('table[aria-label="Distributor results"] tbody tr').length ?? 0;
           const alert = s?.querySelector('[role="alert"]')?.textContent ?? "";
           return rows ? `results:${rows}` : alert ? `alert:${alert}` : "";
         });
         return state !== "";
       },
-      "LCSC search showed neither results nor an error",
+      "Distributor search showed neither results nor an error",
       30000,
     );
     // Either outcome is honest UI; a refusal is reported, never replaced by invented rows.
     return state.startsWith("results:")
-      ? `LCSC returned ${state.slice(8)} row(s) for C25804`
-      : `LCSC answered with an explicit error shown to the user: "${state.slice(6).trim()}" (no rows invented)`;
+      ? `Distributor returned ${state.slice(8)} row(s) for C25804`
+      : `Distributor answered with an explicit error shown to the user: "${state.slice(6).trim()}" (no rows invented)`;
   });
 
-  await step("X3", "JLCPCB prep: DFM check + BOM/DFM tables + bundle", "UI", async () => {
+  await step("X3", "Fabricator prep: DFM check + BOM/DFM tables + bundle", "UI", async () => {
     await clickButton("header.toolbar", "Run DFM");
     await waitFor(async () => /ran on revision/i.test(await statusMessage()), "DFM did not report in the status bar");
     const dfm = (await ipc("run_check", { check: "dfm" })).report;
@@ -484,9 +484,9 @@ try {
     await sec.$('table[aria-label="Bill of materials"]').waitForDisplayed({ timeout: 15000 });
     const bomRows = (await sec.$$('table[aria-label="Bill of materials"] tbody tr')).length;
     const dfmRows = (await sec.$$('table[aria-label="DFM checks"] tbody tr')).length;
-    await sec.$("button=Generate JLCPCB bundle").click();
+    await sec.$("button=Generate Fabricator bundle").click();
     let msg = "";
-    await waitFor(async () => /JLCPCB bundle prepared for review in/.test((msg = await statusMessage())) || (await sec.$('[role="alert"]').isExisting()), "bundle step did not report", 60000);
+    await waitFor(async () => /Fabricator bundle prepared for review in/.test((msg = await statusMessage())) || (await sec.$('[role="alert"]').isExisting()), "bundle step did not report", 60000);
     const m = msg.match(/prepared for review in (\S+)/);
     if (!m) throw new Error(`bundle failed: ${await sec.$('[role="alert"]').getText()}`);
     const dir = m[1].replace(/[|]$/, "");

@@ -96,16 +96,16 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
         ),
         SetComponentProperties { .. } => (
             D::Library,
-            "Set manufacturer, MPN, LCSC number and datasheet URL of a project library component (null or blank clears a field). Provenance and ratings are unchanged.",
+            "Set manufacturer, MPN, Distributor number and datasheet URL of a project library component (null or blank clears a field). Provenance and ratings are unchanged.",
             obj(
                 &[
                     ("component_id", id("project library component id")),
                     ("manufacturer", nullable(string("manufacturer"))),
                     ("mpn", nullable(string("manufacturer part number"))),
-                    ("lcsc", nullable(string("LCSC part number"))),
+                    ("distributor", nullable(string("Distributor part number"))),
                     ("datasheet", nullable(string("datasheet URL"))),
                 ],
-                &["component_id", "manufacturer", "mpn", "lcsc", "datasheet"],
+                &["component_id", "manufacturer", "mpn", "distributor", "datasheet"],
             ),
         ),
         AssignComponentFootprint { .. } => (
@@ -478,7 +478,7 @@ pub fn command_samples() -> Vec<Command> {
             component_id: "c".into(),
             manufacturer: Some("m".into()),
             mpn: None,
-            lcsc: Some("C1".into()),
+            distributor: Some("C1".into()),
             datasheet: None,
         },
         AssignComponentFootprint {

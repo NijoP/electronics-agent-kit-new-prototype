@@ -7,7 +7,7 @@
     "brandNameEn": "EAK Test Fixtures",
     "encapStandard": "0603",
     "productIntroEn": "SYNTHETIC FIXTURE, not a real part: 10kOhm 1% 100mW thick film resistor 0603",
-    "pdfUrl": "https://datasheet.lcsc.com/fixture/EAKFIX-R0603-10K.pdf",
+    "pdfUrl": "https://distributor.invalid/fixture/EAKFIX-R0603-10K.pdf",
     "stockNumber": 12000,
     "productPriceList": [
       { "ladder": 100, "usdPrice": 0.0012 },

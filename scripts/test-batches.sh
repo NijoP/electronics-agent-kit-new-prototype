@@ -71,7 +71,7 @@ batch light:tsc "${DESK[@]}" npx tsc --noEmit
 batch light:vitest "${DESK[@]}" npx vitest run --pool=forks --maxWorkers="$workers"
 
 # (b) per-crate Rust tests, one crate at a time, smallest first. eak-intelligence includes the
-# LCSC/JLCPCB provider tests; eak-runtime runs with 2 test threads (process tests are timing-
+# Distributor/Fabricator provider tests; eak-runtime runs with 2 test threads (process tests are timing-
 # sensitive under load). eak-desktop is the Tauri IPC crate (links the WebView libraries).
 for crate in eak-core eak-engineering eak-validation eak-manufacturing eak-intelligence eak-runtime eak-desktop; do
   extra=()

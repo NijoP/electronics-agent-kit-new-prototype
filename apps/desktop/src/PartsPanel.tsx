@@ -1,6 +1,6 @@
-// Parts search: the EAK library, records stored with the project, and the LCSC OpenAPI
+// Parts search: the EAK library, records stored with the project, and the Distributor OpenAPI
 // catalogue (credentials, browsing and paging are in CataloguePanel). Import is one engine
-// command carrying the revision this panel last saw. When LCSC cannot be asked the panel says
+// command carrying the revision this panel last saw. When Distributor cannot be asked the panel says
 // why; it never fills the list itself.
 import { useState } from "react";
 import { api, describeError } from "./api";
@@ -19,11 +19,11 @@ function price(r: SourcingRecord): string {
   return b ? `$${b.unit_price} @ ${b.min_quantity}+` : "—";
 }
 
-function Row({ r, onImport, busy }: { r: SourcingRecord; onImport?: (lcsc: string) => void; busy: boolean }) {
-  const lcsc = r.lcsc_part;
+function Row({ r, onImport, busy }: { r: SourcingRecord; onImport?: (distributor: string) => void; busy: boolean }) {
+  const distributor = r.distributor_part;
   return (
     <tr>
-      <td>{lcsc ?? "—"}</td>
+      <td>{distributor ?? "—"}</td>
       <td>{r.mpn ?? "—"}</td>
       <td>{r.manufacturer ?? "—"}</td>
       <td>{r.package ?? "—"}</td>
@@ -39,8 +39,8 @@ function Row({ r, onImport, busy }: { r: SourcingRecord; onImport?: (lcsc: strin
         )}
       </td>
       <td>
-        {onImport && lcsc && (
-          <button type="button" disabled={busy} onClick={() => onImport(lcsc)} aria-label={`Import ${lcsc}`}>
+        {onImport && distributor && (
+          <button type="button" disabled={busy} onClick={() => onImport(distributor)} aria-label={`Import ${distributor}`}>
             Import
           </button>
         )}
@@ -72,15 +72,15 @@ export function PartsPanel({ revision, onImported }: Props) {
       setResult(await api.partsSearch(query));
     });
 
-  const importPart = (lcsc: string) =>
+  const importPart = (distributor: string) =>
     run(async () => {
-      const r = await api.partsImport(revision, lcsc);
+      const r = await api.partsImport(revision, distributor);
       if (!r.response.accepted) {
         setNote(`Import rejected: ${r.response.error ? describeError(r.response.error) : "unknown error"}`);
         return;
       }
-      setNote(`Imported ${lcsc} as ${r.component_id}. ${r.notes.join(" ")}`);
-      await onImported(`Imported ${lcsc} into the project library (revision ${r.response.revision_after})`);
+      setNote(`Imported ${distributor} as ${r.component_id}. ${r.notes.join(" ")}`);
+      await onImported(`Imported ${distributor} into the project library (revision ${r.response.revision_after})`);
     });
 
   const [catalogueOpen, setCatalogueOpen] = useState(false);
@@ -96,7 +96,7 @@ export function PartsPanel({ revision, onImported }: Props) {
         }}
       >
         <label>
-          LCSC part number or keyword
+          Distributor part number or keyword
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="C25804" />
         </label>
         <button type="submit" disabled={busy || query.trim() === ""}>
@@ -104,19 +104,19 @@ export function PartsPanel({ revision, onImported }: Props) {
         </button>
       </form>
       <p className="muted">
-        Only the text you type is sent to LCSC, signed with your own API credentials. Stock and prices are a snapshot, not a quote.
+        Only the text you type is sent to Distributor, signed with your own API credentials. Stock and prices are a snapshot, not a quote.
       </p>
       {note && <p role="status">{note}</p>}
       {live && live.status !== "ok" && (
         <p role="alert" className="error">
-          LCSC: {live.message}
+          Distributor: {live.message}
         </p>
       )}
       {live && live.records.length > 0 && (
-        <table aria-label="LCSC results">
+        <table aria-label="Distributor results">
           <thead>
             <tr>
-              <th>LCSC #</th>
+              <th>Distributor #</th>
               <th>MPN</th>
               <th>Maker</th>
               <th>Package</th>
@@ -146,8 +146,8 @@ export function PartsPanel({ revision, onImported }: Props) {
         </>
       )}
       <details open={catalogueOpen} onToggle={(e) => setCatalogueOpen(e.currentTarget.open)}>
-        <summary>LCSC catalogue: credentials, categories, manufacturers, paged search</summary>
-        {catalogueOpen && <CataloguePanel busy={busy} onImport={(lcsc) => void importPart(lcsc)} />}
+        <summary>Distributor catalogue: credentials, categories, manufacturers, paged search</summary>
+        {catalogueOpen && <CataloguePanel busy={busy} onImport={(distributor) => void importPart(distributor)} />}
       </details>
       <details open={libraryOpen} onToggle={(e) => setLibraryOpen(e.currentTarget.open)}>
         <summary>Component library: built-in, project, personal and open-source scopes</summary>
@@ -162,7 +162,7 @@ export function PartsPanel({ revision, onImported }: Props) {
                 {h.id}{" "}
                 <span className="muted">
                   {h.name}
-                  {h.lcsc ? ` · ${h.lcsc}` : ""}
+                  {h.distributor ? ` · ${h.distributor}` : ""}
                 </span>
               </li>
             ))}

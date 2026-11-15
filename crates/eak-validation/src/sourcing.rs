@@ -1,4 +1,4 @@
-//! Sourcing checks: library identity, missing data, BOM-to-LCSC mapping and
+//! Sourcing checks: library identity, missing data, BOM-to-Distributor mapping and
 //! symbol / footprint / supplier-record compatibility.
 //!
 //! This report is independent of ERC/DRC/MECH and never gates them: supplier data
@@ -24,29 +24,29 @@ pub enum VerificationState {
     Verified,
 }
 
-/// The supplier-side facts this check needs about one part, keyed by LCSC part number.
+/// The supplier-side facts this check needs about one part, keyed by Distributor part number.
 /// `eak-manufacturing::sourcing::SourcingRecord` produces these; nothing here is inferred.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SupplierPart {
-    pub lcsc: String,
+    pub distributor: String,
     pub mpn: Option<String>,
     pub package: Option<String>,
     pub datasheet_sha256: Option<String>,
     pub state: VerificationState,
 }
 
-/// One BOM line: a component definition at one value, with its LCSC mapping if it has one.
+/// One BOM line: a component definition at one value, with its Distributor mapping if it has one.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BomRow {
     pub component_id: String,
     pub value: String,
     pub refs: Vec<String>,
-    /// `None` = unmapped (no well-formed LCSC part number in the library definition).
-    pub lcsc: Option<String>,
+    /// `None` = unmapped (no well-formed Distributor part number in the library definition).
+    pub distributor: Option<String>,
 }
 
-/// LCSC part numbers are the letter `C` followed by decimal digits.
-pub fn is_lcsc_part_number(s: &str) -> bool {
+/// Distributor part numbers are the letter `C` followed by decimal digits.
+pub fn is_distributor_part_number(s: &str) -> bool {
     let b = s.as_bytes();
     (2..=13).contains(&b.len()) && b[0] == b'C' && b[1..].iter().all(u8::is_ascii_digit)
 }
@@ -68,17 +68,17 @@ pub fn bom_rows(p: &Project) -> Vec<BomRow> {
         .into_iter()
         .map(|((component_id, value), mut refs)| {
             refs.sort();
-            let lcsc = p
+            let distributor = p
                 .library
                 .get(&component_id)
-                .and_then(|d| present(&d.lcsc))
-                .filter(|l| is_lcsc_part_number(l))
+                .and_then(|d| present(&d.distributor))
+                .filter(|l| is_distributor_part_number(l))
                 .map(String::from);
             BomRow {
                 component_id,
                 value,
                 refs,
-                lcsc,
+                distributor,
             }
         })
         .collect()
@@ -148,17 +148,17 @@ fn check_component(
     if mpn.is_none() {
         push("SRC-001", Error, format!("{id} ({refs}): MPN is MISSING"));
     }
-    let lcsc = present(&def.lcsc);
-    match lcsc {
+    let distributor = present(&def.distributor);
+    match distributor {
         None => push(
             "SRC-002",
             Error,
-            format!("{id} ({refs}): LCSC part number is MISSING; BOM row is unmapped"),
+            format!("{id} ({refs}): Distributor part number is MISSING; BOM row is unmapped"),
         ),
-        Some(l) if !is_lcsc_part_number(l) => push(
+        Some(l) if !is_distributor_part_number(l) => push(
             "SRC-002",
             Error,
-            format!("{id} ({refs}): LCSC part number {l:?} is malformed; BOM row is unmapped"),
+            format!("{id} ({refs}): Distributor part number {l:?} is malformed; BOM row is unmapped"),
         ),
         Some(_) => {}
     }
@@ -220,12 +220,12 @@ fn check_component(
 
     // ---- one orderable part has one value
     let values: BTreeSet<&str> = rows.iter().map(|r| r.value.as_str()).collect();
-    if lcsc.is_some() && values.len() > 1 {
+    if distributor.is_some() && values.len() > 1 {
         push(
             "SRC-012",
             Error,
             format!(
-                "{id}: one LCSC part number is used for {} different values ({}); each value needs its own component definition",
+                "{id}: one Distributor part number is used for {} different values ({}); each value needs its own component definition",
                 values.len(),
                 values.into_iter().collect::<Vec<_>>().join(", ")
             ),
@@ -233,14 +233,14 @@ fn check_component(
     }
 
     // ---- supplier record
-    let Some(lcsc) = lcsc.filter(|l| is_lcsc_part_number(l)) else {
+    let Some(distributor) = distributor.filter(|l| is_distributor_part_number(l)) else {
         return;
     };
     let Some(part) = part else {
         push(
             "SRC-005",
             Error,
-            format!("{id} ({refs}): no sourcing record for {lcsc}; the part is UNVERIFIED"),
+            format!("{id} ({refs}): no sourcing record for {distributor}; the part is UNVERIFIED"),
         );
         return;
     };
@@ -248,13 +248,13 @@ fn check_component(
         VerificationState::SearchHit => push(
             "SRC-006",
             Error,
-            format!("{id}: sourcing record for {lcsc} is a search hit only, not a verified part"),
+            format!("{id}: sourcing record for {distributor} is a search hit only, not a verified part"),
         ),
         VerificationState::DatasheetMatched => push(
             "SRC-006",
             Warning,
             format!(
-                "{id}: sourcing record for {lcsc} is datasheet-matched but not reviewer-verified"
+                "{id}: sourcing record for {distributor} is datasheet-matched but not reviewer-verified"
             ),
         ),
         VerificationState::Verified => {}
@@ -263,12 +263,12 @@ fn check_component(
         (_, None) => push(
             "SRC-007",
             Error,
-            format!("{id}: sourcing record for {lcsc} has no MPN (MISSING)"),
+            format!("{id}: sourcing record for {distributor} has no MPN (MISSING)"),
         ),
         (Some(lib), Some(rec)) if !lib.eq_ignore_ascii_case(rec) => push(
             "SRC-007",
             Error,
-            format!("{id}: library MPN {lib:?} differs from sourcing record MPN {rec:?} ({lcsc})"),
+            format!("{id}: library MPN {lib:?} differs from sourcing record MPN {rec:?} ({distributor})"),
         ),
         _ => {}
     }
@@ -277,7 +277,7 @@ fn check_component(
             push(
                 "SRC-008",
                 Error,
-                format!("{id}: sourcing record for {lcsc} has no package (MISSING)"),
+                format!("{id}: sourcing record for {distributor} has no package (MISSING)"),
             );
         }
         Some(pkg) => {
@@ -286,7 +286,7 @@ fn check_component(
                     "SRC-008",
                     Error,
                     format!(
-                        "{id}: footprint {:?} does not match supplier package {pkg:?} ({lcsc}); review against the datasheet",
+                        "{id}: footprint {:?} does not match supplier package {pkg:?} ({distributor}); review against the datasheet",
                         def.footprint.name
                     ),
                 );
@@ -329,7 +329,7 @@ fn check_component(
         push(
             "SRC-011",
             Error,
-            format!("{id}: no datasheet file hash is recorded for {lcsc}; the datasheet was not retrieved"),
+            format!("{id}: no datasheet file hash is recorded for {distributor}; the datasheet was not retrieved"),
         );
     }
 }
@@ -356,17 +356,17 @@ pub fn run(p: &Project, parts: &[SupplierPart]) -> Report {
             .iter()
             .filter(|r| r.component_id == *component_id)
             .collect();
-        let part = present(&def.lcsc).and_then(|l| parts.iter().find(|s| s.lcsc == l));
+        let part = present(&def.distributor).and_then(|l| parts.iter().find(|s| s.distributor == l));
         check_component(def, &own, objects, part, &mut f);
     }
-    let unmapped = rows.iter().filter(|r| r.lcsc.is_none()).count();
+    let unmapped = rows.iter().filter(|r| r.distributor.is_none()).count();
     let rules = vec![
         rule("SRC-001", "Manufacturer part number present", "", "EAK"),
         rule(
             "SRC-002",
-            "BOM row mapped to an LCSC part number",
+            "BOM row mapped to an Distributor part number",
             format!("{} of {} BOM rows unmapped", unmapped, rows.len()),
-            "EAK; LCSC part number format C<digits>",
+            "EAK; Distributor part number format C<digits>",
         ),
         rule("SRC-003", "Datasheet reference present", "", "EAK"),
         rule(
@@ -377,7 +377,7 @@ pub fn run(p: &Project, parts: &[SupplierPart]) -> Report {
         ),
         rule(
             "SRC-005",
-            "Sourcing record exists for the LCSC part number",
+            "Sourcing record exists for the Distributor part number",
             format!("{} sourcing record(s) supplied", parts.len()),
             "EAK",
         ),
@@ -414,7 +414,7 @@ pub fn run(p: &Project, parts: &[SupplierPart]) -> Report {
         rule("SRC-011", "Datasheet file hash recorded", "SHA-256", "EAK"),
         rule(
             "SRC-012",
-            "One LCSC part number per component value",
+            "One Distributor part number per component value",
             "",
             "EAK",
         ),
@@ -425,7 +425,7 @@ pub fn run(p: &Project, parts: &[SupplierPart]) -> Report {
         rules,
         f,
         vec![
-            "Live LCSC / JLCPCB retrieval (no network client in this build; records are supplied offline)".into(),
+            "Live Distributor / Fabricator retrieval (no network client in this build; records are supplied offline)".into(),
             "Datasheet content extraction: ratings, pinout and land-pattern dimensions are not compared against the datasheet".into(),
             "Stock, price and lifecycle (NRND / EOL) checks".into(),
             "Package alias resolution (JEDEC / EIAJ / manufacturer names)".into(),
@@ -479,7 +479,7 @@ mod tests {
 
     fn ldo_part(state: VerificationState) -> SupplierPart {
         SupplierPart {
-            lcsc: "C6186".into(),
+            distributor: "C6186".into(),
             mpn: Some("ams1117-3.3".into()),
             package: Some("SOT-223-3".into()),
             datasheet_sha256: Some("00".repeat(32)),
@@ -488,8 +488,8 @@ mod tests {
     }
 
     #[test]
-    fn lcsc_part_number_format() {
-        assert!(is_lcsc_part_number("C6186"));
+    fn distributor_part_number_format() {
+        assert!(is_distributor_part_number("C6186"));
         for bad in [
             "",
             "C",
@@ -499,7 +499,7 @@ mod tests {
             "C6186x",
             "C12345678901234",
         ] {
-            assert!(!is_lcsc_part_number(bad), "{bad}");
+            assert!(!is_distributor_part_number(bad), "{bad}");
         }
     }
 
@@ -524,7 +524,7 @@ mod tests {
         let p = project(&[("R_0603", "R1", "10k"), ("CONN_1x04_P2.54", "J1", "IO")]);
         let rows = bom_rows(&p);
         assert_eq!(rows.len(), 2);
-        assert!(rows.iter().all(|r| r.lcsc.is_none()));
+        assert!(rows.iter().all(|r| r.distributor.is_none()));
         let r = run(&p, &[]);
         assert_eq!(r.check, "SOURCING");
         assert_eq!(r.outcome, crate::Outcome::Errors);
@@ -544,7 +544,7 @@ mod tests {
     #[test]
     fn a_mapped_part_without_a_record_or_with_a_search_hit_is_an_error() {
         let p = project(&[("AMS1117-3.3_SOT-223", "U1", "AMS1117-3.3")]);
-        assert_eq!(bom_rows(&p)[0].lcsc.as_deref(), Some("C6186"));
+        assert_eq!(bom_rows(&p)[0].distributor.as_deref(), Some("C6186"));
         assert!(has(&run(&p, &[]), "SRC-005", Severity::Error));
         let hit = run(&p, &[ldo_part(VerificationState::SearchHit)]);
         assert!(has(&hit, "SRC-006", Severity::Error));
@@ -587,16 +587,16 @@ mod tests {
     fn symbol_footprint_inconsistency_and_shared_part_numbers_are_reported() {
         let mut p = project(&[("R_0603", "R1", "10k"), ("R_0603", "R2", "330")]);
         let def = p.library.get_mut("R_0603").unwrap();
-        def.lcsc = Some("C25804".into());
+        def.distributor = Some("C25804".into());
         def.pin_map.remove("2");
         let r = run(&p, &[]);
         assert!(has(&r, "SRC-012", Severity::Error));
         // Pin 2 unmapped (structural error) and pad 2 unreferenced (warning).
         assert!(has(&r, "SRC-009", Severity::Error));
         assert!(has(&r, "SRC-009", Severity::Warning));
-        // Malformed LCSC numbers leave the row unmapped.
-        p.library.get_mut("R_0603").unwrap().lcsc = Some("25804".into());
-        assert!(bom_rows(&p).iter().all(|r| r.lcsc.is_none()));
+        // Malformed Distributor numbers leave the row unmapped.
+        p.library.get_mut("R_0603").unwrap().distributor = Some("25804".into());
+        assert!(bom_rows(&p).iter().all(|r| r.distributor.is_none()));
         assert!(has(&run(&p, &[]), "SRC-002", Severity::Error));
     }
 }

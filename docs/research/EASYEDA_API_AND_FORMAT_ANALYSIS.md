@@ -4,7 +4,7 @@ How EasyEDA Pro structures documents, primitives, layers, events, validation and
 public repositories show it, and what that means for EAK. Sources are the group A repositories of the
 [ecosystem audit](EASYEDA_ECOSYSTEM_AUDIT.md) (sections 1-8), plus groups B and E where noted. The
 editor itself is closed source: the API facts come from the generated reference in
-`easyeda-api-skill/references/` (the typings package `@jlceda/pro-api-types` is not in any inspected
+`easyeda-api-skill/references/` (the typings package `@fabeda/pro-api-types` is not in any inspected
 repository) and the format facts from `easyeda-format-skill`, `easyeda-file-format` and the working
 reader/writer in `easyeda-eprj3-skill`. Nothing here was verified by running EasyEDA.
 
@@ -129,8 +129,8 @@ clock would only matter for multi-user collaboration, which is a future capabili
   (`easyeda-file-format/en/pcb/rule.md`).
 - The only published, coded rule tables are in `easyeda-eprj3-skill` (ERC E001-E008 and W001-W003,
   layout L001-L010, copper DRC D001-D012, each with a fix string; rules that do not apply to a
-  placed-only board are skipped and reported) and `eext-jlc-order-dfm-checker` (18 PCB and 7 SMT
-  checks against JLCPCB capability tables).
+  placed-only board are skipped and reported) and `eext-fab-order-dfm-checker` (18 PCB and 7 SMT
+  checks against Fabricator capability tables).
 
 **EAK:** EAK's reports are stronger contracts (revision and input hash, `not_implemented`,
 `limitations`, measured vs required, stable finding ids). Use the EasyEDA rule taxonomy as a checklist:

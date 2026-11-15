@@ -1,12 +1,12 @@
-//! JLCPCB manufacturing preparation (a provider separate from LCSC sourcing).
+//! Fabricator manufacturing preparation (a provider separate from Distributor sourcing).
 //!
 //! Produces, for human review only:
-//! * a JLCPCB-format assembly BOM (`Comment, Designator, Footprint, LCSC Part #`) and a
+//! * a Fabricator-format assembly BOM (`Comment, Designator, Footprint, Distributor Part #`) and a
 //!   review BOM with manufacturer, MPN and the stored stock/price snapshot;
-//! * a JLCPCB-format pick-and-place file (`Designator, Mid X, Mid Y, Layer, Rotation`)
+//! * a Fabricator-format pick-and-place file (`Designator, Mid X, Mid Y, Layer, Rotation`)
 //!   holding the surface-mount footprints;
 //! * a Gerber + Excellon `.zip` made from the files `compile` generated and self-validated;
-//! * a capability / DFM rule check against JLCPCB's published 2-layer limits, in which every
+//! * a capability / DFM rule check against Fabricator's published 2-layer limits, in which every
 //!   rule that cannot be evaluated is reported as `not_checked`, never as a pass.
 //!
 //! Nothing is uploaded and no order is placed or prepared for placement. The output is
@@ -21,15 +21,15 @@ use eak_core::geom::{
     segments_intersect, to_mm, Rect,
 };
 use eak_core::{CopperLayer, PadKind, Point, Project, Side};
-use eak_validation::sourcing::is_lcsc_part_number;
+use eak_validation::sourcing::is_distributor_part_number;
 use eak_validation::Report;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
-/// JLCPCB limits for a 2-layer FR-4 board with 1 oz outer copper, in millimetres.
+/// Fabricator limits for a 2-layer FR-4 board with 1 oz outer copper, in millimetres.
 ///
-/// Read from JLCPCB's published capability page on `verified_on`. A profile without a
+/// Read from Fabricator's published capability page on `verified_on`. A profile without a
 /// source and a verification date would be UNVERIFIED and unusable; the values below are
 /// the page's own numbers, not EAK defaults.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,9 +61,9 @@ pub struct Profile {
 impl Profile {
     pub fn two_layer_1oz() -> Profile {
         Profile {
-            id: "jlcpcb-fr4-2layer-1oz".into(),
+            id: "fabricator-fr4-2layer-1oz".into(),
             version: "2026-11-14".into(),
-            source_url: "https://jlcpcb.com/capabilities/pcb-capabilities".into(),
+            source_url: "https://fabricator.invalid/capabilities/pcb-capabilities".into(),
             verified_on: "2026-11-14".into(),
             verified_by: "EAK worker, read of the published page text (not a fabricator DFM)"
                 .into(),
@@ -95,7 +95,7 @@ impl Profile {
 #[serde(rename_all = "snake_case")]
 pub enum Status {
     Pass,
-    /// Within the hard limit but outside JLCPCB's recommendation, or a soft finding.
+    /// Within the hard limit but outside Fabricator's recommendation, or a soft finding.
     Warn,
     Fail,
     /// The rule exists but this software cannot evaluate it. Never a pass.
@@ -329,7 +329,7 @@ fn not_checked(id: &str, title: &str, why: &str) -> DfmCheck {
         id: id.into(),
         title: title.into(),
         status: Status::NotChecked,
-        required: "per JLCPCB capability page".into(),
+        required: "per Fabricator capability page".into(),
         measured: "not evaluated".into(),
         detail: vec![why.into()],
     }
@@ -342,10 +342,10 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     let edges = outline_edges(p);
     let outline_ok = p.pcb.board.outline.len() >= 3;
 
-    // JLC-001 board size
+    // Fab-001 board size
     {
         let mut c = DfmCheck {
-            id: "JLC-001".into(),
+            id: "Fab-001".into(),
             title: "Board outline and dimensions".into(),
             status: Status::Fail,
             required: format!(
@@ -377,13 +377,13 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
         checks.push(c);
     }
 
-    // JLC-002 stackup
+    // Fab-002 stackup
     let st = &p.pcb.board.stackup;
     let layers = st.copper_layers();
     let top_oz = st.copper_oz(CopperLayer::Top).unwrap_or(0.0);
     let bottom_oz = st.copper_oz(CopperLayer::Bottom).unwrap_or(0.0);
     checks.push(DfmCheck {
-        id: "JLC-002".into(),
+        id: "Fab-002".into(),
         title: "Layer count and copper weight match the profile".into(),
         status: if layers == profile.copper_layers as usize
             && (top_oz - profile.outer_copper_oz).abs() < 1e-9
@@ -402,15 +402,15 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
             vec![]
         } else {
             vec![format!(
-                "this profile holds JLCPCB limits for {} layers only; limits for a {layers}-layer build-up are not loaded, so the checks below are not valid for this board",
+                "this profile holds Fabricator limits for {} layers only; limits for a {layers}-layer build-up are not loaded, so the checks below are not valid for this board",
                 profile.copper_layers
             )]
         },
     });
 
-    // JLC-010 track width
+    // Fab-010 track width
     let mut a = Acc::new(
-        "JLC-010",
+        "Fab-010",
         "Minimum track width",
         fmt_mm(profile.min_track_mm),
     );
@@ -424,9 +424,9 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     }
     checks.push(a.done());
 
-    // JLC-011 track-to-track spacing, different nets, same layer
+    // Fab-011 track-to-track spacing, different nets, same layer
     let mut a = Acc::new(
-        "JLC-011",
+        "Fab-011",
         "Track-to-track spacing (different nets)",
         fmt_mm(profile.min_track_space_mm),
     );
@@ -449,9 +449,9 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     }
     checks.push(a.done());
 
-    // JLC-012 pad-to-track and via-to-track
+    // Fab-012 pad-to-track and via-to-track
     let mut a = Acc::new(
-        "JLC-012",
+        "Fab-012",
         "Pad / via to track spacing (different nets)",
         fmt_mm(profile.min_pad_to_track_mm),
     );
@@ -486,9 +486,9 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     }
     checks.push(a.done());
 
-    // JLC-013 SMD pad-to-pad
+    // Fab-013 SMD pad-to-pad
     let mut a = Acc::new(
-        "JLC-013",
+        "Fab-013",
         "SMD pad-to-pad spacing (different nets)",
         fmt_mm(profile.min_smd_pad_to_pad_mm),
     );
@@ -509,9 +509,9 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     }
     checks.push(a.done());
 
-    // JLC-014 smallest SMD pad
+    // Fab-014 smallest SMD pad
     let mut a = Acc::new(
-        "JLC-014",
+        "Fab-014",
         "Smallest SMD pad",
         format!("{0:.2} x {0:.2} mm", profile.min_smd_pad_mm),
     );
@@ -525,9 +525,9 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     }
     checks.push(a.done());
 
-    // JLC-020 drills
+    // Fab-020 drills
     let mut a = Acc::new(
-        "JLC-020",
+        "Fab-020",
         "Drill diameter (vias and plated holes)",
         format!(
             ">= {} (recommended plated hole >= {})",
@@ -555,9 +555,9 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     }
     checks.push(a.done());
 
-    // JLC-021 annular rings
+    // Fab-021 annular rings
     let mut a = Acc::new(
-        "JLC-021",
+        "Fab-021",
         "Annular ring",
         format!(
             "via >= {}, plated pad >= {} (recommended {})",
@@ -586,9 +586,9 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     }
     checks.push(a.done());
 
-    // JLC-022 hole-to-hole
+    // Fab-022 hole-to-hole
     let mut a = Acc::new(
-        "JLC-022",
+        "Fab-022",
         "Hole-to-hole spacing (edge to edge)",
         format!(
             "via-via {}, with a plated pad hole {}",
@@ -627,9 +627,9 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     }
     checks.push(a.done());
 
-    // JLC-030 copper to board edge
+    // Fab-030 copper to board edge
     let mut a = Acc::new(
-        "JLC-030",
+        "Fab-030",
         "Copper to routed board edge",
         fmt_mm(profile.min_copper_to_edge_mm),
     );
@@ -672,16 +672,16 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     }
     checks.push(a.done());
 
-    // JLC-040..042 assembly data
+    // Fab-040..042 assembly data
     let assembled: Vec<&BomLine> = bom.iter().filter(|l| l.assembled()).collect();
     let missing: Vec<String> = assembled
         .iter()
-        .filter(|l| l.lcsc.is_none())
+        .filter(|l| l.distributor.is_none())
         .map(|l| format!("{} ({})", l.designators.join(","), l.value))
         .collect();
     checks.push(DfmCheck {
-        id: "JLC-040".into(),
-        title: "Every assembled BOM line has an LCSC part number".into(),
+        id: "Fab-040".into(),
+        title: "Every assembled BOM line has an Distributor part number".into(),
         status: if assembled.is_empty() {
             Status::NotChecked
         } else if missing.is_empty() {
@@ -689,7 +689,7 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
         } else {
             Status::Fail
         },
-        required: "LCSC Part # on each surface-mount line".into(),
+        required: "Distributor Part # on each surface-mount line".into(),
         measured: if assembled.is_empty() {
             "no placed surface-mount parts".into()
         } else {
@@ -700,15 +700,15 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     let malformed: Vec<String> = bom
         .iter()
         .filter_map(|l| {
-            l.lcsc
+            l.distributor
                 .as_deref()
-                .filter(|c| !is_lcsc_part_number(c))
+                .filter(|c| !is_distributor_part_number(c))
                 .map(|c| format!("{c:?} on {}", l.designators.join(",")))
         })
         .collect();
     checks.push(DfmCheck {
-        id: "JLC-041".into(),
-        title: "LCSC part numbers are well formed".into(),
+        id: "Fab-041".into(),
+        title: "Distributor part numbers are well formed".into(),
         status: if malformed.is_empty() {
             Status::Pass
         } else {
@@ -724,7 +724,7 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
         .map(|l| l.designators.join(","))
         .collect();
     checks.push(DfmCheck {
-        id: "JLC-042".into(),
+        id: "Fab-042".into(),
         title: "Every schematic part has a footprint on the PCB".into(),
         status: if unplaced.is_empty() {
             Status::Pass
@@ -739,34 +739,34 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
     // Rules this software does not evaluate. Listed so they cannot be mistaken for a pass.
     for (id, title, why) in [
         (
-            "JLC-050",
+            "Fab-050",
             "Basic vs extended assembly parts and fees",
-            "needs JLCPCB's assembly parts library, which has no public machine-readable access",
+            "needs Fabricator's assembly parts library, which has no public machine-readable access",
         ),
         (
-            "JLC-051",
+            "Fab-051",
             "CPL rotation and polarity per package",
-            "JLCPCB applies per-package rotation offsets that EAK does not hold; check every part in JLCPCB's viewer",
+            "Fabricator applies per-package rotation offsets that EAK does not hold; check every part in Fabricator's viewer",
         ),
         (
-            "JLC-052",
+            "Fab-052",
             "Silkscreen line width, text height and pad clearance",
             "silkscreen geometry is not measured",
         ),
         (
-            "JLC-053",
+            "Fab-053",
             "Soldermask bridge and opening clearance",
             "soldermask geometry is not measured",
         ),
         (
-            "JLC-054",
+            "Fab-054",
             "Plated-slot, NPTH and castellation rules",
             "the EAK-IR has no slots, NPTH or castellated holes",
         ),
         (
-            "JLC-055",
+            "Fab-055",
             "Copper pour, thermal and acid-trap rules",
-            "zone fills are not checked against JLCPCB rules",
+            "zone fills are not checked against Fabricator rules",
         ),
     ] {
         checks.push(not_checked(id, title, why));
@@ -787,7 +787,7 @@ pub fn dfm(p: &Project, bom: &[BomLine], profile: &Profile) -> DfmReport {
         warnings,
         not_checked,
         limitations: vec![
-            "Limits are JLCPCB's published numbers for 2-layer 1 oz FR-4 read on the date above; JLCPCB can change them and applies its own DFM at order time.".into(),
+            "Limits are Fabricator's published numbers for 2-layer 1 oz FR-4 read on the date above; Fabricator can change them and applies its own DFM at order time.".into(),
             "Circular and oval pads are measured as their bounding rectangle (conservative).".into(),
             "Copper pours are not included in spacing checks; only tracks, vias and pads are.".into(),
             "Rules marked not_checked are not evaluated and are not passes.".into(),
@@ -802,7 +802,7 @@ fn stem(p: &Project) -> String {
         .collect()
 }
 
-/// JLCPCB pick-and-place file: surface-mount footprints only.
+/// Fabricator pick-and-place file: surface-mount footprints only.
 pub fn cpl_csv(p: &Project) -> String {
     let mut rows: Vec<_> = p
         .pcb
@@ -872,7 +872,7 @@ fn sha(data: &[u8]) -> String {
     format!("{:x}", Sha256::digest(data))
 }
 
-/// Write the JLCPCB preparation bundle into `out_dir` (created if absent). Nothing leaves
+/// Write the Fabricator preparation bundle into `out_dir` (created if absent). Nothing leaves
 /// the machine; the caller chooses where the files go.
 pub fn prepare(
     p: &Project,
@@ -883,8 +883,8 @@ pub fn prepare(
     prepare_with(p, reports, records, &[], out_dir)
 }
 
-/// [`prepare`] with the project's JLCPCB assembly records. A part without a record stays
-/// `Unknown` and is reported; nothing is inferred from the LCSC listing.
+/// [`prepare`] with the project's Fabricator assembly records. A part without a record stays
+/// `Unknown` and is reported; nothing is inferred from the Distributor listing.
 pub fn prepare_with(
     p: &Project,
     reports: &[&Report],
@@ -898,7 +898,7 @@ pub fn prepare_with(
     let profile = Profile::two_layer_1oz();
     let dfm_report = dfm(p, &lines, &profile);
     // The generic package supplies the Gerber/Excellon files, already self-validated and
-    // hashed; the JLCPCB files below are derived from the same project revision.
+    // hashed; the Fabricator files below are derived from the same project revision.
     let pkg_dir = out_dir.join("eak-package");
     let package = compile(p, reports, &pkg_dir)?;
     let stem = stem(p);
@@ -915,14 +915,14 @@ pub fn prepare_with(
     let zip = crate::zip::stored(&zip_entries)?;
     let dfm_json = serde_json::to_string_pretty(&dfm_report).map_err(|e| e.to_string())?;
     let outputs: Vec<(String, &str, Vec<u8>)> = vec![
-        (format!("{stem}-JLCPCB-gerbers.zip"), "gerber_zip", zip),
+        (format!("{stem}-Fabricator-gerbers.zip"), "gerber_zip", zip),
         (
-            format!("{stem}-JLCPCB-BOM.csv"),
+            format!("{stem}-Fabricator-BOM.csv"),
             "bom",
-            bom::jlcpcb_csv(&lines).into_bytes(),
+            bom::fabricator_csv(&lines).into_bytes(),
         ),
         (
-            format!("{stem}-JLCPCB-CPL.csv"),
+            format!("{stem}-Fabricator-CPL.csv"),
             "cpl",
             cpl_csv(p).into_bytes(),
         ),
@@ -932,7 +932,7 @@ pub fn prepare_with(
             bom::detail_csv(&lines).into_bytes(),
         ),
         (
-            "jlcpcb-dfm-report.json".into(),
+            "fabricator-dfm-report.json".into(),
             "dfm",
             dfm_json.into_bytes(),
         ),
@@ -956,18 +956,18 @@ pub fn prepare_with(
         project_name: p.name.clone(),
         revision: p.revision,
         generator: format!(
-            "eak-manufacturing {} (jlcpcb prep)",
+            "eak-manufacturing {} (fabricator prep)",
             env!("CARGO_PKG_VERSION")
         ),
         generated_ms: eak_runtime::store::now_ms(),
-        provider: "JLCPCB (preparation only: no upload, no quote, no order)".into(),
+        provider: "Fabricator (preparation only: no upload, no quote, no order)".into(),
         statement: if blocked {
             format!(
                 "PREPARED FOR REVIEW — BLOCKED: {} DFM failure(s); package gate status {:?}. Do not send to a fabricator.",
                 dfm_report.failures, package.status
             )
         } else {
-            format!("PREPARED FOR REVIEW. Internal checks found no failing rule, but this is NOT manufacturing-ready: rules marked not_checked, {asm_warnings} BOM/assembly warning(s), independent engineering review and JLCPCB's own DFM are still required. Upload and ordering are manual and not done by EAK.")
+            format!("PREPARED FOR REVIEW. Internal checks found no failing rule, but this is NOT manufacturing-ready: rules marked not_checked, {asm_warnings} BOM/assembly warning(s), independent engineering review and Fabricator's own DFM are still required. Upload and ordering are manual and not done by EAK.")
         },
         package_status: package.status,
         dfm_failures: dfm_report.failures,
@@ -975,15 +975,15 @@ pub fn prepare_with(
         dfm_not_checked: dfm_report.not_checked,
         files,
         not_verified: vec![
-            "JLCPCB's own DFM / engineering review of these files".into(),
-            "Per-package CPL rotation and polarity in JLCPCB's placement viewer".into(),
+            "Fabricator's own DFM / engineering review of these files".into(),
+            "Per-package CPL rotation and polarity in Fabricator's placement viewer".into(),
             "Basic/extended classification, stock and price at order time".into(),
             "Independent electrical engineering review and physical testing".into(),
         ],
         assembly: asm,
     };
     let mjson = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
-    eak_runtime::store::atomic_write(&out_dir.join("jlcpcb-prep-manifest.json"), mjson.as_bytes())
+    eak_runtime::store::atomic_write(&out_dir.join("fabricator-prep-manifest.json"), mjson.as_bytes())
         .map_err(|e| e.to_string())?;
     Ok(PrepResult {
         out_dir: out_dir.display().to_string(),

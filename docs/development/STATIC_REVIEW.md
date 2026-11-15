@@ -42,7 +42,7 @@ sites, enum-match exhaustiveness, serde derives on IPC types, Cargo.toml depende
 | `eak-engineering/src/placement_intel.rs:335` | clippy `unnecessary_lazy_evaluations` | `.then(\|\| cmp)` | `.then_some(cmp)` |
 | `eak-validation/src/sourcing.rs:51` | clippy `manual_range_contains` | `len >= 2 && len <= 13` | `(2..=13).contains(&len)` |
 | `eak-validation/src/drc.rs:465` | clippy `uninlined_format_args` | `format!("zone {} …", z)` | `format!("zone {z} …")` |
-| `eak-manufacturing/tests/lcsc_jlcpcb.rs:1` | would not compile with `--no-default-features` | imports `UreqFetch`, which exists only under `live-http` | `#![cfg(feature = "live-http")]` |
+| `eak-manufacturing/tests/distributor_fabricator.rs:1` | would not compile with `--no-default-features` | imports `UreqFetch`, which exists only under `live-http` | `#![cfg(feature = "live-http")]` |
 | 9 files (engineering: `interactive`, `placement_intel`, `placer`, `router`, `routing_intel`; validation: `report`, `state`; manufacturing: `provider`, `sourcing`) | `cargo fmt --check` would fail | formatting drift | `rustfmt` (whitespace only) |
 
 Not settled by reading (watch on the first real build): inference of `.sum()`/`.collect()` in `routing_intel::diff_pairs` and

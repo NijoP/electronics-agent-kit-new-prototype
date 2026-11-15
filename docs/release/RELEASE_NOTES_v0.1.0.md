@@ -72,7 +72,7 @@ checksums.
 ## Known limitations
 
 - **Prototype.** No independent engineering review and no fabricator DFM check has been done. IPC
-  tables are not verified against the standard text; JLCPCB stackup limits are unverified. Exported
+  tables are not verified against the standard text; Fabricator stackup limits are unverified. Exported
   Gerbers have not been checked in an external viewer or fabricated.
 - **Linux x86_64 only** as packages. Windows and macOS have not been built or verified since commit
   599bf91 (CI is disabled). The packages were built and launch-checked on one Zorin OS 18.1 (Ubuntu 24.04 base) host only.

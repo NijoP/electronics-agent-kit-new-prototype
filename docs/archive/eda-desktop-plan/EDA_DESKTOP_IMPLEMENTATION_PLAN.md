@@ -164,7 +164,7 @@ other IR change.
 | Per-field evidence and verified/unverified state | `crates/eak-core/src/library.rs` | **ADR**; `ComponentDef.evidence` (schema bump); `SetComponentEvidence` |
 | Symbol editor and footprint editor documents | new `editors/SymbolEditor.tsx`, `editors/FootprintEditor.tsx`; write through `UpsertComponentDefinition` | none |
 | AI datasheet-to-library candidate flow: candidate marked `AiCandidate`, deterministic checks (pin count, pad count vs pin map, pitch/size consistency), human approval | new `eak-intelligence` tool; checks in a new `eak-validation/src/library.rs` | |
-| Supplier data (LCSC) | reconcile with the supplier-integration worker and PR #17 | |
+| Supplier data (Distributor) | reconcile with the supplier-integration worker and PR #17 | |
 
 **Effort: 8-12 worker-days.**
 

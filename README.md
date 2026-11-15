@@ -100,9 +100,9 @@ and statically checked only; nothing here is verified on the current tree.
 | Terminal engine (PTY sessions) and terminal workspace UI | PTY tests passed on Linux before the freeze; UI never run |
 | `eak` CLI, MCP server, app endpoint for agents | Written; end-to-end tests never run; no agent trialled |
 | Optional model providers (Anthropic, OpenAI-compatible, Gemini, Ollama) | Partial; no chat UI |
-| Parts search (LCSC), simulation panel (ngspice), library | Partial; not checked against live services |
+| Parts search (Distributor), simulation panel (ngspice), library | Partial; not checked against live services |
 | 3D board viewer with component models | Written; never rendered |
-| Gerber, drill, BOM, CPL, JLCPCB preparation | Reviewed; always labelled DRAFT; no fabricator check |
+| Gerber, drill, BOM, CPL, Fabricator preparation | Reviewed; always labelled DRAFT; no fabricator check |
 | Agent approval UI, requirements capture, automatic component selection | Planned or partial |
 | Independent engineering review, fabricator DFM sign-off | Not done |
 
@@ -114,7 +114,7 @@ and statically checked only; nothing here is verified on the current tree.
 | `crates/eak-runtime` | `Engine::execute`, commands, journal, undo, recovery, project lock |
 | `crates/eak-engineering` | Calculators, netlist, native router and placer |
 | `crates/eak-validation` | ERC, DRC and mechanical checks, fail-closed gates |
-| `crates/eak-manufacturing` | Gerber, drill, BOM, CPL, JLCPCB preparation (DRAFT) |
+| `crates/eak-manufacturing` | Gerber, drill, BOM, CPL, Fabricator preparation (DRAFT) |
 | `crates/eak-simulation` | ngspice integration |
 | `crates/eak-intelligence` | Optional model providers, typed tools, approvals, knowledge search |
 | `crates/eak-terminal` | PTY sessions, process status, local control API |

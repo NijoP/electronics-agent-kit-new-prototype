@@ -1,9 +1,9 @@
-// LCSC catalogue browser and API-credential settings (ADR-0032).
+// Distributor catalogue browser and API-credential settings (ADR-0032).
 // Credentials go straight to the OS credential store through the backend; the secret is never
 // kept in component state after Save and never shown again. Nothing is fetched until the user
 // opens a section: the category tree, the manufacturer list and each page of products are
-// lazy. Every result says whether it is live, cached or stale, and when LCSC produced it. When
-// LCSC cannot be asked (no credentials, rejected, rate-limited, offline) the panel shows why
+// lazy. Every result says whether it is live, cached or stale, and when Distributor produced it. When
+// Distributor cannot be asked (no credentials, rejected, rate-limited, offline) the panel shows why
 // and shows no rows; it never fills the table itself.
 import { useCallback, useState } from "react";
 import { api } from "./api";
@@ -12,7 +12,7 @@ import type {
   CatalogueResults,
   Candidate,
   CategoryNode,
-  LcscView,
+  DistributorView,
   LibraryLink,
   Manufacturer,
   MatchKind,
@@ -22,12 +22,12 @@ import type {
 
 interface Props {
   busy: boolean;
-  /** Imports one LCSC part into the project library (engineering definition), via the parent. */
-  onImport: (lcsc: string) => void;
+  /** Imports one Distributor part into the project library (engineering definition), via the parent. */
+  onImport: (distributor: string) => void;
 }
 
 const KIND_LABEL: Record<MatchKind, string> = {
-  exact_lcsc: "Exact LCSC #",
+  exact_distributor: "Exact Distributor #",
   exact_mpn_manufacturer: "Exact MPN + maker",
   exact_mpn: "Exact MPN",
   fuzzy: "Fuzzy suggestion",
@@ -58,14 +58,14 @@ function when(unix: number | null): string {
 
 export function servedLabel(served: Served | null, fetched: number | null): string {
   if (!served) return "";
-  const at = fetched === null ? "" : ` · LCSC data from ${when(fetched)}`;
+  const at = fetched === null ? "" : ` · Distributor data from ${when(fetched)}`;
   switch (served.source) {
     case "live":
       return `live${at}`;
     case "cache":
       return `cached ${served.age_s ?? 0} s ago${at}`;
     case "stale_cache":
-      return `STALE (LCSC unavailable) — ${served.age_s ?? 0} s old${at}`;
+      return `STALE (Distributor unavailable) — ${served.age_s ?? 0} s old${at}`;
   }
 }
 
@@ -75,13 +75,13 @@ function price(c: Candidate): string {
 }
 
 function Settings() {
-  const [view, setView] = useState<LcscView | null>(null);
+  const [view, setView] = useState<DistributorView | null>(null);
   const [key, setKey] = useState("");
   const [secret, setSecret] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const run = async (f: () => Promise<LcscView>, after?: () => void) => {
+  const run = async (f: () => Promise<DistributorView>, after?: () => void) => {
     setBusy(true);
     setNote(null);
     try {
@@ -96,10 +96,10 @@ function Settings() {
 
   const status = view?.status;
   return (
-    <section aria-label="LCSC API credentials">
-      <h3>LCSC API credentials</h3>
+    <section aria-label="Distributor API credentials">
+      <h3>Distributor API credentials</h3>
       {!view && (
-        <button type="button" disabled={busy} onClick={() => void run(api.lcscSettings)}>
+        <button type="button" disabled={busy} onClick={() => void run(api.distributorSettings)}>
           Show credential status
         </button>
       )}
@@ -132,7 +132,7 @@ function Settings() {
               // The secret leaves component state as soon as it is submitted.
               setSecret("");
               void run(
-                () => api.lcscSaveCredentials(k, s),
+                () => api.distributorSaveCredentials(k, s),
                 () => setKey(""),
               );
             }}
@@ -157,20 +157,20 @@ function Settings() {
             <button
               type="button"
               disabled={busy || !view.has_credentials}
-              onClick={() => void run(api.lcscTestConnection)}
+              onClick={() => void run(api.distributorTestConnection)}
             >
               Test connection
             </button>
             <button
               type="button"
               disabled={busy || !view.has_credentials}
-              onClick={() => void run(api.lcscClearCredentials)}
+              onClick={() => void run(api.distributorClearCredentials)}
             >
               Remove credentials
             </button>
           </form>
           <p className="muted">
-            Approved credentials and a whitelisted IP address come from LCSC (
+            Approved credentials and a whitelisted IP address come from Distributor (
             <a href={view.apply_url} target="_blank" rel="noreferrer">
               apply
             </a>
@@ -258,16 +258,16 @@ export function CataloguePanel({ busy, onImport }: Props) {
       );
     });
 
-  const saveRecord = (lcsc: string) =>
+  const saveRecord = (distributor: string) =>
     guard(async () => {
-      const r = await api.partsSaveRecord(lcsc);
-      setSaved(`Saved supplier record ${lcsc} to ${r.path}. ${r.link.explanation}`);
+      const r = await api.partsSaveRecord(distributor);
+      setSaved(`Saved supplier record ${distributor} to ${r.path}. ${r.link.explanation}`);
     });
 
   const data = reply?.data ?? null;
   return (
-    <section aria-label="LCSC catalogue">
-      <h3>LCSC catalogue</h3>
+    <section aria-label="Distributor catalogue">
+      <h3>Distributor catalogue</h3>
       <Settings />
 
       <details>
@@ -288,7 +288,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
         </button>
         {tree && tree.status !== "ok" && tree.status !== "stale" && (
           <p role="alert" className="error">
-            LCSC: {tree.message}
+            Distributor: {tree.message}
           </p>
         )}
         {tree?.data && (
@@ -307,7 +307,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
         )}
         {makers && makers.status !== "ok" && makers.status !== "stale" && (
           <p role="alert" className="error">
-            LCSC: {makers.message}
+            Distributor: {makers.message}
           </p>
         )}
         {makers?.data && (
@@ -334,7 +334,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
         }}
       >
         <label>
-          LCSC #, MPN or keyword
+          Distributor #, MPN or keyword
           <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="C25804 or 0603WAF1002T5E" />
         </label>
         <label>
@@ -371,7 +371,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
       {saved && <p role="status">{saved}</p>}
       {reply && reply.status !== "ok" && reply.status !== "stale" && (
         <p role="alert" className="error">
-          LCSC ({reply.status.replace("_", " ")}): {reply.message}
+          Distributor ({reply.status.replace("_", " ")}): {reply.message}
         </p>
       )}
       {reply?.status === "stale" && (
@@ -390,13 +390,13 @@ export function CataloguePanel({ busy, onImport }: Props) {
             {data.via !== "keyword" ? ` · via ${data.via}` : ""}
           </p>
           {data.candidates.length === 0 ? (
-            <p>LCSC returned no matching parts.</p>
+            <p>Distributor returned no matching parts.</p>
           ) : (
             <table aria-label="Catalogue results">
               <thead>
                 <tr>
                   <th>Match</th>
-                  <th>LCSC #</th>
+                  <th>Distributor #</th>
                   <th>MPN</th>
                   <th>Maker</th>
                   <th>Package</th>
@@ -409,8 +409,8 @@ export function CataloguePanel({ busy, onImport }: Props) {
               </thead>
               <tbody>
                 {data.candidates.map((c) => {
-                  const lcsc = c.record.lcsc_part;
-                  const link = lcsc ? data.links?.[lcsc] : undefined;
+                  const distributor = c.record.distributor_part;
+                  const link = distributor ? data.links?.[distributor] : undefined;
                   return (
                   <tr key={c.record.raw_sha256}>
                     <td>
@@ -424,7 +424,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
                       </details>
                       {c.manufacturer_conflict && <strong> maker differs</strong>}
                     </td>
-                    <td>{c.record.lcsc_part ?? "—"}</td>
+                    <td>{c.record.distributor_part ?? "—"}</td>
                     <td>{c.record.mpn ?? "—"}</td>
                     <td>{c.record.manufacturer ?? "—"}</td>
                     <td>{c.record.package ?? "—"}</td>
@@ -443,14 +443,14 @@ export function CataloguePanel({ busy, onImport }: Props) {
                       <LinkCell link={link} />
                     </td>
                     <td>
-                      {lcsc && (
-                        <button type="button" disabled={wait} onClick={() => void saveRecord(lcsc)} aria-label={`Save record ${lcsc}`}>
+                      {distributor && (
+                        <button type="button" disabled={wait} onClick={() => void saveRecord(distributor)} aria-label={`Save record ${distributor}`}>
                           Save record
                         </button>
                       )}
                       {/* Import only where an existing symbol/footprint template can carry the part. */}
-                      {lcsc && (link === undefined || link.standing === "supplier_only") && (
-                        <button type="button" disabled={busy} onClick={() => onImport(lcsc)} aria-label={`Import ${lcsc}`}>
+                      {distributor && (link === undefined || link.standing === "supplier_only") && (
+                        <button type="button" disabled={busy} onClick={() => onImport(distributor)} aria-label={`Import ${distributor}`}>
                           Import
                         </button>
                       )}
@@ -469,7 +469,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
               Next page
             </button>
             <button type="button" disabled={wait} onClick={() => void query(data.page, category, true)}>
-              Refresh from LCSC
+              Refresh from Distributor
             </button>
           </div>
         </>

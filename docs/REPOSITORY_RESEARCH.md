@@ -8,7 +8,7 @@ Classification: REUSE DATA/RULE · REWRITE IN RUST · ADAPT CONCEPT · DEVELOPME
 
 | Repository | Branch @ commit | Licence (from API / LICENSE file) | Depth | EAK action |
 |---|---|---|---|---|
-| [NijoP/DESK](https://github.com/NijoP/DESK) | main @ `5ad8492c37a5` | MIT | Source: `desk/ipc.py`, `desk/erc.py`, `desk/manufacturing/jlcpcb/capabilities.py`, `desk/drc_engine.py` (header), `library/pcb_domains/rule_sets/core.json`, `library/devices.json`, `tests/test_ipc_models.py` | REWRITE IN RUST (sizing rules, ERC rules) + TEST VECTORS; EasyEDA parts REJECT |
+| [NijoP/DESK](https://github.com/NijoP/DESK) | main @ `5ad8492c37a5` | MIT | Source: `desk/ipc.py`, `desk/erc.py`, `desk/manufacturing/fabricator/capabilities.py`, `desk/drc_engine.py` (header), `library/pcb_domains/rule_sets/core.json`, `library/devices.json`, `tests/test_ipc_models.py` | REWRITE IN RUST (sizing rules, ERC rules) + TEST VECTORS; EasyEDA parts REJECT |
 | [storytold/craft-anything](https://github.com/storytold/craft-anything) | main @ `52f1daa66802` | Apache-2.0 (repo also ships LICENSE-MIT) | Crate map; `crates/evidence/src/{lib,unknown}.rs` | ADAPT CONCEPT (evidence + limitations + coverage, optimistic revisions) |
 | [kunchenguid/firstmate](https://github.com/kunchenguid/firstmate) | main @ `427056c4181c` | MIT | Local installation `AGENTS.md`, session-start behaviour observed | ADAPT CONCEPT (one lead, bounded delegation); REJECT crew model inside EAK |
 | [kunchenguid/backpass](https://github.com/kunchenguid/backpass) | main @ `c8d60c24d4dc` | MIT | Repository layout only | DEFER (evidence-backed, human-approved instruction improvement — Phase 8) |
@@ -37,10 +37,10 @@ Classification: REUSE DATA/RULE · REWRITE IN RUST · ADAPT CONCEPT · DEVELOPME
   EAK follows the conservative code behaviour and documents the inconsistency.
 - **ERC** (`desk/erc.py`): ground/supply pin misconnection, missing decoupling cap, capacitor
   voltage rating < rail (error) / < 1.5× (warning), non-numeric resistor values → ERC-010…013.
-- **JLCPCB capabilities** (`capabilities.py`): 3.5 mil track/space, 0.2 mm drill. Not adopted as
+- **Fabricator capabilities** (`capabilities.py`): 3.5 mil track/space, 0.2 mm drill. Not adopted as
   defaults (EAK defaults are more conservative: 0.15 mm / 0.3 mm); candidate for a fab profile once
-  verified against JLCPCB's current published capabilities.
-- `library/devices.json`: EasyEDA UUIDs → REJECT (EasyEDA-specific). LCSC codes could migrate with provenance.
+  verified against Fabricator's current published capabilities.
+- `library/devices.json`: EasyEDA UUIDs → REJECT (EasyEDA-specific). Distributor codes could migrate with provenance.
 - `drc_engine.py`: parses EasyEDA live DRC → REJECT (EasyEDA-specific). Its acceptance targets
   (0 unconnected pads, orphan vias, shorts, clearance) map onto EAK DRC-003/004/012.
 
