@@ -85,3 +85,41 @@ Each entry is written when the problem is hit. Severity: blocks / degrades / cos
 - Suspected cause: `crates/eak-intelligence/src/domain/classify.rs:309-321` CHECKLIST keys (`max_ambient_c`, `environment`) are text features extracted from free text; the typed spec's `conditions.ambient_max_c` is not fed into the feature set.
 - Status: open
 
+## B-010 — MPN / LCSC number is per library component, not per value
+- Time: 2026-11-15 18:52 · Phase: 2
+- Tried: planned `SetComponentProperties` on `R_0603` for 10 kΩ, 5.1 kΩ and 1 kΩ resistors.
+- Expected: per-value (or per-instance) MPN/LCSC so the BOM gets one correct LCSC number per line.
+- Actual: `SetComponentProperties` takes only `component_id`; `eak-manufacturing/src/bom.rs:57-146` groups BOM lines by (component_id, value) but takes `lcsc`/`mpn` from the component definition, so every R_0603 line would carry the same LCSC number whatever its value.
+- Severity: degrades (silently wrong BOM if the obvious path is used)
+- Workaround: one project component per value (`R_0603_10K`, `R_0603_5K1`, ...) via `UpsertComponentDefinition` with the built-in 0603/0805 land geometry copied from `crates/eak-core/src/builtin.rs:128-135`.
+- Status: open
+
+## B-011 — `design_plan` schema omits `intent`, which the design procedure requires
+- Time: 2026-11-15 19:05 · Phase: 3
+- Tried: `eak tools --json` → `design_plan` input schema = {title, steps, rationale, addresses}, `additionalProperties: false`. `design_procedure` step S8 says "State the intended net of every pin in the plan's intent" (checked_by `design_plan: intent`).
+- Expected: `intent` (`{connections:[{net, pins:["U1.2",...]}]}`) in the published schema.
+- Actual: field missing from the schema; the CLI accepted it anyway (`intent_pins: 143`) because `crates/eak-harness/src/design.rs:1211` reads `args.get("intent")`. An MCP client that validates against `tools/list` cannot send it, so the intent read-back (S11/S12) silently never happens.
+- Severity: degrades
+- Workaround: sent `intent` through `eak design plan <file>` (CLI).
+- Suspected cause: the `design_plan` tool spec in `crates/eak-harness/src/design.rs` / `tools.rs` lacks the `intent` property.
+- Status: open
+
+## B-012 — Derating check applies the ×0.8 stress derating to `supply_voltage_max` (operating limit): every 3.3 V IC fails
+- Time: 2026-11-15 19:08 · Phase: 3
+- Tried: `eak design validate --json` at rev 4.
+- Expected: a recommended-operating supply limit (ESP32 3.0–3.6 V) compared with the rail max (3.4 V) directly → pass.
+- Actual: `error derating:U1:supply_voltage_max  U1 supply_voltage_max 3.6 V derated to 2.880 (x0.8) < applied 3.4 from the spec rails`. With the generic `*` voltage derating of 0.8, no 3.3 V part on a 3.3 V rail can ever pass; the check is a guaranteed false error.
+- Severity: degrades (wrong engineering result; trains users to ignore derating errors)
+- Workaround: none applied (rating kept honest; finding left visible until the fix).
+- Suspected cause: `crates/eak-intelligence/src/mental.rs:104-112` lists `supply_voltage_max` among stress ratings; `crates/eak-harness/src/design.rs:1017-1030` derates every listed rating. Related: the current check applies the full rail current to every part touching the rail (fine for series D1, wrong for shunt parts).
+- Status: open
+
+## B-013 — No schematic / PCB image export (no screenshots possible from the CLI)
+- Time: 2026-11-15 19:10 · Phase: 3
+- Tried: searched the harness/manufacturing crates and tool list for SVG/PNG/PDF output.
+- Expected: a plot of the schematic and board (SVG/PDF/PNG) for review and for the report.
+- Actual: none; only the desktop window can show the design, and the agent cannot see it (also B-002: the app is not attached to this project).
+- Severity: degrades (schematic neatness cannot be reviewed by the agent; reviewers need the app)
+- Workaround: neatness checked from coordinates in `list_symbols` only.
+- Status: open
+

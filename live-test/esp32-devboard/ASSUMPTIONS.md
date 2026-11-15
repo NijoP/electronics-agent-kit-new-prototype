@@ -15,3 +15,23 @@ Every deviation from the board specification and every assumption, with the reas
 - A8. USB pair: 0.3 mm tracks, 0.15 mm gap target; EAK cannot compute or check 90 Ω (B-005). On 1.6 mm 2-layer FR-4 a true 90 Ω microstrip pair over a far bottom plane is not achievable at these widths; USB full-speed (12 Mbit/s) over < 15 mm is tolerant of this.
 
 ## Sourcing (all LCSC numbers entered from the agent's knowledge, NOT verified by EAK — B-003)
+| Ref | Part | MPN | LCSC (unverified) | LCSC class (agent belief) |
+|---|---|---|---|---|
+| U1 | ESP32-WROOM-32E 4 MB | ESP32-WROOM-32E-N4 | C701341 | extended |
+| U2 | 3.3 V LDO | AMS1117-3.3 | C6186 | basic |
+| U3 | USB-UART | CH340C | C84681 | extended |
+| U4 | USB ESD | USBLC6-2SC6 | C7519 | extended |
+| J1 | USB-C 16P | TYPE-C-31-M-12 | C165948 | extended |
+| D1 | Schottky 40 V 3 A | SS34 | C8678 | basic |
+| Q1,Q2 | NPN | MMBT3904 | C20526 | basic |
+| R 10k / 5.1k / 1k | 0603 1 % | 0603WAF1002T5E / 0603WAF5101T5E / 0603WAF1001T5E | C25804 / C23186 / C21190 | basic |
+| C 100n / 1u / 10u / 22u | MLCC | CC0603KRX7R9BB104 / CL10A105KA8NNNC / CL21A106KAYNNNE / CL21A226MAQNNNE | C14663 / C15849 / C15850 / C45783 | basic |
+| D2 / D3 | LED red / green 0603 | KT-0603R / 19-217/GHC-YR1S2/3T | C2286 / C72043 | basic |
+| SW1,SW2 | 6x6 THT tact | PTS645SL43-2 LFS | none known | — |
+| J2,J3 | 1x19 header | PZ254V-11-19P | none known | — |
+
+## Library geometry (entered by the agent, not verified by EAK)
+- A9. ESP32-WROOM-32E land pattern: 1.5 x 0.9 mm pads, 1.27 mm pitch, rows at x = ±8.75 mm, bottom row y = -12.5 mm, 4 x 4 mm GND pad at (-1, -2). The exposed-pad size/position is approximate; compare with Espressif's footprint before ordering.
+- A10. USB-C HRO TYPE-C-31-M-12: signal pads as the KiCad land pattern; shell slots replaced by 0.6 mm round plated holes and NPTH pegs by 0.65 mm plated holes in 1.0 mm pads (B-007). **The shell holes are NOT the datasheet slots; the connector legs will not seat in 0.6 mm round holes.** Before ordering, the drill file must be corrected or EAK must gain slot support.
+- A11. Shield (S1-S4, pegs) tied directly to GND (common hobby practice; no RC/ferrite).
+- A12. D1 changed SS14 → SS34 after the EAK derating finding (1 A × 0.75 < 0.8 A rail).
