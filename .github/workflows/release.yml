@@ -183,7 +183,7 @@ jobs:
             echo
             echo '  },'
             echo '  "sha256": {'
-            awk 'NR>1{printf ",\n"} {printf "    \"%s\": \"%s\"", $2, $1}' SHA256SUMS
+            awk 'NR>1{printf ",\n"} {n=$2; sub(/^\*/, "", n); printf "    \"%s\": \"%s\"", n, $1}' SHA256SUMS
             echo
             echo '  }'
             echo '}'
@@ -192,6 +192,8 @@ jobs:
           rm -f toolchain-*.txt
           sha256sum provenance.json >> SHA256SUMS
           cat provenance.json
-          gh release create "$tag" ./* --repo "$GITHUB_REPOSITORY" --target "$SHA" --prerelease \
+          # The tag points at exactly the CI-green commit; the release is then made from that tag.
+          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SHA" > /dev/null
+          gh release create "$tag" ./* --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
             --title "EAK prebuilt $tag (unsigned pre-release)" \
             --notes "Unsigned prebuilt bundles and the eak CLI built from commit $SHA, which passed CI ($CI_RUN). Verify with SHA256SUMS; build details are in provenance.json. Not a manufacturing-ready claim and not an installer-tested-on-hardware claim."
