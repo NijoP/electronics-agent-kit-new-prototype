@@ -369,7 +369,7 @@ mod tests {
         d.lcsc = None;
         d.supplier_offers.clear();
         let defs = [d];
-        let r = rec("C7", "abc-123", "Maker Two", "0603", "Resistors");
+        let r = rec("C7", "abc 123", "Maker Two", "0603", "Resistors");
         let l = link_record(&r, &[(Scope::Personal, &defs[0])]);
         assert_eq!(l.matches.len(), 1);
         assert!(l.matches[0].manufacturer_conflict);

@@ -13,21 +13,24 @@
 //!    ([`Candidate::engineering_status`] is always `supplier_listing_only`).
 //! 5. [`MatchKind::Browse`]: no query to match against (category browsing).
 //!
-//! Normalisation (`normalize_mpn`) folds case, removes whitespace and unifies the Unicode
-//! dash/minus characters to `-`. It is used only to *compare*; the manufacturer part number
+//! Normalisation (`normalize_mpn`) folds case and removes whitespace and `-`, `_`, `/`, `.`. It is used only to *compare*; the manufacturer part number
 //! stored on a record is never rewritten.
 
 use crate::sourcing::SourcingRecord;
 use eak_validation::sourcing::is_lcsc_part_number;
 use serde::Serialize;
 
-/// Fold case, drop whitespace, unify dash variants. Comparison key only.
+/// Comparison key: folds case and drops whitespace and the separators `-`, `_`, `/`, `.`
+/// (including Unicode dash/minus variants), so `abc 123`, `ABC-123`, `abc_123` and `abc123` agree.
+/// The stored and displayed MPN is never rewritten.
 pub fn normalize_mpn(s: &str) -> String {
     s.chars()
-        .filter(|c| !c.is_whitespace())
-        .map(|c| match c {
-            '\u{2010}'..='\u{2015}' | '\u{2212}' => '-',
-            c => c,
+        .filter(|c| {
+            !c.is_whitespace()
+                && !matches!(
+                    c,
+                    '-' | '_' | '/' | '.' | '\u{2010}'..='\u{2015}' | '\u{2212}'
+                )
         })
         .flat_map(char::to_uppercase)
         .collect()
@@ -262,7 +265,10 @@ mod tests {
 
     #[test]
     fn normalisation_folds_case_space_and_dashes_only() {
-        assert_eq!(normalize_mpn(" stm32 f103–c8t6 "), "STM32F103-C8T6");
+        assert_eq!(normalize_mpn(" stm32 f103–c8t6 "), "STM32F103C8T6");
+        for v in ["abc 123", "ABC-123", "abc_123", "abc123", "a.b/c-123"] {
+            assert_eq!(normalize_mpn(v), "ABC123", "{v}");
+        }
         assert_eq!(normalize_mpn("0603WAF1002T5E"), "0603WAF1002T5E");
         assert_eq!(
             normalize_manufacturer("Texas-Instruments"),

@@ -42,7 +42,7 @@ and there was no browsing. LCSC publishes two OpenAPI documents; they are not in
   Missing credentials produce an explicit "what you need" reply and no rows.
 - Matching (`eak-manufacturing::matching`): exact LCSC number > exact normalised MPN + manufacturer >
   exact normalised MPN (manufacturer conflict flagged) > fuzzy > browse; each candidate carries
-  reasons; MPNs are normalised for comparison only (case, whitespace, dash variants) and never
+  reasons; MPNs are normalised for comparison only (case, whitespace, `-` `_` `/` `.`) and never
   rewritten; two manufacturers' parts with the same MPN text are never merged; a result is always
   `supplier_listing_only` and records stay `SearchHit` (nothing here approves a part).
 - New IPC commands (all `P4`): `lcsc_settings_get|save|clear`, `lcsc_test_connection`,
