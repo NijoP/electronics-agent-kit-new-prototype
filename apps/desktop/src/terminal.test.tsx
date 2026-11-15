@@ -22,7 +22,7 @@ vi.mock("@xterm/xterm", () => ({
     hasSelection() { return false; }
   },
 }));
-vi.mock("@xterm/addon-fit", () => ({ FitAddon: class { fit() {} } }));
+vi.mock("@xterm/addon-fit", () => ({ FitAddon: class { fit() {} proposeDimensions() { return { cols: 80, rows: 24 }; } } }));
 vi.mock("@xterm/addon-search", () => ({ SearchAddon: class { findNext() {} findPrevious() {} } }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
@@ -35,6 +35,7 @@ let tabs: Tab[];
 let sessions: SessionInfo[];
 let focused: number | null;
 let nextId: number;
+let launchers: { name: string; command: string; path: string | null }[];
 
 const session = (id: number, space: number, tab: number, state: SessionInfo["status"]["state"] = "idle"): SessionInfo => ({
   id,
@@ -54,6 +55,7 @@ beforeEach(() => {
   sessions = [];
   focused = null;
   nextId = 1;
+  launchers = [];
   mockIPC((cmd, payload) => {
     const args = (payload ?? {}) as Record<string, unknown>;
     calls.push({ cmd, args });
@@ -89,7 +91,7 @@ beforeEach(() => {
       case "terminal_shells":
         return ["/bin/bash", "/bin/zsh"];
       case "terminal_launchers":
-        return [];
+        return launchers;
       default:
         return null;
     }
@@ -139,5 +141,53 @@ describe("terminal workspace", () => {
     expect(calls.some((c) => c.cmd === "terminal_close")).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Close and terminate" }));
     await waitFor(() => expect(calls.find((c) => c.cmd === "terminal_close")?.args).toEqual({ id: 2 }));
+  });
+
+  // Regression (unrun): the terminal must be fitted and the PTY resized when it mounts in a box
+  // with a real size, and panes must share the whole area (flex fractions sum to 1, no dead band).
+  it("sends PTY rows/cols on mount and panes fill the area", async () => {
+    const w = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+    const h = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, value: 800 });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, value: 600 });
+    try {
+      spaces = [{ id: 1, name: "Board", root: "/projects/board", project_id: null }];
+      tabs = [{ id: 3, space: 1, direction: "column", panes: [2, 4] }];
+      sessions = [session(2, 1, 3, "idle"), session(4, 1, 3, "idle")];
+      focused = 2;
+      render(<TerminalWorkspace visible project={null} newSpaceNonce={0} />);
+      await waitFor(() => expect(calls.filter((c) => c.cmd === "terminal_resize").map((c) => c.args.id).sort()).toEqual([2, 4]));
+      expect(calls.find((c) => c.cmd === "terminal_resize")?.args).toMatchObject({ cols: 80, rows: 24 });
+      const wraps = [...document.querySelectorAll<HTMLElement>(".term-pane-wrap")];
+      expect(wraps.map((e) => e.style.flexGrow)).toEqual(["0.5", "0.5"]);
+    } finally {
+      if (w) Object.defineProperty(HTMLElement.prototype, "clientWidth", w);
+      if (h) Object.defineProperty(HTMLElement.prototype, "clientHeight", h);
+    }
+  });
+
+  it("a pane whose session is gone shows a session picker, not a blank rectangle", async () => {
+    spaces = [{ id: 1, name: "Board", root: "/projects/board", project_id: null }];
+    tabs = [{ id: 3, space: 1, direction: "row", panes: [2, 9] }];
+    sessions = [session(2, 1, 3, "idle")];
+    focused = 2;
+    render(<TerminalWorkspace visible project={null} newSpaceNonce={0} />);
+    await screen.findByRole("group", { name: "Empty pane" });
+  });
+
+  // Unrun: agent launch surface is separate from session tabs and runs the real executable.
+  it("agents that are not installed are disabled and say so; installed ones run their executable", async () => {
+    spaces = [{ id: 1, name: "Board", root: "/projects/board", project_id: null }];
+    launchers = [{ name: "claude", command: "claude", path: "/usr/local/bin/claude" }];
+    nextId = 2;
+    render(<TerminalWorkspace visible project={null} newSpaceNonce={0} />);
+    const pi = await screen.findByRole("button", { name: /^Pi/ });
+    expect((pi as HTMLButtonElement).disabled).toBe(true);
+    expect(pi.textContent).toContain("not installed");
+    fireEvent.click(await screen.findByRole("button", { name: /Claude Code/ }));
+    await waitFor(() => expect(calls.find((c) => c.cmd === "terminal_create")?.args.opts).toEqual({ space: 1, name: "Claude Code", command: ["/usr/local/bin/claude"] }));
+    // The new session is a tab (not a launcher) and gets focus.
+    await screen.findByRole("tab", { name: /bash 2/ });
+    await waitFor(() => expect(calls.some((c) => c.cmd === "terminal_focus" && c.args.id === 2)).toBe(true));
   });
 });

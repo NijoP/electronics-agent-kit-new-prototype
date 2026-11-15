@@ -50,6 +50,19 @@ export function clientToView(vb: ViewBox, size: Size, px: number, py: number): [
   return [vb.x + (px - offX) / s, vb.y + (py - offY) / s];
 }
 
+/**
+ * The region actually visible in a pane of `size` pixels under `preserveAspectRatio="xMidYMid meet"`:
+ * `vb` grown on its shorter axis to the pane's aspect ratio (same centre and scale). The grid
+ * and rulers are drawn over this so they fill the pane instead of stopping at `vb`.
+ */
+export function visibleViewBox(vb: ViewBox, size: Size): ViewBox {
+  if (size.width <= 0 || size.height <= 0) return vb;
+  const s = Math.min(size.width / vb.w, size.height / vb.h);
+  const w = size.width / s;
+  const h = size.height / s;
+  return { x: vb.x - (w - vb.w) / 2, y: vb.y - (h - vb.h) / 2, w, h };
+}
+
 /** Zoom by `factor` (<1 zooms in) keeping view point (cx, cy) fixed on screen. */
 export function zoomAt(vb: ViewBox, factor: number, cx: number, cy: number): ViewBox {
   const f = Math.min(Math.max(factor, 0.05), 20);

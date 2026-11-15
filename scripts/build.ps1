@@ -128,6 +128,16 @@ try {
   }
 } finally { Pop-Location }
 
+$cliArgs = if ($env:EAK_UNLOCKED -eq '1') { @() } else { @('--locked') }
+Say "Building the EAK CLI and MCP harness: cargo build --release $($cliArgs -join ' ') -p eak-harness --bin eak --bin eak-mcp"
+Push-Location $root
+try {
+  & cargo build --release @cliArgs -p eak-harness --bin eak --bin eak-mcp
+  if ($LASTEXITCODE -ne 0) { Die 'eak-harness build failed' @('Out of memory or a killed linker: re-run with EAK_BUILD_JOBS=1.') }
+} finally { Pop-Location }
+$cliDir = Join-Path $target 'release'
+foreach ($b in 'eak.exe', 'eak-mcp.exe') { $p = Join-Path $cliDir $b; if (-not (Test-Path $p) -or (Get-Item $p).Length -le 0) { Die "expected harness binary not found or empty: $p" } }
+
 # ---------------------------------------------------------------- verified artifact discovery
 Say 'Locating the build artifact'
 $art = Join-Path $target "release\$binName"
@@ -144,7 +154,7 @@ if ($Bundles -ne 'none') {
   Get-ChildItem (Join-Path $target 'release\bundle') -Recurse -File -Include *.exe, *.msi -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "      $($_.FullName)" }
 }
 if ($ResultFile) {
-  "kind=binary`npath=$art`nversion=$version`ncommit=$commit`nos=windows`narch=x86_64`njobs=$Jobs" | Set-Content -Path $ResultFile -Encoding ASCII
+  "kind=binary`npath=$art`nversion=$version`ncommit=$commit`nos=windows`narch=x86_64`njobs=$Jobs`ncli_dir=$cliDir" | Set-Content -Path $ResultFile -Encoding ASCII
 }
 Write-Host ''
 Write-Host "Built EAK $version (bundles: $Bundles) for windows-x86_64, commit $commit"

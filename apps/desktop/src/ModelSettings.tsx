@@ -98,6 +98,14 @@ export function ModelSettings({ onClose }: { onClose: () => void }) {
   const [importText, setImportText] = useState<string | null>(null);
 
   const reload = useCallback(async () => setProviders(await api.modelProviders()), []);
+  // Escape closes the dialog wherever focus is (a handler on the dialog element misses
+  // presses while focus is on the page behind or on the backdrop).
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+
   useEffect(() => {
     Promise.all([api.modelCatalog().then(setCatalog), reload()]).catch((e) => setError(String(e)));
   }, [reload]);

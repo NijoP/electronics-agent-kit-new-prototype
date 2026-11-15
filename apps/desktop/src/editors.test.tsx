@@ -133,6 +133,17 @@ describe("schematic editor", () => {
 });
 
 describe("PCB editor", () => {
+  // Unrun: an empty board explains itself and offers the one action; it disappears once drawing starts.
+  it("shows a Draw board outline empty state when there is no outline", () => {
+    const snap = fixture();
+    snap.project.pcb.board.outline = [];
+    render(<PcbView snapshot={snap} selected={null} onSelect={() => {}} edit={edit()} />);
+    expect(screen.getByRole("note", { name: "No board outline" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Draw board outline" }));
+    expect(screen.queryByRole("note", { name: "No board outline" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Board outline" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("draws a rectangular board outline from two corners", () => {
     const { container } = render(<PcbView snapshot={fixture()} selected={null} onSelect={() => {}} edit={edit()} />);
     tool("Board outline");

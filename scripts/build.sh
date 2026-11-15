@@ -144,6 +144,14 @@ printf '    the first build compiles the whole Rust dependency tree and can take
          "If the message mentions the lockfile: Cargo.lock needs a deliberate fix; do not build unlocked for an install." \
          "Out of memory or a killed linker: re-run with EAK_BUILD_JOBS=1."
 
+CLI_ARGS=(--locked); if [ "${EAK_UNLOCKED:-0}" = 1 ]; then CLI_ARGS=(); fi
+say "Building the EAK CLI and MCP harness: cargo build --release ${CLI_ARGS[*]} -p eak-harness --bin eak --bin eak-mcp"
+( cd "$ROOT" && CARGO_TARGET_DIR="$TARGET" cargo build --release "${CLI_ARGS[@]}" -p eak-harness --bin eak --bin eak-mcp ) \
+  || die "eak-harness build failed" "Command: cargo build --release ${CLI_ARGS[*]} -p eak-harness --bin eak --bin eak-mcp" \
+         "Out of memory or a killed linker: re-run with EAK_BUILD_JOBS=1."
+CLI_DIR="$TARGET/release"
+for b in eak eak-mcp; do [ -s "$CLI_DIR/$b" ] || die "expected harness binary not found or empty: $CLI_DIR/$b"; done
+
 # ---------------------------------------------------------------- verified artifact discovery
 say "Locating the build artifact"
 KIND=""; ART=""
@@ -166,7 +174,7 @@ if [ "$BUNDLES" != none ]; then
   { find "$TARGET/release/bundle" -type f -newer "$MARK" \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.dmg' \) 2>/dev/null || true; } | sed 's/^/      /'
 fi
 if [ -n "$RESULT_FILE" ]; then
-  printf 'kind=%s\npath=%s\nversion=%s\ncommit=%s\nos=%s\narch=%s\njobs=%s\n' \
-    "$KIND" "$ART" "$VERSION" "$COMMIT" "$OS" "$ARCH" "$JOBS" > "$RESULT_FILE"
+  printf 'kind=%s\npath=%s\nversion=%s\ncommit=%s\nos=%s\narch=%s\njobs=%s\ncli_dir=%s\n' \
+    "$KIND" "$ART" "$VERSION" "$COMMIT" "$OS" "$ARCH" "$JOBS" "$CLI_DIR" > "$RESULT_FILE"
 fi
 printf '\nBuilt EAK %s (bundles: %s) for %s-%s, commit %s\nArtifact (%s): %s\n' "$VERSION" "$BUNDLES" "$OS" "$ARCH" "$COMMIT" "$KIND" "$ART"

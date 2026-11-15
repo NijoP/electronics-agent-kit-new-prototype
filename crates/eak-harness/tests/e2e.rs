@@ -330,3 +330,16 @@ fn cli_routes_through_the_app_endpoint_when_the_project_is_open() {
     assert_eq!(v["error"]["code"], "project_locked", "{v}");
     let _ = std::fs::remove_dir_all(root);
 }
+
+/// Regression: an app-endpoint client (MCP, any forwarder) that sends its project context must
+/// still get the discovery tools, not "does not run against an open project".
+#[test]
+fn discovery_tools_answer_while_a_project_is_open() {
+    let root = temp_dir("discovery");
+    let mut engine = eak_runtime::Engine::create(&root.join("d.eak"), "Disc").unwrap();
+    let ctx = eak_harness::CallContext::from_env();
+    for tool in ["list_tools", "guide", "design_spec_schema"] {
+        let v = eak_harness::handle(&mut engine, &ctx, "app", tool, &json!({}));
+        assert_eq!(v["ok"], true, "{tool}: {v}");
+    }
+}

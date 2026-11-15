@@ -1,3 +1,4 @@
+  install_cli "$stage"
 #!/usr/bin/env bash
 # EAK one-command SOURCE installer for Linux and macOS: builds the requested EAK revision (default:
 # current `main`) on THIS machine, installs it per-user, registers a launcher and starts it.
@@ -177,6 +178,9 @@ if [ "$UNINSTALL" = 1 ] || [ "$CLEAN_CACHE" = 1 ]; then
     if [ "$OS" = linux ]; then
       rm -rf -- "$APP_ROOT/versions" "$APP_ROOT/current" "$APP_ROOT/current.new" "$APP_ROOT/current.rb" "$INFO"
       if [ -f "$BIN_DIR/eak-desktop" ] && grep -q '^# eak-source-install' "$BIN_DIR/eak-desktop" 2>/dev/null; then rm -f "$BIN_DIR/eak-desktop"; fi
+      for b in eak eak-mcp; do
+        if [ -f "$BIN_DIR/$b" ] && grep -q '^# eak-source-install' "$BIN_DIR/$b" 2>/dev/null; then rm -f "$BIN_DIR/$b"; fi
+      done
       if [ -f "$DATA/applications/eak.desktop" ] && grep -q '^X-EAK-Install=source' "$DATA/applications/eak.desktop" 2>/dev/null; then
         rm -f "$DATA/applications/eak.desktop" "$DATA/icons/hicolor/128x128/apps/eak.png"
       fi
@@ -188,6 +192,10 @@ if [ "$UNINSTALL" = 1 ] || [ "$CLEAN_CACHE" = 1 ]; then
       APP="$APP_ROOT/EAK.app"
       if [ -d "$APP" ] && grep -q 'dev.eak.desktop' "$APP/Contents/Info.plist" 2>/dev/null; then rm -rf -- "$APP"; info "removed $APP"
       else info "no EAK.app from this installer at $APP"; fi
+      rm -rf -- "$APP_ROOT/cli"
+      for b in eak eak-mcp; do
+        if [ -f "$BIN_DIR/$b" ] && grep -q '^# eak-source-install' "$BIN_DIR/$b" 2>/dev/null; then rm -f "$BIN_DIR/$b"; fi
+      done
       rm -rf -- "$HOME/Library/Application Support/EAK-installer"
     fi
   fi
@@ -432,7 +440,7 @@ fi
 
 # ------------------------------------------------------------------ 5. source download
 SRC="$BUILD_CACHE/src"
-KIND=""; ART=""; VERSION=""
+KIND=""; ART=""; VERSION=""; CLI_DIR=""
 if [ "$UP_TO_DATE" = 0 ]; then
   step "Downloading EAK source at $SHA"
   FETCHED=0
@@ -480,7 +488,7 @@ if [ "$UP_TO_DATE" = 0 ]; then
     fail "the EAK build failed" "Command: bash scripts/build.sh (in $SRC)" \
          "Common causes: out of memory (retry with EAK_BUILD_JOBS=1), missing system libraries, no network. See docs/INSTALL.md#troubleshooting"
   fi
-  KIND="$(sed -n 's/^kind=//p' "$RESULT")"; ART="$(sed -n 's/^path=//p' "$RESULT")"; VERSION="$(sed -n 's/^version=//p' "$RESULT")"
+  KIND="$(sed -n 's/^kind=//p' "$RESULT")"; ART="$(sed -n 's/^path=//p' "$RESULT")"; VERSION="$(sed -n 's/^version=//p' "$RESULT")"; CLI_DIR="$(sed -n 's/^cli_dir=//p' "$RESULT")"
   { [ -n "$KIND" ] && [ -e "$ART" ]; } || fail "the build did not report a usable artifact" "See $LOG"
   info "built EAK $VERSION: $ART"
 else
@@ -494,8 +502,29 @@ write_info() {
   {
     printf 'repo=%s\nref=%s\ncommit=%s\nversion=%s\nos=%s\narch=%s\n' "$REPO" "$REF" "$SHA" "$VERSION" "$OS" "$ARCH"
     printf 'installed_at=%s\nlog=%s\n' "$(date -u +%FT%TZ)" "$LOG"
+    printf 'cli=%s\n' "$( [ -n "$CLI_DIR" ] && echo "eak eak-mcp" || echo none )"
     printf 'rustc=%s\nnode=%s\n' "$(rustc --version 2>/dev/null || echo unknown)" "$(node --version 2>/dev/null || echo unknown)"
   } > "$INFO.tmp" && mv "$INFO.tmp" "$INFO"
+}
+
+# EAK CLI + MCP harness (built from the same commit): copied into $1, launchers on PATH in $BIN_DIR.
+# Terminal sessions in the app find them next to eak-desktop (or via these launchers).
+install_cli() {
+  local dest="$1" b
+  [ -n "$CLI_DIR" ] || fail "the build did not report the eak harness directory" "See $LOG"
+  mkdir -p "$BIN_DIR"
+  for b in eak eak-mcp; do
+    install -m 755 "$CLI_DIR/$b" "$dest/$b" || fail "could not install $b"
+    [ -s "$dest/$b" ] || fail "staged $b is empty"
+  done
+}
+link_cli() {
+  local dir="$1" b
+  for b in eak eak-mcp; do
+    printf '#!/bin/sh\n# eak-source-install: managed by the EAK source installer\nexec "%s" "$@"\n' "$dir/$b" > "$BIN_DIR/$b.tmp"
+    chmod 755 "$BIN_DIR/$b.tmp"; mv "$BIN_DIR/$b.tmp" "$BIN_DIR/$b"
+  done
+  info "CLI: $BIN_DIR/eak and $BIN_DIR/eak-mcp"
 }
 
 install_linux() {
@@ -508,6 +537,7 @@ install_linux() {
   install -m 755 "$ART" "$stage/eak-desktop"
   [ -s "$stage/eak-desktop" ] || fail "staged executable is empty"
   [ "$(head -c4 "$stage/eak-desktop" | od -An -tx1 | tr -d ' \n')" = 7f454c46 ] || fail "staged file is not a Linux executable"
+  install_cli "$stage"   # eak + eak-mcp next to eak-desktop; link_cli below points the launchers here
   prev="$(readlink "$APP_ROOT/current" 2>/dev/null || true)"
   mv "$stage" "$APP_ROOT/versions/$vname"
   RB_KIND=linux; RB_NEW="$APP_ROOT/versions/$vname"; RB_PREV="$prev"
@@ -516,6 +546,7 @@ install_linux() {
   APP_BIN="$APP_ROOT/current/eak-desktop"; LAUNCHER="$BIN_DIR/eak-desktop"
   printf '#!/bin/sh\n# eak-source-install: managed by the EAK source installer\nexec "%s" "$@"\n' "$APP_BIN" > "$LAUNCHER.tmp"
   chmod 755 "$LAUNCHER.tmp"; mv "$LAUNCHER.tmp" "$LAUNCHER"
+  link_cli "$APP_ROOT/current"
   cp "$SRC/apps/desktop/src-tauri/icons/128x128.png" "$DATA/icons/hicolor/128x128/apps/eak.png" 2>/dev/null \
     || info "warning: could not copy the application icon"
   cat > "$DATA/applications/eak.desktop" <<DESK
@@ -548,6 +579,7 @@ install_macos() {
   mv "$APP_ROOT/.EAK.app.new" "$dest"
   RB_KIND=macos; RB_NEW="$dest"; RB_PREV="$APP_ROOT/.EAK.app.old"
   APP_DIR="$dest"; LAUNCHER="$dest"
+  rm -rf -- "$APP_ROOT/cli"; mkdir -p "$APP_ROOT/cli"; install_cli "$APP_ROOT/cli"; link_cli "$APP_ROOT/cli"
   info "installed: $dest (not developer-signed, not notarized: built locally on this Mac)"
 }
 

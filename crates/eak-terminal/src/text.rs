@@ -10,10 +10,18 @@ pub fn strip_ansi(s: &str) -> String {
             '\x1b' => match it.next() {
                 // CSI: parameters, then one final byte in @..~
                 Some('[') => {
+                    let mut params = String::new();
                     for d in it.by_ref() {
                         if ('@'..='~').contains(&d) {
+                            // Cursor-forward (`CSI n C`) is how full-screen TUIs space words;
+                            // dropping it glues them together, so emit the blanks.
+                            if d == 'C' {
+                                let n = params.parse::<usize>().unwrap_or(1).clamp(1, 200);
+                                out.extend(std::iter::repeat_n(' ', n));
+                            }
                             break;
                         }
+                        params.push(d);
                     }
                 }
                 // OSC / DCS / APC / PM / SOS: up to BEL or ST (ESC \)
@@ -75,6 +83,15 @@ mod tests {
     fn strips_colour_osc_and_cursor_codes() {
         let raw = "\x1b]0;title\x07\x1b[1;32mok\x1b[0m done\r\n\x1b[?2004hnext";
         assert_eq!(strip_ansi(raw), "ok done\nnext");
+    }
+
+    #[test]
+    fn cursor_forward_becomes_spaces() {
+        // Claude Code style output: words separated only by `CSI n C`.
+        assert_eq!(
+            strip_ansi("Accessing\x1b[1Cworkspace:\x1b[3Cx\x1b[Cy"),
+            "Accessing workspace:   x y"
+        );
     }
 
     #[test]
