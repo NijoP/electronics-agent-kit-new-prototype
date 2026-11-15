@@ -1293,12 +1293,11 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             );
             if res.routed_connections == 0 && res.failed_connections.is_empty() {
                 // Say which nets are still open, so a filtered call is not read as "all done".
-                let open: std::collections::BTreeSet<String> =
-                    eak_engineering::copper::analyse(p)
-                        .ratsnest
-                        .into_iter()
-                        .map(|(n, _, _)| n)
-                        .collect();
+                let open: std::collections::BTreeSet<String> = eak_engineering::copper::analyse(p)
+                    .ratsnest
+                    .into_iter()
+                    .map(|(n, _, _)| n)
+                    .collect();
                 return Err(CommandError::NothingTo(match (nets, open.is_empty()) {
                     (_, true) => "route: no unrouted connections".into(),
                     (Some(only), false) => format!(

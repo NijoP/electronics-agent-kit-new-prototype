@@ -1558,9 +1558,18 @@ const ENV_ALLOW_PREFIX: &[&str] = &["LC_", "XDG_", "EAK_"];
 /// prefix; only [`PASSTHROUGH_VAR`] can pass them.
 fn looks_secret(name: &str) -> bool {
     let n = name.to_ascii_uppercase();
-    ["TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "APIKEY", "API_KEY", "PRIVATE_KEY"]
-        .iter()
-        .any(|s| n.contains(s))
+    [
+        "TOKEN",
+        "SECRET",
+        "PASSWORD",
+        "PASSWD",
+        "CREDENTIAL",
+        "APIKEY",
+        "API_KEY",
+        "PRIVATE_KEY",
+    ]
+    .iter()
+    .any(|s| n.contains(s))
         || n.ends_with("_KEY")
 }
 
@@ -1590,7 +1599,10 @@ fn inherited_env(
 fn find_cli() -> Option<PathBuf> {
     let name = if cfg!(windows) { "eak.exe" } else { "eak" };
     let mut dirs = Vec::new();
-    if let Some(d) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
+    if let Some(d) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_path_buf))
+    {
         dirs.push(d);
     }
     dirs.push(home_dir().join(".local").join("bin"));
@@ -1687,13 +1699,28 @@ mod tests {
             .map(v)
         };
         let names = |p: &str| -> Vec<String> {
-            inherited_env(all(), p).into_iter().map(|(k, _)| k).collect()
+            inherited_env(all(), p)
+                .into_iter()
+                .map(|(k, _)| k)
+                .collect()
         };
         let got = names("");
-        for k in ["PATH", "HOME", "LC_ALL", "XDG_CONFIG_HOME", "EAK_PROJECT_DIR"] {
+        for k in [
+            "PATH",
+            "HOME",
+            "LC_ALL",
+            "XDG_CONFIG_HOME",
+            "EAK_PROJECT_DIR",
+        ] {
             assert!(got.contains(&k.to_string()), "{k} should be kept");
         }
-        for k in ["GITHUB_TOKEN", "OPENAI_API_KEY", "AWS_SECRET_ACCESS_KEY", "EAK_API_KEY", "RANDOM_VAR"] {
+        for k in [
+            "GITHUB_TOKEN",
+            "OPENAI_API_KEY",
+            "AWS_SECRET_ACCESS_KEY",
+            "EAK_API_KEY",
+            "RANDOM_VAR",
+        ] {
             assert!(!got.contains(&k.to_string()), "{k} must be dropped");
         }
         assert!(names("github_token, OPENAI_API_KEY").contains(&"GITHUB_TOKEN".to_string()));

@@ -215,16 +215,20 @@ mod tests {
     #[test]
     fn only_human_verified_limits_are_design_grade() {
         assert!(value(LimitClass::AbsoluteMaximum, None, human()).is_design_grade_limit());
-        assert!(!value(LimitClass::AbsoluteMaximum, None, Extraction::ExtractedAuto)
-            .is_design_grade_limit());
+        assert!(
+            !value(LimitClass::AbsoluteMaximum, None, Extraction::ExtractedAuto)
+                .is_design_grade_limit()
+        );
         assert!(
             !value(LimitClass::Characteristic, Some(Statistic::Max), human())
                 .is_design_grade_limit()
         );
-        assert!(
-            !value(LimitClass::RecommendedOperating, Some(Statistic::Typ), human())
-                .is_design_grade_limit()
-        );
+        assert!(!value(
+            LimitClass::RecommendedOperating,
+            Some(Statistic::Typ),
+            human()
+        )
+        .is_design_grade_limit());
     }
 
     #[test]

@@ -190,7 +190,10 @@ fn island_size_at(f: &ZoneFill, sizes: &[usize], pt: Point) -> usize {
 fn escaped(copper: &[CopperItem], pad: &CopperItem) -> bool {
     let via_at = |pt: Point| {
         copper.iter().any(|v| {
-            v.kind == ItemKind::Via && v.net == pad.net && v.layer == pad.layer && v.shape.contains(pt)
+            v.kind == ItemKind::Via
+                && v.net == pad.net
+                && v.layer == pad.layer
+                && v.shape.contains(pt)
         })
     };
     copper.iter().any(|t| {
@@ -530,7 +533,11 @@ mod tests {
         p.pcb.zones.remove("zb");
         let plan = plan(&p, Some("GND"));
         assert!(plan.vias.is_empty());
-        assert!(plan.notes[0].contains("1 layer(s) only"), "{:?}", plan.notes);
+        assert!(
+            plan.notes[0].contains("1 layer(s) only"),
+            "{:?}",
+            plan.notes
+        );
     }
 
     /// Regression for dev-board run B (GND unrouted, 43 pour islands): orphan SMD pads get

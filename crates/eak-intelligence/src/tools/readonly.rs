@@ -392,8 +392,7 @@ fn analyze_routing(p: &Project, preview: bool) -> Value {
     let conn = copper::analyse(p);
     let mut todo = conn.ratsnest.clone();
     priority::order_connections(p, &mut todo);
-    let nets: std::collections::BTreeSet<String> =
-        todo.iter().map(|(n, _, _)| n.clone()).collect();
+    let nets: std::collections::BTreeSet<String> = todo.iter().map(|(n, _, _)| n.clone()).collect();
     let terminals = priority::terminal_counts(p);
     let order: Vec<Value> = todo
         .iter()

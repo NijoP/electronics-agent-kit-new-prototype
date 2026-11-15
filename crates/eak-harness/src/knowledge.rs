@@ -62,7 +62,10 @@ fn search(engine: &Engine, args: &Value) -> Result<Value, Fail> {
         .and_then(Value::as_u64)
         .map_or(5, |n| n as usize);
     let idx = index(engine)?;
-    let part = args.get("part").and_then(Value::as_str).filter(|s| !s.trim().is_empty());
+    let part = args
+        .get("part")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty());
     let hits = idx.search_filtered(query, limit, kind_filter(args)?, part);
     Ok(json!({
         "advisory": ADVISORY,
@@ -164,7 +167,8 @@ fn import(engine: &Engine, args: &Value) -> Result<Value, Fail> {
         .filter(|s| !s.trim().is_empty())
         .map(|s| vec![s.to_string()])
         .unwrap_or_default();
-    let summary = user.add_source_for_part(SourceKind::UserDocument, &source, &revision, &text, &parts);
+    let summary =
+        user.add_source_for_part(SourceKind::UserDocument, &source, &revision, &text, &parts);
     user.save_user(dir)
         .map_err(|e| fail(ErrorCode::Storage, e))?;
     Ok(json!({

@@ -300,7 +300,11 @@ pub fn main_with(args: Vec<String>) -> i32 {
                         _ => usage("rework approve <PLAN_ID> <FINGERPRINT>"),
                     };
                 }
-                _ => return usage("rework <inspect|baseline|audit|protect|plan|apply|report|approve>"),
+                _ => {
+                    return usage(
+                        "rework <inspect|baseline|audit|protect|plan|apply|report|approve>",
+                    )
+                }
             }
         }
         other => return usage(&format!("unknown command {other}")),

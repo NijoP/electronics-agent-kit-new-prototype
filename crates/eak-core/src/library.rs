@@ -350,7 +350,8 @@ impl ComponentDef {
     pub fn migrate_offers(&mut self) {
         if let Some(part) = self.lcsc.clone().filter(|s| !s.trim().is_empty()) {
             if !self.supplier_offers.iter().any(|o| o.supplier == "lcsc") {
-                self.supplier_offers.push(SupplierOffer::bare("lcsc", &part));
+                self.supplier_offers
+                    .push(SupplierOffer::bare("lcsc", &part));
             }
         }
     }
@@ -493,8 +494,7 @@ mod model_ref_tests {
     #[test]
     fn legacy_model3d_json_without_model_ref_still_loads() {
         let m: Model3d =
-            serde_json::from_str(r##"{"kind":"box","color":"#000","external_ref":null}"##)
-                .unwrap();
+            serde_json::from_str(r##"{"kind":"box","color":"#000","external_ref":null}"##).unwrap();
         assert!(m.model_ref.is_none());
     }
 }
@@ -522,11 +522,14 @@ mod search_tests {
 
 #[cfg(test)]
 mod supplier_offer_tests {
-    use crate::builtin;
     use super::*;
+    use crate::builtin;
 
     fn part() -> ComponentDef {
-        builtin::components().into_iter().next().expect("a builtin part")
+        builtin::components()
+            .into_iter()
+            .next()
+            .expect("a builtin part")
     }
 
     #[test]
@@ -539,7 +542,10 @@ mod supplier_offer_tests {
         assert_eq!(def.supplier_part("LCSC"), Some("C25804"));
         def.migrate_offers();
         def.migrate_offers();
-        assert_eq!(def.supplier_offers, vec![SupplierOffer::bare("lcsc", "C25804")]);
+        assert_eq!(
+            def.supplier_offers,
+            vec![SupplierOffer::bare("lcsc", "C25804")]
+        );
     }
 
     #[test]
@@ -550,7 +556,10 @@ mod supplier_offer_tests {
         let mut with = def.clone();
         with.set_offer(SupplierOffer::bare("lcsc", "C1"));
         assert_eq!(with.lcsc.as_deref(), Some("C1"));
-        assert_eq!((&with.mpn, &with.manufacturer), (&def.mpn, &def.manufacturer));
+        assert_eq!(
+            (&with.mpn, &with.manufacturer),
+            (&def.mpn, &def.manufacturer)
+        );
         let back: ComponentDef =
             serde_json::from_value(serde_json::to_value(&with).unwrap()).unwrap();
         assert_eq!(back, with);
