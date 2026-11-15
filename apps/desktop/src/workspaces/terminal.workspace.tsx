@@ -18,7 +18,7 @@ const bump = () => {
   listeners.forEach((l) => l());
 };
 
-function Terminal({ active, project }: { active: boolean; project: { dir: string; name: string; id: string } | null }) {
+function Terminal({ active, project }: { active: boolean; project: { dir: string; name: string; id: string; revision?: number | null } | null }) {
   const newSpaceNonce = useSyncExternalStore(subscribe, () => nonce);
   return <TerminalWorkspace visible={active} newSpaceNonce={newSpaceNonce} project={project} />;
 }
