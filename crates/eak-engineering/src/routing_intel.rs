@@ -423,6 +423,9 @@ mod tests {
         assert!(s.notes.iter().any(|n| n.contains("raised")));
         let plain = net_spec(&p, "SIG");
         assert_eq!(plain.track_width, p.constraints.default_class.track_width);
-        assert!(plain.notes.iter().any(|n| n.contains("no declared current")));
+        assert!(plain
+            .notes
+            .iter()
+            .any(|n| n.contains("no declared current")));
     }
 }

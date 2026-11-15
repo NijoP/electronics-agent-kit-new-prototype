@@ -1,7 +1,10 @@
 //! Revision-bound verification evidence (Spec §9; Execution Instructions §9.1).
 //! A report always lists what was NOT checked; "no errors" never means "design correct".
 
-use crate::state::{subsystem_of, CheckState, Currency, Detectability, Likelihood, RiskRecord, RuleResult, Severity as RiskSeverity};
+use crate::state::{
+    subsystem_of, CheckState, Currency, Detectability, Likelihood, RiskRecord, RuleResult,
+    Severity as RiskSeverity,
+};
 use eak_core::{Id, Point, Project};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -278,7 +281,9 @@ impl Report {
 
     /// A report speaks only for the project id, revision and canonical content it ran on.
     pub fn currency(&self, p: &Project) -> Currency {
-        if self.project_id == p.id && self.revision == p.revision && self.input_sha256 == project_hash(p)
+        if self.project_id == p.id
+            && self.revision == p.revision
+            && self.input_sha256 == project_hash(p)
         {
             Currency::Current
         } else {
@@ -331,13 +336,19 @@ impl Report {
                         Detectability::NotChecked
                     },
                     consequence: if failed {
-                        format!("{} reports a violation that must be resolved before release", r.rule_id)
+                        format!(
+                            "{} reports a violation that must be resolved before release",
+                            r.rule_id
+                        )
                     } else {
                         format!("{} could not be evaluated: {}", r.rule_id, r.reason)
                     },
-                    evidence: std::iter::once(format!("{} report, revision {}", self.check, self.revision))
-                        .chain(ids)
-                        .collect(),
+                    evidence: std::iter::once(format!(
+                        "{} report, revision {}",
+                        self.check, self.revision
+                    ))
+                    .chain(ids)
+                    .collect(),
                     mitigation: None,
                     approval_required: severity >= RiskSeverity::High,
                 }

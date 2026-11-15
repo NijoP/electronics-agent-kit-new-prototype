@@ -5,6 +5,9 @@
 //! response captured from LCSC's public endpoint on 2026-11-14 (trimmed to the fields the
 //! ingest boundary reads). The keyword-search response shape could not be observed (LCSC
 //! answers 403), so the only keyword-search success test uses an assumed shape and says so.
+//!
+//! `UreqFetch` exists only with the `live-http` feature, so this file builds only with it.
+#![cfg(feature = "live-http")]
 
 use eak_core::{builtin, Point, Project};
 use eak_manufacturing::bom;

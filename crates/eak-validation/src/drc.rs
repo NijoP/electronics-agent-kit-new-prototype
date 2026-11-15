@@ -462,7 +462,7 @@ pub fn run(p: &Project) -> Report {
                     finding(
                         "DRC-013",
                         Warning,
-                        format!("zone {} has no fill (completely cleared)", z),
+                        format!("zone {z} has no fill (completely cleared)"),
                         vec![z.clone()],
                         at,
                     )
