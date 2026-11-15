@@ -72,6 +72,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Auto-route (two layers) | integ | `eak-manufacturing/tests/end_to_end.rs::reference_design_end_to_end` (20/20 connections); connection order is now net priority (power/ground, high current, terminal count; DESK model in `eak_engineering::priority`) then length; plus congestion cost, multi-pass with stagnation stop, selective rip-up, diff-pair adjacency, current-sized widths (`routing_intel`, ADR-0023) - code-reviewed only, unrun |
 | Existing-project rework (inspect, baseline, audit, protect, plan, human approval, apply with readback, report) | code-reviewed only | `eak-harness/src/rework.rs`, `docs/agents/REWORK.md`, ADR-0022; unit tests written, unrun; no end-to-end run on a real project |
 | Copper zones (engine, raster fill) | integ | reference design GND pour; DRC-013 zone islands |
+| Zone stitching (`StitchZones`), dead-copper removal | code-reviewed only | DESK `stitch_orphans` method, ADR-0030; never compiled or run |
 | Copper zone editing UI, thermal reliefs | - | thermal reliefs are in unmerged PR #5 |
 | Text, dimensions, keepouts, rule regions | - | |
 

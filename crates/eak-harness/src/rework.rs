@@ -712,6 +712,7 @@ fn step_touches(step: &Value, idx: &Index) -> Result<Touches, String> {
         "AutoPlace" => return Err("AutoPlace repositions every unlocked footprint; rework repairs must be surgical (use MoveFootprint on named footprints)".into()),
         "AutoRoute" if missing("nets") => return Err("AutoRoute needs `nets`: rework routes only the nets an issue names".into()),
         "ClearRouting" if missing("net") => return Err("ClearRouting needs a `net`".into()),
+        "StitchZones" if missing("net") => return Err("StitchZones needs a `net`: rework stitches only the net an issue names".into()),
         _ => {}
     }
     let mut hit = BTreeSet::new();

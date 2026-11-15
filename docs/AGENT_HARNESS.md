@@ -57,7 +57,7 @@ Lengths are **integer nanometres** (1 mm = 1 000 000). Rotations are `R0|R90|R18
 | Category | Effect | Tools |
 |---|---|---|
 | `read` | none | `project_info`, `list_symbols`, `get_component`, `list_footprints`, `get_board`, `get_connectivity`, `get_history`, `get_design_summary`, `get_netlist`, `list_library_components`, `classify_domain`, `calc_*` (incl. `calc_copper_trace_width`, `calc_copper_voltage_drop`: every input explicit), `power_analysis` |
-| `design` | one new revision (needs `expected_revision`) | one tool per EAK command (`PlaceSymbol`, `ConnectPins`, `SyncSchematicToPcb`, `SetBoardOutline`, `MoveFootprint`, `AddTrack`, `AddVia`, `AddZone`, `AutoRoute`, `Batch`, ...), `Undo`, `Redo` |
+| `design` | one new revision (needs `expected_revision`) | one tool per EAK command (`PlaceSymbol`, `ConnectPins`, `SyncSchematicToPcb`, `SetBoardOutline`, `MoveFootprint`, `AddTrack`, `AddVia`, `AddZone`, `AutoRoute`, `StitchZones`, `Batch`, ...), `Undo`, `Redo` |
 | `simulation` | none (ngspice on a snapshot) | `simulation_status`, `run_simulation` |
 | `validation` | stores evidence only | `run_check` (`erc`, `drc`, `mech`, `dfm`, `all`), `run_gates` (fail-closed gates, ADR-0021; only PASS passes) |
 | `manufacturing` | writes `output/rev-N/` only | `export_manufacturing` |
@@ -65,6 +65,22 @@ Lengths are **integer nanometres** (1 mm = 1 000 000). Rotations are `R0|R90|R18
 | `rework` | evidence in `rework/<session>/`; `rework_apply` = one revision per repair after human approval (`eak rework approve`) | `rework_inspect`, `rework_baseline`, `rework_audit`, `rework_protect`, `rework_plan`, `rework_apply`, `rework_report` (ADR-0022; loop in `docs/agents/REWORK.md`) |
 | `knowledge` | none for the design; `knowledge_import` writes only `knowledge/index.json` | `knowledge_search`, `knowledge_lookup`, `knowledge_cite`, `knowledge_import` (ADR-0024): advisory text with source/page/revision/hash, **never a validation result** |
 | `project` / `discovery` | creates a folder / none | `create_project`, `list_tools`, `guide`, `design_spec_schema` |
+
+## Board flow (DESK method; heuristics, not a certification)
+
+1. Mark where each supply enters the board: library connector pins are passive, so put a power
+   port (the PWR_FLAG equivalent) on the connector pin of every external rail and of GND:
+   `{"type":"LabelPin","symbol_id":"<J1>","pin":"1","name":"VBUS","kind":"power"}`. Otherwise
+   ERC-003 reports "nothing drives it"; its fix text names the exact command.
+2. `SyncSchematicToPcb`, `SetBoardOutline`, `AutoPlace`, then `AutoRoute` (signals and power).
+   If no connection can be routed, AutoRoute fails with `precondition` and lists each connection
+   and why; `nothing_to_do` names the nets still unrouted.
+3. Pour GND on **every** copper layer (`AddZone` per layer over the board), then
+   `StitchZones {"net":"GND"}`: escape via + short track for each GND SMD pad the pour of its
+   own layer does not reach, and a stitching via for each pour island without one. Islands that
+   touch no GND copper are dropped from the fill as dead copper.
+4. `run_check all`, then `run_gates`; fix what they report and repeat. Nothing here certifies
+   the board.
 
 ## Errors
 

@@ -212,6 +212,13 @@ pub enum Command {
         #[serde(default)]
         net: Option<String>,
     },
+    /// Stitch copper pours (DESK `stitch_orphans`): an escape via and pad-to-via track for each
+    /// SMD pad of the zone net its own layer's fill does not reach, and a stitching via for each
+    /// fill island with no via. Needs a zone of the net on two or more layers.
+    StitchZones {
+        #[serde(default)]
+        net: Option<String>,
+    },
     // ---- constraints / manufacturing
     SetDesignRules {
         min_track_width: Option<Nm>,
@@ -311,6 +318,7 @@ impl Command {
             | DeleteZone { .. }
             | AutoPlace { .. }
             | AutoRoute { .. }
+            | StitchZones { .. }
             | SetDesignRules { .. }
             | UpsertNetClass { .. }
             | SetNetCurrent { .. }
@@ -1284,9 +1292,48 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 },
             );
             if res.routed_connections == 0 && res.failed_connections.is_empty() {
-                return Err(CommandError::NothingTo(
-                    "route: no unrouted connections".into(),
-                ));
+                // Say which nets are still open, so a filtered call is not read as "all done".
+                let open: std::collections::BTreeSet<String> =
+                    eak_engineering::copper::analyse(p)
+                        .ratsnest
+                        .into_iter()
+                        .map(|(n, _, _)| n)
+                        .collect();
+                return Err(CommandError::NothingTo(match (nets, open.is_empty()) {
+                    (_, true) => "route: no unrouted connections".into(),
+                    (Some(only), false) => format!(
+                        "route: none of {} has an unrouted connection; still unrouted: {}",
+                        only.join(", "),
+                        open.into_iter().collect::<Vec<_>>().join(", ")
+                    ),
+                    (None, false) => format!(
+                        "route: nothing the router can attempt; still unrouted: {}",
+                        open.into_iter().collect::<Vec<_>>().join(", ")
+                    ),
+                }));
+            }
+            if res.tracks.is_empty() && res.vias.is_empty() {
+                // Every attempt failed: the empty change would otherwise surface as a bare
+                // "no change" and drop the reasons (dev-board run A/B, issue E2).
+                let why: Vec<String> = res
+                    .failed_connections
+                    .iter()
+                    .take(10)
+                    .map(|(net, a, b, why)| {
+                        format!(
+                            "{net} ({:.2},{:.2})→({:.2},{:.2}) mm: {why}",
+                            geom::to_mm(a.x),
+                            geom::to_mm(a.y),
+                            geom::to_mm(b.x),
+                            geom::to_mm(b.y)
+                        )
+                    })
+                    .collect();
+                return Err(CommandError::Precondition(format!(
+                    "router could not route any of {} connection(s): {}. Move parts apart (AutoPlace / MoveFootprint), add a layer (SetLayerCount), or route these by hand (AddTrack / AddVia); a GND pad can join a two-layer pour with StitchZones",
+                    res.failed_connections.len(),
+                    why.join("; ")
+                )));
             }
             for t in res.tracks {
                 let id = new_id("trk");
@@ -1352,6 +1399,70 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     geom::to_mm(b.y)
                 ));
             }
+        }
+        StitchZones { net } => {
+            if !p
+                .pcb
+                .zones
+                .values()
+                .any(|z| net.as_ref().is_none_or(|n| &z.net == n))
+            {
+                return Err(CommandError::Precondition(match net {
+                    Some(n) => format!("no zone on net {n}: add {n} zones with AddZone on every copper layer first (DESK pours ground on all layers)"),
+                    None => "no zones to stitch: add zones with AddZone first".into(),
+                }));
+            }
+            let plan = eak_engineering::stitch::plan(p, net.as_deref());
+            if plan.vias.is_empty() {
+                return Err(CommandError::NothingTo(if plan.notes.is_empty() {
+                    "stitch: every pad and pour island is already joined".into()
+                } else {
+                    format!("stitch: nothing placed; {}", plan.notes.join("; "))
+                }));
+            }
+            for t in plan.tracks {
+                let id = new_id("trk");
+                p.pcb.tracks.insert(
+                    id.clone(),
+                    Track {
+                        id: id.clone(),
+                        layer: t.layer,
+                        width: t.width,
+                        a: t.a,
+                        b: t.b,
+                        net: t.net,
+                    },
+                );
+                created.push(id);
+            }
+            let n_vias = plan.vias.len();
+            for v in plan.vias {
+                let id = new_id("via");
+                p.pcb.vias.insert(
+                    id.clone(),
+                    Via {
+                        id: id.clone(),
+                        position: v.position,
+                        drill: v.drill,
+                        diameter: v.diameter,
+                        net: v.net,
+                        from: CopperLayer::Top,
+                        to: CopperLayer::Bottom,
+                    },
+                );
+                created.push(id);
+            }
+            warnings.push(format!(
+                "stitch: {n_vias} via(s): {} pad escape(s), {} pour island(s) stitched",
+                plan.pads_stitched, plan.islands_stitched
+            ));
+            for note in plan.notes.iter().take(20) {
+                warnings.push(format!("stitch: {note}"));
+            }
+            warnings.push(
+                "stitch: connectivity is not certified here; run run_check drc (DRC-004/013/014)"
+                    .into(),
+            );
         }
         ClearRouting { net } => {
             let before = p.pcb.tracks.len() + p.pcb.vias.len();

@@ -224,6 +224,7 @@ export type Command =
   | { type: "AutoPlace"; grid: Nm | null }
   | { type: "AutoRoute"; nets: string[] | null }
   | { type: "ClearRouting"; net: string | null }
+  | { type: "StitchZones"; net: string | null }
   | { type: "Batch"; commands: Command[]; label?: string | null };
 
 export interface CommandError {

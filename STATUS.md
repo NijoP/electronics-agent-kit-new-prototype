@@ -21,6 +21,7 @@ assistant panel was removed in the IDE shell (#49); model providers remain as op
 | ERC / DRC / MECH, sourcing checks | build/test-verified | reports list `not_implemented` and `limitations` |
 | Placement intelligence (roles, snaps, `analyze_placement`) | code-reviewed only, unbuilt | DESK-derived heuristics; no thermal, RF, switching-node or escape analysis |
 | Router intelligence (passes, rip-up, congestion, pairs) and existing-project rework | code-reviewed only | never compiled or run; see ADR-0022/0023 |
+| Zone stitching, dead-copper removal, AutoRoute failure reasons, ERC-003 power-port fix text | code-reviewed only | never compiled or run; ADR-0030, `docs/engineering/DESK_PIPELINE_PARITY.md` |
 | Engineering calculators, router, placer | build/test-verified | IPC tables not checked against the standard text |
 | Gerber / drill / BOM / CPL, JLCPCB preparation | build/test-verified | DRAFT output; no external viewer or fabricator check |
 | Schematic and PCB editors (select, drag, flip, grids, align) | build/test-verified (jsdom + engine) | not exercised in a real window |

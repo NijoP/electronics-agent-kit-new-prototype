@@ -457,7 +457,20 @@ pub fn run(p: &Project) -> Report {
                 touched.extend(fill.islands_touching(&it.shape));
             }
             let isolated = (1..=fill.islands).filter(|k| !touched.contains(k)).count();
-            if fill.islands == 0 {
+            if fill.islands == 0 && fill.removed_islands > 0 {
+                f.push(
+                    finding(
+                        "DRC-013",
+                        Warning,
+                        format!("zone {z} has no fill: its {} island(s) touch no {} copper on {} and were removed as dead copper", fill.removed_islands, fill.net, fill.layer.name()),
+                        vec![z.clone()],
+                        at,
+                    )
+                    .fix(format!(
+                        "Give zone {z} a {} anchor on {}: a {} pad, track or via inside it (StitchZones adds stitching vias), or delete the zone.", fill.net, fill.layer.name(), fill.net
+                    )),
+                );
+            } else if fill.islands == 0 {
                 f.push(
                     finding(
                         "DRC-013",
