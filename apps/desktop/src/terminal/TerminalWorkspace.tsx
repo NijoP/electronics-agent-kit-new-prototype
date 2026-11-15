@@ -7,6 +7,7 @@ import { describeStatus, term, type Overview, type SessionInfo, type Space, type
 import { disposeTerminal, XTermView } from "./XTermView";
 import { StatusDot } from "../design/ui";
 import { agentRows, launchArgv, STATE_WORD, type AgentRow } from "./agents";
+import { boundToOtherProject, spaceForProject } from "./projectSpace";
 
 export interface ProjectContext { dir: string; name: string; id: string }
 
@@ -84,13 +85,24 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
     });
   const newTerminal = (sp: number | null = spaceId) => openSession(sp != null ? { space: sp } : {});
   const split = (direction: "row" | "column") => current && openSession({ split_of: current.id, direction });
+  // The open project's space (found by project id or folder, created when missing). Its sessions
+  // export EAK_PROJECT_DIR / EAK_PROJECT_ID for the project the editors show.
+  const ensureProjectSpace = useCallback(async (): Promise<Space | null> => {
+    if (!project) return null;
+    const ovNow = await term.overview();
+    return spaceForProject(ovNow.spaces, project) ?? (await term.spaceCreate(project.name, project.dir));
+  }, [project]);
   // Runs the agent executable itself as the PTY program (never a shell labelled as the agent).
+  // With a project open the agent always starts in that project's space: started in another
+  // project's space it would edit that project, and nothing would appear in the open editors.
   const launch = (a: AgentRow) =>
     act(async () => {
-      const s = await term.create({ ...(spaceId != null ? { space: spaceId } : {}), name: a.label, command: launchArgv(a) });
+      const target = (await ensureProjectSpace())?.id ?? spaceId;
+      const s = await term.create({ ...(target != null ? { space: target } : {}), name: a.label, command: launchArgv(a) });
       setActiveSpace(s.space);
       await term.focus(s.id);
     });
+  const otherProject = boundToOtherProject(space, project);
   const focus = (s: SessionInfo) => {
     setActiveSpace(s.space);
     act(() => term.focus(s.id));
@@ -122,14 +134,12 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
   const renameSession = (s: SessionInfo) => setRename({ label: "Rename terminal", value: s.name, save: (v) => term.rename(s.id, v) });
   const renameSpace = (sp: Space) => setRename({ label: "Rename space", value: sp.name, save: (v) => term.spaceRename(sp.id, v) });
   const projectSpace = useCallback(async () => {
-    if (!project) return;
-    const ovNow = await term.overview();
-    const have = ovNow.spaces.find((s) => s.root === project.dir);
-    const sp = have ?? (await term.spaceCreate(project.name, project.dir));
+    const sp = await ensureProjectSpace();
+    if (!sp) return;
     setActiveSpace(sp.id);
-    if (!ovNow.sessions.some((s) => s.space === sp.id)) await term.create({ space: sp.id });
+    if (!(await term.overview()).sessions.some((s) => s.space === sp.id)) await term.create({ space: sp.id });
     await refresh();
-  }, [project, refresh]);
+  }, [ensureProjectSpace, refresh]);
 
   useEffect(() => {
     if (newSpaceNonce > 0) void projectSpace().catch((e) => setMessage(String(e)));
@@ -332,6 +342,15 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
               </div>
             )}
           </div>
+          {otherProject && project && space && (
+            <div className="term-msg term-other-project" role="alert">
+              Space “{space.name}” belongs to another project, not “{project.name}” (open in the editors). Agents here
+              edit that project, so their changes will not appear in the schematic or PCB.
+              <button type="button" onClick={() => void projectSpace().catch((e) => setMessage(String(e)))}>
+                Go to {project.name}’s space
+              </button>
+            </div>
+          )}
           {message && (
             <div className="term-msg" role="status">
               {message} <button type="button" onClick={() => setMessage(null)}>Dismiss</button>
