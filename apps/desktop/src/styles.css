@@ -320,9 +320,18 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .library-panel .field { display: grid; gap: 2px; font-size: var(--fs-sm); }
 
 .tb-title { display: flex; gap: var(--s-1); align-items: baseline; margin-right: var(--s-1); }
-.tb-group { display: flex; gap: var(--s-half); padding-right: var(--s-1); border-right: 1px solid var(--line); }
+.tb-group { display: flex; flex-direction: column; gap: var(--s-quarter); padding-right: var(--s-1h); border-right: 1px solid var(--line); }
 .tb-group:last-child { border-right: 0; }
-.toolbar button { padding: 0 var(--s-1); height: var(--h-sm); }
+.tb-cap { font-size: var(--fs-2xs); font-weight: var(--fw-strong); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--fg-faint); }
+.tb-row { display: flex; gap: var(--s-half); }
+.tb-item { display: inline-flex; }
+.toolbar button { padding: 0 var(--s-1h); height: var(--h-md); font-size: var(--fs-md); }
+.toolbar button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.toolbar button:disabled { color: var(--fg-faint); cursor: help; }
+.tb-more { position: relative; margin-left: auto; }
+.tb-pop { position: absolute; right: 0; top: calc(100% + var(--s-half)); z-index: var(--z-popover); display: grid; gap: var(--s-1); padding: var(--s-1h); background: var(--bg-raised); border: 1px solid var(--line-strong); border-radius: var(--r-2); box-shadow: var(--shadow); }
+.tb-pop .tb-group { border-right: 0; padding-right: 0; }
+.tb-pop .tb-row { flex-wrap: wrap; max-width: 420px; }
 .toolbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 
 /* Simulation panel */
