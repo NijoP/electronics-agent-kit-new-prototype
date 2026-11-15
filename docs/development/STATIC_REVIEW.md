@@ -28,3 +28,24 @@ Checked and consistent (reviewed-only):
 Not covered (needs a real `tsc`/test run): structural typing of large object literals, generic
 inference and strict-null narrowing inside the big views (`PcbView`, `SchematicView`, `Workspace`,
 `Viewer3D`).
+
+## Rust kernel crates (eak-core, eak-runtime, eak-engineering, eak-validation, eak-manufacturing, eak-simulation) — `fm/eak-sr-kernel`
+
+Reviewed-only, **not compiled**. Method: reading every `src`/`tests` file plus `rustfmt --check` (parse only) and grep across
+the workspace for consumers. Checked: `mod` declarations vs files, every `use` path, struct fields and fn signatures at call
+sites, enum-match exhaustiveness, serde derives on IPC types, Cargo.toml dependencies vs `Cargo.lock`, ureq 3.5.2 calls and
+`live-http` gating. **No hard compile error was found by reading.**
+
+| File | Error | Root cause | Fix |
+|---|---|---|---|
+| `eak-engineering/src/placement_intel.rs:15` | unused import `to_mm` (error under `-D warnings`) | imported, never used | removed |
+| `eak-engineering/src/placement_intel.rs:335` | clippy `unnecessary_lazy_evaluations` | `.then(\|\| cmp)` | `.then_some(cmp)` |
+| `eak-validation/src/sourcing.rs:51` | clippy `manual_range_contains` | `len >= 2 && len <= 13` | `(2..=13).contains(&len)` |
+| `eak-validation/src/drc.rs:465` | clippy `uninlined_format_args` | `format!("zone {} …", z)` | `format!("zone {z} …")` |
+| `eak-manufacturing/tests/lcsc_jlcpcb.rs:1` | would not compile with `--no-default-features` | imports `UreqFetch`, which exists only under `live-http` | `#![cfg(feature = "live-http")]` |
+| 9 files (engineering: `interactive`, `placement_intel`, `placer`, `router`, `routing_intel`; validation: `report`, `state`; manufacturing: `provider`, `sourcing`) | `cargo fmt --check` would fail | formatting drift | `rustfmt` (whitespace only) |
+
+Not settled by reading (watch on the first real build): inference of `.sum()`/`.collect()` in `routing_intel::diff_pairs` and
+`placement_intel::airwire`; tuple-of-closure coercion in `eak-runtime/tests/schematic_edit.rs:244`; `net_of` closure lifetime in
+`eak-simulation/src/run.rs`; `Option::is_none_or`/`usize::is_multiple_of` vs `rust-version = "1.80"` (clippy `incompatible_msrv`);
+pinned SHA-256 values and file counts in manufacturing tests and the `builtin_m1_parts.json` golden fixture were not re-hashed.
