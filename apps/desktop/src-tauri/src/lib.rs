@@ -550,6 +550,33 @@ pub fn current_project(s: &Session) -> Result<Snapshot, String> {
     s.with_engine(|e| snapshot(e))
 }
 
+/// One schematic net for the Netlist panel: computed by `eak-engineering` (the engine's own
+/// connectivity, the same netlist ERC and PCB sync use), never rebuilt in the UI.
+#[derive(Debug, Clone, Serialize)]
+pub struct NetRow {
+    pub name: String,
+    /// `R1.1`-style pin references.
+    pub pins: Vec<String>,
+    pub label_names: Vec<String>,
+    pub has_power_port: bool,
+}
+
+/// Read-only netlist of the active project at its current revision.
+pub fn netlist(s: &Session) -> Result<Vec<NetRow>, String> {
+    s.with_engine(|e| {
+        eak_engineering::netlist::build(e.project())
+            .nets
+            .into_values()
+            .map(|n| NetRow {
+                name: n.name,
+                pins: n.pins.iter().map(|p| format!("{}.{}", p.refdes, p.pin)).collect(),
+                label_names: n.label_names,
+                has_power_port: n.has_power_port,
+            })
+            .collect()
+    })
+}
+
 /// The agent task ledger of the active project (ADR-0036), oldest first.
 pub fn agent_tasks(s: &Session) -> Result<Vec<eak_harness::agent_task::AgentTask>, String> {
     s.with_engine(|e| {
@@ -958,7 +985,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 72] = [
+pub const IPC_COMMANDS: [&str; 73] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -1000,6 +1027,7 @@ pub const IPC_COMMANDS: [&str; 72] = [
     "close_project",
     "current_project",
     "agent_tasks",
+    "netlist",
     "execute_command",
     "undo",
     "redo",
@@ -1105,6 +1133,11 @@ pub mod cmd {
     #[tauri::command(rename_all = "snake_case")]
     pub async fn current_project(app: AppHandle) -> Result<Snapshot, String> {
         blocking(app, Priority::P1, super::current_project).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn netlist(app: AppHandle) -> Result<Vec<super::NetRow>, String> {
+        blocking(app, Priority::P1, super::netlist).await
     }
 
     #[tauri::command(rename_all = "snake_case")]
@@ -1346,6 +1379,7 @@ pub fn run() {
             cmd::close_project,
             cmd::current_project,
             cmd::agent_tasks,
+            cmd::netlist,
             cmd::execute_command,
             cmd::undo,
             cmd::redo,

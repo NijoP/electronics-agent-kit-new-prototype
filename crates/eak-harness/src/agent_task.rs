@@ -455,9 +455,43 @@ fn command_names(tool: &str, args: &Value) -> Vec<String> {
     }
 }
 
+/// Command names for the revisions in `(before, after]`, from the journal: the entry's own
+/// command, or for a `Batch` the IR sections it changed (footprints = PCB sync, tracks/vias/zones
+/// = routing, schematic = schematic edits).
+fn journal_commands(dir: &Path, before: u64, after: u64) -> Vec<String> {
+    let mut out = vec![];
+    for e in store::read_journal(dir) {
+        if e.state != EntryState::Pending || e.revision_after <= before || e.revision_after > after {
+            continue;
+        }
+        if e.command != "Batch" {
+            out.push(e.command.clone());
+            continue;
+        }
+        for c in &e.changes {
+            let p = |i: usize| c.path.get(i).map(String::as_str);
+            let name = match (p(0), p(1)) {
+                (Some("schematic"), _) => "PlaceSymbol",
+                (Some("pcb"), Some("footprints")) => "SyncSchematicToPcb",
+                (Some("pcb"), Some("tracks" | "vias" | "zones")) => "AddTrack",
+                _ => continue,
+            };
+            out.push(name.to_string());
+        }
+    }
+    out
+}
+
 /// Record one finished harness call (best effort: a ledger that cannot be written is reported
 /// on stderr and never fails the call).
-pub fn record(engine: &Engine, ctx: &CallContext, tool: &str, args: &Value, out: &Value) {
+pub fn record(
+    engine: &Engine,
+    ctx: &CallContext,
+    tool: &str,
+    args: &Value,
+    out: &Value,
+    call_rev: u64,
+) {
     let Some(dir) = engine.dir() else { return };
     let ok = out["ok"].as_bool().unwrap_or(false);
     let p = engine.project();
@@ -473,13 +507,26 @@ pub fn record(engine: &Engine, ctx: &CallContext, tool: &str, args: &Value, out:
             drc: check_errors(out, "drc"),
         },
         Some("manufacturing") if ok => Kind::Manufacturing,
+        // Autonomous flow and rework apply paths: the commands come from the engine's own
+        // journal for the revisions they committed, not from the tool name (ADR-0036).
+        Some("flow" | "rework") if ok => Kind::Design {
+            commands: journal_commands(dir, call_rev, p.revision),
+            ok,
+            refusal: None,
+        },
+        Some("flow" | "rework") => Kind::Design {
+            commands: vec![],
+            ok: false,
+            refusal: (out.pointer("/error/code").and_then(Value::as_str) == Some("precondition"))
+                .then(|| out["error"]["message"].as_str().unwrap_or("").to_string()),
+        },
         _ => return,
     };
     let rev_after = p.revision;
     let rev_before = out
         .pointer("/result/revision_before")
         .and_then(Value::as_u64)
-        .unwrap_or(rev_after);
+        .unwrap_or(call_rev);
     let ev = Event {
         session: &ctx.session_id,
         agent: &ctx.agent,

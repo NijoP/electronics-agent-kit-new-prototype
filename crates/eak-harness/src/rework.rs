@@ -1143,6 +1143,16 @@ fn apply(engine: &mut Engine, ctx: &CallContext, root: &Path, args: &Value) -> R
             }
         };
         let before = engine.project().revision;
+        // ADR-0036: rework repairs obey the same ERC gate before PCB synchronisation.
+        if crate::tools::carries_pcb_sync(&command) {
+            crate::agent_task::pcb_sync_gate(engine).map_err(|why| {
+                Fail(
+                    ErrorCode::Precondition,
+                    why,
+                    json!({"gate": "pcb_sync"}),
+                )
+            })?;
+        }
         let resp = engine.execute(CommandRequest {
             expected_revision: before,
             actor: Actor::agent_in_session(&ctx.agent, &ctx.session_id),

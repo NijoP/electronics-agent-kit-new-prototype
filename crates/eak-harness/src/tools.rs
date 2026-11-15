@@ -571,6 +571,7 @@ pub fn handle(
     args: &Value,
 ) -> Value {
     let spec = find_spec(tool);
+    let call_rev = engine.project().revision;
     let result = match &spec {
         None => Err(fail(
             ErrorCode::UnknownTool,
@@ -612,7 +613,7 @@ pub fn handle(
     };
     // Echo the project state *after* the call (a design tool moved the revision).
     out["project"] = project_echo(engine);
-    crate::agent_task::record(engine, ctx, tool, args, &out);
+    crate::agent_task::record(engine, ctx, tool, args, &out, call_rev);
     log_call(engine, ctx, tool, ok, code, &out);
     out
 }
@@ -747,7 +748,7 @@ fn design(
 }
 
 /// Whether a command is, or (in a batch) contains, the PCB synchronisation the ERC gate guards.
-fn carries_pcb_sync(c: &eak_runtime::Command) -> bool {
+pub(crate) fn carries_pcb_sync(c: &eak_runtime::Command) -> bool {
     match c {
         eak_runtime::Command::SyncSchematicToPcb => true,
         eak_runtime::Command::Batch { commands, .. } => commands.iter().any(carries_pcb_sync),

@@ -83,6 +83,7 @@ export const IPC_COMMANDS = [
   "close_project",
   "current_project",
   "agent_tasks",
+  "netlist",
   "execute_command",
   "undo",
   "redo",
@@ -176,6 +177,7 @@ export const api = {
   projectLockState: (path: string) => call<LockState>("project_lock_state", { path }),
   closeProject: () => call<void>("close_project"),
   currentProject: () => call<Snapshot>("current_project"),
+  netlist: () => call<{ name: string; pins: string[]; label_names: string[]; has_power_port: boolean }[]>("netlist"),
   agentTasks: () => call<import("./agentTasks").AgentTask[]>("agent_tasks"),
   execute: (expectedRevision: number, command: Command) =>
     call<CommandResponse>("execute_command", { expected_revision: expectedRevision, command }),

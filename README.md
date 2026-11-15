@@ -23,6 +23,40 @@ onto an EDA tool, and it does not wrap KiCad or EasyEDA.
 >
 > Per-feature state: [capability matrix](docs/development/CAPABILITY_GAP_MATRIX.md) · [STATUS.md](STATUS.md).
 
+## Terminal and EDA, one project
+
+The terminal workspace and the schematic/PCB workspace operate on **one** open project and one
+revision counter. A coding agent in an EAK terminal uses the `eak` CLI or MCP server; its calls run
+as typed commands on the same engine the editor uses, so there is no second design copy.
+
+- **Live refresh.** After an agent commit the editor refreshes by itself, keeping each document's
+  camera and your selection (unless the selected part was deleted). Details: ADR-0031, ADR-0036.
+- **Agent task status.** Every agent session gets a task record with its starting revision and a phase
+  (planning, schematic committed, ERC run, PCB synchronised, placement, routing, DRC run, ...). Phases
+  come from what the engine actually executed, never from what the agent says. "Completed" is granted
+  only when ERC and DRC evidence supports it, otherwise the task ends "partial". The EDA status bar and
+  the terminal workspace show the same revision and phase.
+- **ERC gate.** PCB synchronisation is refused (in the editor, the CLI, MCP, the autonomous flow and
+  rework) until the schematic is committed and ERC has run on it.
+- **Netlist tab.** The bottom panel's Netlist tab shows the engine's own connectivity.
+
+## Install from the prebuilt release
+
+The release workflow publishes unsigned `prebuilt-*` pre-releases (Linux `.deb`/AppImage, Windows
+installer, macOS dmg, plus the `eak` CLI) from a commit that passed CI, with SHA-256 checksums and
+`provenance.json`. The installer below prefers a verified prebuilt release and falls back to building
+from source. You can also download from the repository's Releases page and verify the checksum
+yourself. Installers are **unrun on real hardware**.
+
+## Honest status
+
+| Area | State |
+|---|---|
+| Whole tree since `c16a5f3` (terminal/EDA sync, task phases, gate, Netlist and Search tabs) | **Code-reviewed only, not runtime-verified**; CI has not confirmed these commits |
+| Compiles and tests pass | Last proven by CI at the earlier commits named above, not at the current head |
+| Schematic / PCB editors, terminal workspace, installers | Written and reviewed; never used on real hardware |
+| Manufacturing output | Always a draft; nothing is manufacturing-ready |
+
 ## Install
 
 One command builds **the current `main` source on your own computer**, installs EAK for your user,

@@ -1,6 +1,7 @@
 // Bottom panel: ERC/DRC/DFM findings (diagnostics), a BOM derived from the schematic, simulation,
 // the engine log and this session's tasks.
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "../api";
 import { EngineeringMonitor } from "../EngineeringMonitor";
 import { SimulationPanel } from "../SimulationPanel";
 import type { Check, CheckResult, EngineEvent, Finding, Id, Snapshot } from "../types";
@@ -67,9 +68,39 @@ export function searchDesign(s: Snapshot, query: string): SearchHit[] {
 }
 
 /** Tabs that have no backend yet are shown disabled with the reason (never decorative). */
-const DISABLED: Partial<Record<string, string>> = {
-  netlist: "Netlist view needs an engine netlist IPC that is not exposed to the desktop yet",
-};
+const DISABLED: Partial<Record<string, string>> = {};
+
+type NetRow = Awaited<ReturnType<typeof api.netlist>>[number];
+
+/** The engine's own netlist (eak-engineering), refetched when the revision changes. */
+function NetlistTab({ revision }: { revision: number }) {
+  const [rows, setRows] = useState<NetRow[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.netlist().then((r) => live && (setRows(r), setErr(null))).catch((e) => live && setErr(String(e)));
+    return () => {
+      live = false;
+    };
+  }, [revision]);
+  if (err) return <p className="empty-state">Netlist unavailable: {err}</p>;
+  if (!rows) return <p className="empty-state">Reading netlist…</p>;
+  if (rows.length === 0) return <p className="empty-state">No nets: connect pins or label them in the schematic.</p>;
+  return (
+    <table className="bom" aria-label="Netlist">
+      <thead><tr><th>Net</th><th>Pins</th><th>Notes</th></tr></thead>
+      <tbody>
+        {rows.map((n) => (
+          <tr key={n.name}>
+            <td>{n.name}</td>
+            <td>{n.pins.join(", ")}</td>
+            <td className="muted">{[n.has_power_port ? "power port" : "", n.label_names.length > 1 ? `labels: ${n.label_names.join(", ")}` : ""].filter(Boolean).join(" · ")}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 const TABS: [BottomTab, string][] = [
   ["findings", "Findings"],
@@ -161,6 +192,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
             </>
           ))}
         {tab === "tasks" && <TasksList tasks={tasks} onClear={onClearTasks} />}
+        {tab === "netlist" && <NetlistTab revision={snapshot.project.revision} />}
         {tab === "search" && <SearchTab snapshot={snapshot} onProbe={onProbe} />}
         {tab === "sim" && <SimulationPanel revision={snapshot.project.revision} />}
         {tab === "log" && (

@@ -1314,6 +1314,16 @@ fn apply(engine: &mut Engine, ctx: &CallContext, root: &Path, args: &Value) -> R
             )),
         }
     };
+    // ADR-0036: the autonomous flow obeys the same ERC gate before PCB synchronisation.
+    if crate::tools::carries_pcb_sync(&command) {
+        crate::agent_task::pcb_sync_gate(engine).map_err(|why| {
+            Fail(
+                ErrorCode::Precondition,
+                why,
+                json!({"gate": "pcb_sync"}),
+            )
+        })?;
+    }
     let resp = engine.execute(CommandRequest {
         expected_revision: expected,
         actor: Actor::agent_in_session(&ctx.agent, &ctx.session_id),
