@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { describeStatus, term, type Overview, type SessionInfo, type Space, type Tab } from "./api";
 import { disposeTerminal, XTermView } from "./XTermView";
 import { StatusDot } from "../design/ui";
+import { agentRows, launchArgv, STATE_WORD, type AgentRow } from "./agents";
 
 export interface ProjectContext { dir: string; name: string; id: string }
 
@@ -28,7 +29,7 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
   const [ov, setOv] = useState<Overview | null>(null);
   const [shells, setShells] = useState<string[]>([]);
   const [shell, setShell] = useState("");
-  const [launchers, setLaunchers] = useState<{ name: string; command: string }[]>([]);
+  const [launchers, setLaunchers] = useState<{ name: string; command: string; path: string | null }[]>([]);
   const [activeSpace, setActiveSpace] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
   const [sizes, setSizes] = useState<Record<number, number[]>>({});
@@ -83,11 +84,12 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
     });
   const newTerminal = (sp: number | null = spaceId) => openSession(sp != null ? { space: sp } : {});
   const split = (direction: "row" | "column") => current && openSession({ split_of: current.id, direction });
-  const launch = (command: string, name: string) =>
+  // Runs the agent executable itself as the PTY program (never a shell labelled as the agent).
+  const launch = (a: AgentRow) =>
     act(async () => {
-      const s = await term.create({ ...(spaceId != null ? { space: spaceId } : {}), shell: shell || undefined, name });
+      const s = await term.create({ ...(spaceId != null ? { space: spaceId } : {}), name: a.label, command: launchArgv(a) });
       setActiveSpace(s.space);
-      await term.run(s.id, command);
+      await term.focus(s.id);
     });
   const focus = (s: SessionInfo) => {
     setActiveSpace(s.space);
@@ -253,55 +255,81 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
           {ov && ov.spaces.length === 0 && <p className="muted pad">No spaces yet. Create one, or press “+ New terminal”.</p>}
         </aside>
         <section className="term-center">
-          <div className="tabs term-tabs" role="tablist" aria-label="Terminal tabs">
-            {tabs.map((t, i) => {
-              const s = byId.get(t.panes[0]);
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  draggable
-                  aria-selected={t.id === tab?.id}
-                  className={t.id === tab?.id ? "tab on" : "tab"}
-                  onClick={() => s && focus(s)}
-                  onDoubleClick={() => s && renameSession(s)}
-                  onDragStart={() => (dragTab.current = t.id)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    const from = dragTab.current;
-                    dragTab.current = null;
-                    if (from != null && from !== t.id) act(() => term.moveTab(from, i));
-                  }}
-                >
-                  <StatusDot state={s?.status.state ?? "ended"} /> {s?.name ?? "terminal"}
-                  {t.panes.length > 1 ? ` +${t.panes.length - 1}` : ""}
-                </button>
-              );
-            })}
-            <button type="button" title="New terminal (Ctrl+Shift+T)" onClick={() => newTerminal()}>
-              + New terminal
-            </button>
+          <div className="term-launch" role="toolbar" aria-label="New agent session">
+            <span className="term-launch-label">New agent</span>
+            {agentRows(launchers).map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                className={a.installed ? "agent-btn" : "agent-btn missing"}
+                disabled={!a.installed}
+                title={a.installed ? `Start ${a.label} in a new session (${a.path ?? a.command})` : `${a.label} is not installed: "${a.id}" was not found on PATH`}
+                onClick={() => launch(a)}
+              >
+                <span className="agent-ico" aria-hidden="true">{a.glyph}</span>
+                <span className="agent-txt">
+                  {a.label}
+                  {!a.installed && <small>not installed</small>}
+                </span>
+              </button>
+            ))}
+            <span className="spacer" />
             <select aria-label="Shell" value={shell} onChange={(e) => setShell(e.target.value)}>
               <option value="">Default shell</option>
               {shells.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            {launchers.map((l) => (
-              <button key={l.name} type="button" title={`New terminal running ${l.command}`} onClick={() => launch(l.command, l.name)}>
-                {l.name}
-              </button>
-            ))}
-            <span className="spacer" />
+            <button type="button" className="agent-btn" title="New terminal (Ctrl+Shift+T)" onClick={() => newTerminal()}>
+              + New terminal
+            </button>
+          </div>
+          <div className="term-sessbar">
+            <div className="term-tabs" role="tablist" aria-label="Terminal sessions">
+              {tabs.map((t, i) => {
+                const s = byId.get(t.panes[0]);
+                const state = s?.status.state ?? "ended";
+                return (
+                  <div
+                    key={t.id}
+                    className={t.id === tab?.id ? "sess-tab on" : "sess-tab"}
+                    draggable
+                    onDragStart={() => (dragTab.current = t.id)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      const from = dragTab.current;
+                      dragTab.current = null;
+                      if (from != null && from !== t.id) act(() => term.moveTab(from, i));
+                    }}
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={t.id === tab?.id}
+                      className="sess-main"
+                      title={s ? `${describeStatus(s.status)} · ${s.spec.cwd}` : undefined}
+                      onClick={() => s && focus(s)}
+                      onDoubleClick={() => s && renameSession(s)}
+                    >
+                      <StatusDot state={state} />
+                      <span className="sess-name">{s?.name ?? "terminal"}{t.panes.length > 1 ? ` +${t.panes.length - 1}` : ""}</span>
+                      <span className={`sess-state st-${state}`}>{STATE_WORD[state] ?? state}</span>
+                    </button>
+                    {s && (
+                      <button type="button" className="sess-x" aria-label={`Close ${s.name}`} title="Close session" onClick={() => closeSession(s)}>×</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
             {current && (
-              <>
+              <div className="term-sessctl" role="toolbar" aria-label="Session controls">
                 <button type="button" title="Split right (Ctrl+Shift+D)" onClick={() => split("row")}>Split right</button>
                 <button type="button" title="Split down (Ctrl+Shift+E)" onClick={() => split("column")}>Split down</button>
                 <button type="button" onClick={() => renameSession(current)}>Rename</button>
                 <button type="button" onClick={() => act(() => term.restart(current.id))}>Restart</button>
                 <button type="button" title="Close (Ctrl+Shift+W)" onClick={() => closeSession(current)}>Close</button>
-              </>
+              </div>
             )}
           </div>
           {message && (

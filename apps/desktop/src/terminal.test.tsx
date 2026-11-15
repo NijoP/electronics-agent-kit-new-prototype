@@ -35,6 +35,7 @@ let tabs: Tab[];
 let sessions: SessionInfo[];
 let focused: number | null;
 let nextId: number;
+let launchers: { name: string; command: string; path: string | null }[];
 
 const session = (id: number, space: number, tab: number, state: SessionInfo["status"]["state"] = "idle"): SessionInfo => ({
   id,
@@ -54,6 +55,7 @@ beforeEach(() => {
   sessions = [];
   focused = null;
   nextId = 1;
+  launchers = [];
   mockIPC((cmd, payload) => {
     const args = (payload ?? {}) as Record<string, unknown>;
     calls.push({ cmd, args });
@@ -89,7 +91,7 @@ beforeEach(() => {
       case "terminal_shells":
         return ["/bin/bash", "/bin/zsh"];
       case "terminal_launchers":
-        return [];
+        return launchers;
       default:
         return null;
     }
@@ -171,5 +173,21 @@ describe("terminal workspace", () => {
     focused = 2;
     render(<TerminalWorkspace visible project={null} newSpaceNonce={0} />);
     await screen.findByRole("group", { name: "Empty pane" });
+  });
+
+  // Unrun: agent launch surface is separate from session tabs and runs the real executable.
+  it("agents that are not installed are disabled and say so; installed ones run their executable", async () => {
+    spaces = [{ id: 1, name: "Board", root: "/projects/board", project_id: null }];
+    launchers = [{ name: "claude", command: "claude", path: "/usr/local/bin/claude" }];
+    nextId = 2;
+    render(<TerminalWorkspace visible project={null} newSpaceNonce={0} />);
+    const pi = await screen.findByRole("button", { name: /^Pi/ });
+    expect((pi as HTMLButtonElement).disabled).toBe(true);
+    expect(pi.textContent).toContain("not installed");
+    fireEvent.click(await screen.findByRole("button", { name: /Claude Code/ }));
+    await waitFor(() => expect(calls.find((c) => c.cmd === "terminal_create")?.args.opts).toEqual({ space: 1, name: "Claude Code", command: ["/usr/local/bin/claude"] }));
+    // The new session is a tab (not a launcher) and gets focus.
+    await screen.findByRole("tab", { name: /bash 2/ });
+    await waitFor(() => expect(calls.some((c) => c.cmd === "terminal_focus" && c.args.id === 2)).toBe(true));
   });
 });
