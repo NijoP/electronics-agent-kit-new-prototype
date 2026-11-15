@@ -173,12 +173,13 @@ fn cli_drives_a_fresh_project_from_create_to_checks() {
     assert_ne!(code, 0, "{v}");
     assert_eq!(v["error"]["code"], "precondition", "{v}");
     assert_eq!(v["error"]["details"]["gate"], "pcb_sync", "{v}");
-    assert_eq!(rev(&v), rev(&r), "a refused gate must not move the revision");
-    let (_, task) = eak(&dir, &["call", "agent_task_status"]);
     assert_eq!(
-        task["result"]["session_task"]["phase"], "blocked",
-        "{task}"
+        rev(&v),
+        rev(&r),
+        "a refused gate must not move the revision"
     );
+    let (_, task) = eak(&dir, &["call", "agent_task_status"]);
+    assert_eq!(task["result"]["session_task"]["phase"], "blocked", "{task}");
     // ERC evidence is revision-bound; the outline change before it is not a schematic change.
     let (_, erc) = eak(&dir, &["check", "erc"]);
     assert_eq!(erc["category"], "validation", "{erc}");

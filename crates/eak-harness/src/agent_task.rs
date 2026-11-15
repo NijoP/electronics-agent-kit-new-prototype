@@ -362,11 +362,9 @@ impl Ledger {
                     Some(format!("completion not supported by evidence: {gap}")),
                 ),
             },
-            other => {
-                return Err(format!(
-                    "outcome must be completed, partial, blocked, failed or cancelled, got {other:?}"
-                ))
-            }
+            other => return Err(format!(
+                "outcome must be completed, partial, blocked, failed or cancelled, got {other:?}"
+            )),
         };
         t.set(phase, revision, now, detail);
         t.ended_ms = Some(now);
@@ -461,7 +459,8 @@ fn command_names(tool: &str, args: &Value) -> Vec<String> {
 fn journal_commands(dir: &Path, before: u64, after: u64) -> Vec<String> {
     let mut out = vec![];
     for e in store::read_journal(dir) {
-        if e.state != EntryState::Pending || e.revision_after <= before || e.revision_after > after {
+        if e.state != EntryState::Pending || e.revision_after <= before || e.revision_after > after
+        {
             continue;
         }
         if e.command != "Batch" {

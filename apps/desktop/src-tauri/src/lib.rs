@@ -569,7 +569,11 @@ pub fn netlist(s: &Session) -> Result<Vec<NetRow>, String> {
             .into_values()
             .map(|n| NetRow {
                 name: n.name,
-                pins: n.pins.iter().map(|p| format!("{}.{}", p.refdes, p.pin)).collect(),
+                pins: n
+                    .pins
+                    .iter()
+                    .map(|p| format!("{}.{}", p.refdes, p.pin))
+                    .collect(),
                 label_names: n.label_names,
                 has_power_port: n.has_power_port,
             })
@@ -1317,15 +1321,12 @@ pub fn run() {
                             // so it has its own event (ADR-0036).
                             let dir = req.context.project.dir.clone();
                             let before = dir.as_deref().map(eak_harness::agent_task::stamp);
-                            let out = harness_call(
-                                &handle.state::<Session>(),
-                                req,
-                                &move |change| {
+                            let out =
+                                harness_call(&handle.state::<Session>(), req, &move |change| {
                                     if let Err(e) = emitter.emit(sync::REVISION_EVENT, change) {
                                         eprintln!("eak-desktop: revision event not emitted: {e}");
                                     }
-                                },
-                            );
+                                });
                             if let (Some(d), Some(b)) = (dir.as_deref(), before) {
                                 if eak_harness::agent_task::stamp(d) != b {
                                     let change = sync::AgentTasksChanged {
