@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import css from "./styles.css?raw";
 import { IPC_COMMANDS } from "./api";
 import { TerminalWorkspace } from "./terminal/TerminalWorkspace";
 import type { CreateOptions, Overview, SessionInfo, Space, Tab } from "./terminal/api";
@@ -196,10 +197,8 @@ describe("terminal workspace", () => {
 // `.row` utility (align-items:center, wrap) used to shrink the pane to content height (10 px host,
 // blank terminal). jsdom cannot lay out, so assert the override in the stylesheet source.
 describe("terminal pane layout css", () => {
-  it(".term-panes resets the global .row utility so panes stretch to the full area", async () => {
-    const { readFileSync } = await import("node:fs");
-    const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-    const rule = css.split("\n").find((l) => l.startsWith(".term-panes {")) ?? "";
+  it(".term-panes resets the global .row utility so panes stretch to the full area", () => {
+    const rule = css.split("\n").find((line: string) => line.startsWith(".term-panes {")) ?? "";
     expect(rule).toContain("align-items: stretch");
     expect(rule).toContain("flex-wrap: nowrap");
   });
