@@ -796,7 +796,18 @@ mod tests {
                 clearance: 300_000,
             },
         );
+        // A pour island that touches no copper of its own net is dead copper and is removed
+        // (ADR-0030), so the zone needs a GND anchor, well away from the signal route below.
+        add_track(
+            &mut p,
+            "gnd",
+            "GND",
+            Point::mm(40.0, 35.0),
+            Point::mm(45.0, 35.0),
+            250_000,
+        );
         let before = crate::copper::fill_zone(&p, "z", &items(&p)).unwrap();
+        assert!(before.filled_area_mm2() > 0.0, "the anchored pour is kept");
         let (from, to) = (Point::mm(5.0, 10.0), Point::mm(30.0, 20.0));
         let r = route_step(&p, &req(from, to, BendMode::Diagonal45));
         assert!(r.reached && !r.walkaround, "a zone is not an obstacle");
