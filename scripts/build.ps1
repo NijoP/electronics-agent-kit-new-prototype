@@ -128,7 +128,7 @@ try {
   }
 } finally { Pop-Location }
 
-$cliArgs = if ($env:EAK_UNLOCKED -eq '1') { @() } else { @('--locked') }
+$cliArgs = @(if ($env:EAK_UNLOCKED -ne '1') { '--locked' })   # @(...): see $bundleArgs
 Say "Building the EAK CLI and MCP harness: cargo build --release $($cliArgs -join ' ') -p eak-harness --bin eak --bin eak-mcp"
 Push-Location $root
 try {
