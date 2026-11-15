@@ -990,7 +990,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 73] = [
+pub const IPC_COMMANDS: [&str; 75] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
