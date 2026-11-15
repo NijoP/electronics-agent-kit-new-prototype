@@ -221,7 +221,8 @@ fn drc_copper_to_hole_and_hole_to_hole() {
 #[test]
 fn drc_silkscreen_to_board_edge() {
     let p = reference();
-    assert!(fired(&drc::run(&p), "DRC-020").is_empty());
+    let clean = fired(&drc::run(&p), "DRC-020");
+    assert!(clean.is_empty(), "{clean:?}");
     let mut bad = p.clone();
     let fp = bad.pcb.footprints.values_mut().next().unwrap();
     fp.position = bad.pcb.board.outline[0];

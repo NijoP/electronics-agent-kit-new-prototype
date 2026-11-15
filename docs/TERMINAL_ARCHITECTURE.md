@@ -16,7 +16,9 @@ EAK desktop (Tauri backend, apps/desktop/src-tauri/src/terminal.rs)
     ├── saved layout                terminal-sessions.json: spaces, tabs, panes, names, programs
     └── control API + eak-term CLI  token-authenticated loopback JSON API (docs/terminal-api.md)
 Frontend (apps/desktop/src/terminal)
-├── TerminalWorkspace.tsx           spaces sidebar, tabs, splits, status line, menus, shortcuts
+├── TerminalWorkspace.tsx           Spaces + Agents sidebar, tab strip, pane headers, details
+│                                   panel (hidden by default), status bar, menus, shortcuts
+├── agents.ts                       Agents-list logic (detected agents only, state mapping)
 └── XTermView.tsx                   xterm.js per session; instances kept across workspace
                                     switches; rebuilt from scrollback after a window reload
 ```
@@ -24,8 +26,9 @@ Frontend (apps/desktop/src/terminal)
 ## Session lifecycle
 - **Shells:** the user's `$SHELL` on Linux/macOS, `%COMSPEC%` on Windows by default; any
   installed shell can be chosen (`/etc/shells`, or `pwsh`/`powershell`/`cmd`/`bash` on `PATH`
-  on Windows). Agent CLIs found on the machine (built-in list or `terminal-agents.json`) are
-  offered as launchers; launching one opens a shell and types the command.
+  on Windows). The default action (the tab strip "+", Ctrl+Shift+T) opens a normal shell. EAK
+  has no agent launcher: the user types the CLI they installed themselves. EAK never bundles,
+  installs, configures or authenticates an agent.
 - **Switching workspaces / reloading the window:** sessions are owned by the backend and keep
   running; views reattach to them.
 - **Closing a session:** confirmation when its process is still running, then SIGHUP to the
@@ -56,3 +59,57 @@ Sessions export `EAK_SESSION_ID`, `EAK_PROJECT_DIR`, `EAK_PROJECT_ID` (project s
 - Project file tree inside the Terminal workspace (to reuse the shell team's explorer).
 - Detach from / reattach to processes across an app restart (not implemented; stated above).
 - Windows and macOS were not run by this work.
+
+## Workspace layout (desktop)
+```
+┌ Spaces ───────────┬ tab strip: [tab] [tab] ... [+] [▾] [Details] ────────┐
+│ ● Board  project  ├──────────────────────────────┬───────────────────────┤
+│ ● Power           │ pane header: ● name chip ⇥ ⇩ ✎ ↻ ×                   │ Details (optional,
+├ Agents ───────────┤ xterm.js                      │ pane header ...      │ hidden by default)
+│ ● claude  Board / │                               │                       │
+│   Review / pane 1 ├───────────────────────────────┴───────────────────────┤
+└───────────────────┴ status bar: state · evidence · cwd · pid · space · tab ─┘
+```
+- **Spaces** (sidebar): create, rename (double-click), select and close. A project opened in
+  EAK has a natural space (the top bar "+" opens it). Each row shows the folder, a
+  most-urgent-state dot and the session count.
+- **Agents** (sidebar): aggregated across spaces. A session is listed only when the backend
+  recognised an agent CLI as its foreground program from the executable name (alias table in
+  `crates/eak-terminal/src/agents.rs`, plus `terminal-agents.json`). Each row shows the agent
+  name, space / tab / pane and a state; clicking it focuses that pane. A plain shell is never
+  listed as an agent.
+- **Tabs**: create ("+" opens a normal shell; "▾" picks a shell), rename (double-click or
+  context menu; persisted in the layout file), close, reorder (drag or context menu) and a
+  context menu with split and move. Each tab holds one or more panes (row or column split).
+- **Panes**: each has a header (status dot, name, detected agent chip, state, split, rename,
+  restart, close). The divider between panes is draggable.
+- **Details panel**: optional, hidden by default (Details button, Ctrl+Shift+P); shows the
+  focused session's status evidence, program, folder and process id.
+
+### Agent states and their limits
+| Shown | From |
+|---|---|
+| working | the session's process is running a foreground job |
+| blocked | the kernel/PTY says it waits for input, or the agent reported it via the API |
+| idle | the shell is the terminal's foreground process (Unix) |
+| done | the process exited (0 or non-zero) |
+| unknown | restored from a previous run, or only a quiet-output heuristic (Windows idle) |
+Detection is passive and name-based: an agent run through a wrapper script, an alias or under
+another executable name is shown as an ordinary terminal. EAK never reads agent screens to
+guess, and never claims a shell is an agent. These states describe the *process*, not whether
+the agent's task succeeded.
+
+### Keyboard shortcuts (Terminal workspace)
+| Keys | Action |
+|---|---|
+| Ctrl+Shift+T | New tab with a normal shell |
+| Ctrl+Shift+W | Close the focused pane (asks first if its process is running) |
+| Ctrl+Shift+D / Ctrl+Shift+E | Split the focused pane right / down |
+| Ctrl+Shift+R | Rename the current tab |
+| Ctrl+Shift+N | New space |
+| Ctrl+Shift+P | Show or hide the details panel |
+| Ctrl+Shift+A | Go to a session that needs input |
+| Ctrl+Shift+1..9 | Select the nth tab of the space |
+| Ctrl+PageUp / Ctrl+PageDown | Previous / next tab |
+| Ctrl+Shift+Arrow keys | Previous / next pane in the tab |
+| Ctrl+Shift+C / Ctrl+Shift+V / Ctrl+Shift+F | Copy / paste / search output (plain Ctrl+C stays an interrupt) |

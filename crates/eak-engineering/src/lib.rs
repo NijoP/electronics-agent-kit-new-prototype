@@ -4,6 +4,7 @@
 //! * `calc`    – circuit calculations and engineering value parsing.
 //! * `netlist` – schematic connectivity → canonical nets.
 //! * `copper`  – PCB copper shapes, zone fill with thermal reliefs, physical connectivity.
+//! * `stitch`  – zone stitching: escape vias for orphan SMD pads, stitching vias for pour islands (DESK).
 //! * `silk`    – silkscreen legend: stroke-font reference designators, mask-opening clip.
 //! * `router`  – EAK's native two-layer grid router (passes, rip-up, congestion, pairs, widths).
 //! * `routing_intel` – congestion, stagnation, differential pairs, width/via selection (DESK-derived).
@@ -26,3 +27,4 @@ pub mod router;
 pub mod routing_intel;
 pub mod scene3d;
 pub mod silk;
+pub mod stitch;

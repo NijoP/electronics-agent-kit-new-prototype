@@ -93,16 +93,18 @@ projects, datasheets, credentials, settings, `~/.cargo`, `~/.rustup` or any Node
 - Add `--clean-cache` / `$env:EAK_CLEAN_CACHE=1` to also delete the build cache (alone, it deletes only the cache).
 - A prebuilt install is removed separately (below).
 
-## Prebuilt release (optional)
-Only when you ask for it, and only if the release has an asset for your platform; otherwise it stops with an
-explanation. It never stands in for `main`. The newest release is v0.1.4 (prerelease): Linux `.deb` and AppImage,
-built before the workspace/terminal/harness refactor; no Windows or macOS binaries are published.
-- Linux/macOS: `curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.sh | EAK_INSTALL_MODE=prebuilt bash`
-  (the variable goes after the pipe; `EAK_INSTALL_MODE=prebuilt curl ... | bash` would set it for `curl` only)
-- Windows: `$env:EAK_INSTALL_MODE='prebuilt'; irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 | iex`
-- Prebuilt options and uninstall: `EAK_VERSION`, `EAK_FORMAT=deb`, `EAK_NO_LAUNCH`, `EAK_UNINSTALL=1`, run through the same
-  `EAK_INSTALL_MODE=prebuilt` entry. It verifies SHA-256 against the release `SHA256SUMS`; packages are unsigned.
-  Its Linux app is in `~/.local/share/eak/app`, command `~/.local/bin/eak`, log `~/.local/state/eak/install.log`.
+## Prebuilt release (the default fast path when one exists)
+Plain `install.sh` / `install.ps1` use a verified prebuilt when the repository has a `prebuilt-*` pre-release,
+and otherwise say so and build the source. Those releases are made only by the `release` workflow, from a commit
+whose `ci` run is green: unsigned Tauri bundles (Linux `.deb`/AppImage, Windows NSIS setup, macOS arm64 and x64
+`.dmg`), the `eak` CLI + `eak-mcp` archives, `SHA256SUMS`, and `provenance.json` (commit SHA, the green CI run,
+toolchain versions, checksums). The installer verifies SHA-256 against `SHA256SUMS` before installing. Older
+releases such as v0.1.4 are never picked.
+- Force the source build: Linux/macOS `curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.sh | bash -s -- --source`;
+  Windows `$env:EAK_INSTALL_MODE='source'; irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 | iex`
+- Force prebuilt only (fails if none is published): `--prebuilt` / `$env:EAK_INSTALL_MODE='prebuilt'`.
+- Prebuilt options and uninstall: `EAK_VERSION=prebuilt-<date>-<sha>`, `EAK_FORMAT=deb`, `EAK_NO_LAUNCH`, `EAK_UNINSTALL=1`.
+  Packages are unsigned (Windows SmartScreen / macOS Gatekeeper warnings apply).
 
 ## Developers
 Build without installing: `./scripts/build.sh` (Linux/macOS) or `.\scripts\build.ps1` (Windows); the installers run the same

@@ -14,9 +14,12 @@
 //!   evidence by the engine.
 
 pub mod ai;
+pub mod catalogue;
+pub mod libstore;
 pub mod models;
 pub mod parts;
 pub mod resources;
+pub mod sync;
 pub mod terminal;
 pub mod workspace;
 
@@ -429,7 +432,13 @@ fn install(
 
 /// Serve one harness request from a terminal agent on the open project's engine. The request
 /// must target the project the app has open; anything else is refused, never redirected.
-pub fn harness_call(s: &Session, req: &eak_harness::endpoint::Request) -> serde_json::Value {
+/// `emit` receives a [`sync::RevisionChange`] for every call that moved the project's revision,
+/// so the UI learns of agent edits at once (docs/AGENT_HARNESS.md, "Live synchronisation").
+pub fn harness_call(
+    s: &Session,
+    req: &eak_harness::endpoint::Request,
+    emit: &dyn Fn(sync::RevisionChange),
+) -> serde_json::Value {
     use eak_harness::{envelope_error, ErrorCode};
     let ctx = &req.context;
     let mut guard = match s.engine() {
@@ -463,7 +472,16 @@ pub fn harness_call(s: &Session, req: &eak_harness::endpoint::Request) -> serde_
         .iter_mut()
         .find(|e| matches!((e.dir(), wanted), (Some(o), Some(w)) if same(o, w)));
     match found {
-        Some(engine) => eak_harness::handle(engine, ctx, "app", &req.tool, &req.args),
+        Some(engine) => {
+            let before = engine.project().revision;
+            let out = eak_harness::handle(engine, ctx, "app", &req.tool, &req.args);
+            if let Some(change) =
+                sync::revision_change(engine, before, "harness", Some(&ctx.session_id))
+            {
+                emit(change);
+            }
+            out
+        }
         None => {
             let open: Vec<PathBuf> = guard
                 .engines
@@ -937,7 +955,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 55] = [
+pub const IPC_COMMANDS: [&str; 71] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -951,6 +969,22 @@ pub const IPC_COMMANDS: [&str; 55] = [
     "route_step",
     "parts_search",
     "parts_import",
+    "lcsc_settings_get",
+    "lcsc_settings_save",
+    "lcsc_settings_clear",
+    "lcsc_test_connection",
+    "catalogue_categories",
+    "catalogue_manufacturers",
+    "catalogue_search",
+    "parts_save_record",
+    "library_browse",
+    "library_meta",
+    "library_personal_save",
+    "library_personal_remove",
+    "library_import_open_source",
+    "library_imported_remove",
+    "assembly_attest",
+    "assembly_import_parts_file",
     "manufacturing_preview",
     "jlcpcb_prepare",
     "library_components",
@@ -1206,7 +1240,7 @@ pub mod cmd {
 
 /// Start the desktop application.
 pub fn run() {
-    use tauri::Manager;
+    use tauri::{Emitter, Manager};
     tauri::Builder::default()
         // Native folder pickers for Project Home (open a project folder, choose a parent directory).
         .plugin(tauri_plugin_dialog::init())
@@ -1234,7 +1268,12 @@ pub fn run() {
                     let handle = app.handle().clone();
                     let handler: eak_harness::endpoint::Handler =
                         std::sync::Arc::new(move |req: &eak_harness::endpoint::Request| {
-                            harness_call(&handle.state::<Session>(), req)
+                            let emitter = handle.clone();
+                            harness_call(&handle.state::<Session>(), req, &move |change| {
+                                if let Err(e) = emitter.emit(sync::REVISION_EVENT, change) {
+                                    eprintln!("eak-desktop: revision event not emitted: {e}");
+                                }
+                            })
                         });
                     if let Err(e) =
                         start_harness(&app.state::<Session>(), &dir.join("harness"), handler)
@@ -1246,6 +1285,12 @@ pub fn run() {
             }
             app.manage(ai::AiState::default());
             app.manage(terminal_state(app));
+            // Non-secret LCSC connection status lives beside the model settings; the LCSC API
+            // key and secret go to the OS credential store only.
+            if let Ok(dir) = app.path().app_config_dir() {
+                catalogue::init(&dir);
+                libstore::init(&dir);
+            }
             // Profiles are plain JSON in the config dir; keys go to the OS credential store.
             let profiles = app
                 .path()
@@ -1304,6 +1349,22 @@ pub fn run() {
             ai::cmd::ai_rollback,
             parts::cmd::parts_search,
             parts::cmd::parts_import,
+            catalogue::cmd::lcsc_settings_get,
+            catalogue::cmd::lcsc_settings_save,
+            catalogue::cmd::lcsc_settings_clear,
+            catalogue::cmd::lcsc_test_connection,
+            catalogue::cmd::catalogue_categories,
+            catalogue::cmd::catalogue_manufacturers,
+            catalogue::cmd::catalogue_search,
+            parts::cmd::parts_save_record,
+            libstore::cmd::library_browse,
+            libstore::cmd::library_meta,
+            libstore::cmd::library_personal_save,
+            libstore::cmd::library_personal_remove,
+            libstore::cmd::library_import_open_source,
+            libstore::cmd::library_imported_remove,
+            parts::cmd::assembly_attest,
+            parts::cmd::assembly_import_parts_file,
             parts::cmd::manufacturing_preview,
             parts::cmd::jlcpcb_prepare,
             workspace::cmd::open_projects,
@@ -1334,6 +1395,7 @@ pub fn run() {
             terminal::cmd::terminal_space_rename,
             terminal::cmd::terminal_space_close,
             terminal::cmd::terminal_move_tab,
+            terminal::cmd::terminal_tab_rename,
             resources::cmd::resource_profile,
             resources::cmd::performance_settings,
             resources::cmd::set_performance_settings,

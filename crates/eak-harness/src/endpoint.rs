@@ -26,6 +26,8 @@ use std::time::Duration;
 /// Endpoint record file inside a project folder.
 pub const RECORD_FILE: &str = ".harness.json";
 const MAX_REQUEST: u64 = 16 * 1024 * 1024;
+/// Folder-name prefix of the short private socket folder used when the state path is too long.
+const SHORT_SOCKET_PREFIX: &str = "eak-sock-";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Request {
@@ -124,7 +126,17 @@ impl Server {
         let stop = Arc::new(AtomicBool::new(false));
         #[cfg(unix)]
         {
-            let path = state_dir.join(format!("eak-{}.sock", std::process::id()));
+            let mut path = state_dir.join(format!("eak-{}.sock", std::process::id()));
+            // `sockaddr_un.sun_path` holds 104 bytes on macOS (108 on Linux): a deep app-data or
+            // temp folder would make bind fail, so such a socket lives in a short private folder.
+            if path.as_os_str().len() > 100 {
+                let short = PathBuf::from(format!(
+                    "/tmp/{SHORT_SOCKET_PREFIX}{}",
+                    &uuid::Uuid::new_v4().simple().to_string()[..12]
+                ));
+                private_dir(&short)?;
+                path = short.join(format!("{}.sock", std::process::id()));
+            }
             let _ = std::fs::remove_file(&path);
             let listener = std::os::unix::net::UnixListener::bind(&path)?;
             {
@@ -221,6 +233,13 @@ impl Drop for Server {
         let _ = connect(&self.endpoint, Duration::from_millis(200));
         if let Some(p) = &self.socket_path {
             let _ = std::fs::remove_file(p);
+            // The short fallback folder is ours alone; the normal state folder is not removed.
+            if let Some(dir) = p.parent().filter(|d| {
+                d.file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with(SHORT_SOCKET_PREFIX))
+            }) {
+                let _ = std::fs::remove_dir(dir);
+            }
         }
         let _ = std::fs::remove_file(&self.token_file);
     }
@@ -289,13 +308,18 @@ pub fn call(
     args: &Value,
     context: &CallContext,
 ) -> Result<Value, ClientError> {
-    // Connect before reading the token: an app that exited cleanly has already removed its
-    // token file, and that must surface as Unreachable (stale record, fall through), not as a
-    // token error. On Windows the TCP endpoint has no socket file to vanish first.
+    // The app removes its token file on exit, so a missing one means the app is gone and the
+    // endpoint record is stale (the caller then falls back to a direct engine under the lock).
+    let token = std::fs::read_to_string(token_file).map_err(|e| {
+        let msg = format!("{}: {e}", token_file.display());
+        if e.kind() == std::io::ErrorKind::NotFound {
+            ClientError::Unreachable(msg)
+        } else {
+            ClientError::Token(msg)
+        }
+    })?;
     let mut s = connect(endpoint, Duration::from_secs(2))
         .map_err(|e| ClientError::Unreachable(e.to_string()))?;
-    let token = std::fs::read_to_string(token_file)
-        .map_err(|e| ClientError::Token(format!("{}: {e}", token_file.display())))?;
     let req = Request {
         token: token.trim().into(),
         tool: tool.into(),

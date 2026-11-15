@@ -30,10 +30,10 @@ fn manager() -> (Arc<Manager>, Arc<Mutex<Vec<OutputEvent>>>) {
     )
 }
 
-fn sh(m: &Arc<Manager>, cwd: &PathBuf) -> u64 {
+fn sh(m: &Arc<Manager>, cwd: &std::path::Path) -> u64 {
     let info = m
         .create(CreateOptions {
-            cwd: Some(cwd.clone()),
+            cwd: Some(cwd.to_path_buf()),
             shell: Some("/bin/sh".into()),
             ..Default::default()
         })
@@ -471,6 +471,29 @@ fn spaces_isolate_roots_and_sessions() {
         vec![a2, a1]
     );
 
+    // Tab rename: a custom name is kept; empty restores the default.
+    m.rename_tab(t2, "  Build  ").unwrap();
+    assert_eq!(
+        m.overview()
+            .tabs
+            .iter()
+            .find(|t| t.id == t2)
+            .unwrap()
+            .name
+            .as_deref(),
+        Some("Build")
+    );
+    m.rename_tab(t2, "").unwrap();
+    assert!(m
+        .overview()
+        .tabs
+        .iter()
+        .find(|t| t.id == t2)
+        .unwrap()
+        .name
+        .is_none());
+    assert!(m.rename_tab(u64::MAX, "x").is_err());
+
     // Closing DESK terminates only DESK's sessions.
     let d_pid = m.info(d1).unwrap().pid.unwrap();
     m.close_space(d.id).unwrap();
@@ -702,11 +725,7 @@ fn sessions_export_the_eak_context() {
         "echo ctx:$EAK_PROJECT_DIR:$EAK_PROJECT_ID:$EAK_SESSION_ID:end",
     )
     .unwrap();
-    wait_output(
-        &m,
-        id,
-        &format!("ctx:{}:proj-123:{id}:end", dir.display()),
-    );
+    wait_output(&m, id, &format!("ctx:{}:proj-123:{id}:end", dir.display()));
     m.close(id).unwrap();
 }
 
@@ -725,8 +744,19 @@ fn spaces_on_the_project_folder_are_bound_to_the_project_id() {
     assert_eq!(late.project_id.as_deref(), Some("p-1"));
     assert_eq!(elsewhere.project_id, None);
     let spaces = m.overview().spaces;
-    let get = |id| spaces.iter().find(|s| s.id == id).unwrap().project_id.clone();
-    assert_eq!(get(early.id).as_deref(), Some("p-1"), "existing space bound by set_context");
+    let get = |id| {
+        spaces
+            .iter()
+            .find(|s| s.id == id)
+            .unwrap()
+            .project_id
+            .clone()
+    };
+    assert_eq!(
+        get(early.id).as_deref(),
+        Some("p-1"),
+        "existing space bound by set_context"
+    );
 }
 
 /// Regression (security review): per-session environment can hold credentials and must never

@@ -18,11 +18,11 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     // Async test utilities get extra room on the slow shared laptop (src/test-setup.ts).
     setupFiles: ["./src/test-setup.ts"],
-    // Process the app stylesheet so `styles.css?raw` is the real file (vitest stubs CSS to "" by
-    // default, which made every rule lookup in layoutRegressions.test.ts fail).
-    css: { include: [/\/src\/styles\.css/] },
     testTimeout: 15000,
     // Forked processes, at most 2 at once (override: `vitest run --maxWorkers=N`).
+    // Vitest blanks every stylesheet import by default, including `?raw` ones; the layout
+    // regression tests read the real rules of styles.css through `?raw`.
+    css: { include: [/\.css\?raw$/] },
     pool: "forks",
     maxWorkers: 2,
   },

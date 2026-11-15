@@ -80,9 +80,10 @@ function Install-Eak {
     else {
       $tag = $env:EAK_VERSION
       if (-not $tag) {
-        $rels = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases?per_page=10" -Headers @{ 'User-Agent' = 'eak-installer' }
-        $first = @($rels | Where-Object { -not $_.draft })[0]
-        if (-not $first) { throw "no published EAK release found in $repo (releases appear after a v* tag is pushed)" }
+        # Only releases built by the release workflow count (tag prebuilt-*); older releases are never picked.
+        $rels = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases?per_page=30" -Headers @{ 'User-Agent' = 'eak-installer' }
+        $first = @($rels | Where-Object { -not $_.draft -and $_.tag_name -like 'prebuilt-*' })[0]
+        if (-not $first) { throw "no verified prebuilt EAK release exists in $repo yet (the release workflow publishes them from a CI-green commit); install from source instead, see docs/INSTALL.md" }
         $tag = $first.tag_name
       }
       $src = "https://github.com/$repo/releases/download/$tag"

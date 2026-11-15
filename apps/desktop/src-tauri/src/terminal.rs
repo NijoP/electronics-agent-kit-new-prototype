@@ -245,10 +245,14 @@ pub mod cmd {
     pub fn terminal_move_tab(state: State<'_, TerminalState>, tab: TabId, index: usize) -> R<()> {
         state.manager.move_tab(tab, index)
     }
+    #[tauri::command]
+    pub fn terminal_tab_rename(state: State<'_, TerminalState>, tab: TabId, name: String) -> R<()> {
+        state.manager.rename_tab(tab, &name)
+    }
 }
 
 /// IPC command names this module registers (kept in sync with `api.ts`).
-pub const TERMINAL_COMMANDS: [&str; 18] = [
+pub const TERMINAL_COMMANDS: [&str; 19] = [
     "terminal_overview",
     "terminal_shells",
     "terminal_launchers",
@@ -267,6 +271,7 @@ pub const TERMINAL_COMMANDS: [&str; 18] = [
     "terminal_space_rename",
     "terminal_space_close",
     "terminal_move_tab",
+    "terminal_tab_rename",
 ];
 
 #[cfg(test)]

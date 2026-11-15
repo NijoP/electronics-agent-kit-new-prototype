@@ -202,6 +202,23 @@ pub fn run(p: &Project) -> Report {
             .filter(|p| p.electrical_type == PinType::PowerIn)
             .collect();
         if !power_in.is_empty() && drivers.is_empty() && !net.has_power_port && connected {
+            // Where the rail enters the board: a connector pin on the net. Library connector
+            // pins are passive (as in KiCad), so the entry needs an explicit power port, the
+            // EAK equivalent of a PWR_FLAG.
+            let entry = net.pins.iter().find(|pin| {
+                p.schematic
+                    .symbols
+                    .get(&pin.symbol_id)
+                    .and_then(|s| p.library.get(&s.component_id))
+                    .is_some_and(|d| d.category == "Connector")
+            });
+            let how = match entry {
+                Some(e) => format!(
+                    "{} enters through {}.{}: mark it as the supply with {{\"type\":\"LabelPin\",\"symbol_id\":\"{}\",\"pin\":\"{}\",\"name\":\"{}\",\"kind\":\"power\"}} (power port, the PWR_FLAG equivalent). ",
+                    net.name, e.refdes, e.pin_name, e.symbol_id, e.pin, net.name
+                ),
+                None => String::new(),
+            };
             f.push(
                 finding(
                     "ERC-003",
@@ -212,7 +229,7 @@ pub fn run(p: &Project) -> Report {
                 )
                 .key(&net_key)
                 .fix(format!(
-                    "Connect {} to a source (a regulator or connector power output pin), or add a power port for {} if the rail is supplied from outside this schematic.",
+                    "{how}Connect {} to a source (a regulator or connector power output pin), or add a power port for {} (LabelPin or AddNetLabel with \"kind\":\"power\") if the rail is supplied from outside this schematic.",
                     net.name, net.name
                 )),
             );

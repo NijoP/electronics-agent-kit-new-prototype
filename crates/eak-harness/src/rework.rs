@@ -138,7 +138,12 @@ fn index(p: &Project) -> Index {
     }
     put("@board", "board", val(&p.pcb.board), None);
     put("@constraints", "constraints", val(&p.constraints), None);
-    put("@manufacturing", "manufacturing", val(&p.manufacturing), None);
+    put(
+        "@manufacturing",
+        "manufacturing",
+        val(&p.manufacturing),
+        None,
+    );
     m
 }
 
@@ -382,12 +387,7 @@ fn inspect(engine: &Engine, root: &Path, args: &Value) -> Result<Value, Fail> {
 
 // ---------------------------------------------------------------- 2. baseline
 
-fn baseline(
-    engine: &Engine,
-    ctx: &CallContext,
-    root: &Path,
-    args: &Value,
-) -> Result<Value, Fail> {
+fn baseline(engine: &Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result<Value, Fail> {
     let p = engine.project();
     let confirm = arg_str(args, "confirm_project_id")?;
     if confirm != p.id {
@@ -621,12 +621,7 @@ fn find_issue(root: &Path, sid: &str, id: &str) -> Option<Value> {
 
 // ---------------------------------------------------------------- 4. protect
 
-fn protect(
-    engine: &Engine,
-    ctx: &CallContext,
-    root: &Path,
-    args: &Value,
-) -> Result<Value, Fail> {
+fn protect(engine: &Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result<Value, Fail> {
     let sid = session_of(root, args)?;
     load_baseline(root, &sid)?;
     let reason = arg_str(args, "reason")?;
@@ -712,6 +707,7 @@ fn step_touches(step: &Value, idx: &Index) -> Result<Touches, String> {
         "AutoPlace" => return Err("AutoPlace repositions every unlocked footprint; rework repairs must be surgical (use MoveFootprint on named footprints)".into()),
         "AutoRoute" if missing("nets") => return Err("AutoRoute needs `nets`: rework routes only the nets an issue names".into()),
         "ClearRouting" if missing("net") => return Err("ClearRouting needs a `net`".into()),
+        "StitchZones" if missing("net") => return Err("StitchZones needs a `net`: rework stitches only the net an issue names".into()),
         _ => {}
     }
     let mut hit = BTreeSet::new();
@@ -813,9 +809,7 @@ fn plan(engine: &Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result
         let mut ok = true;
         for (si, s) in steps.iter().enumerate() {
             match decode_step(s) {
-                Ok((_, c)) => {
-                    class = class.max(c.unwrap_or(OperationClass::EngineeringImpacting))
-                }
+                Ok((_, c)) => class = class.max(c.unwrap_or(OperationClass::EngineeringImpacting)),
                 Err(e) => {
                     problems.push(json!({"repair": n, "step": si, "error": e}));
                     ok = false;
@@ -1061,7 +1055,13 @@ fn load_plan(root: &Path, plan_id: &str) -> Result<(String, Value, Value), Fail>
         .ok_or_else(|| invalid("plan_id must be an id returned by rework_plan"))?
         .to_string();
     let text = std::fs::read_to_string(root.join(&sid).join(PLANS).join(format!("{plan_id}.json")))
-        .map_err(|_| Fail(ErrorCode::NotFound, format!("no plan {plan_id}"), Value::Null))?;
+        .map_err(|_| {
+            Fail(
+                ErrorCode::NotFound,
+                format!("no plan {plan_id}"),
+                Value::Null,
+            )
+        })?;
     let doc: Value = serde_json::from_str(&text).map_err(storage)?;
     if doc["fingerprint"].as_str() != Some(fingerprint(&doc["body"]).as_str()) {
         return Err(Fail(
@@ -1073,12 +1073,7 @@ fn load_plan(root: &Path, plan_id: &str) -> Result<(String, Value, Value), Fail>
     Ok((sid, doc["body"].clone(), doc))
 }
 
-fn apply(
-    engine: &mut Engine,
-    ctx: &CallContext,
-    root: &Path,
-    args: &Value,
-) -> Result<Value, Fail> {
+fn apply(engine: &mut Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result<Value, Fail> {
     let plan_id = arg_str(args, "plan_id")?.to_string();
     let expected = args
         .get("expected_revision")
@@ -1228,12 +1223,7 @@ fn apply(
 
 // ---------------------------------------------------------------- 8. report
 
-fn report(
-    engine: &Engine,
-    ctx: &CallContext,
-    root: &Path,
-    args: &Value,
-) -> Result<Value, Fail> {
+fn report(engine: &Engine, ctx: &CallContext, root: &Path, args: &Value) -> Result<Value, Fail> {
     let sid = session_of(root, args)?;
     let base = load_baseline(root, &sid)?;
     let sdir = root.join(&sid);

@@ -39,6 +39,15 @@ pub struct HttpResponse {
 /// One blocking HTTP GET. `Err` is a transport failure (DNS, TLS, timeout, oversize).
 pub trait Fetch: Send + Sync {
     fn get(&self, url: &str) -> Result<HttpResponse, String>;
+    /// GET with extra request headers (the signed LCSC OpenAPI client needs them). An
+    /// implementation that cannot send headers must fail rather than drop them silently.
+    fn get_with_headers(
+        &self,
+        _url: &str,
+        _headers: &[(String, String)],
+    ) -> Result<HttpResponse, String> {
+        Err("this transport cannot send request headers".into())
+    }
 }
 
 /// HTTPS client (rustls) with a global timeout and a bounded body.
@@ -59,6 +68,14 @@ impl Default for UreqFetch {
 #[cfg(feature = "live-http")]
 impl Fetch for UreqFetch {
     fn get(&self, url: &str) -> Result<HttpResponse, String> {
+        self.get_with_headers(url, &[])
+    }
+
+    fn get_with_headers(
+        &self,
+        url: &str,
+        headers: &[(String, String)],
+    ) -> Result<HttpResponse, String> {
         let agent: ureq::Agent = ureq::Agent::config_builder()
             .timeout_global(Some(self.timeout))
             .http_status_as_error(false)
@@ -69,7 +86,11 @@ impl Fetch for UreqFetch {
             ))
             .build()
             .into();
-        let mut resp = agent.get(url).call().map_err(|e| e.to_string())?;
+        let mut req = agent.get(url);
+        for (k, v) in headers {
+            req = req.header(k.as_str(), v.as_str());
+        }
+        let mut resp = req.call().map_err(|e| e.to_string())?;
         let status = resp.status().as_u16();
         let body = resp
             .body_mut()

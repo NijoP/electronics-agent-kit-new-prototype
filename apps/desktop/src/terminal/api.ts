@@ -26,7 +26,7 @@ export interface SessionInfo {
   output_seq: number;
 }
 export interface Space { id: number; name: string; root: string; project_id: string | null }
-export interface Tab { id: number; space: number; direction: "row" | "column"; panes: number[] }
+export interface Tab { id: number; space: number; name: string | null; direction: "row" | "column"; panes: number[] }
 export interface Overview { spaces: Space[]; tabs: Tab[]; sessions: SessionInfo[]; focused: number | null; layout_seq: number }
 export interface CreateOptions { space?: number; name?: string; cwd?: string; shell?: string; command?: string[]; split_of?: number; direction?: "row" | "column"; cols?: number; rows?: number }
 export interface OutputEvent { id: number; data: string; seq: number }
@@ -41,6 +41,7 @@ export const term = {
   spaceRename: (id: number, name: string) => call<void>("terminal_space_rename", { id, name }),
   spaceClose: (id: number) => call<void>("terminal_space_close", { id }),
   moveTab: (tab: number, index: number) => call<void>("terminal_move_tab", { tab, index }),
+  tabRename: (tab: number, name: string) => call<void>("terminal_tab_rename", { tab, name }),
   setContext: (dir: string | null, project: string | null, projectId: string | null) =>
     call<void>("terminal_set_context", { dir, project, project_id: projectId }),
   create: (opts: CreateOptions) => call<SessionInfo>("terminal_create", { opts }),

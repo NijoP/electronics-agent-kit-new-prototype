@@ -314,8 +314,10 @@ impl KnowledgeIndex {
         let id_prefix = sha256_hex(format!("{source}\n{source_sha}").as_bytes());
         let mut n = 0;
         for (i, (loc, passage)) in chunk_text(text).into_iter().enumerate() {
-            let mut part_ids: Vec<String> =
-                parts.iter().map(|p| p.trim().to_ascii_uppercase()).collect();
+            let mut part_ids: Vec<String> = parts
+                .iter()
+                .map(|p| p.trim().to_ascii_uppercase())
+                .collect();
             for id in lcsc_ids(&passage) {
                 if !part_ids.contains(&id) {
                     part_ids.push(id);
@@ -451,8 +453,7 @@ impl KnowledgeIndex {
                     }
                     let d = *df.get(term.as_str()).unwrap_or(&0) as f64;
                     let idf = ((n - d + 0.5) / (d + 0.5) + 1.0).ln();
-                    score +=
-                        idf * tf * (k1 + 1.0) / (tf + k1 * (1.0 - b + b * len / avg.max(1.0)));
+                    score += idf * tf * (k1 + 1.0) / (tf + k1 * (1.0 - b + b * len / avg.max(1.0)));
                 }
                 (score > 0.0).then(|| Hit {
                     chunk: (*c).clone(),
@@ -599,7 +600,9 @@ mod tests {
     #[test]
     fn builtin_corpus_is_searchable_and_labelled() {
         let b = KnowledgeIndex::builtin();
-        assert!(!b.search("derating", 5, Some(SourceKind::DeskRule)).is_empty());
+        assert!(!b
+            .search("derating", 5, Some(SourceKind::DeskRule))
+            .is_empty());
         assert!(
             b.search("IPC-2221 ampacity", 3, Some(SourceKind::EakDoc))[0]
                 .chunk
@@ -636,7 +639,12 @@ mod tests {
     #[test]
     fn rerank_prefers_the_requested_limit_class() {
         let mut i = KnowledgeIndex::new();
-        i.add_source(SourceKind::UserDocument, "a.txt", "r", "Input voltage typical 5 V.");
+        i.add_source(
+            SourceKind::UserDocument,
+            "a.txt",
+            "r",
+            "Input voltage typical 5 V.",
+        );
         i.add_source(
             SourceKind::UserDocument,
             "b.txt",

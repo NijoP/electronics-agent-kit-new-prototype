@@ -72,6 +72,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Auto-route (two layers) | integ | `eak-manufacturing/tests/end_to_end.rs::reference_design_end_to_end` (20/20 connections); connection order is now net priority (power/ground, high current, terminal count; DESK model in `eak_engineering::priority`) then length; plus congestion cost, multi-pass with stagnation stop, selective rip-up, diff-pair adjacency, current-sized widths (`routing_intel`, ADR-0023) - code-reviewed only, unrun |
 | Existing-project rework (inspect, baseline, audit, protect, plan, human approval, apply with readback, report) | code-reviewed only | `eak-harness/src/rework.rs`, `docs/agents/REWORK.md`, ADR-0022; unit tests written, unrun; no end-to-end run on a real project |
 | Copper zones (engine, raster fill) | integ | reference design GND pour; DRC-013 zone islands |
+| Zone stitching (`StitchZones`), dead-copper removal | code-reviewed only | DESK `stitch_orphans` method, ADR-0030; never compiled or run |
 | Copper zone editing UI, thermal reliefs | - | thermal reliefs are in unmerged PR #5 |
 | Text, dimensions, keepouts, rule regions | - | |
 
@@ -86,6 +87,9 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | User library | - | |
 | Component 3D model reference (STEP/WRL/GLB, transform, quality, licence), viewer loading, missing-model state | impl | code-reviewed only, unrun (ADR-0025); no model-vs-footprint verification or collision checks |
 | Supplier offers separate from component identity (`SupplierOffer`, legacy `lcsc` migration), resilient LCSC search/import (cache, retry, stale label, typed errors) | impl | code-reviewed only, unrun (ADR-0028); no lifecycle parsing, cache not persisted, offer data never used as suitability evidence |
+| LCSC catalogue through the documented signed OpenAPI (credentials in OS keyring, test connection, category/manufacturer browsing, paged search, exact/normalised/fuzzy explainable matching, live/cached/stale markers) | impl | code-reviewed only, unrun (ADR-0032); never run against a live LCSC account; response field mapping inferred from public docs; package/manufacturer filters are client-side per page |
+| Library scopes (built-in/project/personal/imported open-source with licence), cross-scope browser (filters, favourites, tags, recents, pin/pad inspection), supplier discovery separate from engineering import, listing standing (existing / supplier-only / needs authoring) | impl | code-reviewed only, unrun (ADR-0033); only EAK ComponentDef JSON is imported (no external format translation, no authoring wizard, no bulk matching); metadata per machine |
+| JLCPCB assembly classification separate from LCSC listing (attested or parts-file only), fail-closed BOM warnings, prep manifest assembly report | impl | code-reviewed only, unrun (ADR-0034); no live JLCPCB lookup; warnings do not block |
 | AI datasheet-to-library workflow | - | |
 
 ## Part 8: design manager and cross-probing
@@ -148,3 +152,5 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | 2026-11-15 | Autonomous design flow (`eak design`, `design_*` harness tools, ADR-0020): code-reviewed only, never compiled or run; tracked in `STATUS.md` | `docs/agents/AUTONOMOUS_DESIGN.md` |
 | 2026-11-15 | Knowledge retrieval (BM25, provenance, advisory; ADR-0024): code-reviewed only, unit tests written and unrun (`eak-intelligence/src/knowledge.rs`, `eak-harness/src/knowledge.rs`; code-reviewed only) |
 | 2026-11-15 | Performance directive: resource profile, bounded jobs, lock-free analysis, pointer coalescing, 3D context-loss/quality tier (code-reviewed only, nothing measured); tracked in `STATUS.md` | `docs/development/PERFORMANCE_LEDGER.md`, `docs/development/PERFORMANCE.md` |
+| 2026-11-15 | Live EDA synchronisation (harness commit → typed `eak://revision-changed` event → one snapshot refetch, stale events rejected, derived views refetch only changed areas; ADR-0031) and CI enabled: code-reviewed only; tests run in GitHub Actions only | `docs/AGENT_HARNESS.md`, `.github/workflows/ci.yml` |
+| 2026-11-15 | CI enabled and green on Linux, Windows and macOS (arm64 + x64): fmt, clippy `-D warnings`, `cargo test --workspace --locked`, frontend typecheck + 253 tests ([run 43733291036](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43733291036), `b62d0e2`; [run 43734737480](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43734737480), `b096688`). Rows above marked "code-reviewed only" are now compiled and test-passing in CI but still not run in a real window or on hardware | `.github/workflows/ci.yml` |

@@ -19,14 +19,16 @@ describe("terminal layout CSS", () => {
   it("pane containers clip instead of overflowing", () => {
     for (const s of [".term-center", ".term-main", ".term-panes", ".term-pane-wrap"]) expect(rule(s)).toContain("overflow: hidden");
   });
-  // Regression: panes were classed `row`, picking up the global `.row { align-items: center }`
-  // utility, so the pane (whose xterm host is absolutely positioned) collapsed to 0 px height and
-  // every terminal showed as an empty black area (found on Windows, all platforms affected).
-  it("terminal panes stretch to full height and never use the generic row/column classes", () => {
-    expect(rule(".term-panes")).toContain("align-items: stretch");
-    expect(workspaceSrc).not.toMatch(/className=\{`term-(panes|divider) \$\{tab\.direction\}`\}/);
-    expect(workspaceSrc).toContain("term-panes split-${tab.direction}");
-    expect(rule(".term-panes.split-column")).toContain("flex-direction: column");
+  // Regression: panes are classed `row`/`column` and picked up the global `.row` utility
+  // (align-items: center, wrap), so the pane (whose xterm host is absolutely positioned) collapsed
+  // to 0 px height and every terminal showed as an empty black area (found on Windows).
+  it("terminal panes stretch to full height despite the global .row utility", () => {
+    const panes = rule(".term-panes");
+    expect(panes).toContain("align-items: stretch");
+    expect(panes).toContain("flex-wrap: nowrap");
+    // The .term-panes override must come after .row so it wins at equal specificity.
+    expect(css.indexOf("\n.term-panes {")).toBeGreaterThan(css.indexOf("\n.row {"));
+    expect(workspaceSrc).toContain("term-panes ${tab.direction}");
   });
   it("session tab bar is one row that scrolls horizontally", () => {
     const r = rule(".term-tabs");

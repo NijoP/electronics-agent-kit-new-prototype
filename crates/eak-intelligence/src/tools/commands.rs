@@ -391,6 +391,11 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                 &[],
             ),
         ),
+        StitchZones { .. } => (
+            D::Pcb,
+            "Stitch copper pours (DESK method): escape via + pad-to-via track for each SMD pad of the zone net that its own layer's fill does not reach, and a stitching via for each fill island with no via. Needs a zone of the net on two or more layers. Fill islands touching no copper of the net are dropped as dead copper.",
+            obj(&[("net", nullable(string("zone net, e.g. GND; omit for every zoned net")))], &[]),
+        ),
         ClearRouting { .. } => (
             D::Pcb,
             "Remove all tracks and vias, or those of one net. DESTRUCTIVE.",
@@ -614,6 +619,9 @@ pub fn command_samples() -> Vec<Command> {
         AutoRoute {
             nets: Some(vec!["N".into()]),
         },
+        StitchZones {
+            net: Some("GND".into()),
+        },
         ClearRouting { net: None },
         SetDesignRules {
             min_track_width: Some(1),
@@ -722,9 +730,8 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 45 `Command` variants (SetProjectName .. SetManufacturing, plus Batch); bump this
-        // together with the enum.
-        assert_eq!(tools.len(), 45);
+        // 46 commands (incl. Batch, SetLayerCount, StitchZones); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
+        assert_eq!(tools.len(), 46);
         for t in &tools {
             assert!(t
                 .spec

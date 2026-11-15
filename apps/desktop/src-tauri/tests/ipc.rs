@@ -186,11 +186,15 @@ fn locked_project_needs_explicit_take_over() {
         .unwrap_err()
         .contains("locked"));
     // The holder is this live process: takeover is refused, never forced (ADR-0029).
-    assert!(open_project(&s, &path(&d), true).unwrap_err().contains("locked"));
+    assert!(open_project(&s, &path(&d), true)
+        .unwrap_err()
+        .contains("locked"));
     drop(holder);
     // A lock left by a process that is gone is an interrupted session: takeover recovers it.
     std::fs::write(d.join(".lock"), "4000000000").unwrap();
-    assert!(open_project(&s, &path(&d), false).unwrap_err().contains("interrupted"));
+    assert!(open_project(&s, &path(&d), false)
+        .unwrap_err()
+        .contains("interrupted"));
     let snap = open_project(&s, &path(&d), true).unwrap();
     assert_eq!(snap.project.name, "Held");
     close_project(&s).unwrap();
@@ -358,15 +362,25 @@ fn frontend_invokes_exactly_the_registered_commands() {
     )
     .unwrap();
     let names = |decl: &str| -> Vec<String> {
-        let start = api.find(decl).unwrap_or_else(|| panic!("api.ts declares {decl}"));
+        let start = api
+            .find(decl)
+            .unwrap_or_else(|| panic!("api.ts declares {decl}"));
         let list = &api[start..api[start..].find(']').unwrap() + start];
-        list.split('"').skip(1).step_by(2).map(String::from).collect()
+        list.split('"')
+            .skip(1)
+            .step_by(2)
+            .map(String::from)
+            .collect()
     };
     let mut ts = names("IPC_COMMANDS = [");
     ts.extend(names("TERMINAL_IPC = ["));
     ts.sort();
     let mut rust: Vec<String> = IPC_COMMANDS.iter().map(|s| s.to_string()).collect();
-    rust.extend(eak_desktop::terminal::TERMINAL_COMMANDS.iter().map(|s| s.to_string()));
+    rust.extend(
+        eak_desktop::terminal::TERMINAL_COMMANDS
+            .iter()
+            .map(|s| s.to_string()),
+    );
     rust.sort();
     assert_eq!(ts, rust);
 }

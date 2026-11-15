@@ -7,12 +7,16 @@
 //! hash and contain no errors. Even then it is "internally verified", never
 //! "manufacturing-ready": independent engineering review and fabricator DFM are required.
 
+pub mod assembly;
 pub mod bom;
 pub mod drill;
 pub mod fabpack;
 pub mod gerber;
 pub mod jlcpcb;
 pub mod lcsc;
+pub mod lcsc_api;
+pub mod library_link;
+pub mod matching;
 pub mod provider;
 pub mod sourcing;
 pub mod stackup;

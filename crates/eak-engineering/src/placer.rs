@@ -6,6 +6,7 @@
 //! board edge, decoupling/crystal/ESD parts next to the pad they serve.
 
 use crate::placement_intel::{self as intel, Role};
+use crate::silk;
 use eak_core::geom::{mm, point_in_polygon, point_segment_distance};
 use eak_core::{Id, Nm, Point, Project, Rect, Rotation};
 use serde::{Deserialize, Serialize};
@@ -25,6 +26,21 @@ fn courtyard(p: &Project, id: &str, at: Point, rot: Rotation) -> Option<Rect> {
         def.footprint.courtyard_half_h * 2,
     );
     Some(Rect::centered(at, w, h))
+}
+
+/// Where the generated silkscreen legend of a footprint at `at` can reach: the reference text sits
+/// above the courtyard (and may be wider than it) and the pin-1 dot left of it (`silk::raw_legend`).
+/// Placement keeps this envelope inside the board edge clearance too, so DRC-020 stays clean.
+fn legend_envelope(p: &Project, id: &str, at: Point, r: &Rect) -> Rect {
+    let refdes = p.pcb.footprints.get(id).map_or("", |f| f.refdes.as_str());
+    let half_text = silk::text_width(refdes, silk::TEXT_HEIGHT) / 2 + silk::LINE_WIDTH;
+    Rect {
+        min: Point::new(r.min.x.min(at.x - half_text) - silk::PIN1_DOT * 2, r.min.y),
+        max: Point::new(
+            r.max.x.max(at.x + half_text),
+            r.max.y + silk::TEXT_GAP + silk::TEXT_HEIGHT + silk::LINE_WIDTH,
+        ),
+    }
 }
 
 fn rect_inside(r: &Rect, outline: &[Point], edge: Nm) -> bool {
@@ -103,7 +119,13 @@ pub fn place(p: &Project, grid: Nm, spacing: Nm) -> Placement {
                     let Some(r) = courtyard(p, id, at, rot) else {
                         continue;
                     };
-                    if !rect_inside(&r, outline, p.constraints.board_edge_clearance) {
+                    if !rect_inside(&r, outline, p.constraints.board_edge_clearance)
+                        || !rect_inside(
+                            &legend_envelope(p, id, at, &r),
+                            outline,
+                            p.constraints.board_edge_clearance,
+                        )
+                    {
                         continue;
                     }
                     if placed

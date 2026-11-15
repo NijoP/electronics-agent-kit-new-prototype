@@ -44,7 +44,7 @@ impl Shape {
     }
 }
 
-fn poly_boundary_dist(p: Point, poly: &[Point]) -> f64 {
+pub(crate) fn poly_boundary_dist(p: Point, poly: &[Point]) -> f64 {
     let mut best = f64::INFINITY;
     for i in 0..poly.len() {
         best = best.min(point_segment_distance(
@@ -250,6 +250,9 @@ pub struct ZoneFill {
     /// Island index per cell (0 = empty, k = island k).
     pub cells: Vec<u32>,
     pub islands: u32,
+    /// Islands dropped as dead copper: they touched no copper of the zone net on their layer
+    /// (DESK `copper_fill` / KiCad "remove islands"). Not part of `cells` or `islands`.
+    pub removed_islands: u32,
     /// One entry per same-net pad on this layer that the zone surrounds or reaches.
     pub reliefs: Vec<ThermalRelief>,
 }
@@ -344,7 +347,7 @@ impl ThermalRelief {
     }
 }
 
-fn core_center(core: &Core) -> Point {
+pub(crate) fn core_center(core: &Core) -> Point {
     match core {
         Core::Segment(a, b) => Point::new((a.x + b.x) / 2, (a.y + b.y) / 2),
         Core::Polygon(poly) => Rect::from_points(poly)
@@ -441,7 +444,16 @@ impl Grid {
     }
 }
 
+/// Zone fill as fabricated: the raw fill with dead islands removed (`remove_dead_islands`).
 pub fn fill_zone(p: &Project, zone_id: &str, copper: &[CopperItem]) -> Option<ZoneFill> {
+    let mut f = fill_zone_raw(p, zone_id, copper)?;
+    remove_dead_islands(&mut f, copper);
+    Some(f)
+}
+
+/// Zone fill before dead-island removal (`removed_islands` is 0). Stitching uses it to find the
+/// islands that a via could still anchor.
+pub fn fill_zone_raw(p: &Project, zone_id: &str, copper: &[CopperItem]) -> Option<ZoneFill> {
     let z = p.pcb.zones.get(zone_id)?;
     let bb = Rect::from_points(&z.outline)?;
     let pitch = ZONE_FILL_PITCH;
@@ -608,7 +620,7 @@ pub fn fill_zone(p: &Project, zone_id: &str, copper: &[CopperItem]) -> Option<Zo
             }
         }
     }
-    Some(ZoneFill {
+    let fill = ZoneFill {
         zone_id: z.id.clone(),
         layer: z.layer,
         net: z.net.clone(),
@@ -618,8 +630,39 @@ pub fn fill_zone(p: &Project, zone_id: &str, copper: &[CopperItem]) -> Option<Zo
         rows,
         cells,
         islands,
+        removed_islands: 0,
         reliefs,
-    })
+    };
+    Some(fill)
+}
+
+/// Drop islands that touch no copper (pad, track or via) of the zone net on the zone layer and
+/// renumber the rest. Such copper carries no current and only adds antennas and sliver risk;
+/// DESK removes it after every fill (`desk/copper_fill.py`), as KiCad does with "remove islands".
+fn remove_dead_islands(fill: &mut ZoneFill, copper: &[CopperItem]) {
+    let mut anchored = BTreeSet::new();
+    for it in copper
+        .iter()
+        .filter(|i| i.layer == fill.layer && i.net == fill.net)
+    {
+        anchored.extend(fill.islands_touching(&it.shape));
+    }
+    if anchored.len() == fill.islands as usize {
+        return;
+    }
+    let mut remap = vec![0u32; fill.islands as usize + 1];
+    let mut kept = 0u32;
+    for old in 1..=fill.islands {
+        if anchored.contains(&old) {
+            kept += 1;
+            remap[old as usize] = kept;
+        }
+    }
+    for c in fill.cells.iter_mut() {
+        *c = remap[*c as usize];
+    }
+    fill.removed_islands = fill.islands - kept;
+    fill.islands = kept;
 }
 
 /// Result of physical connectivity analysis.

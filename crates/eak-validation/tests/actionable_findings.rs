@@ -442,3 +442,61 @@ fn zone_and_failed_current_findings_carry_locations() {
         assert_eq!(f.location, Some(p.pcb.tracks[&f.objects[0]].a), "{f:?}");
     }
 }
+
+/// Regression (dev-board run B, E3): a rail that enters through a connector pin, with no
+/// power port, fails ERC-003; the fix names the exact typed LabelPin power-port command on
+/// that connector pin, and applying it clears the finding. (unrun: builds are frozen)
+#[test]
+fn undriven_rail_fix_names_the_connector_power_port() {
+    let mut p = reference();
+    let j1 = p
+        .schematic
+        .symbols
+        .values()
+        .find(|s| s.refdes == "J1")
+        .unwrap()
+        .id
+        .clone();
+    for l in p.schematic.labels.values_mut() {
+        if l.name == "+5V" {
+            l.kind = eak_core::LabelKind::Net;
+        }
+    }
+    let r = erc::run(&p);
+    let f = r
+        .findings
+        .iter()
+        .find(|f| f.rule_id == "ERC-003" && f.message.contains("+5V"))
+        .expect("ERC-003 on +5V");
+    let fix = f.suggested_fix.as_deref().unwrap();
+    assert!(fix.contains("\"type\":\"LabelPin\""), "{fix}");
+    assert!(fix.contains(&format!("\"symbol_id\":\"{j1}\"")), "{fix}");
+    assert!(fix.contains("\"kind\":\"power\""), "{fix}");
+
+    let mut e = Engine::in_memory(p);
+    let rev = e.project().revision;
+    let resp = e.execute(eak_runtime::CommandRequest {
+        expected_revision: rev,
+        command: eak_runtime::Command::LabelPin {
+            symbol_id: j1,
+            pin: "1".into(),
+            name: "+5V".into(),
+            kind: eak_core::LabelKind::Power,
+        },
+        actor: eak_runtime::Actor {
+            kind: eak_runtime::ActorKind::Cli,
+            name: "test".into(),
+            session: None,
+        },
+        approval: None,
+    });
+    assert!(resp.error.is_none(), "{:?}", resp.error);
+    let r = erc::run(e.project());
+    assert!(
+        !r.findings
+            .iter()
+            .any(|f| f.rule_id == "ERC-003" && f.message.contains("+5V")),
+        "{:?}",
+        r.findings
+    );
+}

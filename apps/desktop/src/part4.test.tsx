@@ -108,7 +108,7 @@ afterEach(() => {
 
 async function open() {
   render(<App />);
-  fireEvent.click(await screen.findByText("Fixture board"));
+  fireEvent.click((await screen.findAllByText("Fixture board"))[0]);
   await screen.findByRole("img", { name: "Schematic canvas" });
 }
 const menu = (name: string) => fireEvent.click(within(screen.getByRole("navigation", { name: "Application menu" })).getByRole("button", { name }));

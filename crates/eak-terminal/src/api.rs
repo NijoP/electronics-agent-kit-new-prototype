@@ -175,6 +175,7 @@ pub const METHODS: &[&str] = &[
     "space.rename",
     "space.close",
     "tab.move",
+    "tab.rename",
     "session.create",
     "session.split",
     "session.get",
@@ -209,6 +210,10 @@ pub fn dispatch(m: &Arc<Manager>, method: &str, params: Value) -> Result<Value, 
             m.rename_space(id()?, &name).map(|_| Value::Null)
         }
         "space.close" => m.close_space(id()?).map(|_| Value::Null),
+        "tab.rename" => {
+            let name: String = arg(&params, "name")?;
+            m.rename_tab(id()?, &name).map(|_| Value::Null)
+        }
         "tab.move" => {
             let index: usize = arg(&params, "index")?;
             m.move_tab(id()?, index).map(|_| Value::Null)

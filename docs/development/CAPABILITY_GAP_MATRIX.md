@@ -41,3 +41,5 @@ States: **V** implemented and verified · **U** implemented, not verified · **P
 3. Existing-project rework (`NEXT_ACTION.md` item 6) not started.
 4. Domain engines beyond ERC/DRC/MECH and power are missing; most domains report UNKNOWN.
 5. No real-window verification of any UI, including this redesign.
+
+- 2026-11-15: gap 5 narrowed, not closed. CI (Linux, Windows, macOS arm64 + x64) compiled and tested the whole tree: [run 43733291036](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43733291036) (`b62d0e2`), [run 43734737480](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43734737480) (`b096688`). Still no real-window verification of any UI and no hardware or fabricator evidence.

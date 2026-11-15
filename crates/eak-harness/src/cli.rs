@@ -71,6 +71,19 @@ fn read_json_or_file(s: &str) -> Result<Value, String> {
     serde_json::from_str(&text).map_err(|e| format!("{s}: invalid JSON: {e}"))
 }
 
+/// Print one line to stdout. A closed reader (`eak guide | head`) is not an error: `println!`
+/// panics on `BrokenPipe`, so write explicitly and stop quietly; the exit code is unchanged.
+fn out(s: &str) {
+    let _ = write_line(&mut std::io::stdout().lock(), s);
+}
+
+fn write_line(w: &mut impl std::io::Write, s: &str) -> std::io::Result<()> {
+    match writeln!(w, "{s}").and_then(|()| w.flush()) {
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        r => r,
+    }
+}
+
 fn exit_code(v: &Value) -> i32 {
     if v["ok"] != json!(true) {
         return if v.pointer("/error/code") == Some(&json!("stale_revision")) {
@@ -121,7 +134,7 @@ pub fn main_with(args: Vec<String>) -> i32 {
                 Ok(())
             }
             "-h" | "--help" => {
-                println!("{USAGE}");
+                out(USAGE);
                 return 0;
             }
             _ => {
@@ -153,7 +166,7 @@ pub fn main_with(args: Vec<String>) -> i32 {
             };
         }
         "guide" if !json_out => {
-            println!("{}", crate::GUIDE);
+            out(crate::GUIDE);
             return 0;
         }
         "guide" => ("guide".into(), json!({})),
@@ -287,14 +300,18 @@ pub fn main_with(args: Vec<String>) -> i32 {
                         _ => usage("rework approve <PLAN_ID> <FINGERPRINT>"),
                     };
                 }
-                _ => return usage("rework <inspect|baseline|audit|protect|plan|apply|report|approve>"),
+                _ => {
+                    return usage(
+                        "rework <inspect|baseline|audit|protect|plan|apply|report|approve>",
+                    )
+                }
             }
         }
         other => return usage(&format!("unknown command {other}")),
     };
     let env = route::invoke(&ctx, &tool, &args);
     if json_out {
-        println!("{env}");
+        out(&env.to_string());
     } else {
         let status = if env["ok"] == json!(true) {
             "ok".to_string()
@@ -306,7 +323,7 @@ pub fn main_with(args: Vec<String>) -> i32 {
                     .unwrap_or("?")
             )
         };
-        println!(
+        out(&format!(
             "{status}: {tool} project={} revision={} route={}",
             env.pointer("/project/id")
                 .and_then(Value::as_str)
@@ -315,8 +332,34 @@ pub fn main_with(args: Vec<String>) -> i32 {
                 .map(|v| v.to_string())
                 .unwrap_or("-".into()),
             env["route"].as_str().unwrap_or("-"),
-        );
-        println!("{}", serde_json::to_string_pretty(&env).unwrap_or_default());
+        ));
+        out(&serde_json::to_string_pretty(&env).unwrap_or_default());
     }
     exit_code(&env)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_line;
+    use std::io::{Error, ErrorKind, Write};
+
+    struct ClosedPipe;
+    impl Write for ClosedPipe {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            Err(Error::from(ErrorKind::BrokenPipe))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Err(Error::from(ErrorKind::BrokenPipe))
+        }
+    }
+
+    /// Regression (C1): `eak guide | head` panicked "failed printing to stdout: Broken pipe".
+    /// (unrun: written while builds are frozen)
+    #[test]
+    fn closed_pipe_is_not_an_error() {
+        assert!(write_line(&mut ClosedPipe, "guide text").is_ok());
+        let mut buf = vec![];
+        write_line(&mut buf, "x").unwrap();
+        assert_eq!(buf, b"x\n");
+    }
 }

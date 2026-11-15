@@ -43,6 +43,7 @@ import { clampSize, DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "
 import { MenuBar, type Menu } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
 import { nextRotation } from "./editing";
+import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, type RevisionChange, type Shown } from "./revisionSync";
 import type { OpenProject, RecentProject, Check, CheckResult, Command, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
@@ -69,6 +70,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const [snapshot, setSnapshot] = useState(initial);
   const [events, setEvents] = useState<EngineEvent[]>([]);
   const lastSeq = useRef(0);
+  // What is on screen, and the engine's own account of the last external commit (src-tauri/src/sync.rs).
+  const onScreen = useRef<Shown>({ projectId: initial.project.id, revision: initial.project.revision });
+  const lastChange = useRef<RevisionChange | null>(null);
   const [results, setResults] = useState<Partial<Record<Check, CheckResult>>>({});
   const [selected, setSelected] = useState<Id | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -117,6 +121,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const [armPart, setArmPart] = useState<{ id: string; n: number } | null>(null);
   const [status, setStatus] = useState<{ layer: CopperLayer; gridMm: number }>({ layer: "top", gridMm: 0.5 });
   const revision = snapshot.project.revision;
+  onScreen.current = { projectId: snapshot.project.id, revision };
   const rank = (k: string) => (k === "schematic" ? 0 : k === "pcb" ? 1 : 2);
   const wsCtx = (active: boolean): WorkspaceContext => ({
     projectId: snapshot.project.id,
@@ -186,6 +191,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
 
   // Airwires come from the engine's connectivity analysis (the one DRC-004 uses), per revision.
   useEffect(() => {
+    // An external commit that touched neither the schematic nor the PCB cannot change the airwires.
+    if (!needsRefetch(lastChange.current, revision, ["schematic", "pcb"])) return;
     let live = true;
     api
       .connectivity()
@@ -198,6 +205,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
 
   // Deterministic and local: re-run whenever the design revision changes.
   useEffect(() => {
+    if (!needsRefetch(lastChange.current, revision, ["schematic", "library", "requirements", "constraints"])) return;
     let live = true;
     api
       .domainClassification()
@@ -210,6 +218,33 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
 
   useEffect(() => {
     pullEvents().catch((e) => setMessage(String(e)));
+  }, [pullEvents]);
+
+  // The backend announces every harness commit (docs/AGENT_HARNESS.md, "Live synchronisation"):
+  // fetch the new snapshot once, and drop anything older than what is already on screen.
+  useEffect(() => {
+    let live = true;
+    let off: (() => void) | undefined;
+    onRevisionChange(async (ev) => {
+      if (isStale(ev, onScreen.current)) return;
+      const before = onScreen.current;
+      try {
+        const fresh = await api.currentProject();
+        // A local commit may have landed while this was in flight: only a strictly newer snapshot wins.
+        if (!live || !acceptsSnapshot({ projectId: fresh.project.id, revision: fresh.project.revision }, onScreen.current)) return;
+        lastChange.current = exactChange(ev, before);
+        setSnapshot(fresh);
+        await pullEvents();
+      } catch {
+        /* the 1.5 s event poll below catches up */
+      }
+    })
+      .then((un) => (live ? (off = un) : un()))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+      off?.();
+    };
   }, [pullEvents]);
 
   // Edits made by terminal agents through the harness endpoint run on this same engine; poll its

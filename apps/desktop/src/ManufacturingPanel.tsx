@@ -4,7 +4,7 @@
 // evaluate are listed as not checked, never as passing.
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
-import type { DfmStatus, ManufacturingPreview, PrepareResult } from "./types";
+import type { AssemblyClass, DfmStatus, ManufacturingPreview, PrepareResult } from "./types";
 
 const LABEL: Record<DfmStatus, string> = {
   pass: "pass",
@@ -19,6 +19,8 @@ export function ManufacturingPanel({ revision, onPrepared }: { revision: number;
   const [result, setResult] = useState<PrepareResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [partsFile, setPartsFile] = useState("");
+  const [asmNote, setAsmNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -88,6 +90,71 @@ export function ManufacturingPanel({ revision, onPrepared }: { revision: number;
               ))}
             </tbody>
           </table>
+          <h3>JLCPCB assembly classification and BOM warnings</h3>
+          <p className="muted">
+            A part listed at LCSC is not thereby assemblable by JLCPCB. Basic/extended class is never inferred; it comes only from
+            your attestation or a JLCPCB parts file you provide, and stays unknown otherwise.
+          </p>
+          {preview.assembly.warnings.length === 0 ? (
+            <p role="status">No BOM/assembly warnings.</p>
+          ) : (
+            <ul aria-label="BOM warnings">
+              {preview.assembly.warnings.map((w, i) => (
+                <li key={i}>
+                  <strong>{w.kind.replace(/_/g, " ")}</strong> {w.designators.join(", ")}: {w.message}
+                </li>
+              ))}
+            </ul>
+          )}
+          {preview.assembly.rows.length > 0 && (
+            <table aria-label="Assembly classes">
+              <tbody>
+                {preview.assembly.rows.map((r) => (
+                  <tr key={r.lcsc}>
+                    <td>{r.lcsc}</td>
+                    <td>{r.class ?? "unknown (no record)"}</td>
+                    <td>{r.source ?? "—"}</td>
+                    <td>
+                      <select
+                        aria-label={`Attest assembly class of ${r.lcsc}`}
+                        value=""
+                        onChange={(e) => {
+                          const v = e.target.value as AssemblyClass;
+                          if (v) void api.assemblyAttest(r.lcsc, v).then(load).catch((x) => setError(String(x)));
+                        }}
+                      >
+                        <option value="">attest…</option>
+                        <option value="basic">basic</option>
+                        <option value="extended">extended</option>
+                        <option value="preferred_extended">preferred extended</option>
+                        <option value="not_assemblable">not assemblable</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <label>
+            JLCPCB parts file (CSV, absolute path)
+            <input value={partsFile} onChange={(e) => setPartsFile(e.target.value)} />
+          </label>
+          <button
+            type="button"
+            disabled={partsFile.trim() === ""}
+            onClick={() =>
+              void api
+                .assemblyImportPartsFile(partsFile)
+                .then((r) => {
+                  setAsmNote(`Recorded ${r.recorded} part(s) from ${r.file}; ${r.unknown_class} with unrecognised class.`);
+                  return load();
+                })
+                .catch((x) => setError(String(x)))
+            }
+          >
+            Import assembly classes
+          </button>
+          {asmNote && <p role="status">{asmNote}</p>}
           <h3>
             JLCPCB capability check{" "}
             <span className="muted">

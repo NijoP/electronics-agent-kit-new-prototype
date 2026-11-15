@@ -202,7 +202,7 @@ describe("PCB editor", () => {
     clickAt(svg, pcbVb(), 5, -5);
     clickAt(svg, pcbVb(), 8, -5);
     expect(sent).toEqual([]);
-    expect(ctx.notify).toHaveBeenCalledWith("Start on a pad or track of a net, or pick the net first.");
+    expect(ctx.notify).toHaveBeenCalledWith("Start on a pad or track end of a net, or pick the net first.");
   });
 
   it("places a via on a pad's net and deletes tracks and vias", () => {

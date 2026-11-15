@@ -21,6 +21,7 @@ Request `{"token": "...", "method": "session.run", "params": {"id": 1, "command"
 | `session.list` | - | `{spaces, tabs, sessions, focused, layout_seq}` |
 | `space.create` / `space.rename` / `space.close` | `root`, `name?` / `id`, `name` / `id` | space; close terminates its sessions |
 | `tab.move` | `id` (tab), `index` | - |
+| `tab.rename` | `id` (tab), `name` (empty restores the default) | - |
 | `session.create` | `space?`, `cwd?`, `shell?`, `command?` (argv), `name?`, `cols?`, `rows?` | session |
 | `session.split` | `id`, `direction` (`row`/`column`), create params | session |
 | `session.get` | `id` | session with `status` |
@@ -47,7 +48,7 @@ close | report | release` (`eak-term --help`). Exit code 2 when `wait` times out
 - Agents report their own state with `session.report_state` and hand back with `session.release`.
 - Extra agent CLIs: `terminal-agents.json` in the app config dir,
   `[{"name": "my-agent", "command": "my-agent --flag"}]`; installed ones are recognised in
-  status and offered as launchers.
+  status (the desktop UI no longer shows launcher buttons; run the CLI yourself in a terminal).
 
 ## Session context contract
 Every session exports `EAK_SESSION_ID`, `EAK_PROJECT_DIR` (its space root) and, for project

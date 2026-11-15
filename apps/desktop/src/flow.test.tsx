@@ -227,7 +227,7 @@ describe("end-to-end flow", () => {
   it("5b. with an outline the dialog exports and shows the DRAFT manifest, never 'ready'", async () => {
     proj = blank("Outlined", true);
     render(<App />);
-    fireEvent.click(await screen.findByText("Outlined"));
+    fireEvent.click((await screen.findAllByText("Outlined"))[0]);
     await screen.findByRole("img", { name: "Schematic canvas" });
     fireEvent.click(activity().getByRole("button", { name: "PCB" }));
     fireEvent.click(toolbar().getByRole("button", { name: "Export manufacturing files" }));
@@ -249,7 +249,7 @@ describe("end-to-end flow", () => {
     fireEvent.click(menubar().getByRole("button", { name: "File" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Close project" }));
     await screen.findByRole("heading", { name: "Recent projects" });
-    fireEvent.click(await screen.findByText("Persist"));
+    fireEvent.click((await screen.findAllByText("Persist"))[0]);
     await screen.findByRole("img", { name: "Schematic canvas" });
     expect(ran("open_project").at(-1)!.args).toEqual({ path: "/p/demo.eak", take_over_lock: false });
     expect(Object.keys(proj!.project.schematic.symbols)).toHaveLength(1); // unchanged after reopen

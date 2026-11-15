@@ -224,6 +224,7 @@ export type Command =
   | { type: "AutoPlace"; grid: Nm | null }
   | { type: "AutoRoute"; nets: string[] | null }
   | { type: "ClearRouting"; net: string | null }
+  | { type: "StitchZones"; net: string | null }
   | { type: "Batch"; commands: Command[]; label?: string | null };
 
 export interface CommandError {
@@ -489,7 +490,17 @@ export interface LibraryHit {
   mpn: string | null;
 }
 
-export type LiveStatus = "ok" | "stale" | "blocked" | "not_found" | "unreachable" | "bad_query" | "error";
+export type LiveStatus =
+  | "ok"
+  | "stale"
+  | "needs_credentials"
+  | "unauthorized"
+  | "rate_limited"
+  | "blocked"
+  | "not_found"
+  | "unreachable"
+  | "bad_query"
+  | "error";
 
 export interface PartsSearch {
   query: string;
@@ -549,10 +560,26 @@ export interface DfmReport {
   limitations: string[];
 }
 
+export type AssemblyClass = "unknown" | "basic" | "extended" | "preferred_extended" | "not_assemblable";
+
+export interface AssemblyWarning {
+  kind: string;
+  component_id: string;
+  designators: string[];
+  message: string;
+}
+
+export interface AssemblyReport {
+  rows: { lcsc: string; class: AssemblyClass | null; source: string | null; verified_at_unix_s: number | null }[];
+  warnings: AssemblyWarning[];
+}
+
 export interface ManufacturingPreview {
   revision: number;
   bom: BomLine[];
   dfm: DfmReport;
+  /** JLCPCB assembly classification and fail-closed BOM warnings (ADR-0034). */
+  assembly: AssemblyReport;
   default_out_dir: string | null;
 }
 
@@ -944,4 +971,169 @@ export interface IntelligenceSummary {
   elsewhere: [string, string][];
   not_implemented: string[];
   limitations: string[];
+}
+
+// LCSC OpenAPI catalogue (ADR-0032). The API secret never reaches the frontend: only the last
+// four characters of the key are returned.
+export interface LcscStatusFile {
+  state: "untested" | "ok" | "failed";
+  message: string;
+  tested_at_unix_s: number | null;
+  last_success_unix_s: number | null;
+}
+
+export interface LcscView {
+  has_credentials: boolean;
+  key_hint: string | null;
+  store_error: string | null;
+  status: LcscStatusFile;
+  requests_this_session: number;
+  apply_url: string;
+  host: string;
+  needs: string | null;
+}
+
+export type Served = { source: "live" | "cache" | "stale_cache"; age_s?: number; because?: string };
+
+export interface CatalogueReply<T> {
+  status: LiveStatus;
+  message: string;
+  served: Served | null;
+  fetched_at_unix_s: number | null;
+  data: T | null;
+}
+
+export interface CategoryNode {
+  id: number;
+  name: string;
+  product_count: number | null;
+  children: CategoryNode[];
+}
+
+export interface Manufacturer {
+  id: number | null;
+  name: string;
+  product_count: number | null;
+}
+
+export type MatchKind = "exact_lcsc" | "exact_mpn_manufacturer" | "exact_mpn" | "fuzzy" | "browse";
+
+export interface Candidate {
+  record: SourcingRecord;
+  kind: MatchKind;
+  exact: boolean;
+  reasons: string[];
+  manufacturer_conflict: boolean;
+  package_match: boolean | null;
+  category_match: boolean | null;
+  engineering_status: "supplier_listing_only";
+}
+
+export interface CatalogueResults {
+  candidates: Candidate[];
+  /** What each listing is relative to the libraries, by LCSC number. */
+  links: Record<string, LibraryLink>;
+  total: number | null;
+  page: number;
+  limit: number;
+  has_more: boolean;
+  via: string;
+  filtered_out: number;
+}
+
+export interface CatalogueQuery {
+  keyword?: string;
+  category_id?: number;
+  category_name?: string;
+  page?: number;
+  limit?: number;
+  in_stock_only?: boolean;
+  currency?: string;
+  manufacturer?: string;
+  package?: string;
+  category?: string;
+  refresh?: boolean;
+}
+
+// Library scopes, browse and supplier-record linking (ADR-0033).
+export type LibraryScope = { kind: "builtin" } | { kind: "project" } | { kind: "personal" } | { kind: "imported"; name: string };
+
+export type Standing = "existing_eak" | "imported_definition" | "supplier_only" | "needs_authoring";
+
+export interface LibraryLinkMatch {
+  component_id: string;
+  scope: LibraryScope;
+  kind: "exact_supplier_part" | "exact_mpn_manufacturer" | "exact_mpn";
+  reasons: string[];
+  manufacturer_conflict: boolean;
+}
+
+export interface LibraryLink {
+  standing: Standing;
+  matches: LibraryLinkMatch[];
+  /** Not approved for engineering use: unverified ratings, no datasheet, or no definition yet. */
+  unverified: boolean;
+  import_template: string | null;
+  explanation: string;
+}
+
+export interface SavedRecord {
+  record: SourcingRecord;
+  path: string;
+  link: LibraryLink;
+}
+
+export interface LibraryEntry2 {
+  scope: LibraryScope;
+  scope_label: string;
+  id: string;
+  def: ComponentDef;
+  favourite: boolean;
+  tags: string[];
+  recent_rank: number | null;
+  unverified_ratings: number;
+  has_datasheet: boolean;
+  in_project: boolean;
+  supplier: { lcsc: string; stock: number | null; as_of_unix_s: number } | null;
+}
+
+export interface Facet {
+  value: string;
+  count: number;
+}
+
+export interface ImportedLibrary {
+  manifest: { name: string; licence: string; source_url: string };
+  components: number;
+}
+
+export interface LibraryBrowse {
+  entries: LibraryEntry2[];
+  facets: { sources: Facet[]; categories: Facet[]; manufacturers: Facet[]; packages: Facet[]; tags: Facet[] };
+  total: number;
+  problems: string[];
+  imported: ImportedLibrary[];
+}
+
+export interface LibraryBrowseQuery {
+  query?: string;
+  source?: string;
+  category?: string;
+  manufacturer?: string;
+  package?: string;
+  tag?: string;
+  favourites_only?: boolean;
+  recent_only?: boolean;
+}
+
+export interface LibraryMeta {
+  favourites: string[];
+  tags: Record<string, string[]>;
+  recent: string[];
+}
+
+export interface LibraryImportSummary {
+  library: ImportedLibrary;
+  accepted: string[];
+  rejected: string[];
 }
