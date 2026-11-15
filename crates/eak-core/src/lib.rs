@@ -5,6 +5,7 @@
 //!
 //! * `geom`     – exact integer geometry (nanometres).
 //! * `library`  – native component / symbol / footprint definitions.
+//! * `libmeta`  – library identity, scope, maturity, catalogue and committed-definition references (ADR-0031).
 //! * `ir`       – project, schematic, PCB, constraints, manufacturing config.
 //! * `integrity`– structural validation of a whole project (dangling references etc.).
 //! * `migrate`  – schema version handling; unknown/newer schemas fail safely.
@@ -17,6 +18,7 @@ pub mod datasheet;
 pub mod geom;
 pub mod integrity;
 pub mod ir;
+pub mod libmeta;
 pub mod library;
 pub mod migrate;
 pub mod units;
