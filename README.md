@@ -202,23 +202,81 @@ revision, and it is never called manufacturing-ready.
 
 ## Installation
 
-The goal is a one-minute install. Today it is available for Linux only.
+### Install EAK
 
-| Platform | Command | Availability |
-|---|---|---|
-| Linux x86_64 | `curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.sh \| bash` | v0.1.4: `.deb` and AppImage (old; does not include current `main`) |
-| Windows (PowerShell) | `irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/scripts/install.ps1 \| iex` | **Not yet available**: no Windows package is published; the script stops and says so |
-| macOS | same script as Linux | **Not yet available**: no macOS package is published |
+One command builds **the current `main` source on your own computer** (it does not download an old
+package), installs EAK for your user, adds a launcher and starts it. It sets up Rust, Node.js and the
+native build libraries for you (asking before anything needs administrator rights).
 
-The published v0.1.4 (Linux only) predates the terminal workspace, the harness and all the work
-listed above. **Current `main` must be built from source**; see [Developer setup](#developer-setup). Windows and macOS packages are pending. Packages are unsigned; installers verify SHA-256 against the
-release `SHA256SUMS`. The Linux installer's fallback to v0.1.4's asset names is itself unrun.
-Options, paths and uninstall: [docs/INSTALL.md](docs/INSTALL.md).
+| Platform | Command |
+|---|---|
+| Linux (Debian/Ubuntu first) | `curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.sh \| bash` |
+| macOS (Apple Silicon / Intel) | the same command as Linux |
+| Windows 10/11 x64 (PowerShell) | `irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 \| iex` |
+
+- **It needs network access** (source, Rust crates, npm packages, toolchains) and **the first build takes
+  a long time** (the whole Rust dependency tree is compiled; plan for tens of minutes, longer on small
+  machines). Later updates reuse caches. Allow roughly 10 GB of free disk (an estimate, not measured).
+- **Status: code-reviewed only.** None of these installers has been run on real hardware yet; see
+  [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md) for the honest per-platform matrix.
+- Pin a revision with `EAK_REF` (tag, branch or full commit); the exact commit built is always printed.
+  Log: `~/.local/state/eak/install-source.log` (Linux), `~/Library/Logs/EAK/` (macOS),
+  `%LOCALAPPDATA%\EAK\Logs\` (Windows). Options, paths, privileges and details: [docs/INSTALL.md](docs/INSTALL.md).
+
+### Update EAK
+
+Run the same install command again. It resolves the newest requested commit, rebuilds only if it changed,
+keeps the previous version until the new one starts, and rolls back if the new one does not.
+
+### Uninstall EAK
+
+Removes only EAK's own files and launcher; never your projects, settings or credentials.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.sh | bash -s -- --uninstall   # add --clean-cache to drop build caches
+```
+```powershell
+$env:EAK_UNINSTALL=1; irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 | iex   # also $env:EAK_CLEAN_CACHE=1 for caches
+```
+
+### Install a prebuilt release (optional)
+
+Only on explicit request, and only if a release has an asset for your platform (otherwise it stops; it never
+substitutes an older release for `main`). The newest published release, v0.1.4 (Linux `.deb`/AppImage),
+predates most of the work listed above.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.sh | EAK_INSTALL_MODE=prebuilt bash
+```
+```powershell
+$env:EAK_INSTALL_MODE='prebuilt'; irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 | iex
+```
+(The variable must be set on the shell after the pipe, not on `curl`.)
+
+### Troubleshooting
+
+Out of memory or a killed linker: `EAK_BUILD_JOBS=1`. "Missing system libraries" on Linux: re-run and accept the
+package list, or see the Tauri prerequisites. Windows: the C++ Build Tools and WebView2 are required; a restart
+may be needed after installing them. Full list (network, disk, long paths, unsupported distributions):
+[docs/INSTALL.md](docs/INSTALL.md#troubleshooting).
 
 ## Developer setup
 
-Needs stable Rust 1.80+, Node.js 22+, and the Tauri system libraries for your OS
-([docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)). No Python anywhere.
+### Build from source manually
+
+For developers who already have the toolchain: stable Rust 1.80+, Node.js 20.19+ or 22.12+ (Vite 8), and the
+Tauri system libraries for your OS ([docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)). No Python anywhere.
+After cloning, the same build the installer uses (`npm ci`, then one `npm run tauri -- build`; never a bare
+`cargo build --release`, which skips the frontend build):
+
+```bash
+./scripts/build.sh          # Linux / macOS; prints the artifact path
+```
+```powershell
+.\scripts\build.ps1         # Windows
+```
+
+Development loop and checks:
 
 ```bash
 cd apps/desktop && npm ci && npm run tauri dev
