@@ -19,9 +19,11 @@ pub mod datasheet;
 pub mod geom;
 pub mod integrity;
 pub mod ir;
+pub mod kicad_import;
 pub mod libmeta;
 pub mod library;
 pub mod migrate;
+pub mod pinmap;
 pub mod sexpr;
 pub mod units;
 

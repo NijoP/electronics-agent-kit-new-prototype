@@ -1048,6 +1048,22 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                         fp.pad_nets = pad_nets;
                     }
                     None => {
+                        // Never stage a footprint whose pin/pad mapping is unusable: report it
+                        // instead, so the component stays visibly unresolved (ADR-0035).
+                        let report = eak_core::pinmap::check_component(&def);
+                        if report.blocking() {
+                            warnings.push(format!(
+                                "{} not placed on the PCB: {}",
+                                s.refdes,
+                                report
+                                    .messages()
+                                    .into_iter()
+                                    .filter(|m| !m.starts_with("warning"))
+                                    .collect::<Vec<_>>()
+                                    .join("; ")
+                            ));
+                            continue;
+                        }
                         let id = new_id("fp");
                         p.pcb.footprints.insert(
                             id.clone(),
