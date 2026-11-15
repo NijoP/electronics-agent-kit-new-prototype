@@ -68,7 +68,7 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
   }, [visible, refresh]);
 
   const sessions = useMemo(() => ov?.sessions ?? [], [ov]);
-  const byId = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions]);
+  const byId = useMemo(() => new Map((ov?.sessions ?? []).map((s) => [s.id, s])), [ov]);
   const focused = ov?.focused != null ? byId.get(ov.focused) ?? null : null;
   const spaceId = activeSpace ?? focused?.space ?? ov?.spaces[0]?.id ?? null;
   const space = ov?.spaces.find((s) => s.id === spaceId) ?? null;
