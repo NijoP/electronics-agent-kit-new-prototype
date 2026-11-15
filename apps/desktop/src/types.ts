@@ -560,10 +560,26 @@ export interface DfmReport {
   limitations: string[];
 }
 
+export type AssemblyClass = "unknown" | "basic" | "extended" | "preferred_extended" | "not_assemblable";
+
+export interface AssemblyWarning {
+  kind: string;
+  component_id: string;
+  designators: string[];
+  message: string;
+}
+
+export interface AssemblyReport {
+  rows: { lcsc: string; class: AssemblyClass | null; source: string | null; verified_at_unix_s: number | null }[];
+  warnings: AssemblyWarning[];
+}
+
 export interface ManufacturingPreview {
   revision: number;
   bom: BomLine[];
   dfm: DfmReport;
+  /** JLCPCB assembly classification and fail-closed BOM warnings (ADR-0034). */
+  assembly: AssemblyReport;
   default_out_dir: string | null;
 }
 

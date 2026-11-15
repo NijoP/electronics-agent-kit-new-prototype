@@ -12,6 +12,7 @@
 
 use crate::Session;
 use eak_core::builtin;
+use eak_manufacturing::assembly::{self, AssemblyClass, AssemblyRecord, AssemblyReport};
 use eak_manufacturing::bom::{self, BomLine};
 use eak_manufacturing::jlcpcb::{self, DfmReport, PrepResult};
 use eak_manufacturing::lcsc::{self, UreqFetch};
@@ -297,6 +298,8 @@ pub struct ManufacturingPreview {
     pub revision: u64,
     pub bom: Vec<BomLine>,
     pub dfm: DfmReport,
+    /// JLCPCB assembly classification rows and fail-closed BOM warnings (ADR-0034).
+    pub assembly: AssemblyReport,
     pub default_out_dir: Option<String>,
 }
 
@@ -308,15 +311,103 @@ pub fn manufacturing_preview(s: &Session) -> Result<ManufacturingPreview, String
         let p = e.project();
         let lines = bom::build(p, &records);
         let dfm = jlcpcb::dfm(p, &lines, &jlcpcb::Profile::two_layer_1oz());
+        let stored = e
+            .dir()
+            .map(|d| assembly::read_records(&d.join("sourcing")))
+            .unwrap_or_default();
+        let assembly = assembly::warnings(&lines, &records, &stored, now_s());
         ManufacturingPreview {
             revision: p.revision,
             bom: lines,
             dfm,
+            assembly,
             default_out_dir: e
                 .dir()
                 .map(|d| d.join("output").join(format!("jlcpcb-rev-{}", p.revision)))
                 .map(|d| d.display().to_string()),
         }
+    })
+}
+
+fn now_s() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Record the user's own statement of a part's JLCPCB assembly class (basic, extended, preferred
+/// extended or not assemblable), with the time. `Unknown` is not an attestation and is refused.
+pub fn assembly_attest(
+    s: &Session,
+    lcsc: &str,
+    class: AssemblyClass,
+) -> Result<AssemblyRecord, String> {
+    if class == AssemblyClass::Unknown {
+        return Err("choose basic, extended, preferred extended or not assemblable".into());
+    }
+    let rec = AssemblyRecord {
+        lcsc: lcsc.trim().to_ascii_uppercase(),
+        class,
+        source: "user_attested".into(),
+        verified_at_unix_s: now_s(),
+        stock: None,
+        unit_price: None,
+    };
+    let dir = sourcing_dir(s).ok_or("recording assembly data needs a saved project folder")?;
+    assembly::write_record(&dir, &rec)?;
+    Ok(rec)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AssemblyImport {
+    pub file: String,
+    /// Parts of this project's BOM found in the file and recorded.
+    pub recorded: usize,
+    pub unknown_class: usize,
+}
+
+/// Read a JLCPCB parts-library CSV the user obtained (absolute path) and record the rows for the
+/// LCSC numbers on this project's BOM. Rows for other parts are ignored; unrecognised type text
+/// stays `Unknown`.
+pub fn assembly_import_parts_file(s: &Session, path: &str) -> Result<AssemblyImport, String> {
+    let p = Path::new(path.trim());
+    if !p.is_absolute() {
+        return Err("choose an absolute file path".into());
+    }
+    let len = std::fs::metadata(p)
+        .map_err(|e| format!("{}: {e}", p.display()))?
+        .len();
+    if len > 256 * 1024 * 1024 {
+        return Err("the file is larger than 256 MiB".into());
+    }
+    let text =
+        String::from_utf8_lossy(&std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()))?)
+            .into_owned();
+    let records = stored_records(s);
+    let wanted: std::collections::BTreeSet<String> = s.with_engine(|e| {
+        bom::build(e.project(), &records)
+            .into_iter()
+            .filter_map(|l| l.lcsc)
+            .map(|c| c.to_ascii_uppercase())
+            .collect()
+    })?;
+    let name = p
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let rows = assembly::parse_parts_csv(&text, &name, now_s(), Some(&wanted))?;
+    let dir = sourcing_dir(s).ok_or("recording assembly data needs a saved project folder")?;
+    for r in &rows {
+        assembly::write_record(&dir, r)?;
+    }
+    Ok(AssemblyImport {
+        file: name,
+        recorded: rows.len(),
+        unknown_class: rows
+            .iter()
+            .filter(|r| r.class == AssemblyClass::Unknown)
+            .count(),
     })
 }
 
@@ -373,7 +464,11 @@ pub fn jlcpcb_prepare(s: &Session, out_dir: &str) -> Result<PrepareResult, Strin
                 .ok_or_else(|| format!("{} evidence could not be saved", r.check))?;
         }
         let refs: Vec<&Report> = reports.iter().collect();
-        let prep = jlcpcb::prepare(e.project(), &refs, &records, &target)?;
+        let stored = e
+            .dir()
+            .map(|d| assembly::read_records(&d.join("sourcing")))
+            .unwrap_or_default();
+        let prep = jlcpcb::prepare_with(e.project(), &refs, &records, &stored, &target)?;
         Ok(PrepareResult { prep, reports })
     })?
 }
@@ -422,6 +517,29 @@ pub mod cmd {
         app: AppHandle,
     ) -> Result<super::ManufacturingPreview, String> {
         blocking(app, Priority::P3, super::manufacturing_preview).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn assembly_attest(
+        app: AppHandle,
+        lcsc: String,
+        class: super::AssemblyClass,
+    ) -> Result<super::AssemblyRecord, String> {
+        blocking(app, Priority::P1, move |s| {
+            super::assembly_attest(s, &lcsc, class)
+        })
+        .await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn assembly_import_parts_file(
+        app: AppHandle,
+        path: String,
+    ) -> Result<super::AssemblyImport, String> {
+        blocking(app, Priority::P3, move |s| {
+            super::assembly_import_parts_file(s, &path)
+        })
+        .await
     }
 
     #[tauri::command(rename_all = "snake_case")]

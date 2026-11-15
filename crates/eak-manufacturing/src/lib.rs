@@ -7,6 +7,7 @@
 //! hash and contain no errors. Even then it is "internally verified", never
 //! "manufacturing-ready": independent engineering review and fabricator DFM are required.
 
+pub mod assembly;
 pub mod bom;
 pub mod drill;
 pub mod fabpack;

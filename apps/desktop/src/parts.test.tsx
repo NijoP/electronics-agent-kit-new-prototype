@@ -53,6 +53,7 @@ const dfm: DfmReport = {
 };
 
 const preview: ManufacturingPreview = {
+  assembly: { rows: [], warnings: [] },
   revision: 4,
   dfm,
   default_out_dir: "/p/output/jlcpcb-rev-4",

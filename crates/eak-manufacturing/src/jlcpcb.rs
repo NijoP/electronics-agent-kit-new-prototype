@@ -12,6 +12,7 @@
 //! Nothing is uploaded and no order is placed or prepared for placement. The output is
 //! labelled "prepared for review", never "manufacturing-ready".
 
+use crate::assembly::{self, AssemblyRecord, AssemblyReport};
 use crate::bom::{self, BomLine};
 use crate::sourcing::SourcingRecord;
 use crate::{compile, FileEntry, Manifest, PackageStatus};
@@ -853,6 +854,9 @@ pub struct PrepManifest {
     pub dfm_not_checked: usize,
     pub files: Vec<FileEntry>,
     pub not_verified: Vec<String>,
+    /// Assembly classification rows and fail-closed BOM warnings (ADR-0034).
+    #[serde(default)]
+    pub assembly: AssemblyReport,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -876,7 +880,21 @@ pub fn prepare(
     records: &[SourcingRecord],
     out_dir: &Path,
 ) -> Result<PrepResult, String> {
+    prepare_with(p, reports, records, &[], out_dir)
+}
+
+/// [`prepare`] with the project's JLCPCB assembly records. A part without a record stays
+/// `Unknown` and is reported; nothing is inferred from the LCSC listing.
+pub fn prepare_with(
+    p: &Project,
+    reports: &[&Report],
+    records: &[SourcingRecord],
+    assembly_records: &[AssemblyRecord],
+    out_dir: &Path,
+) -> Result<PrepResult, String> {
     let lines = bom::build(p, records);
+    let now_s = (eak_runtime::store::now_ms() / 1000) as u64;
+    let asm = assembly::warnings(&lines, records, assembly_records, now_s);
     let profile = Profile::two_layer_1oz();
     let dfm_report = dfm(p, &lines, &profile);
     // The generic package supplies the Gerber/Excellon files, already self-validated and
@@ -932,6 +950,7 @@ pub fn prepare(
         });
     }
     let blocked = dfm_report.failures > 0 || package.status == PackageStatus::Draft;
+    let asm_warnings = asm.warnings.len();
     let manifest = PrepManifest {
         project_id: p.id.clone(),
         project_name: p.name.clone(),
@@ -948,7 +967,7 @@ pub fn prepare(
                 dfm_report.failures, package.status
             )
         } else {
-            "PREPARED FOR REVIEW. Internal checks found no failing rule, but this is NOT manufacturing-ready: rules marked not_checked, independent engineering review and JLCPCB's own DFM are still required. Upload and ordering are manual and not done by EAK.".into()
+            format!("PREPARED FOR REVIEW. Internal checks found no failing rule, but this is NOT manufacturing-ready: rules marked not_checked, {asm_warnings} BOM/assembly warning(s), independent engineering review and JLCPCB's own DFM are still required. Upload and ordering are manual and not done by EAK.")
         },
         package_status: package.status,
         dfm_failures: dfm_report.failures,
@@ -961,6 +980,7 @@ pub fn prepare(
             "Basic/extended classification, stock and price at order time".into(),
             "Independent electrical engineering review and physical testing".into(),
         ],
+        assembly: asm,
     };
     let mjson = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
     eak_runtime::store::atomic_write(&out_dir.join("jlcpcb-prep-manifest.json"), mjson.as_bytes())

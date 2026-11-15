@@ -942,7 +942,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 69] = [
+pub const IPC_COMMANDS: [&str; 71] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -970,6 +970,8 @@ pub const IPC_COMMANDS: [&str; 69] = [
     "library_personal_remove",
     "library_import_open_source",
     "library_imported_remove",
+    "assembly_attest",
+    "assembly_import_parts_file",
     "manufacturing_preview",
     "jlcpcb_prepare",
     "library_components",
@@ -1348,6 +1350,8 @@ pub fn run() {
             libstore::cmd::library_personal_remove,
             libstore::cmd::library_import_open_source,
             libstore::cmd::library_imported_remove,
+            parts::cmd::assembly_attest,
+            parts::cmd::assembly_import_parts_file,
             parts::cmd::manufacturing_preview,
             parts::cmd::jlcpcb_prepare,
             workspace::cmd::open_projects,

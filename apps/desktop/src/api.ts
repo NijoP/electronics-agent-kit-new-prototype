@@ -27,6 +27,7 @@ import type {
   FootprintCandidate,
   ManufacturingPreview,
   PartsSearch,
+  AssemblyClass,
   CatalogueQuery,
   CatalogueReply,
   CatalogueResults,
@@ -130,6 +131,8 @@ export const IPC_COMMANDS = [
   "library_personal_remove",
   "library_import_open_source",
   "library_imported_remove",
+  "assembly_attest",
+  "assembly_import_parts_file",
   "manufacturing_preview",
   "jlcpcb_prepare",
   "open_projects",
@@ -228,6 +231,9 @@ export const api = {
   libraryPersonalRemove: (id: string) => call<void>("library_personal_remove", { id }),
   libraryImportOpenSource: (dir: string) => call<LibraryImportSummary>("library_import_open_source", { dir }),
   libraryImportedRemove: (name: string) => call<void>("library_imported_remove", { name }),
+  assemblyAttest: (lcsc: string, cls: AssemblyClass) => call<unknown>("assembly_attest", { lcsc, class: cls }),
+  assemblyImportPartsFile: (path: string) =>
+    call<{ file: string; recorded: number; unknown_class: number }>("assembly_import_parts_file", { path }),
   manufacturingPreview: () => call<ManufacturingPreview>("manufacturing_preview"),
   jlcpcbPrepare: (outDir: string) => call<PrepareResult>("jlcpcb_prepare", { out_dir: outDir }),
   // IDE shell: several open projects (one active) and the sandboxed project file explorer. Every
