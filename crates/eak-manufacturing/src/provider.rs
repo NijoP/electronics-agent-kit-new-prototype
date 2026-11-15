@@ -1,7 +1,8 @@
 //! Supplier provider abstraction with caching, rate limiting, retry with backoff, error
 //! reporting, offline fallback and provenance (directive part 2 §7.2).
 //!
-//! * [`SupplierProvider`] is the trait a supplier lookup implements; [`LcscProvider`] does.
+//! * [`SupplierProvider`] is the trait a supplier lookup implements; the signed OpenAPI client
+//!   (`lcsc_api::LcscApi`) and the legacy [`LcscProvider`] do.
 //!   JLCPCB is a manufacturing-preparation adapter (`jlcpcb.rs`), not a part-lookup supplier, so it
 //!   does not implement this trait; further suppliers add an impl.
 //! * [`Resilient`] wraps any provider. Calls are blocking: run them off the UI thread (the desktop's
@@ -32,6 +33,13 @@ pub enum ErrorKind {
     Blocked,
     NotFound,
     Unusable,
+    /// No API credentials are configured (LCSC OpenAPI). Never retried, never stale.
+    NeedsCredentials,
+    /// Credentials, signature or clock rejected. Never retried, never stale.
+    Unauthorized,
+    /// Rate limit or quota (per-minute 429, daily 430, or "busy"). Never retried; falls back
+    /// to stale cache.
+    RateLimited,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -227,8 +235,11 @@ impl<P: SupplierProvider> Resilient<P> {
             }
         }
         let err = last_err.expect("at least one attempt ran");
-        // Offline fallback: only for unreachable / refused, and always labelled as stale.
-        if matches!(err.kind, ErrorKind::Offline | ErrorKind::Blocked) {
+        // Offline fallback: only for unreachable / refused / rate-limited, always labelled as stale.
+        if matches!(
+            err.kind,
+            ErrorKind::Offline | ErrorKind::Blocked | ErrorKind::RateLimited
+        ) {
             if let Some((age, records)) = cached {
                 return Ok(Answer {
                     provider,

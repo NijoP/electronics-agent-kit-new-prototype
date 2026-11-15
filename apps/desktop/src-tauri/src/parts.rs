@@ -2,8 +2,9 @@
 //!
 //! Plain functions over [`Session`] (tested headless in `tests/parts_ipc.rs`); the Tauri
 //! wrappers in [`cmd`] only decode arguments. Rules:
-//! * the only network traffic is the LCSC part number or keyword the user typed, sent to
-//!   LCSC's public catalogue; no design data is ever sent anywhere;
+//! * the only network traffic is the LCSC part number or keyword the user typed, sent to the
+//!   documented, signed LCSC OpenAPI with the user's own credentials (ADR-0031); no design data
+//!   is ever sent anywhere;
 //! * an import is a typed `UpsertComponentDefinition` command through the engine as the
 //!   Human actor, with the revision the UI last rendered;
 //! * JLCPCB output is written only to a folder the user names, is labelled "prepared for
@@ -13,7 +14,8 @@ use crate::Session;
 use eak_core::builtin;
 use eak_manufacturing::bom::{self, BomLine};
 use eak_manufacturing::jlcpcb::{self, DfmReport, PrepResult};
-use eak_manufacturing::lcsc::{self, LcscProvider, UreqFetch};
+use eak_manufacturing::lcsc::{self, UreqFetch};
+use eak_manufacturing::lcsc_api::LcscApi;
 use eak_manufacturing::provider::{Answer, ErrorKind, Resilient, Served, SupplierProvider};
 use eak_manufacturing::sourcing::{self, SourcingRecord};
 use eak_runtime::{Actor, Command, CommandRequest, CommandResponse};
@@ -35,8 +37,9 @@ pub struct LibraryHit {
 /// What happened when LCSC was asked.
 #[derive(Debug, Clone, Serialize)]
 pub struct LiveSearch {
-    /// `ok`, `stale` (earlier cached answer, supplier down), `blocked`, `not_found`,
-    /// `unreachable`, `bad_query` or `error`.
+    /// `ok`, `stale` (earlier cached answer, supplier down), `needs_credentials`,
+    /// `unauthorized`, `rate_limited`, `blocked`, `not_found`, `unreachable`, `bad_query` or
+    /// `error`.
     pub status: &'static str,
     /// Human-readable explanation, shown as-is. Empty when `ok`.
     pub message: String,
@@ -100,24 +103,27 @@ fn library_hits(query: &str) -> Vec<LibraryHit> {
         .collect()
 }
 
-fn live_status(k: ErrorKind) -> &'static str {
+pub fn live_status(k: ErrorKind) -> &'static str {
     match k {
         ErrorKind::BadQuery => "bad_query",
         ErrorKind::Offline => "unreachable",
         ErrorKind::Blocked => "blocked",
         ErrorKind::NotFound => "not_found",
         ErrorKind::Unusable => "error",
+        ErrorKind::NeedsCredentials => "needs_credentials",
+        ErrorKind::Unauthorized => "unauthorized",
+        ErrorKind::RateLimited => "rate_limited",
     }
 }
 
 /// Supplier lookups shared by every `parts_*` command: one cache, rate limit and retry policy
 /// per process (ADR-0028). The wrapper never holds a lock while waiting on the network, so a
 /// slow or dead supplier cannot freeze other commands.
-pub type LcscResilient = Resilient<LcscProvider<UreqFetch>>;
+pub type LcscResilient = Resilient<LcscApi<UreqFetch>>;
 
 pub fn live_provider() -> &'static LcscResilient {
     static P: OnceLock<LcscResilient> = OnceLock::new();
-    P.get_or_init(|| Resilient::new(LcscProvider::live()))
+    P.get_or_init(|| Resilient::new(crate::catalogue::lookup_api()))
 }
 
 /// Search the built-in library and the project's stored records offline, then ask LCSC.

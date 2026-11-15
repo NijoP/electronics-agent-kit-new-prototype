@@ -490,7 +490,17 @@ export interface LibraryHit {
   mpn: string | null;
 }
 
-export type LiveStatus = "ok" | "stale" | "blocked" | "not_found" | "unreachable" | "bad_query" | "error";
+export type LiveStatus =
+  | "ok"
+  | "stale"
+  | "needs_credentials"
+  | "unauthorized"
+  | "rate_limited"
+  | "blocked"
+  | "not_found"
+  | "unreachable"
+  | "bad_query"
+  | "error";
 
 export interface PartsSearch {
   query: string;
@@ -945,4 +955,84 @@ export interface IntelligenceSummary {
   elsewhere: [string, string][];
   not_implemented: string[];
   limitations: string[];
+}
+
+// LCSC OpenAPI catalogue (ADR-0031). The API secret never reaches the frontend: only the last
+// four characters of the key are returned.
+export interface LcscStatusFile {
+  state: "untested" | "ok" | "failed";
+  message: string;
+  tested_at_unix_s: number | null;
+  last_success_unix_s: number | null;
+}
+
+export interface LcscView {
+  has_credentials: boolean;
+  key_hint: string | null;
+  store_error: string | null;
+  status: LcscStatusFile;
+  requests_this_session: number;
+  apply_url: string;
+  host: string;
+  needs: string | null;
+}
+
+export type Served = { source: "live" | "cache" | "stale_cache"; age_s?: number; because?: string };
+
+export interface CatalogueReply<T> {
+  status: LiveStatus;
+  message: string;
+  served: Served | null;
+  fetched_at_unix_s: number | null;
+  data: T | null;
+}
+
+export interface CategoryNode {
+  id: number;
+  name: string;
+  product_count: number | null;
+  children: CategoryNode[];
+}
+
+export interface Manufacturer {
+  id: number | null;
+  name: string;
+  product_count: number | null;
+}
+
+export type MatchKind = "exact_lcsc" | "exact_mpn_manufacturer" | "exact_mpn" | "fuzzy" | "browse";
+
+export interface Candidate {
+  record: SourcingRecord;
+  kind: MatchKind;
+  exact: boolean;
+  reasons: string[];
+  manufacturer_conflict: boolean;
+  package_match: boolean | null;
+  category_match: boolean | null;
+  engineering_status: "supplier_listing_only";
+}
+
+export interface CatalogueResults {
+  candidates: Candidate[];
+  total: number | null;
+  page: number;
+  limit: number;
+  has_more: boolean;
+  via: string;
+  filtered_out: number;
+}
+
+export interface CatalogueQuery {
+  keyword?: string;
+  category_id?: number;
+  category_name?: string;
+  page?: number;
+  limit?: number;
+  in_stock_only?: boolean;
+  currency?: string;
+  manufacturer?: string;
+  package?: string;
+  category?: string;
+  refresh?: boolean;
 }

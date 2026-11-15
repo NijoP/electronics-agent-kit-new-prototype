@@ -14,6 +14,7 @@
 //!   evidence by the engine.
 
 pub mod ai;
+pub mod catalogue;
 pub mod models;
 pub mod parts;
 pub mod resources;
@@ -940,7 +941,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 55] = [
+pub const IPC_COMMANDS: [&str; 62] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -954,6 +955,13 @@ pub const IPC_COMMANDS: [&str; 55] = [
     "route_step",
     "parts_search",
     "parts_import",
+    "lcsc_settings_get",
+    "lcsc_settings_save",
+    "lcsc_settings_clear",
+    "lcsc_test_connection",
+    "catalogue_categories",
+    "catalogue_manufacturers",
+    "catalogue_search",
     "manufacturing_preview",
     "jlcpcb_prepare",
     "library_components",
@@ -1254,6 +1262,11 @@ pub fn run() {
             }
             app.manage(ai::AiState::default());
             app.manage(terminal_state(app));
+            // Non-secret LCSC connection status lives beside the model settings; the LCSC API
+            // key and secret go to the OS credential store only.
+            if let Ok(dir) = app.path().app_config_dir() {
+                catalogue::init(&dir);
+            }
             // Profiles are plain JSON in the config dir; keys go to the OS credential store.
             let profiles = app
                 .path()
@@ -1312,6 +1325,13 @@ pub fn run() {
             ai::cmd::ai_rollback,
             parts::cmd::parts_search,
             parts::cmd::parts_import,
+            catalogue::cmd::lcsc_settings_get,
+            catalogue::cmd::lcsc_settings_save,
+            catalogue::cmd::lcsc_settings_clear,
+            catalogue::cmd::lcsc_test_connection,
+            catalogue::cmd::catalogue_categories,
+            catalogue::cmd::catalogue_manufacturers,
+            catalogue::cmd::catalogue_search,
             parts::cmd::manufacturing_preview,
             parts::cmd::jlcpcb_prepare,
             workspace::cmd::open_projects,

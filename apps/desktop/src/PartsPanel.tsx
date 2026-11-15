@@ -1,8 +1,10 @@
-// Parts search: the EAK library, records stored with the project, and LCSC's public
-// catalogue. Import is one engine command carrying the revision this panel last saw.
-// When LCSC refuses automated access the panel says so; it never fills the list itself.
+// Parts search: the EAK library, records stored with the project, and the LCSC OpenAPI
+// catalogue (credentials, browsing and paging are in CataloguePanel). Import is one engine
+// command carrying the revision this panel last saw. When LCSC cannot be asked the panel says
+// why; it never fills the list itself.
 import { useState } from "react";
 import { api, describeError } from "./api";
+import { CataloguePanel } from "./CataloguePanel";
 import type { PartsSearch, SourcingRecord } from "./types";
 
 interface Props {
@@ -80,6 +82,7 @@ export function PartsPanel({ revision, onImported }: Props) {
       await onImported(`Imported ${lcsc} into the project library (revision ${r.response.revision_after})`);
     });
 
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
   const live = result?.live;
   return (
     <section className="parts" aria-label="Parts search">
@@ -99,7 +102,7 @@ export function PartsPanel({ revision, onImported }: Props) {
         </button>
       </form>
       <p className="muted">
-        Only the text you type is sent to LCSC&apos;s public catalogue. Stock and prices are a snapshot, not a quote.
+        Only the text you type is sent to LCSC, signed with your own API credentials. Stock and prices are a snapshot, not a quote.
       </p>
       {note && <p role="status">{note}</p>}
       {live && live.status !== "ok" && (
@@ -140,6 +143,10 @@ export function PartsPanel({ revision, onImported }: Props) {
           </table>
         </>
       )}
+      <details open={catalogueOpen} onToggle={(e) => setCatalogueOpen(e.currentTarget.open)}>
+        <summary>LCSC catalogue: credentials, categories, manufacturers, paged search</summary>
+        {catalogueOpen && <CataloguePanel busy={busy} onImport={(lcsc) => void importPart(lcsc)} />}
+      </details>
       {result && result.library.length > 0 && (
         <>
           <h3>EAK library</h3>
