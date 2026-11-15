@@ -1015,6 +1015,8 @@ export interface Candidate {
 
 export interface CatalogueResults {
   candidates: Candidate[];
+  /** What each listing is relative to the libraries, by LCSC number. */
+  links: Record<string, LibraryLink>;
   total: number | null;
   page: number;
   limit: number;
@@ -1035,4 +1037,87 @@ export interface CatalogueQuery {
   package?: string;
   category?: string;
   refresh?: boolean;
+}
+
+// Library scopes, browse and supplier-record linking (ADR-0033).
+export type LibraryScope = { kind: "builtin" } | { kind: "project" } | { kind: "personal" } | { kind: "imported"; name: string };
+
+export type Standing = "existing_eak" | "imported_definition" | "supplier_only" | "needs_authoring";
+
+export interface LibraryLinkMatch {
+  component_id: string;
+  scope: LibraryScope;
+  kind: "exact_supplier_part" | "exact_mpn_manufacturer" | "exact_mpn";
+  reasons: string[];
+  manufacturer_conflict: boolean;
+}
+
+export interface LibraryLink {
+  standing: Standing;
+  matches: LibraryLinkMatch[];
+  /** Not approved for engineering use: unverified ratings, no datasheet, or no definition yet. */
+  unverified: boolean;
+  import_template: string | null;
+  explanation: string;
+}
+
+export interface SavedRecord {
+  record: SourcingRecord;
+  path: string;
+  link: LibraryLink;
+}
+
+export interface LibraryEntry2 {
+  scope: LibraryScope;
+  scope_label: string;
+  id: string;
+  def: ComponentDef;
+  favourite: boolean;
+  tags: string[];
+  recent_rank: number | null;
+  unverified_ratings: number;
+  has_datasheet: boolean;
+  in_project: boolean;
+  supplier: { lcsc: string; stock: number | null; as_of_unix_s: number } | null;
+}
+
+export interface Facet {
+  value: string;
+  count: number;
+}
+
+export interface ImportedLibrary {
+  manifest: { name: string; licence: string; source_url: string };
+  components: number;
+}
+
+export interface LibraryBrowse {
+  entries: LibraryEntry2[];
+  facets: { sources: Facet[]; categories: Facet[]; manufacturers: Facet[]; packages: Facet[]; tags: Facet[] };
+  total: number;
+  problems: string[];
+  imported: ImportedLibrary[];
+}
+
+export interface LibraryBrowseQuery {
+  query?: string;
+  source?: string;
+  category?: string;
+  manufacturer?: string;
+  package?: string;
+  tag?: string;
+  favourites_only?: boolean;
+  recent_only?: boolean;
+}
+
+export interface LibraryMeta {
+  favourites: string[];
+  tags: Record<string, string[]>;
+  recent: string[];
+}
+
+export interface LibraryImportSummary {
+  library: ImportedLibrary;
+  accepted: string[];
+  rejected: string[];
 }

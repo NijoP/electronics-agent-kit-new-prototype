@@ -88,6 +88,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Component 3D model reference (STEP/WRL/GLB, transform, quality, licence), viewer loading, missing-model state | impl | code-reviewed only, unrun (ADR-0025); no model-vs-footprint verification or collision checks |
 | Supplier offers separate from component identity (`SupplierOffer`, legacy `lcsc` migration), resilient LCSC search/import (cache, retry, stale label, typed errors) | impl | code-reviewed only, unrun (ADR-0028); no lifecycle parsing, cache not persisted, offer data never used as suitability evidence |
 | LCSC catalogue through the documented signed OpenAPI (credentials in OS keyring, test connection, category/manufacturer browsing, paged search, exact/normalised/fuzzy explainable matching, live/cached/stale markers) | impl | code-reviewed only, unrun (ADR-0032); never run against a live LCSC account; response field mapping inferred from public docs; package/manufacturer filters are client-side per page |
+| Library scopes (built-in/project/personal/imported open-source with licence), cross-scope browser (filters, favourites, tags, recents, pin/pad inspection), supplier discovery separate from engineering import, listing standing (existing / supplier-only / needs authoring) | impl | code-reviewed only, unrun (ADR-0033); only EAK ComponentDef JSON is imported (no external format translation, no authoring wizard, no bulk matching); metadata per machine |
 | AI datasheet-to-library workflow | - | |
 
 ## Part 8: design manager and cross-probing

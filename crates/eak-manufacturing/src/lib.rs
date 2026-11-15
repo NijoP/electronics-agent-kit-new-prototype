@@ -14,6 +14,7 @@ pub mod gerber;
 pub mod jlcpcb;
 pub mod lcsc;
 pub mod lcsc_api;
+pub mod library_link;
 pub mod matching;
 pub mod provider;
 pub mod sourcing;

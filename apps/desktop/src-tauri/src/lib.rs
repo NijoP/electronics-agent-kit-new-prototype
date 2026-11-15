@@ -15,6 +15,7 @@
 
 pub mod ai;
 pub mod catalogue;
+pub mod libstore;
 pub mod models;
 pub mod parts;
 pub mod resources;
@@ -941,7 +942,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 62] = [
+pub const IPC_COMMANDS: [&str; 69] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -962,6 +963,13 @@ pub const IPC_COMMANDS: [&str; 62] = [
     "catalogue_categories",
     "catalogue_manufacturers",
     "catalogue_search",
+    "parts_save_record",
+    "library_browse",
+    "library_meta",
+    "library_personal_save",
+    "library_personal_remove",
+    "library_import_open_source",
+    "library_imported_remove",
     "manufacturing_preview",
     "jlcpcb_prepare",
     "library_components",
@@ -1266,6 +1274,7 @@ pub fn run() {
             // key and secret go to the OS credential store only.
             if let Ok(dir) = app.path().app_config_dir() {
                 catalogue::init(&dir);
+                libstore::init(&dir);
             }
             // Profiles are plain JSON in the config dir; keys go to the OS credential store.
             let profiles = app
@@ -1332,6 +1341,13 @@ pub fn run() {
             catalogue::cmd::catalogue_categories,
             catalogue::cmd::catalogue_manufacturers,
             catalogue::cmd::catalogue_search,
+            parts::cmd::parts_save_record,
+            libstore::cmd::library_browse,
+            libstore::cmd::library_meta,
+            libstore::cmd::library_personal_save,
+            libstore::cmd::library_personal_remove,
+            libstore::cmd::library_import_open_source,
+            libstore::cmd::library_imported_remove,
             parts::cmd::manufacturing_preview,
             parts::cmd::jlcpcb_prepare,
             workspace::cmd::open_projects,

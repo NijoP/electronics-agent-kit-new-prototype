@@ -15,11 +15,13 @@
 //! thin Tauri wrappers.
 
 use crate::models::KeyStore;
+use eak_core::ComponentDef;
 use eak_manufacturing::lcsc::{Fetch, UreqFetch};
 use eak_manufacturing::lcsc_api::{
     ApiError, Catalogue, CategoryNode, CredentialSource, Credentials, Fetched, LcscApi,
     Manufacturer, SearchRequest, APPLY_URL, DEFAULT_LIMIT, MAX_LIMIT, PRODUCTION_BASE,
 };
+use eak_manufacturing::library_link::{link_record, Link, Scope};
 use eak_manufacturing::matching::{self, Candidate, Hints};
 use eak_manufacturing::provider::{ErrorKind, Served};
 use serde::{Deserialize, Serialize};
@@ -334,6 +336,9 @@ pub struct Results {
     pub via: String,
     /// Rows of this page removed by the manufacturer/package filters.
     pub filtered_out: usize,
+    /// What each listing is relative to the libraries, by LCSC number (existing part, supplier-only,
+    /// needs a new symbol/footprint). A listing is never rejected for lacking a definition.
+    pub links: std::collections::BTreeMap<String, Link>,
 }
 
 fn clean(s: &Option<String>) -> Option<String> {
@@ -344,6 +349,15 @@ fn clean(s: &Option<String>) -> Option<String> {
 }
 
 pub fn search<F: Fetch>(cat: &Catalogue<F>, q: &CatalogueQuery) -> Reply<Results> {
+    search_linked(cat, q, &[])
+}
+
+/// [`search`], with each listing classified against `defs` (every library scope).
+pub fn search_linked<F: Fetch>(
+    cat: &Catalogue<F>,
+    q: &CatalogueQuery,
+    defs: &[(Scope, &ComponentDef)],
+) -> Reply<Results> {
     let page = q.page.unwrap_or(1);
     let limit = q.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
     let in_stock = q.in_stock_only.unwrap_or(false);
@@ -408,6 +422,10 @@ pub fn search<F: Fetch>(cat: &Catalogue<F>, q: &CatalogueQuery) -> Reply<Results
             .collect();
         let filtered_out = before - kept.len();
         let query = keyword.clone().unwrap_or_default();
+        let links = kept
+            .iter()
+            .filter_map(|r| r.lcsc_part.clone().map(|l| (l, link_record(r, defs))))
+            .collect();
         Fetched {
             served: f.served,
             fetched_at_unix_s: f.fetched_at_unix_s,
@@ -419,6 +437,7 @@ pub fn search<F: Fetch>(cat: &Catalogue<F>, q: &CatalogueQuery) -> Reply<Results
                 has_more: f.data.has_more,
                 via: f.data.via,
                 filtered_out,
+                links,
             },
         }
     }))
@@ -541,8 +560,13 @@ pub mod cmd {
         app: AppHandle,
         query: CatalogueQuery,
     ) -> Result<Reply<Results>, String> {
-        blocking(app, Priority::P4, move |_| {
-            Ok(search(&lcsc().catalogue, &query))
+        blocking(app, Priority::P4, move |s| {
+            let defs = crate::libstore::all_defs(
+                crate::libstore::store(),
+                &crate::libstore::project_library(s),
+            );
+            let refs: Vec<_> = defs.iter().map(|(sc, d)| (sc.clone(), d)).collect();
+            Ok(search_linked(&lcsc().catalogue, &query, &refs))
         })
         .await
     }

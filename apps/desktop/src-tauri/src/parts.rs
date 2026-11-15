@@ -57,13 +57,13 @@ pub struct PartsSearch {
     pub live: LiveSearch,
 }
 
-fn sourcing_dir(s: &Session) -> Option<PathBuf> {
+pub(crate) fn sourcing_dir(s: &Session) -> Option<PathBuf> {
     s.with_engine(|e| e.dir().map(|d| d.join("sourcing")))
         .ok()
         .flatten()
 }
 
-fn stored_records(s: &Session) -> Vec<SourcingRecord> {
+pub(crate) fn stored_records(s: &Session) -> Vec<SourcingRecord> {
     sourcing_dir(s)
         .filter(|d| d.is_dir())
         .and_then(|d| sourcing::read_records(&d).ok())
@@ -183,6 +183,50 @@ pub fn parts_search<P: SupplierProvider>(
         library: library_hits(q),
         stored,
         live,
+    })
+}
+
+/// A supplier listing kept with the project without any engineering definition.
+#[derive(Debug, Clone, Serialize)]
+pub struct SavedRecord {
+    pub record: SourcingRecord,
+    pub path: String,
+    /// What the listing is relative to the libraries (existing part, supplier-only, needs authoring).
+    pub link: eak_manufacturing::library_link::Link,
+}
+
+/// Supplier discovery, separate from engineering import: fetch one LCSC listing and store it in
+/// `<project>/sourcing` so the MPN and LCSC number are kept and the engineering definition can
+/// be completed later. No engine command runs, the project revision does not change, and no
+/// symbol, footprint or rating is created.
+pub fn parts_save_record<P: SupplierProvider>(
+    s: &Session,
+    provider: &Resilient<P>,
+    lcsc_part: &str,
+) -> Result<SavedRecord, String> {
+    let answer = provider.lookup(lcsc_part).map_err(|e| e.message)?;
+    let record = answer
+        .records
+        .into_iter()
+        .next()
+        .ok_or("LCSC returned no record for that part number")?;
+    let defs = crate::libstore::all_defs(
+        crate::libstore::store(),
+        &crate::libstore::project_library(s),
+    );
+    let refs: Vec<_> = defs.iter().map(|(sc, d)| (sc.clone(), d)).collect();
+    let link = eak_manufacturing::library_link::link_record(&record, &refs);
+    let path = s.with_engine(|e| {
+        let dir = e
+            .dir()
+            .ok_or("saving a supplier record needs a saved project folder")?
+            .join("sourcing");
+        sourcing::write_record(&dir, &record).map_err(|err| err.to_string())
+    })??;
+    Ok(SavedRecord {
+        record,
+        path: path.display().to_string(),
+        link,
     })
 }
 
@@ -358,6 +402,17 @@ pub mod cmd {
     ) -> Result<super::ImportResult, String> {
         blocking(app, Priority::P1, move |s| {
             super::parts_import(s, super::live_provider(), expected_revision, &lcsc)
+        })
+        .await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn parts_save_record(
+        app: AppHandle,
+        lcsc: String,
+    ) -> Result<super::SavedRecord, String> {
+        blocking(app, Priority::P1, move |s| {
+            super::parts_save_record(s, super::live_provider(), &lcsc)
         })
         .await
     }

@@ -13,9 +13,11 @@ import type {
   Candidate,
   CategoryNode,
   LcscView,
+  LibraryLink,
   Manufacturer,
   MatchKind,
   Served,
+  Standing,
 } from "./types";
 
 interface Props {
@@ -31,6 +33,24 @@ const KIND_LABEL: Record<MatchKind, string> = {
   fuzzy: "Fuzzy suggestion",
   browse: "Category listing",
 };
+
+const STANDING_LABEL: Record<Standing, string> = {
+  existing_eak: "Existing EAK component",
+  imported_definition: "Imported definition",
+  supplier_only: "Supplier record only",
+  needs_authoring: "Needs new symbol/footprint",
+};
+
+function LinkCell({ link }: { link: LibraryLink | undefined }) {
+  if (!link) return <>—</>;
+  return (
+    <span title={link.explanation}>
+      {STANDING_LABEL[link.standing]}
+      {link.import_template ? ` (template ${link.import_template})` : ""}
+      {link.unverified ? " · unverified engineering definition" : ""}
+    </span>
+  );
+}
 
 function when(unix: number | null): string {
   return unix === null ? "never" : new Date(unix * 1000).toLocaleString();
@@ -206,6 +226,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
   const [reply, setReply] = useState<CatalogueReply<CatalogueResults> | null>(null);
   const [wait, setWait] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
 
   const guard = useCallback(async (f: () => Promise<void>) => {
     setWait(true);
@@ -235,6 +256,12 @@ export function CataloguePanel({ busy, onImport }: Props) {
           refresh,
         }),
       );
+    });
+
+  const saveRecord = (lcsc: string) =>
+    guard(async () => {
+      const r = await api.partsSaveRecord(lcsc);
+      setSaved(`Saved supplier record ${lcsc} to ${r.path}. ${r.link.explanation}`);
     });
 
   const data = reply?.data ?? null;
@@ -341,6 +368,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
           {note}
         </p>
       )}
+      {saved && <p role="status">{saved}</p>}
       {reply && reply.status !== "ok" && reply.status !== "stale" && (
         <p role="alert" className="error">
           LCSC ({reply.status.replace("_", " ")}): {reply.message}
@@ -375,11 +403,15 @@ export function CataloguePanel({ busy, onImport }: Props) {
                   <th>Stock</th>
                   <th>Price</th>
                   <th>Datasheet</th>
+                  <th>Library</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {data.candidates.map((c) => (
+                {data.candidates.map((c) => {
+                  const lcsc = c.record.lcsc_part;
+                  const link = lcsc ? data.links?.[lcsc] : undefined;
+                  return (
                   <tr key={c.record.raw_sha256}>
                     <td>
                       <details>
@@ -408,19 +440,24 @@ export function CataloguePanel({ busy, onImport }: Props) {
                       )}
                     </td>
                     <td>
-                      {c.record.lcsc_part && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => onImport(c.record.lcsc_part as string)}
-                          aria-label={`Import ${c.record.lcsc_part}`}
-                        >
+                      <LinkCell link={link} />
+                    </td>
+                    <td>
+                      {lcsc && (
+                        <button type="button" disabled={wait} onClick={() => void saveRecord(lcsc)} aria-label={`Save record ${lcsc}`}>
+                          Save record
+                        </button>
+                      )}
+                      {/* Import only where an existing symbol/footprint template can carry the part. */}
+                      {lcsc && (link === undefined || link.standing === "supplier_only") && (
+                        <button type="button" disabled={busy} onClick={() => onImport(lcsc)} aria-label={`Import ${lcsc}`}>
                           Import
                         </button>
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

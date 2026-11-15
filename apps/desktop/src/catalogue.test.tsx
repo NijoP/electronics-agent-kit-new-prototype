@@ -64,6 +64,10 @@ const results = (page: number, hasMore: boolean): CatalogueReply<CatalogueResult
       cand(rec("C25804", "0603WAF1002T5E", "UNI-ROYAL"), "exact_mpn", ["manufacturer part number is identical"]),
       cand(rec("C99", "0603WAF1002T5X", "OTHER"), "fuzzy", ["fuzzy suggestion: not an exact match"]),
     ],
+    links: {
+      C25804: { standing: "supplier_only", matches: [], unverified: true, import_template: "R_0603", explanation: "Supplier listing only." },
+      C99: { standing: "needs_authoring", matches: [], unverified: true, import_template: null, explanation: "Author the symbol and footprint later." },
+    },
     total: 120,
     page,
     limit: 50,
@@ -88,6 +92,12 @@ beforeEach(() => {
         return view({ has_credentials: true, key_hint: "1234", needs: null });
       case "catalogue_search":
         return searchReply;
+      case "parts_save_record":
+        return {
+          record: rec(String(args.lcsc), "X", "Y"),
+          path: "/p/sourcing/C99.json",
+          link: { standing: "needs_authoring", matches: [], unverified: true, import_template: null, explanation: "Author the symbol and footprint later." },
+        };
       default:
         throw new Error(`unexpected ${cmd}`);
     }
@@ -150,6 +160,13 @@ describe("CataloguePanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Import C25804" }));
     expect(onImport).toHaveBeenCalledWith("C25804");
+
+    // A listing that needs a new symbol/footprint is kept, not rejected, and cannot be imported yet.
+    expect(screen.getByText(/Needs new symbol\/footprint/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Import C99" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save record C99" }));
+    await screen.findByText(/Saved supplier record C99 to \/p\/sourcing\/C99.json/);
+    expect(calls.at(-1)).toEqual({ cmd: "parts_save_record", args: { lcsc: "C99" } });
 
     searchReply = results(2, false);
     fireEvent.click(screen.getByRole("button", { name: "Next page" }));

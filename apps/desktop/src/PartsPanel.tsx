@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { api, describeError } from "./api";
 import { CataloguePanel } from "./CataloguePanel";
+import { LibraryBrowser } from "./LibraryBrowser";
 import type { PartsSearch, SourcingRecord } from "./types";
 
 interface Props {
@@ -83,6 +84,7 @@ export function PartsPanel({ revision, onImported }: Props) {
     });
 
   const [catalogueOpen, setCatalogueOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const live = result?.live;
   return (
     <section className="parts" aria-label="Parts search">
@@ -146,6 +148,10 @@ export function PartsPanel({ revision, onImported }: Props) {
       <details open={catalogueOpen} onToggle={(e) => setCatalogueOpen(e.currentTarget.open)}>
         <summary>LCSC catalogue: credentials, categories, manufacturers, paged search</summary>
         {catalogueOpen && <CataloguePanel busy={busy} onImport={(lcsc) => void importPart(lcsc)} />}
+      </details>
+      <details open={libraryOpen} onToggle={(e) => setLibraryOpen(e.currentTarget.open)}>
+        <summary>Component library: built-in, project, personal and open-source scopes</summary>
+        {libraryOpen && <LibraryBrowser />}
       </details>
       {result && result.library.length > 0 && (
         <>
