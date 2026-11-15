@@ -1,4 +1,4 @@
-# ADR-0031: LCSC catalogue through the documented, signed OpenAPI
+# ADR-0032: LCSC catalogue through the documented, signed OpenAPI
 
 Status: accepted (code-reviewed only; nothing built or run on the authoring machine — CI is the first compile)
 

@@ -1,4 +1,4 @@
-//! LCSC catalogue browsing and API-credential settings for the desktop shell (ADR-0031).
+//! LCSC catalogue browsing and API-credential settings for the desktop shell (ADR-0032).
 //!
 //! * Credentials (API key and secret) live **only** in the operating-system credential store
 //!   (service `eak-desktop.lcsc`), never in a file, the IR, a log, a search record or the

@@ -957,7 +957,7 @@ export interface IntelligenceSummary {
   limitations: string[];
 }
 
-// LCSC OpenAPI catalogue (ADR-0031). The API secret never reaches the frontend: only the last
+// LCSC OpenAPI catalogue (ADR-0032). The API secret never reaches the frontend: only the last
 // four characters of the key are returned.
 export interface LcscStatusFile {
   state: "untested" | "ok" | "failed";

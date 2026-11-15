@@ -1,4 +1,4 @@
-//! LCSC OpenAPI client (the documented "agent" API, v1 product module) — ADR-0031.
+//! LCSC OpenAPI client (the documented "agent" API, v1 product module) — ADR-0032.
 //!
 //! One API, one authentication scheme: the header-signed REST API described at
 //! <https://www.lcsc.com/agent/authentication> and `.../agent/basic-rules` (production host
@@ -19,7 +19,7 @@
 //! documented signing rule) and the website's `wmsc.lcsc.com` endpoints (HTTP 403) are not
 //! used and are not mixed in.
 //!
-//! What is and is not known about the wire format (see ADR-0031): the authentication rule,
+//! What is and is not known about the wire format (see ADR-0032): the authentication rule,
 //! the envelope (`code`, `message`, `success`, `result`), the pagination rule (`limit` 1–500,
 //! `offset` starting at 1), the status/error-code table and the keyword-search parameters
 //! (`keyword`, `offset`, `limit`, `returnInformation`, `currency`, `inStockOnly`) are public.

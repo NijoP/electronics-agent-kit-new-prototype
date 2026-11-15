@@ -1,4 +1,4 @@
-// LCSC catalogue browser and API-credential settings (ADR-0031).
+// LCSC catalogue browser and API-credential settings (ADR-0032).
 // Credentials go straight to the OS credential store through the backend; the secret is never
 // kept in component state after Save and never shown again. Nothing is fetched until the user
 // opens a section: the category tree, the manufacturer list and each page of products are

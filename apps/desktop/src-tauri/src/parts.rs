@@ -3,7 +3,7 @@
 //! Plain functions over [`Session`] (tested headless in `tests/parts_ipc.rs`); the Tauri
 //! wrappers in [`cmd`] only decode arguments. Rules:
 //! * the only network traffic is the LCSC part number or keyword the user typed, sent to the
-//!   documented, signed LCSC OpenAPI with the user's own credentials (ADR-0031); no design data
+//!   documented, signed LCSC OpenAPI with the user's own credentials (ADR-0032); no design data
 //!   is ever sent anywhere;
 //! * an import is a typed `UpsertComponentDefinition` command through the engine as the
 //!   Human actor, with the revision the UI last rendered;
