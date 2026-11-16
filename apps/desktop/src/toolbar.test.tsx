@@ -106,9 +106,13 @@ describe("main toolbar", () => {
 
   it("Move tool arms the active editor's move tool; Rotate and Delete act on the selection through typed commands", async () => {
     await open();
-    fireEvent.click(tb().getByRole("button", { name: "Move tool" }));
     const sch = within(screen.getByRole("region", { name: "Schematic view" }));
-    await waitFor(() => expect(sch.getByRole("button", { name: "Move" }).getAttribute("aria-pressed")).toBe("true"));
+    // The editor registers its tool handler in an effect; clicking before that arms nothing.
+    // Clicking is idempotent, so retry it until the editor reports the tool as armed.
+    await waitFor(() => {
+      fireEvent.click(tb().getByRole("button", { name: "Move tool" }));
+      expect(sch.getByRole("button", { name: "Move" }).getAttribute("aria-pressed")).toBe("true");
+    });
     fireEvent.click(screen.getByRole("button", { name: /R1 330/ }));
     fireEvent.click(tb().getByRole("button", { name: "Rotate selection" }));
     await waitFor(() => expect(executed).toEqual([{ type: "RotateSymbol", symbol_id: "sym_r1", rotation: "R90" }]));
