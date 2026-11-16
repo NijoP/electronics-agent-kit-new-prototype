@@ -29,6 +29,7 @@ pub mod knowledge;
 pub mod mcp;
 pub mod rework;
 pub mod route;
+pub mod task_graph;
 pub mod tools;
 
 pub use context::{CallContext, ProjectRef};
