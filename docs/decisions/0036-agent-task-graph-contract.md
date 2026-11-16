@@ -20,3 +20,12 @@ invalidation. Base revision is a run-time property recorded by the journal (next
 
 Consequences: later steps (journal, scoped context, invalidation, approval, role templates, evaluator,
 CLI/MCP and desktop views) build on these types. Adding a role or data kind is an additive change.
+
+## Journal (step 2)
+`eak-harness/src/task_journal.rs` keeps `agent-journal.jsonl` beside the project: append-only, one
+entry per line with run id, project revision, sequence number and a SHA-256 chain over the previous
+entry, so edits, deletions and reordering are detected on read. Only an incomplete final line (crash
+mid-write) is ever dropped, on the next append. Run state is rebuilt by folding entries, so
+interrupted, suspended and completed nodes survive a restart. External effects are gated by an
+idempotency key: planned before, committed after; a planned-but-uncommitted key yields
+`NeedsReconcile` and is never replayed blindly.
