@@ -1,4 +1,3 @@
-  install_cli "$stage"
 #!/usr/bin/env bash
 # EAK one-command SOURCE installer for Linux and macOS: builds the requested EAK revision (default:
 # current `main`) on THIS machine, installs it per-user, registers a launcher and starts it.
