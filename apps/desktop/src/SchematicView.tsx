@@ -9,6 +9,7 @@ import type { Command, FlipAxis, Id, Point, Snapshot, SymbolGeom, SymbolInstance
 import { boundsOf, fromView, mm, toView } from "./viewport";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import * as S from "./tools/schematic/selection";
+import { junctionPoints } from "./tools/schematic/junctions";
 import "./tools/schematic/schematic.css";
 
 interface Props {
@@ -473,6 +474,13 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
               </g>
             );
           })}
+        {junctionPoints(
+          Object.values(schematic.wires).filter((w) => w.sheet_id === sheet?.id),
+          pins.map((p) => p.at),
+        ).map((p) => {
+          const [cx, cy] = toView(p);
+          return <circle key={`j${p.x},${p.y}`} className="junction" cx={cx} cy={cy} r={0.45} />;
+        })}
         {preview.map(([a, b], i) => {
           const [x1, y1] = toView(a);
           const [x2, y2] = toView(b);

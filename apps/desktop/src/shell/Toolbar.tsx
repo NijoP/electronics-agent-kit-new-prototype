@@ -41,7 +41,7 @@ export const TOOLBAR_CONTEXT: Record<string, ToolbarContext[]> = {
   // Placement and drawing tools of each editor (they select the editor's own tool; see Workspace).
   "t-place": ["schematic"], "t-wire": ["schematic"], "t-label": ["schematic"], "t-noconnect": ["schematic"],
   "t-pinlabel": ["schematic"], "t-mirror": ["schematic"],
-  "t-route": ["pcb"], "t-via": ["pcb"], "t-outline": ["pcb"], "t-zone": ["pcb"], "t-flip": ["pcb"],
+  "t-refill": ["pcb"], "t-junction": ["schematic"], "t-route": ["pcb"], "t-via": ["pcb"], "t-outline": ["pcb"], "t-zone": ["pcb"], "t-flip": ["pcb"],
 };
 
 /** The toolbar for the current context: drops buttons that do not apply and groups left empty. */

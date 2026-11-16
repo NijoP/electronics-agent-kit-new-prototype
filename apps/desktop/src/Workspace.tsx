@@ -389,6 +389,22 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   };
   const undo = () => submit(() => api.undo(revision));
   const redo = () => submit(() => api.redo(revision));
+  // Zone fill is derived from the board at analysis time (the IR stores only the outline), so
+  // "refill" recomputes the engine's connectivity (islands, airwires) and re-runs DRC for this
+  // revision, and shows the results in Findings. It changes no design data.
+  const refillZones = () =>
+    guarded(async () => {
+      const out = await track(
+        "Refill zones",
+        async () => ({ conn: await api.connectivity(), drc: await api.runCheck("drc") }),
+        (r) => `DRC ${r.drc.report.errors} error(s), ${r.drc.report.warnings} warning(s) at revision ${r.drc.report.revision}`,
+      );
+      setConn(out.conn);
+      setResults((old) => ({ ...old, drc: out.drc }));
+      setBottomTab("findings");
+      setBottomOpen(true);
+      setMessage(`Zones refilled: connectivity and DRC recomputed for revision ${out.drc.report.revision}`);
+    });
   const check = (c: Check) =>
     guarded(async () => {
       const result = await track(`Run ${c.toUpperCase()}`, () => api.runCheck(c), (r) => `${r.report.findings.length} finding(s) at revision ${r.report.revision}`);
@@ -672,6 +688,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       { id: "t-via", group: "edit", label: "Via", title: "Place a via (AddVia)", run: toolTo("via"), disabled: noDoc },
       { id: "t-outline", group: "edit", label: "Board outline", title: "Draw the board outline (SetBoardOutline)", run: toolTo("outline"), disabled: noDoc },
       { id: "t-zone", group: "edit", label: "Copper zone", title: "Draw a copper zone (AddZone). The engine has no separate refill command", run: toolTo("zone"), disabled: noDoc },
+      { id: "t-junction", group: "edit", label: "Junction", title: "Junction", disabled: "Junctions are added automatically where wires meet" },
+      { id: "t-refill", group: "edit", label: "Refill zones", title: "Recompute zone connectivity (islands, airwires) and re-run DRC for this revision; the fill is derived, nothing is changed", run: refillZones, disabled: busy ? "An engine command is running" : Object.keys(snapshot.project.pcb.zones).length === 0 ? "No copper zones to refill" : undefined },
       { id: "t-flip", group: "edit", label: "Flip footprint", title: "Move the selected footprint to the other board side (MoveFootprint)", run: () => fpOfSelected && execute({ type: "MoveFootprint", footprint_id: fpOfSelected.id, position: fpOfSelected.position, rotation: null, side: fpOfSelected.side === "top" ? "bottom" : "top" }), disabled: fpOfSelected ? (busy ? "An engine command is running" : fpOfSelected.locked ? "The footprint is locked" : undefined) : "Select a part that has a footprint first" },
       { id: "delete", group: "edit", label: "Delete selection", title: "Delete selection (asks first)", run: deleteSel, disabled: needSel ?? (busy ? "An engine command is running" : undefined) },
     ],

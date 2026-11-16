@@ -572,3 +572,4 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .net-hit line.track { stroke: var(--accent) !important; }
 .zone.net-hit { stroke: var(--accent) !important; stroke-width: 0.3; fill-opacity: 0.45; }
 .via.net-hit circle:not(.drill) { stroke: var(--accent); stroke-width: 0.2; }
+.junction { fill: var(--c-wire); pointer-events: none; }
