@@ -47,7 +47,7 @@ curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-pro
 irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 | iex
 ```
 
-Releases: <https://github.com/NijoP/electronics-agent-kit-new-prototype/releases>. The installers are **unsigned**, so Windows SmartScreen or macOS Gatekeeper may warn; the installer verifies the SHA-256 checksum. They have not yet been run on real hardware.
+Latest prebuilt release: [prebuilt-20261116-66946bd](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/tag/prebuilt-20261116-66946bd) ([all releases](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases)). The installers are **unsigned**, so Windows SmartScreen or macOS Gatekeeper may warn; the installer verifies the SHA-256 checksum. They have not yet been run on real hardware.
 
 ### Prerequisites
 
@@ -82,9 +82,14 @@ Update by running the same command again. Build from source, uninstall and platf
 | Auto-place and auto-route | Beta: EAK's own router; quality not benchmarked |
 | Simulation (ngspice) | Beta: needs ngspice installed |
 | Manufacturing export (Gerber, drill, BOM, placement) | Beta: always labelled DRAFT |
-| Native component library, optional KiCad import report | Beta |
+| Native, vendor-neutral component library | Beta |
+| Import from KiCad (optional one-way interchange; report only today) | Beta |
+| Automatic junction dots, Refill zones (recompute connectivity and re-run DRC), PCB net highlighting | Beta |
+| Agent orchestration: typed task graph, task journal, scoped context, smart re-runs | Beta |
+| Agent orchestration: approval pauses, specialist agents with an independent evaluator, app views | Planned |
 | 3D viewer | Beta |
-| Netlist import, junction and zone-refill commands, interactive push-and-shove routing | Planned |
+| Netlist import, interactive push-and-shove routing | Planned |
+| Licence: [O'Saasy](LICENSE): free to use, modify and self-host; no competing hosted service of EAK itself | In effect |
 
 Nothing EAK produces is manufacturing-ready. CI (Linux, Windows, macOS arm64 and x64) compiles and tests the tree; no area has been verified on real hardware. Details: [STATUS.md](STATUS.md).
 
