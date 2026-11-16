@@ -54,6 +54,11 @@ pub enum Event {
     NodeCancelled {
         node: String,
     },
+    /// The node's earlier result was discarded because something it depends on changed.
+    NodeInvalidated {
+        node: String,
+        reason: String,
+    },
     EffectPlanned {
         node: String,
         key: String,
@@ -160,11 +165,23 @@ pub fn effect_state(entries: &[Entry], key: &str) -> EffectState {
 pub enum NodeStatus {
     Kicked,
     Running,
-    Completed { output_ref: String },
-    Failed { error: String },
-    Skipped { reason: String },
-    Suspended { reason: String },
+    Completed {
+        output_ref: String,
+    },
+    Failed {
+        error: String,
+    },
+    Skipped {
+        reason: String,
+    },
+    Suspended {
+        reason: String,
+    },
     Cancelled,
+    /// Result discarded; the node runs again.
+    Invalidated {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -276,6 +293,14 @@ pub fn fold(entries: &[Entry], run: &str) -> RunState {
             }
             Event::NodeCancelled { node } => {
                 st.nodes.insert(node.clone(), NodeStatus::Cancelled);
+            }
+            Event::NodeInvalidated { node, reason } => {
+                st.nodes.insert(
+                    node.clone(),
+                    NodeStatus::Invalidated {
+                        reason: reason.clone(),
+                    },
+                );
             }
             Event::EffectPlanned { .. } | Event::EffectCommitted { .. } => {}
             Event::RunCompleted => st.ended = Some(RunEnd::Completed),

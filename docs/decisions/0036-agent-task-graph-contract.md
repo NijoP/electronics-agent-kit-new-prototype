@@ -38,3 +38,15 @@ stable references to the design parts its role may read (`parts_for`), each boun
 revision. There is deliberately no field for chat history, unrelated results or the whole project; no
 role may read every part. An input whose producer has not finished, or an external input that was not
 supplied, is refused rather than guessed.
+
+## Invalidation (step 4)
+`eak-harness/src/task_invalidate.rs` maps a design change to the nodes it resets. `classify_command`
+turns an `Engine` command type into a `Change` (footprint/pin map, net, schematic, requirements,
+constraints, rules, board outline); commands that do not invalidate a stage (symbol moves, property
+edits, a node's own PCB writes) map to nothing. Each change names seed roles and stop roles; the reset
+set is the seeds plus their dependents through the graph, minus anything behind a stop, plus the
+evaluator whenever anything is reset. Examples: a footprint change resets placement and what follows
+(routing, DRC, DFM, evaluation) and keeps the schematic, ERC and netlist check; a net change resets the
+netlist check, ERC, approval, routing and what follows, and keeps placement. Resets are recorded as
+`NodeInvalidated` journal events (`NodeStatus::Invalidated`), so they survive a restart. Granularity is
+the graph node, not a single component.
