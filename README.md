@@ -40,21 +40,43 @@ as typed commands on the same engine the editor uses, so there is no second desi
   rework) until the schematic is committed and ERC has run on it.
 - **Netlist tab.** The bottom panel's Netlist tab shows the engine's own connectivity.
 
-## Install from the prebuilt release
+## Install
 
-Latest release: [prebuilt-20261115-d3bdf7b](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/tag/prebuilt-20261115-d3bdf7b) (unsigned, built from a commit whose CI was green: [run 43760954310](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43760954310)). The installer below installs the newest `prebuilt-*` release: **no compile, no Node.js, no Rust**. It verifies the SHA-256 checksum first. Building from source is only the fallback when no prebuilt release exists, or when you pass `--source`. Installers have **not been run on real hardware**.
+Installs the newest verified prebuilt release (no compile). One line:
+
+**Linux and macOS**
+```bash
+curl -fsSL https://github.com/NijoP/electronics-agent-kit-new-prototype/raw/main/install.sh | bash
+```
+**Windows (PowerShell)**
+```powershell
+irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 | iex
+```
+
+Latest release: [prebuilt-20261115-7c047a1](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/tag/prebuilt-20261115-7c047a1), built from a commit whose CI was green. The installers are **unsigned**: Windows SmartScreen or macOS Gatekeeper may warn; the installer verifies the SHA-256 checksum. They have not been run on real hardware. More options, update and uninstall are in [Install options](#install-options).
+
+## Prerequisites
+
+- **OS:** Linux x86_64 (Debian/Ubuntu first), Windows 10/11 x64, macOS on Apple silicon or Intel.
+- **Tools for the installer:** `curl` (Linux/macOS) or PowerShell 5.1+ (Windows), and internet access to download the release.
+- **Linux runtime libraries:** WebKitGTK 4.1 and GTK 3. Debian/Ubuntu: `sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1`. Fedora: `sudo dnf install webkit2gtk4.1 gtk3 libappindicator-gtk3`.
+- **Windows:** the Microsoft Edge WebView2 runtime (already present on current Windows 10/11).
+- **macOS:** a macOS version supported by the bundled Tauri webview; not yet checked on a real Mac.
+- **Disk and memory:** a few hundred MB for the app; project and cache sizes grow with use. No RAM figure has been measured.
+- **Optional:** a coding-agent CLI such as Claude Code for the terminal workspace (EAK never installs or starts one), and model API keys, which are stored in the OS keyring.
+- **Not needed** on the prebuilt path: Rust, Node.js, Python or any build tools.
 
 
 ## Honest status
 
 | Area | State |
 |---|---|
-| Source tree through `d3bdf7b` | **Passed CI on Linux, Windows and macOS (arm64 + x64)**: [run 43760954310](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43760954310). Compiles, lints and tests pass; **not runtime-verified on real hardware** |
-| Commits after `d3bdf7b` | Not yet confirmed by CI |
+| Source tree through `5f14256` | **Passed CI on Linux, Windows and macOS (arm64 + x64)**: [run 43804231551](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/43804231551). Compiles, lints and tests pass; **not runtime-verified on real hardware** |
+| Commits after `5f14256` | Not yet confirmed by CI |
 | Schematic / PCB editors, terminal workspace, installers | Written and reviewed; never used on real hardware |
 | Manufacturing output | Always a draft; nothing is manufacturing-ready |
 
-## Install
+## Install options
 
 One command installs EAK for your user (the prebuilt release; or, as a fallback, it builds **the current `main` source on your own computer**),
 adds a launcher and starts it. Only the source fallback provisions Rust, Node.js and the native build libraries (asking
