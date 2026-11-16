@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -61,6 +62,8 @@ struct Proc {
     child: Option<Child>,
     out: Arc<Mutex<Bounded>>,
     err: Arc<Mutex<Bounded>>,
+    /// One flag per output stream, true once that stream has been fully read.
+    readers: Vec<Arc<AtomicBool>>,
     deadline: Instant,
 }
 
@@ -70,7 +73,12 @@ pub struct Supervisor {
     next: u64,
 }
 
-fn reader<R: Read + Send + 'static>(mut r: R, sink: Arc<Mutex<Bounded>>) {
+/// Drain `r` into `sink` on a thread. The returned flag turns true once the stream has ended, so
+/// `wait` can let the last output arrive before it reports the process (a finished process can
+/// still have unread bytes in its pipe).
+fn reader<R: Read + Send + 'static>(mut r: R, sink: Arc<Mutex<Bounded>>) -> Arc<AtomicBool> {
+    let done = Arc::new(AtomicBool::new(false));
+    let flag = done.clone();
     std::thread::spawn(move || {
         let mut chunk = [0u8; 4096];
         loop {
@@ -79,7 +87,9 @@ fn reader<R: Read + Send + 'static>(mut r: R, sink: Arc<Mutex<Bounded>>) {
                 Ok(n) => sink.lock().expect("capture lock").push(&chunk[..n]),
             }
         }
+        flag.store(true, Ordering::SeqCst);
     });
+    done
 }
 
 /// The `kill` argument that signals exactly one process group, or `None` when `pgid` could
@@ -165,13 +175,14 @@ impl Supervisor {
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
+        let mut readers = Vec::new();
         let child = match cmd.spawn() {
             Ok(mut c) => {
                 if let Some(o) = c.stdout.take() {
-                    reader(o, out.clone());
+                    readers.push(reader(o, out.clone()));
                 }
                 if let Some(e) = c.stderr.take() {
-                    reader(e, err.clone());
+                    readers.push(reader(e, err.clone()));
                 }
                 Some(c)
             }
@@ -187,6 +198,7 @@ impl Supervisor {
                 child,
                 out,
                 err,
+                readers,
                 deadline: Instant::now() + timeout,
             },
         );
@@ -267,7 +279,17 @@ impl Supervisor {
             self.poll();
             match self.procs.get(&id) {
                 None => return None,
-                Some(p) if p.info.state != ProcState::Running => return self.info(id),
+                Some(p) if p.info.state != ProcState::Running => {
+                    // Let the readers drain what the exited process wrote (bounded: a grandchild
+                    // may keep the pipe open).
+                    let grace = Instant::now() + Duration::from_secs(1);
+                    while Instant::now() < grace
+                        && !p.readers.iter().all(|d| d.load(Ordering::SeqCst))
+                    {
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    return self.info(id);
+                }
                 _ => std::thread::sleep(Duration::from_millis(20)),
             }
         }
