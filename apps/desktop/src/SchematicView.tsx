@@ -6,7 +6,7 @@ import { getDraggedComponent, setDraggedComponent, EAK_COMPONENT_MIME } from "./
 import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, segments, snapPoint } from "./editing";
 import { Coords, GridControls, GridLayer, useGridConfig } from "./grid";
-import type { Command, FlipAxis, Id, Point, Rotation, Snapshot, SymbolDef, SymbolGeom, SymbolInstance } from "./types";
+import type { Command, FlipAxis, Id, Point, Rotation, Snapshot, SymbolDef, SymbolGeom, SymbolInstance, SymbolPin } from "./types";
 import { boundsOf, fromView, mm, toView } from "./viewport";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import * as S from "./tools/schematic/selection";
@@ -772,7 +772,7 @@ function PlaceGhost({
         strokeWidth={0.3}
       />
       <path d={`M${x - 1.27} ${y}H${x + 1.27}M${x} ${y - 1.27}V${y + 1.27}`} stroke="var(--accent)" strokeWidth={0.4} />
-      {def?.pins?.map((p) => {
+      {def?.pins?.map((p: SymbolPin) => {
         const px = x + mm(p.position.x);
         const py = y - mm(p.position.y);
         return (

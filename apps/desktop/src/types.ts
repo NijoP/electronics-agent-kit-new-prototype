@@ -714,6 +714,11 @@ export interface FootprintDef {
   body_height: number | null;
 }
 export interface Rating { name: string; value: number; unit: string; source: string; verified: boolean }
+export interface SymbolDef {
+  pins: SymbolPin[];
+  body_half_w: number;
+  body_half_h: number;
+}
 export interface ComponentDef {
   id: string;
   name: string;
@@ -724,7 +729,7 @@ export interface ComponentDef {
   mpn: string | null;
   distributor: string | null;
   datasheet: string | null;
-  symbol: { pins: SymbolPin[]; body_half_w: number; body_half_h: number };
+  symbol: SymbolDef;
   footprint: FootprintDef;
   pin_map: Record<string, string[]>;
   ratings: Rating[];
