@@ -212,8 +212,11 @@ unverified claims. Every bug fix needs a regression test; shared-contract change
 
 ## Licence
 
-Dual licensed under [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. One small
-component derived from an Apache-2.0 project keeps its notices in
+[![License: O'Saasy](https://img.shields.io/badge/license-O'Saasy-blue)](LICENSE)
+
+Licensed under the [O'Saasy License](LICENSE): free to use, modify and self-host; you may not offer EAK
+itself as a competing hosted or SaaS product. Releases before this change were published under
+MIT OR Apache-2.0. Dependency and third-party notices are in
 [`third_party/licenses/`](third_party/licenses/); see also [LICENSING.md](LICENSING.md) and
 [docs/LICENSES_AND_ATTRIBUTION.md](docs/LICENSES_AND_ATTRIBUTION.md).
 

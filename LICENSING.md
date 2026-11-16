@@ -1,6 +1,6 @@
 # Licensing
 
-EAK is licensed under either of MIT or Apache-2.0 at your option (see LICENSE-MIT and LICENSE-APACHE); copyright 2026 Tusk Innovations Global Pvt Ltd. One small piece of Apache-2.0 third-party source is included with its notices under `third_party/licenses/` (see `docs/LICENSES_AND_ATTRIBUTION.md`); everything else is EAK-original.
+EAK is licensed under the [O'Saasy License](LICENSE) (<https://osaasy.dev>), copyright (c) 2026 NijoP. In one line: free to use, modify and self-host, but you may not offer EAK itself to third parties as a competing hosted or SaaS product. The licence text is used verbatim from the official source. Releases published before the relicensing commit were published under MIT OR Apache-2.0 and stay available under those terms. The workspace `license` is `LicenseRef-OSaasy` (not an SPDX identifier) with `license-file = "LICENSE"`; the npm packages say `SEE LICENSE IN LICENSE`. One small piece of Apache-2.0 third-party source is included with its notices in `third_party/licenses/` (unchanged).
 
 ## Rust dependencies (direct)
 | Crate | Licence | Use |
