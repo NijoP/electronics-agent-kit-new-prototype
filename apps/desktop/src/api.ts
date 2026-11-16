@@ -86,6 +86,7 @@ export const IPC_COMMANDS = [
   "agent_tasks",
   "netlist",
   "kicad_import_report",
+  "kicad_import_commit",
   "execute_command",
   "undo",
   "redo",
@@ -186,6 +187,18 @@ export interface KicadImportView {
   };
 }
 
+export interface KicadCommitResult {
+  library_name: string;
+  components_created: number;
+  component_ids: string[];
+  rejected: string[];
+  report: {
+    format: string;
+    items: { name: string; status: "imported" | "rejected"; notes: string[] }[];
+    unsupported: Record<string, number>;
+  };
+}
+
 /** Native file picker for an optional KiCad interchange file. Resolves to the path, or null when cancelled. */
 export async function pickKicadFile(title: string): Promise<string | null> {
   const r = await openDialog({ directory: false, multiple: false, title, filters: [{ name: "KiCad symbol or footprint", extensions: ["kicad_sym", "kicad_mod"] }] });
@@ -200,6 +213,8 @@ export const api = {
   closeProject: () => call<void>("close_project"),
   currentProject: () => call<Snapshot>("current_project"),
   kicadImportReport: (path: string) => call<KicadImportView>("kicad_import_report", { path }),
+  kicadImportCommit: (path: string, licence?: string, source?: string) =>
+    call<KicadCommitResult>("kicad_import_commit", { path, licence, source }),
   netlist: () => call<{ name: string; pins: string[]; label_names: string[]; has_power_port: boolean }[]>("netlist"),
   agentTasks: () => call<import("./agentTasks").AgentTask[]>("agent_tasks"),
   execute: (expectedRevision: number, command: Command) =>

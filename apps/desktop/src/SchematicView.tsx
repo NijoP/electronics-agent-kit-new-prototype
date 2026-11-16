@@ -1,11 +1,12 @@
 // Schematic editor: draws the active sheet from the engine snapshot and turns tool
 // clicks into typed engine commands (place, wire, label, move, rotate, delete, edit).
 import { useEffect, useRef, useState } from "react";
-import { Canvas, type DragHandler } from "./Canvas";
+import { Canvas, type DragHandler, type DropHandler } from "./Canvas";
+import { getDraggedComponent, setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
 import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, segments, snapPoint } from "./editing";
 import { Coords, GridControls, GridLayer, useGridConfig } from "./grid";
-import type { Command, FlipAxis, Id, Point, Snapshot, SymbolGeom, SymbolInstance } from "./types";
+import type { Command, FlipAxis, Id, Point, Rotation, Snapshot, SymbolDef, SymbolGeom, SymbolInstance } from "./types";
 import { boundsOf, fromView, mm, toView } from "./viewport";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import * as S from "./tools/schematic/selection";
@@ -65,6 +66,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   }, [docSheet]);
   const [tool, setTool] = useState<Tool>("select");
   const [partId, setPartId] = useState("");
+  const [placeRotation, setPlaceRotation] = useState<Rotation>("R0");
+  const [externalDrag, setExternalDrag] = useState<{ componentId: string; name: string; at: Point } | null>(null);
   const [labelName, setLabelName] = useState("NET1");
   const [labelKind, setLabelKind] = useState<"net" | "power">("net");
   const [start, setStart] = useState<Point | null>(null);
@@ -82,6 +85,13 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     x: Math.round((to.x - from.x) / GRID) * GRID,
     y: Math.round((to.y - from.y) / GRID) * GRID,
   });
+
+  const ROTATIONS: Rotation[] = ["R0", "R90", "R180", "R270"];
+  const nextRotation = (r: Rotation): Rotation => {
+    const idx = ROTATIONS.indexOf(r);
+    return ROTATIONS[(idx + 1) % ROTATIONS.length];
+  };
+
   // Object selected by the current press, so the click that ends it does not toggle it back.
   const pressed = useRef<Id | null>(null);
   const sheet = sheets.find((s) => s.id === sheetId) ?? sheets[0];
@@ -100,6 +110,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   };
   const choose = (t: Tool) => {
     reset();
+    setExternalDrag(null);
     setTool(t);
   };
   const docId = useDocId();
@@ -114,6 +125,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     setStart(null);
     setPin(null);
     setPicked(null);
+    setPlaceRotation("R0");
     setTool("place");
   }, [armPart]);
 
@@ -177,11 +189,17 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     else if (e.key === "Escape") {
       reset();
       setDrag(null);
+      setExternalDrag(null);
       setSel(S.EMPTY);
       setTool("select");
     } else if (k === "w") choose("wire");
-    else if (k === "r") actions.rotate();
-    else if (k === "x") actions.flip("horizontal");
+    else if (k === "r") {
+      if (tool === "place" || externalDrag) {
+        setPlaceRotation((r) => nextRotation(r));
+      } else {
+        actions.rotate();
+      }
+    } else if (k === "x") actions.flip("horizontal");
     else if (k === "y") actions.flip("vertical");
     else if (e.key === "Delete" || e.key === "Backspace") actions.remove();
   };
@@ -256,6 +274,92 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     return `translate(${mm(c.position.x - l.position.x)} ${-mm(c.position.y - l.position.y)})`;
   };
 
+  const dropTarget: DropHandler = {
+    onDragEnter: (x, y, e) => {
+      e.preventDefault();
+      const dragged = getDraggedComponent();
+      let compId = dragged?.id;
+      let compName = dragged?.name ?? "";
+      if (!compId) {
+        try {
+          const json = e.dataTransfer.getData(EAK_COMPONENT_MIME);
+          if (json) {
+            const parsed = JSON.parse(json);
+            compId = parsed.id;
+            compName = parsed.name ?? parsed.id;
+          }
+        } catch {}
+      }
+      if (!compId) {
+        compId = e.dataTransfer.getData("text/plain");
+        if (compId) compName = compId;
+      }
+      if (!compId) return;
+      const pt = fromView(x, y);
+      const snap = snapPoint(pt, GRID, pins.map((p) => p.at), 0);
+      setExternalDrag({ componentId: compId, name: compName, at: snap.point });
+    },
+    onDragOver: (x, y, e) => {
+      e.preventDefault();
+      const dragged = getDraggedComponent();
+      let compId = dragged?.id;
+      let compName = dragged?.name ?? "";
+      if (!compId) {
+        try {
+          const json = e.dataTransfer.getData(EAK_COMPONENT_MIME);
+          if (json) {
+            const parsed = JSON.parse(json);
+            compId = parsed.id;
+            compName = parsed.name ?? parsed.id;
+          }
+        } catch {}
+      }
+      if (!compId) {
+        compId = e.dataTransfer.getData("text/plain");
+        if (compId) compName = compId;
+      }
+      if (!compId) return;
+      const pt = fromView(x, y);
+      const snap = snapPoint(pt, GRID, pins.map((p) => p.at), 0);
+      setExternalDrag({ componentId: compId, name: compName, at: snap.point });
+    },
+    onDragLeave: () => {
+      setExternalDrag(null);
+    },
+    onDrop: (x, y, e) => {
+      e.preventDefault();
+      const dragged = getDraggedComponent();
+      let compId = dragged?.id;
+      if (!compId) {
+        try {
+          const json = e.dataTransfer.getData(EAK_COMPONENT_MIME);
+          if (json) {
+            const parsed = JSON.parse(json);
+            compId = parsed.id;
+          }
+        } catch {}
+      }
+      if (!compId) {
+        compId = e.dataTransfer.getData("text/plain");
+      }
+      setExternalDrag(null);
+      setDraggedComponent(null);
+      if (!compId || !sheet || !edit || edit.busy) return;
+      const pt = fromView(x, y);
+      const snap = snapPoint(pt, GRID, pins.map((p) => p.at), 0);
+      void edit.execute({
+        type: "PlaceSymbol",
+        sheet_id: sheet.id,
+        component_id: compId,
+        position: snap.point,
+        rotation: placeRotation,
+        refdes: null,
+        value: null,
+      });
+      edit.notify?.(`Placed ${dragged?.name ?? compId} on sheet.`);
+    },
+  };
+
   const onPoint = (x: number, y: number, e: React.PointerEvent) => {
     if (!edit || edit.busy) return;
     if (tool === "select") return selectClick(e);
@@ -277,7 +381,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
           sheet_id: sheet.id,
           component_id: part.id,
           position: snap.point,
-          rotation: "R0",
+          rotation: placeRotation,
           refdes: null,
           value: null,
         });
@@ -437,7 +541,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
               (S.isEmpty(sel)
                 ? "Click or drag a box to select (Shift adds, Ctrl toggles) · W wire · Ctrl+V paste · middle-drag pans"
                 : `${objects(S.count(sel))} selected · drag to move · R rotate · X/Y flip · Del delete · Ctrl+C/X/V/D copy/cut/paste/duplicate · Esc clear`)}
-            {tool === "place" && "Click the sheet to place the part · drag a part to move it"}
+            {tool === "place" && `Click sheet to place · R rotate (${placeRotation}) · Esc cancel`}
+            {externalDrag && `Drop component to place · R rotate (${placeRotation})`}
             {tool === "wire" && (start ? "Click to end the wire segment · Esc stops" : "Click a start point (pins snap)")}
             {tool === "connect" && (pin ? "Click the second pin" : "Click the first pin")}
             {tool === "label" && "Click to drop the label"}
@@ -455,6 +560,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         onPoint={edit ? onPoint : undefined}
         onHover={(x, y) => setHover(fromView(x, y))}
         onDrag={edit && MOVE_TOOLS.includes(tool) ? dragHandler : undefined}
+        onDropTarget={dropTarget}
         underlay={(vb) => (
           <>
             <rect className="sheet" x={0} y={-mm(sheet.height)} width={mm(sheet.width)} height={mm(sheet.height)} />
@@ -555,7 +661,24 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
             <path key={n.id} className="no-connect" d={`M${x - 1} ${y - 1}L${x + 1} ${y + 1}M${x - 1} ${y + 1}L${x + 1} ${y - 1}`} />
           );
         })}
-        {tool === "place" && hover && part && <PlaceGhost snapshot={snapshot} componentId={part.id} name={part.name} at={snapPoint(hover, GRID, [], 0).point} />}
+        {tool === "place" && hover && part && (
+          <PlaceGhost
+            snapshot={snapshot}
+            componentId={part.id}
+            name={part.name}
+            at={snapPoint(hover, GRID, [], 0).point}
+            rotation={placeRotation}
+          />
+        )}
+        {externalDrag && (
+          <PlaceGhost
+            snapshot={snapshot}
+            componentId={externalDrag.componentId}
+            name={externalDrag.name}
+            at={externalDrag.at}
+            rotation={placeRotation}
+          />
+        )}
         {drag?.mode === "marquee" && <Marquee from={drag.from} to={drag.to} />}
         {start && <circle className="anchor" cx={toView(start)[0]} cy={toView(start)[1]} r={0.6} />}
       </Canvas>
@@ -611,18 +734,59 @@ function SelectionBox({ s }: { s: SymbolGeom }) {
  * Where the Place tool will drop the part: its body outline at the snapped cursor (when the
  * definition or an existing instance gives the size) and a crosshair on the origin.
  */
-function PlaceGhost({ snapshot, componentId, name, at }: { snapshot: Snapshot; componentId: string; name: string; at: Point }) {
-  const def = snapshot.project.library?.[componentId]?.symbol as { body_half_w?: number; body_half_h?: number } | undefined;
-  const twin = Object.values(snapshot.project.schematic.symbols).find((s) => s.component_id === componentId && (s.rotation === "R0" || s.rotation === "R180"));
+function PlaceGhost({
+  snapshot,
+  componentId,
+  name,
+  at,
+  rotation = "R0",
+}: {
+  snapshot: Snapshot;
+  componentId: string;
+  name: string;
+  at: Point;
+  rotation?: Rotation;
+}) {
+  const def = snapshot.project.library?.[componentId]?.symbol as SymbolDef | undefined;
+  const twin = Object.values(snapshot.project.schematic.symbols).find(
+    (s) => s.component_id === componentId && (s.rotation === "R0" || s.rotation === "R180"),
+  );
   const geom = twin && snapshot.geometry.symbols.find((g) => g.id === twin.id);
-  const hw = def?.body_half_w ?? geom?.half_w;
-  const hh = def?.body_half_h ?? geom?.half_h;
+  const hw = def?.body_half_w ?? geom?.half_w ?? 2_000_000;
+  const hh = def?.body_half_h ?? geom?.half_h ?? 1_500_000;
   const [x, y] = toView(at);
+  const rotDeg = rotation === "R90" ? 90 : rotation === "R180" ? 180 : rotation === "R270" ? 270 : 0;
+  const rotTransform = rotDeg !== 0 ? `rotate(${rotDeg} ${x} ${y})` : undefined;
+
   return (
-    <g className="place-ghost" data-place-ghost={componentId}>
-      {hw !== undefined && hh !== undefined && <rect x={x - mm(hw)} y={y - mm(hh)} width={2 * mm(hw)} height={2 * mm(hh)} />}
-      <path d={`M${x - 1.27} ${y}H${x + 1.27}M${x} ${y - 1.27}V${y + 1.27}`} />
-      <text x={x} y={y - (hh !== undefined ? mm(hh) : 1.27) - 1}>{name}</text>
+    <g className="place-ghost" data-place-ghost={componentId} transform={rotTransform}>
+      <rect
+        x={x - mm(hw)}
+        y={y - mm(hh)}
+        width={2 * mm(hw)}
+        height={2 * mm(hh)}
+        fill="var(--accent)"
+        fillOpacity={0.15}
+        stroke="var(--accent)"
+        strokeDasharray="2 2"
+        strokeWidth={0.3}
+      />
+      <path d={`M${x - 1.27} ${y}H${x + 1.27}M${x} ${y - 1.27}V${y + 1.27}`} stroke="var(--accent)" strokeWidth={0.4} />
+      {def?.pins?.map((p) => {
+        const px = x + mm(p.position.x);
+        const py = y - mm(p.position.y);
+        return (
+          <g key={p.number}>
+            <circle cx={px} cy={py} r={0.35} fill="var(--accent)" />
+            <text x={px + 0.5} y={py - 0.5} fontSize={1} fill="currentColor" opacity={0.7}>
+              {p.number}
+            </text>
+          </g>
+        );
+      })}
+      <text x={x} y={y - mm(hh) - 1} textAnchor="middle" fontSize={1.8} fill="currentColor" fontWeight="bold">
+        {name} {rotation !== "R0" ? `(${rotation})` : ""}
+      </text>
     </g>
   );
 }

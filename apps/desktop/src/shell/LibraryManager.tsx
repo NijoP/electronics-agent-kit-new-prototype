@@ -3,6 +3,7 @@
 // placement. Nothing here touches the filesystem.
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import { KicadImport } from "../KicadImport";
 import type { LibraryCatalogView } from "../types";
 
 export function LibraryManager({ revision }: { revision: number }) {
@@ -62,6 +63,7 @@ export function LibraryManager({ revision }: { revision: number }) {
           </li>
         ))}
       </ul>
+      <KicadImport onCommitted={() => { api.libraryCatalog().then((c) => setCat(c ?? null)); }} />
       {rows.length === 0 && <p className="empty-state">No library matches.</p>}
       {(cat?.problems ?? []).map((p) => (
         <p key={p} className="muted" role="status">

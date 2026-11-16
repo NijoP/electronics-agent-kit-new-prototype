@@ -173,6 +173,17 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         spec("project_info", Read, "Project id, name, folder, current revision, undo/redo availability, recovery block and object counts. Call this first; use `revision` as expected_revision for design tools.", empty()),
         spec("list_symbols", Read, "Schematic symbols with refdes, value, component, position and every pin (number, name, electrical type, absolute position, net).", empty()),
         spec("get_component", Read, "Full definition of one component (project library or built-in): properties, pins, footprint pads, pin map, ratings, provenance.", props(json!({"component_id": str_schema("component id, e.g. R_0805")}), &["component_id"])),
+        spec(
+            "validate_component_definition",
+            Read,
+            "Validate a proposed component definition JSON: verifies structural rules, pin numbers, footprint pads, pin-to-pad mapping and maturity claims. Returns validity status, blocking errors, and warnings without modifying the project.",
+            props(
+                json!({
+                    "definition": {"type": "object", "description": "Candidate ComponentDef JSON"}
+                }),
+                &["definition"],
+            ),
+        ),
         spec("list_footprints", Read, "PCB footprints with position, rotation, side, lock state and every pad (absolute position, size, shape, drill, net).", empty()),
         spec("get_board", Read, "Board geometry: outline, stackup, tracks, vias, zones and design-rule constraints (lengths in integer nm).", empty()),
         spec("get_connectivity", Read, "Physical copper connectivity of the PCB: per-net copper groups (1 = connected), shorts, and the ratsnest of unrouted pad pairs.", empty()),
@@ -974,6 +985,25 @@ fn read(engine: &Engine, name: &str, args: &Value) -> Result<Value, Fail> {
             Ok(
                 json!({"revision": p.revision, "in_project": in_project, "component": def, "units": UNITS}),
             )
+        }
+        "validate_component_definition" => {
+            let raw = args
+                .get("definition")
+                .cloned()
+                .ok_or_else(|| fail(ErrorCode::InvalidArguments, "definition is required"))?;
+            let def: eak_core::ComponentDef = serde_json::from_value(raw)
+                .map_err(|e| fail(ErrorCode::InvalidArguments, format!("invalid ComponentDef: {e}")))?;
+            let structural_problems = def.validate();
+            let pinmap_report = eak_core::pinmap::check_component(&def);
+            let valid = structural_problems.is_empty() && !pinmap_report.blocking();
+            Ok(json!({
+                "valid": valid,
+                "component_id": def.id,
+                "structural_problems": structural_problems,
+                "pinmap_blocking": pinmap_report.blocking(),
+                "pinmap_messages": pinmap_report.messages(),
+                "requires_review": !def.provenance.contains("engineer-verified"),
+            }))
         }
         "list_footprints" => Ok(list_footprints(p)),
         "get_board" => Ok(json!({

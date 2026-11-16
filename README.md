@@ -12,7 +12,7 @@ share <b>one verifiable design model</b>. Early prototype; open source.
 </p>
 
 <p align="center">
-  <a href="https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-pass-brightgreen" alt="CI: pass"></a>
+  <a href="https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/workflows/ci.yml"><img src="https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/NijoP/electronics-agent-kit-new-prototype/releases"><img src="https://img.shields.io/github/v/release/NijoP/electronics-agent-kit-new-prototype?include_prereleases&label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-O'Saasy-blue" alt="License: O'Saasy"></a>
   <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" alt="Platforms">
@@ -74,7 +74,7 @@ Update by running the same command again. Build from source, uninstall and platf
 
 | Area | Status |
 |---|---|
-| Schematic editing (place, wire, labels, no-connect, mirror, undo/redo) | Beta: reviewed and CI-tested, not used on real hardware |
+| Schematic editing (drag-and-drop placement, click-to-place with 'R' rotation, wire, labels, no-connect, mirror, undo/redo) | Beta: reviewed and CI-tested, not used on real hardware |
 | PCB editing (outline, footprints, tracks, vias, zones, net highlight, layer manager) | Beta |
 | Terminal workspace (spaces, tabs, split panes, agent status) | Beta |
 | Terminal-to-EDA live sync, agent task phases, ERC gate | Beta |
@@ -82,8 +82,8 @@ Update by running the same command again. Build from source, uninstall and platf
 | Auto-place and auto-route | Beta: EAK's own router; quality not benchmarked |
 | Simulation (ngspice) | Beta: needs ngspice installed |
 | Manufacturing export (Gerber, drill, BOM, placement) | Beta: always labelled DRAFT |
-| Native, vendor-neutral component library | Beta |
-| Import from KiCad (optional one-way interchange; report only today) | Beta |
+| Native, vendor-neutral component library and agent acquisition validation | Beta |
+| Import from KiCad (symbols .kicad_sym and footprints .kicad_mod, transactional library commit) | Beta |
 | Automatic junction dots, Refill zones (recompute connectivity and re-run DRC), PCB net highlighting | Beta |
 | Agent orchestration: typed task graph, task journal, scoped context, smart re-runs | Beta |
 | Agent orchestration: approval pauses, specialist agents with an independent evaluator, app views | Planned |

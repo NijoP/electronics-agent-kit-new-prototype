@@ -1,6 +1,6 @@
 // Shell behaviour: shortcut formatting, BOM, and the shell flows
 // (quick open, panel toggles) against a mocked Tauri IPC.
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { IPC_COMMANDS } from "./api";
@@ -87,10 +87,14 @@ describe("shell flows", () => {
   it("Ctrl+B and Ctrl+J collapse the side and bottom panels", async () => {
     await open();
     expect(screen.getByRole("region", { name: "Bottom panel" })).toBeTruthy();
-    fireEvent.keyDown(window, { key: "j", ctrlKey: true });
-    expect(screen.queryByRole("region", { name: "Bottom panel" })).toBeNull();
-    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
-    expect(screen.getByLabelText("Side panel").className).not.toContain("open");
+    await waitFor(() => {
+      fireEvent.keyDown(window, { key: "j", ctrlKey: true });
+      expect(screen.queryByRole("region", { name: "Bottom panel" })).toBeNull();
+    });
+    await waitFor(() => {
+      fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+      expect(screen.getByLabelText("Side panel").className).not.toContain("open");
+    });
   });
 });
 

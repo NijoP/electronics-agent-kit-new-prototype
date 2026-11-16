@@ -6,6 +6,7 @@
 // The UI keeps no library model of its own: every list comes from the engine.
 import { useEffect, useMemo, useState } from "react";
 import { api, pickModelFile } from "../api";
+import { setDraggedComponent, EAK_COMPONENT_MIME } from "../dragState";
 import { LibraryManager } from "./LibraryManager";
 import type { Command, ComponentDef, FootprintCandidate, FootprintDef, LibraryPart, ModelFormat, ModelQuality, ModelRef } from "../types";
 
@@ -214,7 +215,23 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
       <ul className="tree" aria-label="Library parts">
         {parts.map((p) => (
           <li key={p.id}>
-            <button type="button" className={p.id === selId ? "on" : ""} aria-pressed={p.id === selId} onClick={() => setSelId(p.id)}>
+            <button
+              type="button"
+              className={p.id === selId ? "on" : ""}
+              aria-pressed={p.id === selId}
+              onClick={() => setSelId(p.id)}
+              draggable={true}
+              onDragStart={(e) => {
+                setDraggedComponent({ id: p.id, name: p.def.name, category: p.def.category, footprint: p.def.footprint?.name });
+                e.dataTransfer.setData(EAK_COMPONENT_MIME, JSON.stringify({ id: p.id, name: p.def.name, category: p.def.category, footprint: p.def.footprint?.name }));
+                e.dataTransfer.setData("text/plain", p.id);
+                e.dataTransfer.effectAllowed = "copy";
+              }}
+              onDragEnd={() => {
+                setDraggedComponent(null);
+              }}
+              title="Click to select · Drag onto schematic to place"
+            >
               <strong>{p.def.name}</strong>{" "}
               <span className="muted">
                 {p.def.category} · {p.def.footprint.name} · {p.source}
@@ -226,7 +243,21 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
       {sel && (
         <section className="lib-detail" aria-label={`Details of ${sel.def.name}`}>
           <h3>{sel.def.name}</h3>
-          <div className="lib-previews">
+          <div
+            className="lib-previews"
+            draggable={true}
+            onDragStart={(e) => {
+              setDraggedComponent({ id: sel.id, name: sel.def.name, category: sel.def.category, footprint: sel.def.footprint?.name });
+              e.dataTransfer.setData(EAK_COMPONENT_MIME, JSON.stringify({ id: sel.id, name: sel.def.name, category: sel.def.category, footprint: sel.def.footprint?.name }));
+              e.dataTransfer.setData("text/plain", sel.id);
+              e.dataTransfer.effectAllowed = "copy";
+            }}
+            onDragEnd={() => {
+              setDraggedComponent(null);
+            }}
+            style={{ cursor: "grab" }}
+            title="Drag symbol onto schematic to place"
+          >
             <SymbolPreview def={sel.def} />
             <FootprintPreview fp={sel.def.footprint} />
           </div>

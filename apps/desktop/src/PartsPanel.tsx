@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { api, describeError } from "./api";
 import { CataloguePanel } from "./CataloguePanel";
+import { setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
 import { LibraryBrowser } from "./LibraryBrowser";
 import type { PartsSearch, SourcingRecord } from "./types";
 
@@ -158,7 +159,21 @@ export function PartsPanel({ revision, onImported }: Props) {
           <h3>EAK library</h3>
           <ul aria-label="Library matches">
             {result.library.map((h) => (
-              <li key={h.id}>
+              <li
+                key={h.id}
+                draggable={true}
+                onDragStart={(e) => {
+                  setDraggedComponent({ id: h.id, name: h.name });
+                  e.dataTransfer.setData(EAK_COMPONENT_MIME, JSON.stringify({ id: h.id, name: h.name }));
+                  e.dataTransfer.setData("text/plain", h.id);
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+                onDragEnd={() => {
+                  setDraggedComponent(null);
+                }}
+                style={{ cursor: "grab" }}
+                title="Drag onto schematic to place"
+              >
                 {h.id}{" "}
                 <span className="muted">
                   {h.name}

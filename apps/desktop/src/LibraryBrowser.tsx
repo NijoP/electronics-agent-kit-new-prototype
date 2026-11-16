@@ -5,6 +5,7 @@
 // every list comes from the backend. A supplier snapshot is never shown as suitability evidence.
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
 import { KicadImport } from "./KicadImport";
 import { FootprintPreview, SymbolPreview } from "./shell/LibraryPanel";
 import type { Facet, LibraryBrowse, LibraryBrowseQuery, LibraryEntry2 } from "./types";
@@ -227,6 +228,17 @@ export function LibraryBrowser() {
                       setTagText(e.tags.join(", "));
                       void api.libraryMeta(e.id, { touch: true }).catch(() => undefined);
                     }}
+                    draggable={true}
+                    onDragStart={(ev) => {
+                      setDraggedComponent({ id: e.id, name: e.def.name, category: e.def.category, footprint: e.def.footprint?.name });
+                      ev.dataTransfer.setData(EAK_COMPONENT_MIME, JSON.stringify({ id: e.id, name: e.def.name, category: e.def.category, footprint: e.def.footprint?.name }));
+                      ev.dataTransfer.setData("text/plain", e.id);
+                      ev.dataTransfer.effectAllowed = "copy";
+                    }}
+                    onDragEnd={() => {
+                      setDraggedComponent(null);
+                    }}
+                    title="Click to inspect · Drag onto schematic to place"
                   >
                     {e.id}
                   </button>{" "}

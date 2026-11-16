@@ -1,7 +1,7 @@
 // SVG canvas with wheel zoom (about the cursor) and drag pan. When `onPoint` is given a
 // click (pointer released without dragging) reports the view-space point under it, and
 // `onHover` tracks the cursor so editors can draw rubber-band previews.
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, type ReactNode } from "react";
 import { clientToView, fit, pan, visibleViewBox, zoomAt, type Bounds, type Size, type ViewBox } from "./viewport";
 import { loadViewport, saveViewport, useDocId, useRegisterCanvas } from "./shell/viewState";
 
@@ -21,6 +21,8 @@ interface Props {
    * moved past the click slop; a press released in place is still a click (`onPoint`).
    */
   onDrag?: DragHandler;
+  /** Handling for external drag-and-drop onto the canvas (e.g. library component drop). */
+  onDropTarget?: DropHandler;
   /** Drawn under the design (the grid), given the current view box. */
   underlay?: (vb: ViewBox) => ReactNode;
   /** Drawn over the design (rulers), given the current view box. */
@@ -34,6 +36,13 @@ export interface DragHandler {
   cancel: () => void;
 }
 
+export interface DropHandler {
+  onDragEnter?: (x: number, y: number, e: ReactDragEvent<SVGSVGElement>) => void;
+  onDragOver?: (x: number, y: number, e: ReactDragEvent<SVGSVGElement>) => void;
+  onDragLeave?: (e: ReactDragEvent<SVGSVGElement>) => void;
+  onDrop?: (x: number, y: number, e: ReactDragEvent<SVGSVGElement>) => void;
+}
+
 const CLICK_SLOP_PX = 4;
 
 interface PointerSample {
@@ -42,7 +51,7 @@ interface PointerSample {
   buttons: number;
 }
 
-export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, underlay, overlay }: Props) {
+export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const docId = useDocId();
   // A restored viewport (this tab's last zoom/pan, kept across tab closes and sessions) wins over fit.
@@ -214,6 +223,26 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
       }}
       onDoubleClick={() => {
         if (!tool) setVb(fit(bounds));
+      }}
+      onDragEnter={(e) => {
+        const p = toView(e);
+        if (p) onDropTarget?.onDragEnter?.(p[0], p[1], e);
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (e.dataTransfer) {
+          e.dataTransfer.dropEffect = "copy";
+        }
+        const p = toView(e);
+        if (p) onDropTarget?.onDragOver?.(p[0], p[1], e);
+      }}
+      onDragLeave={(e) => {
+        onDropTarget?.onDragLeave?.(e);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        const p = toView(e);
+        if (p) onDropTarget?.onDrop?.(p[0], p[1], e);
       }}
     >
       {underlay?.(visible)}
