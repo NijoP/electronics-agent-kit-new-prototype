@@ -29,3 +29,12 @@ mid-write) is ever dropped, on the next append. Run state is rebuilt by folding 
 interrupted, suspended and completed nodes survive a restart. External effects are gated by an
 idempotency key: planned before, committed after; a planned-but-uncommitted key yields
 `NeedsReconcile` and is never replayed blindly.
+
+## Scoped context (step 3)
+`eak-harness/src/task_context.rs` builds, per node, a `ScopedContext` holding only: the task contract
+(role, tools, write scope, timeout, budget, expected outputs), exactly the inputs the node's ports
+declare (small values inline, large ones by output reference with a SHA-256 digest and size), and
+stable references to the design parts its role may read (`parts_for`), each bound to the run's base
+revision. There is deliberately no field for chat history, unrelated results or the whole project; no
+role may read every part. An input whose producer has not finished, or an external input that was not
+supplied, is refused rather than guessed.
