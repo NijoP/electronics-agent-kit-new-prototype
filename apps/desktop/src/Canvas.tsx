@@ -115,12 +115,14 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  const toView = (e: { clientX: number; clientY: number }): [number, number] | null => {
+  const toView = (e: { clientX?: number; clientY?: number }): [number, number] | null => {
     const el = ref.current;
     if (!el) return null;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return null;
-    return clientToView(vbRef.current, r, e.clientX - r.left, e.clientY - r.top);
+    const cx = typeof e.clientX === "number" && !Number.isNaN(e.clientX) ? e.clientX : r.left + r.width / 2;
+    const cy = typeof e.clientY === "number" && !Number.isNaN(e.clientY) ? e.clientY : r.top + r.height / 2;
+    return clientToView(vbRef.current, r, cx - r.left, cy - r.top);
   };
 
   // Pointer moves: the first move of a frame is handled at once (no added latency); further

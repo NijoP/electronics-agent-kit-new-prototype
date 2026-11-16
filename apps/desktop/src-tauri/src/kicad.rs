@@ -203,7 +203,12 @@ pub fn import_commit(
                 footprint,
                 pin_map,
                 ratings: vec![],
-                model3d: eak_core::Model3d::default(),
+                model3d: eak_core::Model3d {
+                    kind: "box".into(),
+                    color: "#333333".into(),
+                    external_ref: None,
+                    model_ref: None,
+                },
                 provenance: format!("Imported KiCad symbol library {file_name}; unverified by EAK"),
             };
             let problems = def.validate();
@@ -264,7 +269,12 @@ pub fn import_commit(
                     footprint: fp_imp.def,
                     pin_map,
                     ratings: vec![],
-                    model3d: eak_core::Model3d::default(),
+                    model3d: eak_core::Model3d {
+                        kind: "box".into(),
+                        color: "#333333".into(),
+                        external_ref: None,
+                        model_ref: None,
+                    },
                     provenance: format!("Imported KiCad footprint {file_name}; unverified by EAK"),
                 };
                 let problems = def.validate();

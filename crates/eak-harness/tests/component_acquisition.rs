@@ -1,57 +1,41 @@
 use eak_core::{
-    ComponentDef, FootprintDef, PadDef, PadKind, PadShape, PinDef, PinType, Point, SymbolDef,
+    ComponentDef, FootprintDef, Model3d, PadDef, PadKind, PadShape, PinType, Point, Project,
+    Rotation, SymbolDef, SymbolPin,
 };
-use eak_harness::{CallContext, EngineHarness};
-use eak_runtime::Command;
+use eak_harness::{handle, CallContext};
+use eak_runtime::{Command, Engine};
 use serde_json::json;
 use std::collections::BTreeMap;
 
 #[test]
 fn validate_component_definition_and_stage_to_schematic_and_pcb() {
-    let td = std::env::temp_dir().join(format!("acq_test_{}", uuid::Uuid::new_v4().simple()));
-    std::fs::create_dir_all(&td).unwrap();
-    let dir = td.to_str().unwrap();
+    let mut engine = Engine::in_memory(Project::new("AcquisitionTest"));
+    let ctx = CallContext::from_env();
 
-    let harness = EngineHarness::new();
-    let ctx = CallContext {
-        session_id: "s1".into(),
-        agent: "agent:lead".into(),
-        max_class: eak_runtime::ImpactClass::Destructive,
-    };
-
-    // 1. Create a project
-    harness
-        .call(
-            "create_project",
-            &json!({"dir": dir, "name": "AcquisitionTest"}),
-            &ctx,
-        )
-        .unwrap();
-
-    // 2. Build a candidate component definition (e.g. TPS5430 buck regulator)
+    // 1. Build a candidate component definition (e.g. TPS5430 buck regulator)
     let pins = vec![
-        PinDef {
+        SymbolPin {
             number: "1".into(),
             name: "BOOT".into(),
-            electrical_type: PinType::Power,
+            electrical_type: PinType::PowerIn,
             position: Point::new(-5_000_000, 2_540_000),
         },
-        PinDef {
+        SymbolPin {
             number: "2".into(),
             name: "VIN".into(),
-            electrical_type: PinType::Power,
+            electrical_type: PinType::PowerIn,
             position: Point::new(-5_000_000, 0),
         },
-        PinDef {
+        SymbolPin {
             number: "3".into(),
             name: "PH".into(),
             electrical_type: PinType::Output,
             position: Point::new(5_000_000, 2_540_000),
         },
-        PinDef {
+        SymbolPin {
             number: "4".into(),
             name: "GND".into(),
-            electrical_type: PinType::Power,
+            electrical_type: PinType::PowerIn,
             position: Point::new(5_000_000, 0),
         },
     ];
@@ -126,26 +110,32 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
         },
         pin_map,
         ratings: vec![],
-        model3d: eak_core::Model3d::default(),
+        model3d: Model3d {
+            kind: "box".into(),
+            color: "#333333".into(),
+            external_ref: None,
+            model_ref: None,
+        },
         provenance: "Acquired by EAK agent from TI TPS5430 datasheet; unverified by engineer"
             .into(),
     };
 
-    // 3. Test `validate_component_definition` tool
-    let val_res = harness
-        .call(
-            "validate_component_definition",
-            &json!({"definition": serde_json::to_value(&def).unwrap()}),
-            &ctx,
-        )
-        .unwrap();
+    // 2. Test `validate_component_definition` tool
+    let val_res = handle(
+        &mut engine,
+        &ctx,
+        "direct",
+        "validate_component_definition",
+        &json!({"definition": serde_json::to_value(&def).unwrap()}),
+    );
 
-    assert_eq!(val_res["valid"], true, "{val_res}");
-    assert_eq!(val_res["pinmap_blocking"], false);
-    assert_eq!(val_res["requires_review"], true);
+    assert_eq!(val_res["ok"], true, "{val_res}");
+    let res = &val_res["result"];
+    assert_eq!(res["valid"], true, "{res}");
+    assert_eq!(res["pinmap_blocking"], false);
+    assert_eq!(res["requires_review"], true);
 
-    // 4. Stage component into the project library via UpsertComponentDefinition
-    let engine = harness.engine().unwrap();
+    // 3. Stage component into the project library via UpsertComponentDefinition
     let r = engine
         .execute(
             0,
@@ -157,7 +147,7 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
     assert_eq!(r.revision, 1);
     assert!(engine.project().library.contains_key("TPS5430DDA"));
 
-    // 5. Place symbol on schematic
+    // 4. Place symbol on schematic
     let r2 = engine
         .execute(
             1,
@@ -165,7 +155,7 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
                 sheet_id: None,
                 component_id: "TPS5430DDA".into(),
                 position: Point::new(10_000_000, 10_000_000),
-                rotation: eak_core::Rotation::R90,
+                rotation: Rotation::R90,
                 refdes: None,
                 value: None,
             },
@@ -181,9 +171,9 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
         .find(|s| s.component_id == "TPS5430DDA")
         .unwrap();
     assert_eq!(sym_inst.refdes, "U1");
-    assert_eq!(sym_inst.rotation, eak_core::Rotation::R90);
+    assert_eq!(sym_inst.rotation, Rotation::R90);
 
-    // 6. Synchronize to PCB and verify footprint placement
+    // 5. Synchronize to PCB and verify footprint placement
     let r3 = engine.execute(2, Command::SyncSchematicToPcb).unwrap();
     assert_eq!(r3.revision, 3);
 
@@ -196,6 +186,4 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
         .unwrap();
     assert_eq!(fp_inst.refdes, "U1");
     assert_eq!(fp_inst.symbol_id, sym_inst.id);
-
-    let _ = std::fs::remove_dir_all(&td);
 }

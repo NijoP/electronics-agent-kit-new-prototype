@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditCtx } from "../../EditContext";
 import { fixture } from "../../fixture.test-data";
@@ -77,11 +77,19 @@ describe("Schematic component drag-and-drop & click-to-place", () => {
     };
 
     // Drag over canvas
-    fireEvent.dragOver(canvas, { ...c, dataTransfer });
+    const dragOverEvent = createEvent.dragOver(canvas);
+    Object.defineProperty(dragOverEvent, "clientX", { value: c.clientX });
+    Object.defineProperty(dragOverEvent, "clientY", { value: c.clientY });
+    Object.defineProperty(dragOverEvent, "dataTransfer", { value: dataTransfer });
+    fireEvent(canvas, dragOverEvent);
     expect(screen.getByText(/Drop component to place/)).toBeDefined();
 
     // Drop on canvas
-    fireEvent.drop(canvas, { ...c, dataTransfer });
+    const dropEvent = createEvent.drop(canvas);
+    Object.defineProperty(dropEvent, "clientX", { value: c.clientX });
+    Object.defineProperty(dropEvent, "clientY", { value: c.clientY });
+    Object.defineProperty(dropEvent, "dataTransfer", { value: dataTransfer });
+    fireEvent(canvas, dropEvent);
 
     expect(sent.length).toBe(1);
     const cmd = sent[0];
