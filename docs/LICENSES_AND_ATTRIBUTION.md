@@ -10,7 +10,7 @@ in `third_party/licenses/THIRD_PARTY_NOTICES.md`. No third-party terminal binary
 | @xterm/xterm 6, @xterm/addon-fit, @xterm/addon-search | MIT | Terminal rendering in the desktop UI |
 
 ## EAK's own licence and the rest
-EAK is MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`). Rust dependency licences are in
+EAK is under the O'Saasy License (`LICENSE`; releases before the relicensing were MIT OR Apache-2.0). Rust dependency licences are in
 `LICENSING.md`. The only derived third-party source is recorded in
 `third_party/licenses/THIRD_PARTY_NOTICES.md` (licence text, upstream commit, modifications);
 it is the one place where that upstream project is named. EasyEDA and KiCad were studied for
