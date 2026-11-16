@@ -85,6 +85,7 @@ export const IPC_COMMANDS = [
   "current_project",
   "agent_tasks",
   "netlist",
+  "kicad_import_report",
   "execute_command",
   "undo",
   "redo",
@@ -173,6 +174,24 @@ export async function pickModelFile(title: string): Promise<string | null> {
   return typeof r === "string" ? r : null;
 }
 
+/** Must match `KicadImportView` in src-tauri/src/kicad.rs (eak-core `ImportReport`). */
+export interface KicadImportView {
+  file: string;
+  imported: number;
+  rejected: number;
+  report: {
+    format: string;
+    items: { name: string; status: "imported" | "rejected"; notes: string[] }[];
+    unsupported: Record<string, number>;
+  };
+}
+
+/** Native file picker for an optional KiCad interchange file. Resolves to the path, or null when cancelled. */
+export async function pickKicadFile(title: string): Promise<string | null> {
+  const r = await openDialog({ directory: false, multiple: false, title, filters: [{ name: "KiCad symbol or footprint", extensions: ["kicad_sym", "kicad_mod"] }] });
+  return typeof r === "string" ? r : null;
+}
+
 export const api = {
   createProject: (path: string, name: string) => call<Snapshot>("create_project", { path, name }),
   openProject: (path: string, takeOverLock: boolean) =>
@@ -180,6 +199,7 @@ export const api = {
   projectLockState: (path: string) => call<LockState>("project_lock_state", { path }),
   closeProject: () => call<void>("close_project"),
   currentProject: () => call<Snapshot>("current_project"),
+  kicadImportReport: (path: string) => call<KicadImportView>("kicad_import_report", { path }),
   netlist: () => call<{ name: string; pins: string[]; label_names: string[]; has_power_port: boolean }[]>("netlist"),
   agentTasks: () => call<import("./agentTasks").AgentTask[]>("agent_tasks"),
   execute: (expectedRevision: number, command: Command) =>

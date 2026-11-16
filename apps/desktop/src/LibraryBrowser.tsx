@@ -5,6 +5,7 @@
 // every list comes from the backend. A supplier snapshot is never shown as suitability evidence.
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { KicadImport } from "./KicadImport";
 import { FootprintPreview, SymbolPreview } from "./shell/LibraryPanel";
 import type { Facet, LibraryBrowse, LibraryBrowseQuery, LibraryEntry2 } from "./types";
 
@@ -149,6 +150,7 @@ export function LibraryBrowser() {
   return (
     <section aria-label="Library browser">
       <h3>Library</h3>
+      <KicadImport />
       <form
         onSubmit={(e) => {
           e.preventDefault();

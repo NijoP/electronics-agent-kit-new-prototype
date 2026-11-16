@@ -15,6 +15,7 @@
 
 pub mod ai;
 pub mod catalogue;
+pub mod kicad;
 pub mod libcatalog;
 pub mod libstore;
 pub mod models;
@@ -990,7 +991,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 75] = [
+pub const IPC_COMMANDS: [&str; 76] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -1035,6 +1036,7 @@ pub const IPC_COMMANDS: [&str; 75] = [
     "current_project",
     "agent_tasks",
     "netlist",
+    "kicad_import_report",
     "execute_command",
     "undo",
     "redo",
@@ -1140,6 +1142,14 @@ pub mod cmd {
     #[tauri::command(rename_all = "snake_case")]
     pub async fn current_project(app: AppHandle) -> Result<Snapshot, String> {
         blocking(app, Priority::P1, super::current_project).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn kicad_import_report(
+        app: AppHandle,
+        path: String,
+    ) -> Result<super::kicad::KicadImportView, String> {
+        blocking(app, Priority::P1, move |_| super::kicad::import_report(&path)).await
     }
 
     #[tauri::command(rename_all = "snake_case")]
@@ -1384,6 +1394,7 @@ pub fn run() {
             cmd::current_project,
             cmd::agent_tasks,
             cmd::netlist,
+            cmd::kicad_import_report,
             cmd::execute_command,
             cmd::undo,
             cmd::redo,
