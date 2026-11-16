@@ -50,3 +50,12 @@ evaluator whenever anything is reset. Examples: a footprint change resets placem
 netlist check, ERC, approval, routing and what follows, and keeps placement. Resets are recorded as
 `NodeInvalidated` journal events (`NodeStatus::Invalidated`), so they survive a restart. Granularity is
 the graph node, not a single component.
+
+## Approval (step 5)
+`eak-harness/src/task_approval.rs` makes an approval node a suspended node. `request` writes an
+`ApprovalRequested` entry (question plus evidence references) and suspends the node in the journal,
+so the wait survives a restart; a repeated request while one is open writes nothing. `decide` needs a
+named approver, an open request, and the design to still be at the revision the request was made
+against (otherwise it must be asked again). Approval completes the node (`approval-<seq>`); denial
+fails it with the approver and reason. Invalidating the node voids an open request. No model runs in an
+approval node.

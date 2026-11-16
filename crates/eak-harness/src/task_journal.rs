@@ -59,6 +59,19 @@ pub enum Event {
         node: String,
         reason: String,
     },
+    /// A person was asked a question; the node waits (see `task_approval`).
+    ApprovalRequested {
+        node: String,
+        question: String,
+        evidence: Vec<String>,
+    },
+    /// A named person answered; `approve` is their decision.
+    ApprovalDecided {
+        node: String,
+        approve: bool,
+        by: String,
+        note: String,
+    },
     EffectPlanned {
         node: String,
         key: String,
@@ -302,7 +315,10 @@ pub fn fold(entries: &[Entry], run: &str) -> RunState {
                     },
                 );
             }
-            Event::EffectPlanned { .. } | Event::EffectCommitted { .. } => {}
+            Event::EffectPlanned { .. }
+            | Event::EffectCommitted { .. }
+            | Event::ApprovalRequested { .. }
+            | Event::ApprovalDecided { .. } => {}
             Event::RunCompleted => st.ended = Some(RunEnd::Completed),
             Event::RunFailed { .. } => st.ended = Some(RunEnd::Failed),
             Event::RunCancelled => st.ended = Some(RunEnd::Cancelled),
