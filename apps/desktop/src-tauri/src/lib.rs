@@ -1149,7 +1149,10 @@ pub mod cmd {
         app: AppHandle,
         path: String,
     ) -> Result<super::kicad::KicadImportView, String> {
-        blocking(app, Priority::P1, move |_| super::kicad::import_report(&path)).await
+        blocking(app, Priority::P1, move |_| {
+            super::kicad::import_report(&path)
+        })
+        .await
     }
 
     #[tauri::command(rename_all = "snake_case")]
