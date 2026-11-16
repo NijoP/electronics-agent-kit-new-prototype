@@ -192,7 +192,7 @@ DESK
   info "launcher: $DATA/applications/eak.desktop, command: $APP_BIN"
 else
   MNT="$TMP/mnt"; mkdir -p "$MNT"
-  hdiutil attach -nobrowse -readonly -quiet -mountpoint "$MNT" "$TMP/$ASSET" || fail "could not mount the DMG"
+  printf "Y\n" | hdiutil attach -nobrowse -readonly -quiet -mountpoint "$MNT" "$TMP/$ASSET" || fail "could not mount the DMG"
   SRCAPP="$(find "$MNT" -maxdepth 1 -name '*.app' | head -n1)"
   [ -n "$SRCAPP" ] || { hdiutil detach -quiet "$MNT" || true; fail "no .app inside the DMG"; }
   DEST=/Applications; [ -w "$DEST" ] || { DEST="$HOME/Applications"; mkdir -p "$DEST"; }
