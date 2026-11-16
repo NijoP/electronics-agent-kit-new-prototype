@@ -18,7 +18,6 @@ members = [
 version = "0.1.4"
 edition = "2021"
 license = "LicenseRef-OSaasy"
-license-file = "LICENSE"
 rust-version = "1.80"
 repository = "https://github.com/NijoP/electronics-agent-kit-new-prototype"
 

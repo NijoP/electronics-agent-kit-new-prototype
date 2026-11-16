@@ -29,7 +29,6 @@
     "publisher": "Tusk Innovations Global Pvt Ltd",
     "copyright": "Copyright (c) 2026 NijoP",
     "license": "LicenseRef-OSaasy",
-    "windows": { "nsis": { "licenseFile": "../../../LICENSE" } },
     "category": "DeveloperTool",
     "shortDescription": "Electronics Agent Kit: AI-native electronics design (prototype)",
     "longDescription": "EAK is an early-development, Rust-first electronics design desktop application with one canonical design model, a typed command engine and independent ERC/DRC verification. Prototype: output is not manufacturing-ready.",
