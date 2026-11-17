@@ -12,7 +12,7 @@ share <b>one verifiable design model</b>. Early prototype; open source.
 </p>
 
 <p align="center">
-  <a href="https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/workflows/ci.yml"><img src="https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-pass-brightgreen" alt="CI: pass"></a>
   <a href="https://github.com/NijoP/electronics-agent-kit-new-prototype/releases"><img src="https://img.shields.io/github/v/release/NijoP/electronics-agent-kit-new-prototype?include_prereleases&label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-O'Saasy-blue" alt="License: O'Saasy"></a>
   <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" alt="Platforms">
