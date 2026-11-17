@@ -8,7 +8,7 @@ use eak_core::kicad_import::{import_footprint, import_symbol_lib, ImportReport};
 use eak_core::pinmap::suggest_by_number;
 use eak_core::sexpr::Limits;
 use eak_core::{
-    ComponentDef, FootprintDef, PadDef, PadKind, PadShape, PinDef, PinType, Point, SymbolDef,
+    ComponentDef, FootprintDef, PadDef, PadKind, PadShape, PinType, Point, SymbolDef, SymbolPin,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -32,12 +32,15 @@ pub struct KicadCommitResult {
 }
 
 /// Generates a valid footprint definition with pads corresponding to the symbol pins.
-pub fn default_footprint_for_pins(name: &str, pins: &[PinDef]) -> FootprintDef {
+pub fn default_footprint_for_pins(name: &str, pins: &[SymbolPin]) -> FootprintDef {
     let mut pads = Vec::new();
     let count = pins.len();
     if count <= 2 {
         pads.push(PadDef {
-            number: pins.first().map(|p| p.number.clone()).unwrap_or_else(|| "1".into()),
+            number: pins
+                .first()
+                .map(|p| p.number.clone())
+                .unwrap_or_else(|| "1".into()),
             kind: PadKind::Smd,
             shape: PadShape::Rect,
             position: Point::new(-1_000_000, 0),
@@ -78,9 +81,14 @@ pub fn default_footprint_for_pins(name: &str, pins: &[PinDef]) -> FootprintDef {
             });
         }
     }
-    let (max_x, max_y) = pads.iter().fold((1_500_000i64, 1_500_000i64), |(mx, my), p| {
-        (mx.max(p.position.x.abs() + p.size_x / 2), my.max(p.position.y.abs() + p.size_y / 2))
-    });
+    let (max_x, max_y) = pads
+        .iter()
+        .fold((1_500_000i64, 1_500_000i64), |(mx, my), p| {
+            (
+                mx.max(p.position.x.abs() + p.size_x / 2),
+                my.max(p.position.y.abs() + p.size_y / 2),
+            )
+        });
     FootprintDef {
         name: name.to_string(),
         pads,
@@ -151,13 +159,16 @@ pub fn import_commit(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "imported".into());
-    let stem = p
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("kicad");
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("kicad");
     let safe_stem = stem
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '_' | '-') { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect::<String>();
     let lib_name = format!("kicad_{safe_stem}");
     safe_name(&lib_name)?;
@@ -167,7 +178,8 @@ pub fn import_commit(
 
     let store_ref = store();
     let target_dir = store_ref.root().join("imported").join(&lib_name);
-    std::fs::create_dir_all(&target_dir).map_err(|e| format!("cannot create target library dir: {e}"))?;
+    std::fs::create_dir_all(&target_dir)
+        .map_err(|e| format!("cannot create target library dir: {e}"))?;
 
     let mut component_ids = Vec::new();
     let mut rejected = Vec::new();
@@ -179,7 +191,13 @@ pub fn import_commit(
             if safe_name(&id).is_err() {
                 id = id
                     .chars()
-                    .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '_' | '-') { c } else { '_' })
+                    .map(|c| {
+                        if c.is_ascii_alphanumeric() || matches!(c, '_' | '-') {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
                     .collect();
             }
             if safe_name(&id).is_err() {
@@ -218,7 +236,8 @@ pub fn import_commit(
             }
             let json = serde_json::to_string_pretty(&def).map_err(|e| e.to_string())?;
             let file_path = target_dir.join(format!("{id}.json"));
-            std::fs::write(&file_path, json).map_err(|e| format!("cannot write component file: {e}"))?;
+            std::fs::write(&file_path, json)
+                .map_err(|e| format!("cannot write component file: {e}"))?;
             component_ids.push(id);
         }
         sym_lib.report
@@ -229,27 +248,36 @@ pub fn import_commit(
             if safe_name(&id).is_err() {
                 id = id
                     .chars()
-                    .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '_' | '-') { c } else { '_' })
+                    .map(|c| {
+                        if c.is_ascii_alphanumeric() || matches!(c, '_' | '-') {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
                     .collect();
             }
             if safe_name(&id).is_ok() {
-                let symbol_pins: Vec<PinDef> = fp_imp
+                let symbol_pins: Vec<SymbolPin> = fp_imp
                     .def
                     .pads
                     .iter()
                     .enumerate()
-                    .map(|(i, pad)| PinDef {
+                    .map(|(i, pad)| SymbolPin {
                         number: pad.number.clone(),
                         name: pad.number.clone(),
                         electrical_type: PinType::Passive,
                         position: Point::new(-5_000_000, i as i64 * 2_540_000),
                     })
                     .collect();
-                let pin_map = suggest_by_number(&SymbolDef {
-                    pins: symbol_pins.clone(),
-                    body_half_w: 3_000_000,
-                    body_half_h: (symbol_pins.len() as i64 * 2_540_000 / 2).max(2_000_000),
-                }, &fp_imp.def);
+                let pin_map = suggest_by_number(
+                    &SymbolDef {
+                        pins: symbol_pins.clone(),
+                        body_half_w: 3_000_000,
+                        body_half_h: (symbol_pins.len() as i64 * 2_540_000 / 2).max(2_000_000),
+                    },
+                    &fp_imp.def,
+                );
                 let def = ComponentDef {
                     id: id.clone(),
                     name: fp_imp.def.name.clone(),
@@ -281,7 +309,8 @@ pub fn import_commit(
                 if problems.is_empty() {
                     let json = serde_json::to_string_pretty(&def).map_err(|e| e.to_string())?;
                     let file_path = target_dir.join(format!("{id}.json"));
-                    std::fs::write(&file_path, json).map_err(|e| format!("cannot write component file: {e}"))?;
+                    std::fs::write(&file_path, json)
+                        .map_err(|e| format!("cannot write component file: {e}"))?;
                     component_ids.push(id);
                 } else {
                     rejected.push(format!("{}: {}", def.name, problems.join("; ")));
@@ -328,16 +357,16 @@ mod tests {
     #[test]
     fn default_footprint_generation_validates() {
         let pins = vec![
-            PinDef {
+            SymbolPin {
                 number: "1".into(),
                 name: "IN".into(),
-                electrical_type: PinType::Input,
+                electrical_type: PinType::Passive,
                 position: Point::new(-5_000_000, 0),
             },
-            PinDef {
+            SymbolPin {
                 number: "2".into(),
                 name: "OUT".into(),
-                electrical_type: PinType::Output,
+                electrical_type: PinType::Passive,
                 position: Point::new(5_000_000, 0),
             },
         ];

@@ -991,8 +991,12 @@ fn read(engine: &Engine, name: &str, args: &Value) -> Result<Value, Fail> {
                 .get("definition")
                 .cloned()
                 .ok_or_else(|| fail(ErrorCode::InvalidArguments, "definition is required"))?;
-            let def: eak_core::ComponentDef = serde_json::from_value(raw)
-                .map_err(|e| fail(ErrorCode::InvalidArguments, format!("invalid ComponentDef: {e}")))?;
+            let def: eak_core::ComponentDef = serde_json::from_value(raw).map_err(|e| {
+                fail(
+                    ErrorCode::InvalidArguments,
+                    format!("invalid ComponentDef: {e}"),
+                )
+            })?;
             let structural_problems = def.validate();
             let pinmap_report = eak_core::pinmap::check_component(&def);
             let valid = structural_problems.is_empty() && !pinmap_report.blocking();

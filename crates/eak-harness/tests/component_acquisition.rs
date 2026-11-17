@@ -3,7 +3,7 @@ use eak_core::{
     Rotation, SymbolDef, SymbolPin,
 };
 use eak_harness::{handle, CallContext};
-use eak_runtime::{Command, Engine};
+use eak_runtime::{Actor, Command, CommandRequest, Engine};
 use serde_json::json;
 use std::collections::BTreeMap;
 
@@ -136,32 +136,38 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
     assert_eq!(res["requires_review"], true);
 
     // 3. Stage component into the project library via UpsertComponentDefinition
-    let r = engine
-        .execute(
-            0,
-            Command::UpsertComponentDefinition {
-                definition: Box::new(def.clone()),
-            },
-        )
-        .unwrap();
-    assert_eq!(r.revision, 1);
+    let r = engine.execute(CommandRequest {
+        expected_revision: 0,
+        actor: Actor::human(),
+        command: Command::UpsertComponentDefinition {
+            definition: Box::new(def.clone()),
+        },
+        approval: None,
+    });
+    assert!(
+        r.accepted,
+        "UpsertComponentDefinition failed: {:?}",
+        r.error
+    );
+    assert_eq!(r.revision_after, 1);
     assert!(engine.project().library.contains_key("TPS5430DDA"));
 
     // 4. Place symbol on schematic
-    let r2 = engine
-        .execute(
-            1,
-            Command::PlaceSymbol {
-                sheet_id: None,
-                component_id: "TPS5430DDA".into(),
-                position: Point::new(10_000_000, 10_000_000),
-                rotation: Rotation::R90,
-                refdes: None,
-                value: None,
-            },
-        )
-        .unwrap();
-    assert_eq!(r2.revision, 2);
+    let r2 = engine.execute(CommandRequest {
+        expected_revision: 1,
+        actor: Actor::human(),
+        command: Command::PlaceSymbol {
+            sheet_id: None,
+            component_id: "TPS5430DDA".into(),
+            position: Point::new(10_000_000, 10_000_000),
+            rotation: Rotation::R90,
+            refdes: None,
+            value: None,
+        },
+        approval: None,
+    });
+    assert!(r2.accepted, "PlaceSymbol failed: {:?}", r2.error);
+    assert_eq!(r2.revision_after, 2);
 
     let sym_inst = engine
         .project()
@@ -174,8 +180,14 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
     assert_eq!(sym_inst.rotation, Rotation::R90);
 
     // 5. Synchronize to PCB and verify footprint placement
-    let r3 = engine.execute(2, Command::SyncSchematicToPcb).unwrap();
-    assert_eq!(r3.revision, 3);
+    let r3 = engine.execute(CommandRequest {
+        expected_revision: 2,
+        actor: Actor::human(),
+        command: Command::SyncSchematicToPcb,
+        approval: None,
+    });
+    assert!(r3.accepted, "SyncSchematicToPcb failed: {:?}", r3.error);
+    assert_eq!(r3.revision_after, 3);
 
     let fp_inst = engine
         .project()
