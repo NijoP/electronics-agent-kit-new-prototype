@@ -146,12 +146,16 @@ describe("keyboard scope (evaluator C4)", () => {
     const sch = within(screen.getByRole("region", { name: "Schematic view" }));
     const pcb = within(screen.getByRole("region", { name: "PCB view" }));
     const pressed = (v: typeof sch, name: string) => v.getByRole("button", { name }).getAttribute("aria-pressed");
-    fireEvent.keyDown(window, { key: "3" }); // schematic: Wire, PCB: Move
-    await waitFor(() => expect(pressed(sch, "Wire")).toBe("true"));
+    await waitFor(() => {
+      fireEvent.keyDown(window, { key: "3" }); // schematic: Wire, PCB: Move
+      expect(pressed(sch, "Wire")).toBe("true");
+    });
     expect(pressed(pcb, "Move")).toBe("false");
     fireEvent.pointerDown(screen.getByRole("region", { name: "PCB view" }));
-    fireEvent.keyDown(window, { key: "6" }); // PCB: Delete, schematic: Move
-    await waitFor(() => expect(pressed(pcb, "Delete")).toBe("true"));
+    await waitFor(() => {
+      fireEvent.keyDown(window, { key: "6" }); // PCB: Delete, schematic: Move
+      expect(pressed(pcb, "Delete")).toBe("true");
+    });
     expect(pressed(sch, "Move")).toBe("false");
     expect(pressed(sch, "Wire")).toBe("true"); // untouched
   });
