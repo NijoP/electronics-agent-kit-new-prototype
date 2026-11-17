@@ -169,15 +169,18 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
     assert!(r2.accepted, "PlaceSymbol failed: {:?}", r2.error);
     assert_eq!(r2.revision_after, 2);
 
-    let sym_inst = engine
-        .project()
-        .schematic
-        .symbols
-        .values()
-        .find(|s| s.component_id == "TPS5430DDA")
-        .unwrap();
-    assert_eq!(sym_inst.refdes, "U1");
-    assert_eq!(sym_inst.rotation, Rotation::R90);
+    let sym_id = {
+        let sym_inst = engine
+            .project()
+            .schematic
+            .symbols
+            .values()
+            .find(|s| s.component_id == "TPS5430DDA")
+            .unwrap();
+        assert_eq!(sym_inst.refdes, "U1");
+        assert_eq!(sym_inst.rotation, Rotation::R90);
+        sym_inst.id.clone()
+    };
 
     // 5. Synchronize to PCB and verify footprint placement
     let r3 = engine.execute(CommandRequest {
@@ -197,5 +200,5 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
         .find(|f| f.component_id == "TPS5430DDA")
         .unwrap();
     assert_eq!(fp_inst.refdes, "U1");
-    assert_eq!(fp_inst.symbol_id, sym_inst.id);
+    assert_eq!(fp_inst.symbol_id, sym_id);
 }

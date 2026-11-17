@@ -60,7 +60,7 @@ pub fn default_footprint_for_pins(name: &str, pins: &[SymbolPin]) -> FootprintDe
             });
         }
     } else {
-        let half = (count + 1) / 2;
+        let half = count.div_ceil(2);
         let pitch = 2_540_000i64; // 2.54 mm
         let span = 5_000_000i64; // 5 mm between columns
         for (i, p) in pins.iter().enumerate() {
