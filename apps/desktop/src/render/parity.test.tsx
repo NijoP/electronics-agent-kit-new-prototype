@@ -11,6 +11,7 @@ import { fixture } from "../fixture.test-data";
 import { PcbView, pcbBounds } from "../PcbView";
 import type { Command, Snapshot } from "../types";
 import { fit, type ViewBox } from "../viewport";
+import { Canvas2DRenderer } from "./canvas2d";
 import { RENDERER_KEY, setCanvas2dAvailableForTests } from "./flag";
 import { stubContext, type Call } from "./stubContext.test-util";
 
@@ -21,6 +22,7 @@ let sent: Command[];
 let notify: ReturnType<typeof vi.fn<(m: string) => void>>;
 let drawn: Call[];
 let contexts = 0;
+let issued: { ctx: unknown; calls: Call[] }[] = [];
 const realGetContext = HTMLCanvasElement.prototype.getContext;
 const edit = (): EditCtx => ({
   execute: async (c) => {
@@ -35,6 +37,7 @@ beforeEach(() => {
   sent = [];
   drawn = [];
   contexts = 0;
+  issued = [];
   notify = vi.fn<(m: string) => void>();
   localStorage.clear();
   Element.prototype.getBoundingClientRect = () =>
@@ -51,7 +54,9 @@ beforeEach(() => {
   setCanvas2dAvailableForTests(true);
   HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
     contexts++;
-    return stubContext(this.width, this.height, drawn).ctx;
+    const s = stubContext(this.width, this.height, drawn);
+    issued.push(s);
+    return s.ctx;
   } as unknown as typeof HTMLCanvasElement.prototype.getContext;
 });
 afterEach(() => {
@@ -102,6 +107,7 @@ describe("Canvas2D PCB renderer", () => {
   it("paints the board on a canvas instead of SVG nodes and keeps the interactive SVG on top", async () => {
     const errors: string[] = [];
     vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => void errors.push(a.map((x) => (x instanceof Error ? (x.stack ?? x.message) : String(x))).join(" ")));
+    const renders = vi.spyOn(Canvas2DRenderer.prototype, "render");
     const { container } = setup(fixture());
     expect(errors.join(" | ").slice(0, 1500), "errors while starting the renderer").toBe("");
     expect(container.querySelector('canvas[data-renderer="canvas2d"]')).toBeTruthy();
@@ -113,7 +119,7 @@ describe("Canvas2D PCB renderer", () => {
     // Each stage of the first frame, so a failure says where the pipeline stopped.
     await waitFor(() => expect(el.width, "scene canvas sized to the measured pane").toBe(SIZE));
     expect(contexts, "2D contexts requested").toBeGreaterThan(0);
-    await waitFor(() => expect(drawn.some((c) => c.fn === "drawImage"), `first calls: ${drawn.map((c) => c.fn).slice(0, 12).join(",")}; draw state: ${el.dataset.draw ?? "never attempted"}, frames: ${el.dataset.frames ?? 0}, connected: ${el.isConnected}; errors: ${errors.join(" | ").slice(0, 1500)}`).toBe(true));
+    await waitFor(() => expect(drawn.some((c) => c.fn === "drawImage"), `first calls: ${drawn.map((c) => c.fn).slice(0, 12).join(",")}; draw state: ${el.dataset.draw ?? "never attempted"}, frames: ${el.dataset.frames ?? 0}, connected: ${el.isConnected}; renders: ${renders.mock.calls.length}, target is an issued stub: ${renders.mock.contexts.map((c) => issued.some((s) => s.ctx === (c as unknown as { target: unknown }).target)).join("/")}, issued: ${issued.map((s) => s.calls.length).join("/")}, same log: ${issued.map((s) => s.calls === drawn).join("/")}; errors: ${errors.join(" | ").slice(0, 1500)}`).toBe(true));
     expect(drawn.some((c) => c.fn === "fillText" && c.args[0] === "R1")).toBe(true);
   });
 
