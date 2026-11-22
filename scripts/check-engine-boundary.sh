@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Engine-boundary scan (AGENTS.md "no code writes project files directly"; ADR-0037).
+# Engine-boundary scan (AGENTS.md "no code writes project files directly"; ADR-0039).
 # The desktop IPC layer may write a project folder only through `Engine::execute`,
 # `Engine::save_evidence` or `Engine::write_project_record`. This scan fails when:
 #   1. a desktop or harness source writes a sourcing/assembly record directly

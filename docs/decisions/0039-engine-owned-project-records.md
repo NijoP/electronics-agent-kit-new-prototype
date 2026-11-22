@@ -1,4 +1,4 @@
-# ADR-0037 Engine-owned project records (sourcing and assembly evidence)
+# ADR-0039 Engine-owned project records (sourcing and assembly evidence)
 
 Status: accepted (Phase 1 slice E3). Contract change: `eak-runtime::Engine` gains
 `write_project_record`; `Command`, `CommandResponse`, report types and EAK-IR are unchanged, so

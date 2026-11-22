@@ -690,7 +690,7 @@ impl Engine {
         Some(path)
     }
 
-    /// Write one project record that is not design data (ADR-0037): supplier sourcing records
+    /// Write one project record that is not design data (ADR-0039): supplier sourcing records
     /// and fabricator assembly classes under `<project>/sourcing/`. They are evidence about
     /// parts, not part of EAK-IR, so they carry no revision or undo step; instead every write is
     /// appended to the area's own journal (`<area>/journal.jsonl`) and emitted as an event.
@@ -764,7 +764,7 @@ impl Engine {
     }
 }
 
-/// Project sub-folders written only through [`Engine::write_project_record`] (ADR-0037).
+/// Project sub-folders written only through [`Engine::write_project_record`] (ADR-0039).
 pub const RECORD_AREAS: &[&str] = &["sourcing"];
 /// Journal file inside each record area.
 pub const RECORD_JOURNAL: &str = "journal.jsonl";

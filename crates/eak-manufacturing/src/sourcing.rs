@@ -609,7 +609,7 @@ pub fn search<'a>(records: &'a [SourcingRecord], query: &str) -> Vec<&'a Sourcin
 }
 
 /// The file a record is stored as inside the sourcing folder (`<Distributor part number>.json`)
-/// and its bytes. In a project, hand both to `Engine::write_project_record` (ADR-0037).
+/// and its bytes. In a project, hand both to `Engine::write_project_record` (ADR-0039).
 pub fn record_file(rec: &SourcingRecord) -> Result<(String, Vec<u8>), SourcingError> {
     let distributor = rec
         .distributor_part

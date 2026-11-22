@@ -1,4 +1,4 @@
-//! `Engine::write_project_record` contract (ADR-0037): the only writer of the non-design
+//! `Engine::write_project_record` contract (ADR-0039): the only writer of the non-design
 //! record areas in a project folder. Journalled, never touches the design revision, refuses
 //! agents, path escapes and unknown areas.
 

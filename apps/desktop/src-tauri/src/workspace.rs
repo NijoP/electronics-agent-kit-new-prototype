@@ -29,7 +29,7 @@ const ENGINE_OWNED: [&str; 6] = [
     ".lock",
     "checkpoints",
     "evidence",
-    // Supplier and assembly records, written only by `Engine::write_project_record` (ADR-0037).
+    // Supplier and assembly records, written only by `Engine::write_project_record` (ADR-0039).
     "sourcing",
 ];
 

@@ -8,7 +8,7 @@
 //! * an import is a typed `UpsertComponentDefinition` command through the engine as the
 //!   Human actor, with the revision the UI last rendered;
 //! * supplier and assembly records are written into `<project>/sourcing` only through
-//!   `Engine::write_project_record` (ADR-0037): journalled, never a direct file write;
+//!   `Engine::write_project_record` (ADR-0039): journalled, never a direct file write;
 //! * Fabricator output is written only to a folder the user names, is labelled "prepared for
 //!   review", and nothing is uploaded or ordered.
 
@@ -207,7 +207,7 @@ pub struct SavedRecord {
 
 /// Supplier discovery, separate from engineering import: fetch one Distributor listing and store it in
 /// `<project>/sourcing` so the MPN and Distributor number are kept and the engineering definition can
-/// be completed later. The engine writes and journals the record (ADR-0037); no design command
+/// be completed later. The engine writes and journals the record (ADR-0039); no design command
 /// runs, the project revision does not change, and no symbol, footprint or rating is created.
 pub fn parts_save_record<P: SupplierProvider>(
     s: &Session,
@@ -377,7 +377,7 @@ pub fn assembly_attest(
 }
 
 /// The one way this module writes into a project folder: `Engine::write_project_record`
-/// (ADR-0037), as the Human actor, journalled in `sourcing/journal.jsonl`.
+/// (ADR-0039), as the Human actor, journalled in `sourcing/journal.jsonl`.
 fn write_record(e: &mut Engine, file: &str, bytes: &[u8], summary: &str) -> Result<(), String> {
     e.write_project_record(&Actor::human(), "sourcing", file, bytes, summary)
         .map(|_| ())

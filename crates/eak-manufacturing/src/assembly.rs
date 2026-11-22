@@ -169,7 +169,7 @@ pub fn assembly_dir(sourcing_dir: &Path) -> PathBuf {
 
 /// The file a record is stored as, relative to the sourcing folder
 /// (`assembly/<Distributor>.json`), and its bytes. In a project, hand both to
-/// `Engine::write_project_record` (ADR-0037).
+/// `Engine::write_project_record` (ADR-0039).
 pub fn record_file(rec: &AssemblyRecord) -> Result<(String, Vec<u8>), String> {
     if !is_distributor_part_number(&rec.distributor) {
         return Err(format!(
