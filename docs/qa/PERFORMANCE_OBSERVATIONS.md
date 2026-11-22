@@ -62,3 +62,11 @@ Candidate next steps (not done in A4):
 
 Not measured: the Tauri WebKitGTK webview, the 8 GB reference host, devicePixelRatio 2, memory
 use of the layer caches (budget 96 MiB).
+
+Known limitation: the jsdom unit tests do not prove that the canvas paints. In jsdom with a stub
+2D context, the scene canvas set its painted-frame flag (`data-draw="drawn"`,
+`data-frames="1"`) while a spy on `Canvas2DRenderer.render` saw 0 calls and the stub context
+recorded 0 calls. This is unexplained after six CI diagnostic rounds (2026-11-23). The jsdom
+tests keep what they can prove: scene and pick-table construction, renderer selection, the SVG
+fallback flag and picking parity. Real painting is asserted by the browser job `render-qa`:
+pixel diffs and real-click picking.
