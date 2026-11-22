@@ -137,12 +137,19 @@ export interface RenderStats {
   fullLayers: number;
   /** Dirty rectangles redrawn this frame (pan strips and changed objects). */
   dirtyRects: number;
-  /** Layers composited from their offscreen cache without redrawing. */
+  /** Layers shown from the offscreen composite without redrawing any of it. */
   cachedLayers: number;
   /** Layers drawn straight to the screen (over the cache memory budget, or annotations). */
   directLayers: number;
+  /** Annotation layers skipped because none of their labels fits at this zoom (level of detail). */
+  lodLayers: number;
   /** Render objects drawn this frame. */
   drawn: number;
+  /**
+   * The frame shows the cache scaled while a zoom moves; it is redrawn sharp by a frame rendered
+   * once the zoom has been still for `SETTLE_MS` (`canvas2d.ts`). The host must request that frame.
+   */
+  stale: boolean;
   ms: number;
 }
 

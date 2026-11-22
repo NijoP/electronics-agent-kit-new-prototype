@@ -1,10 +1,10 @@
 // Scene renderer (slice A4): render-object table, layer draw-order stack, picking, and the
-// Canvas2D backend's per-layer offscreen cache with dirty rectangles, against a recording 2D
+// Canvas2D backend's composite cache with dirty rectangles, against a recording 2D
 // context (jsdom has none). Real-browser pixels and frame rates are measured by the render QA
 // page in CI (`e2e/render-qa.mjs`), not here.
 import { describe, expect, it } from "vitest";
 import type { CopperLayer } from "../types";
-import { Canvas2DRenderer, diffBoxes, MAX_DIRTY_RECTS } from "./canvas2d";
+import { Canvas2DRenderer, diffBoxes, MAX_DIRTY_RECTS, SETTLE_MS, STALE_ZOOM_RANGE } from "./canvas2d";
 import { benchmarkBoard, BENCH_FOOTPRINTS, BENCH_SEGMENTS, referenceBasic, referenceFourLayer } from "./fixtures";
 import { GridIndex } from "./geometry";
 import { buildPcbScene, FAR_SIDE_ALPHA, pcbLayers, type PcbSceneOptions } from "./pcbScene";
@@ -141,48 +141,124 @@ describe("picking", () => {
   });
 });
 
-describe("Canvas2D backend: per-layer offscreen cache and dirty rectangles", () => {
+describe("Canvas2D backend: composite cache, dirty rectangles, deferred zoom redraw, level of detail", () => {
   const view = (o: Partial<ViewTransform> = {}): ViewTransform => ({ x0: 0, y0: -20, scale: 20, width: 600, height: 400, dpr: 1, ...o });
   const setup = (scene = basic()) => {
     const log: Call[] = [];
     const target = stubContext(600, 400);
-    const r = new Canvas2DRenderer(target.ctx, { createSurface: stubSurfaces(log).create, resolveColour: () => "#123456" });
+    const clock = { t: 0 };
+    const r = new Canvas2DRenderer(target.ctx, { createSurface: stubSurfaces(log).create, resolveColour: () => "#123456", now: () => clock.t });
     r.setScene(scene);
-    return { r, target };
+    return { r, target, clock, log };
   };
   // Non-empty cached layers of the basic board: bottom:zone, top:copper, top:silk, multi, outline, drill.
   const CACHED = 6;
 
-  it("draws every layer once, then composites from cache while the view is unchanged", () => {
+  it("draws every layer once, then shows the composite while the view is unchanged", () => {
     const { r } = setup();
     const first = r.render(view());
     expect(first.fullLayers).toBe(CACHED);
-    expect(first.directLayers).toBe(2); // top:netNames and top:padNumbers are drawn live
+    // top:padNumbers is drawn live; top:netNames is skipped: a 10 px name cannot fit a 0.25 mm
+    // track (5 px) at 20 px/mm.
+    expect(first).toMatchObject({ directLayers: 1, lodLayers: 1, stale: false });
     expect(r.render(view())).toMatchObject({ fullLayers: 0, dirtyRects: 0, cachedLayers: CACHED });
   });
 
-  it("pans by shifting the cached pixels and redrawing only the exposed strips", () => {
+  it("pans by shifting the composite and redrawing only the exposed strips", () => {
     const { r } = setup();
     r.render(view());
-    expect(r.render(view({ x0: -0.25 }))).toMatchObject({ fullLayers: 0, dirtyRects: CACHED }); // 5 px right
-    // 10 px left and 10 px down: two strips per layer.
-    expect(r.render(view({ x0: 0.25, y0: -20.5 }))).toMatchObject({ fullLayers: 0, dirtyRects: 2 * CACHED });
+    expect(r.render(view({ x0: -0.25 }))).toMatchObject({ fullLayers: 0, dirtyRects: 1 }); // 5 px right
+    // 10 px left and 10 px down: two strips.
+    expect(r.render(view({ x0: 0.25, y0: -20.5 }))).toMatchObject({ fullLayers: 0, dirtyRects: 2 });
   });
 
-  it("redraws everything on zoom, and on a sub-pixel pan it cannot reuse", () => {
+  it("snaps a sub-pixel pan to whole device pixels instead of redrawing", () => {
     const { r } = setup();
     r.render(view());
-    expect(r.render(view({ scale: 25 })).fullLayers).toBe(CACHED);
-    expect(r.render(view({ scale: 25, x0: 0.013 })).fullLayers).toBe(CACHED);
+    // 0.26 px: snapped to no move at all.
+    expect(r.render(view({ x0: -0.013 }))).toMatchObject({ fullLayers: 0, dirtyRects: 0, cachedLayers: CACHED });
+    // 2.5 px: shifted 3 px, one strip.
+    expect(r.render(view({ x0: -0.125 }))).toMatchObject({ fullLayers: 0, dirtyRects: 1 });
+    // 5.2 px in all, 2.2 px from the composite (now at 3 px): shifted 2 px more.
+    expect(r.render(view({ x0: -0.26 }))).toMatchObject({ fullLayers: 0, dirtyRects: 1 });
   });
 
-  it("an edit redraws only the changed object's rectangle on its own layer", () => {
+  it("shows the scaled composite while a zoom moves and redraws it once the zoom settles", () => {
+    const { r, clock } = setup();
+    r.render(view());
+    clock.t = 1000;
+    expect(r.render(view({ scale: 25 }))).toMatchObject({ fullLayers: 0, stale: true, cachedLayers: CACHED });
+    clock.t = 1050;
+    expect(r.render(view({ scale: 26 }))).toMatchObject({ fullLayers: 0, stale: true });
+    clock.t = 1050 + SETTLE_MS - 1;
+    expect(r.render(view({ scale: 26 })).stale).toBe(true);
+    clock.t = 1050 + SETTLE_MS;
+    expect(r.render(view({ scale: 26 }))).toMatchObject({ fullLayers: CACHED, stale: false });
+    expect(r.render(view({ scale: 26 }))).toMatchObject({ fullLayers: 0, dirtyRects: 0, stale: false });
+  });
+
+  it("redraws a zoom at once when the scaled composite would be too far off", () => {
+    const { r, clock } = setup();
+    r.render(view());
+    clock.t = 1000;
+    expect(r.render(view({ scale: 20 * STALE_ZOOM_RANGE[1] * 1.01 }))).toMatchObject({ fullLayers: CACHED, stale: false });
+    clock.t = 1010;
+    expect(r.render(view({ scale: 20 * STALE_ZOOM_RANGE[1] * 1.01 * STALE_ZOOM_RANGE[0] * 0.99 }))).toMatchObject({ fullLayers: CACHED, stale: false });
+  });
+
+  it("an edit during a moving zoom redraws at once (no stale frame for changed objects)", () => {
+    const { r, clock } = setup();
+    r.render(view());
+    clock.t = 1000;
+    expect(r.render(view({ scale: 22 })).stale).toBe(true);
+    const snap = referenceBasic();
+    snap.project.pcb.tracks.trk_1.b = { x: 19_200_000, y: 12_000_000 };
+    r.setScene(buildPcbScene(snap, opts(["top", "bottom"])));
+    clock.t = 1010;
+    expect(r.render(view({ scale: 22 }))).toMatchObject({ fullLayers: CACHED, stale: false });
+  });
+
+  it("an edit redraws only the changed object's rectangle", () => {
     const { r } = setup();
     r.render(view());
     const snap = referenceBasic();
     snap.project.pcb.tracks.trk_1.b = { x: 19_200_000, y: 12_000_000 };
     r.setScene(buildPcbScene(snap, opts(["top", "bottom"])));
-    expect(r.render(view())).toMatchObject({ fullLayers: 0, dirtyRects: 1, cachedLayers: CACHED - 1 });
+    expect(r.render(view())).toMatchObject({ fullLayers: 0, dirtyRects: 1 });
+  });
+
+  it("a layer-stack change (active side switch) redraws the composite: opacity is baked in", () => {
+    const { r } = setup();
+    r.render(view());
+    r.setScene(basic({ activeLayer: "bottom" }));
+    expect(r.render(view()).fullLayers).toBe(CACHED);
+  });
+
+  it("draws translucent layers through the scratch surface and opaque ones straight into the composite", () => {
+    const { r, log } = setup();
+    r.render(view());
+    // One translucent layer with objects (bottom:zone, the far side): one region copy into the
+    // composite; then the composite is copied to the screen (logged on the target, not `log`).
+    expect(log.filter((c) => c.fn === "drawImage")).toHaveLength(1);
+  });
+
+  it("skips objects under half a CSS pixel", () => {
+    const tiny: RenderObject = {
+      key: "dot",
+      ref: null,
+      layerKey: "L",
+      bbox: { minX: 0, minY: 0, maxX: 0.01, maxY: 0.01 },
+      hit: () => false,
+      ops: [{ t: "circle", cx: 0.005, cy: 0.005, r: 0.005, fill: "#fff" }],
+      sig: "dot",
+    };
+    const target = stubContext(600, 400);
+    const r = new Canvas2DRenderer(target.ctx, { createSurface: null, resolveColour: () => "#000" });
+    r.setScene({ layers: [{ key: "L", order: 0, alpha: 1 }], objects: [tiny], bounds: null });
+    r.render(view({ y0: 0, scale: 20 })); // 0.2 px
+    expect(target.calls.filter((c) => c.fn === "arc")).toHaveLength(0);
+    r.render(view({ y0: 0, scale: 100 })); // 1 px
+    expect(target.calls.filter((c) => c.fn === "arc")).toHaveLength(1);
   });
 
   it("diffs layers by signature and gives up past the dirty-rectangle limit", () => {

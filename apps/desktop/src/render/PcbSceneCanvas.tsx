@@ -3,7 +3,7 @@
 // editing tools keep their pointer contract; this only paints the scene under it.
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { Size, ViewBox } from "../viewport";
-import { Canvas2DRenderer } from "./canvas2d";
+import { Canvas2DRenderer, SETTLE_MS } from "./canvas2d";
 import type { OverlayScene, RenderStats, Scene, SceneRenderer, ViewTransform } from "./types";
 
 interface Props {
@@ -27,6 +27,7 @@ export function PcbSceneCanvas({ scene, overlay, vb, size, onFrame, onUnavailabl
   const ref = useRef<HTMLCanvasElement>(null);
   const renderer = useRef<SceneRenderer | null>(null);
   const frame = useRef<number | null>(null);
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Until the first frame is on screen, paint synchronously (no empty flash, no wait for a frame).
   const painted = useRef(false);
   const latest = useRef({ vb, size, onFrame, scene, overlay });
@@ -45,7 +46,14 @@ export function PcbSceneCanvas({ scene, overlay, vb, size, onFrame, onUnavailabl
     painted.current = true;
     if (el) el.dataset.frames = String(Number(el.dataset.frames ?? 0) + 1);
     try {
-      cb?.(r.render(viewTransform(v, s, dpr)));
+      const stats = r.render(viewTransform(v, s, dpr));
+      cb?.(stats);
+      // A zoom frame drawn from the scaled cache: ask for the sharp redraw once the zoom settles.
+      if (stats.stale && settle.current === null && typeof setTimeout !== "undefined")
+        settle.current = setTimeout(() => {
+          settle.current = null;
+          schedule();
+        }, SETTLE_MS + 10);
     } catch (e) {
       // Keep the editor alive; the frame is retried on the next change.
       if (el) el.dataset.draw = "error";
@@ -92,6 +100,8 @@ export function PcbSceneCanvas({ scene, overlay, vb, size, onFrame, onUnavailabl
       mo?.disconnect();
       if (frame.current !== null) cancelAnimationFrame(frame.current);
       frame.current = null;
+      if (settle.current !== null) clearTimeout(settle.current);
+      settle.current = null;
       r.dispose();
       renderer.current = null;
       painted.current = false;
