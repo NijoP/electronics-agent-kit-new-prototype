@@ -70,7 +70,6 @@ jobs:
         if: always()
         run: |
           cat "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no results file" >> "$GITHUB_STEP_SUMMARY"
-          echo "::notice title=ui-evidence-gz-b64::$(gzip -9c "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" | base64 -w0)" || true
       - name: Upload screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
