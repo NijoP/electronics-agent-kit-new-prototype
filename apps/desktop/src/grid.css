@@ -8,8 +8,10 @@
 .rulers .ruler-band { fill: color-mix(in srgb, var(--bg-panel) 92%, transparent); stroke: var(--line-strong); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .rulers .ruler-tick { fill: none; stroke: var(--fg-dim); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .canvas .rulers text.ruler-label { font-size: inherit; text-anchor: start; fill: var(--fg-dim); }
-.grid-controls { display: inline-flex; align-items: center; gap: var(--s-half); margin-left: auto; }
-.grid-controls label { display: inline-flex; align-items: center; gap: 2px; }
+.grid-controls { display: inline-flex; align-items: center; gap: var(--s-1); }
+.grid-controls label, .grid-controls .combo { display: inline-flex; align-items: center; gap: var(--s-quarter); }
+.grid-controls .icon { color: var(--fg-dim); flex: none; }
+.view-header .coords { margin-left: auto; }
 .coords { font-variant-numeric: tabular-nums; min-width: 17ch; white-space: pre; }
 .selection-bar { display: inline-flex; align-items: center; gap: var(--s-quarter); padding-left: var(--s-1); border-left: 1px solid var(--line); }
 /* Selection boundary and placement preview (schematic symbols and PCB footprints). */

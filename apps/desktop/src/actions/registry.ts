@@ -36,7 +36,7 @@ export function toolbarFor(actions: readonly Action[], ctx: DocContext): Toolbar
   return TOOLBAR_ORDER.map((g) =>
     shown
       .filter((a) => a.toolbar === g)
-      .map((a) => ({ id: a.id, group: g, label: a.short ?? a.label, title: a.title, run: a.run, shortcut: keysOf(a)[0], disabled: reason(a) })),
+      .map((a) => ({ id: a.id, group: g, label: a.short ?? a.label, title: a.title, icon: a.icon, split: a.split, pressed: a.checked, run: a.run, shortcut: keysOf(a)[0], disabled: reason(a) })),
   ).filter((g) => g.length > 0);
 }
 

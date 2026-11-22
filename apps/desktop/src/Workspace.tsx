@@ -45,6 +45,7 @@ import { clampSize, DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "
 import { MenuBar } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
 import { nextRotation } from "./editing";
+import { formatLength, GridControls, useGridConfig } from "./grid";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
 import type { OpenProject, RecentProject, Check, CheckResult, Command, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
@@ -67,6 +68,23 @@ interface Props {
 
 const MAX_EVENTS = 200;
 
+// "Toolbar labels" (View menu): text beside the toolbar icons, remembered across sessions.
+const TB_LABELS_KEY = "eak.toolbar.labels";
+const readFlag = (key: string): boolean => {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+};
+const writeFlag = (key: string, on: boolean) => {
+  try {
+    localStorage.setItem(key, on ? "1" : "0");
+  } catch {
+    // Storage unavailable: the option still applies for this session.
+  }
+};
+
 export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged }: Props) {
   const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules">(null);
   const [recent, setRecent] = useState<RecentProject[]>([]);
@@ -86,6 +104,10 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const [docState, setDocState] = useState(() => loadDocState(initial));
   // One view at a time by default: Schematic and PCB are separate documents; split is opt-in.
   const [split, setSplit] = useState(false);
+  // Grid settings of both editors (shared with their snapping) and the toolbar labels option.
+  const schGrid = useGridConfig("schematic");
+  const pcbGrid = useGridConfig("pcb");
+  const [tbLabels, setTbLabels] = useState(() => readFlag(TB_LABELS_KEY));
   const [workspace, setWorkspace] = useState<string>(() => {
     try {
       return localStorage.getItem(`eak.workspace.${initial.project.id}`) ?? "editor";
@@ -583,6 +605,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   // One definition per operation (src/actions/): menus, toolbar, palette and keys of the active
   // document are all generated from it.
   const ctx: DocContext = wsId !== "editor" ? "3d" : docContext(docs.find((d) => d.id === activeId)?.kind);
+  const gridKind = ctx === "schematic" || ctx === "pcb" ? ctx : null;
+  const [gridCfg, setGridCfg] = gridKind === "pcb" ? pcbGrid : schGrid;
+  const activeGrid = gridKind ? { kind: gridKind, cfg: gridCfg, set: setGridCfg } : null;
   const allActions = workspaceActions({
     snapshot, busy, selected, selectedSymbol, fpOfSelected, theme, sideOpen, bottomOpen, split, recent, library, docs, openIds, projects,
     sideViews: SIDE_VIEWS,
@@ -604,6 +629,12 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     help: () => setHelp(true),
     notify: setMessage,
     open, closeAll, showWorkspace, switchTo, placePart,
+    grid: activeGrid,
+    toolbarLabels: tbLabels,
+    toggleToolbarLabels: () => {
+      writeFlag(TB_LABELS_KEY, !tbLabels);
+      setTbLabels(!tbLabels);
+    },
   });
   keys.current = { actions: allActions, ctx };
   const menus = menusFor(allActions, ctx);
@@ -615,6 +646,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       <MenuBar menus={menus} />
       <Toolbar
         groups={shownToolbar}
+        labels={tbLabels}
+        extras={gridKind ? { view: <GridControls kind={gridKind} /> } : {}}
         left={
           <div className="tb-title">
             <strong>{snapshot.project.name}</strong>
@@ -782,7 +815,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         project={snapshot.project.name}
         revision={revision}
         layer={status.layer === "top" ? "Top" : "Bottom"}
-        gridMm={status.gridMm}
+        grid={activeGrid ? `${formatLength(activeGrid.cfg.spacingMm, activeGrid.cfg.unit)}${activeGrid.cfg.snap ? "" : " (snap off)"}` : null}
         drc={results.drc}
         selection={selLabel ? `Selected ${selLabel}` : null}
         task={{ text: taskSummary(currentTask(agentTasks), revision), title: taskTitle(currentTask(agentTasks)) }}

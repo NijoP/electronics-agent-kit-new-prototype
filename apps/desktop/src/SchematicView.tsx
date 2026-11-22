@@ -5,7 +5,7 @@ import { Canvas, type DragHandler, type DropHandler } from "./Canvas";
 import { getDraggedComponent, setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
 import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, segments, snapPoint } from "./editing";
-import { Coords, GridControls, GridLayer, useGridConfig } from "./grid";
+import { Coords, GridLayer, snapStepNm, useGridConfig } from "./grid";
 import type { Command, FlipAxis, Id, Point, Rotation, Snapshot, SymbolDef, SymbolGeom, SymbolInstance, SymbolPin } from "./types";
 import { boundsOf, fromView, mm, toView } from "./viewport";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
@@ -77,10 +77,10 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   const [selRaw, setSel] = useState<S.Selection>(S.EMPTY);
   const [drag, setDrag] = useState<Drag | null>(null);
   const clip = useRef<S.Clip | null>(null);
-  const [grid, setGrid] = useGridConfig("schematic");
+  const [grid] = useGridConfig("schematic");
   // Grid step in nm; with snap off, points and moves land on whole nanometres.
   const step = mmToNm(grid.spacingMm);
-  const GRID = grid.snap ? step : 1;
+  const GRID = snapStepNm(grid);
   const snapDelta = (from: Point, to: Point): Point => ({
     x: Math.round((to.x - from.x) / GRID) * GRID,
     y: Math.round((to.y - from.y) / GRID) * GRID,
@@ -491,8 +491,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         ) : (
           <span className="muted">read-only · wheel zoom · drag pan · double-click fit</span>
         )}
-        <GridControls kind="schematic" cfg={grid} onChange={setGrid} />
-        <Coords at={hover} />
+        <Coords at={hover} unit={grid.unit} />
       </header>
       {edit && (
         <div className="tool-options">

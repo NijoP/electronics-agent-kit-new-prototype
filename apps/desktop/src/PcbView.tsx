@@ -5,7 +5,7 @@ import { api } from "./api";
 import { Canvas, type DragHandler } from "./Canvas";
 import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, outlineFrom, samePoint, snapPoint } from "./editing";
-import { Coords, GridControls, GridLayer, Rulers, useGridConfig } from "./grid";
+import { Coords, GridLayer, Rulers, snapStepNm, useGridConfig } from "./grid";
 import * as P from "./tools/pcb/selection";
 import * as O from "./tools/pcb/outline";
 import { OutlinePanel } from "./tools/pcb/OutlinePanel";
@@ -143,10 +143,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const nets = [...new Set([...pads.map((p) => p.net), ...Object.values(pcb.tracks).map((t) => t.net)])]
     .filter((n): n is string => !!n)
     .sort();
-  const [grid, setGrid] = useGridConfig("pcb");
-  const step = mmToNm(grid.spacingMm);
+  const [grid] = useGridConfig("pcb");
   // Snap step in nm; with snap off, points and moves land on whole nanometres.
-  const GRID = grid.snap ? step : 1;
+  const GRID = snapStepNm(grid);
   const snapDelta = (from: Point, to: Point): Point => ({
     x: Math.round((to.x - from.x) / GRID) * GRID,
     y: Math.round((to.y - from.y) / GRID) * GRID,
@@ -531,8 +530,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             {outline.length ? "" : "no board outline yet · "}read-only · wheel zoom · drag pan · double-click fit
           </span>
         )}
-        <GridControls kind="pcb" cfg={grid} onChange={setGrid} />
-        <Coords at={vdrag?.to ?? hover} />
+        <Coords at={vdrag?.to ?? hover} unit={grid.unit} />
       </header>
       {edit && (
         <div className="tool-options">

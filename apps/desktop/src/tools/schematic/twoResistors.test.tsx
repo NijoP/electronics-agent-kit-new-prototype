@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { EditCtx } from "../../EditContext";
 import { fixture } from "../../fixture.test-data";
+import { GridControls } from "../../grid";
 import { SchematicView } from "../../SchematicView";
 import type { Command, Snapshot } from "../../types";
 import { boundsOf, fit, type ViewBox } from "../../viewport";
@@ -65,7 +66,13 @@ function twoResistors(): Snapshot {
 }
 
 function setup(selected: string | null = null) {
-  const r = render(<SchematicView snapshot={twoResistors()} selected={selected} onSelect={() => {}} edit={edit()} />);
+  // The grid combos live in the main toolbar; they share the schematic grid store with the editor.
+  const r = render(
+    <>
+      <GridControls kind="schematic" />
+      <SchematicView snapshot={twoResistors()} selected={selected} onSelect={() => {}} edit={edit()} />
+    </>,
+  );
   const svg = r.container.querySelector("svg.canvas")!;
   const body = (id: string) => r.container.querySelector(`[data-symbol-id="${id}"] rect.body`)!;
   return { ...r, svg, body };
@@ -177,6 +184,26 @@ describe("schematic selection editing (directive section 2)", () => {
     dragOn(body("sym_r1"), [50, 50], [50, 53]);
     const c = moved("sym_r1")[0] as Extract<Command, { type: "MoveSymbol" }>;
     expect(Math.abs(c.position.y - mm(53))).toBeLessThan(mm(0.01));
+    localStorage.clear();
+  });
+});
+
+describe("toolbar grid size and unit move the schematic snap (slice A2)", () => {
+  it("0.1 in snaps a 3 mm drag to 2.54 mm; 25 mil snaps it to 3.175 mm", () => {
+    localStorage.clear();
+    const { body } = setup();
+    fireEvent.change(screen.getByLabelText("Unit"), { target: { value: "inch" } });
+    expect((screen.getByLabelText("Grid spacing") as HTMLSelectElement).value).toBe("1.27"); // 0.05 in
+    fireEvent.change(screen.getByLabelText("Grid spacing"), { target: { value: "2.54" } });
+    dragOn(body("sym_r1"), [50, 50], [50, 53]);
+    const a = moved("sym_r1")[0] as Extract<Command, { type: "MoveSymbol" }>;
+    expect(Math.abs(a.position.y - mm(52.54))).toBeLessThan(10);
+    fireEvent.change(screen.getByLabelText("Unit"), { target: { value: "mil" } });
+    fireEvent.change(screen.getByLabelText("Grid spacing"), { target: { value: "0.635" } });
+    expect(screen.getByLabelText("Cursor position").textContent).toMatch(/mil$/);
+    dragOn(body("sym_r1"), [50, 50], [50, 53]);
+    const b = moved("sym_r1")[1] as Extract<Command, { type: "MoveSymbol" }>;
+    expect(Math.abs(b.position.y - mm(53.175))).toBeLessThan(10);
     localStorage.clear();
   });
 });
