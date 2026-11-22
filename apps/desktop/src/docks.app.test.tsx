@@ -126,8 +126,8 @@ describe("design manager", () => {
       expect(w).toBeCloseTo(18);
       expect(h).toBeCloseTo(18);
     });
-    // the Properties tab of the right dock shows the selection (read-only)
-    expect(within(screen.getByRole("region", { name: "Properties" })).getByText("Green")).toBeTruthy();
+    // the Properties tab of the right dock (the A5 inspector) shows the selection's fields
+    await waitFor(() => expect(within(screen.getByRole("region", { name: "Properties" })).getByDisplayValue("Green")).toBeTruthy());
   });
 
   it("clicking a net in the PCB highlights its objects and zooms to them; search filters the list", async () => {

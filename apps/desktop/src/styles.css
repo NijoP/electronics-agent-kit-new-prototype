@@ -652,3 +652,9 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .settings-table th, .settings-table td { text-align: left; padding: 2px var(--s-half); border-bottom: 1px solid var(--line); }
 .settings-actions { white-space: nowrap; }
 .settings-actions button { margin-right: var(--s-half); }
+/* A5 inspector (right dock Properties): editable fields fill their column; unavailable fields
+   read as text with the reason. */
+.inspector-fields dd select, .inspector-fields dd input { width: 100%; box-sizing: border-box; min-width: 0; font-family: var(--mono); }
+.inspector-fields .unavailable dt { opacity: 0.7; }
+.unavail { color: var(--fg-dim); font-family: inherit; font-size: var(--fs-xs); font-style: italic; }
+.tool-options .unavail, .tool-options .opt-info { color: var(--fg-dim); }
