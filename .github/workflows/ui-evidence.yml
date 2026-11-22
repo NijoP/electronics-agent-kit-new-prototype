@@ -68,7 +68,8 @@ jobs:
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       - name: Results to job summary
         if: always()
-        run: cat "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no results file" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          cat "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no results file" >> "$GITHUB_STEP_SUMMARY"
           echo "::notice title=ui-evidence-gz-b64::$(gzip -9c "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" | base64 -w0)" || true
       - name: Upload screenshots and results
         if: always()
