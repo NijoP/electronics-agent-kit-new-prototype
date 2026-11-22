@@ -44,7 +44,13 @@ export function PcbSceneCanvas({ scene, overlay, vb, size, onFrame, onUnavailabl
     if (why !== "drawn" || !r) return;
     painted.current = true;
     if (el) el.dataset.frames = String(Number(el.dataset.frames ?? 0) + 1);
-    cb?.(r.render(viewTransform(v, s, dpr)));
+    try {
+      cb?.(r.render(viewTransform(v, s, dpr)));
+    } catch (e) {
+      // Keep the editor alive; the frame is retried on the next change.
+      if (el) el.dataset.draw = "error";
+      console.error("Canvas2D frame failed", e);
+    }
   };
   const schedule = () => {
     if (!painted.current && renderer.current) {
