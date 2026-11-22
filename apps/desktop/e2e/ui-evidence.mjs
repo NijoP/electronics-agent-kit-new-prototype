@@ -23,7 +23,7 @@ const APP = env("EAK_APP", path.join(env("CARGO_TARGET_DIR", path.join(repo, "ta
 const SCENARIO = path.resolve(env("UI_SCENARIO", path.join(here, "scenarios", "a1-menus.json")));
 const OUT = env("UI_OUT", fs.mkdtempSync(path.join(os.tmpdir(), "eak-ui-")));
 const SHOTS = path.join(OUT, "screenshots");
-const PORT = Number(env("UI_PORT", "4445"));
+const PORT = Number(env("UI_PORT", "4444"));
 const NATIVE_DRIVER = env("NATIVE_DRIVER", "");
 
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -42,7 +42,8 @@ const childEnv = {
   XDG_CONFIG_HOME: path.join(appHome, "config"),
   XDG_CACHE_HOME: path.join(appHome, "cache"),
 };
-const driverArgs = ["--port", String(PORT)];
+// tauri-driver starts WebKitWebDriver on --native-port (default 4445): keep the two apart.
+const driverArgs = ["--port", String(PORT), "--native-port", String(PORT + 1)];
 if (NATIVE_DRIVER) driverArgs.push("--native-driver", NATIVE_DRIVER);
 const driver = spawn(env("TAURI_DRIVER", "tauri-driver"), driverArgs, { env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
 const driverLog = fs.createWriteStream(path.join(OUT, "tauri-driver.log"));
