@@ -37,8 +37,9 @@
     {
       "id": "e3-library",
       "do": "click",
-      "title": "E3: open the Library / Parts panel",
-      "selector": "nav[aria-label=\"Activity bar\"] button[aria-label=\"Library / Parts\"]",
+      "title": "E3: open the Library tab of the bottom dock (Phase 1 A3)",
+      "selector": "section[aria-label=\"Bottom panel\"] [role=\"tab\"]",
+      "text": "Library",
       "expect": "input[aria-label=\"Search library\"]"
     },
     {

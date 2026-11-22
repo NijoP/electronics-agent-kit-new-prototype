@@ -3,7 +3,7 @@
 // `onHover` tracks the cursor so editors can draw rubber-band previews.
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, type ReactNode } from "react";
 import { clientToView, fit, pan, visibleViewBox, zoomAt, type Bounds, type Size, type ViewBox } from "./viewport";
-import { loadViewport, saveViewport, useDocId, useRegisterCanvas } from "./shell/viewState";
+import { loadViewport, reportCanvas, saveViewport, useDocId, useRegisterCanvas } from "./shell/viewState";
 
 interface Props {
   label: string;
@@ -83,6 +83,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
   useRegisterCanvas(docId, {
     zoomBy: (f) => setVb((v) => zoomAt(v, f, v.x + v.w / 2, v.y + v.h / 2)),
     fit: () => setVb(fit(bounds)),
+    zoomTo: (b) => setVb(fit(b, 0.4)),
   });
   useEffect(() => {
     if (zoomTo) setVb(fit(zoomTo.bounds, 0.4));
@@ -103,6 +104,12 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
     return () => ro.disconnect();
   }, []);
   const visible = visibleViewBox(vb, size);
+  // Scale for the canvas strip (A3): screen px per view mm of what the pane shows.
+  useEffect(() => {
+    if (size.width > 0 && visible.w > 0) reportCanvas(docId, { pxPerMm: size.width / visible.w });
+  }, [docId, size.width, visible.w]);
+  // A closed canvas leaves no stale pointer or anchor behind.
+  useEffect(() => () => reportCanvas(docId, { at: null, anchor: null }), [docId]);
 
   useEffect(() => {
     const el = ref.current;
@@ -138,6 +145,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
   const handleMove = (m: PointerSample) => {
     const p = toView(m);
     if (p && onHover) onHover(p[0], p[1]);
+    if (p) reportCanvas(docId, { at: { x: p[0], y: p[1] } });
     const d = drag.current;
     const el = ref.current;
     if (!d || !el || m.buttons === 0) return;
@@ -186,6 +194,9 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
         const p = e.button === 0 && onDrag ? toView(e) : null;
         const captured = !!p && !!onDrag?.start(p[0], p[1], e);
         down.current = { x: e.clientX, y: e.clientY, moved: false, captured, middle: e.button === 1 };
+        // A primary press sets the dX / dY origin of the canvas strip.
+        const a = e.button === 0 ? (p ?? toView(e)) : null;
+        if (a) reportCanvas(docId, { anchor: { x: a[0], y: a[1] }, at: { x: a[0], y: a[1] } });
       }}
       onPointerMove={(e) => {
         const m: PointerSample = { clientX: e.clientX, clientY: e.clientY, buttons: e.buttons };
@@ -219,6 +230,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
         if (p) onPoint(p[0], p[1], e);
       }}
       onPointerLeave={() => {
+        reportCanvas(docId, { at: null });
         if (frame.current) cancelAnimationFrame(frame.current.id);
         frame.current = null;
         if (down.current?.captured) onDrag?.cancel();

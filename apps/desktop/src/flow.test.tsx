@@ -149,7 +149,8 @@ async function createFromHome(name = "Flow") {
   await screen.findByRole("img", { name: "Schematic canvas" });
 }
 async function placeResistor() {
-  fireEvent.click(screen.getByRole("button", { name: "Library / Parts" }));
+  // Phase 1 A3: the library is a tab of the bottom panel.
+  fireEvent.click(screen.getByRole("tab", { name: "Library" }));
   fireEvent.click(await screen.findByText("Resistor 0603"));
   fireEvent.click(await screen.findByRole("button", { name: "Place on schematic" }));
   const svg = screen.getByRole("img", { name: "Schematic canvas" });

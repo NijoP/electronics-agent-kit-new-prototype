@@ -203,11 +203,12 @@ describe("finding navigation", () => {
     expect(detail.textContent).toContain("Move the track away");
     expect(document.querySelector(".finding-marker")).toBeTruthy();
   });
-  it("the Layers view is reachable from the activity bar", async () => {
+  it("the Layers view is a tab of the right panel in the PCB (Phase 1 A3)", async () => {
     render(<App />);
     fireEvent.click((await screen.findAllByText("Fixture board"))[0]);
     await screen.findByRole("img", { name: "PCB canvas" });
-    fireEvent.click(screen.getByRole("button", { name: "PCB Layers" }));
+    fireEvent.click(screen.getByRole("button", { name: "PCB" }));
+    fireEvent.click(within(await screen.findByRole("tablist", { name: "Right panel tabs" })).getByRole("tab", { name: "Layers" }));
     expect(await screen.findByRole("list", { name: "Layers" })).toBeTruthy();
   });
 });

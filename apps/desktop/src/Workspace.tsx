@@ -20,7 +20,7 @@ import { docContext, type Action, type DocContext } from "./actions/types";
 import type { Theme } from "./design/theme";
 import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
-import { ManufacturingPanel, netNames, ProjectPanel } from "./shell/panels";
+import { ManufacturingPanel, netNames } from "./shell/panels";
 import { ProjectOverview } from "./shell/ProjectOverview";
 import { LibraryPanel } from "./shell/LibraryPanel";
 import { StatusBar } from "./shell/StatusBar";
@@ -44,7 +44,12 @@ import { fileDocId, type FileEntry } from "./shell/files";
 import { listWorkspaces, useRegistryVersion, type WorkspaceContext } from "./shell/registry";
 import "./shell/workspaces";
 import { availableDocs, closeDoc, fileDocs, loadDocState, openDoc, remapFileDocs, saveDocState, visibleDocs } from "./shell/documents";
-import { clampSize, DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "./shell/layout";
+import { clampSize, DEFAULT_LAYOUT, LIMITS, useDockLayouts, type DockId, type LayoutWorkspace } from "./shell/layout";
+import { CanvasStrip } from "./shell/CanvasStrip";
+import { DesignManager } from "./shell/DesignManager";
+import { editorFor, pcbObjects, schematicPlace, type ManagerTab, type NetRow, type Target } from "./shell/designManagerData";
+import { PropertiesPanel, RightDock, shownRightTab, type RightTab } from "./shell/RightDock";
+import type { Bounds } from "./viewport";
 import { MenuBar } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
 import { nextRotation } from "./editing";
@@ -131,21 +136,16 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       /* storage unavailable */
     }
   }, [initial.project.id, workspace]);
-  const [layout, setLayout] = useState<Layout>(loadLayout);
   const [help, setHelp] = useState(false);
   const [about, setAbout] = useState(false);
   const [conn, setConn] = useState<ConnectivityReport | null>(null);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [activeFinding, setActiveFinding] = useState<string | null>(null);
   const layerView = useLayerView(initial.project.id);
-  const flag = (k: "sideOpen" | "bottomOpen") => (f: boolean | ((o: boolean) => boolean)) =>
-    setLayout((l) => ({ ...l, [k]: typeof f === "function" ? f(l[k]) : f }));
-  const { sideOpen, bottomOpen } = layout;
-  const setSideOpen = flag("sideOpen");
-  const setBottomOpen = flag("bottomOpen");
-  useEffect(() => saveLayout(layout), [layout]);
-  const [sideView, setSideView] = useState<SideView>("project");
-  const [bottomTab, setBottomTab] = useState<BottomTab>("log");
+  const docks = useDockLayouts();
+  const [dmTab, setDmTab] = useState<ManagerTab>("pages");
+  // Design manager zoom into a schematic sheet, applied once that sheet's canvas is registered.
+  const [pendingZoom, setPendingZoom] = useState<{ docId: string; bounds: Bounds } | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
   const [armPart, setArmPart] = useState<{ id: string; n: number } | null>(null);
   const [status, setStatus] = useState<{ layer: CopperLayer; gridMm: number }>({ layer: "top", gridMm: 0.5 });
@@ -193,6 +193,24 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const effective = { open: openIds, active: activeId };
   useEffect(() => saveDocState(snapshot.project.id, effective), [snapshot.project.id, openIds.join("|"), activeId]);
   const shown = visibleDocs(effective, docs, split);
+  const activeKind = docs.find((d) => d.id === activeId)?.kind;
+  // The workspace whose dock layout is shown (spec UI-01: layout persists per workspace).
+  const ctx: DocContext = wsId !== "editor" ? "3d" : docContext(activeKind);
+  const layout = docks.get(ctx);
+  const sideOpen = layout.left.open;
+  const bottomOpen = layout.bottom.open;
+  const rightOpen = layout.right.open;
+  const sideView: SideView = SIDE_VIEWS.some((v) => v.id === layout.left.tab) ? (layout.left.tab as SideView) : "project";
+  const bottomTab: BottomTab = layout.bottom.tab;
+  const rightTab = shownRightTab(layout.right.tab, ctx === "pcb");
+  const toggler = (dock: DockId) => (f: boolean | ((o: boolean) => boolean)) => docks.patch(ctx, dock, (d) => ({ open: typeof f === "function" ? f(d.open) : f }));
+  const setSideOpen = toggler("left");
+  const setBottomOpen = toggler("bottom");
+  const setRightOpen = toggler("right");
+  const setBottomTab = (tab: BottomTab, ws: LayoutWorkspace = ctx) => docks.patch(ws, "bottom", { tab, open: true });
+  const showRight = (tab: RightTab, ws: LayoutWorkspace = ctx) => docks.patch(ws, "right", { tab, open: true });
+  const resize = (dock: DockId, delta: number) => docks.patch(ctx, dock, (d) => ({ size: clampSize(dock, d.size + delta) }));
+  const resetSize = (dock: DockId) => docks.patch(ctx, dock, { size: DEFAULT_LAYOUT[dock].size });
   // Editors listen on window: while this workspace (or its editor area) is hidden none may act.
   setActiveEditor(visible && wsId === "editor" ? activeId : "__hidden__");
   const openDocs = openIds.map((id) => docs.find((d) => d.id === id)!);
@@ -438,7 +456,6 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       setConn(out.conn);
       setResults((old) => ({ ...old, drc: out.drc }));
       setBottomTab("findings");
-      setBottomOpen(true);
       setMessage(`Zones refilled: connectivity and DRC recomputed for revision ${out.drc.report.revision}`);
     });
   const check = (c: Check) =>
@@ -446,7 +463,6 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       const result = await track(`Run ${c.toUpperCase()}`, () => api.runCheck(c), (r) => `${r.report.findings.length} finding(s) at revision ${r.report.revision}`);
       setResults((old) => ({ ...old, [c]: result }));
       setBottomTab("findings");
-      setBottomOpen(true);
       setMessage(`${result.report.check} ran on revision ${result.report.revision}`);
       await syncTo(result.report.revision);
     });
@@ -474,15 +490,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const selLabel = selectedSymbol ? `${selectedSymbol.refdes} (${selectedSymbol.value})` : null;
 
   // "Show <view>" (menus, overview links) always shows; the activity bar button toggles, so
-  // pressing the open view again collapses the panel.
-  const showSide = (v: SideView) => {
-    setSideView(v);
-    setSideOpen(true);
-  };
-  const toggleSideView = (v: SideView) => {
-    if (sideOpen && sideView === v) setSideOpen(false);
-    else showSide(v);
-  };
+  // pressing the open view again collapses the panel (E1). Both act on this workspace's left dock.
+  const showSide = (v: SideView) => docks.patch(ctx, "left", { open: true, tab: v });
+  const toggleSideView = (v: SideView) => docks.patch(ctx, "left", (d) => (d.open && d.tab === v ? { open: false } : { open: true, tab: v }));
 
   // Net summary from the geometry the engine derived (no model involved).
   const showNet = (name: string) => {
@@ -532,7 +542,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     if (openDocs.some((d) => docMarker(d)) && !window.confirm("The engine has not confirmed the latest change. Close all documents anyway?")) return;
     setDocState({ open: [], active: null });
   };
-  const resetLayout = () => setLayout(DEFAULT_LAYOUT);
+  const resetLayout = () => docks.reset(ctx);
   // Click a finding: open the right editor, select the object, zoom to it, highlight it.
   // DRC and DFM findings live in the PCB editor (zoom + highlight); ERC findings select the symbol in
   // the schematic (no zoom there yet).
@@ -545,9 +555,44 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     setActiveFinding(findingKey(f));
     if (kind === "pcb") setFocus({ n: Date.now(), objects: f.objects, location: f.location });
     else setFocus(null);
-    setBottomTab("findings");
-    setBottomOpen(true);
+    // The findings stay in view in the workspace the finding opened.
+    setBottomTab("findings", kind);
   };
+  // Design manager entry: open the page, or select the object and zoom to it in the editor it
+  // belongs to (components and nets follow the active editor; nothing on the board falls back to
+  // the schematic).
+  const navigateManager = (t: Target, netlist: NetRow[] | null) => {
+    if (t.kind === "page") return open(t.docId);
+    if (t.kind === "component") setSelected(t.symbolId);
+    const name = t.kind === "component" ? (snapshot.project.schematic.symbols[t.symbolId]?.refdes ?? t.symbolId) : t.kind === "net" ? `Net ${t.name}` : t.id;
+    const objs = editorFor(t, activeKind) === "pcb" ? pcbObjects(snapshot, t) : [];
+    if (objs.length > 0) {
+      const d = docs.find((x) => x.kind === "pcb");
+      if (d) open(d.id);
+      setActiveFinding(null);
+      setFocus({ n: Date.now(), objects: objs, location: null });
+      if (t.kind === "net") showNet(t.name);
+      else setMessage(`${name}: selected and zoomed in the PCB`);
+      return;
+    }
+    const place = schematicPlace(snapshot, t, netlist);
+    if (!place) {
+      setMessage(`${name} has no position to zoom to in the schematic or on the PCB`);
+      return;
+    }
+    const docId = `sch:${place.sheetId}`;
+    open(docId);
+    setPendingZoom({ docId, bounds: place.bounds });
+    const pins = t.kind === "net" ? netlist?.find((n) => n.name === t.name)?.pins.length : undefined;
+    setMessage(t.kind === "net" ? `${name}: ${pins ?? 0} pin(s) in the engine netlist; zoomed in the schematic` : `${name}: selected and zoomed in the schematic`);
+  };
+  useEffect(() => {
+    if (!pendingZoom) return;
+    const c = canvasControls(pendingZoom.docId);
+    if (!c) return;
+    c.zoomTo(pendingZoom.bounds);
+    setPendingZoom(null);
+  }, [pendingZoom, activeId]);
   const placePart = (c: Pick<LibraryEntry, "id" | "name"> | LibraryEntry) => {
     if ("pins" in c) setArmedEntry(c);
     showKind("schematic");
@@ -621,12 +666,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   };
   // One definition per operation (src/actions/): menus, toolbar, palette and keys of the active
   // document are all generated from it.
-  const ctx: DocContext = wsId !== "editor" ? "3d" : docContext(docs.find((d) => d.id === activeId)?.kind);
   const gridKind = ctx === "schematic" || ctx === "pcb" ? ctx : null;
   const [gridCfg, setGridCfg] = gridKind === "pcb" ? pcbGrid : schGrid;
   const activeGrid = gridKind ? { kind: gridKind, cfg: gridCfg, set: setGridCfg } : null;
   const allActions = workspaceActions({
-    snapshot, busy, selected, selectedSymbol, fpOfSelected, theme, sideOpen, bottomOpen, split, recent, library, docs, openIds, projects,
+    snapshot, busy, selected, selectedSymbol, fpOfSelected, theme, sideOpen, bottomOpen, rightOpen, split, recent, library, docs, openIds, projects,
     sideViews: SIDE_VIEWS,
     edaViews,
     dialog: setDialog,
@@ -639,7 +683,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     showSide,
     toggleSide: () => setSideOpen((o) => !o),
     toggleBottom: () => setBottomOpen((o) => !o),
-    showBottom: (t) => (setBottomTab(t), setBottomOpen(true)),
+    toggleRight: () => setRightOpen((o) => !o),
+    showBottom: (t) => setBottomTab(t),
+    showRight: (t) => showRight(t),
     onTheme, resetLayout, onSettings,
     palette: () => (setQuickOpen(false), setPalette(true)),
     quickOpen: () => (setPalette(false), setQuickOpen(true)),
@@ -695,12 +741,15 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           </button>
         </div>
       )}
-      <div className="main" style={{ gridTemplateColumns: `48px ${sideOpen ? layout.sideWidth : 0}px ${sideOpen ? 4 : 0}px minmax(0, 1fr)` }}>
+      <div
+        className="main"
+        style={{ gridTemplateColumns: `48px ${sideOpen ? layout.left.size : 0}px ${sideOpen ? 4 : 0}px minmax(0, 1fr) ${rightOpen ? 4 : 0}px ${rightOpen ? layout.right.size : 0}px` }}
+      >
         <ActivityBar
           sideView={sideView}
           sideOpen={sideOpen}
           onSide={toggleSideView}
-          workspace={wsId !== "editor" ? wsId : (docs.find((d) => d.id === activeId)?.kind === "schematic" || docs.find((d) => d.id === activeId)?.kind === "pcb" ? (docs.find((d) => d.id === activeId)!.kind as string) : "")}
+          workspace={wsId !== "editor" ? wsId : activeKind === "schematic" || activeKind === "pcb" ? activeKind : ""}
           onWorkspace={showWorkspace}
           registered={edaViews}
           onSettings={onSettings}
@@ -727,8 +776,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
                   setBottomTab("findings");
                   setBottomOpen(true);
                 }}
-                onLayers={() => showSide("layers")}
-                onParts={() => showSide("parts")}
+                onLayers={() => {
+                  showWorkspace("pcb");
+                  showRight("layers", "pcb");
+                }}
+                onParts={() => setBottomTab("library")}
               />
             </div>
           )}
@@ -736,24 +788,10 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
             <div className="side-scroll">
               <h3 className="side-h">Files</h3>
               <FileExplorer projectId={snapshot.project.id} revision={revision} onOpen={openFile} onRemoved={fileRemoved} onRenamed={fileRenamed} notify={setMessage} />
-              <h3 className="side-h">Design</h3>
-              <ProjectPanel snapshot={snapshot} selected={selected} onSelect={setSelected} onNet={showNet} onSheet={(id) => open(`sch:${id}`)} />
             </div>
           )}
-          {sideView === "layers" && (
-            <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
-          )}
-          {sideView === "parts" && (
-            <>
-              <LibraryPanel revision={revision} busy={busy} execute={edit.execute} onPlace={placePart} />
-              <DistributorPartsPanel
-                revision={revision}
-                onImported={async (m) => {
-                  setMessage(m);
-                  await refresh();
-                }}
-              />
-            </>
+          {sideView === "design" && (
+            <DesignManager snapshot={snapshot} conn={conn} selected={selected} activeDoc={activeId} tab={dmTab} onTab={setDmTab} onNavigate={navigateManager} />
           )}
           {sideView === "domain" && (
             <div className="panel-body">
@@ -768,7 +806,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           )}
         </aside>
         {sideOpen ? (
-          <Splitter orientation="vertical" label="Resize side panel" value={layout.sideWidth} onResize={(d) => setLayout((l) => ({ ...l, sideWidth: clampSize("sideWidth", l.sideWidth + d) }))} onReset={() => setLayout((l) => ({ ...l, sideWidth: DEFAULT_LAYOUT.sideWidth }))} />
+          <Splitter orientation="vertical" label="Resize side panel" value={layout.left.size} min={LIMITS.left[0]} max={LIMITS.left[1]} onResize={(d) => resize("left", d)} onReset={() => resetSize("left")} />
         ) : (
           <div />
         )}
@@ -807,10 +845,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
               {noParts && wsId === "editor" && (
                 <div className="canvas-empty" aria-label="Empty design">
                   <strong>An empty design</strong>
-                  <span>Open Library / Parts to place a part, or press {formatShortcut(SHORTCUTS.quickOpen)} to go anywhere.</span>
+                  <span>Open the Library tab of the bottom panel to place a part, or press {formatShortcut(SHORTCUTS.quickOpen)} to go anywhere.</span>
                 </div>
               )}
             </div>
+            {activeGrid && <CanvasStrip docId={activeId} cfg={activeGrid.cfg} />}
           </div>
           {edaViews
             .filter((w) => w.id === wsId || visitedViews.has(w.id))
@@ -820,13 +859,13 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
               </div>
             ))}
           {bottomOpen && (
-            <Splitter orientation="horizontal" label="Resize bottom panel" value={layout.bottomHeight} onResize={(d) => setLayout((l) => ({ ...l, bottomHeight: clampSize("bottomHeight", l.bottomHeight - d) }))} onReset={() => setLayout((l) => ({ ...l, bottomHeight: DEFAULT_LAYOUT.bottomHeight }))} />
+            <Splitter orientation="horizontal" label="Resize bottom panel" value={layout.bottom.size} min={LIMITS.bottom[0]} max={LIMITS.bottom[1]} onResize={(d) => resize("bottom", -d)} onReset={() => resetSize("bottom")} />
           )}
           {bottomOpen && (
             <BottomPanel
-              height={layout.bottomHeight}
+              height={layout.bottom.size}
               tab={bottomTab}
-              onTab={setBottomTab}
+              onTab={(t) => setBottomTab(t)}
               snapshot={snapshot}
               results={results}
               events={events}
@@ -836,9 +875,37 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
               onNavigate={navigateFinding}
               activeFinding={activeFinding}
               onClose={() => setBottomOpen(false)}
+              library={
+                <>
+                  <LibraryPanel revision={revision} busy={busy} execute={edit.execute} onPlace={placePart} />
+                  <DistributorPartsPanel
+                    revision={revision}
+                    onImported={async (m) => {
+                      setMessage(m);
+                      await refresh();
+                    }}
+                  />
+                </>
+              }
             />
           )}
         </div>
+        {rightOpen ? (
+          <Splitter orientation="vertical" label="Resize right panel" value={layout.right.size} min={LIMITS.right[0]} max={LIMITS.right[1]} onResize={(d) => resize("right", -d)} onReset={() => resetSize("right")} />
+        ) : (
+          <div />
+        )}
+        {rightOpen ? (
+          <RightDock pcb={ctx === "pcb"} tab={rightTab} onTab={(t) => showRight(t)} onClose={() => setRightOpen(false)}>
+            {rightTab === "layers" ? (
+              <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
+            ) : (
+              <PropertiesPanel snapshot={snapshot} selected={selected} pcb={ctx === "pcb"} />
+            )}
+          </RightDock>
+        ) : (
+          <div />
+        )}
       </div>
       <StatusBar
         project={snapshot.project.name}

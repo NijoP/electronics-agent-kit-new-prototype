@@ -106,6 +106,28 @@ async function waitRect(selector, text, timeout = 15000) {
   return r;
 }
 
+/**
+ * What is at viewport point (vx, vy) when it is not the element itself (or inside it): a clipped,
+ * scrolled-out or covered element would take the click somewhere else, so the step fails instead.
+ */
+const coveredBy = (selector, text, vx, vy) =>
+  browser.execute(
+    (s, t, x, y) => {
+      const norm = (v) => v.replace(/\s+/g, " ").trim();
+      const el = [...document.querySelectorAll(s)].find((e) => {
+        const r = e.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && (!t || norm(e.textContent ?? "").startsWith(t));
+      });
+      const hit = document.elementFromPoint(x, y);
+      if (!el || (hit && el.contains(hit))) return null;
+      return hit ? `${hit.tagName.toLowerCase()}${typeof hit.className === "string" && hit.className ? `.${hit.className.split(" ").join(".")}` : ""}` : "nothing (outside the window)";
+    },
+    selector,
+    text ?? null,
+    vx,
+    vy,
+  );
+
 /** Scroll the first visible match into view (no-op when it is already visible), as a user would. */
 const reveal = (selector, text) =>
   browser.execute(
@@ -130,6 +152,8 @@ async function xclick(selector, text, dx = 0, dy = 0) {
   await reveal(selector, text);
   await sleep(150);
   const r = await waitRect(selector, text);
+  const cover = await coveredBy(selector, text, r.x + r.w / 2 + dx, r.y + r.h / 2 + dy);
+  if (cover) throw new Error(`the click point of ${selector}${text ? ` "${text}"` : ""} is covered by or scrolled out to ${cover}`);
   const o = origin();
   const x = Math.round(o.x + r.x + r.w / 2 + dx);
   const y = Math.round(o.y + r.y + r.h / 2 + dy);
@@ -137,6 +161,34 @@ async function xclick(selector, text, dx = 0, dy = 0) {
   await sleep(250);
   return `XTest click at ${x},${y}`;
 }
+
+/** Screen point at fractions (fx, fy) of an element (0.5, 0.5 is its centre). */
+async function screenPoint(selector, text, fx = 0.5, fy = 0.5) {
+  const r = await waitRect(selector, text);
+  const cover = await coveredBy(selector, text, r.x + r.w * fx, r.y + r.h * fy);
+  if (cover) throw new Error(`point (${fx}, ${fy}) of ${selector} is covered by or scrolled out to ${cover}`);
+  const o = origin();
+  return { x: Math.round(o.x + r.x + r.w * fx), y: Math.round(o.y + r.y + r.h * fy) };
+}
+
+/** Whitespace-normalised text of the first visible match, or null. */
+const textOf = (selector) =>
+  browser.execute((s) => {
+    for (const el of document.querySelectorAll(s)) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) continue;
+      return (el.textContent ?? "").replace(/\s+/g, " ").trim();
+    }
+    return null;
+  }, selector);
+const attrOf = (selector, attr) => browser.execute((s, a) => document.querySelector(s)?.getAttribute(a) ?? null, selector, attr);
+
+/** Waits until no visible element matches (a hidden dock, a closed menu). */
+async function waitGone(selector, timeout = 15000) {
+  await browser.waitUntil(async () => (await rectOf(selector)) === null, { timeout, interval: 200, timeoutMsg: `still visible after ${timeout} ms: ${selector}` });
+}
+/** Values remembered by a step (`save`) for a later `check-attr` (`equalsVar`). */
+const vars = {};
 
 const xkey = (keys) => sh("xdotool", ["key", "--clearmodifiers", ...keys.split(" ")]);
 
@@ -235,16 +287,19 @@ const handlers = {
     return `SETUP (IPC library_import_open_source: "${s.name}", licence ${s.licence}, ${r.accepted.length} part(s); not a UI action)`;
   },
   // XTest click into a field, then XTest typing.
+  // XTest typing of `value`: into `selector` after clicking it, or without one into the focused field.
   async type(s) {
-    const how = await xclick(s.selector, s.text);
-    sh("xdotool", ["type", "--delay", "40", s.value]);
+    const how = s.selector ? await xclick(s.selector, s.text) : "focused field";
+    sh("xdotool", ["type", "--delay", "40", "--", s.value]);
+    await sleep(300);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
     return `${how}; XTest typed "${s.value}"${s.expect ? `; then visible: ${s.expect}` : ""}`;
   },
   async click(s) {
     const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
-    return `${how}${s.expect ? `; then visible: ${s.expect}` : ""}`;
+    if (s.gone) await waitGone(s.gone, s.timeout ?? 20000);
+    return `${how}${s.expect ? `; then visible: ${s.expect}` : ""}${s.gone ? `; then gone: ${s.gone}` : ""}`;
   },
   // Passes once no visible element matches (a removed control, a closed dialog); fails if one
   // is still visible after `timeout` ms.
@@ -260,12 +315,71 @@ const handlers = {
   async key(s) {
     xkey(s.keys);
     await sleep(300);
-    return `XTest key ${s.keys}`;
+    if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
+    if (s.gone) await waitGone(s.gone, s.timeout ?? 20000);
+    return `XTest key ${s.keys}${s.expect ? `; then visible: ${s.expect}` : ""}${s.gone ? `; then gone: ${s.gone}` : ""}`;
+  },
+  // XTest pointer move to fractions `at` of an element; `report` is read after it. With
+  // `changed` the report must differ from what it showed before the move.
+  async move(s) {
+    const before = s.report ? await textOf(s.report) : null;
+    const [fx, fy] = s.at ?? [0.5, 0.5];
+    const p = await screenPoint(s.selector, s.text, fx, fy);
+    // Two motion events: the first one crossing into the element may arrive as an enter only.
+    sh("xdotool", ["mousemove", "--sync", String(p.x - 2), String(p.y - 2)]);
+    await sleep(100);
+    sh("xdotool", ["mousemove", "--sync", String(p.x), String(p.y)]);
+    await sleep(300);
+    if (!s.report) return `XTest move to ${p.x},${p.y}`;
+    let now = null;
+    await browser.waitUntil(async () => {
+      now = await textOf(s.report);
+      return now !== null && now !== "—" && (!s.changed || now !== before);
+    }, { timeout: s.timeout ?? 5000, interval: 100, timeoutMsg: `${s.report} did not update (before "${before}")` });
+    return `XTest move to ${p.x},${p.y}; ${s.report}: "${before}" → "${now}"`;
+  },
+  // XTest drag: press at the element's centre, move by dx/dy in steps, release. `attr` (default
+  // aria-valuenow) of the element must change; `save` remembers its new value.
+  async drag(s) {
+    const attr = s.attr ?? "aria-valuenow";
+    const before = await attrOf(s.selector, attr);
+    const p = await screenPoint(s.selector, s.text);
+    const steps = 6;
+    sh("xdotool", ["mousemove", "--sync", String(p.x), String(p.y), "mousedown", "1"]);
+    for (let i = 1; i <= steps; i++) {
+      await sleep(40);
+      sh("xdotool", ["mousemove", "--sync", String(Math.round(p.x + ((s.dx ?? 0) * i) / steps)), String(Math.round(p.y + ((s.dy ?? 0) * i) / steps))]);
+    }
+    sh("xdotool", ["mouseup", "1"]);
+    await sleep(300);
+    const after = await attrOf(s.selector, attr);
+    if (after === before) throw new Error(`${attr} stayed ${before} after an XTest drag of ${s.dx ?? 0},${s.dy ?? 0}`);
+    if (s.save) vars[s.save] = after;
+    return `XTest drag ${s.dx ?? 0},${s.dy ?? 0} from ${p.x},${p.y}; ${attr} ${before} → ${after}`;
+  },
+  // XTest typing into whatever has the keyboard focus, then waits for `expect`.
+  async gone(s) {
+    await waitGone(s.selector, s.timeout ?? 15000);
+    return `not visible: ${s.selector}`;
+  },
+  // Reads an attribute; with `equalsVar` it must equal the value a previous step saved.
+  async "check-attr"(s) {
+    await waitRect(s.selector, s.text, s.timeout ?? 15000);
+    const v = await attrOf(s.selector, s.attr);
+    if (s.equalsVar && v !== vars[s.equalsVar]) throw new Error(`${s.attr} is ${v}, expected ${vars[s.equalsVar]} (saved as ${s.equalsVar})`);
+    return `${s.selector} ${s.attr}=${v}${s.equalsVar ? ` (equals saved ${s.equalsVar})` : ""}`;
+  },
+  // Reloads the webview (a new UI session with the same app data), then waits for `expect`.
+  async reload(s) {
+    await browser.execute(() => window.location.reload());
+    if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 30000);
+    return `webview reloaded${s.expect ? `; then visible: ${s.expect}` : ""}`;
   },
   async menu(s) {
     await openMenu(s.menu);
     await xclick(`ul[role="menu"][aria-label="${s.menu}"] [role="menuitem"]`, s.item);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
+    if (s.gone) await waitGone(s.gone, s.timeout ?? 20000);
     return `${s.menu} › ${s.item}${s.expect ? `; then visible: ${s.expect}` : ""}`;
   },
   async shot() {

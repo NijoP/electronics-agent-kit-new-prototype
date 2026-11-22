@@ -4,6 +4,7 @@
 import { formatLength, stepPreset, UNITS, type GridConfig, type GridKind } from "../grid";
 import type { SideView } from "../shell/ActivityBar";
 import type { BottomTab } from "../shell/BottomPanel";
+import type { RightTab } from "../shell/RightDock";
 import type { Check, Command, LibraryEntry, OpenProject, RecentProject, Snapshot, SymbolInstance, FootprintInstance } from "../types";
 import type { IconName } from "../design/icons/icons";
 import type { Action, DocContext, SplitId } from "./types";
@@ -17,6 +18,7 @@ export interface ActionDeps {
   theme: "dark" | "light";
   sideOpen: boolean;
   bottomOpen: boolean;
+  rightOpen: boolean;
   split: boolean;
   recent: RecentProject[];
   library: LibraryEntry[];
@@ -47,7 +49,9 @@ export interface ActionDeps {
   showSide: (v: SideView) => void;
   toggleSide: () => void;
   toggleBottom: () => void;
+  toggleRight: () => void;
   showBottom: (t: BottomTab) => void;
+  showRight: (t: RightTab) => void;
   onTheme: () => void;
   resetLayout: () => void;
   onSettings: () => void;
@@ -108,9 +112,13 @@ export function commonActions(d: ActionDeps): Action[] {
     { id: "toolbar-labels", label: "Toolbar labels", title: "Show text labels beside the toolbar icons", menu: "View", checked: d.toolbarLabels, enabled: () => true, run: d.toggleToolbarLabels },
     { id: "toggle-side", label: "Side panel", whileTyping: true, menu: "View", sep: true, checked: d.sideOpen, enabled: () => true, run: d.toggleSide },
     { id: "toggle-bottom", label: "Bottom panel", whileTyping: true, menu: "View", checked: d.bottomOpen, enabled: () => true, run: d.toggleBottom },
+    { id: "toggle-right", label: "Right panel", whileTyping: true, menu: "View", checked: d.rightOpen, enabled: () => true, run: d.toggleRight },
     { id: "toggle-split", label: "Split schematic and PCB", menu: "View", checked: d.split, enabled: () => true, run: d.toggleSplit },
     ...d.sideViews.map<Action>((v, i) => ({ id: `show-${v.id}`, label: `Show ${v.label}`, whileTyping: v.id === "project", menu: "View", sep: i === 0, checked: d.sideOpen && d.sideView === v.id, enabled: () => true, run: () => d.showSide(v.id) })),
-    { id: "bom", label: "Show BOM", menu: "View", sep: true, enabled: () => true, run: () => d.showBottom("bom") },
+    { id: "show-properties", label: "Show Properties", menu: "View", sep: true, enabled: () => true, run: () => d.showRight("properties") },
+    { id: "show-layers", label: "Show Layers", docs: PCB, menu: "View", enabled: () => true, run: () => d.showRight("layers") },
+    { id: "library", label: "Show library", menu: "View", sep: true, enabled: () => true, run: () => d.showBottom("library") },
+    { id: "bom", label: "Show BOM", menu: "View", enabled: () => true, run: () => d.showBottom("bom") },
     { id: "log", label: "Show log", menu: "View", enabled: () => true, run: () => d.showBottom("log") },
     { id: "ws-schematic", label: "Go to Schematic editor", whileTyping: true, menu: "View", sep: true, enabled: () => true, run: () => d.showWorkspace("schematic") },
     { id: "ws-pcb", label: "Go to PCB editor", whileTyping: true, menu: "View", enabled: () => true, run: () => d.showWorkspace("pcb") },

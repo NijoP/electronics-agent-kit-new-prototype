@@ -137,6 +137,8 @@ describe("main toolbar", () => {
       fireEvent.click(tb().getByRole("button", { name: "Move tool" }));
       expect(sch.getByRole("button", { name: "Move" }).getAttribute("aria-pressed")).toBe("true");
     });
+    // The part list is the design manager's Components tab (Phase 1 A3).
+    fireEvent.click(screen.getByRole("tab", { name: "Components" }));
     fireEvent.click(screen.getByRole("button", { name: /R1 330/ }));
     fireEvent.click(tb().getByRole("button", { name: "Rotate selection" }));
     await waitFor(() => expect(executed).toEqual([{ type: "RotateSymbol", symbol_id: "sym_r1", rotation: "R90" }]));

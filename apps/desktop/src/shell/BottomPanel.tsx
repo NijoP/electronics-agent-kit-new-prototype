@@ -1,13 +1,14 @@
-// Bottom panel: ERC/DRC/DFM findings (diagnostics), a BOM derived from the schematic, simulation,
-// the engine log and this session's tasks.
-import { useEffect, useState } from "react";
+// Bottom panel: the component library (Phase 1 A3 moved it here from the side panel), ERC/DRC/DFM
+// findings (diagnostics), a BOM derived from the schematic, simulation, the engine log and this
+// session's tasks.
+import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
 import { EngineeringMonitor } from "../EngineeringMonitor";
 import { SimulationPanel } from "../SimulationPanel";
 import type { Check, CheckResult, EngineEvent, Finding, Id, Snapshot } from "../types";
 import type { Task } from "./tasks";
 
-export type BottomTab = "findings" | "bom" | "sim" | "log" | "tasks" | (string & {});
+export type BottomTab = "library" | "findings" | "bom" | "sim" | "log" | "tasks" | (string & {});
 
 interface Props {
   tab: BottomTab;
@@ -22,6 +23,8 @@ interface Props {
   activeFinding?: string | null;
   tasks?: Task[];
   onClearTasks?: () => void;
+  /** Content of the Library tab (the library and distributor search, owned by the workspace). */
+  library?: ReactNode;
 }
 
 export interface BomLine {
@@ -103,6 +106,7 @@ function NetlistTab({ revision }: { revision: number }) {
 }
 
 const TABS: [BottomTab, string][] = [
+  ["library", "Library"],
   ["findings", "Findings"],
   ["netlist", "Netlist"],
   ["bom", "BOM"],
@@ -153,7 +157,7 @@ function SearchTab({ snapshot, onProbe }: { snapshot: Snapshot; onProbe: (id: Id
   );
 }
 
-export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, activeFinding, tasks = [], onClearTasks }: Props) {
+export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, activeFinding, tasks = [], onClearTasks, library }: Props) {
   const bom = bomLines(snapshot);
   const running = tasks.filter((t) => t.status === "running").length;
   return (
@@ -169,6 +173,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
         <button type="button" className="icon" aria-label="Hide bottom panel" title="Hide panel (Ctrl+J)" onClick={onClose}>×</button>
       </div>
       <div className="bottom-body">
+        {tab === "library" && <div className="bottom-library">{library}</div>}
         {tab === "findings" && <EngineeringMonitor snapshot={snapshot} results={results} onProbe={onProbe} onNavigate={onNavigate} activeFinding={activeFinding} />}
         {tab === "bom" &&
           (bom.length === 0 ? (

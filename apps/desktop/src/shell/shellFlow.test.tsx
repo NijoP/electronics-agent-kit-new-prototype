@@ -132,6 +132,8 @@ describe("registered workspaces", () => {
 describe("explorer", () => {
   it("lists real files with git status, expands folders, opens a file in a viewer tab", async () => {
     await open();
+    // Phase 1 A3: the editors open the design manager in the left dock; Explorer is one click away.
+    fireEvent.click(bar().getByRole("button", { name: "Explorer" }));
     const tree = await screen.findByRole("tree", { name: "Project files" });
     await within(tree).findByText("notes.md");
     expect(within(tree).getByText("U")).toBeTruthy(); // untracked
@@ -146,6 +148,8 @@ describe("explorer", () => {
   });
   it("engine-owned files are view-only: rename and delete are disabled", async () => {
     await open();
+    // Phase 1 A3: the editors open the design manager in the left dock; Explorer is one click away.
+    fireEvent.click(bar().getByRole("button", { name: "Explorer" }));
     const tree = await screen.findByRole("tree", { name: "Project files" });
     fireEvent.click(await within(tree).findByText("project.eak.json", undefined, { timeout: 4000 }).catch(() => within(tree).findByText("project.eak.json")));
     expect((exp().getByRole("button", { name: "Delete" }) as HTMLButtonElement).disabled).toBe(true);
@@ -153,6 +157,8 @@ describe("explorer", () => {
   });
   it("creating a file validates the name, then calls the sandboxed IPC with the project id", async () => {
     await open();
+    // Phase 1 A3: the editors open the design manager in the left dock; Explorer is one click away.
+    fireEvent.click(bar().getByRole("button", { name: "Explorer" }));
     await screen.findByRole("tree", { name: "Project files" });
     fireEvent.click(exp().getByRole("button", { name: "New file" }));
     const box = screen.getByRole("textbox", { name: "Name" });
@@ -166,6 +172,8 @@ describe("explorer", () => {
   });
   it("deleting asks first and does nothing when declined", async () => {
     await open();
+    // Phase 1 A3: the editors open the design manager in the left dock; Explorer is one click away.
+    fireEvent.click(bar().getByRole("button", { name: "Explorer" }));
     const tree = await screen.findByRole("tree", { name: "Project files" });
     fireEvent.click(await within(tree).findByText("notes.md"));
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);

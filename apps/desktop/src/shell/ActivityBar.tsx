@@ -1,19 +1,19 @@
 // Left activity bar. Two kinds of entry:
 //  * workspaces (Schematic, PCB, and anything registered in registry.ts such as a 3D viewer or the
 //    terminal): each fills the editor area on its own, one at a time;
-//  * side views (Explorer, Library / Parts, ...): each switches the side panel, and pressing the
-//    active one collapses it.
+//  * side views (Overview, Explorer, Design manager, Domain, Manufacturing): each switches the left
+//    dock, and pressing the active one collapses it. Editor panels live in the docks (Phase 1 A3):
+//    Layers in the right dock, the library in the bottom dock.
 import { tip } from "../design/shortcuts";
 import { Icons } from "./icons";
 import type { WorkspaceEntry } from "./registry";
 
-export type SideView = "overview" | "project" | "parts" | "layers" | "domain" | "manufacturing";
+export type SideView = "overview" | "project" | "design" | "domain" | "manufacturing";
 
 export const SIDE_VIEWS: { id: SideView; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "project", label: "Explorer" },
-  { id: "parts", label: "Library / Parts" },
-  { id: "layers", label: "PCB Layers" },
+  { id: "design", label: "Design manager" },
   { id: "domain", label: "Domain" },
   { id: "manufacturing", label: "Manufacturing" },
 ];
@@ -42,8 +42,8 @@ export function ActivityBar({ sideView, sideOpen, onSide, workspace, onWorkspace
     const v = SIDE_VIEWS.find((x) => x.id === id)!;
     const on = sideOpen && sideView === id;
     return (
-      <button key={id} type="button" className={on ? "ab on" : "ab"} aria-label={v.label} aria-pressed={on} title={tip(on ? `${v.label} (press again to collapse the side panel)` : v.label, id === "project" ? "Mod+Shift+E" : undefined)} onClick={() => onSide(id)}>
-        {Icons[id === "parts" ? "parts" : id]}
+      <button key={id} type="button" className={on ? "ab on" : "ab"} aria-label={v.label} aria-pressed={on} title={tip(on ? `${v.label} (press again to collapse the side panel)` : v.label, id === "project" ? "Mod+Shift+E" : id === "design" ? "Mod+Shift+D" : undefined)} onClick={() => onSide(id)}>
+        {Icons[id]}
       </button>
     );
   };

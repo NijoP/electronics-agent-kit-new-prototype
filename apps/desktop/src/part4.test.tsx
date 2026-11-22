@@ -7,7 +7,7 @@ import { App } from "./App";
 import { shellCmd } from "./shell.test-data";
 import { fixture } from "./fixture.test-data";
 import { availableDocs, closeDoc, defaultDocState, loadDocState, openDoc, saveDocState, visibleDocs } from "./shell/documents";
-import { clampSize, DEFAULT_LAYOUT, LIMITS, sanitizeLayout } from "./shell/layout";
+import { clampSize, defaultLayout, LIMITS, sanitizeLayout } from "./shell/layout";
 import { MenuBar } from "./shell/MenuBar";
 import type { CommandResponse } from "./types";
 
@@ -39,10 +39,11 @@ describe("documents", () => {
 
 describe("layout", () => {
   it("clamps sizes and ignores malformed stored values", () => {
-    expect(clampSize("sideWidth", 5000)).toBe(LIMITS.sideWidth[1]);
-    expect(clampSize("bottomHeight", -1)).toBe(LIMITS.bottomHeight[0]);
-    expect(sanitizeLayout("junk")).toEqual(DEFAULT_LAYOUT);
-    expect(sanitizeLayout({ sideWidth: "x", bottomOpen: false, bottomHeight: 300, aiOpen: true })).toEqual({ ...DEFAULT_LAYOUT, bottomOpen: false, bottomHeight: 300 });
+    expect(clampSize("left", 5000)).toBe(LIMITS.left[1]);
+    expect(clampSize("bottom", -1)).toBe(LIMITS.bottom[0]);
+    expect(sanitizeLayout("pcb", "junk")).toEqual(defaultLayout("pcb"));
+    const d = defaultLayout("schematic");
+    expect(sanitizeLayout("schematic", { left: { size: "x" }, bottom: { open: false, size: 300 }, ai: { open: true } })).toEqual({ ...d, bottom: { ...d.bottom, open: false, size: 300 } });
   });
 });
 
@@ -157,12 +158,14 @@ describe("workspace Part 4", () => {
     const before = Number(sep.getAttribute("aria-valuenow"));
     fireEvent.keyDown(sep, { key: "ArrowRight" });
     await waitFor(() => expect(Number(screen.getByRole("separator", { name: "Resize side panel" }).getAttribute("aria-valuenow"))).toBe(before + 16));
-    expect(JSON.parse(localStorage.getItem("eak.layout.v1")!).sideWidth).toBe(before + 16);
+    // Phase 1 A3: saved per workspace (the schematic here).
+    const saved = () => JSON.parse(localStorage.getItem("eak.layout.v2.schematic")!);
+    expect(saved().left.size).toBe(before + 16);
     fireEvent.keyDown(window, { key: "j", ctrlKey: true });
-    expect(JSON.parse(localStorage.getItem("eak.layout.v1")!).bottomOpen).toBe(false);
+    expect(saved().bottom.open).toBe(false);
     menu("View");
     fireEvent.click(screen.getByRole("menuitem", { name: "Reset panel layout" }));
-    await waitFor(() => expect(JSON.parse(localStorage.getItem("eak.layout.v1")!)).toEqual(DEFAULT_LAYOUT));
+    await waitFor(() => expect(saved()).toEqual(defaultLayout("schematic")));
   });
 });
 

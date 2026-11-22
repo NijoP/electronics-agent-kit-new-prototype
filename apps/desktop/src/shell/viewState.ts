@@ -1,8 +1,8 @@
 // Per-document canvas state shared between the workspace and the canvases without touching the
 // editors: which document a canvas belongs to (context), its last viewport (kept across tab
 // closes and sessions), and imperative zoom / tool controls the toolbar drives.
-import { createContext, useContext, useEffect } from "react";
-import type { ViewBox } from "../viewport";
+import { createContext, useContext, useEffect, useSyncExternalStore } from "react";
+import type { Bounds, ViewBox } from "../viewport";
 
 export const DocIdContext = createContext<string | null>(null);
 export const useDocId = () => useContext(DocIdContext);
@@ -52,6 +52,8 @@ export function forgetViewports(): void {
 export interface CanvasControls {
   zoomBy: (factor: number) => void;
   fit: () => void;
+  /** Zoom to view-space bounds (design manager navigation). */
+  zoomTo: (b: Bounds) => void;
 }
 const canvases = new Map<string, CanvasControls>();
 export const canvasControls = (docId: string | null) => (docId ? canvases.get(docId) : undefined);
@@ -86,3 +88,32 @@ export const setActiveEditor = (id: string | null) => {
   activeEditor = id;
 };
 export const isActiveEditor = (id: string | null) => id === null || activeEditor === null || activeEditor === id;
+
+// Canvas readout of each document (A3 canvas strip): the pointer position, the anchor of the last
+// primary press (for dX / dY) and the scale, all in view millimetres (Y down) as the canvas reports
+// them. A small external store, so only the strip re-renders on pointer moves.
+export interface CanvasReadout {
+  at: { x: number; y: number } | null;
+  anchor: { x: number; y: number } | null;
+  /** Screen pixels per view millimetre; null until the pane is measured. */
+  pxPerMm: number | null;
+}
+const EMPTY_READOUT: CanvasReadout = { at: null, anchor: null, pxPerMm: null };
+const readouts = new Map<string, CanvasReadout>();
+const readoutListeners = new Set<() => void>();
+export function reportCanvas(docId: string | null, patch: Partial<CanvasReadout>): void {
+  if (!docId) return;
+  const cur = readouts.get(docId) ?? EMPTY_READOUT;
+  const next = { ...cur, ...patch };
+  if (next.at === cur.at && next.anchor === cur.anchor && next.pxPerMm === cur.pxPerMm) return;
+  readouts.set(docId, next);
+  readoutListeners.forEach((l) => l());
+}
+export const canvasReadout = (docId: string | null): CanvasReadout => (docId ? readouts.get(docId) : undefined) ?? EMPTY_READOUT;
+const subscribeReadout = (l: () => void) => {
+  readoutListeners.add(l);
+  return () => {
+    readoutListeners.delete(l);
+  };
+};
+export const useCanvasReadout = (docId: string | null): CanvasReadout => useSyncExternalStore(subscribeReadout, () => canvasReadout(docId));

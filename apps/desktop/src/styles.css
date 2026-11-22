@@ -610,3 +610,23 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .term-sessbar { gap: var(--s-half); padding: 0 var(--s-half); }
 .term-pane-head { height: var(--h-row); font-size: var(--fs-xs); }
 .term-status { height: var(--h-row); font-size: var(--fs-xs); }
+
+/* Phase 1 A3: three docks and the canvas strip. The right dock mirrors the left one; the
+   design manager fills the left dock; the strip sits under the active editor's canvas. */
+.right-dock { min-width: 0; min-height: 0; overflow: hidden; background: var(--bg-panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+.right-body { flex: 1; min-height: 0; overflow: auto; }
+.design-manager { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dm-tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 0 var(--s-1); border-bottom: 1px solid var(--line); flex: none; }
+.dm-tabs .tab { padding: 0 var(--s-1); }
+.dm-search { margin: var(--s-1) var(--s-2); flex: none; min-width: 0; }
+.dm-list { padding: 0 var(--s-1) var(--s-2); }
+.dm-list button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dm-group { font-size: var(--fs-xs); letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-dim); padding: var(--s-1) var(--s-1) 0; }
+.props { margin: 0 var(--s-2); display: grid; gap: var(--s-half); font-size: var(--fs-sm); }
+.props > div { display: grid; grid-template-columns: minmax(0, 9em) minmax(0, 1fr); gap: var(--s-1); }
+.props dt { color: var(--fg-dim); }
+.props dd { margin: 0; overflow-wrap: anywhere; font-family: var(--mono); }
+.bottom-library { display: grid; gap: var(--s-2); }
+.canvas-strip { display: flex; align-items: center; gap: var(--s-2); height: var(--h-sm); padding: 0 var(--s-2); flex: none; border-top: 1px solid var(--line); background: var(--bg-panel); color: var(--fg-dim); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; }
+.canvas-strip .strip-val { font-family: var(--mono); color: var(--fg); display: inline-block; min-width: 7ch; text-align: right; }
+.canvas-strip .strip-unit { color: var(--fg); }

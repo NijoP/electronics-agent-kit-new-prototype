@@ -20,6 +20,7 @@ function deps(over: Partial<ActionDeps> = {}): ActionDeps {
     theme: "dark",
     sideOpen: true,
     bottomOpen: true,
+    rightOpen: true,
     split: false,
     recent: [{ path: "/o.eak", project_id: "prj_other", name: "Other", revision: 1, last_opened_ms: 1 }],
     library: [{ id: "res", name: "Resistor", category: "passive", refdes_prefix: "R", default_value: "10k", pins: [] }],
@@ -30,7 +31,7 @@ function deps(over: Partial<ActionDeps> = {}): ActionDeps {
     edaViews: [{ id: "viewer3d", label: "3D view", shortcut: "Mod+3" }],
     dialog: fn(), save: fn(), undo: fn(), redo: fn(), close: fn(), openRecent: fn(), execute: fn(), check: fn(), syncPcb: fn(),
     refillZones: fn(), rotateSel: fn(), deleteSel: fn(), tool: fn(), zoomBy: fn(), fit: fn(), select: fn(), toggleSplit: fn(),
-    showSide: fn(), toggleSide: fn(), toggleBottom: fn(), showBottom: fn(), onTheme: fn(), resetLayout: fn(), onSettings: fn(),
+    showSide: fn(), toggleSide: fn(), toggleBottom: fn(), toggleRight: fn(), showBottom: fn(), showRight: fn(), onTheme: fn(), resetLayout: fn(), onSettings: fn(),
     palette: fn(), quickOpen: fn(), help: fn(), about: fn(), sideView: "project", notify: fn(), open: fn(), closeAll: fn(), showWorkspace: fn(), switchTo: fn(), placePart: fn(),
     grid: { kind: "schematic", cfg: GRID_KINDS.schematic.defaults, set: fn() },
     toolbarLabels: false,
@@ -197,13 +198,13 @@ describe("slice E1: no dead or decorative entries", () => {
   });
 
   it("Show <view> shows the view (never toggles it closed) and is checked while that view is open", () => {
-    const d = deps({ sideOpen: true, sideView: "layers" });
+    const d = deps({ sideOpen: true, sideView: "design" });
     const all = workspaceActions(d);
-    const layers = all.find((a) => a.id === "show-layers")!;
-    expect(layers.checked).toBe(true);
-    expect(all.find((a) => a.id === "show-parts")!.checked).toBe(false);
-    runAction(layers);
-    expect(d.showSide).toHaveBeenCalledWith("layers");
+    const design = all.find((a) => a.id === "show-design")!;
+    expect(design.checked).toBe(true);
+    expect(all.find((a) => a.id === "show-domain")!.checked).toBe(false);
+    runAction(design);
+    expect(d.showSide).toHaveBeenCalledWith("design");
     expect(d.toggleSide).not.toHaveBeenCalled();
   });
 
@@ -214,5 +215,27 @@ describe("slice E1: no dead or decorative entries", () => {
     expect(d.about).toHaveBeenCalled();
     expect(d.notify).not.toHaveBeenCalled();
     expect(labels("home", "Project", d)).toEqual(expect.arrayContaining(["Open sheet Sheet 1", "Open file notes.md"]));
+  });
+});
+
+describe("dock actions (slice A3)", () => {
+  it("each dock has a View toggle and a key; Layers is a PCB-only right-dock tab; the library opens in the bottom dock", () => {
+    const d = deps({ rightOpen: false });
+    const all = workspaceActions(d);
+    const key = (k: string, mods: Partial<KeyboardEvent> = {}) => ({ key: k, ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, ...mods }) as unknown as KeyboardEvent;
+    expect(actionForKey(all, "schematic", key("b"), false)?.id).toBe("toggle-side");
+    expect(actionForKey(all, "schematic", key("j"), false)?.id).toBe("toggle-bottom");
+    expect(actionForKey(all, "schematic", key("B", { shiftKey: true }), false)?.id).toBe("toggle-right");
+    expect(actionForKey(all, "pcb", key("D", { shiftKey: true }), false)?.id).toBe("show-design");
+    const view = (ctx: DocContext) => menusFor(all, ctx).find((m) => m.label === "View")!.items;
+    expect(view("schematic").find((i) => i.label === "Right panel")?.checked).toBe(false);
+    expect(view("schematic").map((i) => i.label)).not.toContain("Show Layers");
+    expect(view("pcb").map((i) => i.label)).toContain("Show Layers");
+    // the activity bar views no longer include the panels that moved into the docks
+    expect(SIDE_VIEWS.map((v) => v.id)).toEqual(["overview", "project", "design", "domain", "manufacturing"]);
+    runAction(all.find((a) => a.id === "show-layers")!);
+    expect(d.showRight).toHaveBeenLastCalledWith("layers");
+    runAction(all.find((a) => a.id === "library")!);
+    expect(d.showBottom).toHaveBeenLastCalledWith("library");
   });
 });

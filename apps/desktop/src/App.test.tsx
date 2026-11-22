@@ -33,6 +33,9 @@ const response = (command: string, accepted: boolean): CommandResponse => ({
 
 let closed = false;
 beforeEach(() => {
+  // The dock layout, including each dock's tab, is persisted per workspace (Phase 1 A3): start
+  // every test from the defaults (bottom dock on Log) rather than the last test's layout.
+  localStorage.clear();
   calls = [];
   closed = false;
   revision = 7;

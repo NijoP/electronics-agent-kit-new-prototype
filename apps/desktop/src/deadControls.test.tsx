@@ -165,12 +165,12 @@ describe("navigation and state display", () => {
   it("View > Show <view> shows the view and never collapses it", async () => {
     await open();
     const side = () => screen.getByRole("complementary", { hidden: true, name: "Side panel" });
-    menu("View", "Show PCB Layers");
+    menu("View", "Show Design manager");
     await waitFor(() => expect(side().getAttribute("aria-hidden")).toBe("false"));
-    expect(side().querySelector(".panel-head .title")!.textContent).toBe("PCB Layers");
-    menu("View", /Show PCB Layers/);
+    expect(side().querySelector(".panel-head .title")!.textContent).toBe("Design manager");
+    menu("View", /Show Design manager/);
     expect(side().getAttribute("aria-hidden")).toBe("false");
-    expect(side().querySelector(".panel-head .title")!.textContent).toBe("PCB Layers");
+    expect(side().querySelector(".panel-head .title")!.textContent).toBe("Design manager");
   });
 
   it("quick open > a sheet opens that sheet, not the first schematic", async () => {
@@ -195,7 +195,7 @@ describe("navigation and state display", () => {
   it("the activity bar does not advertise Mod+B for views it cannot open", async () => {
     await open();
     const ab = within(screen.getByRole("navigation", { name: "Activity bar" }));
-    for (const name of ["Library / Parts", "PCB Layers", "Domain", "Manufacturing", "Overview"]) expect(ab.getByRole("button", { name }).getAttribute("title")).not.toMatch(/\+B\)/);
+    for (const name of ["Design manager", "Domain", "Manufacturing", "Overview"]) expect(ab.getByRole("button", { name }).getAttribute("title")).not.toMatch(/\+B\)/);
   });
 });
 

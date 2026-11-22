@@ -33,7 +33,7 @@ blocking the PR) when any row fails.
 
 ## Adding steps
 Scenarios are JSON files in `apps/desktop/e2e/scenarios/`; the workflow runs
-`scenarios/a1-menus.json` (A1 menus, then the A2 toolbar steps `a2-*`: icon toolbar, grid/unit/snap per editor, split-button picks, Toolbar labels; then the E9 steps `e9-*` (kept for entries still unavailable; Save as and Release check were removed by E1); then the E1 steps `e1-*`: removed placeholders absent, Saved badge, menu-bar arrow keys, status-bar layer per editor, Show <view>, Help and About with Escape, Distributor not configured). A later UI slice adds steps to a scenario (or a new scenario file plus
+`scenarios/a1-menus.json` (A1 menus, then the A2 toolbar steps `a2-*`: icon toolbar, grid/unit/snap per editor, split-button picks, Toolbar labels; then the E9 steps `e9-*` (kept for entries still unavailable; Save as and Release check were removed by E1); then the E1 steps `e1-*`: removed placeholders absent, Saved badge, menu-bar arrow keys, status-bar layer per editor, Show <view>, Help and About with Escape, Distributor not configured; then the A3 dock steps `a3-*`: three docks, canvas strip under real pointer moves, a dragged and hidden right dock restored after a webview reload, a part placed from the bottom-dock Library and selected from the design manager). A later UI slice adds steps to a scenario (or a new scenario file plus
 one more `node ui-evidence.mjs` line with its own `UI_SCENARIO` and `UI_OUT`) instead of a new
 job. `scenarios/e2-editor.json` (slice E2, editor correctness) is such a second scenario: it
 runs in its own step with `UI_OUT` under `ui-evidence/e2`, and its rows are added to the job
@@ -45,16 +45,21 @@ Every step except `each-menu` takes one screenshot after it runs (set `"shot": f
 | `wait` | `selector`, `text`?, `timeout`? (ms) | waits until a visible element matches |
 | `fixture-project` | `name`, `folder`? | SETUP: creates the fixture project, reloads to Project Home, waits for it in Recent projects |
 | `fixture-library` | `name`, `licence`, `source`, `from`, `part`, `partName` | SETUP (needs an open project): writes an open-source library folder (manifest with licence and source, one definition copied from built-in `from` as `part`) and imports it through `library_import_open_source` |
-| `click` | `selector`, `text`?, `dx`?, `dy`? (px from the centre), `expect`?, `expectText`?, `timeout`? | scrolls the element into view if needed (as a user would), XTest click on it (offset by `dx`/`dy`), then waits for `expect` |
-| `type` | `selector`, `text`?, `value`, `expect`?, `expectText`?, `timeout`? | XTest click into the field, XTest typing of `value`, then waits for `expect` |
-| `menu` | `menu`, `item`, `expect`?, `expectText`? | XTest: opens a top-level menu and clicks the item whose text starts with `item` |
-| `key` | `keys` (xdotool key names, space-separated, e.g. `"ctrl+k"`) | XTest key presses |
+| `click` | `selector`, `text`?, `dx`?, `dy`? (px from the centre), `expect`?, `expectText`?, `gone`?, `timeout`? | scrolls the element into view if needed (as a user would), XTest click on it (offset by `dx`/`dy`), then waits for `expect` (and for `gone` to disappear) |
+| `type` | `selector`?, `text`?, `value`, `expect`?, `expectText`?, `timeout`? | XTest click into the field (without `selector`: the focused field), XTest typing of `value`, then waits for `expect` |
+| `menu` | `menu`, `item`, `expect`?, `expectText`?, `gone`? | XTest: opens a top-level menu and clicks the item whose text starts with `item` |
+| `key` | `keys` (xdotool key names, space-separated, e.g. `"ctrl+k"`), `expect`?, `expectText`?, `gone`? | XTest key presses |
+| `move` | `selector`, `text`?, `at`? (`[fx, fy]` fractions of the element, default centre), `report`?, `changed`? | XTest pointer move; `report`'s text must show a value (and, with `changed`, differ from before the move) |
+| `drag` | `selector`, `text`?, `dx`?, `dy`?, `attr`? (default `aria-valuenow`), `save`? | XTest press, move in steps, release; `attr` of the element must change; `save` remembers its new value |
+| `check-attr` | `selector`, `attr`, `equalsVar`? | reads an attribute; with `equalsVar` it must equal a value a `drag` saved |
+| `gone` | `selector` | waits until no visible element matches |
+| `reload` | `expect`?, `expectText`? | reloads the webview (a new UI session with the same app data), then waits for `expect` |
 | `absent` | `selector`, `text`?, `timeout`? (ms, default 3000) | passes once no visible element matches (a removed control, a closed dialog); fails if one is still visible |
 | `each-menu` | — | opens every top-level menu in turn; one row and one screenshot per menu, listing its items |
 | `shot` | — | screenshot only |
 | `count` | `selector`, `equals`, `timeout`? | DOM read: waits until exactly `equals` elements match (e.g. markers drawn on the sheet) |
 
-`text` matches the start of the element's whitespace-normalised text. Prefer the app's
+`text` matches the start of the element's whitespace-normalised text. A click whose target point is covered, clipped or scrolled out (`elementFromPoint` is not the element) fails instead of clicking something else. Prefer the app's
 accessible names (`aria-label`) in selectors; they are the same ones the unit tests use.
 
 Example (after `pcb` in `a1-menus.json`):

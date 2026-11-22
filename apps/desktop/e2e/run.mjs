@@ -439,15 +439,18 @@ try {
   };
 
   await step("X1", "Library panel: open, search, previews", "UI", async () => {
-    await sideView("Library / Parts");
+    // Phase 1 A3: the library is the Library tab of the bottom panel.
+    const tab = await browser.$('section[aria-label="Bottom panel"] [role="tab"]=Library');
+    await tab.waitForDisplayed({ timeout: 10000 });
+    await tab.click();
     const q = await browser.$('input[aria-label="Search library"]');
     await q.waitForDisplayed({ timeout: 10000 });
     await q.setValue("0603");
     await browser.pause(400);
-    const text = await browser.$("aside.side").getText();
-    const previews = (await browser.$$('aside.side svg[aria-label^="Symbol preview"], aside.side svg[aria-label^="Footprint preview"]')).length;
+    const text = await browser.$(".bottom-library").getText();
+    const previews = (await browser.$$('.bottom-library svg[aria-label^="Symbol preview"], .bottom-library svg[aria-label^="Footprint preview"]')).length;
     ok(/0603/.test(text), "no 0603 entry listed for the query");
-    return `Library / Parts panel open; query "0603" lists matching entries; ${previews} symbol/footprint preview(s) rendered`;
+    return `Library tab of the bottom panel open; query "0603" lists matching entries; ${previews} symbol/footprint preview(s) rendered`;
   });
 
   await step("X2", "Distributor part search (Parts panel, live public catalogue)", "UI", async () => {
