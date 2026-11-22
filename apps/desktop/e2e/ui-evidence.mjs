@@ -106,8 +106,29 @@ async function waitRect(selector, text, timeout = 15000) {
   return r;
 }
 
-/** Real X pointer click (XTest) at the centre of an element, optionally offset by dx/dy px. */
+/** Scroll the first visible match into view (no-op when it is already visible), as a user would. */
+const reveal = (selector, text) =>
+  browser.execute(
+    (s, t) => {
+      const norm = (x) => x.replace(/\s+/g, " ").trim();
+      for (const el of document.querySelectorAll(s)) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        if (t && !norm(el.textContent ?? "").startsWith(t)) continue;
+        el.scrollIntoView({ block: "nearest", inline: "nearest" });
+        return;
+      }
+    },
+    selector,
+    text ?? null,
+  );
+
+/** Real X pointer click (XTest) at the centre of an element, optionally offset by dx/dy px;
+ *  the element is first scrolled into view if needed, as a user would. */
 async function xclick(selector, text, dx = 0, dy = 0) {
+  await waitRect(selector, text);
+  await reveal(selector, text);
+  await sleep(150);
   const r = await waitRect(selector, text);
   const o = origin();
   const x = Math.round(o.x + r.x + r.w / 2 + dx);
