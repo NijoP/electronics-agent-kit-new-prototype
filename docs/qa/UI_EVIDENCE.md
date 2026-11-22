@@ -37,7 +37,7 @@ Scenarios are JSON files in `apps/desktop/e2e/scenarios/`; the workflow runs
 one more `node ui-evidence.mjs` line with its own `UI_SCENARIO` and `UI_OUT`) instead of a new
 job. `scenarios/e2-editor.json` (slice E2, editor correctness) is such a second scenario: it
 runs in its own step with `UI_OUT` under `ui-evidence/e2`, and its rows are added to the job
-summary and its screenshots to the same artifact. `scenarios/e3-engine-provenance.json` (slice E3) is a third, under `ui-evidence/e3`. Each step has an `id` (used in screenshot names), a `do` type and an optional `title`.
+summary and its screenshots to the same artifact. Its `fx-*` steps (fix place-selbar) check that the schematic canvas does not move when a selection appears and that Place menu picks (Wire, No connect, Net / power label) switch the tool while Place is armed. `scenarios/e3-engine-provenance.json` (slice E3) is a third, under `ui-evidence/e3`. Each step has an `id` (used in screenshot names), a `do` type and an optional `title`.
 Every step except `each-menu` takes one screenshot after it runs (set `"shot": false` to skip).
 
 | `do` | Fields | What it does |
@@ -58,6 +58,7 @@ Every step except `each-menu` takes one screenshot after it runs (set `"shot": f
 | `each-menu` | — | opens every top-level menu in turn; one row and one screenshot per menu, listing its items |
 | `shot` | — | screenshot only |
 | `count` | `selector`, `equals`, `timeout`? | DOM read: waits until exactly `equals` elements match (e.g. markers drawn on the sheet) |
+| `rect` | `selector`, `text`?, `save` or `same` | DOM read: `save` stores the element's viewport rect under a name; `same` fails if it moved or resized (more than 0.5 px) since that save (e.g. the canvas when the selection bar appears) |
 
 `text` matches the start of the element's whitespace-normalised text. A click whose target point is covered, clipped or scrolled out (`elementFromPoint` is not the element) fails instead of clicking something else. Prefer the app's
 accessible names (`aria-label`) in selectors; they are the same ones the unit tests use.

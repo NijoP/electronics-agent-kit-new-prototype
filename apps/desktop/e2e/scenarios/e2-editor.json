@@ -1,6 +1,6 @@
 {
   "name": "E2 editor correctness and atomicity",
-  "description": "Opens an isolated software fixture project and drives the schematic with real X input: places a part, clicks the placed part with the Place tool (no second part on top), marks a pin No connect and clicks it again (the marker is removed with DeleteNoConnect), draws an L-shaped wire (one Batch: one revision) and undoes it once (both legs go: one undo step). Then the PCB layer-count select lists 2..16 copper layers.",
+  "description": "Opens an isolated software fixture project and drives the schematic with real X input: places a part, clicks the placed part with the Place tool (no second part on top), marks a pin No connect and clicks it again (the marker is removed with DeleteNoConnect), draws an L-shaped wire (one Batch: one revision) and undoes it once (both legs go: one undo step). Then the PCB layer-count select lists 2..16 copper layers. Then (fix place-selbar) the canvas keeps its position when a selection appears, and Place menu picks switch the tool while Place is armed.",
   "steps": [
     {
       "id": "home",
@@ -172,6 +172,93 @@
       "title": "E2: no wire left after one undo",
       "selector": "section[aria-label=\"Schematic view\"] line.wire:not(.preview)",
       "equals": 0,
+      "shot": false
+    },
+    {
+      "id": "fx-esc",
+      "do": "key",
+      "title": "FX: Esc returns to the Select tool",
+      "keys": "Escape",
+      "shot": false
+    },
+    {
+      "id": "fx-deselect",
+      "do": "menu",
+      "title": "FX: Edit › Clear selection",
+      "menu": "Edit",
+      "item": "Clear selection",
+      "shot": false
+    },
+    {
+      "id": "fx-no-selbar",
+      "do": "absent",
+      "title": "FX: no selection bar while nothing is selected",
+      "selector": "section[aria-label=\"Schematic view\"] [role=\"group\"][aria-label=\"Selection\"]"
+    },
+    {
+      "id": "fx-canvas-before",
+      "do": "rect",
+      "title": "FX: canvas position with nothing selected",
+      "selector": "section[aria-label=\"Schematic view\"] svg.canvas",
+      "save": "canvas",
+      "shot": false
+    },
+    {
+      "id": "fx-select",
+      "do": "click",
+      "title": "FX: select the part (selection bar appears)",
+      "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] rect.body",
+      "expect": "section[aria-label=\"Schematic view\"] [role=\"group\"][aria-label=\"Selection\"]"
+    },
+    {
+      "id": "fx-canvas-after",
+      "do": "rect",
+      "title": "FX: the canvas did not move when the selection bar appeared",
+      "selector": "section[aria-label=\"Schematic view\"] svg.canvas",
+      "same": "canvas",
+      "shot": false
+    },
+    {
+      "id": "fx-menu-place",
+      "do": "menu",
+      "title": "FX: Place › Place part arms Place",
+      "menu": "Place",
+      "item": "Place part",
+      "expect": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button[aria-pressed=\"true\"]",
+      "expectText": "Place"
+    },
+    {
+      "id": "fx-menu-wire",
+      "do": "menu",
+      "title": "FX: with Place armed, Place › Wire switches to Wire",
+      "menu": "Place",
+      "item": "Wire",
+      "expect": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button[aria-pressed=\"true\"]",
+      "expectText": "Wire"
+    },
+    {
+      "id": "fx-menu-nc",
+      "do": "menu",
+      "title": "FX: Place › No connect switches to No connect",
+      "menu": "Place",
+      "item": "No connect",
+      "expect": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button[aria-pressed=\"true\"]",
+      "expectText": "No connect"
+    },
+    {
+      "id": "fx-menu-label",
+      "do": "menu",
+      "title": "FX: Place › Net / power label switches to Label",
+      "menu": "Place",
+      "item": "Net / power label",
+      "expect": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button[aria-pressed=\"true\"]",
+      "expectText": "Label"
+    },
+    {
+      "id": "fx-esc-end",
+      "do": "key",
+      "title": "FX: Esc back to Select",
+      "keys": "Escape",
       "shot": false
     },
     {

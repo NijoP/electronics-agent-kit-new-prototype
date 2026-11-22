@@ -259,6 +259,8 @@ async function run(st, fn) {
   console.log(`${result.padEnd(4)} ${row.id} ${row.title} — ${evidence}`);
 }
 
+const savedRects = new Map();
+
 /** Step types (docs/qa/UI_EVIDENCE.md). Each returns evidence text or throws. */
 const handlers = {
   async wait(s) {
@@ -388,6 +390,20 @@ const handlers = {
   },
   async shot() {
     return "screenshot";
+  },
+  // DOM read: the viewport rect of the first visible match. `save` stores it under a name;
+  // `same` fails unless it equals (within 0.5 px) the rect saved under that name.
+  async rect(s) {
+    const r = await waitRect(s.selector, s.text, s.timeout ?? 10000);
+    const fmt = (q) => `x=${q.x.toFixed(1)} y=${q.y.toFixed(1)} w=${q.w.toFixed(1)} h=${q.h.toFixed(1)}`;
+    if (s.save) {
+      savedRects.set(s.save, r);
+      return `saved "${s.save}": ${fmt(r)}`;
+    }
+    const before = savedRects.get(s.same);
+    if (!before) throw new Error(`no rect saved as "${s.same}"`);
+    if (["x", "y", "w", "h"].some((k) => Math.abs(r[k] - before[k]) > 0.5)) throw new Error(`moved: was ${fmt(before)}, now ${fmt(r)}`);
+    return `unchanged since "${s.same}": ${fmt(r)}`;
   },
   // DOM read: waits until exactly `equals` elements match (visible or not), e.g. markers drawn.
   async count(s) {
