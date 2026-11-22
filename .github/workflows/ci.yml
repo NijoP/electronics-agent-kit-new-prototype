@@ -34,6 +34,28 @@ jobs:
           npm ci
           npm run typecheck
           npm test
+      # E9: `npm test` fails on a visible control with no handler and no explicit unavailable
+      # state (src/qa/uiInventory.test.ts). This step regenerates docs/qa/UI_INVENTORY.md, shows
+      # its diff against the committed file in the job summary and uploads it; a stale doc does
+      # not fail the build, so lanes that add controls are not blocked on regenerating it.
+      - name: UI inventory (regenerate and diff)
+        if: always()
+        working-directory: apps/desktop
+        run: |
+          UPDATE_UI_INVENTORY=1 npx vitest run src/qa/uiInventory.test.ts || true
+          git add -N ../../docs/qa/UI_INVENTORY.md 2>/dev/null || true
+          {
+            echo "## UI inventory diff (docs/qa/UI_INVENTORY.md)"
+            if git diff --quiet -- ../../docs/qa/UI_INVENTORY.md; then echo "Up to date."; else
+              echo "Out of date: commit the \`ui-inventory\` artifact. Diff:"; echo '```diff'; git diff -- ../../docs/qa/UI_INVENTORY.md | head -400; echo '```'; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload UI inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-inventory
+          path: docs/qa/UI_INVENTORY.md
+          if-no-files-found: warn
       # The Tauri context macro embeds apps/desktop/dist, so the frontend must be built
       # before any cargo step compiles apps/desktop/src-tauri.
       - name: Frontend build (embedded by the desktop crate)

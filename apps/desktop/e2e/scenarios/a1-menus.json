@@ -19,6 +19,10 @@
     { "id": "a2-pcb-unit", "do": "menu", "title": "A2: PCB unit inch (0.5 mm becomes 0.025 in)", "menu": "View", "item": "Unit: inch", "expect": "footer.status span.item", "expectText": "Grid 0.025 in" },
     { "id": "a2-pcb-split", "do": "click", "title": "A2: Board regions split-button dropdown", "selector": "[role=\"toolbar\"] button[aria-label=\"Board regions: choose\"]", "expect": "div.tb-menu[aria-label=\"Board regions\"]" },
     { "id": "a2-pcb-pick", "do": "click", "title": "A2: pick Copper zone; it becomes the main button", "selector": "div.tb-menu[aria-label=\"Board regions\"] [role=\"menuitemradio\"]", "text": "Copper zone", "expect": "[role=\"toolbar\"] button.tb-btn[aria-label=\"Copper zone\"]" },
-    { "id": "a2-labels", "do": "menu", "title": "A2: View > Toolbar labels (text beside the icons)", "menu": "View", "item": "Toolbar labels", "expect": "header.toolbar.labels" }
+    { "id": "a2-labels", "do": "menu", "title": "A2: View > Toolbar labels (text beside the icons)", "menu": "View", "item": "Toolbar labels", "expect": "header.toolbar.labels" },
+    { "id": "e9-file-unavailable", "do": "click", "title": "E9: File menu; Save as is explicitly unavailable with its reason (inventory rule)", "selector": "nav[aria-label=\"Application menu\"] button.menu-btn", "text": "File", "expect": "ul[role=\"menu\"][aria-label=\"File\"] .mi.disabled .why", "expectText": "— Not implemented" },
+    { "id": "e9-file-close", "do": "key", "title": "E9: close the File menu", "keys": "Escape", "shot": false },
+    { "id": "e9-mfg-unavailable", "do": "click", "title": "E9: Manufacturing menu; Release check is explicitly unavailable with its reason", "selector": "nav[aria-label=\"Application menu\"] button.menu-btn", "text": "Manufacturing", "expect": "ul[role=\"menu\"][aria-label=\"Manufacturing\"] .mi.disabled .why", "expectText": "— Not implemented" },
+    { "id": "e9-mfg-close", "do": "key", "title": "E9: close the Manufacturing menu", "keys": "Escape", "shot": false }
   ]
 }

@@ -71,7 +71,9 @@ const SCH: readonly DocContext[] = ["schematic"];
 const PCB: readonly DocContext[] = ["pcb"];
 const DESIGN: readonly DocContext[] = ["home", "schematic", "pcb"];
 const BOARD: readonly DocContext[] = ["pcb", "3d"];
-const never = () => {};
+/** The handler of an action that has no implementation; such an action must be unavailable with a reason (`qa/uiInventory.ts`). */
+export const NO_HANDLER = () => {};
+const never = NO_HANDLER;
 
 /** File, Edit, View, Project, Tools, Settings and Help: the chrome every document shares. */
 export function commonActions(d: ActionDeps): Action[] {
