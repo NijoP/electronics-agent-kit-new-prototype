@@ -93,6 +93,10 @@ describe("Place tool", () => {
     const body = r.container.querySelector(`[data-symbol-id="sym_r1"] rect.body`)!;
     clickOn(body, [50, 50]);
     expect(sent.filter((c) => c.type === "PlaceSymbol")).toEqual([]);
+    // Real window: the place ghost under the pointer is the event target, not the body. A
+    // click at the symbol with any other target must not place either (geometry decides).
+    clickOn(r.container.querySelector("svg.canvas")!, [50, 50]);
+    expect(sent.filter((c) => c.type === "PlaceSymbol")).toEqual([]);
     // Empty sheet still places.
     clickOn(r.container.querySelector("svg.canvas")!, [150, 150]);
     expect(sent.filter((c) => c.type === "PlaceSymbol")).toHaveLength(1);
