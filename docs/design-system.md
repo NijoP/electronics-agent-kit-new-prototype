@@ -57,7 +57,8 @@ it never introduces new ones. Reduced motion zeroes the `--t-*` durations.
 | Nothing to show yet | `EmptyState` (title, why, the one action that fixes it) |
 | A titled block in a panel or overview | `Section` |
 | Name / value rows (properties, facts) | `<dl className="facts">` with `Fact` |
-| Main toolbar | `shell/Toolbar.tsx` (data-driven; disabled items carry their reason) |
+| Main toolbar | `shell/Toolbar.tsx` (data-driven from the action registry; icon buttons, split buttons for tool families, grid combos; disabled items carry their reason) |
+| Icon | `Icon` (`design/icons/icons.tsx`): EAK-authored 20 px-grid stroke icons in `currentColor`, shown at 16 or 20 px; every icon is listed in `design/icons/README.md` (icon audit, checked by `icons.test.ts`). Never trace or copy another product's icons |
 | Tabs | `.tabs` + `.tab` / `shell/DocTabs.tsx` for closable documents |
 | Resizable divider | `shell/Splitter.tsx` (keyboard operable) |
 | Dialog | `.modal-backdrop` + `.modal` (`ProjectDialogs`, `RulesDialog`, `ExportDialog`, `ModelSettings`) |

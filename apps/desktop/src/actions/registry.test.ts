@@ -1,6 +1,8 @@
 // Action registry (slice A1): one definition per operation drives menus, toolbar, palette and keys.
 import { describe, expect, it, vi } from "vitest";
 import { fixture } from "../fixture.test-data";
+import { ICON_NAMES } from "../design/icons/icons";
+import { GRID_KINDS } from "../grid";
 import { SIDE_VIEWS } from "../shell/ActivityBar";
 import { actionForKey, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./registry";
 import { workspaceActions, type ActionDeps } from "./sets";
@@ -30,6 +32,9 @@ function deps(over: Partial<ActionDeps> = {}): ActionDeps {
     refillZones: fn(), rotateSel: fn(), deleteSel: fn(), tool: fn(), zoomBy: fn(), fit: fn(), select: fn(), toggleSplit: fn(),
     showSide: fn(), toggleSide: fn(), toggleBottom: fn(), showBottom: fn(), onTheme: fn(), resetLayout: fn(), onSettings: fn(),
     palette: fn(), quickOpen: fn(), help: fn(), notify: fn(), open: fn(), closeAll: fn(), showWorkspace: fn(), switchTo: fn(), placePart: fn(),
+    grid: { kind: "schematic", cfg: GRID_KINDS.schematic.defaults, set: fn() },
+    toolbarLabels: false,
+    toggleToolbarLabels: fn(),
     ...over,
   };
 }
@@ -114,5 +119,55 @@ describe("action registry", () => {
     expect(pal.find((p) => p.id === "drc")).toMatchObject({ disabled: true, group: "Design" });
     expect(pal.find((p) => p.id === "erc")).toBeUndefined();
     expect(pal.find((p) => p.id === "save")?.shortcut).toBe("Mod+S");
+  });
+});
+
+describe("toolbar icons, families and grid actions (slice A2)", () => {
+  it("every toolbar action in every context has an icon from the EAK set", () => {
+    const known = new Set<string>(ICON_NAMES);
+    for (const ctx of DOC_CONTEXTS)
+      for (const b of toolbarFor(workspaceActions(deps()), ctx).flat()) {
+        expect(b.icon, `${b.id} in ${ctx}`).toBeTruthy();
+        expect(known.has(b.icon!), `${b.id}: ${b.icon}`).toBe(true);
+      }
+  });
+
+  it("split families group the tools of one kind in one toolbar group", () => {
+    const ids = (ctx: DocContext, split: string) => toolbarFor(workspaceActions(deps()), ctx).flat().filter((b) => b.split === split).map((b) => b.id);
+    expect(ids("schematic", "sch-marks")).toEqual(["t-label", "t-noconnect", "t-pinlabel", "t-junction"]);
+    expect(ids("pcb", "pcb-regions")).toEqual(["t-outline", "t-zone"]);
+    expect(ids("pcb", "pcb-checks")).toEqual(["drc", "dfm"]);
+    for (const ctx of DOC_CONTEXTS)
+      for (const g of toolbarFor(workspaceActions(deps()), ctx))
+        for (const b of g.filter((x) => x.split)) expect(g.filter((x) => x.split === b.split).length, `${b.split} split across groups`).toBe(toolbarFor(workspaceActions(deps()), ctx).flat().filter((x) => x.split === b.split).length);
+  });
+
+  it("the grid is no longer a disabled placeholder: View drives the active editor's grid", () => {
+    const set = vi.fn();
+    const all = workspaceActions(deps({ grid: { kind: "pcb", cfg: GRID_KINDS.pcb.defaults, set } }));
+    expect(all.find((a) => a.id === "grid")).toBeUndefined();
+    const view = menusFor(all, "pcb").find((m) => m.label === "View")!.items;
+    for (const l of ["Show grid", "Snap to grid", "Finer grid", "Coarser grid", "Unit: mm", "Unit: mil", "Unit: inch", "Toolbar labels"]) expect(view.map((i) => i.label)).toContain(l);
+    expect(view.find((i) => i.label === "Unit: mm")?.checked).toBe(true);
+    const run = (id: string) => runAction(all.find((a) => a.id === id)!);
+    run("grid-snap");
+    expect(set).toHaveBeenLastCalledWith({ snap: false });
+    run("grid-finer");
+    expect(set).toHaveBeenLastCalledWith({ spacingMm: 0.25 });
+    run("unit-mil");
+    expect(set).toHaveBeenLastCalledWith({ unit: "mil" });
+    // at the finest preset "Finer grid" is disabled and says why
+    const finest = workspaceActions(deps({ grid: { kind: "pcb", cfg: { ...GRID_KINDS.pcb.defaults, spacingMm: 0.05 }, set } }));
+    expect(finest.find((a) => a.id === "grid-finer")!.enabled()).toMatch(/finest mm preset \(0\.05 mm\)/);
+    // grid actions exist only in the editors
+    expect(menusFor(all, "home").find((m) => m.label === "View")!.items.map((i) => i.label)).not.toContain("Show grid");
+  });
+
+  it("Toolbar labels is a checked View option that toggles", () => {
+    const d = deps({ toolbarLabels: true });
+    const a = workspaceActions(d).find((x) => x.id === "toolbar-labels")!;
+    expect(a.checked).toBe(true);
+    runAction(a);
+    expect(d.toggleToolbarLabels).toHaveBeenCalled();
   });
 });

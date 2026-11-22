@@ -1,6 +1,7 @@
 // Action registry types (frontend only, no shared engine contract). One definition per
 // operation; the menu bar, the toolbar, the command palette and the key handler are generated
 // from it, so a tool is reachable the same way from every route.
+import type { IconName } from "../design/icons/icons";
 import type { ToolbarGroupId } from "../shell/Toolbar";
 
 /**
@@ -16,6 +17,9 @@ export const DOC_CONTEXTS: readonly DocContext[] = ["home", "schematic", "pcb", 
 /** Top-level menus, in menu-bar order. A menu with no visible action is not shown. */
 export const MENU_ORDER = ["File", "Edit", "View", "Place", "Route", "Design", "Simulation", "Manufacturing", "Project", "Tools", "Settings", "Help"] as const;
 export type MenuName = (typeof MENU_ORDER)[number];
+
+/** Toolbar split-button families. */
+export type SplitId = "sch-marks" | "pcb-regions" | "pcb-checks";
 
 export interface Action {
   /** Stable id; also the key of the default key map (`design/shortcuts.ts`). */
@@ -33,6 +37,13 @@ export interface Action {
   sep?: boolean;
   /** Toolbar group that shows the action as a button. Every toolbar action also has a menu. */
   toolbar?: ToolbarGroupId;
+  /** Toolbar icon (EAK icon set, `design/icons/`); every toolbar action has one. */
+  icon?: IconName;
+  /**
+   * Tool family: toolbar actions of one family share a split button whose main part runs the
+   * last member picked from its dropdown (see `SPLITS` in `shell/Toolbar.tsx`).
+   */
+  split?: SplitId;
   /** Listed in the command palette (default true). */
   palette?: boolean;
   paletteGroup?: string;

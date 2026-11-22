@@ -6,7 +6,8 @@ interface Props {
   project: string;
   revision: number;
   layer: string;
-  gridMm: number;
+  /** Grid of the active editor ("1.27 mm", "25 mil (snap off)"); null outside the editors. */
+  grid: string | null;
   drc: CheckResult | undefined;
   selection: string | null;
   /** Revision + agent task phase, the same text the Terminal workspace shows (ADR-0036). */
@@ -21,14 +22,14 @@ export function drcText(drc: CheckResult | undefined, revision: number): string 
   return `DRC ${r.errors} err · ${r.warnings} warn${r.revision !== revision ? " (stale)" : ""}`;
 }
 
-export function StatusBar({ project, revision, layer, gridMm, drc, selection, task, busy, message }: Props) {
+export function StatusBar({ project, revision, layer, grid, drc, selection, task, busy, message }: Props) {
   const stale = drc && drc.report.revision !== revision;
   const sev = drc ? (drc.report.errors > 0 ? "bad" : stale ? "warn" : "") : "";
   return (
     <footer className="status" role="status">
       <span className="item strong">{project}</span>
       <span className="item">Layer {layer}</span>
-      <span className="item">Grid {gridMm} mm</span>
+      {grid && <span className="item">Grid {grid}</span>}
       <span className={`item ${sev}`}>{drcText(drc, revision)}</span>
       {task && (
         <span className="item" data-testid="agent-task" title={task.title}>

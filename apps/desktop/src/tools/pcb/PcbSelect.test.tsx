@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditCtx } from "../../EditContext";
 import { fixture } from "../../fixture.test-data";
+import { GridControls } from "../../grid";
 import { PcbView, pcbBounds } from "../../PcbView";
 import type { Command, Snapshot } from "../../types";
 import { fit, type ViewBox } from "../../viewport";
@@ -63,7 +64,13 @@ function clickOn(t: Element, at: [number, number], mods: Mods = {}) {
 
 function setup(snap = board()) {
   vb = fit(pcbBounds(snap));
-  const r = render(<PcbView snapshot={snap} selected={null} onSelect={() => {}} edit={edit()} />);
+  // The grid combos live in the main toolbar; they share the PCB grid store with the editor.
+  const r = render(
+    <>
+      <GridControls kind="pcb" />
+      <PcbView snapshot={snap} selected={null} onSelect={() => {}} edit={edit()} />
+    </>,
+  );
   const svg = r.container.querySelector("svg.canvas")!;
   const court = (id: string) => r.container.querySelector(`[data-footprint-id="${id}"] rect.courtyard`)!;
   return { ...r, svg, court, snap };
@@ -145,6 +152,22 @@ describe("PCB footprints move independently", () => {
     expect(sent).toEqual([{ type: "MoveFootprint", footprint_id: "fp_r1", position: pt(11, 10), rotation: null, side: null }]);
     fireEvent.click(screen.getByLabelText("Show grid"));
     expect(container.querySelector("g.grid-pcb")).toBeNull();
+  });
+
+  it("toolbar unit and grid size move the PCB snap (slice A2): 1 mm becomes 50 mil, then 10 mil (a 1.4 mm drag snaps to 1.27 mm, then to 1.524 mm)", () => {
+    const { svg, court } = setup();
+    fireEvent.change(screen.getByLabelText("Grid spacing"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Unit"), { target: { value: "mil" } });
+    expect((screen.getByLabelText("Grid spacing") as HTMLSelectElement).value).toBe("1.27");
+    fireEvent.pointerMove(svg, client(12.7, 7.62));
+    expect(screen.getByLabelText("Cursor position").textContent).toMatch(/X 500\.0 +Y 300\.0 mil/);
+    dragOn(court("fp_r1"), [10, 10], [11.4, 10]);
+    fireEvent.change(screen.getByLabelText("Grid spacing"), { target: { value: "0.254" } });
+    dragOn(court("fp_r1"), [10, 10], [11.4, 10]);
+    expect(sent).toEqual([
+      { type: "MoveFootprint", footprint_id: "fp_r1", position: { x: mm(10) + 1_270_000, y: mm(10) }, rotation: null, side: null },
+      { type: "MoveFootprint", footprint_id: "fp_r1", position: { x: mm(10) + 1_524_000, y: mm(10) }, rotation: null, side: null },
+    ]);
   });
 });
 

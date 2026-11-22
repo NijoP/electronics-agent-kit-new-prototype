@@ -1,13 +1,24 @@
 {
-  "name": "A1 document-aware menus",
-  "description": "Opens an isolated software fixture project, then every application menu with the schematic and then the PCB as the active document (Phase 1 A1: menus come from the action registry and change with the document).",
+  "name": "A1 document-aware menus and A2 toolbar",
+  "description": "Opens an isolated software fixture project, then every application menu with the schematic and then the PCB as the active document (Phase 1 A1: menus come from the action registry and change with the document). Then the A2 toolbar: icon buttons, the grid/unit/snap combos of each editor (unit and grid size changed through their View menu entries, which write the same per-editor store as the combos; snap toggled by an XTest click on its check box), a split-button dropdown whose pick becomes the main button, and View > Toolbar labels.",
   "steps": [
     { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
     { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "UI Evidence Fixture" },
     { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "UI Evidence Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
     { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]" },
     { "id": "sch-menu", "do": "each-menu", "title": "Schematic menu" },
+    { "id": "a2-sch-toolbar", "do": "wait", "title": "A2: icon toolbar with the schematic grid combos", "selector": "[role=\"toolbar\"] [role=\"group\"][aria-label=\"Schematic grid\"]" },
+    { "id": "a2-sch-unit", "do": "menu", "title": "A2: schematic unit mil (1.27 mm becomes 50 mil)", "menu": "View", "item": "Unit: mil", "expect": "footer.status span.item", "expectText": "Grid 50 mil" },
+    { "id": "a2-sch-coarser", "do": "menu", "title": "A2: schematic coarser grid (100 mil)", "menu": "View", "item": "Coarser grid", "expect": "footer.status span.item", "expectText": "Grid 100 mil" },
+    { "id": "a2-sch-snap", "do": "click", "title": "A2: snap check box off (XTest)", "selector": "[role=\"toolbar\"] input[aria-label=\"Snap to grid\"]", "expect": "footer.status span.item", "expectText": "Grid 100 mil (snap off)" },
+    { "id": "a2-sch-split", "do": "click", "title": "A2: Net marks split-button dropdown", "selector": "[role=\"toolbar\"] button[aria-label=\"Net marks: choose\"]", "expect": "div.tb-menu[aria-label=\"Net marks\"]" },
+    { "id": "a2-sch-pick", "do": "click", "title": "A2: pick No connect; it becomes the main button", "selector": "div.tb-menu[aria-label=\"Net marks\"] [role=\"menuitemradio\"]", "text": "No connect", "expect": "[role=\"toolbar\"] button.tb-btn[aria-label=\"No connect\"]" },
     { "id": "pcb", "do": "menu", "title": "Open PCB", "menu": "View", "item": "Go to PCB editor", "expect": "section[aria-label=\"PCB view\"]" },
-    { "id": "pcb-menu", "do": "each-menu", "title": "PCB menu" }
+    { "id": "pcb-menu", "do": "each-menu", "title": "PCB menu" },
+    { "id": "a2-pcb-toolbar", "do": "wait", "title": "A2: icon toolbar with the PCB grid combos (own grid: 0.5 mm)", "selector": "footer.status span.item", "text": "Grid 0.5 mm" },
+    { "id": "a2-pcb-unit", "do": "menu", "title": "A2: PCB unit inch (0.5 mm becomes 0.025 in)", "menu": "View", "item": "Unit: inch", "expect": "footer.status span.item", "expectText": "Grid 0.025 in" },
+    { "id": "a2-pcb-split", "do": "click", "title": "A2: Board regions split-button dropdown", "selector": "[role=\"toolbar\"] button[aria-label=\"Board regions: choose\"]", "expect": "div.tb-menu[aria-label=\"Board regions\"]" },
+    { "id": "a2-pcb-pick", "do": "click", "title": "A2: pick Copper zone; it becomes the main button", "selector": "div.tb-menu[aria-label=\"Board regions\"] [role=\"menuitemradio\"]", "text": "Copper zone", "expect": "[role=\"toolbar\"] button.tb-btn[aria-label=\"Copper zone\"]" },
+    { "id": "a2-labels", "do": "menu", "title": "A2: View > Toolbar labels (text beside the icons)", "menu": "View", "item": "Toolbar labels", "expect": "header.toolbar.labels" }
   ]
 }

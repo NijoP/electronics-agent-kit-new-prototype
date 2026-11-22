@@ -78,13 +78,40 @@ const viewBox = () => screen.getByRole("img", { name: "Schematic canvas" }).getA
 describe("main toolbar", () => {
   it("unimplemented controls are disabled and say why; nothing decorative is clickable", async () => {
     await open();
-    for (const [name, why] of [["Save as", "Not implemented"], ["Grid", "Not implemented"]] as const) {
+    for (const [name, why] of [["Save as", "Not implemented"]] as const) {
       const b = tb().getByRole("button", { name }) as HTMLButtonElement;
       expect(b.disabled).toBe(true);
       expect(b.title).toContain(why);
     }
     // selection-dependent controls explain themselves too
     expect((tb().getByRole("button", { name: "Rotate selection" }) as HTMLButtonElement).title).toContain("Select a part first");
+  });
+
+  it("slice A2: the grid placeholder is gone; the View group holds the active editor's grid, unit and snap combos", async () => {
+    await open();
+    expect(tb().queryByRole("button", { name: "Grid" })).toBeNull();
+    const view = within(tb().getByRole("group", { name: "View" }));
+    expect(view.getByRole("group", { name: "Schematic grid" })).toBeTruthy();
+    fireEvent.change(view.getByLabelText("Unit"), { target: { value: "mil" } });
+    expect((view.getByLabelText("Grid spacing") as HTMLSelectElement).value).toBe("1.27");
+    expect([...(view.getByLabelText("Grid spacing") as HTMLSelectElement).options].map((o) => o.text)).toEqual(["10 mil", "25 mil", "50 mil", "100 mil"]);
+    expect(JSON.parse(localStorage.getItem("eak.grid.schematic")!)).toMatchObject({ unit: "mil", spacingMm: 1.27 });
+    expect(screen.getByRole("status").textContent).toContain("Grid 50 mil");
+    // the PCB keeps its own grid
+    fireEvent.click(screen.getByRole("button", { name: "PCB" }));
+    await waitFor(() => expect(within(tb().getByRole("group", { name: "View" })).getByRole("group", { name: "PCB grid" })).toBeTruthy());
+    expect((within(tb().getByRole("group", { name: "View" })).getByLabelText("Unit") as HTMLSelectElement).value).toBe("mm");
+    // every toolbar button carries an EAK icon
+    for (const b of tb().getAllByRole("button").filter((x) => x.classList.contains("tb-btn"))) expect(b.querySelector("svg[data-icon]"), b.getAttribute("aria-label") ?? "").not.toBeNull();
+  });
+
+  it("slice A2: View > Toolbar labels shows text beside the icons and is remembered", async () => {
+    await open();
+    expect(tb().getByRole("button", { name: "Save" }).textContent).toBe("");
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Application menu" })).getByRole("button", { name: "View" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Toolbar labels" }));
+    await waitFor(() => expect(tb().getByRole("button", { name: "Save" }).textContent).toBe("Save"));
+    expect(localStorage.getItem("eak.toolbar.labels")).toBe("1");
   });
 
   it("every enabled toolbar button does something: engine command, IPC call or UI state", async () => {
