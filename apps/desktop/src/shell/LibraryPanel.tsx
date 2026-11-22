@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, pickModelFile } from "../api";
 import { setDraggedComponent, EAK_COMPONENT_MIME } from "../dragState";
 import { LibraryManager } from "./LibraryManager";
-import type { Command, ComponentDef, FootprintCandidate, FootprintDef, LibraryPart, ModelFormat, ModelQuality, ModelRef } from "../types";
+import type { Command, ComponentDef, FootprintCandidate, FootprintDef, LibraryEntry, LibraryPart, ModelFormat, ModelQuality, ModelRef } from "../types";
 
 const FORMAT_BY_EXT: Record<string, ModelFormat> = { step: "step", stp: "step", wrl: "wrl", glb: "glb" };
 const formatOf = (path: string): ModelFormat | null => FORMAT_BY_EXT[path.split(".").pop()?.toLowerCase() ?? ""] ?? null;
@@ -92,11 +92,26 @@ interface Props {
   busy: boolean;
   /** Submit typed commands to the engine. */
   execute: (c: Command | Command[]) => Promise<void>;
-  onPlace: (p: { id: string; name: string }) => void;
+  /** Arm the Place tool with this part (the full entry, so a personal or imported part that is
+   *  not in the built-in list is placed as itself, never replaced by another part). */
+  onPlace: (p: LibraryEntry) => void;
 }
 
 const emptyToNull = (s: string) => (s.trim() === "" ? null : s.trim());
 const LABELS = { manufacturer: "Manufacturer", mpn: "MPN", distributor: "Distributor id", datasheet: "Datasheet URL" } as const;
+
+/** The Place-tool entry for a library definition. */
+export function entryOf(d: ComponentDef): LibraryEntry {
+  return { id: d.id, name: d.name, category: d.category, refdes_prefix: d.refdes_prefix, default_value: d.default_value, pins: d.symbol.pins.map((p) => [p.number, p.name]) };
+}
+
+/** Where the shown definition comes from, and what placing it does. */
+export function sourceLabel(p: Pick<LibraryPart, "source" | "in_project">): string {
+  if (p.source === "project") return "Project library";
+  if (p.source === "builtin") return p.in_project ? "Built-in (copy in project)" : "Built-in catalogue";
+  const lib = p.source === "personal" ? "Personal library" : `Imported library ${p.source.replace(/^imported:/, "")}`;
+  return p.in_project ? `${lib} (copy in project)` : `${lib}; placing copies it into the project`;
+}
 
 export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
   const [query, setQuery] = useState("");
@@ -110,6 +125,8 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
   const [candidates, setCandidates] = useState<FootprintCandidate[]>([]);
   const [fpChoice, setFpChoice] = useState("");
   const [mf, setMf] = useState<ModelForm>(emptyModelForm);
+  // Bumped when a library is enabled or disabled, so the search reflects it at once.
+  const [libGen, setLibGen] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -124,7 +141,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
     return () => {
       live = false;
     };
-  }, [query, category, source, revision]);
+  }, [query, category, source, revision, libGen]);
 
   useEffect(() => {
     let live = true;
@@ -135,7 +152,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
     return () => {
       live = false;
     };
-  }, [revision]);
+  }, [revision, libGen]);
 
   const sel = useMemo(() => parts.find((p) => p.id === selId) ?? null, [parts, selId]);
 
@@ -189,7 +206,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
 
   return (
     <div className="panel-body library-panel">
-      <LibraryManager revision={revision} />
+      <LibraryManager revision={revision} onChanged={() => setLibGen((n) => n + 1)} />
       <input aria-label="Search library" placeholder="Search name, MPN, Distributor, footprint…" value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="row">
         <select aria-label="Category filter" value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -204,6 +221,8 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
           <option value="all">All sources</option>
           <option value="builtin">Built-in</option>
           <option value="project">Project</option>
+          <option value="personal">Personal</option>
+          <option value="imported">Imported</option>
         </select>
       </div>
       {error && (
@@ -265,7 +284,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
             <dt>ID</dt>
             <dd>{sel.id}</dd>
             <dt>Source</dt>
-            <dd>{sel.source === "project" ? "Project library" : sel.in_project ? "Built-in (copy in project)" : "Built-in catalogue"}</dd>
+            <dd>{sourceLabel(sel)}</dd>
             <dt>Footprint</dt>
             <dd>
               {sel.def.footprint.name} · {sel.def.footprint.pads.length} pads
@@ -278,7 +297,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
             <dd>{sel.def.ratings.length === 0 ? "none" : `${sel.def.ratings.length - sel.unverified_ratings} verified, ${sel.unverified_ratings} unverified`}</dd>
           </dl>
           <div className="row">
-            <button type="button" className="primary" disabled={busy} onClick={() => onPlace({ id: sel.id, name: sel.def.name })} title="Arm the schematic place tool with this part; the footprint is created by Sync to PCB">
+            <button type="button" className="primary" disabled={busy} onClick={() => onPlace(entryOf(sel.def))} title="Arm the schematic place tool with this part; the footprint is created by Sync to PCB">
               Place on schematic
             </button>
             {!sel.in_project && (

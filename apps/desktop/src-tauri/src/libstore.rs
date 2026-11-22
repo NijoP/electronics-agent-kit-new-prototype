@@ -672,6 +672,93 @@ pub fn browse_for(s: &Session, q: &BrowseQuery) -> Browse {
     browse(store(), &project_library(s), &records, q)
 }
 
+/// Make a placement of a personal or imported part work (finding F8). The engine only knows the
+/// project and built-in libraries, so a `PlaceSymbol` naming a part that lives only in the
+/// user's personal library or an enabled imported library is sent as one `Batch`: an
+/// `UpsertComponentDefinition` copying the definition into the project library, then the
+/// original command(s). One revision, one undo step; the copy keeps its provenance (which says
+/// it is not verified by EAK). The personal copy wins over an imported one; two imported
+/// libraries holding the same id are refused as ambiguous. A part found nowhere (or only in a
+/// disabled library) is left unchanged for the engine to reject.
+/// Returns the command to execute and a note for each copied part.
+pub fn resolve_scoped_parts(
+    store: &LibraryStore,
+    project: &BTreeMap<String, ComponentDef>,
+    command: eak_runtime::Command,
+) -> Result<(eak_runtime::Command, Vec<String>), String> {
+    use eak_runtime::Command as C;
+    let missing = |id: &str| !project.contains_key(id) && eak_core::builtin::get(id).is_none();
+    let wanted: Vec<String> = {
+        let steps: Vec<&C> = match &command {
+            C::Batch { commands, .. } => commands.iter().collect(),
+            c => vec![c],
+        };
+        let mut v: Vec<String> = vec![];
+        for s in steps {
+            if let C::PlaceSymbol { component_id, .. } = s {
+                if missing(component_id.as_str()) && !v.contains(component_id) {
+                    v.push(component_id.clone());
+                }
+            }
+        }
+        v
+    };
+    if wanted.is_empty() {
+        return Ok((command, vec![]));
+    }
+    let defs = all_defs(store, project);
+    let mut upserts = vec![];
+    let mut notes = vec![];
+    for id in &wanted {
+        let personal = defs
+            .iter()
+            .find(|(sc, d)| matches!(sc, Scope::Personal) && d.id == *id);
+        let imported: Vec<&(Scope, ComponentDef)> = defs
+            .iter()
+            .filter(|(sc, d)| matches!(sc, Scope::Imported(_)) && d.id == *id)
+            .collect();
+        let pick: &(Scope, ComponentDef) = match (personal, imported.as_slice()) {
+            (Some(p), _) => p,
+            (None, [one]) => *one,
+            // Nowhere (or only in a disabled library): the engine rejects it with the reason.
+            (None, []) => continue,
+            (None, many) => {
+                return Err(format!(
+                    "component {id} exists in several imported libraries ({}); disable all but \
+                     one of them in Libraries, or save the one you mean to your personal library",
+                    many.iter()
+                        .map(|(sc, _)| sc.label())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+            }
+        };
+        notes.push(format!(
+            "copied {id} from the {} library into the project library",
+            pick.0.label()
+        ));
+        upserts.push(C::UpsertComponentDefinition {
+            definition: Box::new(pick.1.clone()),
+        });
+    }
+    if upserts.is_empty() {
+        return Ok((command, vec![]));
+    }
+    let (steps, label) = match command {
+        C::Batch { commands, label } => (commands, label),
+        c => (vec![c], None),
+    };
+    let label = label.or_else(|| Some(format!("Place {}", wanted.join(", "))));
+    upserts.extend(steps);
+    Ok((
+        C::Batch {
+            commands: upserts,
+            label,
+        },
+        notes,
+    ))
+}
+
 /// Copy a definition (project first, then built-in, then an imported library) into the
 /// personal library. The copy keeps its pin/pad mapping and ratings exactly as they were.
 pub fn save_to_personal(s: &Session, id: &str) -> Result<(), String> {

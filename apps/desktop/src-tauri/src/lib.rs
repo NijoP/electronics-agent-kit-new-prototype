@@ -607,13 +607,21 @@ pub fn execute_command(
     command: Command,
 ) -> Result<CommandResponse, String> {
     s.with_engine(|e| {
-        e.execute(CommandRequest {
+        // Personal and imported parts are copied into the project library in the same Batch
+        // as their placement (F8); the engine itself only knows project and built-in parts.
+        let (command, notes) =
+            libstore::resolve_scoped_parts(libstore::store(), &e.project().library, command)?;
+        let mut response = e.execute(CommandRequest {
             expected_revision,
             actor: Actor::human(),
             command,
             approval: None,
-        })
-    })
+        });
+        if response.accepted {
+            response.warnings.extend(notes);
+        }
+        Ok(response)
+    })?
 }
 
 pub fn undo(s: &Session, expected_revision: u64) -> Result<CommandResponse, String> {
@@ -775,7 +783,19 @@ pub struct LibraryEntry {
     pub pins: Vec<(String, String)>,
 }
 
+/// Built-in parts for the Place tool, unless the built-in library is disabled in Libraries
+/// (ADR-0035: a disabled library is hidden from search and placement).
 pub fn library_components() -> Vec<LibraryEntry> {
+    library_components_in(libstore::store())
+}
+
+pub fn library_components_in(store: &libstore::LibraryStore) -> Vec<LibraryEntry> {
+    let off = libcatalog::disabled(store.root());
+    if off.contains(&libcatalog::scope_id(
+        &eak_manufacturing::library_link::Scope::Builtin,
+    )) {
+        return vec![];
+    }
     eak_core::builtin::components()
         .into_iter()
         .map(|c| LibraryEntry {
@@ -794,14 +814,16 @@ pub fn library_components() -> Vec<LibraryEntry> {
         .collect()
 }
 
-/// One library part as shown by the library panel: built-in catalogue merged with the
-/// project library (a project definition shadows the built-in of the same id). Read-only;
+/// One library part as shown by the library panel: every enabled library (built-in, project,
+/// personal, imported), one row per id. The row shows the definition a placement will use: the
+/// project copy, then the built-in, then the personal copy, then an imported one. Read-only;
 /// placing or editing goes through `PlaceSymbol` / `SetComponentProperties` /
-/// `AssignComponentFootprint`.
+/// `AssignComponentFootprint` (a personal or imported part is copied into the project in the
+/// same `Batch` as its placement, see `libstore::resolve_scoped_parts`).
 #[derive(Debug, Clone, Serialize)]
 pub struct LibraryPart {
     pub id: String,
-    /// `builtin` (shipped catalogue) or `project` (stored in this project's library).
+    /// `builtin`, `project`, `personal` or `imported:<library name>`.
     pub source: String,
     /// True when the project library already holds a copy (placing will not import).
     pub in_project: bool,
@@ -810,8 +832,9 @@ pub struct LibraryPart {
     pub unverified_ratings: usize,
 }
 
-/// Search the merged library. `source` is `all`, `builtin` or `project`; `category` an exact
-/// category or empty for any. Terms are AND-matched by `ComponentDef::matches_query`.
+/// Search the merged library. `source` is `all`, `builtin`, `project`, `personal`, `imported`
+/// (any imported library) or `imported:<name>`; `category` an exact category or empty for any.
+/// Terms are AND-matched by `ComponentDef::matches_query`. Disabled libraries are left out.
 pub fn library_search(
     s: &Session,
     query: &str,
@@ -819,37 +842,55 @@ pub fn library_search(
     source: &str,
 ) -> Result<Vec<LibraryPart>, String> {
     let (_, p) = s.shared_project()?;
-    Ok(merged_library(&p.library, query, category, source))
+    Ok(merged_library(
+        libstore::store(),
+        &p.library,
+        query,
+        category,
+        source,
+    ))
 }
 
-fn merged_library(
+pub fn merged_library(
+    store: &libstore::LibraryStore,
     project: &std::collections::BTreeMap<String, eak_core::ComponentDef>,
     query: &str,
     category: &str,
     source: &str,
 ) -> Vec<LibraryPart> {
+    use eak_manufacturing::library_link::Scope;
+    let rank = |sc: &Scope| match sc {
+        Scope::Project => 0,
+        Scope::Builtin => 1,
+        Scope::Personal => 2,
+        Scope::Imported(_) => 3,
+    };
+    let mut defs = libstore::all_defs(store, project);
+    defs.sort_by_key(|(sc, _)| rank(sc));
     let mut parts: std::collections::BTreeMap<String, LibraryPart> = Default::default();
-    let mut add = |def: eak_core::ComponentDef, src: &str| {
+    for (sc, def) in defs {
+        if parts.contains_key(&def.id) {
+            continue;
+        }
         parts.insert(
             def.id.clone(),
             LibraryPart {
                 id: def.id.clone(),
-                source: src.into(),
+                source: sc.label(),
                 in_project: project.contains_key(&def.id),
                 unverified_ratings: def.ratings.iter().filter(|r| !r.verified).count(),
                 def,
             },
         );
-    };
-    for d in eak_core::builtin::components() {
-        add(d, "builtin");
-    }
-    for d in project.values() {
-        add(d.clone(), "project");
     }
     parts
         .into_values()
-        .filter(|p| source == "all" || source.is_empty() || p.source == source)
+        .filter(|p| {
+            source == "all"
+                || source.is_empty()
+                || p.source == source
+                || (source == "imported" && p.source.starts_with("imported:"))
+        })
         .filter(|p| category.is_empty() || p.def.category == category)
         .filter(|p| p.def.matches_query(query))
         .collect()
@@ -907,7 +948,7 @@ pub fn footprint_candidates(
         .ok_or_else(|| format!("unknown component {component_id}"))?;
     let mut out = vec![];
     let mut seen = std::collections::BTreeSet::new();
-    for p in merged_library(project, "", "", "all") {
+    for p in merged_library(libstore::store(), project, "", "", "all") {
         if p.id == target.id || !seen.insert(p.def.footprint.name.clone()) {
             continue;
         }

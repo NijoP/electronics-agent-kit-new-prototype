@@ -356,7 +356,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         refdes: null,
         value: null,
       });
-      edit.notify?.(`Placed ${dragged?.name ?? compId} on sheet.`);
+      // No "Placed" message here: the workspace reports the engine's answer (accepted or why not).
     },
   };
 

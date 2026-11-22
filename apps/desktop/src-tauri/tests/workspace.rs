@@ -312,6 +312,8 @@ fn explorer_cannot_change_engine_owned_files() {
         "checkpoints",
         "checkpoints/c1.json",
         "evidence",
+        "sourcing",
+        "sourcing/journal.jsonl",
     ] {
         assert!(
             project_file_delete(&s, &id, rel, true).is_err(),

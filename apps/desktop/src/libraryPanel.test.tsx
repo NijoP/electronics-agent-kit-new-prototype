@@ -3,7 +3,7 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IPC_COMMANDS } from "./api";
-import { LibraryPanel } from "./shell/LibraryPanel";
+import { LibraryPanel, sourceLabel } from "./shell/LibraryPanel";
 import type { ComponentDef, LibraryPart } from "./types";
 
 const def = (id: string, name: string, extra: Partial<ComponentDef> = {}): ComponentDef => ({
@@ -77,7 +77,7 @@ describe("LibraryPanel", () => {
     const { execute, onPlace } = mount();
     fireEvent.click(await screen.findByText("LED 0603"));
     fireEvent.click(screen.getByRole("button", { name: "Place on schematic" }));
-    expect(onPlace).toHaveBeenCalledWith({ id: "LED_0603", name: "LED 0603" });
+    expect(onPlace).toHaveBeenCalledWith(expect.objectContaining({ id: "LED_0603", name: "LED 0603", refdes_prefix: "R" }));
     fireEvent.click(screen.getByRole("button", { name: "Add to project" }));
     expect(execute).toHaveBeenCalledWith({ type: "ImportLibraryComponent", component_id: "LED_0603" });
     expect(screen.queryByLabelText("MPN")).toBeNull();
@@ -122,5 +122,15 @@ describe("LibraryPanel", () => {
     expect(c.component_id).toBe("R_0603");
     expect(c.footprint.name).toBe("R_0805");
     expect(c.pin_map).toEqual({ "1": ["1"], "2": ["2"] });
+  });
+});
+
+describe("sourceLabel (F8)", () => {
+  it("names personal and imported libraries and says placing copies the part into the project", () => {
+    expect(sourceLabel({ source: "personal", in_project: false })).toBe("Personal library; placing copies it into the project");
+    expect(sourceLabel({ source: "imported:open-parts", in_project: false })).toBe("Imported library open-parts; placing copies it into the project");
+    expect(sourceLabel({ source: "imported:open-parts", in_project: true })).toBe("Imported library open-parts (copy in project)");
+    expect(sourceLabel({ source: "builtin", in_project: true })).toBe("Built-in (copy in project)");
+    expect(sourceLabel({ source: "project", in_project: true })).toBe("Project library");
   });
 });

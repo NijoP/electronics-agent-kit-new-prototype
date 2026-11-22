@@ -6,7 +6,8 @@ import { api } from "../api";
 import { KicadImport } from "../KicadImport";
 import type { LibraryCatalogView } from "../types";
 
-export function LibraryManager({ revision }: { revision: number }) {
+/** `onChanged` runs after a library was enabled, disabled or committed, so searches refresh. */
+export function LibraryManager({ revision, onChanged }: { revision: number; onChanged?: () => void }) {
   const [cat, setCat] = useState<LibraryCatalogView | null>(null);
   const [q, setQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -37,7 +38,10 @@ export function LibraryManager({ revision }: { revision: number }) {
     setErr(null);
     api
       .librarySetEnabled(id, enabled)
-      .then((c) => setCat(c ?? null))
+      .then((c) => {
+        setCat(c ?? null);
+        onChanged?.();
+      })
       .catch((e) => setErr(String(e)));
   };
 
@@ -63,7 +67,12 @@ export function LibraryManager({ revision }: { revision: number }) {
           </li>
         ))}
       </ul>
-      <KicadImport onCommitted={() => { api.libraryCatalog().then((c) => setCat(c ?? null)); }} />
+      <KicadImport
+        onCommitted={() => {
+          api.libraryCatalog().then((c) => setCat(c ?? null));
+          onChanged?.();
+        }}
+      />
       {rows.length === 0 && <p className="empty-state">No library matches.</p>}
       {(cat?.problems ?? []).map((p) => (
         <p key={p} className="muted" role="status">

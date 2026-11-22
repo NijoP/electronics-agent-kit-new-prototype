@@ -25,6 +25,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev pkg-config
       - name: Python-free policy
         run: bash scripts/check-no-python.sh
+      - name: Engine boundary (no direct project-folder writes from the desktop IPC layer)
+        run: |
+          bash scripts/check-engine-boundary.sh --self-test
+          bash scripts/check-engine-boundary.sh
       - name: Frontend install, typecheck, tests
         working-directory: apps/desktop
         env:

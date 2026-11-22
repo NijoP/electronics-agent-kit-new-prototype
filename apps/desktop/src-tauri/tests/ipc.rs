@@ -557,7 +557,10 @@ fn library_search_merges_builtin_and_project_and_keeps_provenance() {
     let s = session();
     create_project(&s, &path(&d), "Lib").unwrap();
     let all = library_search(&s, "", "", "all").unwrap();
-    assert!(all.iter().all(|p| p.source == "builtin" && !p.in_project));
+    // Nothing is in the project yet. (The headless library store is shared by every test
+    // process, so personal or imported parts may also be listed beside the built-ins.)
+    assert!(all.iter().all(|p| p.source != "project" && !p.in_project));
+    assert!(all.iter().any(|p| p.source == "builtin"));
     // Search is AND-over-terms across fields and filterable by category / source.
     let r = library_search(&s, "resistor 0603", "", "all").unwrap();
     assert!(r.iter().any(|p| p.id == "R_0603"));

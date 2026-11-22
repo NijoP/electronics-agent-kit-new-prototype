@@ -101,6 +101,9 @@ describe("Schematic component drag-and-drop & click-to-place", () => {
       expect(Math.abs(cmd.position.x - mm(50))).toBeLessThan(mm(2));
       expect(Math.abs(cmd.position.y - mm(50))).toBeLessThan(mm(2));
     }
+    // F8 regression: the drop no longer claims "Placed" before the engine has answered (a
+    // rejected placement used to be announced as a success).
+    expect(notify.mock.calls.some(([m]) => /Placed/.test(m))).toBe(false);
   });
 
   it("rotates during placement with R key and commits with rotated orientation", () => {

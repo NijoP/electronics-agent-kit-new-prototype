@@ -66,10 +66,21 @@ jobs:
           UI_SCENARIO: scenarios/a1-menus.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # E3 (engine boundary and library provenance): its own fresh app instance and fixture.
+      - name: Run E3 scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/e3
+          UI_SCENARIO: scenarios/e3-engine-provenance.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       - name: Results to job summary
         if: always()
         run: |
           cat "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no results file" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ runner.temp }}/ui-evidence/e3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no E3 results file" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,4 +90,7 @@ jobs:
             ${{ runner.temp }}/ui-evidence/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/tauri-driver.log
+            ${{ runner.temp }}/ui-evidence/e3/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/e3/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/e3/tauri-driver.log
           if-no-files-found: warn
