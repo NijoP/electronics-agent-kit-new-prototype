@@ -48,7 +48,6 @@ jobs:
         run: |
           sudo apt-get install -y webkitgtk-webdriver || sudo apt-get install -y webkit2gtk-driver
           command -v WebKitWebDriver || sudo ln -s "$(find /usr -name WebKitWebDriver -type f | head -1)" /usr/local/bin/WebKitWebDriver
-          WebKitWebDriver --version
       - name: tauri-driver
         run: cargo install tauri-driver --locked
       - name: Debug build of the desktop app (frontend embedded)
