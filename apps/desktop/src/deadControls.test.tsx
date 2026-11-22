@@ -165,12 +165,12 @@ describe("navigation and state display", () => {
   it("View > Show <view> shows the view and never collapses it", async () => {
     await open();
     const side = () => screen.getByRole("complementary", { hidden: true, name: "Side panel" });
-    menu("View", "Show Design manager");
+    menu("View", "Show Domain");
     await waitFor(() => expect(side().getAttribute("aria-hidden")).toBe("false"));
-    expect(side().querySelector(".panel-head .title")!.textContent).toBe("Design manager");
-    menu("View", /Show Design manager/);
+    expect(side().querySelector(".panel-head .title")!.textContent).toBe("Domain");
+    menu("View", /Show Domain/);
     expect(side().getAttribute("aria-hidden")).toBe("false");
-    expect(side().querySelector(".panel-head .title")!.textContent).toBe("Design manager");
+    expect(side().querySelector(".panel-head .title")!.textContent).toBe("Domain");
   });
 
   it("quick open > a sheet opens that sheet, not the first schematic", async () => {
