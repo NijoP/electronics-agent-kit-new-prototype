@@ -2,7 +2,8 @@
 // palette and the key handler for the active document. Nothing here knows any operation; the
 // per-document sets (`sets.ts`) define them.
 import type { PaletteAction } from "../CommandPalette";
-import { DEFAULT_KEYMAP, matches } from "../design/shortcuts";
+import { matches } from "../design/shortcuts";
+import { effectiveKeys } from "../settings/keymap";
 import type { Menu } from "../shell/MenuBar";
 import type { ToolbarGroup, ToolbarGroupId } from "../shell/Toolbar";
 import { MENU_ORDER, type Action, type DocContext } from "./types";
@@ -10,8 +11,8 @@ import { MENU_ORDER, type Action, type DocContext } from "./types";
 /** Toolbar groups, left to right. */
 export const TOOLBAR_ORDER: readonly ToolbarGroupId[] = ["file", "edit", "view", "checks", "mfg", "app"];
 
-/** Key specs of an action: its own, else the default key map. */
-export const keysOf = (a: Action): readonly string[] => a.keys ?? DEFAULT_KEYMAP[a.id] ?? [];
+/** Key specs of an action: the user's rebinding (Settings > Keyboard), else the chosen preset's (its own keys, else the default key map). */
+export const keysOf = (a: Action): readonly string[] => effectiveKeys(a);
 
 /** Actions that exist in this context (an action that does not apply is absent, not disabled). */
 export const visibleIn = (actions: readonly Action[], ctx: DocContext): Action[] => actions.filter((a) => !a.docs || a.docs.includes(ctx));
