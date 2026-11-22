@@ -1,5 +1,6 @@
 // Result of "Update PCB": what the engine's schematic-to-PCB sync added, removed and modified.
 import type { SyncReport } from "./syncReport";
+import { useEscape } from "./useEscape";
 
 interface Props {
   /** Null when the sync was refused; `error` then says why. */
@@ -30,6 +31,7 @@ function Section({ title, items, empty }: { title: string; items: string[]; empt
 }
 
 export function SyncReportDialog({ report, error, revision, onOpenPcb, onClose }: Props) {
+  useEscape(onClose);
   return (
     <div className="palette-backdrop" onClick={onClose}>
       <div className="palette sync-report" role="dialog" aria-label="Update PCB report" onClick={(e) => e.stopPropagation()}>

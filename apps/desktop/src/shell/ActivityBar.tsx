@@ -42,7 +42,7 @@ export function ActivityBar({ sideView, sideOpen, onSide, workspace, onWorkspace
     const v = SIDE_VIEWS.find((x) => x.id === id)!;
     const on = sideOpen && sideView === id;
     return (
-      <button key={id} type="button" className={on ? "ab on" : "ab"} aria-label={v.label} aria-pressed={on} title={tip(v.label, id === "project" ? "Mod+Shift+E" : "Mod+B")} onClick={() => onSide(id)}>
+      <button key={id} type="button" className={on ? "ab on" : "ab"} aria-label={v.label} aria-pressed={on} title={tip(on ? `${v.label} (press again to collapse the side panel)` : v.label, id === "project" ? "Mod+Shift+E" : undefined)} onClick={() => onSide(id)}>
         {Icons[id === "parts" ? "parts" : id]}
       </button>
     );

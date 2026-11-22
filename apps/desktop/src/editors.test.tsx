@@ -229,6 +229,24 @@ describe("PCB editor", () => {
     fireEvent.keyDown(window, { key: "f" });
     expect(sent[1]).toEqual([{ type: "MoveFootprint", footprint_id: "fp_r1", position: { x: 10_000_000, y: 10_000_000 }, rotation: null, side: "bottom" }]);
   });
+
+  it("slice E1 regression: R and F act on the selection only under the Select and Move tools", () => {
+    const { container } = render(<PcbView snapshot={fixture()} selected={null} onSelect={() => {}} edit={edit()} />);
+    tool("Select");
+    const fp = container.querySelector('[data-footprint-id="fp_r1"] .courtyard')!;
+    fireEvent.pointerDown(fp, { clientX: 500, clientY: 500, button: 0, buttons: 1 });
+    fireEvent.pointerUp(fp, { clientX: 500, clientY: 500, button: 0 });
+    for (const t of ["Via", "Route", "Zone", "Board outline"]) {
+      tool(t);
+      fireEvent.keyDown(window, { key: "r" });
+      fireEvent.keyDown(window, { key: "f" });
+    }
+    expect(sent).toEqual([]);
+    tool("Select");
+    fireEvent.keyDown(window, { key: "f" });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toEqual([{ type: "MoveFootprint", footprint_id: "fp_r1", position: { x: 10_000_000, y: 10_000_000 }, rotation: null, side: "bottom" }]);
+  });
 });
 
 describe("view geometry sanity", () => {

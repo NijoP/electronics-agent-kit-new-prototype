@@ -43,6 +43,7 @@ export interface ActionDeps {
   fit: () => void;
   select: (id: string | null) => void;
   toggleSplit: () => void;
+  /** Shows that side view (opens the panel if needed; never collapses it). */
   showSide: (v: SideView) => void;
   toggleSide: () => void;
   toggleBottom: () => void;
@@ -53,6 +54,10 @@ export interface ActionDeps {
   palette: () => void;
   quickOpen: () => void;
   help: () => void;
+  /** Opens the About dialog (version, what EAK does and does not claim). */
+  about: () => void;
+  /** Side view shown in the side panel ("Show <view>" is checked when it is open). */
+  sideView: SideView;
   notify: (m: string) => void;
   open: (docId: string) => void;
   closeAll: () => void;
@@ -73,7 +78,6 @@ const DESIGN: readonly DocContext[] = ["home", "schematic", "pcb"];
 const BOARD: readonly DocContext[] = ["pcb", "3d"];
 /** The handler of an action that has no implementation; such an action must be unavailable with a reason (`qa/uiInventory.ts`). */
 export const NO_HANDLER = () => {};
-const never = NO_HANDLER;
 
 /** File, Edit, View, Project, Tools, Settings and Help: the chrome every document shares. */
 export function commonActions(d: ActionDeps): Action[] {
@@ -84,8 +88,9 @@ export function commonActions(d: ActionDeps): Action[] {
     { id: "new", label: "New project…", short: "New project", menu: "File", toolbar: "file", icon: "new", enabled: idle, run: () => d.dialog("new") },
     { id: "open", label: "Open project…", short: "Open project", menu: "File", toolbar: "file", icon: "open", enabled: idle, run: () => d.dialog("open") },
     ...recent.map<Action>((r, i) => ({ id: `recent-${r.project_id}`, label: `Recent: ${r.name}`, menu: "File", sep: i === 0, palette: false, enabled: idle, run: () => d.openRecent(r.path) })),
-    { id: "save", label: "Save", menu: "File", sep: true, toolbar: "file", icon: "save", whileTyping: true, enabled: idle, run: d.save },
-    { id: "saveas", label: "Save as…", short: "Save as", menu: "File", toolbar: "file", icon: "save-as", enabled: () => "Not implemented: the engine saves the project in place", run: never },
+    // A-SAVE: the engine writes every accepted command before it returns, so there is nothing
+    // unsaved; Save asks the engine to confirm that (and reports blocked writes). No Save as.
+    { id: "save", label: "Save (confirm written)", short: "Save", title: "Save: every accepted command is already written; this asks the engine to confirm no write is blocked", menu: "File", sep: true, toolbar: "file", icon: "save", whileTyping: true, enabled: idle, run: d.save },
     { id: "close", label: "Close project", menu: "File", sep: true, toolbar: "app", icon: "close", enabled: idle, run: d.close },
 
     { id: "undo", label: "Undo", menu: "Edit", toolbar: "file", icon: "undo", enabled: () => (d.snapshot.can_undo ? idle() : "Nothing to undo"), run: d.undo },
@@ -104,7 +109,7 @@ export function commonActions(d: ActionDeps): Action[] {
     { id: "toggle-side", label: "Side panel", whileTyping: true, menu: "View", sep: true, checked: d.sideOpen, enabled: () => true, run: d.toggleSide },
     { id: "toggle-bottom", label: "Bottom panel", whileTyping: true, menu: "View", checked: d.bottomOpen, enabled: () => true, run: d.toggleBottom },
     { id: "toggle-split", label: "Split schematic and PCB", menu: "View", checked: d.split, enabled: () => true, run: d.toggleSplit },
-    ...d.sideViews.map<Action>((v, i) => ({ id: `show-${v.id}`, label: `Show ${v.label}`, whileTyping: v.id === "project", menu: "View", sep: i === 0, enabled: () => true, run: () => d.showSide(v.id) })),
+    ...d.sideViews.map<Action>((v, i) => ({ id: `show-${v.id}`, label: `Show ${v.label}`, whileTyping: v.id === "project", menu: "View", sep: i === 0, checked: d.sideOpen && d.sideView === v.id, enabled: () => true, run: () => d.showSide(v.id) })),
     { id: "bom", label: "Show BOM", menu: "View", sep: true, enabled: () => true, run: () => d.showBottom("bom") },
     { id: "log", label: "Show log", menu: "View", enabled: () => true, run: () => d.showBottom("log") },
     { id: "ws-schematic", label: "Go to Schematic editor", whileTyping: true, menu: "View", sep: true, enabled: () => true, run: () => d.showWorkspace("schematic") },
@@ -112,7 +117,7 @@ export function commonActions(d: ActionDeps): Action[] {
     ...d.edaViews.map<Action>((w) => ({ id: `ws-${w.id}`, label: `Go to ${w.label}`, keys: w.shortcut ? [w.shortcut] : [], whileTyping: true, menu: "View", enabled: () => true, run: () => d.showWorkspace(w.id) })),
     { id: "reset-layout", label: "Reset panel layout", menu: "View", sep: true, enabled: () => true, run: d.resetLayout },
 
-    ...d.docs.map<Action>((doc) => ({ id: `open-${doc.id}`, label: `Open ${doc.kind === "pcb" ? "PCB" : `sheet ${doc.title}`}`, menu: "Project", paletteGroup: "Documents", enabled: () => true, run: () => d.open(doc.id) })),
+    ...d.docs.map<Action>((doc) => ({ id: `open-${doc.id}`, label: `Open ${doc.kind === "pcb" ? "PCB" : doc.kind === "file" ? `file ${doc.title}` : `sheet ${doc.title}`}`, menu: "Project", paletteGroup: "Documents", enabled: () => true, run: () => d.open(doc.id) })),
     { id: "close-all", label: "Close all documents", menu: "Project", paletteGroup: "Documents", enabled: () => (d.openIds.length === 0 ? "No documents are open" : true), run: d.closeAll },
     ...d.projects.filter((p) => !p.active).map<Action>((p, i) => ({ id: `proj-${p.id}`, label: `Switch to project ${p.name}`, menu: "Project", sep: i === 0, enabled: idle, run: () => d.switchTo(p.id) })),
 
@@ -128,7 +133,7 @@ export function commonActions(d: ActionDeps): Action[] {
       label: "About EAK",
       menu: "Help",
       enabled: () => true,
-      run: () => d.notify("EAK: Rust engineering core, typed commands, independent validation. AI output never certifies engineering numbers."),
+      run: d.about,
     },
   ];
 }
@@ -180,7 +185,6 @@ export function schematicActions(d: ActionDeps): Action[] {
     tool("label", "Net / power label", "Net label or power port (AddNetLabel; pick Net or Power in the tool options)", "net-label", { split: "sch-marks" }),
     tool("noconnect", "No connect", "Mark a pin as intentionally unconnected (SetNoConnect)", "no-connect", { split: "sch-marks" }),
     tool("pinlabel", "Label pin", "Name the net on a pin (LabelPin)", "pin-label", { split: "sch-marks" }),
-    { id: "t-junction", label: "Junction", docs: SCH, menu: "Place", toolbar: "edit", icon: "junction", split: "sch-marks", enabled: () => "Junctions are added automatically where wires meet", run: never },
     {
       id: "t-mirror",
       label: "Mirror selection",
@@ -244,7 +248,6 @@ export function boardActions(d: ActionDeps): Action[] {
   return [
     { id: "export", label: "Export manufacturing files…", short: "Export manufacturing files", title: "Gerber, Excellon, BOM, CPL, fab-pack ZIP; runs ERC/DRC/MECH/DFM", docs: BOARD, menu: "Manufacturing", toolbar: "mfg", icon: "export", enabled: idle, run: () => d.dialog("export") },
     { id: "show-mfg-panel", label: "Show manufacturing panel", docs: BOARD, menu: "Manufacturing", enabled: () => true, run: () => d.showSide("manufacturing") },
-    { id: "release", label: "Release check…", docs: BOARD, menu: "Manufacturing", enabled: () => "Not implemented: exports are always DRAFT", run: never },
   ];
 }
 

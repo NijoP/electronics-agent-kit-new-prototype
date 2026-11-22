@@ -13,6 +13,9 @@ import { SchematicView } from "./SchematicView";
 import { formatShortcut, SHORTCUTS } from "./design/shortcuts";
 import { actionForKey, keysOf, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./actions/registry";
 import { workspaceActions } from "./actions/sets";
+import { editorKeys } from "./actions/editorKeys";
+import { APP_VERSION } from "./version";
+import { useEscape } from "./shell/useEscape";
 import { docContext, type Action, type DocContext } from "./actions/types";
 import type { Theme } from "./design/theme";
 import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
@@ -130,6 +133,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   }, [initial.project.id, workspace]);
   const [layout, setLayout] = useState<Layout>(loadLayout);
   const [help, setHelp] = useState(false);
+  const [about, setAbout] = useState(false);
   const [conn, setConn] = useState<ConnectivityReport | null>(null);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [activeFinding, setActiveFinding] = useState<string | null>(null);
@@ -188,7 +192,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   // Editors listen on window: while this workspace (or its editor area) is hidden none may act.
   setActiveEditor(visible && wsId === "editor" ? activeId : "__hidden__");
   const openDocs = openIds.map((id) => docs.find((d) => d.id === id)!);
-  const dirty = busy || !!snapshot.blocked;
+  // Per-document marker (A-SAVE): the engine writes every accepted command before it returns, so
+  // the only "unconfirmed" states are writes blocked (every engine document) or a command in
+  // flight (the active document, which issued it). File viewers are not engine documents.
+  const docMarker = (d: { id: string; kind: string } | undefined): string | null =>
+    !d || d.kind === "file" ? null : snapshot.blocked ? `Writes are blocked: ${snapshot.blocked}` : busy && d.id === activeId ? "A command is in flight; the engine has not confirmed it yet" : null;
   const [domain, setDomain] = useState<DomainReport | null>(null);
   const [domainError, setDomainError] = useState<string | null>(null);
 
@@ -461,12 +469,15 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const selectedSymbol = selected ? snapshot.project.schematic.symbols[selected] : undefined;
   const selLabel = selectedSymbol ? `${selectedSymbol.refdes} (${selectedSymbol.value})` : null;
 
+  // "Show <view>" (menus, overview links) always shows; the activity bar button toggles, so
+  // pressing the open view again collapses the panel.
   const showSide = (v: SideView) => {
+    setSideView(v);
+    setSideOpen(true);
+  };
+  const toggleSideView = (v: SideView) => {
     if (sideOpen && sideView === v) setSideOpen(false);
-    else {
-      setSideView(v);
-      setSideOpen(true);
-    }
+    else showSide(v);
   };
 
   // Net summary from the geometry the engine derived (no model involved).
@@ -509,11 +520,12 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     const d = docs.find((x) => x.id === id);
     // The engine writes every accepted command before it returns, so "unsaved" only means a
     // command is in flight or writes are blocked; closing then needs an explicit yes.
-    if (dirty && !window.confirm(`${d?.title ?? "Document"} has changes the engine has not confirmed (command in flight or writes blocked). Close anyway?`)) return;
+    const why = docMarker(d);
+    if (why && !window.confirm(`${d?.title ?? "Document"}: ${why}. Close anyway?`)) return;
     setDocState(closeDoc({ open: openIds, active: activeId }, id));
   };
   const closeAll = () => {
-    if (dirty && !window.confirm("The engine has not confirmed the latest change. Close all documents anyway?")) return;
+    if (openDocs.some((d) => docMarker(d)) && !window.confirm("The engine has not confirmed the latest change. Close all documents anyway?")) return;
     setDocState({ open: [], active: null });
   };
   const resetLayout = () => setLayout(DEFAULT_LAYOUT);
@@ -551,7 +563,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       id: `sheet-${sh.id}`,
       label: sh.name,
       group: "Sheet",
-      run: () => showKind("schematic"),
+      run: () => open(`sch:${sh.id}`),
     })),
   ];
 
@@ -627,6 +639,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     palette: () => (setQuickOpen(false), setPalette(true)),
     quickOpen: () => (setPalette(false), setQuickOpen(true)),
     help: () => setHelp(true),
+    about: () => setAbout(true),
+    sideView,
     notify: setMessage,
     open, closeAll, showWorkspace, switchTo, placePart,
     grid: activeGrid,
@@ -652,9 +666,19 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           <div className="tb-title">
             <strong>{snapshot.project.name}</strong>
             <span className="muted">revision {revision}</span>
-            <span className="saved" title="Every accepted command is written to disk atomically before it returns">
-              Saved · r{revision}
-            </span>
+            {snapshot.blocked ? (
+              <span className="saved bad" data-state="blocked" title={`Writes are blocked: ${snapshot.blocked}`}>
+                Writes blocked · r{revision}
+              </span>
+            ) : busy ? (
+              <span className="saved busy" data-state="busy" title="A command is in flight; the engine has not confirmed it yet">
+                Writing… · r{revision}
+              </span>
+            ) : (
+              <span className="saved" data-state="saved" title="Every accepted command is written to disk atomically before it returns">
+                Saved · r{revision}
+              </span>
+            )}
           </div>
         }
       />
@@ -670,7 +694,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         <ActivityBar
           sideView={sideView}
           sideOpen={sideOpen}
-          onSide={showSide}
+          onSide={toggleSideView}
           workspace={wsId !== "editor" ? wsId : (docs.find((d) => d.id === activeId)?.kind === "schematic" || docs.find((d) => d.id === activeId)?.kind === "pcb" ? (docs.find((d) => d.id === activeId)!.kind as string) : "")}
           onWorkspace={showWorkspace}
           registered={edaViews}
@@ -748,7 +772,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
             <ProjectTabs projects={projects} onSwitch={switchTo} onClose={closeProjectTab} onOpen={() => setDialog("open")} disabled={busy ? "An engine command is running" : undefined} />
           )}
           <div className="editor-area" hidden={wsId !== "editor"}>
-            <DocTabs docs={openDocs} active={activeId} dirty={dirty} onSelect={open} onClose={closeOne} onCloseAll={closeAll} split={split} onSplit={() => setSplit((v) => !v)} />
+            <DocTabs docs={openDocs} active={activeId} marker={docMarker} onSelect={open} onClose={closeOne} onCloseAll={closeAll} split={split} onSplit={() => setSplit((v) => !v)} />
             <div className={`views ${shown.length > 1 ? "split" : "single"}`}>
               {openDocs.length === 0 && (
                 <div className="canvas-empty static" aria-label="No documents open">
@@ -814,7 +838,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       <StatusBar
         project={snapshot.project.name}
         revision={revision}
-        layer={status.layer === "top" ? "Top" : "Bottom"}
+        layer={ctx === "pcb" ? (status.layer === "top" ? "Top" : "Bottom") : null}
         grid={activeGrid ? `${formatLength(activeGrid.cfg.spacingMm, activeGrid.cfg.unit)}${activeGrid.cfg.snap ? "" : " (snap off)"}` : null}
         drc={results.drc}
         selection={selLabel ? `Selected ${selLabel}` : null}
@@ -835,21 +859,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           onClose={() => setDialog(null)}
         />
       )}
-      {help && (
-        <div className="palette-backdrop" onClick={() => setHelp(false)}>
-          <div className="palette help" role="dialog" aria-label="Keyboard shortcuts" onClick={(e) => e.stopPropagation()}>
-            <h3>Keyboard shortcuts</h3>
-            <ul>
-              {visibleIn(allActions, ctx).filter((a) => keysOf(a).length > 0).map((a) => (
-                <li key={a.id}><span className="grow">{a.label}</span><kbd>{keysOf(a).map((k) => formatShortcut(k)).join(" / ")}</kbd></li>
-              ))}
-              <li><span className="grow">select editor tool</span><kbd>1–7</kbd></li>
-              <li><span className="grow">rotate / flip selection</span><kbd>R / F</kbd></li>
-            </ul>
-            <button type="button" onClick={() => setHelp(false)}>Close</button>
-          </div>
-        </div>
-      )}
+      {help && <ShortcutHelp actions={visibleIn(allActions, ctx).filter((a) => keysOf(a).length > 0)} editor={editorKeys(ctx)} onClose={() => setHelp(false)} />}
+      {about && <AboutDialog onClose={() => setAbout(false)} />}
       {syncDialog && (
         <SyncReportDialog
           report={syncDialog.report}
@@ -873,6 +884,57 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           empty="Nothing matches"
         />
       )}
+    </div>
+  );
+}
+
+/** Help > Keyboard shortcuts: generated from the registry actions of the active document and the
+ * active editor's own keys (actions/editorKeys.ts); nothing here is typed by hand. */
+function ShortcutHelp({ actions, editor, onClose }: { actions: Action[]; editor: { keys: string; label: string }[]; onClose: () => void }) {
+  useEscape(onClose);
+  const fmt = (spec: string) => spec.split(" / ").map((k) => formatShortcut(k)).join(" / ");
+  return (
+    <div className="palette-backdrop" onClick={onClose}>
+      <div className="palette help" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onClick={(e) => e.stopPropagation()}>
+        <h3>Keyboard shortcuts</h3>
+        <ul aria-label="Workspace shortcuts">
+          {actions.map((a) => (
+            <li key={a.id}><span className="grow">{a.label}</span><kbd>{keysOf(a).map((k) => formatShortcut(k)).join(" / ")}</kbd></li>
+          ))}
+        </ul>
+        {editor.length > 0 && (
+          <>
+            <h4>In the active editor</h4>
+            <ul aria-label="Editor shortcuts">
+              {editor.map((k) => (
+                <li key={k.keys + k.label}><span className="grow">{k.label}</span><kbd>{fmt(k.keys)}</kbd></li>
+              ))}
+            </ul>
+          </>
+        )}
+        <button type="button" onClick={onClose}>Close</button>
+      </div>
+    </div>
+  );
+}
+
+/** Help > About EAK: the version this build reports and what EAK does and does not claim. */
+function AboutDialog({ onClose }: { onClose: () => void }) {
+  useEscape(onClose);
+  return (
+    <div className="palette-backdrop" onClick={onClose}>
+      <div className="palette help" role="dialog" aria-modal="true" aria-label="About EAK" onClick={(e) => e.stopPropagation()}>
+        <h3>About EAK</h3>
+        <p>
+          Electronics Agent Kit <strong data-testid="app-version">version {APP_VERSION}</strong>
+        </p>
+        <p>
+          A Rust engineering core with one design representation, typed commands and independent validation. Every edit, from the UI, the CLI or an
+          agent, is one engine command; AI output never certifies engineering numbers.
+        </p>
+        <p className="muted">Exports are drafts for review. Checks that are not implemented are listed as such, never as passing.</p>
+        <button type="button" onClick={onClose}>Close</button>
+      </div>
     </div>
   );
 }

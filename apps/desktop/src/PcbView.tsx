@@ -48,7 +48,7 @@ interface Props {
 }
 
 type Tool = "select" | "outline" | "move" | "route" | "via" | "delete" | "zone";
-const TOOLS: [Tool, string][] = [
+export const TOOLS: [Tool, string][] = [
   ["select", "Select"],
   ["outline", "Board outline"],
   ["move", "Move"],
@@ -307,8 +307,10 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     else if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selTrack) deleteSelectedTrack();
     else if (e.key === "Enter" && tool === "outline") finishOutline();
     else if (e.key === "Enter" && tool === "zone") finishZone();
-    else if (k === "r" && sel.length) actions.rotate();
-    else if (k === "f" && sel.length) actions.flip();
+    // R and F act on the selection only under the tools that select it (Select, Move); under a
+    // drawing tool they would edit footprints the user cannot see are targeted.
+    else if (k === "r" && sel.length && MOVE_TOOLS.includes(tool)) actions.rotate();
+    else if (k === "f" && sel.length && MOVE_TOOLS.includes(tool)) actions.flip();
     else if (k === "l" && tool === "route") {
       const i = order.findIndex((o) => sameLayer(o, layer));
       changeLayer(order[(i + 1) % order.length]);
