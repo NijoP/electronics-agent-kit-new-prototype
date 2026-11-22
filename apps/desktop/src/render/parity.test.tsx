@@ -20,6 +20,7 @@ const pt = (x: number, y: number) => ({ x: mm(x), y: mm(y) });
 let sent: Command[];
 let notify: ReturnType<typeof vi.fn<(m: string) => void>>;
 let drawn: Call[];
+let contexts = 0;
 const realGetContext = HTMLCanvasElement.prototype.getContext;
 const edit = (): EditCtx => ({
   execute: async (c) => {
@@ -33,6 +34,7 @@ const edit = (): EditCtx => ({
 beforeEach(() => {
   sent = [];
   drawn = [];
+  contexts = 0;
   notify = vi.fn<(m: string) => void>();
   localStorage.clear();
   Element.prototype.getBoundingClientRect = () =>
@@ -48,6 +50,7 @@ beforeEach(() => {
   );
   setCanvas2dAvailableForTests(true);
   HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
+    contexts++;
     return stubContext(this.width, this.height, drawn).ctx;
   } as unknown as typeof HTMLCanvasElement.prototype.getContext;
 });
@@ -102,7 +105,11 @@ describe("Canvas2D PCB renderer", () => {
     expect(container.querySelector("[data-track-id]")).toBeNull();
     expect(container.querySelector(".canvas-stack > svg.canvas.canvas-top")).toBeTruthy();
     expect((screen.getByLabelText("PCB renderer") as HTMLSelectElement).value).toBe("canvas");
-    await waitFor(() => expect(drawn.some((c) => c.fn === "drawImage")).toBe(true));
+    const el = container.querySelector("canvas.scene-canvas") as HTMLCanvasElement;
+    // Each stage of the first frame, so a failure says where the pipeline stopped.
+    await waitFor(() => expect(el.width, "scene canvas sized to the measured pane").toBe(SIZE));
+    expect(contexts, "2D contexts requested").toBeGreaterThan(0);
+    await waitFor(() => expect(drawn.some((c) => c.fn === "drawImage") ? "drawImage" : `no drawImage; first calls: ${drawn.map((c) => c.fn).slice(0, 12).join(",")}`).toBe("drawImage"));
     expect(drawn.some((c) => c.fn === "fillText" && c.args[0] === "R1")).toBe(true);
   });
 
