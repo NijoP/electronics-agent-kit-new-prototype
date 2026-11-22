@@ -9,6 +9,8 @@ import { Coords, GridLayer, snapStepNm, useGridConfig } from "./grid";
 import type { Command, FlipAxis, Id, Point, Rotation, Snapshot, SymbolDef, SymbolGeom, SymbolInstance, SymbolPin } from "./types";
 import { boundsOf, fromView, mm, toView } from "./viewport";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
+import { ToolOptionFields } from "./shell/Inspector";
+import { NO_SELECTION, ROTATION_CHOICES, useHasInspector, usePublishEditorContext, type OptionField } from "./shell/inspectorModel";
 import { sheetNoConnects, toggleNoConnect } from "./tools/schematic/noConnect";
 import * as S from "./tools/schematic/selection";
 import { junctionPoints } from "./tools/schematic/junctions";
@@ -212,6 +214,45 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     return () => window.removeEventListener("keydown", h);
   }, []);
 
+  // A5: the active tool's options, shown by the right dock's inspector (inline here when no
+  // inspector is shown), and the selection the inspector edits.
+  const options: OptionField[] = !edit
+    ? []
+    : tool === "place"
+      ? [
+          { kind: "select", name: "Part", label: "Part", value: part?.id ?? "", options: edit.library.map((c) => ({ value: c.id, label: `${c.name} (${c.id})` })), onChange: setPartId },
+          { kind: "select", name: "Place rotation", label: "Rotation", value: placeRotation, options: ROTATION_CHOICES, onChange: (v) => setPlaceRotation(v as Rotation), title: "Rotation of the next placed part (R)" },
+        ]
+      : tool === "label" || tool === "pinlabel"
+        ? [
+            { kind: "text", name: "Net name", label: "Net name", value: labelName, onChange: setLabelName },
+            {
+              kind: "select",
+              name: "Label kind",
+              label: "Kind",
+              value: labelKind,
+              options: [
+                { value: "net", label: "net label" },
+                { value: "power", label: "power port" },
+              ],
+              onChange: (v) => setLabelKind(v as "net" | "power"),
+            },
+          ]
+        : tool === "wire"
+          ? [
+              { kind: "info", name: "Wire corners", label: "Corners", value: "horizontal leg, then vertical; pins snap" },
+              { kind: "unavailable", name: "Wire style", label: "Width, colour, line style", reason: "Unavailable: the EAK-IR has no wire style fields yet (IR v3, slice B1)" },
+            ]
+          : [];
+  usePublishEditorContext(docId, {
+    editor: "schematic",
+    tool,
+    toolLabel: TOOLS.find(([t]) => t === tool)?.[1] ?? tool,
+    options,
+    selection: { ...NO_SELECTION, symbols: sel.symbols, wires: sel.wires, labels: sel.labels },
+    sheetId: sheet?.id ?? null,
+  });
+  const inspector = useHasInspector();
   if (!sheet) return <p className="empty">This project has no schematic sheet.</p>;
 
   const pinAt = new Map(
@@ -471,6 +512,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       ? segments(start, snapPoint(hover, GRID, pins.map((p) => p.at), CAPTURE).point, false)
       : [];
 
+
   return (
     <section className="view" aria-label="Schematic view">
       <header className="view-header">
@@ -506,27 +548,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       </header>
       {edit && (
         <div className="tool-options">
-          {tool === "place" && (
-            <select aria-label="Part" value={part?.id ?? ""} onChange={(e) => setPartId(e.target.value)}>
-              {edit.library.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.id})
-                </option>
-              ))}
-            </select>
-          )}
-          {(tool === "label" || tool === "pinlabel") && (
-            <>
-              <input aria-label="Net name" value={labelName} onChange={(e) => setLabelName(e.target.value)} />
-              <select aria-label="Label kind" value={labelKind} onChange={(e) => setLabelKind(e.target.value as "net" | "power")}>
-                <option value="net">net label</option>
-                <option value="power">power port</option>
-              </select>
-            </>
-          )}
-          {sym && (
-            <SymbolFields key={`${sym.id}|${sym.refdes}|${sym.value}`} sym={sym} edit={edit} />
-          )}
+          {!inspector && <ToolOptionFields fields={options} layout="strip" />}
+          {sym && !inspector && <SymbolFields key={`${sym.id}|${sym.refdes}|${sym.value}`} sym={sym} edit={edit} />}
           {actions && !S.isEmpty(sel) && (
             <span className="selection-bar" role="group" aria-label="Selection">
               <button type="button" title="Rotate 90° (R)" disabled={!sel.symbols.length} onClick={actions.rotate}>

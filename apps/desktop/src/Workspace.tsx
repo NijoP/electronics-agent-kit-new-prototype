@@ -48,7 +48,8 @@ import { clampSize, DEFAULT_LAYOUT, LIMITS, useDockLayouts, type DockId, type La
 import { CanvasStrip } from "./shell/CanvasStrip";
 import { DesignManager } from "./shell/DesignManager";
 import { editorFor, pcbObjects, schematicPlace, type ManagerTab, type NetRow, type Target } from "./shell/designManagerData";
-import { PropertiesPanel, RightDock, shownRightTab, type RightTab } from "./shell/RightDock";
+import { RightDock, shownRightTab, type RightTab } from "./shell/RightDock";
+import { Inspector } from "./shell/Inspector";
 import type { Bounds } from "./viewport";
 import { MenuBar } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
@@ -906,7 +907,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
             {rightTab === "layers" ? (
               <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
             ) : (
-              <PropertiesPanel snapshot={snapshot} selected={selected} pcb={ctx === "pcb"} />
+              <Inspector snapshot={snapshot} docId={wsId === "editor" ? activeId : null} selected={selected} pcb={ctx === "pcb"} edit={edit} />
             )}
           </RightDock>
         ) : (
