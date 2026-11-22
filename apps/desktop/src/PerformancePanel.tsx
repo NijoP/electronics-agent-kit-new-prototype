@@ -1,5 +1,6 @@
 // Performance mode control (directive §4.2): one preference, resolved in Rust into job limits,
-// cache budget, 3D quality and terminal scrollback. These are preferences, not promises of a
+// 3D quality and terminal scrollback. The profile also carries a cache budget, but nothing in the
+// app consumes it yet, so it is not offered as a setting (slice E1: no control without an effect). These are preferences, not promises of a
 // frame rate, and no mode changes an engineering value or skips a check.
 import { useEffect, useState } from "react";
 import { api } from "./api";
@@ -83,7 +84,6 @@ export function PerformancePanel() {
         <div className="performance-custom">
           {num("analysis_jobs", "Parallel checks")}
           {num("background_jobs", "Parallel background jobs")}
-          {num("cache_budget_mb", "Cache budget (MiB)")}
           {num("pixel_ratio_cap", "3D pixel-ratio cap", 0.25)}
           {num("scrollback_lines", "Terminal scrollback lines", 500)}
           <label>

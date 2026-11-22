@@ -202,6 +202,17 @@ const handlers = {
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
     return `${how}${s.expect ? `; then visible: ${s.expect}` : ""}`;
   },
+  // Passes once no visible element matches (a removed control, a closed dialog); fails if one
+  // is still visible after `timeout` ms.
+  async absent(s) {
+    const timeout = s.timeout ?? 3000;
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeout) {
+      if ((await rectOf(s.selector, s.text)) === null) return `absent: ${s.selector}${s.text ? ` "${s.text}"` : ""}`;
+      await sleep(200);
+    }
+    throw new Error(`still visible after ${timeout} ms: ${s.selector}${s.text ? ` "${s.text}"` : ""}`);
+  },
   async key(s) {
     xkey(s.keys);
     await sleep(300);
