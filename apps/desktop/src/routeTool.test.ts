@@ -251,7 +251,7 @@ describe("route via span and track layer changes (E2)", () => {
   });
 
   const t: Track = { id: "trk1", layer: "top", width: 250_000, a: P(0, 0), b: P(5, 0), net: "SIG" };
-  const pad = (kind: "smd" | "tht", at: Point) => ({ number: "1", kind, shape: "rect" as const, position: at, size_x: 1000, size_y: 1000, drill: null, net: "SIG" });
+  const pad = (kind: "smd" | "tht", at: Point) => ({ number: "1", kind, shape: "rect" as const, position: at, size_x: 2, size_y: 2, drill: null, net: "SIG" }); // P() is raw nm: a 2 nm pad covers only its own point
   const fp = (kind: "smd" | "tht", at: Point): FootprintGeom => ({ id: "fp", symbol_id: "s", refdes: "U1", side: "top", position: at, half_w: 1, half_h: 1, pads: [pad(kind, at)] });
   const board = (over: Partial<BoardCopper>): BoardCopper => ({ order: ["top", { inner: 1 }, "bottom"], tracks: [t], vias: [], footprints: [], ...over });
 
