@@ -1,0 +1,13 @@
+{
+  "name": "A1 document-aware menus",
+  "description": "Opens an isolated software fixture project, then every application menu with the schematic and then the PCB as the active document (Phase 1 A1: menus come from the action registry and change with the document).",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "UI Evidence Fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "UI Evidence Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]" },
+    { "id": "sch-menu", "do": "each-menu", "title": "Schematic menu" },
+    { "id": "pcb", "do": "menu", "title": "Open PCB", "menu": "View", "item": "Go to PCB editor", "expect": "section[aria-label=\"PCB view\"]" },
+    { "id": "pcb-menu", "do": "each-menu", "title": "PCB menu" }
+  ]
+}

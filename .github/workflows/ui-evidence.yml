@@ -1,0 +1,77 @@
+# Real-window UI evidence: builds the desktop app, runs it under Xvfb (GDK_BACKEND=x11), drives
+# a data-driven scenario with real X input (XTest) and uploads the screenshots as an artifact.
+# Separate workflow and continue-on-error: NOT a required check until it is proven stable.
+# How to add steps: docs/qa/UI_EVIDENCE.md.
+name: ui-evidence
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/ui-evidence.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/ui-evidence.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ui-evidence-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  linux-xvfb:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            apps/desktop/package-lock.json
+            apps/desktop/e2e/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ui-evidence
+      - name: System libraries, X server and X tools
+        run: >
+          sudo apt-get update && sudo apt-get install -y
+          libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev pkg-config
+          webkit2gtk-driver xvfb xdotool imagemagick
+      - name: tauri-driver
+        run: cargo install tauri-driver --locked
+      - name: Debug build of the desktop app (frontend embedded)
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npx tauri build --debug --no-bundle
+      - name: Scenario dependencies
+        working-directory: apps/desktop/e2e
+        run: npm ci
+      - name: Run scenario under Xvfb
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence
+          UI_SCENARIO: scenarios/a1-menus.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      - name: Results to job summary
+        if: always()
+        run: cat "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no results file" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-evidence-screenshots
+          path: |
+            ${{ runner.temp }}/ui-evidence/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/tauri-driver.log
+          if-no-files-found: warn
