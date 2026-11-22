@@ -56,9 +56,16 @@ export function PcbSceneCanvas({ scene, overlay, vb, size, onFrame, onUnavailabl
       onUnavailable?.();
       return;
     }
-    const r = new Canvas2DRenderer(ctx);
-    r.setScene(latest.current.scene);
-    r.setOverlay(latest.current.overlay);
+    let r: Canvas2DRenderer;
+    try {
+      r = new Canvas2DRenderer(ctx);
+      r.setScene(latest.current.scene);
+      r.setOverlay(latest.current.overlay);
+    } catch (e) {
+      console.error("Canvas2D renderer failed to start; using the SVG renderer", e);
+      onUnavailable?.();
+      return;
+    }
     renderer.current = r;
     schedule();
     // Scene colours come from design tokens: redraw everything when the theme changes.

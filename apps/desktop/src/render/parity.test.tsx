@@ -105,11 +105,13 @@ describe("Canvas2D PCB renderer", () => {
     expect(container.querySelector("[data-track-id]")).toBeNull();
     expect(container.querySelector(".canvas-stack > svg.canvas.canvas-top")).toBeTruthy();
     expect((screen.getByLabelText("PCB renderer") as HTMLSelectElement).value).toBe("canvas");
+    const errors: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => void errors.push(a.map((x) => (x instanceof Error ? (x.stack ?? x.message) : String(x))).join(" ")));
     const el = container.querySelector("canvas.scene-canvas") as HTMLCanvasElement;
     // Each stage of the first frame, so a failure says where the pipeline stopped.
     await waitFor(() => expect(el.width, "scene canvas sized to the measured pane").toBe(SIZE));
     expect(contexts, "2D contexts requested").toBeGreaterThan(0);
-    await waitFor(() => expect(drawn.some((c) => c.fn === "drawImage") ? "drawImage" : `no drawImage; first calls: ${drawn.map((c) => c.fn).slice(0, 12).join(",")}`).toBe("drawImage"));
+    await waitFor(() => expect(drawn.some((c) => c.fn === "drawImage") ? "drawImage" : `no drawImage; first calls: ${drawn.map((c) => c.fn).slice(0, 12).join(",")}; errors: ${errors.join(" | ").slice(0, 1500)}`).toBe("drawImage"));
     expect(drawn.some((c) => c.fn === "fillText" && c.args[0] === "R1")).toBe(true);
   });
 
