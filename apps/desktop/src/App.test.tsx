@@ -126,7 +126,7 @@ describe("desktop shell flow", () => {
     await openFromRecent();
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     const input = await screen.findByRole("textbox", { name: "Search commands" });
-    fireEvent.change(input, { target: { value: "sync" } });
+    fireEvent.change(input, { target: { value: "Update PCB" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("rejected"));
     expect(calls.find((c) => c.cmd === "execute_command")!.args).toEqual({

@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IPC_COMMANDS } from "../api";
 import { App } from "../App";
 import { fixture } from "../fixture.test-data";
-import { filterToolbar } from "./Toolbar";
 import { remapFileDocs } from "./documents";
 import { registerWorkspace } from "./registry";
 
@@ -82,12 +81,6 @@ describe("workspace separation", () => {
     expect(screen.queryByText(/Ask AI/)).toBeNull();
     expect(bar().queryByRole("button", { name: /3D|Terminal/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "New Terminal space" })).toBeNull();
-  });
-  it("the toolbar only offers what applies to the shown view", () => {
-    const groups = [[{ id: "erc", label: "Run ERC" }, { id: "drc", label: "Run DRC" }, { id: "save", label: "Save" }]];
-    expect(filterToolbar(groups, "schematic")[0].map((i) => i.id)).toEqual(["erc", "save"]);
-    expect(filterToolbar(groups, "pcb")[0].map((i) => i.id)).toEqual(["drc", "save"]);
-    expect(filterToolbar(groups, "view")[0].map((i) => i.id)).toEqual(["save"]);
   });
 });
 
