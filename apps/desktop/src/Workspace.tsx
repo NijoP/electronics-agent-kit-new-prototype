@@ -10,7 +10,10 @@ import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
 import { PcbView } from "./PcbView";
 import { SchematicView } from "./SchematicView";
-import { formatShortcut, matches, SHORTCUTS } from "./design/shortcuts";
+import { formatShortcut, SHORTCUTS } from "./design/shortcuts";
+import { actionForKey, keysOf, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./actions/registry";
+import { workspaceActions } from "./actions/sets";
+import { docContext, type Action, type DocContext } from "./actions/types";
 import type { Theme } from "./design/theme";
 import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
@@ -21,7 +24,7 @@ import { StatusBar } from "./shell/StatusBar";
 import { ExportDialog } from "./shell/ExportDialog";
 import { RulesDialog } from "./shell/RulesDialog";
 import { NewProjectDialog, OpenProjectDialog } from "./shell/ProjectDialogs";
-import { Toolbar, type ToolbarGroup } from "./shell/Toolbar";
+import { Toolbar } from "./shell/Toolbar";
 import { canvasControls, DocIdContext, setActiveEditor, setEditorTool } from "./shell/viewState";
 import { LayerManager } from "./shell/LayerManager";
 import { useLayerView } from "./layerView";
@@ -37,10 +40,9 @@ import { useTasks } from "./shell/tasks";
 import { fileDocId, type FileEntry } from "./shell/files";
 import { listWorkspaces, useRegistryVersion, type WorkspaceContext } from "./shell/registry";
 import "./shell/workspaces";
-import { filterToolbar } from "./shell/Toolbar";
 import { availableDocs, closeDoc, fileDocs, loadDocState, openDoc, remapFileDocs, saveDocState, visibleDocs } from "./shell/documents";
 import { clampSize, DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "./shell/layout";
-import { MenuBar, type Menu } from "./shell/MenuBar";
+import { MenuBar } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
 import { nextRotation } from "./editing";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
@@ -514,48 +516,6 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     setMessage(`Place tool armed with ${c.name}: click the schematic to place it.`);
   };
 
-  const actions: PaletteAction[] = [
-    { id: "undo", label: "Undo", run: undo, disabled: !snapshot.can_undo, shortcut: SHORTCUTS.undo, group: "Edit" },
-    { id: "redo", label: "Redo", run: redo, disabled: !snapshot.can_redo, shortcut: SHORTCUTS.redo, group: "Edit" },
-    { id: "export", label: "Export manufacturing files", run: () => setDialog("export"), group: "Manufacturing" },
-    { id: "erc", label: "Run ERC", run: () => check("erc"), group: "Verify" },
-    { id: "drc", label: "Run DRC", run: () => check("drc"), group: "Verify" },
-    { id: "dfm", label: "Run DFM (Fabricator standard profile)", run: () => check("dfm"), group: "Verify" },
-    { id: "annotate", label: "Annotate schematic", run: () => execute({ type: "Annotate" }), group: "Design" },
-    { id: "sync", label: "Update PCB from schematic (sync)", run: syncPcb, group: "Design" },
-    { id: "place", label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), group: "Design" },
-    { id: "route", label: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), group: "Design" },
-    {
-      id: "clear",
-      label: "Clear all routing",
-      run: () => execute({ type: "ClearRouting", net: null }),
-      destructive: true,
-      group: "Design",
-    },
-    { id: "deselect", label: "Clear selection", run: () => setSelected(null), group: "Edit" },
-    { id: "ws-schematic", label: "Go to Schematic editor", run: () => showWorkspace("schematic"), shortcut: SHORTCUTS.showSchematic, group: "Navigate" },
-    { id: "ws-pcb", label: "Go to PCB editor", run: () => showWorkspace("pcb"), shortcut: SHORTCUTS.showPcb, group: "Navigate" },
-    ...edaViews.map((w) => ({ id: `ws-${w.id}`, label: `Go to ${w.label}`, run: () => showWorkspace(w.id), shortcut: w.shortcut, group: "Navigate" })),
-    { id: "open-project", label: "Open another project…", run: () => setDialog("open"), group: "Project" },
-    ...projects.filter((p) => !p.active).map((p) => ({ id: `proj-${p.id}`, label: `Switch to project ${p.name}`, run: () => switchTo(p.id), group: "Project" })),
-    { id: "toggle-split", label: "View: Show schematic and PCB side by side", run: () => setSplit((v) => !v), group: "View" },
-    { id: "quick-open", label: "Go to part, net or sheet…", run: () => setQuickOpen(true), shortcut: SHORTCUTS.quickOpen, group: "Navigate" },
-    { id: "rules", label: "Design rules and net classes…", run: () => setDialog("rules"), group: "Design" },
-    ...docs.map((d) => ({ id: `open-${d.id}`, label: `Open ${d.kind === "pcb" ? "PCB" : `schematic ${d.title}`}`, run: () => open(d.id), group: "Documents" })),
-    { id: "close-all", label: "Close all documents", run: closeAll, disabled: openIds.length === 0, group: "Documents" },
-    { id: "reset-layout", label: "Reset panel layout", run: resetLayout, group: "View" },
-    { id: "help", label: "Keyboard shortcuts", run: () => setHelp(true), group: "Help" },
-    { id: "toggle-side", label: "Toggle side panel", run: () => setSideOpen((o) => !o), shortcut: SHORTCUTS.toggleSide, group: "View" },
-    { id: "toggle-bottom", label: "Toggle bottom panel", run: () => setBottomOpen((o) => !o), shortcut: SHORTCUTS.toggleBottom, group: "View" },
-    ...SIDE_VIEWS.map((v) => ({ id: `show-${v.id}`, label: `Show ${v.label}`, run: () => showSide(v.id), group: "View" })),
-    { id: "bom", label: "Show BOM", run: () => (setBottomTab("bom"), setBottomOpen(true)), group: "View" },
-    { id: "sim", label: "Show simulation", run: () => (setBottomTab("sim"), setBottomOpen(true)), group: "View" },
-    { id: "log", label: "Show log", run: () => (setBottomTab("log"), setBottomOpen(true)), group: "View" },
-    { id: "theme", label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", run: onTheme, group: "Appearance" },
-    { id: "settings", label: "Model settings", run: onSettings, group: "Settings" },
-    { id: "close", label: "Close project", run: close, group: "Project" },
-  ];
-
   const quickItems: PaletteAction[] = [
     ...library.map((c) => ({ id: `part-${c.id}`, label: c.name, group: "Part · place", run: () => placePart(c) })),
     ...Object.values(snapshot.project.schematic.symbols).map((sy) => ({
@@ -573,65 +533,23 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     })),
   ];
 
-  // Keep the latest handlers reachable from the single global key listener.
-  const viewKey = (e: KeyboardEvent) => {
-    const w = edaViews.find((v) => v.shortcut && matches(e, v.shortcut));
-    if (w) showWorkspace(w.id);
-    return !!w;
-  };
-  const keys = useRef({ undo, redo, showWorkspace, showSide, viewKey });
-  keys.current = { undo, redo, showWorkspace, showSide, viewKey };
+  // The single global key listener runs the registry action bound to the key (default key map in
+  // design/shortcuts.ts); it reads the latest actions through this ref.
+  const keys = useRef<{ actions: Action[]; ctx: DocContext }>({ actions: [], ctx: "home" });
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
-  const saveRef = useRef<() => void>(() => {});
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!visibleRef.current) return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
-      const mod = e.ctrlKey || e.metaKey;
-      if (matches(e, SHORTCUTS.palette) || matches(e, SHORTCUTS.paletteAlt)) {
-        e.preventDefault();
-        setQuickOpen(false);
-        setPalette(true);
-      } else if (matches(e, SHORTCUTS.quickOpen)) {
-        e.preventDefault();
-        setPalette(false);
-        setQuickOpen(true);
-      } else if (matches(e, SHORTCUTS.toggleSide)) {
-        e.preventDefault();
-        setSideOpen((o) => !o);
-      } else if (matches(e, SHORTCUTS.toggleBottom)) {
-        e.preventDefault();
-        setBottomOpen((o) => !o);
-      } else if (matches(e, SHORTCUTS.showSchematic)) {
-        e.preventDefault();
-        keys.current.showWorkspace("schematic");
-      } else if (matches(e, SHORTCUTS.showPcb)) {
-        e.preventDefault();
-        keys.current.showWorkspace("pcb");
-      } else if (matches(e, SHORTCUTS.showExplorer)) {
-        e.preventDefault();
-        keys.current.showSide("project");
-      } else if (keys.current.viewKey(e)) {
-        e.preventDefault();
-      } else if (mod && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        saveRef.current();
-      } else if (typing) {
-        return;
-      } else if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
-        e.preventDefault();
-        keys.current.undo();
-      } else if (mod && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
-        e.preventDefault();
-        keys.current.redo();
-      } else if (e.key === "Escape") {
-        setSelected(null);
-      }
+      const a = actionForKey(keys.current.actions, keys.current.ctx, e, typing);
+      if (!a) return;
+      if (a.id !== "deselect") e.preventDefault();
+      runAction(a);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [revision]);
+  }, []);
 
   const fpOfSelected = selected ? Object.values(snapshot.project.pcb.footprints).find((f) => f.symbol_id === selected) : undefined;
   const rotateSel = () => {
@@ -659,133 +577,37 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           : `Revision ${s2.project.revision}: every accepted command is already written (engine reports no blocked writes).`,
       );
     });
-  saveRef.current = save;
-  const noDoc = activeId ? undefined : "Open a document first";
-  const toolTo = (tool: string) => () => {
+  const toolTo = (tool: string) => {
     if (!setEditorTool(activeId, tool)) setMessage(`The active editor has no ${tool} tool.`);
   };
-  const needSel = selectedSymbol ? undefined : "Select a part first";
-  const toolbarGroups: ToolbarGroup[] = [
-    [
-      { id: "new", group: "file", label: "New project", run: () => setDialog("new"), disabled: busy ? "An engine command is running" : undefined },
-      { id: "open", group: "file", label: "Open project", run: () => setDialog("open"), disabled: busy ? "An engine command is running" : undefined },
-      { id: "save", group: "file", label: "Save", shortcut: SHORTCUTS.save, run: save, disabled: busy ? "An engine command is running" : undefined },
-      { id: "saveas", group: "file", label: "Save as", disabled: "Not implemented: the engine saves the project in place" },
-      { id: "undo", group: "file", label: "Undo", shortcut: SHORTCUTS.undo, run: undo, disabled: busy ? "An engine command is running" : !snapshot.can_undo ? "Nothing to undo" : undefined },
-      { id: "redo", group: "file", label: "Redo", shortcut: SHORTCUTS.redo, run: redo, disabled: busy ? "An engine command is running" : !snapshot.can_redo ? "Nothing to redo" : undefined },
-    ],
-    [
-      { id: "select", group: "edit", label: "Select tool", title: "Select tool (key 1)", run: toolTo("select"), disabled: noDoc },
-      { id: "move", group: "edit", label: "Move tool", title: "Move tool (schematic key 6, PCB key 3)", run: toolTo("move"), disabled: noDoc },
-      { id: "rotate", group: "edit", label: "Rotate selection", title: "Rotate selection (key R)", run: rotateSel, disabled: needSel ?? (busy ? "An engine command is running" : undefined) },
-      { id: "t-place", group: "edit", label: "Place part", title: "Place a part from the library (editor Place tool)", run: toolTo("place"), disabled: noDoc },
-      { id: "t-wire", group: "edit", label: "Wire", title: "Draw a wire; ends snap to pins (AddWire)", run: toolTo("wire"), disabled: noDoc },
-      { id: "t-label", group: "edit", label: "Net / power label", title: "Net label or power port (AddNetLabel; pick Net or Power in the tool options)", run: toolTo("label"), disabled: noDoc },
-      { id: "t-noconnect", group: "edit", label: "No connect", title: "Mark a pin as intentionally unconnected (SetNoConnect)", run: toolTo("noconnect"), disabled: noDoc },
-      { id: "t-pinlabel", group: "edit", label: "Label pin", title: "Name the net on a pin (LabelPin)", run: toolTo("pinlabel"), disabled: noDoc },
-      { id: "t-mirror", group: "edit", label: "Mirror selection", title: "Mirror the selected symbol horizontally (FlipSymbol)", run: () => selectedSymbol && execute({ type: "FlipSymbol", symbol_id: selectedSymbol.id, axis: "horizontal" }), disabled: needSel ?? (busy ? "An engine command is running" : undefined) },
-      { id: "t-route", group: "edit", label: "Route track", title: "Route a track with the chosen width and layer (AddTrack)", run: toolTo("route"), disabled: noDoc },
-      { id: "t-via", group: "edit", label: "Via", title: "Place a via (AddVia)", run: toolTo("via"), disabled: noDoc },
-      { id: "t-outline", group: "edit", label: "Board outline", title: "Draw the board outline (SetBoardOutline)", run: toolTo("outline"), disabled: noDoc },
-      { id: "t-zone", group: "edit", label: "Copper zone", title: "Draw a copper zone (AddZone). The engine has no separate refill command", run: toolTo("zone"), disabled: noDoc },
-      { id: "t-junction", group: "edit", label: "Junction", title: "Junction", disabled: "Junctions are added automatically where wires meet" },
-      { id: "t-refill", group: "edit", label: "Refill zones", title: "Recompute zone connectivity (islands, airwires) and re-run DRC for this revision; the fill is derived, nothing is changed", run: refillZones, disabled: busy ? "An engine command is running" : Object.keys(snapshot.project.pcb.zones).length === 0 ? "No copper zones to refill" : undefined },
-      { id: "t-flip", group: "edit", label: "Flip footprint", title: "Move the selected footprint to the other board side (MoveFootprint)", run: () => fpOfSelected && execute({ type: "MoveFootprint", footprint_id: fpOfSelected.id, position: fpOfSelected.position, rotation: null, side: fpOfSelected.side === "top" ? "bottom" : "top" }), disabled: fpOfSelected ? (busy ? "An engine command is running" : fpOfSelected.locked ? "The footprint is locked" : undefined) : "Select a part that has a footprint first" },
-      { id: "delete", group: "edit", label: "Delete selection", title: "Delete selection (asks first)", run: deleteSel, disabled: needSel ?? (busy ? "An engine command is running" : undefined) },
-    ],
-    [
-      { id: "zout", group: "view", label: "Zoom out", run: () => canvasControls(activeId)?.zoomBy(1.4), disabled: noDoc },
-      { id: "zin", group: "view", label: "Zoom in", run: () => canvasControls(activeId)?.zoomBy(1 / 1.4), disabled: noDoc },
-      { id: "fit", group: "view", label: "Fit to view", title: "Fit to view (or double-click the canvas)", run: () => canvasControls(activeId)?.fit(), disabled: noDoc },
-      { id: "grid", group: "view", label: "Grid", disabled: "Not implemented: the grid is fixed (schematic 1.27 mm, PCB 0.5 mm)" },
-    ],
-    [
-      { id: "rules", group: "checks", label: "Design rules", title: "Design rules and net classes", run: () => setDialog("rules") },
-      { id: "sync", group: "checks", label: "Update PCB", title: "Update PCB from schematic", run: syncPcb, disabled: busy ? "An engine command is running" : undefined },
-      { id: "erc", group: "checks", label: "Run ERC", run: () => check("erc"), disabled: busy ? "An engine command is running" : undefined },
-      { id: "drc", group: "checks", label: "Run DRC", run: () => check("drc"), disabled: busy ? "An engine command is running" : undefined },
-      { id: "dfm", group: "checks", label: "Run DFM", title: "Design for manufacture against the Fabricator standard profile", run: () => check("dfm"), disabled: busy ? "An engine command is running" : undefined },
-      { id: "route", group: "checks", label: "Auto-route", title: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), disabled: busy ? "An engine command is running" : undefined },
-      { id: "sim", group: "checks", label: "Simulate", title: "Open the Simulation panel (ngspice)", run: () => (setBottomTab("sim"), setBottomOpen(true)) },
-    ],
-    [
-      { id: "export", group: "mfg", label: "Export manufacturing files", title: "Gerber, Excellon, BOM, CPL, fab-pack ZIP; runs ERC/DRC/MECH/DFM", run: () => setDialog("export"), disabled: busy ? "An engine command is running" : undefined },
-    ],
-    [
-      { id: "cmd", group: "app", label: "Commands", shortcut: SHORTCUTS.palette, run: () => setPalette(true) },
-      { id: "close", group: "app", label: "Close project", run: close, disabled: busy ? "An engine command is running" : undefined },
-    ],
-  ];
-  const noProject = busy ? "An engine command is running" : undefined;
-  const menus: Menu[] = [
-    { label: "File", items: [
-      { label: "New project…", run: () => setDialog("new"), disabled: noProject },
-      { label: "Open project…", run: () => setDialog("open"), disabled: noProject },
-      ...recent.filter((r) => r.project_id !== snapshot.project.id).slice(0, 5).map((r, i) => ({ label: `Recent: ${r.name}`, run: () => openRecent(r.path), disabled: noProject, sep: i === 0 })),
-      { label: "Save", shortcut: SHORTCUTS.save, run: save, disabled: noProject },
-      { label: "Save as…", disabled: "Not implemented: the engine saves the project in place" },
-      { label: "Close project", run: close, disabled: noProject, sep: true },
-    ] },
-    { label: "Edit", items: [
-      { label: "Undo", shortcut: SHORTCUTS.undo, run: undo, disabled: !snapshot.can_undo ? "Nothing to undo" : noProject },
-      { label: "Redo", shortcut: SHORTCUTS.redo, run: redo, disabled: !snapshot.can_redo ? "Nothing to redo" : noProject },
-      { label: "Rotate selection", run: rotateSel, disabled: needSel ?? noProject, sep: true },
-      { label: "Delete selection", run: () => selectedSymbol && execute({ type: "DeleteSymbol", symbol_id: selectedSymbol.id }), disabled: needSel ?? noProject, destructive: true },
-      { label: "Clear selection", run: () => setSelected(null), disabled: selected ? undefined : "Nothing is selected" },
-    ] },
-    { label: "View", items: [
-      { label: "Side panel", shortcut: SHORTCUTS.toggleSide, checked: sideOpen, run: () => setSideOpen((o) => !o) },
-      { label: "Bottom panel", shortcut: SHORTCUTS.toggleBottom, checked: bottomOpen, run: () => setBottomOpen((o) => !o) },
-      { label: "Split schematic and PCB", checked: split, run: () => setSplit((v) => !v) },
-      ...SIDE_VIEWS.map((v, i) => ({ label: `Show ${v.label}`, run: () => showSide(v.id), sep: i === 0 })),
-      { label: "Light theme", checked: theme === "light", run: onTheme, sep: true },
-      { label: "Reset panel layout", run: resetLayout },
-    ] },
-    { label: "Project", items: [
-      { label: "Annotate schematic", run: () => execute({ type: "Annotate" }), disabled: noProject },
-      { label: "Update PCB from schematic", run: syncPcb, disabled: noProject },
-      ...docs.map((d, i) => ({ label: `Open ${d.kind === "pcb" ? "PCB" : `sheet ${d.title}`}`, run: () => open(d.id), sep: i === 0 })),
-      { label: "Close all documents", run: closeAll, disabled: openIds.length === 0 ? "No documents are open" : undefined },
-    ] },
-    { label: "Place", items: [
-      ...(library.length === 0 ? [{ label: "Part…", disabled: "The part library is unavailable" }] : library.map((c) => ({ label: `Part: ${c.name}`, run: () => placePart(c) }))),
-      { label: "Wire, label, junction…", disabled: "Use the schematic toolbar (keys 1-7); not available from the menu", sep: true },
-    ] },
-    { label: "Design", items: [
-      { label: "Run ERC", run: () => check("erc"), disabled: noProject },
-      { label: "Run DRC", run: () => check("drc"), disabled: noProject },
-      { label: "Run DFM (Fabricator standard)", run: () => check("dfm"), disabled: noProject },
-      { label: "Auto-place footprints", run: () => execute({ type: "AutoPlace", grid: null }), disabled: noProject, sep: true },
-      { label: "Design rules…", run: () => setDialog("rules") },
-    ] },
-    { label: "Tools", items: [
-      { label: "Command palette", shortcut: SHORTCUTS.palette, run: () => setPalette(true) },
-      { label: "Go to part, net or sheet", shortcut: SHORTCUTS.quickOpen, run: () => setQuickOpen(true) },
-      { label: "Model settings", run: onSettings },
-    ] },
-    { label: "Route", items: [
-      { label: "Auto-route all nets", run: () => execute({ type: "AutoRoute", nets: null }), disabled: noProject },
-      { label: "Clear all routing", run: () => execute({ type: "ClearRouting", net: null }), disabled: noProject, destructive: true },
-      { label: "Interactive routing…", disabled: "Use the Route tool in the PCB editor (key 4); not available from the menu", sep: true },
-    ] },
-    { label: "Simulation", items: [{ label: "Run simulation…", run: () => (setBottomTab("sim"), setBottomOpen(true)) }] },
-    { label: "Manufacturing", items: [
-      { label: "Export manufacturing files…", run: () => setDialog("export"), disabled: noProject },
-      { label: "Show manufacturing panel", run: () => showSide("manufacturing") },
-      { label: "Release check…", disabled: "Not implemented: exports are always DRAFT" },
-    ] },
-    { label: "Settings", items: [
-      { label: "Model settings", run: onSettings },
-      { label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", run: onTheme },
-      { label: "Reset panel layout", run: resetLayout },
-    ] },
-    { label: "Help", items: [
-      { label: "Keyboard shortcuts", run: () => setHelp(true) },
-      { label: "About EAK", run: () => setMessage("EAK: Rust engineering core, typed commands, independent validation. AI output never certifies engineering numbers.") },
-    ] },
-  ];
-  const ctxKind = wsId !== "editor" ? "view" : (docs.find((d) => d.id === activeId)?.kind ?? "none");
-  const shownToolbar = filterToolbar(toolbarGroups, ctxKind);
+  // One definition per operation (src/actions/): menus, toolbar, palette and keys of the active
+  // document are all generated from it.
+  const ctx: DocContext = wsId !== "editor" ? "3d" : docContext(docs.find((d) => d.id === activeId)?.kind);
+  const allActions = workspaceActions({
+    snapshot, busy, selected, selectedSymbol, fpOfSelected, theme, sideOpen, bottomOpen, split, recent, library, docs, openIds, projects,
+    sideViews: SIDE_VIEWS,
+    edaViews,
+    dialog: setDialog,
+    save, undo, redo, close, openRecent, execute, check, syncPcb, refillZones, rotateSel, deleteSel,
+    tool: toolTo,
+    zoomBy: (f) => canvasControls(activeId)?.zoomBy(f),
+    fit: () => canvasControls(activeId)?.fit(),
+    select: setSelected,
+    toggleSplit: () => setSplit((v) => !v),
+    showSide,
+    toggleSide: () => setSideOpen((o) => !o),
+    toggleBottom: () => setBottomOpen((o) => !o),
+    showBottom: (t) => (setBottomTab(t), setBottomOpen(true)),
+    onTheme, resetLayout, onSettings,
+    palette: () => (setQuickOpen(false), setPalette(true)),
+    quickOpen: () => (setPalette(false), setQuickOpen(true)),
+    help: () => setHelp(true),
+    notify: setMessage,
+    open, closeAll, showWorkspace, switchTo, placePart,
+  });
+  keys.current = { actions: allActions, ctx };
+  const menus = menusFor(allActions, ctx);
+  const shownToolbar = toolbarFor(allActions, ctx);
   const noParts = Object.keys(snapshot.project.schematic.symbols).length === 0;
 
   return (
@@ -985,8 +807,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           <div className="palette help" role="dialog" aria-label="Keyboard shortcuts" onClick={(e) => e.stopPropagation()}>
             <h3>Keyboard shortcuts</h3>
             <ul>
-              {(Object.entries(SHORTCUTS) as [string, string][]).filter(([k]) => k !== "paletteAlt").map(([k, v]) => (
-                <li key={k}><span className="grow">{k.replace(/([A-Z])/g, " $1").toLowerCase()}</span><kbd>{formatShortcut(v)}</kbd></li>
+              {visibleIn(allActions, ctx).filter((a) => keysOf(a).length > 0).map((a) => (
+                <li key={a.id}><span className="grow">{a.label}</span><kbd>{keysOf(a).map((k) => formatShortcut(k)).join(" / ")}</kbd></li>
               ))}
               <li><span className="grow">select editor tool</span><kbd>1–7</kbd></li>
               <li><span className="grow">rotate / flip selection</span><kbd>R / F</kbd></li>
@@ -1007,7 +829,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           onClose={() => setSyncDialog(null)}
         />
       )}
-      {palette && <CommandPalette actions={actions} onClose={() => setPalette(false)} />}
+      {palette && <CommandPalette actions={paletteFor(allActions, ctx)} onClose={() => setPalette(false)} />}
       {quickOpen && (
         <CommandPalette
           actions={quickItems}

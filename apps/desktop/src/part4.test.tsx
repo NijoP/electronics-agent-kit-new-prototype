@@ -116,7 +116,7 @@ const menu = (name: string) => fireEvent.click(within(screen.getByRole("navigati
 describe("workspace Part 4", () => {
   it("menu items call the typed command engine; disabled ones explain themselves", async () => {
     await open();
-    menu("Project");
+    menu("Design");
     fireEvent.click(screen.getByRole("menuitem", { name: /Annotate schematic/ }));
     await waitFor(() => expect(executed).toEqual([{ type: "Annotate" }]));
     menu("Simulation");
@@ -160,8 +160,36 @@ describe("workspace Part 4", () => {
     expect(JSON.parse(localStorage.getItem("eak.layout.v1")!).sideWidth).toBe(before + 16);
     fireEvent.keyDown(window, { key: "j", ctrlKey: true });
     expect(JSON.parse(localStorage.getItem("eak.layout.v1")!).bottomOpen).toBe(false);
-    menu("Settings");
+    menu("View");
     fireEvent.click(screen.getByRole("menuitem", { name: "Reset panel layout" }));
     await waitFor(() => expect(JSON.parse(localStorage.getItem("eak.layout.v1")!)).toEqual(DEFAULT_LAYOUT));
+  });
+});
+
+describe("document-aware menus (slice A1)", () => {
+  const bar = () => within(screen.getByRole("navigation", { name: "Application menu" }));
+  it("schematic and PCB show their own menus; menu Place/Route entries arm the editor tool", async () => {
+    await open();
+    expect(bar().queryByRole("button", { name: "Simulation" })).toBeTruthy();
+    expect(bar().queryByRole("button", { name: "Route" })).toBeNull();
+    const sch = within(screen.getByRole("region", { name: "Schematic view" }));
+    // The editor registers its tool handler in an effect: retry the idempotent pick until armed.
+    await waitFor(() => {
+      menu("Place");
+      fireEvent.click(screen.getByRole("menuitem", { name: "Wire" }));
+      expect(sch.getByRole("button", { name: "Wire" }).getAttribute("aria-pressed")).toBe("true");
+    });
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Activity bar" })).getByRole("button", { name: "PCB" }));
+    await waitFor(() => expect(bar().queryByRole("button", { name: "Route" })).toBeTruthy());
+    expect(bar().queryByRole("button", { name: "Simulation" })).toBeNull();
+    const pcb = within(screen.getByRole("region", { name: "PCB view" }));
+    await waitFor(() => {
+      menu("Route");
+      fireEvent.click(screen.getByRole("menuitem", { name: "Route track" }));
+      expect(pcb.getByRole("button", { name: "Route" }).getAttribute("aria-pressed")).toBe("true");
+    });
+    menu("Place");
+    expect(screen.queryByRole("menuitem", { name: "Wire" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Via" })).toBeTruthy();
   });
 });

@@ -46,3 +46,22 @@ export function matches(e: KeyboardEvent, spec: string): boolean {
     (e.ctrlKey || e.metaKey) === wantMod && e.shiftKey === wantShift && e.altKey === wantAlt && e.key.toLowerCase() === key
   );
 }
+
+/**
+ * Default key map of the action registry (`src/actions/`): action id → key specs. The registry
+ * shows the first spec beside the action in menus, toolbar tooltips and the palette, and the
+ * workspace's key handler runs the action for any of them. Editor tool keys (1-7, R, F) stay
+ * with the editors, which own the canvas focus.
+ */
+export const DEFAULT_KEYMAP: Readonly<Record<string, readonly string[]>> = {
+  palette: [SHORTCUTS.palette, SHORTCUTS.paletteAlt],
+  "quick-open": [SHORTCUTS.quickOpen],
+  "toggle-side": [SHORTCUTS.toggleSide],
+  "toggle-bottom": [SHORTCUTS.toggleBottom],
+  "ws-schematic": [SHORTCUTS.showSchematic],
+  "ws-pcb": [SHORTCUTS.showPcb],
+  "show-project": [SHORTCUTS.showExplorer],
+  save: [SHORTCUTS.save],
+  undo: [SHORTCUTS.undo],
+  redo: [SHORTCUTS.redo, "Mod+Y"],
+};
