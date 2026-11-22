@@ -70,6 +70,35 @@ jobs:
           cargo clippy -p eak-intelligence --all-targets --features remote-http --locked -- -D warnings
           cargo test -p eak-intelligence --features remote-http --locked
 
+  # Canvas2D PCB renderer QA (slice A4): pixel-diff snapshots of the reference boards, real-input
+  # picking and screenshots of the PCB editor, and the 2,000-footprint / 20,000-segment benchmark,
+  # in a real Chrome window under Xvfb. Screenshots, diffs and the report are uploaded as artifacts.
+  render-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Frontend install
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Render QA under Xvfb
+        working-directory: apps/desktop
+        env:
+          RENDER_QA_OUT: ${{ runner.temp }}/render-qa
+        run: xvfb-run -a -s "-screen 0 1920x1200x24" node e2e/render-qa.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render-qa
+          path: ${{ runner.temp }}/render-qa
+          if-no-files-found: warn
+
   # Windows and macOS are equal targets: run the workspace tests natively there too.
   cross-platform:
     strategy:
