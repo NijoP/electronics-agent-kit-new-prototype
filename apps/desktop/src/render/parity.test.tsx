@@ -113,7 +113,7 @@ describe("Canvas2D PCB renderer", () => {
     // Each stage of the first frame, so a failure says where the pipeline stopped.
     await waitFor(() => expect(el.width, "scene canvas sized to the measured pane").toBe(SIZE));
     expect(contexts, "2D contexts requested").toBeGreaterThan(0);
-    await waitFor(() => expect(drawn.some((c) => c.fn === "drawImage") ? "drawImage" : `no drawImage; first calls: ${drawn.map((c) => c.fn).slice(0, 12).join(",")}; errors: ${errors.join(" | ").slice(0, 1500)}`).toBe("drawImage"));
+    await waitFor(() => expect(drawn.some((c) => c.fn === "drawImage") ? "drawImage" : `no drawImage; first calls: ${drawn.map((c) => c.fn).slice(0, 12).join(",")}; draw state: ${el.dataset.draw ?? "never attempted"}, frames: ${el.dataset.frames ?? 0}, connected: ${el.isConnected}; errors: ${errors.join(" | ").slice(0, 1500)}`).toBe("drawImage"));
     expect(drawn.some((c) => c.fn === "fillText" && c.args[0] === "R1")).toBe(true);
   });
 

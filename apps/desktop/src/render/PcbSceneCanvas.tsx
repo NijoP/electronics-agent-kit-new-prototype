@@ -37,8 +37,13 @@ export function PcbSceneCanvas({ scene, overlay, vb, size, onFrame, onUnavailabl
     frame.current = null;
     const r = renderer.current;
     const { vb: v, size: s, onFrame: cb } = latest.current;
-    if (!r || s.width <= 0 || s.height <= 0 || v.w <= 0) return;
+    const el = ref.current;
+    // Observable draw state (e2e checks and diagnostics): why the last attempt stopped, frames painted.
+    const why = !r ? "no-renderer" : s.width <= 0 || s.height <= 0 ? "no-size" : !(v.w > 0) ? "no-view" : "drawn";
+    if (el) el.dataset.draw = why;
+    if (why !== "drawn" || !r) return;
     painted.current = true;
+    if (el) el.dataset.frames = String(Number(el.dataset.frames ?? 0) + 1);
     cb?.(r.render(viewTransform(v, s, dpr)));
   };
   const schedule = () => {
