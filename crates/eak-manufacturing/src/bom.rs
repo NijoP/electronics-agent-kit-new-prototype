@@ -158,7 +158,7 @@ pub fn build(p: &Project, records: &[SourcingRecord]) -> Vec<BomLine> {
     out
 }
 
-fn q(s: &str) -> String {
+pub(crate) fn q(s: &str) -> String {
     // Neutralise spreadsheet formula injection as well as CSV quoting.
     let s = if s.starts_with(['=', '+', '-', '@']) {
         format!("'{s}")

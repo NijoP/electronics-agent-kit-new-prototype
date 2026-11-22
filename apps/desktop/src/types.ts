@@ -448,6 +448,55 @@ export interface ExportFile {
   sha256: string;
   kind: string;
 }
+// ---- D3 output documents (crates/eak-manufacturing/src/{bom_config,outputs}.rs) ----
+export type BomField =
+  | "comment"
+  | "designator"
+  | "quantity"
+  | "footprint"
+  | "component_id"
+  | "manufacturer"
+  | "mpn"
+  | "distributor_part"
+  | "smd"
+  | "placed"
+  | "assembled"
+  | "stock"
+  | "unit_price_usd"
+  | "price_as_of"
+  | "issues";
+export type SortDir = "none" | "asc" | "desc";
+export interface BomColumn {
+  field: BomField;
+  header?: string;
+  sort: SortDir;
+}
+export type FilterOp = "equals" | "not_equals" | "contains" | "is_empty" | "not_empty";
+export interface FilterRule {
+  field: BomField;
+  op: FilterOp;
+  value: string;
+}
+export interface BomConfig {
+  version: number;
+  columns: BomColumn[];
+  grouping: "part" | "designator";
+  exclude: FilterRule[];
+}
+export interface BomTable {
+  fields: BomField[];
+  headers: string[];
+  rows: string[][];
+  removed: number;
+  parts: number;
+}
+export type BomFormat = "csv" | "xlsx";
+export interface OutputRequest {
+  schematic_pdf: boolean;
+  schematic_svg: boolean;
+  ipc_d_356: boolean;
+  netlist_json: boolean;
+}
 export interface ExportResult {
   out_dir: string;
   manifest: {
