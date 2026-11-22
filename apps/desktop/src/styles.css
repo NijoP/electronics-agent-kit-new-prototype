@@ -645,7 +645,7 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .settings-nav ul ul { padding-left: var(--s-1); }
 .settings-group { display: block; font-weight: 600; margin-top: var(--s-1); }
 .settings-nav button { width: 100%; text-align: left; }
-.settings-nav button.active { background: var(--bg-active, var(--bg-raised)); outline: 1px solid var(--line-strong); }
+.settings-nav button.active { background: var(--bg-active); outline: 1px solid var(--line-strong); }
 .settings-page { display: grid; align-content: start; gap: var(--s-1); min-width: 0; max-height: 76vh; overflow: auto; }
 .settings-row { display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: center; }
 .settings-table { width: 100%; border-collapse: collapse; }
