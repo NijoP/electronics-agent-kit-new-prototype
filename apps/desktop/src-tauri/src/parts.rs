@@ -7,6 +7,8 @@
 //!   is ever sent anywhere;
 //! * an import is a typed `UpsertComponentDefinition` command through the engine as the
 //!   Human actor, with the revision the UI last rendered;
+//! * supplier and assembly records are written into `<project>/sourcing` only through
+//!   `Engine::write_project_record` (ADR-0037): journalled, never a direct file write;
 //! * Fabricator output is written only to a folder the user names, is labelled "prepared for
 //!   review", and nothing is uploaded or ordered.
 
@@ -19,7 +21,7 @@ use eak_manufacturing::distributor_api::DistributorApi;
 use eak_manufacturing::fabricator::{self, DfmReport, PrepResult};
 use eak_manufacturing::provider::{Answer, ErrorKind, Resilient, Served, SupplierProvider};
 use eak_manufacturing::sourcing::{self, SourcingRecord};
-use eak_runtime::{Actor, Command, CommandRequest, CommandResponse};
+use eak_runtime::{Actor, Command, CommandRequest, CommandResponse, Engine};
 use eak_validation::{drc, erc, Report};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -71,7 +73,14 @@ pub(crate) fn stored_records(s: &Session) -> Vec<SourcingRecord> {
         .unwrap_or_default()
 }
 
+/// Built-in parts matching every term; none when the built-in library is disabled (ADR-0035).
 fn library_hits(query: &str) -> Vec<LibraryHit> {
+    let off = crate::libcatalog::disabled(crate::libstore::store().root());
+    if off.contains(&crate::libcatalog::scope_id(
+        &eak_manufacturing::library_link::Scope::Builtin,
+    )) {
+        return vec![];
+    }
     let terms: Vec<String> = query
         .split_whitespace()
         .map(str::to_ascii_lowercase)
@@ -198,8 +207,8 @@ pub struct SavedRecord {
 
 /// Supplier discovery, separate from engineering import: fetch one Distributor listing and store it in
 /// `<project>/sourcing` so the MPN and Distributor number are kept and the engineering definition can
-/// be completed later. No engine command runs, the project revision does not change, and no
-/// symbol, footprint or rating is created.
+/// be completed later. The engine writes and journals the record (ADR-0037); no design command
+/// runs, the project revision does not change, and no symbol, footprint or rating is created.
 pub fn parts_save_record<P: SupplierProvider>(
     s: &Session,
     provider: &Resilient<P>,
@@ -217,12 +226,14 @@ pub fn parts_save_record<P: SupplierProvider>(
     );
     let refs: Vec<_> = defs.iter().map(|(sc, d)| (sc.clone(), d)).collect();
     let link = eak_manufacturing::library_link::link_record(&record, &refs);
+    let (file, bytes) = sourcing::record_file(&record).map_err(|e| e.to_string())?;
     let path = s.with_engine(|e| {
         let dir = e
             .dir()
             .ok_or("saving a supplier record needs a saved project folder")?
-            .join("sourcing");
-        sourcing::write_record(&dir, &record).map_err(|err| err.to_string())
+            .join("sourcing")
+            .join(&file);
+        write_record(e, &file, &bytes, "supplier listing saved").map(|()| dir)
     })??;
     Ok(SavedRecord {
         record,
@@ -265,11 +276,10 @@ pub fn parts_import<P: SupplierProvider>(
         ));
     }
     let component_id = plan.definition.id.clone();
+    let (file, bytes) = sourcing::record_file(&record).map_err(|e| e.to_string())?;
     let response = s.with_engine(|e| {
-        let dir = e
-            .dir()
-            .ok_or("importing a part needs a saved project folder")?
-            .join("sourcing");
+        e.dir()
+            .ok_or("importing a part needs a saved project folder")?;
         let response = e.execute(CommandRequest {
             expected_revision,
             actor: Actor::human(),
@@ -281,7 +291,7 @@ pub fn parts_import<P: SupplierProvider>(
         // The record is evidence for the imported definition: keep it only if the engine
         // accepted the command.
         if response.accepted {
-            sourcing::write_record(&dir, &record).map_err(|err| err.to_string())?;
+            write_record(e, &file, &bytes, "supplier record for an imported part")?;
         }
         Ok::<_, String>(response)
     })??;
@@ -357,9 +367,21 @@ pub fn assembly_attest(
         stock: None,
         unit_price: None,
     };
-    let dir = sourcing_dir(s).ok_or("recording assembly data needs a saved project folder")?;
-    assembly::write_record(&dir, &rec)?;
+    let (file, bytes) = assembly::record_file(&rec)?;
+    s.with_engine(|e| {
+        e.dir()
+            .ok_or("recording assembly data needs a saved project folder")?;
+        write_record(e, &file, &bytes, "assembly class attested by the user")
+    })??;
     Ok(rec)
+}
+
+/// The one way this module writes into a project folder: `Engine::write_project_record`
+/// (ADR-0037), as the Human actor, journalled in `sourcing/journal.jsonl`.
+fn write_record(e: &mut Engine, file: &str, bytes: &[u8], summary: &str) -> Result<(), String> {
+    e.write_project_record(&Actor::human(), "sourcing", file, bytes, summary)
+        .map(|_| ())
+        .map_err(|err| err.to_string())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -400,10 +422,18 @@ pub fn assembly_import_parts_file(s: &Session, path: &str) -> Result<AssemblyImp
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let rows = assembly::parse_parts_csv(&text, &name, now_s(), Some(&wanted))?;
-    let dir = sourcing_dir(s).ok_or("recording assembly data needs a saved project folder")?;
-    for r in &rows {
-        assembly::write_record(&dir, r)?;
-    }
+    let files = rows
+        .iter()
+        .map(assembly::record_file)
+        .collect::<Result<Vec<_>, _>>()?;
+    let summary = format!("assembly class from parts file {name}");
+    s.with_engine(|e| {
+        e.dir()
+            .ok_or("recording assembly data needs a saved project folder")?;
+        files
+            .iter()
+            .try_for_each(|(file, bytes)| write_record(e, file, bytes, &summary))
+    })??;
     Ok(AssemblyImport {
         file: name,
         recorded: rows.len(),

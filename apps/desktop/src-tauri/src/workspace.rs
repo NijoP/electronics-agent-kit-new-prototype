@@ -9,7 +9,7 @@
 //! * every call names the root it was made for: an open project's id, or `dir:<absolute path>`
 //!   for a terminal space that is not an open project. A call can only ever act inside that one
 //!   root, so a late call from one project's UI can never act on another project's folder;
-//! * in an EAK project folder, files the engine owns (the design, its journal, checkpoints, evidence, the lock) can be read
+//! * in an EAK project folder, files the engine owns (the design, its journal, checkpoints, evidence, sourcing records, the lock) can be read
 //!   but never created, renamed or deleted here: design changes are `Engine::execute` commands.
 
 use crate::{snapshot, Session, Snapshot};
@@ -23,12 +23,14 @@ use std::path::{Component, Path, PathBuf};
 pub const MAX_READ_BYTES: u64 = 512 * 1024;
 
 /// Top-level names the engine owns inside a project folder.
-const ENGINE_OWNED: [&str; 5] = [
+const ENGINE_OWNED: [&str; 6] = [
     store::PROJECT_FILE,
     store::JOURNAL_FILE,
     ".lock",
     "checkpoints",
     "evidence",
+    // Supplier and assembly records, written only by `Engine::write_project_record` (ADR-0037).
+    "sourcing",
 ];
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]

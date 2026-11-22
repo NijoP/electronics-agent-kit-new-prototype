@@ -167,17 +167,30 @@ pub fn assembly_dir(sourcing_dir: &Path) -> PathBuf {
     sourcing_dir.join("assembly")
 }
 
-pub fn write_record(sourcing_dir: &Path, rec: &AssemblyRecord) -> Result<(), String> {
+/// The file a record is stored as, relative to the sourcing folder
+/// (`assembly/<Distributor>.json`), and its bytes. In a project, hand both to
+/// `Engine::write_project_record` (ADR-0037).
+pub fn record_file(rec: &AssemblyRecord) -> Result<(String, Vec<u8>), String> {
     if !is_distributor_part_number(&rec.distributor) {
         return Err(format!(
             "{:?} is not an Distributor part number",
             rec.distributor
         ));
     }
+    let text = serde_json::to_string_pretty(rec).map_err(|e| e.to_string())?;
+    Ok((
+        format!("assembly/{}.json", rec.distributor),
+        text.into_bytes(),
+    ))
+}
+
+/// Store a record in a sourcing folder that is not an open project's (tests, exports).
+/// Project folders go through the engine.
+pub fn write_record(sourcing_dir: &Path, rec: &AssemblyRecord) -> Result<(), String> {
+    let (_, bytes) = record_file(rec)?;
     let dir = assembly_dir(sourcing_dir);
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let text = serde_json::to_string_pretty(rec).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join(format!("{}.json", rec.distributor)), text)
+    std::fs::write(dir.join(format!("{}.json", rec.distributor)), bytes)
         .map_err(|e| format!("cannot write assembly record: {e}"))
 }
 

@@ -163,6 +163,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   });
   // Built-in parts plus parts imported into this project (e.g. from Distributor), so an imported
   // part can be placed from the part picker.
+  // A personal or imported part armed from the Library panel: kept in the Place tool's list so
+  // the tool places that part (the backend copies it into the project on placement, F8).
+  const [armedEntry, setArmedEntry] = useState<LibraryEntry | null>(null);
   const library = useMemo(() => {
     const known = new Set(baseLibrary.map((l) => l.id));
     const imported = Object.values(snapshot.project.library ?? {})
@@ -175,8 +178,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         default_value: d.default_value,
         pins: d.symbol.pins.map((p) => [p.number, p.name]),
       }));
-    return [...baseLibrary, ...imported];
-  }, [baseLibrary, snapshot.project.library]);
+    const extra = armedEntry && !known.has(armedEntry.id) && !imported.some((l) => l.id === armedEntry.id) ? [armedEntry] : [];
+    return [...baseLibrary, ...imported, ...extra];
+  }, [baseLibrary, snapshot.project.library, armedEntry]);
   const docs = [...availableDocs(snapshot), ...fileDocs(docState.open)];
   // Only documents the engine still has stay open (the snapshot is authoritative).
   const liveIds = new Set(docs.map((d) => d.id));
@@ -333,7 +337,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       if (last)
         setMessage(
           last.accepted
-            ? `${last.command} → revision ${last.revision_after}, saved`
+            ? `${last.command} → revision ${last.revision_after}, saved${last.warnings.length ? ` (${last.warnings.join("; ")})` : ""}`
             : `${last.command} rejected: ${last.error ? describeError(last.error) : "unknown error"}`,
         );
       await refresh();
@@ -532,7 +536,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     setBottomTab("findings");
     setBottomOpen(true);
   };
-  const placePart = (c: Pick<LibraryEntry, "id" | "name">) => {
+  const placePart = (c: Pick<LibraryEntry, "id" | "name"> | LibraryEntry) => {
+    if ("pins" in c) setArmedEntry(c);
     showKind("schematic");
     setArmPart({ id: c.id, n: Date.now() });
     setMessage(`Place tool armed with ${c.name}: click the schematic to place it.`);

@@ -765,7 +765,8 @@ export interface Model3d {
 /** A part as listed by `library_search` (built-in catalogue merged with the project library). */
 export interface LibraryPart {
   id: string;
-  source: "builtin" | "project";
+  /** Library the shown definition comes from (disabled libraries are never listed). */
+  source: "builtin" | "project" | "personal" | `imported:${string}`;
   in_project: boolean;
   def: ComponentDef;
   unverified_ratings: number;

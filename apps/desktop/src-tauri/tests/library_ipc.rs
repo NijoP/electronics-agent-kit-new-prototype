@@ -328,3 +328,117 @@ fn a_supplier_listing_is_saved_without_an_engineering_definition_and_says_it_nee
     let e = parts_save_record(&s, &p, "C1").unwrap_err();
     assert!(e.contains("no such part"));
 }
+
+fn disable(st: &LibraryStore, ids: &[&str]) {
+    std::fs::create_dir_all(st.root()).unwrap();
+    std::fs::write(
+        st.root().join("disabled-libraries.json"),
+        serde_json::json!({ "disabled": ids }).to_string(),
+    )
+    .unwrap();
+}
+
+fn place_cmd(id: &str) -> eak_runtime::Command {
+    eak_runtime::Command::PlaceSymbol {
+        sheet_id: None,
+        component_id: id.into(),
+        // Distinct positions per id so two placements never overlap.
+        position: eak_core::Point::mm(10.0 + 20.0 * id.len() as f64, 10.0),
+        rotation: Default::default(),
+        refdes: None,
+        value: None,
+    }
+}
+
+/// F8 regression: a part from the personal or an imported library used to be refused by the
+/// engine on drop ("not in project or built-in library") while the UI said "Placed". The
+/// desktop now copies it into the project in the same Batch, as one revision and undo step.
+#[test]
+fn placing_a_personal_or_imported_part_copies_it_into_the_project_in_one_batch() {
+    use eak_desktop::libstore::resolve_scoped_parts;
+    use eak_runtime::{Actor, Command as C, CommandRequest, Engine};
+    let st = store("place-scoped");
+    let mut mine = resistor();
+    mine.id = "MY_R".into();
+    st.personal_save(mine).unwrap();
+    let mut oss = resistor();
+    oss.id = "OSS_R".into();
+    let src = tmp("place-scoped-src");
+    write_def(&src, &oss);
+    std::fs::write(
+        src.join("manifest.json"),
+        r#"{"name":"open-parts","licence":"CC-BY-SA-4.0","source_url":"https://example.org/lib"}"#,
+    )
+    .unwrap();
+    st.import_library(&src).unwrap();
+
+    let mut e = Engine::in_memory(eak_core::Project::new("Scoped"));
+    for (id, from) in [("MY_R", "personal"), ("OSS_R", "imported:open-parts")] {
+        let (cmd, notes) = resolve_scoped_parts(&st, &e.project().library, place_cmd(id)).unwrap();
+        let C::Batch { commands, .. } = &cmd else {
+            panic!("expected a Batch, got {cmd:?}")
+        };
+        assert!(
+            matches!(&commands[0], C::UpsertComponentDefinition { definition } if definition.id == id)
+        );
+        assert!(matches!(&commands[1], C::PlaceSymbol { .. }));
+        assert!(notes[0].contains(from), "{notes:?}");
+        let rev = e.project().revision;
+        let r = e.execute(CommandRequest {
+            expected_revision: rev,
+            actor: Actor::human(),
+            command: cmd,
+            approval: None,
+        });
+        assert!(r.accepted, "{id}: {:?}", r.error);
+        assert_eq!(r.revision_after, rev + 1, "one revision for copy + place");
+        assert!(e.project().library.contains_key(id));
+        assert_eq!(e.project().schematic.symbols.len() as u64, rev + 1);
+    }
+
+    // Once in the project (or for a built-in part) the command passes through unchanged.
+    for id in ["MY_R", "R_0603"] {
+        let (cmd, notes) = resolve_scoped_parts(&st, &e.project().library, place_cmd(id)).unwrap();
+        assert_eq!(cmd, place_cmd(id));
+        assert!(notes.is_empty());
+    }
+
+    // A disabled library is not a source for placement: the command is left for the engine
+    // to reject with its reason.
+    disable(&st, &["personal"]);
+    let fresh = eak_core::Project::new("Fresh");
+    let (cmd, _) = resolve_scoped_parts(&st, &fresh.library, place_cmd("MY_R")).unwrap();
+    assert_eq!(cmd, place_cmd("MY_R"));
+}
+
+/// F8 regression: the Library panel search (`library_search`) and the Place tool list
+/// (`library_components`) ignored the enabled flag set in Libraries.
+#[test]
+fn library_search_and_place_list_honour_the_enabled_flag_and_show_every_scope() {
+    use eak_desktop::{library_components_in, merged_library};
+    let st = store("enabled");
+    let mut mine = resistor();
+    mine.id = "MY_R".into();
+    st.personal_save(mine).unwrap();
+    let project = BTreeMap::new();
+
+    let all = merged_library(&st, &project, "", "", "all");
+    let my = all
+        .iter()
+        .find(|p| p.id == "MY_R")
+        .expect("personal part listed");
+    assert_eq!(my.source, "personal");
+    assert!(!my.in_project);
+    assert!(all.iter().any(|p| p.source == "builtin"));
+    assert_eq!(merged_library(&st, &project, "", "", "personal").len(), 1);
+    assert!(!library_components_in(&st).is_empty());
+
+    disable(&st, &["personal", "eak.builtin"]);
+    let all = merged_library(&st, &project, "", "", "all");
+    assert!(
+        all.is_empty(),
+        "{:?}",
+        all.iter().map(|p| &p.id).collect::<Vec<_>>()
+    );
+    assert!(library_components_in(&st).is_empty());
+}

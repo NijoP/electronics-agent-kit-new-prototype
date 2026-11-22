@@ -1,0 +1,19 @@
+{
+  "name": "E3 engine boundary and library provenance",
+  "description": "Opens an isolated software fixture project and imports a fixture open-source library (SETUP, through the same IPC the Library browser uses; licence and source recorded). Then, with real X input: the Library panel search lists the imported part with its source; disabling that library in Libraries hides it from the search and enabling it shows it again (F8: the enabled flag is honoured); the part's details say placing copies it into the project; Place on schematic plus a click on the canvas places it, and the status bar reports the single Batch that copied the definition into the project library (F8: placing from an imported scope succeeds). The KiCad licence gate (F2) needs a native file dialog and is covered by unit tests; sourcing writes (F1) have no window of their own and are covered by tests and the CI engine-boundary scan.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "E3 Evidence Fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "E3 Evidence Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "fixture-lib", "do": "fixture-library", "title": "Import a fixture open-source library", "name": "e3-open-parts", "licence": "CC0-1.0", "source": "https://example.org/e3-open-parts", "from": "R_0603", "part": "E3_OSS_R", "partName": "E3 open resistor" },
+    { "id": "e3-library", "do": "click", "title": "E3: open the Library / Parts panel", "selector": "nav[aria-label=\"Activity bar\"] button[aria-label=\"Library / Parts\"]", "expect": "input[aria-label=\"Search library\"]" },
+    { "id": "e3-search", "do": "type", "title": "E3: search finds the imported part, labelled with its library", "selector": "input[aria-label=\"Search library\"]", "value": "E3_OSS", "expect": "ul[aria-label=\"Library parts\"] button", "expectText": "E3 open resistor" },
+    { "id": "e3-libraries", "do": "click", "title": "E3: open Libraries (enable switches, licence, source)", "selector": "details.library-manager > summary", "expect": "input[aria-label=\"Enable e3-open-parts\"]" },
+    { "id": "e3-disable", "do": "click", "title": "F8: disabling the library hides its part from the search", "selector": "input[aria-label=\"Enable e3-open-parts\"]", "expect": "p.empty-state", "expectText": "No part matches the search." },
+    { "id": "e3-enable", "do": "click", "title": "F8: enabling it again lists the part again", "selector": "input[aria-label=\"Enable e3-open-parts\"]", "expect": "ul[aria-label=\"Library parts\"] button", "expectText": "E3 open resistor" },
+    { "id": "e3-select", "do": "click", "title": "E3: part details say placing copies it into the project", "selector": "ul[aria-label=\"Library parts\"] button", "text": "E3 open resistor", "expect": "section.lib-detail dd", "expectText": "Imported library e3-open-parts; placing copies it into the project" },
+    { "id": "e3-arm", "do": "click", "title": "E3: Place on schematic arms the Place tool with this part", "selector": "section.lib-detail button.primary", "text": "Place on schematic", "expect": "footer.status span.msg", "expectText": "Place tool armed with E3 open resistor" },
+    { "id": "e3-place", "do": "click", "title": "F8: click the sheet; one Batch copies the part into the project and places it", "selector": "[role=\"img\"][aria-label=\"Schematic canvas\"]", "expect": "footer.status span.msg", "expectText": "Batch → revision" },
+    { "id": "e3-in-project", "do": "wait", "title": "E3: the part now comes from the project library", "selector": "section.lib-detail dd", "text": "Project library" }
+  ]
+}

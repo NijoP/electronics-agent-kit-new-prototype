@@ -689,4 +689,126 @@ impl Engine {
         );
         Some(path)
     }
+
+    /// Write one project record that is not design data (ADR-0037): supplier sourcing records
+    /// and fabricator assembly classes under `<project>/sourcing/`. They are evidence about
+    /// parts, not part of EAK-IR, so they carry no revision or undo step; instead every write is
+    /// appended to the area's own journal (`<area>/journal.jsonl`) and emitted as an event.
+    ///
+    /// `file` is a `/`-separated path relative to the area, each component limited to
+    /// letters, digits, `_`, `-` and `.` with no leading dot, ending in `.json`. Refused while
+    /// the project is blocked by recovery, for projects without a folder, and for agent actors
+    /// (an agent never records supplier or assembly evidence on its own).
+    pub fn write_project_record(
+        &mut self,
+        actor: &Actor,
+        area: &str,
+        file: &str,
+        data: &[u8],
+        summary: &str,
+    ) -> Result<PathBuf, CommandError> {
+        if let Some(b) = &self.blocked {
+            return Err(CommandError::Precondition(b.clone()));
+        }
+        if actor.kind == ActorKind::Agent {
+            return Err(CommandError::ApprovalRequired(
+                "agents do not record sourcing or assembly evidence; a person does".into(),
+            ));
+        }
+        if !RECORD_AREAS.contains(&area) {
+            return Err(CommandError::Invalid(format!(
+                "{area:?} is not a project record area"
+            )));
+        }
+        let parts = record_path(file)?;
+        let dir = self.dir.clone().ok_or_else(|| {
+            CommandError::Precondition("recording this needs a saved project folder".into())
+        })?;
+        let area_dir = dir.join(area);
+        let path = parts.iter().fold(area_dir.clone(), |p, c| p.join(c));
+        let storage = |e: std::io::Error| CommandError::Storage(e.to_string());
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(storage)?;
+        }
+        store::atomic_write(&path, data).map_err(storage)?;
+        let op = op_id();
+        let entry = RecordWrite {
+            op_id: op.clone(),
+            actor: actor.label(),
+            area: area.into(),
+            file: parts.join("/"),
+            bytes: data.len() as u64,
+            revision: self.project.revision,
+            summary: summary.into(),
+            timestamp_ms: store::now_ms(),
+        };
+        let mut line =
+            serde_json::to_string(&entry).map_err(|e| CommandError::Storage(e.to_string()))?;
+        line.push('\n');
+        {
+            use std::io::Write;
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(area_dir.join(RECORD_JOURNAL))
+                .and_then(|mut f| f.write_all(line.as_bytes()))
+                .map_err(storage)?;
+        }
+        self.emit(
+            "project_record_written",
+            &op,
+            &actor.label(),
+            format!("{area}/{}: {summary}", entry.file),
+        );
+        Ok(path)
+    }
+}
+
+/// Project sub-folders written only through [`Engine::write_project_record`] (ADR-0037).
+pub const RECORD_AREAS: &[&str] = &["sourcing"];
+/// Journal file inside each record area.
+pub const RECORD_JOURNAL: &str = "journal.jsonl";
+
+/// One line of a record area's journal.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RecordWrite {
+    pub op_id: String,
+    pub actor: String,
+    pub area: String,
+    pub file: String,
+    pub bytes: u64,
+    /// Design revision the project was at when the record was written.
+    pub revision: u64,
+    pub summary: String,
+    pub timestamp_ms: u128,
+}
+
+/// Every entry of `<dir>/<area>/journal.jsonl`, oldest first; unreadable lines are skipped.
+pub fn read_record_journal(dir: &Path, area: &str) -> Vec<RecordWrite> {
+    std::fs::read_to_string(dir.join(area).join(RECORD_JOURNAL))
+        .map(|t| {
+            t.lines()
+                .filter_map(|l| serde_json::from_str(l).ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn record_path(file: &str) -> Result<Vec<String>, CommandError> {
+    let bad = || CommandError::Invalid(format!("{file:?} is not a usable record file name"));
+    let parts: Vec<String> = file.split('/').map(str::to_string).collect();
+    if parts.len() > 4 || !file.ends_with(".json") {
+        return Err(bad());
+    }
+    for c in &parts {
+        let ok = !c.is_empty()
+            && c.len() <= 80
+            && !c.starts_with('.')
+            && c.chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'));
+        if !ok {
+            return Err(bad());
+        }
+    }
+    Ok(parts)
 }

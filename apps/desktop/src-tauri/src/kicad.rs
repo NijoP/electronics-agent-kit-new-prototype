@@ -25,6 +25,12 @@ pub struct KicadImportView {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KicadCommitResult {
     pub library_name: String,
+    /// Licence and source the user stated for the library (recorded in its manifest).
+    pub licence: String,
+    pub source_url: String,
+    /// True for a symbol library: each footprint is an EAK placeholder (one pad per pin,
+    /// numbered like the pins), not the real package, and must be replaced before layout.
+    pub placeholder_footprints: bool,
     pub components_created: usize,
     pub component_ids: Vec<String>,
     pub rejected: Vec<String>,
@@ -140,12 +146,61 @@ pub fn import_report(path: &str) -> Result<KicadImportView, String> {
     })
 }
 
-/// Parses and commits imported KiCad definitions directly into EAK's library store (`imported/` scope).
+/// Check the licence and source the user gave for a KiCad library before anything is written
+/// (finding F2): a library is never imported without a named licence and an http(s) source,
+/// and "unspecified"-style placeholders are not a licence.
+pub fn check_provenance(
+    licence: Option<&str>,
+    source: Option<&str>,
+) -> Result<(String, String), String> {
+    let licence = licence.map(str::trim).unwrap_or("");
+    if licence.is_empty() {
+        return Err(
+            "name the licence the KiCad library is distributed under (for example \
+                    CC-BY-SA-4.0): without a licence nothing is imported"
+                .into(),
+        );
+    }
+    let lower = licence.to_ascii_lowercase();
+    if licence.chars().count() > 120
+        || licence.chars().any(char::is_control)
+        || ["unspecified", "unknown", "none", "n/a", "?"]
+            .iter()
+            .any(|p| lower == *p || lower.starts_with(&format!("{p} ")))
+    {
+        return Err(format!(
+            "{licence:?} is not a licence: name the licence the library is distributed under"
+        ));
+    }
+    let source = source.map(str::trim).unwrap_or("");
+    if !(source.starts_with("https://") || source.starts_with("http://"))
+        || source.len() > 2048
+        || source.chars().any(|c| c.is_whitespace() || c.is_control())
+    {
+        return Err(
+            "give the http(s) address the KiCad library was obtained from as its source".into(),
+        );
+    }
+    Ok((licence.to_string(), source.to_string()))
+}
+
+/// Parses and commits imported KiCad definitions into EAK's library store (`imported/` scope),
+/// with the licence and source the user named (refused without them, see [`check_provenance`]).
 pub fn import_commit(
     path: &str,
     licence: Option<&str>,
     source: Option<&str>,
 ) -> Result<KicadCommitResult, String> {
+    import_commit_into(store(), path, licence, source)
+}
+
+pub fn import_commit_into(
+    store_ref: &crate::libstore::LibraryStore,
+    path: &str,
+    licence: Option<&str>,
+    source: Option<&str>,
+) -> Result<KicadCommitResult, String> {
+    let (licence, source_url) = check_provenance(licence, source)?;
     let p = Path::new(path);
     let ext = p
         .extension()
@@ -176,7 +231,6 @@ pub fn import_commit(
     let limits = Limits::default();
     let src = std::fs::read_to_string(p).map_err(|e| format!("cannot read the file: {e}"))?;
 
-    let store_ref = store();
     let target_dir = store_ref.root().join("imported").join(&lib_name);
     std::fs::create_dir_all(&target_dir)
         .map_err(|e| format!("cannot create target library dir: {e}"))?;
@@ -227,7 +281,11 @@ pub fn import_commit(
                     external_ref: None,
                     model_ref: None,
                 },
-                provenance: format!("Imported KiCad symbol library {file_name}; unverified by EAK"),
+                provenance: format!(
+                    "Imported KiCad symbol library {file_name} (licence {licence}; source \
+                     {source_url}); footprint is an EAK placeholder with one pad per pin, not \
+                     the real package; unverified by EAK"
+                ),
             };
             let problems = def.validate();
             if !problems.is_empty() {
@@ -303,7 +361,10 @@ pub fn import_commit(
                         external_ref: None,
                         model_ref: None,
                     },
-                    provenance: format!("Imported KiCad footprint {file_name}; unverified by EAK"),
+                    provenance: format!(
+                        "Imported KiCad footprint {file_name} (licence {licence}; source \
+                         {source_url}); symbol has one passive pin per pad; unverified by EAK"
+                    ),
                 };
                 let problems = def.validate();
                 if problems.is_empty() {
@@ -322,8 +383,8 @@ pub fn import_commit(
 
     let manifest = Manifest {
         name: lib_name.clone(),
-        licence: licence.unwrap_or("Unspecified (KiCad import)").to_string(),
-        source_url: source.unwrap_or("https://kicad.org").to_string(),
+        licence: licence.clone(),
+        source_url: source_url.clone(),
     };
     let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
     std::fs::write(target_dir.join("manifest.json"), manifest_json)
@@ -331,6 +392,9 @@ pub fn import_commit(
 
     Ok(KicadCommitResult {
         library_name: lib_name,
+        licence,
+        source_url,
+        placeholder_footprints: ext == "kicad_sym",
         components_created: component_ids.len(),
         component_ids,
         rejected,
@@ -376,28 +440,72 @@ mod tests {
         assert_eq!(fp.pads[1].number, "2");
     }
 
-    #[test]
-    fn import_commit_creates_component_def_and_manifest() {
-        let tmp = std::env::temp_dir().join(format!("kicad_test_{}", std::process::id()));
+    const TEST_SYM: &str = r#"(kicad_symbol_lib (version 20231120) (generator "x")
+      (symbol "RES_0805" (in_bom yes) (on_board yes)
+        (property "Reference" "R" (at 0 0 0))
+        (property "Value" "10k" (at 0 0 0))
+        (symbol "RES_0805_1_1"
+          (pin passive line (at 0 3.81 270) (length 1.27) (name "~") (number "1"))
+          (pin passive line (at 0 -3.81 90) (length 1.27) (name "~") (number "2")))))"#;
+
+    /// A KiCad file and an empty library store, both in a fresh temporary folder.
+    fn fixture(name: &str) -> (std::path::PathBuf, crate::libstore::LibraryStore, String) {
+        let tmp = std::env::temp_dir().join(format!("kicad_test_{name}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let sym_file = tmp.join("test_pass.kicad_sym");
-        const TEST_SYM: &str = r#"(kicad_symbol_lib (version 20231120) (generator "x")
-          (symbol "RES_0805" (in_bom yes) (on_board yes)
-            (property "Reference" "R" (at 0 0 0))
-            (property "Value" "10k" (at 0 0 0))
-            (symbol "RES_0805_1_1"
-              (pin passive line (at 0 3.81 270) (length 1.27) (name "~") (number "1"))
-              (pin passive line (at 0 -3.81 90) (length 1.27) (name "~") (number "2")))))"#;
         std::fs::write(&sym_file, TEST_SYM).unwrap();
+        let st = crate::libstore::LibraryStore::new(tmp.join("library"));
+        (tmp, st, sym_file.display().to_string())
+    }
 
-        let res = import_commit(
-            sym_file.to_str().unwrap(),
-            Some("MIT"),
-            Some("https://example.com"),
-        )
-        .unwrap();
+    #[test]
+    fn import_commit_creates_component_def_and_manifest_with_the_stated_licence() {
+        let (tmp, st, file) = fixture("ok");
+        let res =
+            import_commit_into(&st, &file, Some(" MIT "), Some("https://example.com/lib")).unwrap();
         assert_eq!(res.components_created, 1);
         assert!(res.component_ids.contains(&"RES_0805".into()));
+        assert_eq!(res.licence, "MIT");
+        assert_eq!(res.source_url, "https://example.com/lib");
+        assert!(
+            res.placeholder_footprints,
+            "symbol imports get placeholder footprints"
+        );
+        let (m, defs, problems) = st.imported().into_iter().next().unwrap();
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(m.licence, "MIT");
+        assert_eq!(m.source_url, "https://example.com/lib");
+        assert!(defs[0].provenance.contains("licence MIT"));
+        assert!(defs[0].provenance.contains("placeholder"));
+        let _ = std::fs::remove_dir_all(tmp);
+    }
+
+    /// Regression (F2): a commit without a real licence or source used to record
+    /// "Unspecified (KiCad import)" and https://kicad.org. It is now refused and writes nothing.
+    #[test]
+    fn import_commit_without_a_licence_or_source_is_refused_and_writes_nothing() {
+        let (tmp, st, file) = fixture("refused");
+        let cases: [(Option<&str>, Option<&str>); 8] = [
+            (None, Some("https://example.com")),
+            (Some("   "), Some("https://example.com")),
+            (
+                Some("Unspecified (KiCad import)"),
+                Some("https://example.com"),
+            ),
+            (Some("unknown"), Some("https://example.com")),
+            (Some("MIT"), None),
+            (Some("MIT"), Some("kicad.org")),
+            (Some("MIT"), Some("https://exa mple.com")),
+            (Some("MIT"), Some("file:///etc/passwd")),
+        ];
+        for (licence, source) in cases {
+            assert!(
+                import_commit_into(&st, &file, licence, source).is_err(),
+                "{licence:?} {source:?}"
+            );
+        }
+        assert!(!st.root().join("imported").exists(), "nothing was written");
         let _ = std::fs::remove_dir_all(tmp);
     }
 }

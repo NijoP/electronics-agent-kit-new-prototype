@@ -189,6 +189,11 @@ export interface KicadImportView {
 
 export interface KicadCommitResult {
   library_name: string;
+  /** Licence and source the user named; a commit without them is refused (F2). */
+  licence: string;
+  source_url: string;
+  /** Symbol imports: every footprint is a one-pad-per-pin placeholder, not the real package. */
+  placeholder_footprints: boolean;
   components_created: number;
   component_ids: string[];
   rejected: string[];
@@ -213,7 +218,7 @@ export const api = {
   closeProject: () => call<void>("close_project"),
   currentProject: () => call<Snapshot>("current_project"),
   kicadImportReport: (path: string) => call<KicadImportView>("kicad_import_report", { path }),
-  kicadImportCommit: (path: string, licence?: string, source?: string) =>
+  kicadImportCommit: (path: string, licence: string, source: string) =>
     call<KicadCommitResult>("kicad_import_commit", { path, licence, source }),
   netlist: () => call<{ name: string; pins: string[]; label_names: string[]; has_power_port: boolean }[]>("netlist"),
   agentTasks: () => call<import("./agentTasks").AgentTask[]>("agent_tasks"),

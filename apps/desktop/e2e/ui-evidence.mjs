@@ -197,6 +197,29 @@ const handlers = {
     await waitRect("button.home-row", s.name, 30000);
     return `SETUP (IPC create_project, isolated software fixture "${s.name}"; not a UI action)`;
   },
+  // SETUP: an open-source library folder (manifest with licence and source, plus one definition
+  // copied from a built-in part under a new id), imported through the IPC the Library browser
+  // uses. Needs an open project (the built-in part is read through library_search).
+  async "fixture-library"(s) {
+    const dir = path.join(OUT, "fixture", `library-${s.name}`);
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    const hits = await ipc("library_search", { query: s.from, category: "", source: "builtin" });
+    const base = (hits ?? []).find((p) => p.id === s.from);
+    if (!base) throw new Error(`no built-in part ${s.from}`);
+    const def = { ...base.def, id: s.part, name: s.partName, provenance: `UI evidence fixture: copy of built-in ${s.from}` };
+    fs.writeFileSync(path.join(dir, `${s.part}.json`), JSON.stringify(def, null, 2));
+    fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ name: s.name, licence: s.licence, source_url: s.source }, null, 2));
+    const r = await ipc("library_import_open_source", { dir });
+    return `SETUP (IPC library_import_open_source: "${s.name}", licence ${s.licence}, ${r.accepted.length} part(s); not a UI action)`;
+  },
+  // XTest click into a field, then XTest typing.
+  async type(s) {
+    const how = await xclick(s.selector, s.text);
+    sh("xdotool", ["type", "--delay", "40", s.value]);
+    if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
+    return `${how}; XTest typed "${s.value}"${s.expect ? `; then visible: ${s.expect}` : ""}`;
+  },
   async click(s) {
     const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);

@@ -608,8 +608,9 @@ pub fn search<'a>(records: &'a [SourcingRecord], query: &str) -> Vec<&'a Sourcin
         .collect()
 }
 
-/// Store a record as `<dir>/<Distributor part number>.json` (atomic write).
-pub fn write_record(dir: &Path, rec: &SourcingRecord) -> Result<PathBuf, SourcingError> {
+/// The file a record is stored as inside the sourcing folder (`<Distributor part number>.json`)
+/// and its bytes. In a project, hand both to `Engine::write_project_record` (ADR-0037).
+pub fn record_file(rec: &SourcingRecord) -> Result<(String, Vec<u8>), SourcingError> {
     let distributor = rec
         .distributor_part
         .as_deref()
@@ -617,11 +618,18 @@ pub fn write_record(dir: &Path, rec: &SourcingRecord) -> Result<PathBuf, Sourcin
         .ok_or_else(|| {
             SourcingError::Io("record has no Distributor part number to store under".into())
         })?;
+    let json = serde_json::to_string_pretty(rec).map_err(|e| SourcingError::Io(e.to_string()))?;
+    Ok((format!("{distributor}.json"), json.into_bytes()))
+}
+
+/// Store a record as `<dir>/<Distributor part number>.json` (atomic write) in a folder that is
+/// not an open project's (tests, exports). Project folders go through the engine.
+pub fn write_record(dir: &Path, rec: &SourcingRecord) -> Result<PathBuf, SourcingError> {
+    let (file, bytes) = record_file(rec)?;
     let io = |e: std::io::Error| SourcingError::Io(e.to_string());
     std::fs::create_dir_all(dir).map_err(io)?;
-    let path = dir.join(format!("{distributor}.json"));
-    let json = serde_json::to_string_pretty(rec).map_err(|e| SourcingError::Io(e.to_string()))?;
-    eak_runtime::store::atomic_write(&path, json.as_bytes()).map_err(io)?;
+    let path = dir.join(file);
+    eak_runtime::store::atomic_write(&path, &bytes).map_err(io)?;
     Ok(path)
 }
 

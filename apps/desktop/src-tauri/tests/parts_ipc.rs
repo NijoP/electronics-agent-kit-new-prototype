@@ -138,6 +138,11 @@ fn import_is_one_engine_command_with_a_revision_check_and_stores_the_record() {
     assert!(def.supplier_offers[0].fetched_at_unix_s.is_some());
     assert_eq!(def.mpn.as_deref(), Some("0603WAF1002T5E"));
     assert!(d.join("sourcing").join("C25804.json").is_file());
+    // The record was written by the engine and journalled (ADR-0037), not by a direct write.
+    let journal = eak_runtime::engine::read_record_journal(&d, "sourcing");
+    assert_eq!(journal.len(), 1, "{journal:?}");
+    assert_eq!(journal[0].file, "C25804.json");
+    assert_eq!(journal[0].actor, "human:user");
 
     // The stored record now answers an offline search.
     let again = parts_search(&s, &p, "0603WAF1002T5E").unwrap();
@@ -212,4 +217,34 @@ fn nothing_is_prepared_without_an_open_project() {
     let s = session();
     assert!(manufacturing_preview(&s).is_err());
     assert!(fabricator_prepare(&s, "").is_err());
+}
+
+#[test]
+fn assembly_attestations_are_written_through_the_engine_and_journalled() {
+    use eak_desktop::parts::assembly_attest;
+    use eak_manufacturing::assembly::AssemblyClass;
+    let (s, d) = open_empty("attest");
+    let rev = current_project(&s).unwrap().project.revision;
+
+    let rec = assembly_attest(&s, "c25804", AssemblyClass::Basic).unwrap();
+    assert_eq!(rec.distributor, "C25804");
+    assert!(d
+        .join("sourcing")
+        .join("assembly")
+        .join("C25804.json")
+        .is_file());
+    let journal = eak_runtime::engine::read_record_journal(&d, "sourcing");
+    assert_eq!(journal.len(), 1, "{journal:?}");
+    assert_eq!(journal[0].file, "assembly/C25804.json");
+    assert_eq!(journal[0].revision, rev);
+    // Not a design change: no revision and no undo step.
+    assert_eq!(current_project(&s).unwrap().project.revision, rev);
+
+    // Refused inputs write nothing and add no journal line.
+    assert!(assembly_attest(&s, "../evil", AssemblyClass::Basic).is_err());
+    assert!(assembly_attest(&s, "C25804", AssemblyClass::Unknown).is_err());
+    assert_eq!(
+        eak_runtime::engine::read_record_journal(&d, "sourcing").len(),
+        1
+    );
 }
