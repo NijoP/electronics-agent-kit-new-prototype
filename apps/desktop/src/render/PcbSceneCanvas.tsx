@@ -27,6 +27,8 @@ export function PcbSceneCanvas({ scene, overlay, vb, size, onFrame, onUnavailabl
   const ref = useRef<HTMLCanvasElement>(null);
   const renderer = useRef<SceneRenderer | null>(null);
   const frame = useRef<number | null>(null);
+  // Until the first frame is on screen, paint synchronously (no empty flash, no wait for a frame).
+  const painted = useRef(false);
   const latest = useRef({ vb, size, onFrame, scene, overlay });
   latest.current = { vb, size, onFrame, scene, overlay };
   const dpr = typeof window !== "undefined" && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
@@ -36,9 +38,15 @@ export function PcbSceneCanvas({ scene, overlay, vb, size, onFrame, onUnavailabl
     const r = renderer.current;
     const { vb: v, size: s, onFrame: cb } = latest.current;
     if (!r || s.width <= 0 || s.height <= 0 || v.w <= 0) return;
+    painted.current = true;
     cb?.(r.render(viewTransform(v, s, dpr)));
   };
   const schedule = () => {
+    if (!painted.current && renderer.current) {
+      if (frame.current !== null && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(frame.current);
+      draw();
+      return;
+    }
     if (frame.current === null && typeof requestAnimationFrame !== "undefined") frame.current = requestAnimationFrame(draw);
   };
 
@@ -68,6 +76,7 @@ export function PcbSceneCanvas({ scene, overlay, vb, size, onFrame, onUnavailabl
       frame.current = null;
       r.dispose();
       renderer.current = null;
+      painted.current = false;
     };
   }, []);
 
