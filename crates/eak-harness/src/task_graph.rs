@@ -1,4 +1,4 @@
-//! Typed agent task graph (ADR-0036).
+//! Typed agent task graph (ADR-0037).
 //!
 //! A run is a graph of scoped nodes connected by typed ports. The graph, not a model, decides what
 //! may run: a node is ready only when every input it needs has been produced, independent nodes may

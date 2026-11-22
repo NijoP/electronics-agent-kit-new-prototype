@@ -1,4 +1,4 @@
-//! Human approval as a suspended node (ADR-0036).
+//! Human approval as a suspended node (ADR-0037).
 //!
 //! An approval node does not run a model: it asks a person a question and waits. Asking writes an
 //! `ApprovalRequested` entry (with the evidence the person should look at) and suspends the node in

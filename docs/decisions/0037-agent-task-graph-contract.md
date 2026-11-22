@@ -1,4 +1,4 @@
-# ADR-0036 Agent task graph contract
+# ADR-0037 Agent task graph contract
 
 Status: accepted. Step 1 of the orchestration order is implemented in source with test source;
 nothing here has been compiled or run by the author (CI is the first compile).

@@ -1,4 +1,4 @@
-//! Append-only, revision-bound task journal (ADR-0036).
+//! Append-only, revision-bound task journal (ADR-0037).
 //!
 //! One JSON object per line in `<project dir>/agent-journal.jsonl`. Every entry records the run,
 //! the project revision it was written against, a monotonically increasing sequence number and a

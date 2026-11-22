@@ -1,4 +1,4 @@
-//! Dependency-aware invalidation (ADR-0036).
+//! Dependency-aware invalidation (ADR-0037).
 //!
 //! When the design changes under a run, only the nodes that actually depend on what changed are
 //! reset; everything else keeps its recorded result. A change names the roles it touches (its

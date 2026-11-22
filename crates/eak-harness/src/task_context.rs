@@ -1,4 +1,4 @@
-//! Scoped context for one task-graph node (ADR-0036).
+//! Scoped context for one task-graph node (ADR-0037).
 //!
 //! A node never receives the whole project, the chat history or every earlier result. It gets its
 //! task contract, exactly the inputs its ports declare (small values inline, large ones as a
