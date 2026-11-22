@@ -71,7 +71,7 @@ describe("action registry", () => {
     expect(pcb).toContain("Route");
     expect(pcb).toContain("Manufacturing");
     expect(pcb).not.toContain("Simulation");
-    expect(labels("schematic", "Place")).toEqual(["Place part", "Part: Resistor", "Wire", "Net / power label", "No connect", "Label pin"]);
+    expect(labels("schematic", "Place")).toEqual(["Place part", "Wire", "Net / power label", "No connect", "Label pin", "Part: Resistor"]);
     expect(labels("pcb", "Place")).toEqual(["Via", "Board outline", "Copper zone"]);
     expect(labels("pcb", "Route")).toEqual(["Route track", "Auto-route all nets", "Clear all routing"]);
     expect(labels("schematic", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run ERC", "Annotate schematic"]);
@@ -81,6 +81,17 @@ describe("action registry", () => {
     expect(labels("3d", "Manufacturing")).toContain("Export manufacturing files…");
     expect(toolbarFor(workspaceActions(deps()), "3d").flat().map((b) => b.id)).not.toContain("t-wire");
     expect(labels("home", "Edit")).toEqual(["Undo", "Redo", "Clear selection"]);
+  });
+
+  // Regression: with a full library the Place menu listed ~30 parts before Wire, Net / power
+  // label, No connect and Label pin, so those tools sat below the bottom of the window and a
+  // pick from the menu (e.g. while Place was armed) never reached them. Tools now come first.
+  it("Place menu lists every schematic tool before the library parts, however many parts there are", () => {
+    const library = Array.from({ length: 40 }, (_, i) => ({ id: `p${i}`, name: `Part ${i}`, category: "passive", refdes_prefix: "R", default_value: "", pins: [] }));
+    const items = labels("schematic", "Place", deps({ library }))!;
+    expect(items.slice(0, 5)).toEqual(["Place part", "Wire", "Net / power label", "No connect", "Label pin"]);
+    expect(items).toHaveLength(45);
+    expect(items.slice(5).every((l) => l.startsWith("Part: "))).toBe(true);
   });
 
   it("menu Place/Route entries arm the same editor tool as the toolbar", () => {

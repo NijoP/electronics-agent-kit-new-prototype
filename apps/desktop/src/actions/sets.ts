@@ -180,11 +180,13 @@ export function schematicActions(d: ActionDeps): Action[] {
   const tool = (id: string, label: string, title: string, icon: IconName, more: Partial<Action> = {}): Action => ({ id: `t-${id}`, label, title, docs: SCH, menu: "Place", toolbar: "edit", icon, ...more, enabled: () => true, run: () => d.tool(id) });
   return [
     tool("place", "Place part", "Place a part from the library (editor Place tool)", "part"),
-    ...d.library.map<Action>((c, i) => ({ id: `part-${c.id}`, label: `Part: ${c.name}`, docs: SCH, menu: "Place", sep: i === 0, palette: false, enabled: () => true, run: () => d.placePart(c) })),
     tool("wire", "Wire", "Draw a wire; ends snap to pins (AddWire)", "wire", { sep: true }),
     tool("label", "Net / power label", "Net label or power port (AddNetLabel; pick Net or Power in the tool options)", "net-label", { split: "sch-marks" }),
     tool("noconnect", "No connect", "Mark a pin as intentionally unconnected (SetNoConnect); click a marked pin to remove it (DeleteNoConnect)", "no-connect", { split: "sch-marks" }),
     tool("pinlabel", "Label pin", "Name the net on a pin (LabelPin)", "pin-label", { split: "sch-marks" }),
+    // The tools come before the parts: the library can hold dozens of parts, and a tool listed
+    // after them would be pushed past the bottom of the window.
+    ...d.library.map<Action>((c, i) => ({ id: `part-${c.id}`, label: `Part: ${c.name}`, docs: SCH, menu: "Place", sep: i === 0, palette: false, enabled: () => true, run: () => d.placePart(c) })),
     {
       id: "t-mirror",
       label: "Mirror selection",

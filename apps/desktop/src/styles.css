@@ -239,10 +239,16 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .tools button { height: var(--h-sm); padding: 0 var(--s-1); border-color: transparent; background: transparent; color: var(--fg-dim); }
 .tools button:hover:not(:disabled) { color: var(--fg); }
 .tools button.on { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
-.tool-options { display: flex; gap: var(--s-1); align-items: center; flex-wrap: wrap; font-size: var(--fs-sm); background: var(--bg-app); border-bottom: 1px solid var(--line); padding: 2px var(--s-1) var(--s-half); min-height: 8px; }
-.tool-options:empty { min-height: 0; padding: 0; border-bottom: 0; background: transparent; }
+/* One row of fixed height: options, symbol fields and the selection bar appearing or going never
+   move the canvas below it (a wrapped second row did). Overflow scrolls sideways; the hint shrinks. */
+.tool-options { display: flex; gap: var(--s-1); align-items: center; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; font-size: var(--fs-sm); background: var(--bg-app); border-bottom: 1px solid var(--line); padding: 2px var(--s-1) var(--s-half); height: calc(var(--h-sm) + 2px + var(--s-half) + 1px); box-sizing: border-box; flex-shrink: 0; }
+.tool-options::-webkit-scrollbar { display: none; }
+.tool-options > * { flex-shrink: 0; }
+.tool-options > .hint { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-options:empty { min-height: 0; height: 0; padding: 0; border-bottom: 0; background: transparent; }
 .tool-options label { display: flex; gap: var(--s-half); align-items: center; color: var(--fg-dim); }
 .tool-options select, .tool-options input:not([type="checkbox"]):not([type="radio"]), .tool-options button { height: var(--h-sm); padding-top: 0; padding-bottom: 0; }
+.tool-options select { max-width: 240px; }
 .hint { font-size: var(--fs-sm); }
 .canvas.tool { cursor: crosshair; }
 .hit { stroke: transparent; stroke-width: 1.4; pointer-events: stroke; fill: none; }
@@ -284,7 +290,7 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .menu { position: relative; }
 .menu-btn { border: 0; background: transparent; height: var(--h-sm); padding: 0 var(--s-1); color: var(--fg-dim); }
 .menu-btn:hover, .menu-btn.on { color: var(--fg); background: var(--bg-hover); }
-.menu-list { list-style: none; margin: 0; padding: var(--s-half); position: absolute; top: 26px; left: 0; min-width: 280px; background: var(--bg-raised); border: 1px solid var(--line-strong); border-radius: var(--r-2); box-shadow: var(--shadow); animation: rise var(--t-fast) var(--ease); }
+.menu-list { list-style: none; margin: 0; padding: var(--s-half); position: absolute; top: 26px; left: 0; min-width: 280px; max-height: calc(100vh - 80px); overflow-y: auto; background: var(--bg-raised); border: 1px solid var(--line-strong); border-radius: var(--r-2); box-shadow: var(--shadow); animation: rise var(--t-fast) var(--ease); }
 .menu-list li.sep { border-top: 1px solid var(--line); margin-top: var(--s-half); padding-top: var(--s-half); }
 .mi { width: 100%; display: flex; gap: var(--s-1); align-items: center; text-align: left; border: 0; background: transparent; padding: var(--s-half) var(--s-1); }
 .mi:hover:not(.disabled), .mi:focus-visible { background: var(--accent-soft); }

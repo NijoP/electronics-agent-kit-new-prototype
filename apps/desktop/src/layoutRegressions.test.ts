@@ -25,6 +25,24 @@ describe("terminal layout CSS", () => {
   });
 });
 
+// Regression: selecting a part mounted the selection bar (and the symbol fields) in the tool
+// options strip, which wrapped to a second row and pushed the schematic canvas down.
+describe("editor tool options strip", () => {
+  it("is one row of fixed height, so the selection bar appearing never moves the canvas", () => {
+    const r = rule(".tool-options");
+    expect(r).toContain("flex-wrap: nowrap");
+    expect(r).toMatch(/(^|[; ])height: calc\(/);
+    expect(r).not.toContain("min-height");
+    expect(r).toContain("overflow-x: auto");
+    expect(rule(".tool-options > *")).toContain("flex-shrink: 0");
+  });
+  it("long menus scroll inside the window instead of running past its bottom edge", () => {
+    const r = rule(".menu-list");
+    expect(r).toContain("max-height: calc(100vh");
+    expect(r).toContain("overflow-y: auto");
+  });
+});
+
 describe("visibleViewBox (grid fills the pane)", () => {
   it("grows a too-narrow view box to the pane aspect ratio around the same centre", () => {
     const v = visibleViewBox({ x: 0, y: 0, w: 100, h: 100 }, { width: 400, height: 200 });
