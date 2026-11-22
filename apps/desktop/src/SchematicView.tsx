@@ -376,8 +376,10 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     const labelId = hit(e, "data-label-id");
     switch (tool) {
       case "place": {
-        // A click on an existing symbol selected it (drag start); it never places on top.
-        if (symId) return;
+        // A click on an existing symbol selects it (drag start); it never places on top. Decided
+        // from geometry too: the event target can be the ghost or a pin, not the symbol body.
+        const at = fromView(x, y);
+        if (symId || symbols.some((s) => Math.abs(at.x - s.position.x) <= s.half_w && Math.abs(at.y - s.position.y) <= s.half_h)) return;
         if (!part) return edit.notify("No library part available.");
         void edit.execute({
           type: "PlaceSymbol",
@@ -761,7 +763,7 @@ function PlaceGhost({
   const rotTransform = rotDeg !== 0 ? `rotate(${rotDeg} ${x} ${y})` : undefined;
 
   return (
-    <g className="place-ghost" data-place-ghost={componentId} transform={rotTransform}>
+    <g className="place-ghost" data-place-ghost={componentId} transform={rotTransform} style={{ pointerEvents: "none" }}>
       <rect
         x={x - mm(hw)}
         y={y - mm(hh)}
