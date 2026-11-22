@@ -307,6 +307,13 @@
       "expectText": "SetSymbolValue"
     },
     {
+      "id": "a5-esc",
+      "do": "key",
+      "title": "A5: Esc clears the canvas selection (Edit › Clear selection clears the workspace selection)",
+      "keys": "Escape",
+      "shot": false
+    },
+    {
       "id": "a5-clear",
       "do": "menu",
       "title": "A5: Edit › Clear selection: the inspector shows the document (sheet size)",
