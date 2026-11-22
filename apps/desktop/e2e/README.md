@@ -51,3 +51,28 @@ Environment variables:
 The app runs with `XDG_DATA_HOME`/`XDG_CONFIG_HOME`/`XDG_CACHE_HOME` under `$E2E_OUT/app-data`,
 so the recent-project index and saved layout start empty and never touch your own profile.
 Exit code is 0 only when every step passes. Latest recorded run: `docs/qa/E2E_RESULTS.md`.
+
+## Render QA (Canvas2D PCB renderer, slice A4)
+
+`render-qa.mjs` is a separate, dependency-free check used by the CI job `render-qa`. It starts the
+Vite dev server, opens `render-qa.html` (dev-only; not in the packaged build) in a real Chrome
+window under Xvfb, and drives it over the Chrome DevTools Protocol:
+
+- pixel-diff snapshots of the three reference boards (`src/render/fixtures.ts`) against
+  `render-baselines/*.png`. A pixel counts as changed when a channel differs by more than 48; a
+  board fails above 0.2 % changed pixels or when its baseline is missing;
+- the PCB editor on a reference board with each renderer: which renderer is in use, and whether
+  a real mouse click on R2's pad selects R2;
+- screenshots of the editor, including the 2,000-footprint benchmark board;
+- the 2,000-footprint / 20,000-segment pan and zoom benchmark. It is recorded and never fails the
+  job: a result below 30 fps is reported as a shortfall.
+
+```sh
+xvfb-run -a node e2e/render-qa.mjs            # needs npm ci and Chrome/Chromium (or CHROME=...)
+RENDER_QA_UPDATE=1 xvfb-run -a node e2e/render-qa.mjs   # rewrite baselines; review before committing
+```
+
+Output goes to `RENDER_QA_OUT` (`RENDER_QA.md`, `render-qa.json`, `snapshots/`, `diffs/`,
+`screens/`). In CI it is uploaded as the `render-qa` artifact and shown in the job summary.
+Baselines depend on the browser's rasteriser. After a Chrome or runner-image update, review the
+diff images and refresh the baselines.
