@@ -95,6 +95,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
 
   // Object selected by the current press, so the click that ends it does not toggle it back.
   const pressed = useRef<Id | null>(null);
+  // The last press began on an object (Place tool: a click there never places).
+  const downOnObject = useRef(false);
   const sheet = sheets.find((s) => s.id === sheetId) ?? sheets[0];
   // The canvas selection, or the symbol selected elsewhere (explorer, findings).
   const pruned = S.prune(selRaw, snapshot);
@@ -241,6 +243,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       const at = fromView(x, y);
       const o = objectAt(e);
       pressed.current = null;
+      downOnObject.current = !!o;
       if (!o && tool !== "select") return false;
       if (o && !S.has(sel, o[0], o[1])) {
         pressed.current = o[1];
@@ -377,9 +380,12 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     switch (tool) {
       case "place": {
         // A click on an existing symbol selects it (drag start); it never places on top. Decided
-        // from geometry too: the event target can be the ghost or a pin, not the symbol body.
+        // by what the press hit (selecting mounts the selection bar, which shifts the canvas
+        // before the release) and by geometry (the target can be the ghost, not the body).
+        const pressedObject = downOnObject.current;
+        downOnObject.current = false;
         const at = fromView(x, y);
-        if (symId || symbols.some((s) => Math.abs(at.x - s.position.x) <= s.half_w && Math.abs(at.y - s.position.y) <= s.half_h)) return;
+        if (pressedObject || symId || symbols.some((s) => Math.abs(at.x - s.position.x) <= s.half_w && Math.abs(at.y - s.position.y) <= s.half_h)) return;
         if (!part) return edit.notify("No library part available.");
         void edit.execute({
           type: "PlaceSymbol",
