@@ -1,11 +1,12 @@
-// Thin status bar: project, layer, grid, DRC count. The role="status" region also
+// Thin status bar: project, layer and grid of the active editor, DRC count. The role="status" region also
 // carries the latest engine message so assistive tech announces command results.
 import type { CheckResult } from "../types";
 
 interface Props {
   project: string;
   revision: number;
-  layer: string;
+  /** Active copper layer; null unless the PCB editor is the active document. */
+  layer: string | null;
   /** Grid of the active editor ("1.27 mm", "25 mil (snap off)"); null outside the editors. */
   grid: string | null;
   drc: CheckResult | undefined;
@@ -28,7 +29,7 @@ export function StatusBar({ project, revision, layer, grid, drc, selection, task
   return (
     <footer className="status" role="status">
       <span className="item strong">{project}</span>
-      <span className="item">Layer {layer}</span>
+      {layer && <span className="item">Layer {layer}</span>}
       {grid && <span className="item">Grid {grid}</span>}
       <span className={`item ${sev}`}>{drcText(drc, revision)}</span>
       {task && (

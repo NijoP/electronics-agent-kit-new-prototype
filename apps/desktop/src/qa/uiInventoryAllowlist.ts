@@ -5,9 +5,4 @@
 import type { AllowEntry } from "./uiInventory";
 
 export const UI_INVENTORY_ALLOWLIST: readonly AllowEntry[] = [
-  {
-    key: "action:t-junction",
-    owner: "E1",
-    why: "Junction toolbar/menu entry has no handler and a reason that does not mark it unavailable (dead-control sweep)",
-  },
 ];

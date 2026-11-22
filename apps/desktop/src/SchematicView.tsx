@@ -28,7 +28,7 @@ interface Props {
 }
 
 type Tool = "select" | "place" | "wire" | "connect" | "label" | "move" | "delete" | "noconnect" | "pinlabel";
-const TOOLS: [Tool, string][] = [
+export const TOOLS: [Tool, string][] = [
   ["select", "Select"],
   ["place", "Place"],
   ["wire", "Wire"],

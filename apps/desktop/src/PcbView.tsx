@@ -56,7 +56,7 @@ interface Props {
 }
 
 type Tool = "select" | "outline" | "move" | "route" | "via" | "delete" | "zone";
-const TOOLS: [Tool, string][] = [
+export const TOOLS: [Tool, string][] = [
   ["select", "Select"],
   ["outline", "Board outline"],
   ["move", "Move"],

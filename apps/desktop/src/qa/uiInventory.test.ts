@@ -37,7 +37,7 @@ function deps(over: Partial<ActionDeps> = {}): ActionDeps {
     dialog: fn(), save: fn(), undo: fn(), redo: fn(), close: fn(), openRecent: fn(), execute: fn(), check: fn(), syncPcb: fn(),
     refillZones: fn(), rotateSel: fn(), deleteSel: fn(), tool: fn(), zoomBy: fn(), fit: fn(), select: fn(), toggleSplit: fn(),
     showSide: fn(), toggleSide: fn(), toggleBottom: fn(), showBottom: fn(), onTheme: fn(), resetLayout: fn(), onSettings: fn(),
-    palette: fn(), quickOpen: fn(), help: fn(), notify: fn(), open: fn(), closeAll: fn(), showWorkspace: fn(), switchTo: fn(), placePart: fn(),
+    palette: fn(), quickOpen: fn(), help: fn(), about: fn(), sideView: "project", notify: fn(), open: fn(), closeAll: fn(), showWorkspace: fn(), switchTo: fn(), placePart: fn(),
     grid: { kind: "schematic", cfg: GRID_KINDS.schematic.defaults, set: fn() },
     toolbarLabels: false,
     toggleToolbarLabels: fn(),
@@ -101,9 +101,8 @@ describe("UI inventory scanner", () => {
   it("flags a registry action without a handler unless it is explicitly unavailable", () => {
     const rows = auditActions(probes());
     const byId = (id: string) => rows.find((r) => r.id === id)!;
-    expect(byId("saveas").state).toBe("unavailable");
-    expect(byId("release").state).toBe("unavailable");
-    expect(byId("t-junction").state).toBe("violation");
+    // slice E1 removed the three handler-less placeholders (Save as, Release check, Junction)
+    for (const id of ["saveas", "release", "t-junction"]) expect(rows.find((r) => r.id === id), id).toBeUndefined();
     expect(byId("undo").state).toBe("state-dependent");
   });
 });

@@ -69,7 +69,7 @@ export function LayerManager({ snapshot, view, unrouted, edit, busy }: Props) {
         <>
           <table className="bom stackup" aria-label="Stackup">
             <thead>
-              <tr><th>Layer</th><th>Type</th><th>Cu oz</th><th>Gap µm</th><th>εr</th></tr>
+              <tr><th>Layer</th><th>Type</th><th title="Read-only: from the engine stackup rules">Cu oz</th><th title="Read-only: from the engine stackup rules">Gap µm</th><th title="Read-only: from the engine stackup rules">εr</th></tr>
             </thead>
             <tbody>
               {entries.map((l, i) => (
@@ -97,8 +97,8 @@ export function LayerManager({ snapshot, view, unrouted, edit, busy }: Props) {
             </tbody>
           </table>
           <p className="muted hint">
-            Board thickness {(st.board_thickness / 1e6).toFixed(2)} mm · dielectric {st.dielectric}. Edit counts and layer types here; thickness and copper
-            weight come from the engine's stackup rules. Solder mask, silkscreen and paste layers are not in the engine stackup yet, so they are not listed.
+            Board thickness {(st.board_thickness / 1e6).toFixed(2)} mm · dielectric {st.dielectric}. Edit counts and layer types here; copper weight, gaps, εr and
+            thickness are read-only: they come from the engine's stackup rules. Solder mask, silkscreen and paste layers are not in the engine stackup yet, so they are not listed.
           </p>
         </>
       )}

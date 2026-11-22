@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ManufacturingPanel } from "./ManufacturingPanel";
-import { PartsPanel } from "./PartsPanel";
+import { distributorUnconfigured, PartsPanel } from "./PartsPanel";
 import type { DfmReport, ManufacturingPreview, PartsSearch, SourcingRecord } from "./types";
 
 type Call = { cmd: string; args: Record<string, unknown> };
@@ -78,14 +78,20 @@ const preview: ManufacturingPreview = {
 };
 
 let liveReply: PartsSearch;
+// The distributor host the backend reports (a real-looking host unless a test says otherwise).
+let host: string;
+const ran = (cmd: string) => calls.find((c) => c.cmd === cmd);
 
 beforeEach(() => {
   calls = [];
   liveReply = search("ok", [record]);
+  host = "https://api.distributor.example";
   mockIPC((cmd, payload) => {
     const args = (payload ?? {}) as Record<string, unknown>;
     calls.push({ cmd, args });
     switch (cmd) {
+      case "distributor_settings_get":
+        return { has_credentials: false, key_hint: null, store_error: null, status: { state: "untested", message: "", tested_at_unix_s: null, last_success_unix_s: null }, requests_this_session: 0, apply_url: `${host}/apply`, host, needs: null };
       case "parts_search":
         return liveReply;
       case "parts_import":
@@ -128,7 +134,7 @@ describe("PartsPanel", () => {
     fireEvent.change(screen.getByLabelText(/Distributor part number or keyword/i), { target: { value: " C25804 " } });
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
     await screen.findByRole("table", { name: "Distributor results" });
-    expect(calls[0]).toEqual({ cmd: "parts_search", args: { query: " C25804 " } });
+    expect(ran("parts_search")).toEqual({ cmd: "parts_search", args: { query: " C25804 " } });
     expect(screen.getByText("0603WAF1002T5E")).toBeTruthy();
     expect(screen.getByText("1,004,300")).toBeTruthy();
     expect(screen.getByText("$0.0022 @ 100+")).toBeTruthy();
@@ -136,7 +142,7 @@ describe("PartsPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Import C25804" }));
     await waitFor(() => expect(onImported).toHaveBeenCalled());
-    expect(calls[1]).toEqual({ cmd: "parts_import", args: { expected_revision: 4, distributor: "C25804" } });
+    expect(ran("parts_import")).toEqual({ cmd: "parts_import", args: { expected_revision: 4, distributor: "C25804" } });
     expect(screen.getByText(/Imported C25804 as DISTRIBUTOR_C25804/)).toBeTruthy();
   });
 
@@ -149,6 +155,28 @@ describe("PartsPanel", () => {
     expect(screen.queryByRole("table", { name: "Distributor results" })).toBeNull();
     // Offline library matches are still offered.
     expect(screen.getByRole("list", { name: "Library matches" }).textContent).toContain("R_0603");
+  });
+
+  it("slice E1: with the reserved .invalid distributor host the catalogue and live import are replaced by 'Distributor not configured'", async () => {
+    host = "https://distributor.invalid";
+    render(<PartsPanel revision={1} onImported={async () => {}} />);
+    const note = await screen.findByRole("note", { name: "Distributor not configured" });
+    expect(note.textContent).toContain("distributor.invalid");
+    expect(screen.queryByText(/Distributor catalogue: credentials/)).toBeNull();
+    // a search still lists library matches but never offers a live import
+    fireEvent.change(screen.getByLabelText(/Part number or keyword/i), { target: { value: "C25804" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await screen.findByRole("list", { name: "Library matches" });
+    expect(screen.queryByRole("table", { name: "Distributor results" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Import C25804" })).toBeNull();
+    expect(ran("parts_import")).toBeUndefined();
+  });
+
+  it("classifies distributor hosts: only reserved or unparsable hosts are 'not configured'", () => {
+    expect(distributorUnconfigured("https://distributor.invalid")).toBe(true);
+    expect(distributorUnconfigured("https://a.b.INVALID/x")).toBe(true);
+    expect(distributorUnconfigured("not a url")).toBe(true);
+    expect(distributorUnconfigured("https://api.distributor.example")).toBe(false);
   });
 
   it("does not search an empty query", () => {

@@ -33,7 +33,7 @@ blocking the PR) when any row fails.
 
 ## Adding steps
 Scenarios are JSON files in `apps/desktop/e2e/scenarios/`; the workflow runs
-`scenarios/a1-menus.json` (A1 menus, then the A2 toolbar steps `a2-*`: icon toolbar, grid/unit/snap per editor, split-button picks, Toolbar labels; then the E9 steps `e9-*`: menu entries that are explicitly unavailable show their reason). A later UI slice adds steps to a scenario (or a new scenario file plus
+`scenarios/a1-menus.json` (A1 menus, then the A2 toolbar steps `a2-*`: icon toolbar, grid/unit/snap per editor, split-button picks, Toolbar labels; then the E9 steps `e9-*` (kept for entries still unavailable; Save as and Release check were removed by E1); then the E1 steps `e1-*`: removed placeholders absent, Saved badge, menu-bar arrow keys, status-bar layer per editor, Show <view>, Help and About with Escape, Distributor not configured). A later UI slice adds steps to a scenario (or a new scenario file plus
 one more `node ui-evidence.mjs` line with its own `UI_SCENARIO` and `UI_OUT`) instead of a new
 job. `scenarios/e2-editor.json` (slice E2, editor correctness) is such a second scenario: it
 runs in its own step with `UI_OUT` under `ui-evidence/e2`, and its rows are added to the job
@@ -49,6 +49,7 @@ Every step except `each-menu` takes one screenshot after it runs (set `"shot": f
 | `type` | `selector`, `text`?, `value`, `expect`?, `expectText`?, `timeout`? | XTest click into the field, XTest typing of `value`, then waits for `expect` |
 | `menu` | `menu`, `item`, `expect`?, `expectText`? | XTest: opens a top-level menu and clicks the item whose text starts with `item` |
 | `key` | `keys` (xdotool key names, space-separated, e.g. `"ctrl+k"`) | XTest key presses |
+| `absent` | `selector`, `text`?, `timeout`? (ms, default 3000) | passes once no visible element matches (a removed control, a closed dialog); fails if one is still visible |
 | `each-menu` | — | opens every top-level menu in turn; one row and one screenshot per menu, listing its items |
 | `shot` | — | screenshot only |
 | `count` | `selector`, `equals`, `timeout`? | DOM read: waits until exactly `equals` elements match (e.g. markers drawn on the sheet) |

@@ -1,6 +1,6 @@
 {
-  "name": "A1 document-aware menus and A2 toolbar",
-  "description": "Opens an isolated software fixture project, then every application menu with the schematic and then the PCB as the active document (Phase 1 A1: menus come from the action registry and change with the document). Then the A2 toolbar: icon buttons, the grid/unit/snap combos of each editor (unit and grid size changed through their View menu entries, which write the same per-editor store as the combos; snap toggled by an XTest click on its check box), a split-button dropdown whose pick becomes the main button, and View > Toolbar labels.",
+  "name": "A1 document-aware menus, A2 toolbar and E1 shell honesty",
+  "description": "Opens an isolated software fixture project, then every application menu with the schematic and then the PCB as the active document (Phase 1 A1: menus come from the action registry and change with the document). Then the A2 toolbar: icon buttons, the grid/unit/snap combos of each editor (unit and grid size changed through their View menu entries, which write the same per-editor store as the combos; snap toggled by an XTest click on its check box), a split-button dropdown whose pick becomes the main button, and View > Toolbar labels. Then E1 (dead-control sweep): removed placeholders are absent from the toolbar and menus, the Saved badge reports the engine state, the menu bar moves with the arrow keys, the status bar shows a copper layer only in the PCB editor, View > Show <view> shows (twice stays shown), Help lists the generated shortcuts and About shows the version (both close on Escape), and Library / Parts says the distributor is not configured.",
   "steps": [
     { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
     { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "UI Evidence Fixture" },
@@ -20,9 +20,28 @@
     { "id": "a2-pcb-split", "do": "click", "title": "A2: Board regions split-button dropdown", "selector": "[role=\"toolbar\"] button[aria-label=\"Board regions: choose\"]", "expect": "div.tb-menu[aria-label=\"Board regions\"]" },
     { "id": "a2-pcb-pick", "do": "click", "title": "A2: pick Copper zone; it becomes the main button", "selector": "div.tb-menu[aria-label=\"Board regions\"] [role=\"menuitemradio\"]", "text": "Copper zone", "expect": "[role=\"toolbar\"] button.tb-btn[aria-label=\"Copper zone\"]" },
     { "id": "a2-labels", "do": "menu", "title": "A2: View > Toolbar labels (text beside the icons)", "menu": "View", "item": "Toolbar labels", "expect": "header.toolbar.labels" },
-    { "id": "e9-file-unavailable", "do": "click", "title": "E9: File menu; Save as is explicitly unavailable with its reason (inventory rule)", "selector": "nav[aria-label=\"Application menu\"] button.menu-btn", "text": "File", "expect": "ul[role=\"menu\"][aria-label=\"File\"] .mi.disabled .why", "expectText": "— Not implemented" },
-    { "id": "e9-file-close", "do": "key", "title": "E9: close the File menu", "keys": "Escape", "shot": false },
-    { "id": "e9-mfg-unavailable", "do": "click", "title": "E9: Manufacturing menu; Release check is explicitly unavailable with its reason", "selector": "nav[aria-label=\"Application menu\"] button.menu-btn", "text": "Manufacturing", "expect": "ul[role=\"menu\"][aria-label=\"Manufacturing\"] .mi.disabled .why", "expectText": "— Not implemented" },
-    { "id": "e9-mfg-close", "do": "key", "title": "E9: close the Manufacturing menu", "keys": "Escape", "shot": false }
+    { "id": "e1-no-saveas", "do": "absent", "title": "E1: no Save as / Junction placeholders on the toolbar", "selector": "[role=\"toolbar\"] button[aria-label=\"Save as\"], [role=\"toolbar\"] button[aria-label=\"Junction\"]" },
+    { "id": "e1-saved", "do": "wait", "title": "E1: Saved badge bound to the engine state (saved, no blocked writes)", "selector": ".tb-title .saved[data-state=\"saved\"]", "text": "Saved" },
+    { "id": "e1-mfg-open", "do": "click", "title": "E1: open Manufacturing (PCB)", "selector": "nav[aria-label=\"Application menu\"] button.menu-btn", "text": "Manufacturing", "expect": "ul[role=\"menu\"][aria-label=\"Manufacturing\"]", "shot": false },
+    { "id": "e1-no-release", "do": "absent", "title": "E1: no dead Release check entry", "selector": "ul[role=\"menu\"][aria-label=\"Manufacturing\"] [role=\"menuitem\"]", "text": "Release check" },
+    { "id": "e1-arrow-down", "do": "key", "title": "E1: ArrowDown moves into the open menu", "keys": "Down", "shot": false },
+    { "id": "e1-arrow-right", "do": "key", "title": "E1: ArrowRight moves to the next menu", "keys": "Right", "shot": false },
+    { "id": "e1-arrow-menu", "do": "absent", "title": "E1: menu bar arrow keys left the Manufacturing menu for the next one", "selector": "ul[role=\"menu\"][aria-label=\"Manufacturing\"]" },
+    { "id": "e1-arrow-esc", "do": "key", "title": "E1: Escape closes the menu", "keys": "Escape", "shot": false },
+    { "id": "e1-file-open", "do": "click", "title": "E1: open File", "selector": "nav[aria-label=\"Application menu\"] button.menu-btn", "text": "File", "expect": "ul[role=\"menu\"][aria-label=\"File\"]", "shot": false },
+    { "id": "e1-file-no-saveas", "do": "absent", "title": "E1: File has Save (confirm written) and no Save as", "selector": "ul[role=\"menu\"][aria-label=\"File\"] [role=\"menuitem\"]", "text": "Save as" },
+    { "id": "e1-file-esc", "do": "key", "title": "E1: close File", "keys": "Escape", "shot": false },
+    { "id": "e1-status-pcb", "do": "wait", "title": "E1: PCB active, the status bar shows the copper layer", "selector": "footer.status span.item", "text": "Layer Top" },
+    { "id": "e1-show", "do": "menu", "title": "E1: View > Show PCB Layers", "menu": "View", "item": "Show PCB Layers", "expect": "aside.side.open .panel-head .title", "expectText": "PCB Layers" },
+    { "id": "e1-show-again", "do": "menu", "title": "E1: Show PCB Layers again (now checked) keeps it shown (it used to toggle it closed)", "menu": "View", "item": "✓Show PCB Layers", "expect": "aside.side.open .panel-head .title", "expectText": "PCB Layers" },
+    { "id": "e1-help", "do": "menu", "title": "E1: Help > Keyboard shortcuts (generated: registry + PCB tool keys)", "menu": "Help", "item": "Keyboard shortcuts", "expect": "[role=\"dialog\"][aria-label=\"Keyboard shortcuts\"] ul[aria-label=\"Editor shortcuts\"]" },
+    { "id": "e1-help-esc", "do": "key", "title": "E1: Escape closes Help", "keys": "Escape", "shot": false },
+    { "id": "e1-help-gone", "do": "absent", "title": "E1: Help dialog closed by Escape", "selector": "[role=\"dialog\"][aria-label=\"Keyboard shortcuts\"]" },
+    { "id": "e1-about", "do": "menu", "title": "E1: Help > About EAK (dialog with the version)", "menu": "Help", "item": "About EAK", "expect": "[data-testid=\"app-version\"]", "expectText": "version" },
+    { "id": "e1-about-esc", "do": "key", "title": "E1: Escape closes About", "keys": "Escape", "shot": false },
+    { "id": "e1-about-gone", "do": "absent", "title": "E1: About dialog closed by Escape", "selector": "[role=\"dialog\"][aria-label=\"About EAK\"]" },
+    { "id": "e1-sch", "do": "menu", "title": "E1: back to the schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]", "shot": false },
+    { "id": "e1-status-sch", "do": "absent", "title": "E1: schematic active, no PCB layer in the status bar", "selector": "footer.status span.item", "text": "Layer" },
+    { "id": "e1-parts", "do": "click", "title": "E1: Library / Parts says the distributor is not configured (catalogue hidden)", "selector": "nav[aria-label=\"Activity bar\"] button[aria-label=\"Library / Parts\"]", "expect": "[role=\"note\"][aria-label=\"Distributor not configured\"]" }
   ]
 }

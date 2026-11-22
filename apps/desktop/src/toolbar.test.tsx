@@ -76,13 +76,10 @@ const tb = () => within(screen.getByRole("toolbar", { name: "Main toolbar" }));
 const viewBox = () => screen.getByRole("img", { name: "Schematic canvas" }).getAttribute("viewBox");
 
 describe("main toolbar", () => {
-  it("unimplemented controls are disabled and say why; nothing decorative is clickable", async () => {
+  it("slice E1: no permanently disabled placeholder is left on the toolbar; state-dependent controls say why", async () => {
     await open();
-    for (const [name, why] of [["Save as", "Not implemented"]] as const) {
-      const b = tb().getByRole("button", { name }) as HTMLButtonElement;
-      expect(b.disabled).toBe(true);
-      expect(b.title).toContain(why);
-    }
+    for (const name of ["Save as", "Junction", "Grid"]) expect(tb().queryByRole("button", { name }), name).toBeNull();
+    for (const b of tb().getAllByRole("button") as HTMLButtonElement[]) if (b.disabled) expect(b.title, b.getAttribute("aria-label") ?? "").not.toMatch(/not implemented/i);
     // selection-dependent controls explain themselves too
     expect((tb().getByRole("button", { name: "Rotate selection" }) as HTMLButtonElement).title).toContain("Select a part first");
   });

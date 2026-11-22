@@ -31,7 +31,7 @@ function deps(over: Partial<ActionDeps> = {}): ActionDeps {
     dialog: fn(), save: fn(), undo: fn(), redo: fn(), close: fn(), openRecent: fn(), execute: fn(), check: fn(), syncPcb: fn(),
     refillZones: fn(), rotateSel: fn(), deleteSel: fn(), tool: fn(), zoomBy: fn(), fit: fn(), select: fn(), toggleSplit: fn(),
     showSide: fn(), toggleSide: fn(), toggleBottom: fn(), showBottom: fn(), onTheme: fn(), resetLayout: fn(), onSettings: fn(),
-    palette: fn(), quickOpen: fn(), help: fn(), notify: fn(), open: fn(), closeAll: fn(), showWorkspace: fn(), switchTo: fn(), placePart: fn(),
+    palette: fn(), quickOpen: fn(), help: fn(), about: fn(), sideView: "project", notify: fn(), open: fn(), closeAll: fn(), showWorkspace: fn(), switchTo: fn(), placePart: fn(),
     grid: { kind: "schematic", cfg: GRID_KINDS.schematic.defaults, set: fn() },
     toolbarLabels: false,
     toggleToolbarLabels: fn(),
@@ -71,7 +71,7 @@ describe("action registry", () => {
     expect(pcb).toContain("Route");
     expect(pcb).toContain("Manufacturing");
     expect(pcb).not.toContain("Simulation");
-    expect(labels("schematic", "Place")).toEqual(["Place part", "Part: Resistor", "Wire", "Net / power label", "No connect", "Label pin", "Junction"]);
+    expect(labels("schematic", "Place")).toEqual(["Place part", "Part: Resistor", "Wire", "Net / power label", "No connect", "Label pin"]);
     expect(labels("pcb", "Place")).toEqual(["Via", "Board outline", "Copper zone"]);
     expect(labels("pcb", "Route")).toEqual(["Route track", "Auto-route all nets", "Clear all routing"]);
     expect(labels("schematic", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run ERC", "Annotate schematic"]);
@@ -134,7 +134,7 @@ describe("toolbar icons, families and grid actions (slice A2)", () => {
 
   it("split families group the tools of one kind in one toolbar group", () => {
     const ids = (ctx: DocContext, split: string) => toolbarFor(workspaceActions(deps()), ctx).flat().filter((b) => b.split === split).map((b) => b.id);
-    expect(ids("schematic", "sch-marks")).toEqual(["t-label", "t-noconnect", "t-pinlabel", "t-junction"]);
+    expect(ids("schematic", "sch-marks")).toEqual(["t-label", "t-noconnect", "t-pinlabel"]);
     expect(ids("pcb", "pcb-regions")).toEqual(["t-outline", "t-zone"]);
     expect(ids("pcb", "pcb-checks")).toEqual(["drc", "dfm"]);
     for (const ctx of DOC_CONTEXTS)
@@ -169,5 +169,50 @@ describe("toolbar icons, families and grid actions (slice A2)", () => {
     expect(a.checked).toBe(true);
     runAction(a);
     expect(d.toggleToolbarLabels).toHaveBeenCalled();
+  });
+});
+
+describe("slice E1: no dead or decorative entries", () => {
+  it("the inventory's permanently disabled entries are gone, and nothing says 'Not implemented'", () => {
+    for (const busy of [false, true]) {
+      const all = workspaceActions(deps({ busy }));
+      for (const id of ["saveas", "t-junction", "release"]) expect(all.find((a) => a.id === id), id).toBeUndefined();
+      for (const ctx of DOC_CONTEXTS) {
+        for (const m of menusFor(all, ctx)) for (const i of m.items) expect(i.disabled ?? "", `${m.label} > ${i.label}`).not.toMatch(/not implemented|placeholder/i);
+        for (const b of toolbarFor(all, ctx).flat()) expect(b.disabled ?? "", b.id).not.toMatch(/not implemented|placeholder/i);
+      }
+    }
+    expect(labels("pcb", "Manufacturing")).toEqual(["Export manufacturing files…", "Show manufacturing panel"]);
+  });
+
+  it("an idle workspace with a selection has no disabled entry that is not explained by its state", () => {
+    const d = deps({ selected: "sym_r1", selectedSymbol: fixture(7).project.schematic.symbols.sym_r1 });
+    const all = workspaceActions(d);
+    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|finest|coarsest|No documents|Nothing is selected/;
+    for (const ctx of DOC_CONTEXTS)
+      for (const a of visibleIn(all, ctx)) {
+        const e = a.enabled();
+        if (e !== true) expect(e, `${a.id} in ${ctx}`).toMatch(stateReasons);
+      }
+  });
+
+  it("Show <view> shows the view (never toggles it closed) and is checked while that view is open", () => {
+    const d = deps({ sideOpen: true, sideView: "layers" });
+    const all = workspaceActions(d);
+    const layers = all.find((a) => a.id === "show-layers")!;
+    expect(layers.checked).toBe(true);
+    expect(all.find((a) => a.id === "show-parts")!.checked).toBe(false);
+    runAction(layers);
+    expect(d.showSide).toHaveBeenCalledWith("layers");
+    expect(d.toggleSide).not.toHaveBeenCalled();
+  });
+
+  it("About opens the About dialog; file documents are labelled as files, not sheets", () => {
+    const d = deps({ docs: [{ id: "sch:sht_1", kind: "schematic", title: "Sheet 1" }, { id: "file:notes.md", kind: "file", title: "notes.md" }] });
+    const all = workspaceActions(d);
+    runAction(all.find((a) => a.id === "about")!);
+    expect(d.about).toHaveBeenCalled();
+    expect(d.notify).not.toHaveBeenCalled();
+    expect(labels("home", "Project", d)).toEqual(expect.arrayContaining(["Open sheet Sheet 1", "Open file notes.md"]));
   });
 });
