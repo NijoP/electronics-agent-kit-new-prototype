@@ -36,12 +36,23 @@ Option 3, in `apps/desktop/src/render/`:
 * **Constant-pixel annotations:** pad numbers and net names are drawn at a fixed pixel size,
   only where they fit the pad or the track run.
 * **Canvas2D backend** (`canvas2d.ts`):
-  - one offscreen surface per layer, composited with the layer's opacity;
-  - a pan by whole device pixels shifts the cached pixels and redraws only the exposed strips;
+  - the cached layers are composited, each with its opacity, into one offscreen surface (the
+    composite). Translucent layers go through a scratch surface, so the opacity applies to the
+    layer as a whole. (Amended 2026-11-23 by the A4 performance follow-up. The first version
+    kept one surface per layer, and a pan then cost several full-canvas copies per layer.)
+  - a pan shifts the composite once and redraws only the exposed strips. A pan that is not a
+    whole number of device pixels is snapped to one: the frame is drawn up to half a device
+    pixel from the exact view, under the interactive SVG;
   - an edit diffs each layer by object signature and redraws only the old and new boxes of the
     changed objects;
-  - a zoom or a resize redraws fully;
-  - surfaces are capped by a memory budget (96 MiB), and layers over it draw directly;
+  - while a zoom moves, the composite is shown scaled (blurred when zooming in, with empty
+    margins when zooming out). It is redrawn once the scale has been still for 120 ms, or at
+    once when the scale is outside 0.75-1.6 times the drawn one. A resize, a layer-stack change
+    or more than 64 changed objects redraws fully;
+  - level of detail: an annotation layer is skipped where none of its labels fits, and objects
+    under half a CSS pixel both ways are not drawn;
+  - the composite and scratch surfaces must fit a memory budget (96 MiB); otherwise every layer
+    is drawn directly;
   - segments of one style share one path;
   - selection, highlights and drag previews are an uncached overlay drawn from the table's
     outlines.
