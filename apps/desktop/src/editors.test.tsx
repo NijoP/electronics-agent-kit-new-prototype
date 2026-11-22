@@ -87,14 +87,18 @@ describe("schematic editor", () => {
     ]);
   });
 
-  it("wires with pin capture and splits a diagonal into two AddWire legs", () => {
+  it("wires with pin capture and splits a diagonal into two AddWire legs sent as ONE Batch", () => {
     const { container } = render(<SchematicView snapshot={fixture()} selected={null} onSelect={() => {}} edit={edit()} />);
     tool("Wire");
     const svg = container.querySelector("svg.canvas")!;
     clickAt(svg, sheetVb(), 54.3, -50.2); // captures R1 pin 2 at (54, 50)
     clickAt(svg, sheetVb(), 76, -60); // free point on the 1.27 mm grid → (76.2, 59.69)
+    // Regression (inventory F3): the two legs used to be two commands (two revisions/undos).
     expect(sent).toHaveLength(1);
-    const [a, b] = sent[0] as Extract<Command, { type: "AddWire" }>[];
+    expect(sent[0]).toHaveLength(1);
+    const batch = sent[0][0] as Extract<Command, { type: "Batch" }>;
+    expect(batch).toMatchObject({ type: "Batch", label: "Wire" });
+    const [a, b] = batch.commands as Extract<Command, { type: "AddWire" }>[];
     expect(a.a).toEqual({ x: 54_000_000, y: 50_000_000 });
     expect(a.b).toEqual({ x: b.a.x, y: a.a.y });
     expect(b.b.x).toBe(a.b.x);

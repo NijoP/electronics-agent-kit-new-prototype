@@ -1,0 +1,29 @@
+{
+  "name": "E2 editor correctness and atomicity",
+  "description": "Opens an isolated software fixture project and drives the schematic with real X input: places a part, clicks the placed part with the Place tool (no second part on top), marks a pin No connect and clicks it again (the marker is removed with DeleteNoConnect), draws an L-shaped wire (one Batch: one revision) and undoes it once (both legs go: one undo step). Then the PCB layer-count select lists 2..16 copper layers.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "E2 Editor Fixture", "folder": "e2-editor-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "E2 Editor Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]" },
+    { "id": "e2-place-tool", "do": "menu", "title": "E2: Place tool", "menu": "Place", "item": "Place part", "shot": false },
+    { "id": "e2-place", "do": "click", "title": "E2: click the empty sheet places one part (PlaceSymbol)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "expect": "footer.status span.msg", "expectText": "PlaceSymbol" },
+    { "id": "e2-place-count", "do": "count", "title": "E2: one symbol on the sheet", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 1, "shot": false },
+    { "id": "e2-place-on-symbol", "do": "click", "title": "E2: Place-tool click on the placed part (it is selected, nothing placed on top)", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] rect.body" },
+    { "id": "e2-place-on-symbol-count", "do": "count", "title": "E2: still one symbol on the sheet", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 1, "timeout": 3000, "shot": false },
+    { "id": "e2-nc-tool", "do": "menu", "title": "E2: No connect tool", "menu": "Place", "item": "No connect", "shot": false },
+    { "id": "e2-nc-set", "do": "click", "title": "E2: click a pin marks it (SetNoConnect)", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] circle.pin-end", "expect": "footer.status span.msg", "expectText": "SetNoConnect" },
+    { "id": "e2-nc-set-count", "do": "count", "title": "E2: one no-connect marker drawn", "selector": "section[aria-label=\"Schematic view\"] path.no-connect", "equals": 1, "shot": false },
+    { "id": "e2-nc-again", "do": "click", "title": "E2: click the marked pin again removes the marker (DeleteNoConnect, never a duplicate)", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] circle.pin-end", "expect": "footer.status span.msg", "expectText": "DeleteNoConnect" },
+    { "id": "e2-nc-again-count", "do": "count", "title": "E2: no marker left", "selector": "section[aria-label=\"Schematic view\"] path.no-connect", "equals": 0, "shot": false },
+    { "id": "e2-wire-tool", "do": "menu", "title": "E2: Wire tool", "menu": "Place", "item": "Wire", "shot": false },
+    { "id": "e2-wire-start", "do": "click", "title": "E2: wire start point", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -220, "dy": -160, "shot": false },
+    { "id": "e2-wire-l", "do": "click", "title": "E2: diagonal end point: an L-shaped wire sent as ONE Batch", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -80, "dy": -60, "expect": "footer.status span.msg", "expectText": "Batch" },
+    { "id": "e2-wire-count", "do": "count", "title": "E2: the L-wire is two wire segments", "selector": "section[aria-label=\"Schematic view\"] line.wire:not(.preview)", "equals": 2, "shot": false },
+    { "id": "e2-wire-esc", "do": "key", "title": "E2: Esc ends the wire tool's draft", "keys": "Escape", "shot": false },
+    { "id": "e2-undo", "do": "menu", "title": "E2: one Undo removes both legs (one undo step)", "menu": "Edit", "item": "Undo" },
+    { "id": "e2-undo-count", "do": "count", "title": "E2: no wire left after one undo", "selector": "section[aria-label=\"Schematic view\"] line.wire:not(.preview)", "equals": 0, "shot": false },
+    { "id": "pcb", "do": "menu", "title": "Open PCB", "menu": "View", "item": "Go to PCB editor", "expect": "section[aria-label=\"PCB view\"]" },
+    { "id": "e2-layer-count", "do": "count", "title": "E2: PCB layer-count select offers 2..16 (8 options, was 2/4/6/8)", "selector": "select[aria-label=\"Copper layers\"] option", "equals": 8 }
+  ]
+}

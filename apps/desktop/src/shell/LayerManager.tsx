@@ -1,7 +1,7 @@
 // PCB Layer Manager: lists the copper layers of the engine's stackup with active-layer, show/
 // hide and colour controls (display state), and the stackup itself (kind, copper weight,
 // dielectric) which is edited only through the SetLayerCount / SetStackup engine commands.
-import { layerKey, layerName, stackLayers } from "../layers";
+import { layerCountOptions, layerKey, layerName, stackLayers } from "../layers";
 import type { LayerView } from "../layerView";
 import type { Command, CopperLayer, Snapshot, Stackup, StackupLayer } from "../types";
 
@@ -13,7 +13,6 @@ interface Props {
   busy: boolean;
 }
 
-const COUNTS = [2, 4, 6, 8, 10, 12, 14, 16];
 
 /** A full engine Stackup with one layer replaced; fields the engine did not report keep defaults. */
 export function withLayer(s: Snapshot, layer: CopperLayer, patch: Partial<StackupLayer>): Stackup | null {
@@ -37,7 +36,7 @@ export function LayerManager({ snapshot, view, unrouted, edit, busy }: Props) {
           disabled={busy}
           onChange={(e) => void edit({ type: "SetLayerCount", count: Number(e.target.value), board_thickness: null })}
         >
-          {[...new Set([...COUNTS, stack.length])].sort((a, b) => a - b).map((n) => (
+          {layerCountOptions(stack.length).map((n) => (
             <option key={n} value={n}>{n} layers</option>
           ))}
         </select>

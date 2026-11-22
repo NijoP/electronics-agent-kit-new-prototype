@@ -106,12 +106,12 @@ async function waitRect(selector, text, timeout = 15000) {
   return r;
 }
 
-/** Real X pointer click (XTest) at the centre of an element. */
-async function xclick(selector, text) {
+/** Real X pointer click (XTest) at the centre of an element, optionally offset by dx/dy px. */
+async function xclick(selector, text, dx = 0, dy = 0) {
   const r = await waitRect(selector, text);
   const o = origin();
-  const x = Math.round(o.x + r.x + r.w / 2);
-  const y = Math.round(o.y + r.y + r.h / 2);
+  const x = Math.round(o.x + r.x + r.w / 2 + dx);
+  const y = Math.round(o.y + r.y + r.h / 2 + dy);
   sh("xdotool", ["mousemove", "--sync", String(x), String(y), "click", "1"]);
   await sleep(250);
   return `XTest click at ${x},${y}`;
@@ -198,7 +198,7 @@ const handlers = {
     return `SETUP (IPC create_project, isolated software fixture "${s.name}"; not a UI action)`;
   },
   async click(s) {
-    const how = await xclick(s.selector, s.text);
+    const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
     return `${how}${s.expect ? `; then visible: ${s.expect}` : ""}`;
   },
@@ -215,6 +215,17 @@ const handlers = {
   },
   async shot() {
     return "screenshot";
+  },
+  // DOM read: waits until exactly `equals` elements match (visible or not), e.g. markers drawn.
+  async count(s) {
+    let n = -1;
+    const read = () => browser.execute((q) => document.querySelectorAll(q).length, s.selector);
+    try {
+      await browser.waitUntil(async () => (n = await read()) === s.equals, { timeout: s.timeout ?? 10000, interval: 200 });
+    } catch {
+      throw new Error(`${n} element(s) match ${s.selector}, expected ${s.equals}`);
+    }
+    return `${n} element(s) match ${s.selector}`;
   },
   // Opens every top-level menu in turn: one row and one screenshot per menu, listing its items.
   async "each-menu"(s) {

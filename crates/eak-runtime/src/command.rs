@@ -126,9 +126,15 @@ pub enum Command {
         label_id: Id,
         position: Point,
     },
+    /// Mark a pin as intentionally unconnected. Refused (nothing to do) when the pin already
+    /// carries a no-connect marker, so a pin never gets two.
     SetNoConnect {
         symbol_id: Id,
         pin: String,
+    },
+    /// Remove a no-connect marker (ADR-0038).
+    DeleteNoConnect {
+        no_connect_id: Id,
     },
     /// Assign reference designators to symbols ending in '?'.
     Annotate,
@@ -300,6 +306,7 @@ impl Command {
             | ConnectPins { .. }
             | LabelPin { .. }
             | SetNoConnect { .. }
+            | DeleteNoConnect { .. }
             | DeleteWire { .. }
             | DeleteNetLabel { .. }
             | MoveWire { .. }
@@ -952,6 +959,16 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             let def = &p.library[&s.component_id];
             def.pin(pin)
                 .ok_or_else(|| CommandError::NotFound(format!("{} pin {pin}", s.refdes)))?;
+            if p.schematic
+                .no_connects
+                .values()
+                .any(|n| n.symbol_id == *symbol_id && n.pin == *pin)
+            {
+                return Err(CommandError::NothingTo(format!(
+                    "no-connect: {} pin {pin} is already marked",
+                    s.refdes
+                )));
+            }
             let id = new_id("nc");
             p.schematic.no_connects.insert(
                 id.clone(),
@@ -962,6 +979,12 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 },
             );
             created.push(id);
+        }
+        DeleteNoConnect { no_connect_id } => {
+            p.schematic
+                .no_connects
+                .remove(no_connect_id)
+                .ok_or_else(|| CommandError::NotFound(format!("no-connect {no_connect_id}")))?;
         }
         Annotate => {
             let ids: Vec<Id> = p

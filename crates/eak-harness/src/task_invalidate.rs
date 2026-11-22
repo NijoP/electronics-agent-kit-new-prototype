@@ -44,7 +44,7 @@ pub fn classify_command(command_type: &str) -> Option<Change> {
             })
         }
         "AddWire" | "DeleteWire" | "MoveWire" | "ConnectPins" | "AddNetLabel" | "LabelPin"
-        | "DeleteNetLabel" | "SetNoConnect" => Some(Change::Net),
+        | "DeleteNetLabel" | "SetNoConnect" | "DeleteNoConnect" => Some(Change::Net),
         "PlaceSymbol" | "DeleteSymbol" | "SetRefdes" | "Annotate" | "AddSheet" => {
             Some(Change::Schematic)
         }

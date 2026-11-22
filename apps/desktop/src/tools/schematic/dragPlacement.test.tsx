@@ -92,6 +92,9 @@ describe("Schematic component drag-and-drop & click-to-place", () => {
     fireEvent(canvas, dropEvent);
 
     expect(sent.length).toBe(1);
+    // Regression (inventory: drop notice): "Placed … on sheet." was claimed before the engine
+    // answered; the engine result is now the only notice.
+    expect(notify).not.toHaveBeenCalledWith(expect.stringContaining("Placed"));
     const cmd = sent[0];
     expect(cmd.type).toBe("PlaceSymbol");
     if (cmd.type === "PlaceSymbol") {

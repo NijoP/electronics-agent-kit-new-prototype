@@ -178,7 +178,7 @@ export function schematicActions(d: ActionDeps): Action[] {
     ...d.library.map<Action>((c, i) => ({ id: `part-${c.id}`, label: `Part: ${c.name}`, docs: SCH, menu: "Place", sep: i === 0, palette: false, enabled: () => true, run: () => d.placePart(c) })),
     tool("wire", "Wire", "Draw a wire; ends snap to pins (AddWire)", "wire", { sep: true }),
     tool("label", "Net / power label", "Net label or power port (AddNetLabel; pick Net or Power in the tool options)", "net-label", { split: "sch-marks" }),
-    tool("noconnect", "No connect", "Mark a pin as intentionally unconnected (SetNoConnect)", "no-connect", { split: "sch-marks" }),
+    tool("noconnect", "No connect", "Mark a pin as intentionally unconnected (SetNoConnect); click a marked pin to remove it (DeleteNoConnect)", "no-connect", { split: "sch-marks" }),
     tool("pinlabel", "Label pin", "Name the net on a pin (LabelPin)", "pin-label", { split: "sch-marks" }),
     { id: "t-junction", label: "Junction", docs: SCH, menu: "Place", toolbar: "edit", icon: "junction", split: "sch-marks", enabled: () => "Junctions are added automatically where wires meet", run: never },
     {

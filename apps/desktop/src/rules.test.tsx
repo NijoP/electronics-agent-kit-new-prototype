@@ -2,7 +2,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { fixture } from "./fixture.test-data";
-import { RulesDialog } from "./shell/RulesDialog";
+import { netNames } from "./shell/panels";
+import { netDeclaration, RulesDialog } from "./shell/RulesDialog";
 import type { Command, Snapshot } from "./types";
 
 function withRules(): Snapshot {
@@ -49,15 +50,52 @@ describe("design rules dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save net class" }));
     expect((sent[0] as Command[])[0]).toEqual({ type: "UpsertNetClass", class: { name: "Power", track_width: 800_000, clearance: 250_000, via_drill: 400_000, via_diameter: 800_000, nets: ["GND", "VIN"] } });
   });
-  it("declares and clears net current and voltage", () => {
+  it("declares and clears net current and voltage, sending only what changed", () => {
     setup();
     fireEvent.change(screen.getByLabelText("Declared net"), { target: { value: "GND" } });
     expect((screen.getByLabelText("Net current (A)") as HTMLInputElement).value).toBe("2");
     type("Net voltage (V)", "12");
     fireEvent.click(screen.getByRole("button", { name: "Apply net declaration" }));
-    expect(sent[0]).toEqual([{ type: "SetNetCurrent", net: "GND", amps: 2 }, { type: "SetNetVoltage", net: "GND", volts: 12 }]);
+    // The stored 2 A is untouched, so only the voltage is sent.
+    expect(sent[0]).toEqual([{ type: "SetNetVoltage", net: "GND", volts: 12 }]);
     type("Net current (A)", "");
     fireEvent.click(screen.getByRole("button", { name: "Apply net declaration" }));
-    expect((sent[1] as Command[])[0]).toEqual({ type: "SetNetCurrent", net: "GND", amps: null });
+    expect((sent[1] as Command[])[0]).toMatchObject({ type: "Batch" });
+    expect(((sent[1] as Command[])[0] as Extract<Command, { type: "Batch" }>).commands).toEqual([
+      { type: "SetNetCurrent", net: "GND", amps: null },
+      { type: "SetNetVoltage", net: "GND", volts: 12 },
+    ]);
+  });
+
+  // Regression (inventory F4): the first net was preselected with empty fields, so Apply sent
+  // amps/volts null and silently cleared its stored declaration.
+  it("prefills the preselected net and never clears an untouched declaration", () => {
+    sent = [];
+    const s = withRules();
+    const first = netNames(s)[0];
+    s.project.constraints!.net_currents_a = { [first]: 1.5 };
+    s.project.constraints!.net_voltages_v = { [first]: 5 };
+    render(<RulesDialog snapshot={s} busy={false} apply={async (c) => void sent.push(c)} onClose={() => {}} />);
+    expect((screen.getByLabelText("Declared net") as HTMLSelectElement).value).toBe(first);
+    expect((screen.getByLabelText("Net current (A)") as HTMLInputElement).value).toBe("1.5");
+    expect((screen.getByLabelText("Net voltage (V)") as HTMLInputElement).value).toBe("5");
+    fireEvent.click(screen.getByRole("button", { name: "Apply net declaration" }));
+    expect(sent).toEqual([]);
+    expect(screen.getByRole("alert").textContent).toContain("Nothing to apply");
+  });
+
+  it("sends current and voltage together as ONE Batch (one revision, one undo)", () => {
+    const d = netDeclaration(withRules().project.constraints, "VIN", "0.5", "12");
+    expect(d).toEqual({
+      command: {
+        type: "Batch",
+        label: "Declare net VIN",
+        commands: [
+          { type: "SetNetCurrent", net: "VIN", amps: 0.5 },
+          { type: "SetNetVoltage", net: "VIN", volts: 12 },
+        ],
+      },
+    });
+    expect(netDeclaration(undefined, "VIN", "x", "")).toHaveProperty("error");
   });
 });
