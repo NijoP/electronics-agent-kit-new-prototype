@@ -44,7 +44,7 @@ Every step except `each-menu` takes one screenshot after it runs (set `"shot": f
 | `wait` | `selector`, `text`?, `timeout`? (ms) | waits until a visible element matches |
 | `fixture-project` | `name`, `folder`? | SETUP: creates the fixture project, reloads to Project Home, waits for it in Recent projects |
 | `fixture-library` | `name`, `licence`, `source`, `from`, `part`, `partName` | SETUP (needs an open project): writes an open-source library folder (manifest with licence and source, one definition copied from built-in `from` as `part`) and imports it through `library_import_open_source` |
-| `click` | `selector`, `text`?, `expect`?, `expectText`?, `timeout`? | XTest click on the element, then waits for `expect` |
+| `click` | `selector`, `text`?, `expect`?, `expectText`?, `timeout`? | scrolls the element into view if needed (as a user would), XTest click on it, then waits for `expect` |
 | `type` | `selector`, `text`?, `value`, `expect`?, `expectText`?, `timeout`? | XTest click into the field, XTest typing of `value`, then waits for `expect` |
 | `menu` | `menu`, `item`, `expect`?, `expectText`? | XTest: opens a top-level menu and clicks the item whose text starts with `item` |
 | `key` | `keys` (xdotool key names, space-separated, e.g. `"ctrl+k"`) | XTest key presses |
