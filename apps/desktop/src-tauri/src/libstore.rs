@@ -719,7 +719,7 @@ pub fn resolve_scoped_parts(
             .collect();
         let pick: &(Scope, ComponentDef) = match (personal, imported.as_slice()) {
             (Some(p), _) => p,
-            (None, [one]) => *one,
+            (None, [one]) => one,
             // Nowhere (or only in a disabled library): the engine rejects it with the reason.
             (None, []) => continue,
             (None, many) => {
