@@ -76,7 +76,8 @@ afterEach(() => {
 async function open() {
   render(<App />);
   fireEvent.click((await screen.findAllByText("Fixture board"))[0]);
-  await screen.findByRole("img", { name: "Schematic canvas" });
+  // every open schematic sheet keeps its editor mounted (hidden when not active), so there may be several
+  await screen.findAllByRole("img", { name: "Schematic canvas" });
 }
 const bar = () => within(screen.getByRole("navigation", { name: "Application menu" }));
 const menu = (name: string, item: RegExp | string) => {
