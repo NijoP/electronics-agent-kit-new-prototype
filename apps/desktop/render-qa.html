@@ -1,0 +1,15 @@
+<!doctype html>
+<!-- Render QA page (slice A4): dev-server only, never part of the packaged app (the build input is
+     index.html). Driven by e2e/render-qa.mjs: pixel-diff snapshots, the 2,000 / 20,000 benchmark,
+     and screenshots of the PCB editor in both renderers. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EAK render QA</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/render/qa/main.tsx"></script>
+  </body>
+</html>

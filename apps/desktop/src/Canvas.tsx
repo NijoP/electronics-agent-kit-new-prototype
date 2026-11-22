@@ -27,6 +27,12 @@ interface Props {
   underlay?: (vb: ViewBox) => ReactNode;
   /** Drawn over the design (rulers), given the current view box. */
   overlay?: (vb: ViewBox) => ReactNode;
+  /**
+   * Scene renderer layer (the Canvas2D PCB). When given, the design is painted by it between the
+   * underlay and a transparent interactive SVG that keeps pan, zoom and the pointer contract;
+   * `children` then hold only the live tool previews. Given the visible view box and pane size.
+   */
+  scene?: (vb: ViewBox, size: Size) => ReactNode;
 }
 
 export interface DragHandler {
@@ -51,7 +57,7 @@ interface PointerSample {
   buttons: number;
 }
 
-export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay }: Props) {
+export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay, scene }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const docId = useDocId();
   // A restored viewport (this tab's last zoom/pan, kept across tab closes and sessions) wins over fit.
@@ -166,10 +172,10 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
     [],
   );
 
-  return (
+  const svg = (
     <svg
       ref={ref}
-      className={tool ? "canvas tool" : "canvas"}
+      className={`${tool ? "canvas tool" : "canvas"}${scene ? " canvas-top" : ""}`}
       role="img"
       aria-label={label}
       viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
@@ -247,9 +253,19 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
         if (p) onDropTarget?.onDrop?.(p[0], p[1], e);
       }}
     >
-      {underlay?.(visible)}
+      {!scene && underlay?.(visible)}
       {children}
       {overlay?.(visible)}
     </svg>
+  );
+  if (!scene) return svg;
+  return (
+    <div className="canvas-stack">
+      <svg className="canvas-under" aria-hidden="true" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} preserveAspectRatio="xMidYMid meet">
+        {underlay?.(visible)}
+      </svg>
+      {scene(visible, size)}
+      {svg}
+    </div>
   );
 }

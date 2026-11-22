@@ -1,6 +1,6 @@
 // PCB editor: board outline, zones, tracks, vias and footprints from the snapshot, with
 // tools that turn clicks into typed engine commands (outline, move, route, via, delete).
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { api } from "./api";
 import { Canvas, type DragHandler } from "./Canvas";
 import { isTyping, type EditCtx } from "./EditContext";
@@ -29,6 +29,14 @@ import {
 import type { BendMode, Command, CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
+import { usePcbRenderer, type PcbRenderer } from "./render/flag";
+import { buildPcbScene } from "./render/pcbScene";
+import { PcbSceneCanvas } from "./render/PcbSceneCanvas";
+import { ATTR_KIND, PickIndex } from "./render/pick";
+import type { OverlayItem, OverlayScene, RenderObject } from "./render/types";
+
+/** Canvas picking tolerance in screen pixels. */
+const PICK_PX = 3;
 
 interface Props {
   snapshot: Snapshot;
@@ -161,6 +169,35 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const sel = pruned.length ? pruned : footprint ? [footprint.id] : [];
   const one = sel.length === 1 ? snapshot.geometry.footprints.find((f) => f.id === sel[0]) : undefined;
   const lockedCount = sel.filter((id) => pcb.footprints[id]?.locked).length;
+
+  // Renderer: the Canvas2D scene (default where a 2D context exists) or the SVG fallback.
+  const [rendererChoice, setRenderer, canvasOk] = usePcbRenderer();
+  const [ctxFailed, setCtxFailed] = useState(false);
+  const useCanvas = rendererChoice === "canvas" && !ctxFailed;
+  const activeKey = layerKey(layer);
+  const hiddenKey = [...lv.hidden].sort().join(",");
+  const colourKey = order.map((l) => lv.colourOf(l)).join(",");
+  const sceneAirwires = lv.airwires ? (airwires ?? null) : null;
+  const scene = useMemo(
+    () => (useCanvas ? buildPcbScene(snapshot, { order, hidden: lv.hidden, colourOf: lv.colourOf, activeLayer: activeKey, airwires: sceneAirwires }) : null),
+    [useCanvas, snapshot, hiddenKey, colourKey, activeKey, sceneAirwires],
+  );
+  const picker = useMemo(() => (scene ? new PickIndex(scene) : null), [scene]);
+  const byKey = useMemo(() => new Map<string, RenderObject>((scene?.objects ?? []).map((o) => [o.key, o])), [scene]);
+  // Pixels per millimetre of the last canvas frame, for a pick tolerance of a few screen pixels.
+  const scaleRef = useRef(0);
+  /**
+   * What is under the pointer, as the attribute the SVG markup carries (`data-footprint-id`, …).
+   * SVG: the event target's nearest element with that attribute. Canvas: the topmost pickable
+   * render object at the view point (x, y), returned only when it is of the asked kind, which is
+   * how the topmost SVG element behaves. Outline vertex handles stay SVG in both renderers.
+   */
+  const hitAt = (e: { target: EventTarget }, attr: string, x: number, y: number): string | null => {
+    if (!picker || !(attr in ATTR_KIND)) return hit(e, attr);
+    const s = scaleRef.current > 0 ? scaleRef.current : 10;
+    const top = picker.pick(x, y, { tol: PICK_PX / s });
+    return top && top.ref.kind === ATTR_KIND[attr] ? top.ref.id : null;
+  };
 
   const hasZone = (l: CopperLayer) => Object.values(pcb.zones).some((z) => sameLayer(z.layer, l));
   // One zone over the board outline for every plane layer that has none, on the chosen net.
@@ -325,12 +362,12 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   // toggles; empty board clears). Pressing on a footprint and dragging moves the selection
   // (Select and Move tools); pressing an unselected footprint first makes it the selection, so
   // only it moves. A drag on empty board draws a marquee (Select) or pans (other tools).
-  const selectClick = (e: React.PointerEvent) => {
-    const id = hit(e, "data-footprint-id");
+  const selectClick = (e: React.PointerEvent, x: number, y: number) => {
+    const id = hitAt(e, "data-footprint-id", x, y);
     const justPicked = pressed.current;
     pressed.current = null;
     const mode = P.pickMode(e);
-    const trackId = id ? null : hit(e, "data-track-id");
+    const trackId = id ? null : hitAt(e, "data-track-id", x, y);
     setTrackSel(trackId);
     if (trackId) {
       const t = pcb.tracks[trackId];
@@ -348,12 +385,12 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       if (!edit || edit.busy) return false;
       const at = fromView(x, y);
       if (tool === "outline") {
-        const vi = hit(e, "data-outline-vertex");
+        const vi = hitAt(e, "data-outline-vertex", x, y);
         if (vi === null) return false;
         setVdrag({ i: Number(vi), to: snapPoint(at, GRID, [], CAPTURE).point });
         return true;
       }
-      const id = hit(e, "data-footprint-id");
+      const id = hitAt(e, "data-footprint-id", x, y);
       pressed.current = null;
       if (!id && tool !== "select") return false;
       if (id && !sel.includes(id)) {
@@ -401,7 +438,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
 
   const onPoint = (x: number, y: number, e: React.PointerEvent) => {
     if (!edit || edit.busy) return;
-    if (tool === "select") return selectClick(e);
+    if (tool === "select") return selectClick(e, x, y);
     const snap = snapPoint(
       fromView(x, y),
       GRID,
@@ -409,7 +446,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       CAPTURE,
     );
     const snapped = snap.hit === null ? null : targets[snap.hit];
-    const fpId = hit(e, "data-footprint-id");
+    const fpId = hitAt(e, "data-footprint-id", x, y);
     switch (tool) {
       case "outline":
       case "zone":
@@ -470,9 +507,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         return;
       }
       case "delete": {
-        const t = hit(e, "data-track-id");
-        const v = hit(e, "data-via-id");
-        const z = hit(e, "data-zone-id");
+        const t = hitAt(e, "data-track-id", x, y);
+        const v = hitAt(e, "data-via-id", x, y);
+        const z = hitAt(e, "data-zone-id", x, y);
         if (v) void edit.execute({ type: "DeleteVia", via_id: v });
         else if (z && !t) void edit.execute({ type: "DeleteZone", zone_id: z });
         else if (t) void edit.execute({ type: "DeleteTrack", track_id: t });
@@ -507,6 +544,52 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const liveSegs = live ? live.segments.map((g) => ({ ...g, layer: live.layer, width: live.width })) : [];
   const routeVias = [...(draft?.steps ?? []).flatMap((s) => (s.via ? [s.via] : [])), ...(live?.via ? [live.via] : [])];
 
+  // Canvas renderer: selection, finding and net highlights and the drag preview are an uncached
+  // overlay drawn from the pick table's outlines (`selPoly` / `pathPts`), so they never force the
+  // cached layers to redraw.
+  const overlayKey = [
+    sel.join(","),
+    [...highlighted].join(","),
+    hiNet ?? "",
+    trackSel ?? "",
+    aiPreview.join(","),
+    routeNet ?? "",
+    movingIds ? [...movingIds].join(",") : "",
+    dragDelta ? `${dragDelta.x},${dragDelta.y}` : "",
+  ].join("|");
+  const overlay = useMemo<OverlayScene>(() => {
+    if (!scene) return { items: [] };
+    const items: OverlayItem[] = [];
+    const add = (key: string, colour: string, px: number, extra: Partial<OverlayItem> = {}) => {
+      const o = byKey.get(key);
+      const pts = o?.selPoly ?? o?.pathPts;
+      if (o && pts) items.push({ pts, closed: !!o.selPoly || pts.length > 2, colour, px, ...extra });
+    };
+    const fpOfSymbol = new Map(snapshot.geometry.footprints.map((f) => [f.symbol_id, f.id]));
+    for (const z of Object.values(pcb.zones)) if (hiNet !== null && z.net === hiNet) add(`zone:${z.id}`, "--accent", 2);
+    for (const t of Object.values(pcb.tracks)) if (hiNet !== null && t.net === hiNet) add(`track:${t.id}`, "--accent", 3);
+    for (const v of Object.values(pcb.vias)) if (hiNet !== null && v.net === hiNet) add(`via:${v.id}`, "--accent", 2);
+    if (trackSel) add(`track:${trackSel}`, "--accent", 4);
+    if (routeNet)
+      for (const f of snapshot.geometry.footprints) for (const p of f.pads) if (p.net === routeNet) add(`pad:${f.id}:${p.number}`, "--accent", 1.5);
+    for (const f of snapshot.geometry.footprints) if (aiPreview.includes(f.symbol_id)) add(`footprint:${f.id}`, "--c-preview", 1.5, { dash: [4, 3] });
+    for (const id of sel) add(`footprint:${id}`, "--accent", 2, { fill: "--accent-soft" });
+    for (const id of highlighted) {
+      const fp = fpOfSymbol.get(id) ?? id;
+      for (const key of [`footprint:${fp}`, `track:${id}`, `via:${id}`, `zone:${id}`]) add(key, "--err", 2);
+    }
+    const moving = movingIds && dragDelta ? { owners: movingIds, delta: [mm(dragDelta.x), -mm(dragDelta.y)] as [number, number] } : null;
+    return { items, moving };
+    // Keyed on the overlay state; `scene` changes with the snapshot.
+  }, [scene, byKey, overlayKey]);
+  // A click on a footprint selects its symbol (cross-probe), as the SVG footprint's onClick does.
+  const canvasPoint = (x: number, y: number, e: React.PointerEvent) => {
+    const id = hitAt(e, "data-footprint-id", x, y);
+    const f = id ? snapshot.geometry.footprints.find((g) => g.id === id) : undefined;
+    if (f) onSelect(f.symbol_id);
+    if (edit) onPoint(x, y, e);
+  };
+
   return (
     <section className="view" aria-label="PCB view">
       <header className="view-header">
@@ -533,6 +616,22 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         )}
         <GridControls kind="pcb" cfg={grid} onChange={setGrid} />
         <Coords at={vdrag?.to ?? hover} />
+        <label
+          className="renderer-pick"
+          title={
+            canvasOk && !ctxFailed
+              ? "Canvas2D draws large boards faster; SVG is the original renderer, kept as a fallback"
+              : "Canvas2D is unavailable here (no 2D canvas context), so the SVG renderer is used"
+          }
+        >
+          Renderer
+          <select aria-label="PCB renderer" value={useCanvas ? "canvas" : "svg"} onChange={(e) => setRenderer(e.target.value as PcbRenderer)}>
+            <option value="canvas" disabled={!canvasOk || ctxFailed}>
+              {canvasOk && !ctxFailed ? "Canvas2D" : "Canvas2D (unavailable)"}
+            </option>
+            <option value="svg">SVG (fallback)</option>
+          </select>
+        </label>
       </header>
       {edit && (
         <div className="tool-options">
@@ -751,7 +850,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         bounds={pcbBounds(snapshot)}
         zoomTo={zoomTo && zoomTo.bounds ? { bounds: zoomTo.bounds, n: zoomTo.n } : null}
         tool={!!edit && tool !== "select"}
-        onPoint={edit ? onPoint : undefined}
+        onPoint={scene ? canvasPoint : edit ? onPoint : undefined}
         onHover={(x, y) => setHover(fromView(x, y))}
         onDrag={edit && (MOVE_TOOLS.includes(tool) || tool === "outline") ? dragHandler : undefined}
         underlay={(vb) => (
@@ -761,14 +860,23 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           </>
         )}
         overlay={(vb) => <Rulers vb={vb} kind="pcb" cfg={grid} />}
+        scene={
+          scene
+            ? (vb, size) => {
+                if (size.width > 0 && vb.w > 0) scaleRef.current = size.width / vb.w;
+                return <PcbSceneCanvas scene={scene} overlay={overlay} vb={vb} size={size} onUnavailable={() => setCtxFailed(true)} />;
+              }
+            : undefined
+        }
       >
-        {outline.length > 0 && <polygon className="board-edge" points={poly(shownOutline)} />}
+        {!scene && outline.length > 0 && <polygon className="board-edge" points={poly(shownOutline)} />}
         {edit && tool === "outline" &&
           shownOutline.map((p, i) => {
             const [cx, cy] = toView(p);
             return <circle key={i} className="outline-handle" data-outline-vertex={i} cx={cx} cy={cy} r={0.9}><title>{`vertex ${i + 1}: drag to move`}</title></circle>;
           })}
-        {Object.values(pcb.zones)
+        {!scene &&
+          Object.values(pcb.zones)
           .filter((z) => shown(z.layer))
           .map((z) => (
             <polygon
@@ -781,7 +889,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               <title>{`zone ${z.net} (${layerName(z.layer)})`}</title>
             </polygon>
           ))}
-        {Object.values(pcb.tracks)
+        {!scene &&
+          Object.values(pcb.tracks)
           .filter((t) => shown(t.layer))
           .map((t) => {
           const [x1, y1] = toView(t.a);
@@ -820,7 +929,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             <title>{feedbackText(live)}</title>
           </line>
         )}
-        {lv.airwires &&
+        {!scene &&
+          lv.airwires &&
           (airwires ?? []).map(([n, a, b], i) => {
             const [x1, y1] = toView(a);
             const [x2, y2] = toView(b);
@@ -834,7 +944,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           <circle className="finding-marker" cx={toView(focus.location)[0]} cy={toView(focus.location)[1]} r={1.6} />
         )}
         {corners.length > 0 && <polyline className="outline-draft" points={poly([...corners, ...(hoverSnap ? [hoverSnap] : [])])} />}
-        {snapshot.geometry.footprints.map((f) => {
+        {!scene &&
+          snapshot.geometry.footprints.map((f) => {
           const [x, y] = toView(f.position);
           const hw = mm(f.half_w);
           const hh = mm(f.half_h);
@@ -858,7 +969,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             </g>
           );
         })}
-        {Object.values(pcb.vias)
+        {!scene &&
+          Object.values(pcb.vias)
           .filter((v) => viaLayers(order, v.from ?? "top", v.to ?? "bottom").some(shown))
           .map((v) => {
           const [x, y] = toView(v.position);

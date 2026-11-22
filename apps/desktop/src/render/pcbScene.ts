@@ -1,0 +1,269 @@
+// PCB scene builder: snapshot -> render-object table + layer draw-order stack. Pure, so the
+// same table drives the Canvas2D backend, picking and the parity tests.
+//
+// Draw order, back to front (re-implemented from the EasyEDA viewer's PCB stack; EAK has no mask,
+// paste or assembly layers yet, so those slots are empty):
+//   bottom side: zone < copper (tracks, SMD pads) < net names < pad numbers < silk (courtyard, refdes)
+//   < inner layers, deepest first: zone < copper < net names
+//   < top side: zone < copper < net names < pad numbers < silk
+//   < multi-layer (through-hole pads, vias) < multi-layer pad numbers
+//   < board outline < ratsnest < drill holes on top.
+// Layers on the far side of the active copper layer are drawn semi-transparent.
+import { layerKey, viaLayers } from "../layers";
+import type { CopperLayer, Point, Snapshot } from "../types";
+import { mm, toView } from "../viewport";
+import { boxOfPts, grow, inBox, inPoly, polyEdgeDist, rectPoly, segDist, union } from "./geometry";
+import type { Box, DrawOp, Pt, RenderLayer, RenderObject, Scene } from "./types";
+
+export interface PcbSceneOptions {
+  /** Copper layers in stack order, top first. */
+  order: CopperLayer[];
+  /** Hidden copper layer keys (their zones, tracks and net names are left out, as in the SVG view). */
+  hidden: Set<string>;
+  colourOf: (l: CopperLayer) => string;
+  /** Active copper layer key: sets which board side is drawn opaque. */
+  activeLayer: string;
+  /** Unrouted connections to draw as ratsnest, or null to hide them. */
+  airwires: [string, Point, Point][] | null;
+}
+
+/** Pad-number and net-name size in screen pixels. */
+export const ANNOTATION_PX = 10;
+/** Layers on the far side of the active layer are drawn at this opacity. */
+export const FAR_SIDE_ALPHA = 0.55;
+
+const side = (k: string): "top" | "bottom" | "inner" => (k === "top" || k === "bottom" ? k : "inner");
+
+/** The layer stack for a board with these copper layers (top first). */
+export function pcbLayers(order: CopperLayer[], activeLayer: string): RenderLayer[] {
+  const keys: { key: string; copper: string | null; annotation?: boolean }[] = [];
+  const sideLayers = (k: string, withSilk: boolean) => {
+    keys.push({ key: `${k}:zone`, copper: k }, { key: `${k}:copper`, copper: k }, { key: `${k}:netNames`, copper: k, annotation: true });
+    if (withSilk) keys.push({ key: `${k}:padNumbers`, copper: k, annotation: true }, { key: `${k}:silk`, copper: k });
+  };
+  sideLayers("bottom", true);
+  const inner = order.map(layerKey).filter((k) => side(k) === "inner");
+  for (const k of [...inner].reverse()) sideLayers(k, false);
+  sideLayers("top", true);
+  keys.push(
+    { key: "multi", copper: null },
+    { key: "multi:padNumbers", copper: null, annotation: true },
+    { key: "outline", copper: null },
+    { key: "ratsnest", copper: null },
+    { key: "drill", copper: null },
+  );
+  const activeSide = side(activeLayer);
+  return keys.map((k, i) => {
+    let alpha = 1;
+    if (k.copper !== null) {
+      const s = side(k.copper);
+      if (s === "inner") alpha = k.copper === activeLayer ? 1 : 0.7;
+      else if (activeSide !== "inner" && s !== activeSide) alpha = FAR_SIDE_ALPHA;
+    }
+    return { key: k.key, order: i, alpha, annotation: k.annotation };
+  });
+}
+
+/** Text that reads left to right: track angle folded into (-90°, 90°]. */
+function readableAngle(a: Pt, b: Pt): number {
+  let ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  if (ang > Math.PI / 2) ang -= Math.PI;
+  if (ang <= -Math.PI / 2) ang += Math.PI;
+  return ang;
+}
+
+export function buildPcbScene(s: Snapshot, o: PcbSceneOptions): Scene {
+  const { pcb } = s.project;
+  const layers = pcbLayers(o.order, o.activeLayer);
+  const objects: RenderObject[] = [];
+  const shown = (l: CopperLayer) => !o.hidden.has(layerKey(l));
+  const allCopper = o.order.map(layerKey);
+
+  // Zones (pours sit under the copper of their layer).
+  for (const z of Object.values(pcb.zones)) {
+    if (!shown(z.layer)) continue;
+    const pts = z.outline.map(toView);
+    const c = o.colourOf(z.layer);
+    const lk = layerKey(z.layer);
+    objects.push({
+      key: `zone:${z.id}`,
+      ref: { kind: "zone", id: z.id },
+      layerKey: `${lk}:zone`,
+      bbox: boxOfPts(pts),
+      hit: (x, y, tol) => inPoly(pts, x, y) || polyEdgeDist(pts, x, y) <= tol,
+      pathPts: pts,
+      pickLayers: [lk],
+      ops: [{ t: "poly", pts, fill: c, stroke: c, lineWidth: 0.05, alpha: 0.25 }],
+      sig: `${pts.join(";")}|${c}`,
+    });
+  }
+
+  // Tracks and their net names.
+  for (const t of Object.values(pcb.tracks)) {
+    if (!shown(t.layer)) continue;
+    const a = toView(t.a);
+    const b = toView(t.b);
+    const w = mm(t.width);
+    const c = o.colourOf(t.layer);
+    const lk = layerKey(t.layer);
+    objects.push({
+      key: `track:${t.id}`,
+      ref: { kind: "track", id: t.id },
+      layerKey: `${lk}:copper`,
+      bbox: boxOfPts([a, b], w / 2),
+      hit: (x, y, tol) => segDist(x, y, a, b) <= w / 2 + tol,
+      pathPts: [a, b],
+      pickLayers: [lk],
+      ops: [{ t: "seg", a, b, width: w, colour: c }],
+      sig: `${a}|${b}|${w}|${c}`,
+    });
+    if (t.net) {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const mid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      objects.push({
+        key: `netname:${t.id}`,
+        ref: null,
+        layerKey: `${lk}:netNames`,
+        bbox: boxOfPts([a, b], w / 2),
+        hit: () => false,
+        ops: [{ t: "label", x: mid[0], y: mid[1], text: t.net, px: ANNOTATION_PX, colour: "--c-text", fitW: len, fitH: w, angle: readableAngle(a, b) }],
+        sig: `${mid}|${t.net}|${len}|${w}`,
+      });
+    }
+  }
+
+  // Footprints: courtyard + refdes on the side's silk, pads on copper (SMD) or multi-layer (THT).
+  // A pad picks its footprint, as clicking a pad inside the SVG footprint group does.
+  for (const f of s.geometry.footprints) {
+    const [x, y] = toView(f.position);
+    const hw = mm(f.half_w);
+    const hh = mm(f.half_h);
+    const court: Box = { minX: x - hw, minY: y - hh, maxX: x + hw, maxY: y + hh };
+    const fside = f.side === "bottom" ? "bottom" : "top";
+    const padBoxes: Box[] = [];
+    for (const p of f.pads) {
+      const [px, py] = toView(p.position);
+      const w = mm(p.size_x);
+      const h = mm(p.size_y);
+      const r = p.shape === "rect" ? 0 : Math.min(w, h) / 2;
+      const pb: Box = { minX: px - w / 2, minY: py - h / 2, maxX: px + w / 2, maxY: py + h / 2 };
+      padBoxes.push(pb);
+      const tht = p.kind === "tht";
+      const fill = !tht && fside === "bottom" ? "--c-pad-bottom" : "--c-pad";
+      const op: DrawOp = { t: "rect", x: pb.minX, y: pb.minY, w, h, radius: r, fill };
+      objects.push({
+        key: `pad:${f.id}:${p.number}`,
+        ref: { kind: "footprint", id: f.id },
+        layerKey: tht ? "multi" : `${fside}:copper`,
+        bbox: pb,
+        hit: (hx, hy, tol) => inBox(pb, hx, hy, tol),
+        selPoly: rectPoly(pb),
+        pickLayers: tht ? allCopper : [fside],
+        owner: f.id,
+        ops: [op],
+        sig: `${pb.minX},${pb.minY},${w},${h},${r},${fill}`,
+      });
+      if (p.drill !== null) {
+        const dr = mm(p.drill) / 2;
+        objects.push({
+          key: `paddrill:${f.id}:${p.number}`,
+          ref: null,
+          layerKey: "drill",
+          bbox: { minX: px - dr, minY: py - dr, maxX: px + dr, maxY: py + dr },
+          hit: () => false,
+          owner: f.id,
+          ops: [{ t: "circle", cx: px, cy: py, r: dr, fill: "--bg-canvas" }],
+          sig: `${px},${py},${dr}`,
+        });
+      }
+      objects.push({
+        key: `padnum:${f.id}:${p.number}`,
+        ref: null,
+        layerKey: tht ? "multi:padNumbers" : `${fside}:padNumbers`,
+        bbox: pb,
+        hit: () => false,
+        owner: f.id,
+        ops: [{ t: "label", x: px, y: py, text: p.number, px: ANNOTATION_PX, colour: "--bg-canvas", fitW: w, fitH: h, angle: 0 }],
+        sig: `${px},${py},${w},${h},${p.number}`,
+      });
+    }
+    objects.push({
+      key: `footprint:${f.id}`,
+      ref: { kind: "footprint", id: f.id },
+      layerKey: `${fside}:silk`,
+      bbox: padBoxes.reduce<Box>((acc, b) => union(acc, b), { ...court, minY: court.minY - 1.4 }),
+      hit: (hx, hy, tol) => inBox(court, hx, hy, tol) || padBoxes.some((b) => inBox(b, hx, hy, tol)),
+      selPoly: rectPoly(grow(court, 0.3)),
+      owner: f.id,
+      ops: [
+        { t: "rect", x: court.minX, y: court.minY, w: 2 * hw, h: 2 * hh, radius: 0, stroke: "--c-courtyard", lineWidth: 0.05 },
+        { t: "text", x, y: court.minY - 0.5, text: f.refdes, size: 0.9, colour: "--c-text", minPx: 5 },
+      ],
+      sig: `${x},${y},${hw},${hh},${f.refdes}`,
+    });
+  }
+
+  // Vias: barrel on the multi-layer, hole on the drill layer; pickable on every layer they span.
+  for (const v of Object.values(pcb.vias)) {
+    const span = viaLayers(o.order, v.from ?? "top", v.to ?? "bottom");
+    if (!span.some(shown)) continue;
+    const [x, y] = toView(v.position);
+    const r = mm(v.diameter) / 2;
+    const dr = mm(v.drill) / 2;
+    const bb: Box = { minX: x - r, minY: y - r, maxX: x + r, maxY: y + r };
+    objects.push({
+      key: `via:${v.id}`,
+      ref: { kind: "via", id: v.id },
+      layerKey: "multi",
+      bbox: bb,
+      hit: (hx, hy, tol) => Math.hypot(hx - x, hy - y) <= r + tol,
+      selPoly: rectPoly(bb),
+      pickLayers: span.map(layerKey),
+      ops: [{ t: "circle", cx: x, cy: y, r, fill: "--c-via" }],
+      sig: `${x},${y},${r}`,
+    });
+    objects.push({
+      key: `viadrill:${v.id}`,
+      ref: null,
+      layerKey: "drill",
+      bbox: { minX: x - dr, minY: y - dr, maxX: x + dr, maxY: y + dr },
+      hit: () => false,
+      ops: [{ t: "circle", cx: x, cy: y, r: dr, fill: "--bg-canvas" }],
+      sig: `${x},${y},${dr}`,
+    });
+  }
+
+  // Board edge (the board fill stays in the SVG underlay, under the grid).
+  const outline = pcb.board.outline.map(toView);
+  if (outline.length) {
+    objects.push({
+      key: "outline",
+      ref: null,
+      layerKey: "outline",
+      bbox: boxOfPts(outline, 0.1),
+      hit: () => false,
+      pathPts: outline,
+      ops: [{ t: "poly", pts: outline, stroke: "--accent", lineWidth: 0.15 }],
+      sig: outline.join(";"),
+    });
+  }
+
+  // Ratsnest.
+  (o.airwires ?? []).forEach(([n, p, q], i) => {
+    const a = toView(p);
+    const b = toView(q);
+    objects.push({
+      key: `airwire:${i}:${n}`,
+      ref: null,
+      layerKey: "ratsnest",
+      bbox: boxOfPts([a, b], 0.1),
+      hit: () => false,
+      ops: [{ t: "seg", a, b, width: 0.12, colour: "--c-airwire", alpha: 0.7 }],
+      sig: `${a}|${b}`,
+    });
+  });
+
+  let bounds: Box | null = null;
+  for (const ob of objects) bounds = union(bounds, ob.bbox);
+  return { layers, objects, bounds };
+}
