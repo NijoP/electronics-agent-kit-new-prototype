@@ -263,11 +263,16 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
         ),
         SetNoConnect { .. } => (
             D::Schematic,
-            "Mark a pin as intentionally unconnected.",
+            "Mark a pin as intentionally unconnected (refused if it is already marked).",
             obj(
                 &[("symbol_id", id("symbol id")), ("pin", string("pin number"))],
                 &["symbol_id", "pin"],
             ),
+        ),
+        DeleteNoConnect { .. } => (
+            D::Schematic,
+            "Remove a no-connect marker from a pin.",
+            obj(&[("no_connect_id", id("no-connect id"))], &["no_connect_id"]),
         ),
         Annotate => (
             D::Schematic,
@@ -563,6 +568,9 @@ pub fn command_samples() -> Vec<Command> {
             symbol_id: "s".into(),
             pin: "3".into(),
         },
+        DeleteNoConnect {
+            no_connect_id: "nc".into(),
+        },
         Annotate,
         SetBoardOutline {
             points: vec![p, Point::new(1, 0), Point::new(1, 1)],
@@ -730,8 +738,8 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 46 commands (incl. Batch, SetLayerCount, StitchZones); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 46);
+        // 47 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
+        assert_eq!(tools.len(), 47);
         for t in &tools {
             assert!(t
                 .spec

@@ -9,7 +9,7 @@ import { Coords, GridLayer, Rulers, snapStepNm, useGridConfig } from "./grid";
 import * as P from "./tools/pcb/selection";
 import * as O from "./tools/pcb/outline";
 import { OutlinePanel } from "./tools/pcb/OutlinePanel";
-import { layerKey, layerName, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
+import { layerCountOptions, layerKey, layerName, planeFill, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
 import { useLayerView, type LayerView } from "./layerView";
 import { focusBounds, type Focus } from "./pcbFocus";
 import {
@@ -160,15 +160,16 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const sel = pruned.length ? pruned : footprint ? [footprint.id] : [];
   const one = sel.length === 1 ? snapshot.geometry.footprints.find((f) => f.id === sel[0]) : undefined;
   const lockedCount = sel.filter((id) => pcb.footprints[id]?.locked).length;
+  // Footprint edits (R, F, the selection bar) belong to the Select and Move tools only.
+  const footprintTool = MOVE_TOOLS.includes(tool);
 
   const hasZone = (l: CopperLayer) => Object.values(pcb.zones).some((z) => sameLayer(z.layer, l));
-  // One zone over the board outline for every plane layer that has none, on the chosen net.
+  // One zone over the board outline for every plane layer that has none, on the chosen net:
+  // one Batch, so it is one revision and one undo step, and all-or-nothing.
   const fillPlanes = () => {
     if (!edit || !outline.length || !net) return;
-    const cmds = stack
-      .filter((s) => s.kind === "plane" && !hasZone(s.layer))
-      .map((s) => ({ type: "AddZone" as const, layer: s.layer, net, outline, clearance: null }));
-    if (cmds.length) void edit.execute(cmds);
+    const cmd = planeFill(stack, hasZone, net, outline);
+    if (cmd) void edit.execute(cmd);
   };
 
   const reset = () => {
@@ -262,7 +263,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     if (cmd && edit) void edit.execute(cmd);
   };
   const applyTrackEdit = (change: { width?: number; layer?: CopperLayer }) => {
-    const cmd = selTrack ? trackEdit(selTrack, change) : null;
+    const board = { order, tracks: Object.values(pcb.tracks), vias: Object.values(pcb.vias), footprints: snapshot.geometry.footprints };
+    const cmd = selTrack ? trackEdit(selTrack, change, board) : null;
+    if (cmd && "refuse" in cmd) return edit?.notify(cmd.refuse);
     setTrackSel(null);
     if (cmd && edit) void edit.execute(cmd);
   };
@@ -299,6 +302,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     else if (e.key === "Escape") {
       reset();
       setDrag(null);
+      setVdrag(null);
       setSel([]);
     }
     else if (e.key === "Enter" && tool === "route") finishRoute();
@@ -307,8 +311,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     else if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selTrack) deleteSelectedTrack();
     else if (e.key === "Enter" && tool === "outline") finishOutline();
     else if (e.key === "Enter" && tool === "zone") finishZone();
-    else if (k === "r" && sel.length) actions.rotate();
-    else if (k === "f" && sel.length) actions.flip();
+    else if (k === "r" && footprintTool && sel.length) actions.rotate();
+    else if (k === "f" && footprintTool && sel.length) actions.flip();
     else if (k === "l" && tool === "route") {
       const i = order.findIndex((o) => sameLayer(o, layer));
       changeLayer(order[(i + 1) % order.length]);
@@ -673,7 +677,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               </button>
             </span>
           )}
-          {sel.length > 0 && (
+          {footprintTool && sel.length > 0 && (
             <span className="selection-bar" role="group" aria-label="Footprint selection">
               <span className="muted">
                 {one ? `${one.refdes} · ${one.side}${lockedCount ? " · locked" : ""}` : `${fps(sel.length)}${lockedCount ? ` (${lockedCount} locked)` : ""}`}
@@ -717,9 +721,10 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           <select
             aria-label="Copper layers"
             value={stack.length}
+            disabled={edit.busy}
             onChange={(e) => void edit.execute({ type: "SetLayerCount", count: Number(e.target.value), board_thickness: null })}
           >
-            {[2, 4, 6, 8].map((n) => (
+            {layerCountOptions(stack.length).map((n) => (
               <option key={n} value={n}>
                 {n} copper layers
               </option>

@@ -35,18 +35,21 @@ blocking the PR) when any row fails.
 Scenarios are JSON files in `apps/desktop/e2e/scenarios/`; the workflow runs
 `scenarios/a1-menus.json` (A1 menus, then the A2 toolbar steps `a2-*`: icon toolbar, grid/unit/snap per editor, split-button picks, Toolbar labels). A later UI slice adds steps to a scenario (or a new scenario file plus
 one more `node ui-evidence.mjs` line with its own `UI_SCENARIO` and `UI_OUT`) instead of a new
-job. Each step has an `id` (used in screenshot names), a `do` type and an optional `title`.
+job. `scenarios/e2-editor.json` (slice E2, editor correctness) is such a second scenario: it
+runs in its own step with `UI_OUT` under `ui-evidence/e2`, and its rows are added to the job
+summary and its screenshots to the same artifact. Each step has an `id` (used in screenshot names), a `do` type and an optional `title`.
 Every step except `each-menu` takes one screenshot after it runs (set `"shot": false` to skip).
 
 | `do` | Fields | What it does |
 |---|---|---|
 | `wait` | `selector`, `text`?, `timeout`? (ms) | waits until a visible element matches |
 | `fixture-project` | `name`, `folder`? | SETUP: creates the fixture project, reloads to Project Home, waits for it in Recent projects |
-| `click` | `selector`, `text`?, `expect`?, `expectText`?, `timeout`? | XTest click on the element, then waits for `expect` |
+| `click` | `selector`, `text`?, `dx`?, `dy`? (px from the centre), `expect`?, `expectText`?, `timeout`? | XTest click on the element (offset by `dx`/`dy`), then waits for `expect` |
 | `menu` | `menu`, `item`, `expect`?, `expectText`? | XTest: opens a top-level menu and clicks the item whose text starts with `item` |
 | `key` | `keys` (xdotool key names, space-separated, e.g. `"ctrl+k"`) | XTest key presses |
 | `each-menu` | — | opens every top-level menu in turn; one row and one screenshot per menu, listing its items |
 | `shot` | — | screenshot only |
+| `count` | `selector`, `equals`, `timeout`? | DOM read: waits until exactly `equals` elements match (e.g. markers drawn on the sheet) |
 
 `text` matches the start of the element's whitespace-normalised text. Prefer the app's
 accessible names (`aria-label`) in selectors; they are the same ones the unit tests use.

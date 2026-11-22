@@ -66,9 +66,20 @@ jobs:
           UI_SCENARIO: scenarios/a1-menus.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      - name: Run E2 editor-correctness scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/e2
+          UI_SCENARIO: scenarios/e2-editor.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       - name: Results to job summary
         if: always()
-        run: cat "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no results file" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          cat "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no results file" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ runner.temp }}/ui-evidence/e2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no E2 results file" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
@@ -78,4 +89,6 @@ jobs:
             ${{ runner.temp }}/ui-evidence/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/tauri-driver.log
+            ${{ runner.temp }}/ui-evidence/e2/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/e2/UI_EVIDENCE.md
           if-no-files-found: warn

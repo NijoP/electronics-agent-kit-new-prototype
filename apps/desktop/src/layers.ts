@@ -1,6 +1,6 @@
 // Copper-layer helpers for the PCB editor. Pure functions over the snapshot's stackup;
 // the engine owns the stackup, this only names, orders and colours layers for display.
-import type { CopperLayer, Stackup } from "./types";
+import type { Command, CopperLayer, Point, Stackup } from "./types";
 
 /** Stable string key for a layer: "top", "bottom" or "in1", "in2", … */
 export const layerKey = (l: CopperLayer): string =>
@@ -43,4 +43,27 @@ export type ViaKind = "through" | "blind" | "buried";
 export function viaKind(from: CopperLayer, to: CopperLayer): ViaKind {
   const outer = (l: CopperLayer) => typeof l === "string";
   return outer(from) && outer(to) ? "through" : !outer(from) && !outer(to) ? "buried" : "blind";
+}
+
+/** Copper-layer counts offered for `SetLayerCount` (even, 2..16), plus `current` when it is not one. */
+export const LAYER_COUNTS = [2, 4, 6, 8, 10, 12, 14, 16];
+export const layerCountOptions = (current: number): number[] =>
+  [...new Set([...LAYER_COUNTS, current])].sort((a, b) => a - b);
+
+/**
+ * "Fill planes with net": one zone over the board outline on every plane layer that has none,
+ * as ONE command (a `Batch` when there are several), so it is one revision, one undo step and
+ * all-or-nothing. Null when no plane layer needs a zone.
+ */
+export function planeFill(
+  stack: { layer: CopperLayer; kind: "signal" | "plane" }[],
+  hasZone: (l: CopperLayer) => boolean,
+  net: string,
+  outline: Point[],
+): Command | null {
+  const commands: Command[] = stack
+    .filter((s) => s.kind === "plane" && !hasZone(s.layer))
+    .map((s): Command => ({ type: "AddZone", layer: s.layer, net, outline, clearance: null }));
+  if (commands.length <= 1) return commands[0] ?? null;
+  return { type: "Batch", commands, label: `Fill planes with ${net}` };
 }

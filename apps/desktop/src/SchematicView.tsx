@@ -9,6 +9,7 @@ import { Coords, GridLayer, snapStepNm, useGridConfig } from "./grid";
 import type { Command, FlipAxis, Id, Point, Rotation, Snapshot, SymbolDef, SymbolGeom, SymbolInstance, SymbolPin } from "./types";
 import { boundsOf, fromView, mm, toView } from "./viewport";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
+import { sheetNoConnects, toggleNoConnect } from "./tools/schematic/noConnect";
 import * as S from "./tools/schematic/selection";
 import { junctionPoints } from "./tools/schematic/junctions";
 import "./tools/schematic/schematic.css";
@@ -356,7 +357,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         refdes: null,
         value: null,
       });
-      edit.notify?.(`Placed ${dragged?.name ?? compId} on sheet.`);
+      // The engine's result (accepted with its revision, or the rejection) is the notice.
     },
   };
 
@@ -375,6 +376,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     const labelId = hit(e, "data-label-id");
     switch (tool) {
       case "place": {
+        // A click on an existing symbol selected it (drag start); it never places on top.
+        if (symId) return;
         if (!part) return edit.notify("No library part available.");
         void edit.execute({
           type: "PlaceSymbol",
@@ -391,8 +394,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         if (!start) return setStart(snap.point);
         const legs = segments(start, snap.point, false);
         setStart(snap.point);
-        if (legs.length)
-          void edit.execute(legs.map(([a, b]) => ({ type: "AddWire" as const, sheet_id: sheet.id, a, b })));
+        // An L-shaped wire is two legs sent as ONE Batch: one revision, one undo, all-or-nothing.
+        submit(legs.map(([a, b]) => ({ type: "AddWire" as const, sheet_id: sheet.id, a, b })), "Wire");
         return;
       }
       case "connect": {
@@ -436,7 +439,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       }
       case "noconnect": {
         if (!pinHit) return edit.notify("Click a pin to mark it as intentionally unconnected.");
-        void edit.execute({ type: "SetNoConnect", symbol_id: pinHit.symbol, pin: pinHit.number });
+        void edit.execute(toggleNoConnect(snapshot, pinHit.symbol, pinHit.number));
         return;
       }
       case "pinlabel": {
@@ -547,7 +550,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
             {tool === "label" && "Click to drop the label"}
             {tool === "move" && (picked ? "Click the new position" : "Drag a part, or click a symbol then its destination")}
             {tool === "delete" && "Click a symbol, wire or label"}
-            {tool === "noconnect" && "Click a pin to mark it intentionally unconnected (the ERC-001 remedy)"}
+            {tool === "noconnect" && "Click a pin to mark it intentionally unconnected (the ERC-001 remedy); click a marked pin to remove its marker"}
             {tool === "pinlabel" && "Click a pin to put the net label on it"}
           </span>
         </div>
@@ -652,7 +655,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
               </g>
             );
           })}
-        {Object.values(schematic.no_connects).map((n) => {
+        {sheetNoConnects(snapshot, sheet.id).map((n) => {
           const at = pinAt.get(`${n.symbol_id}/${n.pin}`);
           if (!at) return null;
           const [x, y] = toView(at);

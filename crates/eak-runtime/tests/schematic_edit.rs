@@ -298,3 +298,83 @@ fn flip_symbol_mirrors_pins_about_the_origin_and_round_trips() {
     );
     assert!(!missing.accepted);
 }
+
+/// Regression (inventory F7): `SetNoConnect` used to add a second marker on every click, and no
+/// command removed one. A pin now carries at most one marker; `DeleteNoConnect` removes it as
+/// one undo step (ADR-0038).
+#[test]
+fn no_connect_is_never_duplicated_and_can_be_deleted() {
+    let mut e = Engine::in_memory(Project::new("x"));
+    let r1 = place(&mut e, 0.0, 0.0);
+    let mark = || C::SetNoConnect {
+        symbol_id: r1.clone(),
+        pin: "1".into(),
+    };
+    let nc = ok(&mut e, mark()).created[0].clone();
+    let rev = e.project().revision;
+    let again = run(&mut e, mark());
+    assert!(!again.accepted);
+    assert!(
+        matches!(again.error, Some(CommandError::NothingTo(_))),
+        "{:?}",
+        again.error
+    );
+    assert_eq!(
+        e.project().revision,
+        rev,
+        "a refused command leaves no revision"
+    );
+    assert_eq!(e.project().schematic.no_connects.len(), 1);
+
+    ok(
+        &mut e,
+        C::DeleteNoConnect {
+            no_connect_id: nc.clone(),
+        },
+    );
+    assert!(e.project().schematic.no_connects.is_empty());
+    let missing = run(&mut e, C::DeleteNoConnect { no_connect_id: nc });
+    assert!(matches!(missing.error, Some(CommandError::NotFound(_))));
+    // Undo restores the marker; after that the pin can be marked again only once.
+    assert!(e.undo(e.project().revision, &Actor::human()).accepted);
+    assert_eq!(e.project().schematic.no_connects.len(), 1);
+}
+
+/// Regression (inventory F3): an L-shaped wire is two `AddWire` legs. Sent as one `Batch` it is
+/// one revision and one undo step, and a bad leg leaves the sheet untouched.
+#[test]
+fn l_shaped_wire_batch_is_one_revision_and_all_or_nothing() {
+    let mut e = Engine::in_memory(Project::new("x"));
+    let rev = e.project().revision;
+    let (a, k, b) = (
+        Point::mm(0.0, 0.0),
+        Point::mm(10.0, 0.0),
+        Point::mm(10.0, 10.0),
+    );
+    let leg = |a, b| C::AddWire {
+        sheet_id: None,
+        a,
+        b,
+    };
+    ok(
+        &mut e,
+        C::Batch {
+            commands: vec![leg(a, k), leg(k, b)],
+            label: Some("Wire".into()),
+        },
+    );
+    assert_eq!(e.project().revision, rev + 1);
+    assert_eq!(e.project().schematic.wires.len(), 2);
+    assert!(e.undo(e.project().revision, &Actor::human()).accepted);
+    assert!(e.project().schematic.wires.is_empty());
+
+    let bad = run(
+        &mut e,
+        C::Batch {
+            commands: vec![leg(a, k), leg(k, k)],
+            label: None,
+        },
+    );
+    assert!(!bad.accepted);
+    assert!(e.project().schematic.wires.is_empty(), "no partial wire");
+}

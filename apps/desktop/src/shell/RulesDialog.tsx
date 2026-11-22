@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { netNames } from "./panels";
 import { mmToNm } from "../editing";
-import type { Command, NetClass, Snapshot } from "../types";
+import type { Command, Constraints, NetClass, Snapshot } from "../types";
 
 interface Props {
   snapshot: Snapshot;
@@ -19,6 +19,24 @@ function num(s: string): number | null | undefined {
   if (s.trim() === "") return null;
   const v = Number(s);
   return Number.isFinite(v) && v > 0 ? v : undefined;
+}
+
+const declared = (m: Record<string, number> | undefined, net: string) => (m?.[net] !== undefined ? String(m[net]) : "");
+
+/**
+ * The commands for "Apply net declaration": only the fields that differ from what the engine
+ * stores for `net` (so an untouched field is never overwritten, and an empty field clears a
+ * declaration only when the user emptied it), as ONE command (a `Batch` for current and
+ * voltage together: one revision, one undo step, all-or-nothing).
+ */
+export function netDeclaration(c: Constraints | undefined, net: string, amps: string, volts: string): { command: Command } | { error: string } {
+  const a = num(amps), v = num(volts);
+  if (a === undefined || v === undefined) return { error: "Current and voltage must be positive numbers, or empty to clear the declaration." };
+  const commands: Command[] = [];
+  if ((c?.net_currents_a?.[net] ?? null) !== a) commands.push({ type: "SetNetCurrent", net, amps: a });
+  if ((c?.net_voltages_v?.[net] ?? null) !== v) commands.push({ type: "SetNetVoltage", net, volts: v });
+  if (!commands.length) return { error: `Nothing to apply: net ${net} already has these values.` };
+  return { command: commands.length === 1 ? commands[0] : { type: "Batch", commands, label: `Declare net ${net}` } };
 }
 
 export function RulesDialog({ snapshot, busy, apply, onClose }: Props) {
@@ -40,8 +58,9 @@ export function RulesDialog({ snapshot, busy, apply, onClose }: Props) {
   const [cls, setCls] = useState(blank);
   const nets = netNames(snapshot);
   const [netSel, setNetSel] = useState(nets[0] ?? "");
-  const [amps, setAmps] = useState("");
-  const [volts, setVolts] = useState("");
+  // Prefilled with the preselected net's stored declaration, so Apply never clears it unasked.
+  const [amps, setAmps] = useState(() => declared(c?.net_currents_a, nets[0] ?? ""));
+  const [volts, setVolts] = useState(() => declared(c?.net_voltages_v, nets[0] ?? ""));
 
   const loadClass = (n: NetClass) =>
     setCls({ name: n.name, track_width: toMm(n.track_width), clearance: toMm(n.clearance), via_drill: toMm(n.via_drill), via_diameter: toMm(n.via_diameter), nets: n.nets.join(", ") });
@@ -70,17 +89,14 @@ export function RulesDialog({ snapshot, busy, apply, onClose }: Props) {
   };
   const applyNet = () => {
     if (!netSel) return setError("Pick a net first.");
-    const a = num(amps), v = num(volts);
-    if (a === undefined || v === undefined) return setError("Current and voltage must be positive numbers, or empty to clear the declaration.");
-    run([
-      { type: "SetNetCurrent", net: netSel, amps: a },
-      { type: "SetNetVoltage", net: netSel, volts: v },
-    ]);
+    const d = netDeclaration(c, netSel, amps, volts);
+    if ("error" in d) return setError(d.error);
+    run([d.command]);
   };
   const pickNet = (n: string) => {
     setNetSel(n);
-    setAmps(c?.net_currents_a?.[n] !== undefined ? String(c.net_currents_a[n]) : "");
-    setVolts(c?.net_voltages_v?.[n] !== undefined ? String(c.net_voltages_v[n]) : "");
+    setAmps(declared(c?.net_currents_a, n));
+    setVolts(declared(c?.net_voltages_v, n));
   };
 
   const field = (k: keyof typeof rules, label: string) => (

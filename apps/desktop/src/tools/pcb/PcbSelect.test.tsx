@@ -194,3 +194,53 @@ describe("PCB selection reducers", () => {
     expect(lockCommands(s, ["fp_r1", "fp_d1"], false)).toEqual([]);
   });
 });
+
+// Slice E2 regressions (Phase 1 inventory, PCB defects 2, 5 and 8).
+describe("PCB editor correctness (E2)", () => {
+  it("R and F act on a footprint only under the Select and Move tools", () => {
+    const snap = board();
+    vb = fit(pcbBounds(snap));
+    // D1 is selected elsewhere (cross-probe), so it is the footprint selection.
+    render(<PcbView snapshot={snap} selected="sym_d1" onSelect={() => {}} edit={edit()} />);
+    expect(screen.getByRole("group", { name: "Footprint selection" })).toBeTruthy();
+    for (const t of ["Route", "Via", "Zone"]) {
+      fireEvent.click(screen.getByRole("button", { name: t }));
+      fireEvent.keyDown(window, { key: "r" });
+      fireEvent.keyDown(window, { key: "f" });
+      expect(screen.queryByRole("group", { name: "Footprint selection" })).toBeNull();
+    }
+    expect(sent).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Move" }));
+    fireEvent.keyDown(window, { key: "r" });
+    expect(sent).toEqual([{ type: "MoveFootprint", footprint_id: "fp_d1", position: pt(20, 10), rotation: "R90", side: null }]);
+  });
+
+  it("Esc cancels an outline vertex drag: nothing is sent on release", () => {
+    const vertexDrag = (escape: boolean) => {
+      sent = [];
+      const snap = fixture();
+      vb = fit(pcbBounds(snap));
+      const r = render(<PcbView snapshot={snap} selected={null} onSelect={() => {}} edit={edit()} />);
+      fireEvent.click(screen.getByRole("button", { name: "Board outline" }));
+      const h = r.container.querySelector('[data-outline-vertex="2"]')!;
+      fireEvent.pointerDown(h, { ...client(30, 20), button: 0, buttons: 1 });
+      fireEvent.pointerMove(h, { ...client(33, 23), buttons: 1 });
+      fireEvent.pointerMove(h, { ...client(35, 25), buttons: 1 });
+      if (escape) fireEvent.keyDown(window, { key: "Escape" });
+      fireEvent.pointerUp(h, { ...client(35, 25), button: 0 });
+      r.unmount();
+      return sent;
+    };
+    expect(vertexDrag(false)).toEqual([expect.objectContaining({ type: "SetBoardOutline" })]);
+    expect(vertexDrag(true)).toEqual([]);
+  });
+
+  it("the PCB layer-count select offers 2..16 like the engine and is disabled while busy", () => {
+    const snap = board();
+    vb = fit(pcbBounds(snap));
+    const r = render(<PcbView snapshot={snap} selected={null} onSelect={() => {}} edit={{ ...edit(), busy: true }} />);
+    const select = r.getByLabelText("Copper layers") as HTMLSelectElement;
+    expect([...select.options].map((o) => Number(o.value))).toEqual([2, 4, 6, 8, 10, 12, 14, 16]);
+    expect(select.disabled).toBe(true);
+  });
+});

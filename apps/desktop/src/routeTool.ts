@@ -2,8 +2,8 @@
 // (`route_step` IPC -> eak_engineering::interactive); this reducer only records the steps the
 // user fixed with a click and turns the finished route into ONE `Batch` command, so a whole
 // route is one revision and one undo step. Nothing here writes the project.
-import type { BendMode, Command, Constraints, CopperLayer, FootprintGeom, Nm, Point, RouteSegment, RouteStepReport, RouteStepRequest, Track } from "./types";
-import { sameLayer } from "./layers";
+import type { BendMode, Command, Constraints, CopperLayer, FootprintGeom, Nm, PadGeom, Point, RouteSegment, RouteStepReport, RouteStepRequest, Track, Via } from "./types";
+import { layerName, sameLayer, viaLayers } from "./layers";
 
 /** One fixed piece of the route: segments on one layer, optionally starting with a via. */
 export interface RouteStep {
@@ -11,6 +11,8 @@ export interface RouteStep {
   width: Nm;
   segments: RouteSegment[];
   via: { position: Point; drill: Nm; diameter: Nm } | null;
+  /** Layer the via starts on (the layer before the switch); null when there is no via. */
+  viaFrom: CopperLayer | null;
 }
 
 export interface RouteDraft {
@@ -53,7 +55,8 @@ export function routeReducer(d: RouteDraft | null, a: RouteAction): RouteDraft |
       if (s.segments.length && !samePt(s.segments[0].a, d.anchor)) return d;
       if (d.viaPending && !s.via) return d;
       if (!s.segments.length && !s.via) return d;
-      const step: RouteStep = { layer: s.layer, width: s.width, segments: s.segments, via: s.via };
+      const viaFrom = s.via ? (d.previousLayer ?? null) : null;
+      const step: RouteStep = { layer: s.layer, width: s.width, segments: s.segments, via: s.via, viaFrom };
       return { ...d, anchor: s.end, steps: [...d.steps, step], viaPending: false, previousLayer: null };
     }
     case "switchLayer": {
@@ -71,14 +74,13 @@ export function routeReducer(d: RouteDraft | null, a: RouteAction): RouteDraft |
       if (!d.steps.length) return null;
       const last = d.steps[d.steps.length - 1];
       const anchor = last.via ? last.via.position : last.segments[0].a;
-      const before = d.steps.length > 1 ? d.steps[d.steps.length - 2].layer : null;
       return {
         ...d,
         steps: d.steps.slice(0, -1),
         anchor,
         layer: last.layer,
         viaPending: !!last.via,
-        previousLayer: last.via ? before : null,
+        previousLayer: last.via ? last.viaFrom : null,
       };
     }
   }
@@ -90,15 +92,25 @@ export function stepRequest(d: RouteDraft, cursor: Point): RouteStepRequest {
   return { net: d.net, layer: d.layer, from: d.anchor, to: cursor, mode: d.mode, width: d.width, via_at_start: d.viaPending };
 }
 
-/** The finished route as one Batch (null when nothing was fixed). Vias are through vias. */
+/**
+ * The finished route as one Batch (null when nothing was fixed). A via between the two outer
+ * layers is a through via; a via that starts or ends on an inner layer is sent with its span
+ * (`from`/`to`), so the engine makes a blind or buried via instead of a through via.
+ */
 export function routeBatch(d: RouteDraft): Command | null {
   const commands: Command[] = [];
   for (const s of d.steps) {
     if (s.via)
-      commands.push({ type: "AddVia", position: s.via.position, net: d.net, drill: s.via.drill, diameter: s.via.diameter, from: null, to: null });
+      commands.push({ type: "AddVia", position: s.via.position, net: d.net, drill: s.via.drill, diameter: s.via.diameter, ...viaSpan(s.viaFrom, s.layer) });
     for (const g of s.segments) commands.push({ type: "AddTrack", layer: s.layer, a: g.a, b: g.b, width: s.width, net: d.net });
   }
   return commands.length ? { type: "Batch", commands, label: `Route ${d.net}` } : null;
+}
+
+/** The `from`/`to` of a route via: null/null (through) unless an end is an inner layer. */
+export function viaSpan(from: CopperLayer | null, to: CopperLayer): { from: CopperLayer | null; to: CopperLayer | null } {
+  if (!from || (typeof from === "string" && typeof to === "string")) return { from: null, to: null };
+  return { from, to };
 }
 
 /** Rip up a net's tracks and vias and re-route it with the engine's router, as one undo step. */
@@ -195,19 +207,65 @@ export function finishOn(d: RouteDraft, pad: PadHit | null): { kind: "finish" } 
 
 // ---- Track editing -------------------------------------------------------------------------
 
+/** The copper a track's ends can join: used to keep a track connected when it changes layer. */
+export interface BoardCopper {
+  /** Copper layers top to bottom. */
+  order: CopperLayer[];
+  tracks: Track[];
+  vias: Via[];
+  footprints: FootprintGeom[];
+}
+
+const padCovers = (pad: PadGeom, p: Point) =>
+  Math.abs(p.x - pad.position.x) <= pad.size_x / 2 && Math.abs(p.y - pad.position.y) <= pad.size_y / 2;
+
+/**
+ * What moving track `t` from its layer to `to` needs at each end to stay connected: a via
+ * where the end joins another track of the net on the old layer, or nothing where a
+ * through-hole pad or a via that already reaches `to` is there. An end on an SMD pad of the
+ * old layer, or on a via that does not reach `to`, cannot be kept connected by the edit, so
+ * the change is refused with the reason.
+ */
+export function layerChangeVias(t: Track, to: CopperLayer, board: BoardCopper): { vias: Command[] } | { refuse: string } {
+  const from = t.layer;
+  const vias: Command[] = [];
+  for (const [end, p] of [["start", t.a], ["end", t.b]] as const) {
+    const pads = board.footprints.flatMap((f) => f.pads.filter((pad) => padCovers(pad, p)).map((pad) => ({ f, pad })));
+    if (pads.some(({ pad }) => pad.kind === "tht")) continue;
+    const smd = pads.find(({ f }) => sameLayer(f.side, from));
+    if (smd)
+      return {
+        refuse: `The track's ${end} is on SMD pad ${smd.f.refdes}.${smd.pad.number} on ${layerName(from)}; moving the track to ${layerName(to)} would disconnect it. Re-route it with the Route tool instead.`,
+      };
+    const via = board.vias.find((v) => samePt(v.position, p));
+    if (via) {
+      if (viaLayers(board.order, via.from ?? "top", via.to ?? "bottom").some((l) => sameLayer(l, to))) continue;
+      return { refuse: `The via at the track's ${end} does not reach ${layerName(to)}; moving the track there would disconnect it.` };
+    }
+    const joins = board.tracks.some((o) => o.id !== t.id && o.net === t.net && sameLayer(o.layer, from) && (samePt(o.a, p) || samePt(o.b, p)));
+    if (joins) vias.push({ type: "AddVia", position: p, net: t.net, drill: null, diameter: null, ...viaSpan(from, to) });
+  }
+  return { vias };
+}
+
 /**
  * Change a committed track's width and/or layer as ONE undoable `Batch` (delete + re-add with
- * the same end points and net). Null when nothing changes.
+ * the same end points and net). A layer change also adds the vias that keep its ends connected
+ * (`layerChangeVias`) when `board` is given, and is refused when it cannot. Null when nothing
+ * changes.
  */
-export function trackEdit(t: Track, change: { width?: Nm; layer?: CopperLayer }): Command | null {
+export function trackEdit(t: Track, change: { width?: Nm; layer?: CopperLayer }, board?: BoardCopper): Command | { refuse: string } | null {
   const width = change.width ?? t.width;
   const layer = change.layer ?? t.layer;
   if (!(width > 0) || (width === t.width && sameLayer(layer, t.layer))) return null;
+  const keep = board && !sameLayer(layer, t.layer) ? layerChangeVias(t, layer, board) : { vias: [] };
+  if ("refuse" in keep) return keep;
   return {
     type: "Batch",
     commands: [
       { type: "DeleteTrack", track_id: t.id },
       { type: "AddTrack", layer, a: t.a, b: t.b, width, net: t.net },
+      ...keep.vias,
     ],
     label: `Edit track ${t.net}`,
   };

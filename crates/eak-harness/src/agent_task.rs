@@ -176,6 +176,7 @@ const SCHEMATIC_COMMANDS: &[&str] = &[
     "DeleteNetLabel",
     "MoveNetLabel",
     "SetNoConnect",
+    "DeleteNoConnect",
     "Annotate",
     "ImportLibraryComponent",
     "UpsertComponentDefinition",

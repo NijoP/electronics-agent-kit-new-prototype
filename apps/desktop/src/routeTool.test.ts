@@ -12,11 +12,14 @@ import {
   routeReducer,
   startProblem,
   stepRequest,
+  layerChangeVias,
   trackEdit,
+  viaSpan,
   widthFromMm,
+  type BoardCopper,
   type RouteDraft,
 } from "./routeTool";
-import type { FootprintGeom, Point, RouteStepReport, Track } from "./types";
+import type { FootprintGeom, Point, RouteStepReport, Track, Via } from "./types";
 
 const P = (x: number, y: number): Point => ({ x, y });
 
@@ -215,5 +218,67 @@ describe("manual routing helpers", () => {
       undefined,
     );
     expect(q[0][0]).toBe("VCC");
+  });
+});
+
+// Slice E2 regressions (inventory F6 and PCB defect 7).
+describe("route via span and track layer changes (E2)", () => {
+  const via = (x: number) => ({ position: P(x, 0), drill: 300_000, diameter: 600_000 });
+  it("a via onto or off an inner layer carries its span (blind/buried), outer-to-outer stays through", () => {
+    let d = routeReducer(started(), { type: "fix", step: report({ segments: [{ a: P(0, 0), b: P(4, 0) }], end: P(4, 0) }) })!;
+    d = routeReducer(d, { type: "switchLayer", layer: { inner: 1 } })!;
+    d = routeReducer(d, { type: "fix", step: report({ layer: { inner: 1 }, via: via(4), segments: [{ a: P(4, 0), b: P(9, 0) }], end: P(9, 0) }) })!;
+    d = routeReducer(d, { type: "switchLayer", layer: { inner: 2 } })!;
+    d = routeReducer(d, { type: "fix", step: report({ layer: { inner: 2 }, via: via(9), segments: [{ a: P(9, 0), b: P(12, 0) }], end: P(12, 0) }) })!;
+    const b = routeBatch(d);
+    const vias = b && b.type === "Batch" ? b.commands.filter((c) => c.type === "AddVia") : [];
+    expect(vias).toEqual([
+      { type: "AddVia", position: P(4, 0), net: "SIG", drill: 300_000, diameter: 600_000, from: "top", to: { inner: 1 } },
+      { type: "AddVia", position: P(9, 0), net: "SIG", drill: 300_000, diameter: 600_000, from: { inner: 1 }, to: { inner: 2 } },
+    ]);
+    // Stepping back over a via restores the layer it started on, so the redo keeps the span.
+    const back = routeReducer(d, { type: "back" })!;
+    expect(back.previousLayer).toEqual({ inner: 1 });
+    expect(viaSpan("top", "bottom")).toEqual({ from: null, to: null });
+    expect(viaSpan(null, { inner: 1 })).toEqual({ from: null, to: null });
+  });
+
+  it("a via switched before the first segment starts on the route's start layer", () => {
+    let d = routeReducer(started(), { type: "switchLayer", layer: { inner: 1 } })!;
+    d = routeReducer(d, { type: "fix", step: report({ layer: { inner: 1 }, via: via(0), segments: [{ a: P(0, 0), b: P(5, 0) }], end: P(5, 0) }) })!;
+    const b = routeBatch(d)!;
+    expect(b.type === "Batch" && b.commands[0]).toMatchObject({ type: "AddVia", from: "top", to: { inner: 1 } });
+  });
+
+  const t: Track = { id: "trk1", layer: "top", width: 250_000, a: P(0, 0), b: P(5, 0), net: "SIG" };
+  const pad = (kind: "smd" | "tht", at: Point) => ({ number: "1", kind, shape: "rect" as const, position: at, size_x: 1000, size_y: 1000, drill: null, net: "SIG" });
+  const fp = (kind: "smd" | "tht", at: Point): FootprintGeom => ({ id: "fp", symbol_id: "s", refdes: "U1", side: "top", position: at, half_w: 1, half_h: 1, pads: [pad(kind, at)] });
+  const board = (over: Partial<BoardCopper>): BoardCopper => ({ order: ["top", { inner: 1 }, "bottom"], tracks: [t], vias: [], footprints: [], ...over });
+
+  it("moving a track to another layer adds a via where it joins old-layer copper", () => {
+    const joined: Track = { id: "trk2", layer: "top", width: 250_000, a: P(5, 0), b: P(9, 0), net: "SIG" };
+    const b = board({ tracks: [t, joined], footprints: [fp("tht", P(0, 0))] });
+    expect(trackEdit(t, { layer: "bottom" }, b)).toEqual({
+      type: "Batch",
+      label: "Edit track SIG",
+      commands: [
+        { type: "DeleteTrack", track_id: "trk1" },
+        { type: "AddTrack", layer: "bottom", a: P(0, 0), b: P(5, 0), width: 250_000, net: "SIG" },
+        { type: "AddVia", position: P(5, 0), net: "SIG", drill: null, diameter: null, from: null, to: null },
+      ],
+    });
+    expect(layerChangeVias(t, { inner: 1 }, b)).toEqual({
+      vias: [{ type: "AddVia", position: P(5, 0), net: "SIG", drill: null, diameter: null, from: "top", to: { inner: 1 } }],
+    });
+  });
+
+  it("refuses a layer change that would leave an end on an SMD pad or a via that does not reach", () => {
+    expect(trackEdit(t, { layer: "bottom" }, board({ footprints: [fp("smd", P(5, 0))] }))).toHaveProperty("refuse");
+    const blind: Via = { id: "v", position: P(5, 0), drill: 300_000, diameter: 600_000, net: "SIG", from: "top", to: { inner: 1 } };
+    expect(trackEdit(t, { layer: "bottom" }, board({ vias: [blind] }))).toHaveProperty("refuse");
+    // The same via reaches In1, so no extra via is needed there.
+    expect(layerChangeVias(t, { inner: 1 }, board({ vias: [blind] }))).toEqual({ vias: [] });
+    // A width-only edit never needs vias.
+    expect(trackEdit(t, { width: 400_000 }, board({ footprints: [fp("smd", P(5, 0))] }))).toMatchObject({ type: "Batch" });
   });
 });

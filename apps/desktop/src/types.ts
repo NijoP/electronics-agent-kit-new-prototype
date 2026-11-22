@@ -203,6 +203,7 @@ export type Command =
   | { type: "DeleteNetLabel"; label_id: Id }
   | { type: "LabelPin"; symbol_id: Id; pin: string; name: string; kind: "net" | "power" }
   | { type: "SetNoConnect"; symbol_id: Id; pin: string }
+  | { type: "DeleteNoConnect"; no_connect_id: Id }
   | { type: "MoveNetLabel"; label_id: Id; position: Point }
   | { type: "SetBoardOutline"; points: Point[] }
   | { type: "MoveFootprint"; footprint_id: Id; position: Point; rotation: Rotation | null; side: Side | null }
