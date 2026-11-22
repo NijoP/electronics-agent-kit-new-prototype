@@ -33,7 +33,7 @@ blocking the PR) when any row fails.
 
 ## Adding steps
 Scenarios are JSON files in `apps/desktop/e2e/scenarios/`; the workflow runs
-`scenarios/a1-menus.json` (A1 menus, then the A2 toolbar steps `a2-*`: icon toolbar, grid/unit/snap per editor, split-button picks, Toolbar labels). A later UI slice adds steps to a scenario (or a new scenario file plus
+`scenarios/a1-menus.json` (A1 menus, then the A2 toolbar steps `a2-*`: icon toolbar, grid/unit/snap per editor, split-button picks, Toolbar labels; then the E9 steps `e9-*`: menu entries that are explicitly unavailable show their reason). A later UI slice adds steps to a scenario (or a new scenario file plus
 one more `node ui-evidence.mjs` line with its own `UI_SCENARIO` and `UI_OUT`) instead of a new
 job. `scenarios/e2-editor.json` (slice E2, editor correctness) is such a second scenario: it
 runs in its own step with `UI_OUT` under `ui-evidence/e2`, and its rows are added to the job
