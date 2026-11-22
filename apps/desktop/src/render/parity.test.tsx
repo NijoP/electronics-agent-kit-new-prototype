@@ -59,6 +59,7 @@ afterEach(() => {
   HTMLCanvasElement.prototype.getContext = realGetContext;
   setCanvas2dAvailableForTests(null);
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 /** Three footprints in a row: R1 (10,10), D1 (20,10), R2 (40,14); no board outline. */
@@ -99,14 +100,15 @@ const moves = () => sent.flatMap((c) => (c.type === "Batch" ? c.commands : [c]))
 
 describe("Canvas2D PCB renderer", () => {
   it("paints the board on a canvas instead of SVG nodes and keeps the interactive SVG on top", async () => {
+    const errors: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => void errors.push(a.map((x) => (x instanceof Error ? (x.stack ?? x.message) : String(x))).join(" ")));
     const { container } = setup(fixture());
+    expect(errors.join(" | ").slice(0, 1500), "errors while starting the renderer").toBe("");
     expect(container.querySelector('canvas[data-renderer="canvas2d"]')).toBeTruthy();
     expect(container.querySelector("[data-footprint-id]")).toBeNull();
     expect(container.querySelector("[data-track-id]")).toBeNull();
     expect(container.querySelector(".canvas-stack > svg.canvas.canvas-top")).toBeTruthy();
     expect((screen.getByLabelText("PCB renderer") as HTMLSelectElement).value).toBe("canvas");
-    const errors: string[] = [];
-    vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => void errors.push(a.map((x) => (x instanceof Error ? (x.stack ?? x.message) : String(x))).join(" ")));
     const el = container.querySelector("canvas.scene-canvas") as HTMLCanvasElement;
     // Each stage of the first frame, so a failure says where the pipeline stopped.
     await waitFor(() => expect(el.width, "scene canvas sized to the measured pane").toBe(SIZE));
