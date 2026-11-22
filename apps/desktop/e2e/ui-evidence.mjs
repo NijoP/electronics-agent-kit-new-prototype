@@ -108,7 +108,8 @@ async function waitRect(selector, text, timeout = 15000) {
 
 /**
  * What is at viewport point (vx, vy) when it is not the element itself (or inside it): a clipped,
- * scrolled-out or covered element would take the click somewhere else, so the step fails instead.
+ * scrolled-out or covered element would take the click somewhere else, so the step fails instead
+ * (except under another shape of the same SVG drawing).
  */
 const coveredBy = (selector, text, vx, vy) =>
   browser.execute(
@@ -120,6 +121,9 @@ const coveredBy = (selector, text, vx, vy) =>
       });
       const hit = document.elementFromPoint(x, y);
       if (!el || (hit && el.contains(hit))) return null;
+      // Inside a drawing, another shape of the same SVG over the target (a marker on a pin) is
+      // part of the canvas the click is meant for: the canvas handles it by position.
+      if (hit && el.ownerSVGElement && el.ownerSVGElement.contains(hit)) return null;
       return hit ? `${hit.tagName.toLowerCase()}${typeof hit.className === "string" && hit.className ? `.${hit.className.split(" ").join(".")}` : ""}` : "nothing (outside the window)";
     },
     selector,
