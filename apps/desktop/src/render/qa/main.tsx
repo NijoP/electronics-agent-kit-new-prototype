@@ -213,7 +213,14 @@ async function bench() {
   // One edit: move one track, rebuild the scene, redraw (a dirty rectangle, not a full redraw).
   r.render(editing);
   const te = performance.now();
-  const t = Object.values(snap.project.pcb.tracks)[0];
+  // A track inside the editing view, so the edit shows as dirty rectangles on screen.
+  const inView = (p: Point) => {
+    const x = p.x / 1e6;
+    const y = -p.y / 1e6;
+    return x > editing.x0 && x < editing.x0 + editing.width / editing.scale && y > editing.y0 && y < editing.y0 + editing.height / editing.scale;
+  };
+  const tracks = Object.values(snap.project.pcb.tracks);
+  const t = tracks.find((k) => inView(k.a) && inView(k.b)) ?? tracks[0];
   t.b = { x: t.b.x + 500_000, y: t.b.y };
   const edited = sceneOf(snap, "benchmark");
   const tb = performance.now();
