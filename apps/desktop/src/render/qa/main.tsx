@@ -15,7 +15,7 @@ import { layerColour, stackLayers } from "../../layers";
 import { PcbView } from "../../PcbView";
 import type { Command, Point, Snapshot } from "../../types";
 import { fit, visibleViewBox, type Size } from "../../viewport";
-import { Canvas2DRenderer, documentColour } from "../canvas2d";
+import { Canvas2DRenderer, documentColour, SETTLE_MS } from "../canvas2d";
 import { RENDERER_KEY } from "../flag";
 import { BENCH_FOOTPRINTS, BENCH_SEGMENTS, benchmarkBoard, REFERENCE_BOARDS } from "../fixtures";
 import { buildPcbScene } from "../pcbScene";
@@ -130,7 +130,23 @@ interface RunResult {
   meanRenderMs: number;
   maxRenderMs: number;
   fullLayersPerFrame: number;
+  /** Share of frames shown from the scaled cache while the zoom moved (redrawn once it settles). */
+  staleShare: number;
 }
+
+/** Pixels of two same-size canvases that differ by more than `CHANNEL_TOL` in some channel. */
+function mismatch(a: HTMLCanvasElement, b: HTMLCanvasElement): number {
+  const w = a.width;
+  const h = a.height;
+  const da = a.getContext("2d")!.getImageData(0, 0, w, h).data;
+  const db = b.getContext("2d")!.getImageData(0, 0, w, h).data;
+  let n = 0;
+  for (let i = 0; i < da.length; i += 4)
+    if (Math.max(Math.abs(da[i] - db[i]), Math.abs(da[i + 1] - db[i + 1]), Math.abs(da[i + 2] - db[i + 2]), Math.abs(da[i + 3] - db[i + 3])) > CHANNEL_TOL) n++;
+  return n / (w * h);
+}
+
+const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 /** The A4 benchmark: frame rates while panning and zooming the target-size board. */
 async function bench() {
@@ -154,6 +170,7 @@ async function bench() {
     const renderMs: number[] = [];
     const intervals: number[] = [];
     let full = 0;
+    let stale = 0;
     let i = 0;
     const start = await frame();
     let last = start;
@@ -161,6 +178,7 @@ async function bench() {
       const s = r.render(step(i++));
       renderMs.push(s.ms);
       full += s.fullLayers;
+      if (s.stale) stale++;
       const t = await frame();
       intervals.push(t - last);
       last = t;
@@ -175,6 +193,7 @@ async function bench() {
       meanRenderMs: renderMs.reduce((x, y) => x + y, 0) / renderMs.length,
       maxRenderMs: Math.max(...renderMs),
       fullLayersPerFrame: full / renderMs.length,
+      staleShare: stale / renderMs.length,
     };
   };
   // Same centre, new scale.
@@ -196,7 +215,43 @@ async function bench() {
   runs.push(await run("zoom, whole board in view", 3000, zoom(fitV)));
   runs.push(await run("pan, editing zoom 20 px/mm (2 px steps)", 3000, pan(editing, 2)));
   runs.push(await run("zoom, editing zoom around 20 px/mm", 3000, zoom(editing)));
-  runs.push(await run("pan, whole board, sub-pixel steps (no cache reuse)", 3000, pan(fitV, 2.5)));
+  runs.push(await run("pan, whole board, sub-pixel steps (2.5 px, snapped to whole pixels)", 3000, pan(fitV, 2.5)));
+
+  // Correctness of the fast paths: what the screen shows equals a fresh full render of that view.
+  const fresh = (v: ViewTransform) => {
+    const c = canvas(size);
+    const f = new Canvas2DRenderer(c.ctx);
+    f.setScene(scene);
+    f.render(v);
+    return c.el;
+  };
+  const checks: { name: string; ratio: number; detail: string }[] = [];
+  {
+    // A zoom step is first shown scaled, then redrawn once the zoom has been still for SETTLE_MS.
+    const z = at(fitV, fitV.scale * 1.2);
+    r.render(fitV);
+    const moving = r.render(z);
+    await sleep(SETTLE_MS + 30);
+    const settled = r.render(z);
+    checks.push({
+      name: "zoom settles to a sharp redraw",
+      ratio: moving.stale && !settled.stale && settled.fullLayers > 0 ? mismatch(view.el, fresh(z)) : 1,
+      detail: `moving frame stale: ${moving.stale}; settled frame stale: ${settled.stale}, full layers ${settled.fullLayers}`,
+    });
+  }
+  {
+    // 50 pans of 2.5 px (each snapped to whole pixels) end 125 px away: same pixels as a fresh render.
+    r.render(editing);
+    let s = r.render(editing);
+    let strips = 0;
+    let end = editing;
+    for (let i = 1; i <= 50; i++) {
+      end = { ...editing, x0: editing.x0 - (i * 2.5) / editing.scale };
+      s = r.render(end);
+      strips += s.dirtyRects;
+    }
+    checks.push({ name: "sub-pixel pans accumulate to the exact view", ratio: mismatch(view.el, fresh(end)), detail: `${strips} strips redrawn over 50 pans; last frame full layers ${s.fullLayers}` });
+  }
 
   // Picking cost over the full table.
   const b = scene.bounds!;
@@ -238,6 +293,7 @@ async function bench() {
     runs,
     pick: { calls: 2000, hits, meanUs: pickUs },
     edit: { rebuildSceneMs: tb - te, setSceneAndRenderMs: tr - tb, stats: after },
+    checks,
   };
 }
 

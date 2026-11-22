@@ -7,8 +7,9 @@
 //   3. screenshots of the PCB editor (Canvas2D and the SVG fallback, and the benchmark board);
 //   4. the 2,000-footprint / 20,000-segment pan/zoom benchmark.
 // Results go to $RENDER_QA_OUT (RENDER_QA.md, render-qa.json, snapshots/, diffs/, screens/).
-// Exit code 1 when a snapshot differs or has no baseline, or a picking check fails. The benchmark
-// is recorded, never a pass/fail gate: a frame rate under 30 fps is reported as a shortfall.
+// Exit code 1 when a snapshot differs or has no baseline, a picking check fails, or a benchmark
+// correctness check fails (the fast pan/zoom paths must end on the same pixels as a fresh render).
+// Frame rates are recorded, never a pass/fail gate: under 30 fps is reported as a shortfall.
 //
 // Env: RENDER_QA_OUT (default: new temp dir), CHROME (browser binary), RENDER_QA_UPDATE=1 (write
 // the current snapshots as the new baselines; review them before committing).
@@ -226,6 +227,10 @@ async function main() {
   await open("");
   log("benchmark running (about 20 s)");
   results.bench = await cdp.eval("window.__qa.bench()");
+  for (const c of results.bench?.checks ?? []) {
+    c.status = c.ratio <= MAX_RATIO ? "PASS" : "FAIL";
+    if (c.status !== "PASS") failed = true;
+  }
   cdp.close();
 }
 
@@ -256,12 +261,16 @@ function report() {
       "",
       `Scene build ${b.ms.buildScene.toFixed(0)} ms · setScene ${b.ms.setScene.toFixed(0)} ms · first full render ${b.ms.firstFullRender.toFixed(0)} ms (JS time) · pick ${b.pick.meanUs.toFixed(1)} µs/call · one-track edit: rebuild ${b.edit.rebuildSceneMs.toFixed(0)} ms, redraw ${b.edit.setSceneAndRenderMs.toFixed(0)} ms (${b.edit.stats.dirtyRects} dirty rects, ${b.edit.stats.fullLayers} full layers)`,
       "",
-      "| Scenario | fps | p95 frame ms | mean render ms | max render ms | full layer redraws/frame | ≥ 30 fps |",
-      "|---|---:|---:|---:|---:|---:|---|",
+      "| Scenario | fps | p95 frame ms | mean render ms | max render ms | full layer redraws/frame | scaled-cache frames | ≥ 30 fps |",
+      "|---|---:|---:|---:|---:|---:|---:|---|",
       ...b.runs.map(
         (r) =>
-          `| ${r.scenario} | ${r.fps.toFixed(1)} | ${r.p95FrameMs.toFixed(1)} | ${r.meanRenderMs.toFixed(1)} | ${r.maxRenderMs.toFixed(1)} | ${r.fullLayersPerFrame.toFixed(1)} | ${r.fps >= TARGET_FPS ? "yes" : `no (shortfall ${(TARGET_FPS - r.fps).toFixed(1)} fps)`} |`,
+          `| ${r.scenario} | ${r.fps.toFixed(1)} | ${r.p95FrameMs.toFixed(1)} | ${r.meanRenderMs.toFixed(1)} | ${r.maxRenderMs.toFixed(1)} | ${r.fullLayersPerFrame.toFixed(1)} | ${((r.staleShare ?? 0) * 100).toFixed(0)} % | ${r.fps >= TARGET_FPS ? "yes" : `no (shortfall ${(TARGET_FPS - r.fps).toFixed(1)} fps)`} |`,
       ),
+      "",
+      "| Benchmark check | Result | Pixels changed vs a fresh render | Detail |",
+      "|---|---|---:|---|",
+      ...(b.checks ?? []).map((c) => `| ${c.name} | ${c.status} | ${(c.ratio * 100).toFixed(3)} % (limit ${MAX_RATIO * 100} %) | ${c.detail} |`),
       "",
     );
   } else lines.push("## Benchmark", "", "Not run (an earlier step failed).", "");
