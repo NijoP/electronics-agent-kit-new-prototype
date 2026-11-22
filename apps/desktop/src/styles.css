@@ -156,8 +156,10 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .canvas text { font-size: 1.6px; text-anchor: middle; fill: var(--c-text); pointer-events: none; }
 /* Scene-renderer stack (Canvas2D PCB): underlay SVG, scene canvas, transparent interactive SVG. */
 .canvas-stack { position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; background: var(--bg-canvas); }
-.canvas-stack > * { position: absolute; inset: 0; width: 100%; height: 100%; }
-.canvas-stack > .canvas-under, .canvas-stack > .scene-canvas { pointer-events: none; }
+/* The interactive SVG stays in normal flow, so the stack sizes exactly as the bare SVG did;
+   the underlay and the scene canvas are laid behind it. */
+.canvas-stack > .canvas-top { position: relative; display: block; }
+.canvas-stack > .canvas-under, .canvas-stack > .scene-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .canvas.canvas-top { background: transparent; }
 .renderer-pick { font-size: var(--fs-xs); color: var(--fg-dim); display: inline-flex; gap: var(--s-half); align-items: center; }
 .sheet { fill: var(--c-sheet); stroke: var(--c-sheet-line); stroke-width: 0.3; }
