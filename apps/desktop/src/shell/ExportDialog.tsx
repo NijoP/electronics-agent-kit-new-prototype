@@ -18,7 +18,7 @@ export function ExportDialog({ result, revision, busy, blocked, onRun, onClose }
   const stale = result && result.manifest.revision !== revision;
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" role="dialog" aria-label="Export manufacturing files" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label="Export manufacturing files" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
         <div className="modal-head">
           <h2>Export manufacturing files</h2>
           <button type="button" onClick={onClose}>Close</button>

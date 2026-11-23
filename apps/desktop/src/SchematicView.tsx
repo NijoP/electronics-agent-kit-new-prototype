@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import { api } from "./api";
 import type { ContextItem } from "./actions/registry";
 import type { CanvasTarget } from "./actions/types";
+import { tip } from "./design/shortcuts";
 import { CanvasContextMenu } from "./shell/CanvasContextMenu";
 import { ArrayPanel } from "./tools/schematic/ArrayPanel";
 import { clipboard, setClipboard } from "./tools/schematic/clipboard";
@@ -958,7 +959,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
               <button type="button" title="Flip top/bottom (Y)" disabled={!sel.symbols.length} onClick={() => actions.flip("vertical")}>
                 Flip V
               </button>
-              <button type="button" title="Duplicate (Ctrl+D)" onClick={actions.duplicate}>
+              <button type="button" title={tip("Duplicate", "Mod+D")} onClick={actions.duplicate}>
                 Duplicate
               </button>
               <button type="button" title="Delete (Del)" onClick={actions.remove}>
