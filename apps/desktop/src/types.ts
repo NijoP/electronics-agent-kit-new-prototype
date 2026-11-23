@@ -363,12 +363,15 @@ export type Command =
   | { type: "UpsertNetClass"; class: NetClass }
   | { type: "SetNetCurrent"; net: string; amps: number | null }
   | { type: "SetNetVoltage"; net: string; volts: number | null }
+  | { type: "SetRuleConfig"; rule_id: string; config: RuleConfig | null }
+  | { type: "SetClearanceCell"; a: ObjectClass; b: ObjectClass; clearance: Nm | null }
+  | { type: "SetNetPairClearance"; net_a: string; net_b: string; clearance: Nm | null }
   | { type: "SetLayerCount"; count: number; board_thickness?: Nm | null }
   | { type: "SetStackup"; stackup: Stackup }
   | { type: "SetManufacturing"; config: ManufacturingConfig }
   | { type: "SetRoutingOptions"; options: RoutingOptions }
   | { type: "DeleteVia"; via_id: Id }
-  | { type: "Annotate" }
+  | { type: "Annotate"; order?: AnnotateOrder; scope?: AnnotateScope; symbols?: Id[]; reset?: boolean }
   | { type: "SyncSchematicToPcb" }
   | { type: "SyncSchematicToPcbSelected"; changes: SyncChange[] }
   | { type: "MoveTrack"; track_id: Id; by: Point }
@@ -447,19 +450,31 @@ export interface Finding {
   required?: Limit | null;
   suggested_fix?: string | null;
 }
-export type CheckState = "PASS" | "FAIL" | "WARNING" | "UNKNOWN" | "NOT_APPLICABLE" | "REQUIRES_HUMAN_APPROVAL";
+export type CheckState = "PASS" | "FAIL" | "WARNING" | "UNKNOWN" | "NOT_APPLICABLE" | "REQUIRES_HUMAN_APPROVAL" | "DISABLED";
 export interface RuleResult {
   rule_id: string;
   state: CheckState;
   reason: string;
+  /** Severity the project's rule configuration gives the rule's findings (ADR-0046). */
+  severity_override?: Severity;
+  /** The rule's state at its default severity, when the override changed it. */
+  default_state?: CheckState;
 }
 
+export interface RuleInfo {
+  id: string;
+  description: string;
+  parameters: string;
+  source: string;
+}
 export interface Report {
   check: string;
   project_id: Id;
   revision: number;
   input_sha256: string;
   tool: string;
+  /** The rules the check declares (absent in older test fixtures). */
+  rules?: RuleInfo[];
   findings: Finding[];
   outcome: "NO_ERRORS_IN_IMPLEMENTED_CHECKS" | "ERRORS";
   errors: number;
@@ -474,6 +489,11 @@ export type Check = "erc" | "drc" | "dfm";
 export interface CheckResult {
   report: Report;
   evidence_path: string | null;
+}
+/** B5 `export_findings`: the file written and the check run it wrote. */
+export interface FindingsExport {
+  path: string;
+  result: CheckResult;
 }
 
 /** Read-only status read from the project folder (src-tauri `recent_projects`); absent when unreadable. */
@@ -1187,6 +1207,29 @@ export interface Constraints {
   net_voltages_v?: Record<string, number>;
   temp_rise_c: number;
   max_component_height?: Nm | null;
+  /** Per-rule enable and severity override (schema v7, ADR-0046). */
+  rules?: Record<string, RuleConfig>;
+  /** Clearance matrix cells (schema v7, Phase 1 C5). */
+  clearance_matrix?: ClearanceCell[];
+  /** Net-to-net clearances (schema v7, Phase 1 C5). */
+  net_pair_rules?: NetPairRule[];
+}
+
+export type RuleSeverity = "error" | "warning" | "info";
+export interface RuleConfig {
+  enabled: boolean;
+  severity?: RuleSeverity | null;
+}
+export type ObjectClass = "track" | "smd_pad" | "th_pad" | "via" | "zone" | "hole" | "outline" | "silk";
+export interface ClearanceCell {
+  a: ObjectClass;
+  b: ObjectClass;
+  clearance: Nm;
+}
+export interface NetPairRule {
+  net_a: string;
+  net_b: string;
+  clearance: Nm;
 }
 
 /** A project open in this window (the engine keeps several; one is active). */
@@ -1477,3 +1520,8 @@ export interface LibraryCatalogView {
   libraries: LibraryCatalogRow[];
   problems: string[];
 }
+
+/** Annotate numbering order within a sheet (ADR-0046): across = by Y then X, down = by X then Y. */
+export type AnnotateOrder = "across" | "down";
+/** Which symbols Annotate numbers or resets (ADR-0046). */
+export type AnnotateScope = "unannotated" | "all" | "selection";

@@ -242,5 +242,33 @@ pub fn check(p: &Project) -> Vec<String> {
         );
     }
     e.extend(p.pcb.board.stackup.validate());
+    let c = &p.constraints;
+    for cell in &c.clearance_matrix {
+        if cell.clearance <= 0 || cell.a > cell.b {
+            e.push(format!(
+                "clearance matrix cell {:?}/{:?} must have a <= b and a positive clearance",
+                cell.a, cell.b
+            ));
+        }
+    }
+    for (i, cell) in c.clearance_matrix.iter().enumerate() {
+        if c.clearance_matrix[..i]
+            .iter()
+            .any(|o| o.a == cell.a && o.b == cell.b)
+        {
+            e.push(format!(
+                "clearance matrix cell {:?}/{:?} appears twice",
+                cell.a, cell.b
+            ));
+        }
+    }
+    for r in &c.net_pair_rules {
+        if r.clearance <= 0 || r.net_a >= r.net_b {
+            e.push(format!(
+                "net pair rule {}/{} must name two different nets in order with a positive clearance",
+                r.net_a, r.net_b
+            ));
+        }
+    }
     e
 }

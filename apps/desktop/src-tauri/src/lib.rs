@@ -1033,6 +1033,36 @@ pub fn export_documents(
     export_outputs(s, "documents", &request)
 }
 
+/// Result of [`export_findings`]: the file written and the check it wrote, so the Findings
+/// panel shows exactly the report that was exported.
+#[derive(Debug, Clone, Serialize)]
+pub struct FindingsExport {
+    pub path: String,
+    pub result: CheckResult,
+}
+
+/// Phase 1 B5: run `check` on the current revision (saving its evidence, as a check run does) and
+/// write that report as CSV or JSON into `<project>/output/rev-<N>/findings`. The report is the
+/// engine's, recomputed here, never the UI's copy.
+pub fn export_findings(
+    s: &Session,
+    check: Check,
+    format: eak_manufacturing::findings_export::FindingsFormat,
+) -> Result<FindingsExport, String> {
+    let (key, _) = s.shared_project()?;
+    let dir = key.dir.ok_or("export needs a saved project folder")?;
+    let result = run_check(s, check)?;
+    let out = dir
+        .join("output")
+        .join(format!("rev-{}", result.report.revision))
+        .join("findings");
+    let path = eak_manufacturing::findings_export::export_findings(&result.report, &out, format)?;
+    Ok(FindingsExport {
+        path: path.display().to_string(),
+        result,
+    })
+}
+
 fn export_outputs(
     s: &Session,
     folder: &str,
@@ -1267,7 +1297,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 85] = [
+pub const IPC_COMMANDS: [&str; 86] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -1309,6 +1339,7 @@ pub const IPC_COMMANDS: [&str; 85] = [
     "bom_table",
     "export_bom",
     "export_documents",
+    "export_findings",
     "release_check",
     "run_release_checks",
     "create_project",
@@ -1620,6 +1651,18 @@ pub mod cmd {
     }
 
     #[tauri::command(rename_all = "snake_case")]
+    pub async fn export_findings(
+        app: AppHandle,
+        check: Check,
+        format: eak_manufacturing::findings_export::FindingsFormat,
+    ) -> Result<FindingsExport, String> {
+        blocking(app, Priority::P2, move |s| {
+            super::export_findings(s, check, format)
+        })
+        .await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
     pub async fn release_check(app: AppHandle) -> Result<ReleaseCheck, String> {
         blocking(app, Priority::P2, super::release_check).await
     }
@@ -1767,6 +1810,7 @@ pub fn run() {
             cmd::bom_table,
             cmd::export_bom,
             cmd::export_documents,
+            cmd::export_findings,
             cmd::release_check,
             cmd::run_release_checks,
             ai::cmd::ai_propose,

@@ -8,6 +8,7 @@ import type {
   RouteStepReport,
   RouteStepRequest,
   Check,
+  FindingsExport,
   CheckResult,
   Command,
   CommandError,
@@ -122,6 +123,7 @@ export const IPC_COMMANDS = [
   "bom_table",
   "export_bom",
   "export_documents",
+  "export_findings",
   "release_check",
   "run_release_checks",
   "connectivity",
@@ -271,6 +273,8 @@ export const api = {
   bomTable: (config: BomConfig) => call<BomTable>("bom_table", { config }),
   exportBom: (config: BomConfig, format: BomFormat) => call<ExportResult>("export_bom", { bom: { config, format } }),
   exportDocuments: (request: OutputRequest) => call<ExportResult>("export_documents", { request }),
+  /** B5: re-run `check` on the current revision and write its report as CSV or JSON into `output/rev-<N>/findings`. */
+  exportFindings: (check: Check, format: "csv" | "json") => call<FindingsExport>("export_findings", { check, format }),
   // E7 release check: read-only over the saved reports and the engineering gates; the run saves ERC/DRC/MECH/DFM evidence.
   releaseCheck: () => call<ReleaseCheck>("release_check"),
   runReleaseChecks: () => call<ReleaseCheck>("run_release_checks"),

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 6;
+pub const SCHEMA_VERSION: u32 = 7;
 
 pub type Id = String;
 
@@ -1019,6 +1019,122 @@ pub struct Constraints {
     /// Maximum component height above board (enclosure constraint), if any.
     #[serde(default)]
     pub max_component_height: Option<Nm>,
+    /// Per-rule enable flag and severity override, by rule id (schema v7, ADR-0046 / AD-8).
+    /// A rule without an entry runs with its default severity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub rules: BTreeMap<String, RuleConfig>,
+    /// Object-class x object-class minimum clearances (schema v7, Phase 1 C5). One entry per
+    /// unordered pair; DRC applies the larger of a cell and the other clearance rules.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clearance_matrix: Vec<ClearanceCell>,
+    /// Minimum clearance between two named nets (schema v7, Phase 1 C5).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub net_pair_rules: Vec<NetPairRule>,
+}
+
+/// Report severity a rule override may set (EasyEDA's ladder maps onto it: Fatal and Error
+/// -> `Error`, Note -> `Info`; Ignore is `enabled: false`). Mirrors `eak_validation::Severity`,
+/// which eak-core cannot depend on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleSeverity {
+    Info,
+    Warning,
+    Error,
+}
+
+/// Rule families and how many rules each declares (`ERC-001` .. `ERC-021`, ...). Kept equal to
+/// the checks' rule tables by an eak-validation test, so the engine can refuse a configuration for
+/// a rule that does not exist.
+pub const RULE_FAMILIES: [(&str, u32); 5] = [
+    ("ERC", 21),
+    ("DRC", 23),
+    ("DFM", 10),
+    ("MECH", 3),
+    ("SRC", 12),
+];
+
+/// Whether some check declares `id` (see [`RULE_FAMILIES`]).
+pub fn known_rule_id(id: &str) -> bool {
+    let Some((family, n)) = id.split_once('-') else {
+        return false;
+    };
+    let Some(&(_, count)) = RULE_FAMILIES.iter().find(|(f, _)| *f == family) else {
+        return false;
+    };
+    n.len() == 3
+        && n.bytes().all(|b| b.is_ascii_digit())
+        && n.parse::<u32>().is_ok_and(|n| (1..=count).contains(&n))
+}
+
+fn enabled_default() -> bool {
+    true
+}
+
+/// One rule's project configuration. A disabled rule is reported as disabled, never as passing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuleConfig {
+    #[serde(default = "enabled_default")]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub severity: Option<RuleSeverity>,
+}
+
+/// Object classes of the clearance matrix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ObjectClass {
+    Track,
+    SmdPad,
+    ThPad,
+    Via,
+    Zone,
+    Hole,
+    Outline,
+    Silk,
+}
+
+impl ObjectClass {
+    pub const ALL: [ObjectClass; 8] = [
+        ObjectClass::Track,
+        ObjectClass::SmdPad,
+        ObjectClass::ThPad,
+        ObjectClass::Via,
+        ObjectClass::Zone,
+        ObjectClass::Hole,
+        ObjectClass::Outline,
+        ObjectClass::Silk,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ObjectClass::Track => "track",
+            ObjectClass::SmdPad => "SMD pad",
+            ObjectClass::ThPad => "TH pad",
+            ObjectClass::Via => "via",
+            ObjectClass::Zone => "zone",
+            ObjectClass::Hole => "hole",
+            ObjectClass::Outline => "board outline",
+            ObjectClass::Silk => "silkscreen",
+        }
+    }
+}
+
+/// One clearance-matrix cell: the minimum distance between objects of classes `a` and `b`.
+/// Stored with `a <= b`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClearanceCell {
+    pub a: ObjectClass,
+    pub b: ObjectClass,
+    pub clearance: Nm,
+}
+
+/// Minimum clearance between copper of two named nets. Stored with `net_a < net_b`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NetPairRule {
+    pub net_a: String,
+    pub net_b: String,
+    pub clearance: Nm,
 }
 
 impl Default for Constraints {
@@ -1043,11 +1159,31 @@ impl Default for Constraints {
             net_voltages_v: BTreeMap::new(),
             temp_rise_c: 10.0,
             max_component_height: None,
+            rules: BTreeMap::new(),
+            clearance_matrix: vec![],
+            net_pair_rules: vec![],
         }
     }
 }
 
 impl Constraints {
+    /// The configured cell for an unordered class pair, if any.
+    pub fn matrix_cell(&self, a: ObjectClass, b: ObjectClass) -> Option<Nm> {
+        let (a, b) = if a <= b { (a, b) } else { (b, a) };
+        self.clearance_matrix
+            .iter()
+            .find(|c| c.a == a && c.b == b)
+            .map(|c| c.clearance)
+    }
+
+    /// The configured clearance between two nets, if any (order does not matter).
+    pub fn net_pair_clearance(&self, x: &str, y: &str) -> Option<Nm> {
+        self.net_pair_rules
+            .iter()
+            .find(|r| (r.net_a == x && r.net_b == y) || (r.net_a == y && r.net_b == x))
+            .map(|r| r.clearance)
+    }
+
     pub fn class_for(&self, net: &str) -> &NetClass {
         self.net_classes
             .iter()

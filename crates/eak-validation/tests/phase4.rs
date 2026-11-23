@@ -87,6 +87,46 @@ fn erc_pin_conflict_matrix() {
     assert!(erc::pin_conflict(PinType::Passive, PinType::PowerOut).is_none());
 }
 
+/// Phase 1 B5 (ADR-0046): every EasyEDA Pro matrix cell that maps onto EAK pin types, with its
+/// EasyEDA severity; every other pairing is compatible ("ignore") or reported by another rule.
+#[test]
+fn erc_pin_conflict_matrix_follows_easyeda() {
+    use PinType::*;
+    let cells = [
+        (Output, OpenCollector, Severity::Error),
+        (PowerOut, OpenCollector, Severity::Error),
+        (PowerIn, OpenCollector, Severity::Error),
+        (Output, PowerIn, Severity::Error),
+        (Bidirectional, Output, Severity::Warning),
+        (Bidirectional, PowerIn, Severity::Warning),
+        (Bidirectional, PowerOut, Severity::Warning),
+    ];
+    let all = [
+        Input,
+        Output,
+        Bidirectional,
+        Passive,
+        PowerIn,
+        PowerOut,
+        OpenCollector,
+        NoConnect,
+    ];
+    for a in all {
+        for b in all {
+            let want = cells
+                .iter()
+                .find(|(x, y, _)| (*x == a && *y == b) || (*x == b && *y == a))
+                .map(|c| c.2);
+            assert_eq!(erc::pin_conflict(a, b).map(|c| c.0), want, "{a:?}-{b:?}");
+        }
+    }
+    let r = erc::run(&reference());
+    assert!(r
+        .not_implemented
+        .iter()
+        .any(|s| s.contains("open emitter") && s.contains("Undefined")));
+}
+
 #[test]
 fn erc_undriven_input_net() {
     let p = reference();

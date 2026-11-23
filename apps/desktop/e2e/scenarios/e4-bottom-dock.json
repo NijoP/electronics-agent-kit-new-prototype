@@ -1,0 +1,48 @@
+{
+  "name": "E4 bottom dock: Property List, Find Results, Diagnostics",
+  "description": "Phase 1 slice E4. A fixture project gets two 1k resistors and a VIN net label through the engine's execute_command IPC (SETUP). In the real window: the bottom dock's Property List picks both Value cells with the column header and sets 4k7 with one Enter, which the status bar reports as one Batch command; both cells show 4k7, and ONE Edit > Undo puts both back to 1k (one revision, one undo step). Ctrl+F (B3 Find and replace) for R, then List in Find Results lists the two designators in the Find Results tab; a click on R2 selects that one part on the sheet. Diagnostics lists tasks, the performance profile, model connectivity and recovery: the fresh project's clean open is OK, and with no provider ever tested no model row is OK.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "E4 Bottom Dock Fixture", "folder": "e4-bottom-dock-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "E4 Bottom Dock Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]" },
+    {
+      "id": "setup",
+      "do": "fixture-commands",
+      "title": "Two 1k resistors and a VIN net label (engine commands)",
+      "commands": [
+        { "type": "PlaceSymbol", "sheet_id": null, "component_id": "R_0603", "position": { "x": 100000000, "y": 120000000 }, "rotation": "R0", "refdes": null, "value": "1k" },
+        { "type": "PlaceSymbol", "sheet_id": null, "component_id": "R_0603", "position": { "x": 180000000, "y": 120000000 }, "rotation": "R0", "refdes": null, "value": "1k" },
+        { "type": "AddNetLabel", "sheet_id": null, "name": "VIN", "position": { "x": 140000000, "y": 70000000 }, "kind": "net" }
+      ],
+      "expect": "section[aria-label=\"Schematic view\"] g[data-label-id] text",
+      "expectText": "VIN"
+    },
+    { "id": "e4-two", "do": "count", "title": "Two parts on the sheet", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 2, "shot": false },
+    { "id": "e4-pl-tab", "do": "click", "title": "Property List: the bottom dock tab shows the grid of components", "selector": "section[aria-label=\"Bottom panel\"] [role=\"tab\"]", "text": "Property List", "expect": "section[aria-label=\"Property list\"] table[aria-label=\"Property grid\"] button[aria-label=\"R2 Value\"]" },
+    { "id": "e4-pl-r1", "do": "wait", "title": "Property List: R1's Value cell shows 1k", "selector": "section[aria-label=\"Property list\"] button[aria-label=\"R1 Value\"]", "text": "1k", "shot": false },
+    { "id": "e4-pl-column", "do": "click", "title": "Property List: the Value header picks both Value cells", "selector": "section[aria-label=\"Property list\"] button[aria-label=\"Pick every Value cell\"]", "expect": "section[aria-label=\"Property list\"] [aria-label=\"Batch selection\"]", "expectText": "2 Value cells picked" },
+    { "id": "e4-pl-field", "do": "click", "title": "Property List: focus the New value field (it holds the common value 1k)", "selector": "section[aria-label=\"Property list\"] input[aria-label=\"New value\"]", "shot": false },
+    { "id": "e4-pl-all", "do": "key", "title": "Property List: select the field's text", "keys": "ctrl+a", "shot": false },
+    { "id": "e4-pl-type", "do": "type", "title": "Property List: type 4k7", "value": "4k7", "shot": false },
+    { "id": "e4-pl-apply", "do": "key", "title": "Property List: Enter sends the two cells as ONE Batch command", "keys": "Return", "expect": "footer.status span.msg", "expectText": "Batch → revision" },
+    { "id": "e4-pl-r1-new", "do": "wait", "title": "Property List: R1 now 4k7", "selector": "section[aria-label=\"Property list\"] button[aria-label=\"R1 Value\"]", "text": "4k7", "shot": false },
+    { "id": "e4-pl-r2-new", "do": "wait", "title": "Property List: R2 now 4k7", "selector": "section[aria-label=\"Property list\"] button[aria-label=\"R2 Value\"]", "text": "4k7" },
+    { "id": "e4-pl-undo", "do": "menu", "title": "Property List: ONE Edit > Undo", "menu": "Edit", "item": "Undo", "shot": false },
+    { "id": "e4-pl-r1-undone", "do": "wait", "title": "Property List: R1 back to 1k after one Undo", "selector": "section[aria-label=\"Property list\"] button[aria-label=\"R1 Value\"]", "text": "1k", "shot": false },
+    { "id": "e4-pl-r2-undone", "do": "wait", "title": "Property List: R2 back to 1k after the same Undo (one revision, one undo step)", "selector": "section[aria-label=\"Property list\"] button[aria-label=\"R2 Value\"]", "text": "1k" },
+    { "id": "e4-find-focus", "do": "click", "title": "Find Results: click the empty sheet (focuses the canvas)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 0, "dy": -200, "shot": false },
+    { "id": "e4-find-open", "do": "key", "title": "Find Results: Ctrl+F opens the B3 Find and replace bar", "keys": "ctrl+f", "expect": "[role=\"search\"][aria-label=\"Find and replace\"] input[aria-label=\"Find\"]", "shot": false },
+    { "id": "e4-find-type", "do": "type", "title": "Find Results: find R", "selector": "[role=\"search\"][aria-label=\"Find and replace\"] input[aria-label=\"Find\"]", "value": "R", "shot": false },
+    { "id": "e4-find-list", "do": "click", "title": "Find Results: List in Find Results shows the tab with the two designators", "selector": "[role=\"search\"][aria-label=\"Find and replace\"] button", "text": "List in Find Results", "expect": "section[aria-label=\"Find results\"] [role=\"status\"]", "expectText": "2 matches" },
+    { "id": "e4-find-none-sel", "do": "count", "title": "Find Results: nothing selected on the sheet yet", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id].selected", "equals": 0, "shot": false },
+    { "id": "e4-find-pick", "do": "click", "title": "Find Results: a click on R2 selects it on its sheet", "selector": "section[aria-label=\"Find results\"] tr[data-hit-id] button", "text": "R2", "expect": "footer.status span.msg", "expectText": "Find: R2 selected" },
+    { "id": "e4-find-one-sel", "do": "count", "title": "Find Results: exactly one part selected", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id].selected", "equals": 1 },
+    { "id": "e4-diag-tab", "do": "click", "title": "Diagnostics: the bottom dock tab", "selector": "section[aria-label=\"Bottom panel\"] [role=\"tab\"]", "text": "Diagnostics", "expect": "section[aria-label=\"Diagnostics\"] table[aria-label=\"Recovery\"]" },
+    { "id": "e4-diag-tasks", "do": "wait", "title": "Diagnostics: the Tasks section has rows", "selector": "section[aria-label=\"Diagnostics\"] table[aria-label=\"Tasks\"] tbody tr", "shot": false },
+    { "id": "e4-diag-perf", "do": "wait", "title": "Diagnostics: the resolved performance profile (mode row)", "selector": "section[aria-label=\"Diagnostics\"] table[aria-label=\"Performance profile\"] tr[data-row=\"perf-mode\"]", "shot": false },
+    { "id": "e4-diag-model", "do": "wait", "title": "Diagnostics: the Model connectivity section has rows", "selector": "section[aria-label=\"Diagnostics\"] table[aria-label=\"Model connectivity\"] tbody tr", "shot": false },
+    { "id": "e4-diag-model-not-ok", "do": "absent", "title": "Diagnostics: no provider was ever tested here, so no model row says OK", "selector": "section[aria-label=\"Diagnostics\"] table[aria-label=\"Model connectivity\"] [data-state=\"ok\"]", "shot": false },
+    { "id": "e4-diag-recovery", "do": "wait", "title": "Diagnostics: the fresh project opened clean (Recovery OK)", "selector": "section[aria-label=\"Diagnostics\"] table[aria-label=\"Recovery\"] tr[data-row=\"rec-clean\"] [data-state=\"ok\"]", "text": "OK" }
+  ]
+}

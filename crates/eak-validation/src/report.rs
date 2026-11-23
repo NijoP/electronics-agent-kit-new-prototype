@@ -181,6 +181,24 @@ impl Report {
         not_implemented: Vec<String>,
         limitations: Vec<String>,
     ) -> Report {
+        // The project's rule configuration (ADR-0046, AD-8): a disabled rule's findings are not
+        // reported and an overridden rule's findings carry the configured severity. The state at
+        // default severities is kept for overridden rules, for the gates.
+        let cfg = &p.constraints.rules;
+        let defaults: BTreeMap<String, CheckState> = rules
+            .iter()
+            .filter(|r| {
+                cfg.get(&r.id)
+                    .is_some_and(|c| c.enabled && c.severity.is_some())
+            })
+            .map(|r| (r.id.clone(), rule_state(&findings, &r.id)))
+            .collect();
+        findings.retain(|f| cfg.get(&f.rule_id).is_none_or(|c| c.enabled));
+        for f in &mut findings {
+            if let Some(s) = cfg.get(&f.rule_id).and_then(|c| c.severity) {
+                f.severity = Severity::from(s);
+            }
+        }
         findings.sort_by(|a, b| {
             b.severity
                 .cmp(&a.severity)
@@ -208,18 +226,23 @@ impl Report {
         let rule_results: Vec<RuleResult> = rules
             .iter()
             .map(|r| {
-                let mine = findings.iter().filter(|f| f.rule_id == r.id);
-                let state = mine.fold(CheckState::Pass, |s, f| {
-                    s.worst(match f.severity {
-                        Severity::Error => CheckState::Fail,
-                        Severity::Warning => CheckState::Warning,
-                        Severity::Info => CheckState::Pass,
-                    })
-                });
+                let c = cfg.get(&r.id);
+                if c.is_some_and(|c| !c.enabled) {
+                    return RuleResult {
+                        rule_id: r.id.clone(),
+                        state: CheckState::Disabled,
+                        reason: DISABLED_REASON.into(),
+                        severity_override: None,
+                        default_state: None,
+                    };
+                }
+                let state = rule_state(&findings, &r.id);
                 RuleResult {
                     rule_id: r.id.clone(),
                     state,
                     reason: String::new(),
+                    severity_override: c.and_then(|c| c.severity).map(Severity::from),
+                    default_state: defaults.get(&r.id).copied().filter(|d| *d != state),
                 }
             })
             .collect();
@@ -251,7 +274,11 @@ impl Report {
         self.overall = self
             .rule_results
             .iter()
-            .fold(CheckState::NotApplicable, |s, r| s.worst(r.state));
+            // A severity override changes the findings, never the verdict: the overall state
+            // is at least the rule's state at its default severities.
+            .fold(CheckState::NotApplicable, |s, r| {
+                s.worst(r.state.worst(r.default_state.unwrap_or(r.state)))
+            });
         // A report that ran no rule at all certifies nothing.
         if self.rule_results.is_empty() {
             self.overall = CheckState::Unknown;
@@ -261,7 +288,11 @@ impl Report {
     /// Records that `rule_id` could not be fully evaluated. The worse of the existing state
     /// and `state` is kept, so a deterministic `FAIL` is never softened to `UNKNOWN`.
     pub(crate) fn degrade(mut self, rule_id: &str, state: CheckState, reason: &str) -> Report {
-        if let Some(r) = self.rule_results.iter_mut().find(|r| r.rule_id == rule_id) {
+        if let Some(r) = self
+            .rule_results
+            .iter_mut()
+            .find(|r| r.rule_id == rule_id && r.state != CheckState::Disabled)
+        {
             if r.state.worst(state) != r.state {
                 r.state = state;
                 r.reason = reason.into();
@@ -307,7 +338,12 @@ impl Report {
     pub fn risks(&self) -> Vec<RiskRecord> {
         self.rule_results
             .iter()
-            .filter(|r| matches!(r.state, CheckState::Fail | CheckState::Unknown))
+            .filter(|r| {
+                matches!(
+                    r.state,
+                    CheckState::Fail | CheckState::Unknown | CheckState::Disabled
+                )
+            })
             .map(|r| {
                 let failed = r.state == CheckState::Fail;
                 let ids: Vec<String> = self
@@ -355,6 +391,34 @@ impl Report {
             })
             .collect()
     }
+}
+
+/// Why a disabled rule has no result.
+pub const DISABLED_REASON: &str =
+    "disabled in the project's rule configuration: not evaluated, not a pass (ADR-0046)";
+
+impl From<eak_core::RuleSeverity> for Severity {
+    fn from(s: eak_core::RuleSeverity) -> Severity {
+        match s {
+            eak_core::RuleSeverity::Error => Severity::Error,
+            eak_core::RuleSeverity::Warning => Severity::Warning,
+            eak_core::RuleSeverity::Info => Severity::Info,
+        }
+    }
+}
+
+/// A rule's state from its findings: the worst finding decides (`Info` findings pass).
+fn rule_state(findings: &[Finding], rule_id: &str) -> CheckState {
+    findings
+        .iter()
+        .filter(|f| f.rule_id == rule_id)
+        .fold(CheckState::Pass, |s, f| {
+            s.worst(match f.severity {
+                Severity::Error => CheckState::Fail,
+                Severity::Warning => CheckState::Warning,
+                Severity::Info => CheckState::Pass,
+            })
+        })
 }
 
 pub(crate) fn rule(

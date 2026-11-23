@@ -18,5 +18,7 @@ pub mod status;
 pub mod store;
 pub mod tasks;
 
-pub use command::{sync_changes, Command, CommandError, OperationClass, SyncChange};
+pub use command::{
+    sync_changes, AnnotateOrder, AnnotateScope, Command, CommandError, OperationClass, SyncChange,
+};
 pub use engine::{Actor, ActorKind, Approval, CommandRequest, CommandResponse, Engine, Event};

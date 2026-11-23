@@ -200,11 +200,60 @@ fn fabricator_gate(p: &Project, fab: Option<&FabProfile>) -> Gate {
     g
 }
 
+/// A gate any of whose rules the project disables is `NOT_RUN`, never `PASS` (ADR-0046, AD-8);
+/// a gate with an overridden rule says that it used the default severity.
+fn apply_rule_config(p: &Project, gates: &mut [Gate]) {
+    let cfg = &p.constraints.rules;
+    for g in gates {
+        let ids: Vec<String> = g
+            .evidence
+            .iter()
+            .flat_map(|e| e.rule_ids.iter().cloned())
+            .collect();
+        let disabled: Vec<&str> = ids
+            .iter()
+            .filter(|id| cfg.get(*id).is_some_and(|c| !c.enabled))
+            .map(String::as_str)
+            .collect();
+        let overridden: Vec<&str> = ids
+            .iter()
+            .filter(|id| {
+                cfg.get(*id)
+                    .is_some_and(|c| c.enabled && c.severity.is_some())
+            })
+            .map(String::as_str)
+            .collect();
+        if !disabled.is_empty() {
+            g.state = GateState::NotRun;
+            g.reasons.insert(
+                0,
+                format!(
+                    "{} disabled in the project's rule configuration: gate not run",
+                    disabled.join(", ")
+                ),
+            );
+        }
+        if !overridden.is_empty() {
+            g.reasons.push(format!(
+                "severity of {} overridden in the project; this gate used the default severity",
+                overridden.join(", ")
+            ));
+        }
+    }
+}
+
 /// Evaluate every gate for the current revision. `fab` is the fabricator capability profile
 /// the board is meant for; without one the capability gate is `UNKNOWN`.
 pub fn evaluate(p: &Project, fab: Option<&FabProfile>) -> GateReport {
     use Severity::{Error, Warning};
-    let drc = drc::run(p);
+    // Gates run every rule at its default severity (ADR-0046): a severity override in the
+    // project changes how findings are shown, never whether a gate passes.
+    let at_defaults = {
+        let mut d = p.clone();
+        d.constraints.rules.clear();
+        d
+    };
+    let drc = drc::run(&at_defaults);
     let has_copper = !copper::items(p).is_empty();
     let has_footprints = !p.pcb.footprints.is_empty();
     let mut gates = vec![];
@@ -310,7 +359,7 @@ pub fn evaluate(p: &Project, fab: Option<&FabProfile>) -> GateReport {
         true,
     ));
 
-    gates.push(fabricator_gate(p, fab));
+    gates.push(fabricator_gate(&at_defaults, fab));
 
     // Electrical constraints: current capacity where declared; power nets without a declared
     // current or voltage are unknown, never passed.
@@ -419,6 +468,7 @@ pub fn evaluate(p: &Project, fab: Option<&FabProfile>) -> GateReport {
     g.reasons
         .extend(rp.limitations.iter().map(|l| format!("limitation: {l}")));
     gates.push(g);
+    apply_rule_config(p, &mut gates);
 
     let blocking: Vec<String> = gates
         .iter()

@@ -15,6 +15,7 @@ pub mod distributor_api;
 pub mod drill;
 pub mod fabpack;
 pub mod fabricator;
+pub mod findings_export;
 pub mod gerber;
 pub mod library_link;
 pub mod matching;
@@ -188,6 +189,23 @@ pub fn release_gates_with_report(
                 }
                 if r.outcome == Outcome::Errors {
                     blocking.push(format!("{need} reports {} error(s)", r.errors));
+                }
+                // ADR-0046 (AD-8): a disabled rule is not a pass, and a rule whose severity
+                // override hides a failure at its default severity does not release either.
+                for rr in &r.rule_results {
+                    if rr.state == eak_validation::CheckState::Disabled {
+                        blocking.push(format!(
+                            "{need}: {} is disabled in the project's rule configuration",
+                            rr.rule_id
+                        ));
+                    } else if rr.default_state == Some(eak_validation::CheckState::Fail) {
+                        blocking.push(format!(
+                            "{need}: {} fails at its default severity (overridden to {:?})",
+                            rr.rule_id,
+                            rr.severity_override
+                                .unwrap_or(eak_validation::Severity::Error)
+                        ));
+                    }
                 }
                 gates.push(GateResult {
                     check: need.into(),
