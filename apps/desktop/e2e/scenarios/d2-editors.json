@@ -27,6 +27,7 @@
     },
     { "id": "d2-sym-canvas", "do": "wait", "title": "D2: the symbol is drawn by the Canvas2D renderer (B1 rectangle and pins)", "selector": "section[aria-label=\"Symbol editor D2_SENSOR\"] canvas[data-draw=\"drawn\"]" },
     { "id": "d2-pin-table", "do": "count", "title": "D2: the pin table lists the two starting pins", "selector": "section[aria-label=\"Symbol editor D2_SENSOR\"] table[aria-label=\"Pins\"] tbody tr", "equals": 2, "shot": false },
+    { "id": "d2-library-2", "do": "click", "title": "D2: Library tab again (a part editor has its own dock layout)", "selector": "section[aria-label=\"Bottom panel\"] [role=\"tab\"]", "text": "Library", "expect": "input[aria-label=\"Search library\"]", "shot": false },
     { "id": "d2-search", "do": "type", "title": "D2: the new part is in the library search", "selector": "input[aria-label=\"Search library\"]", "value": "D2_SENSOR", "expect": "ul[aria-label=\"Library parts\"] button", "expectText": "D2 sensor", "shot": false },
     { "id": "d2-select", "do": "click", "title": "D2: select it", "selector": "ul[aria-label=\"Library parts\"] button", "text": "D2 sensor", "expect": "section.lib-detail button", "expectText": "Edit footprint", "shot": false },
     { "id": "d2-edit-fp", "do": "click", "title": "D2: Edit footprint opens the footprint editor document", "selector": "section.lib-detail button", "text": "Edit footprint", "expect": "section[aria-label=\"Footprint editor D2_SENSOR\"] table[aria-label=\"Pads\"]" },

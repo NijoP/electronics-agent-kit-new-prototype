@@ -84,6 +84,17 @@ export function editedSlice(kind: PartEditorKind, d: ComponentDef): unknown {
     : { footprint: n.footprint, pin_map: n.pin_map };
 }
 export const sameSlice = (kind: PartEditorKind, a: ComponentDef, b: ComponentDef) => JSON.stringify(editedSlice(kind, a)) === JSON.stringify(editedSlice(kind, b));
+/**
+ * The engine's definition with the draft's own slice kept: the fields the other editor owns (the
+ * footprint for the symbol editor, the symbol for the footprint editor) follow the engine, so the
+ * draft's checks and new-pin mapping see the current pads and pins.
+ */
+export function rebase(kind: PartEditorKind, engine: ComponentDef, draft: ComponentDef): ComponentDef {
+  const e = normDef(engine);
+  return kind === "symbol"
+    ? { ...e, name: draft.name, category: draft.category, refdes_prefix: draft.refdes_prefix, default_value: draft.default_value, symbol: draft.symbol, pin_map: draft.pin_map }
+    : { ...e, footprint: draft.footprint, pin_map: draft.pin_map };
+}
 
 // ---- Edits (all return a new draft).
 

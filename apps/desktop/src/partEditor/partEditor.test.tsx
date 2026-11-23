@@ -99,12 +99,12 @@ function editor(kind: "symbol" | "footprint", def = part(), placedOnPcb = 0) {
   const r = render(<PartEditor kind={kind} def={def} disabled={null} placedOnPcb={placedOnPcb} execute={execute} onDirty={onDirty} />);
   return { execute, onDirty, ...r };
 }
-const save = () => screen.getByRole("button", { name: "Save" });
+const save = () => screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
 
 describe("symbol editor", () => {
   it("edits the pin table and saves once with UpsertComponentDefinition", () => {
     const { execute, onDirty } = editor("symbol");
-    expect(save()).toBeDisabled();
+    expect(save().disabled).toBe(true);
     const name = screen.getByLabelText("Pin 1 name");
     fireEvent.change(name, { target: { value: "IN" } });
     fireEvent.blur(name);
@@ -126,12 +126,12 @@ describe("symbol editor", () => {
     editor("symbol");
     fireEvent.click(screen.getByRole("button", { name: "Add pin" }));
     expect(screen.getByRole("group", { name: "Problems" }).textContent).toContain("Pin 3 is not mapped to a pad.");
-    expect(save()).toBeDisabled();
+    expect(save().disabled).toBe(true);
     expect(save().getAttribute("title")).toMatch(/^Fix first: Pin 3 is not mapped/);
     const pads = screen.getByLabelText("Pin 3 pads");
     fireEvent.change(pads, { target: { value: "2" } });
     fireEvent.blur(pads);
-    expect(save()).not.toBeDisabled();
+    expect(save().disabled).toBe(false);
   });
 
   it("adds a B1 graphic and keeps millimetre edits in nanometres", () => {
@@ -144,6 +144,17 @@ describe("symbol editor", () => {
     fireEvent.click(save());
     const c = execute.mock.calls[0][0] as Extract<Command, { type: "UpsertComponentDefinition" }>;
     expect(c.definition.symbol.graphics?.[1]).toMatchObject({ kind: "circle", radius: 500_000 });
+  });
+
+  it("regression: a footprint saved by the other editor reaches the symbol draft (a new pin maps to the new pad)", () => {
+    const d = part();
+    const { rerender, execute, onDirty } = editor("symbol", d);
+    // The footprint editor saved pad 3; the symbol editor's own slice did not change.
+    rerender(<PartEditor kind="symbol" def={addPad(d)} disabled={null} placedOnPcb={0} execute={execute} onDirty={onDirty} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add pin" }));
+    expect((screen.getByLabelText("Pin 3 pads") as HTMLInputElement).value).toBe("3");
+    expect(screen.queryByRole("group", { name: "Problems" })).toBeNull();
+    expect(save().disabled).toBe(false);
   });
 
   it("follows the engine when it saves, and Revert drops a draft", () => {
@@ -200,7 +211,7 @@ describe("footprint editor", () => {
   it("refuses to save a footprint change while the part is placed on the PCB, with the reason", () => {
     const { execute } = editor("footprint", part(), 2);
     fireEvent.click(screen.getByRole("button", { name: "Add pad" }));
-    expect(save()).toBeDisabled();
+    expect(save().disabled).toBe(true);
     expect(save().getAttribute("title")).toMatch(/placed on the PCB \(2 footprint/);
     fireEvent.click(save());
     expect(execute).not.toHaveBeenCalled();

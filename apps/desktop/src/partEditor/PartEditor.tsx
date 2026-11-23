@@ -29,6 +29,7 @@ import {
   normDef,
   ORIENTATIONS,
   parseList,
+  rebase,
   parsePoints,
   pinsOfPad,
   PIN_TYPES,
@@ -107,15 +108,16 @@ export function PartEditor({ kind, def, disabled, placedOnPcb, execute, onDirty 
   const [stale, setStale] = useState(false);
   useEffect(() => {
     if (prev.current === def) return;
-    // A refreshed snapshot carries the same definition as a new object: nothing changed.
-    if (sameSlice(kind, prev.current, def)) {
-      prev.current = def;
-      return;
-    }
-    if (sameSlice(kind, draft, prev.current) || sameSlice(kind, draft, def)) {
+    // This editor's slice is unchanged (a refreshed snapshot, or a save by the other editor):
+    // keep the draft's edits and take the rest of the definition from the engine.
+    if (sameSlice(kind, prev.current, def)) setDraft((d) => rebase(kind, def, d));
+    else if (sameSlice(kind, draft, prev.current) || sameSlice(kind, draft, def)) {
       setDraft(normDef(def));
       setStale(false);
-    } else setStale(true);
+    } else {
+      setDraft((d) => rebase(kind, def, d));
+      setStale(true);
+    }
     prev.current = def;
   }, [def]);
   const dirty = !sameSlice(kind, draft, def);
