@@ -151,7 +151,7 @@ const reveal = (selector, text) =>
 
 /** Real X pointer click (XTest) at the centre of an element, optionally offset by dx/dy px;
  *  the element is first scrolled into view if needed, as a user would. */
-async function xclick(selector, text, dx = 0, dy = 0) {
+async function xclick(selector, text, dx = 0, dy = 0, button = 1) {
   await waitRect(selector, text);
   await reveal(selector, text);
   await sleep(150);
@@ -161,9 +161,9 @@ async function xclick(selector, text, dx = 0, dy = 0) {
   const o = origin();
   const x = Math.round(o.x + r.x + r.w / 2 + dx);
   const y = Math.round(o.y + r.y + r.h / 2 + dy);
-  sh("xdotool", ["mousemove", "--sync", String(x), String(y), "click", "1"]);
+  sh("xdotool", ["mousemove", "--sync", String(x), String(y), "click", String(button)]);
   await sleep(250);
-  return `XTest click at ${x},${y}`;
+  return `XTest ${button === 3 ? "right-" : ""}click at ${x},${y}`;
 }
 
 /** Screen point at fractions (fx, fy) of an element (0.5, 0.5 is its centre). */
@@ -254,6 +254,11 @@ async function run(st, fn) {
     evidence = String(e?.message ?? e).split("\n")[0];
   }
   if (!file && st.shot !== false) file = shot(st.id);
+  // Evidence that was expected but not taken is a failure, not a pass without a picture.
+  if (!file && st.shot !== false) {
+    result = "FAIL";
+    evidence = `no screenshot taken${evidence ? `; ${evidence}` : ""}`;
+  }
   const row = { id: st.id, title: st.title ?? st.do, result, evidence, file, ms: Date.now() - t0 };
   results.push(row);
   console.log(`${result.padEnd(4)} ${row.id} ${row.title} — ${evidence}`);
@@ -287,6 +292,15 @@ const handlers = {
     }
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
     return `SETUP (IPC execute_command: ${s.commands.map((c) => c.type).join(", ")}; not a UI action)${s.expect ? `; then visible: ${s.expect}` : ""}`;
+  },
+  // SETUP: one typed engine command on the active project through the same IPC the UI's
+  // api.execute uses (for example a fixture board outline). Run it before the project is opened
+  // from Recent projects, so the UI loads the result.
+  async "fixture-command"(s) {
+    const snap = await ipc("current_project");
+    const r = await ipc("execute_command", { expected_revision: snap.project.revision, command: s.command });
+    if (!r.accepted) throw new Error(`${s.command.type} rejected: ${JSON.stringify(r.error)}`);
+    return `SETUP (IPC execute_command ${s.command.type} → revision ${r.revision_after}; not a UI action)`;
   },
   // SETUP: an open-source library folder (manifest with licence and source, plus one definition
   // copied from a built-in part under a new id), imported through the IPC the Library browser
@@ -326,7 +340,7 @@ const handlers = {
     return `${how}; XTest typed "${s.value}"${s.expect ? `; then visible: ${s.expect}` : ""}`;
   },
   async click(s) {
-    const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0);
+    const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0, s.button === "right" ? 3 : 1);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
     if (s.gone) await waitGone(s.gone, s.timeout ?? 20000);
     return `${how}${s.expect ? `; then visible: ${s.expect}` : ""}${s.gone ? `; then gone: ${s.gone}` : ""}`;
@@ -507,4 +521,5 @@ const md = [
 ].join("\n");
 fs.writeFileSync(path.join(OUT, "UI_EVIDENCE.md"), md);
 console.log(`\n${results.length} rows, ${failed} failed; results in ${OUT}`);
-process.exit(failed === 0 ? 0 : 1);
+// A scenario that recorded no rows proved nothing: that fails too.
+process.exit(failed === 0 && results.length > 0 ? 0 : 1);

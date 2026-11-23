@@ -2,7 +2,7 @@
 // rotating, deleting and pasting a selection. They only compute typed engine commands; the
 // caller submits them as one `Batch` (ADR-0013), so a multi-object edit is one revision and
 // one undo step. The engine snapshot stays the only design model.
-import type { Command, FlipAxis, Id, NetLabel, Point, Rotation, Snapshot, SymbolGeom, Wire } from "../../types";
+import type { Command, FlipAxis, Id, NetLabel, NetScope, Point, PowerStyle, Rotation, Snapshot, SymbolGeom, Wire } from "../../types";
 
 export type Kind = "symbol" | "wire" | "label";
 export interface Selection {
@@ -185,7 +185,8 @@ export function deleteCommands(sel: Selection): Command[] {
 export interface Clip {
   symbols: { component_id: string; position: Point; rotation: Rotation; value: string }[];
   wires: { a: Point; b: Point }[];
-  labels: { name: string; kind: "net" | "power"; position: Point }[];
+  /** Labels keep their scope and power style, so a paste on another sheet joins the same nets by label only. */
+  labels: { name: string; kind: "net" | "power"; position: Point; scope?: NetScope; power_style?: PowerStyle }[];
 }
 
 export function copy(snap: Snapshot, sel: Selection): Clip | null {
@@ -198,7 +199,7 @@ export function copy(snap: Snapshot, sel: Selection): Clip | null {
     wires: sel.wires.flatMap((id) => (wires[id] ? [{ a: wires[id].a, b: wires[id].b }] : [])),
     labels: sel.labels.flatMap((id) => {
       const l = labels[id];
-      return l ? [{ name: l.name, kind: l.kind, position: l.position }] : [];
+      return l ? [{ name: l.name, kind: l.kind, position: l.position, ...(l.scope ? { scope: l.scope } : {}), ...(l.power_style ? { power_style: l.power_style } : {}) }] : [];
     }),
   };
   return clip.symbols.length + clip.wires.length + clip.labels.length ? clip : null;
@@ -220,7 +221,15 @@ export function pasteCommands(clip: Clip, sheet: Id, delta: Point): Command[] {
     ),
     ...clip.wires.map((w): Command => ({ type: "AddWire", sheet_id: sheet, a: add(w.a, delta), b: add(w.b, delta) })),
     ...clip.labels.map(
-      (l): Command => ({ type: "AddNetLabel", sheet_id: sheet, name: l.name, kind: l.kind, position: add(l.position, delta) }),
+      (l): Command => ({
+        type: "AddNetLabel",
+        sheet_id: sheet,
+        name: l.name,
+        kind: l.kind,
+        position: add(l.position, delta),
+        ...(l.scope ? { scope: l.scope } : {}),
+        ...(l.power_style ? { power_style: l.power_style } : {}),
+      }),
     ),
   ];
 }
@@ -241,4 +250,118 @@ export function pasteOffset(clip: Clip, at: Point | null, grid: number): Point {
   const anchor = { x: Math.min(...pts.map((p) => p.x)), y: Math.min(...pts.map((p) => p.y)) };
   const d = { x: Math.round((at.x - anchor.x) / grid) * grid, y: Math.round((at.y - anchor.y) / grid) * grid };
   return d.x === 0 && d.y === 0 ? { x: 4 * grid, y: 4 * grid } : d;
+}
+
+// ---- Slice B3: arrange (align, distribute), array, find similar, selection filter ----------
+
+/**
+ * Move several symbols, each by its own delta, in one command list: attached wire ends and pin
+ * labels follow (rubber-banding), wire edits first, the symbol moves last.
+ */
+export function moveEachCommands(snap: Snapshot, sheet: Id, deltas: Map<Id, Point>): Command[] {
+  const { symbols } = snap.project.schematic;
+  const moved = new Map<string, Point>();
+  for (const g of sheetSymbols(snap, sheet)) {
+    const d = deltas.get(g.id);
+    if (d && (d.x !== 0 || d.y !== 0)) for (const p of g.pins) moved.set(key(p.position), add(p.position, d));
+  }
+  const out = rubberBand(sheetWires(snap, sheet), moved, new Set(), null);
+  for (const l of sheetLabels(snap, sheet)) {
+    const to = moved.get(key(l.position));
+    if (to && !same(to, l.position)) out.push({ type: "MoveNetLabel", label_id: l.id, position: to });
+  }
+  for (const [id, d] of deltas) {
+    const s = symbols[id];
+    if (s && (d.x !== 0 || d.y !== 0)) out.push({ type: "MoveSymbol", symbol_id: id, position: add(s.position, d) });
+  }
+  return out;
+}
+
+/** Edge or centre line the selected parts are aligned to (EAK-IR is Y up: "top" is the largest y). */
+export type Align = "left" | "right" | "top" | "bottom" | "center-x" | "center-y";
+
+const selectedGeoms = (snap: Snapshot, sheet: Id, sel: Selection) => sheetSymbols(snap, sheet).filter((g) => sel.symbols.includes(g.id));
+
+/**
+ * Align the selected parts' bodies to the outermost edge (or the common centre line) of the
+ * selection. Needs two or more parts; wires and labels on their pins follow.
+ */
+export function alignCommands(snap: Snapshot, sheet: Id, sel: Selection, how: Align): Command[] {
+  const gs = selectedGeoms(snap, sheet, sel);
+  if (gs.length < 2) return [];
+  const left = Math.min(...gs.map((g) => g.position.x - g.half_w));
+  const right = Math.max(...gs.map((g) => g.position.x + g.half_w));
+  const bottom = Math.min(...gs.map((g) => g.position.y - g.half_h));
+  const top = Math.max(...gs.map((g) => g.position.y + g.half_h));
+  const deltas = new Map<Id, Point>();
+  for (const g of gs) {
+    const { x, y } = g.position;
+    const d =
+      how === "left" ? { x: left - (x - g.half_w), y: 0 }
+      : how === "right" ? { x: right - (x + g.half_w), y: 0 }
+      : how === "bottom" ? { x: 0, y: bottom - (y - g.half_h) }
+      : how === "top" ? { x: 0, y: top - (y + g.half_h) }
+      : how === "center-x" ? { x: Math.round((left + right) / 2) - x, y: 0 }
+      : { x: 0, y: Math.round((bottom + top) / 2) - y };
+    deltas.set(g.id, d);
+  }
+  return moveEachCommands(snap, sheet, deltas);
+}
+
+/**
+ * Space the selected parts evenly along an axis: the two outermost stay, the others move so
+ * their origins are equally spaced between them (whole nanometres). Needs three or more parts.
+ */
+export function distributeCommands(snap: Snapshot, sheet: Id, sel: Selection, axis: "x" | "y"): Command[] {
+  const gs = selectedGeoms(snap, sheet, sel).sort((a, b) => a.position[axis] - b.position[axis] || a.id.localeCompare(b.id));
+  if (gs.length < 3) return [];
+  const first = gs[0].position[axis];
+  const span = gs[gs.length - 1].position[axis] - first;
+  const deltas = new Map<Id, Point>();
+  gs.forEach((g, i) => {
+    const d = Math.round(first + (span * i) / (gs.length - 1)) - g.position[axis];
+    deltas.set(g.id, axis === "x" ? { x: d, y: 0 } : { x: 0, y: d });
+  });
+  return moveEachCommands(snap, sheet, deltas);
+}
+
+/** Largest array the editor sends in one Batch. */
+export const MAX_ARRAY_COPIES = 400;
+
+/**
+ * Paste `cols` x `rows` copies of a clip on a grid of `step` (the original is the cell at 0,0
+ * and is not copied again). Each copy gets fresh ids and designators from the engine.
+ */
+export function arrayCommands(clip: Clip, sheet: Id, cols: number, rows: number, step: Point): Command[] {
+  const out: Command[] = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) if (r !== 0 || c !== 0) out.push(...pasteCommands(clip, sheet, { x: c * step.x, y: r * step.y }));
+  return out;
+}
+
+/**
+ * Objects like `id` on the sheet (EasyEDA's "Find similar objects", in EAK terms): parts of the
+ * same library component, net labels of the same name and kind, or every wire.
+ */
+export function similar(snap: Snapshot, sheet: Id, kind: Kind, id: Id): Selection {
+  const { symbols, labels } = snap.project.schematic;
+  if (kind === "symbol") {
+    const c = symbols[id]?.component_id;
+    return { ...EMPTY, symbols: Object.values(symbols).filter((s) => s.sheet_id === sheet && s.component_id === c).map((s) => s.id) };
+  }
+  if (kind === "label") {
+    const l = labels[id];
+    return { ...EMPTY, labels: l ? sheetLabels(snap, sheet).filter((x) => x.name === l.name && x.kind === l.kind).map((x) => x.id) : [] };
+  }
+  return { ...EMPTY, wires: sheetWires(snap, sheet).map((w) => w.id) };
+}
+
+/** Which object kinds a click, a box or Select all may pick (the selection filter). */
+export type Filter = Record<Kind, boolean>;
+export const ALL_KINDS: Filter = { symbol: true, wire: true, label: true };
+
+/** Drop the kinds the filter excludes. */
+export function filtered(s: Selection, f: Filter): Selection {
+  if (f.symbol && f.wire && f.label) return s;
+  return { symbols: f.symbol ? s.symbols : [], wires: f.wire ? s.wires : [], labels: f.label ? s.labels : [] };
 }

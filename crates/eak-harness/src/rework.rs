@@ -692,6 +692,8 @@ fn collect_strings(v: &Value, out: &mut Vec<String>) {
 fn mutates_existing(ty: &str) -> bool {
     [
         "Delete", "Move", "Rotate", "Flip", "Set", "Upsert", "Assign", "Clear",
+        // EditTrack and EditZone change an existing track or zone (ADR-0042).
+        "Edit",
     ]
     .iter()
     .any(|p| ty.starts_with(p))

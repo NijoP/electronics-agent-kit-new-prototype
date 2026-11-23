@@ -54,6 +54,8 @@ function probes(): ActionDeps[] {
     selected: "sym_r1",
     selectedSymbol: snap.project.schematic.symbols.sym_r1,
     fpOfSelected: snap.project.pcb.footprints.fp_r1,
+    // B3: a schematic editor offering every editing operation (clipboard, arrange, find, net highlight)
+    editorOp: () => ({ enabled: () => true, run: vi.fn() }),
   });
   return [deps(), rich, deps({ busy: true }), deps({ grid: null })];
 }

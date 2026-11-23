@@ -9,6 +9,7 @@
 
 pub mod assembly;
 pub mod bom;
+pub mod bom_config;
 pub mod distributor;
 pub mod distributor_api;
 pub mod drill;
@@ -17,9 +18,13 @@ pub mod fabricator;
 pub mod gerber;
 pub mod library_link;
 pub mod matching;
+pub mod netlist_export;
+pub mod outputs;
 pub mod provider;
+pub mod schematic_doc;
 pub mod sourcing;
 pub mod stackup;
+pub mod xlsx;
 pub mod zip;
 
 use eak_core::{geom::to_mm, CopperLayer, Project, Side};
@@ -145,10 +150,20 @@ pub fn cpl_csv(p: &Project) -> String {
 pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manifest, String> {
     std::fs::create_dir_all(out_dir).map_err(|e| e.to_string())?;
     let input = project_hash(p);
-    let mut blocking = vec![];
     if p.pcb.board.outline.len() < 3 {
         return Err("cannot compile manufacturing outputs without a board outline".into());
     }
+    let (gates, blocking) = release_gates(p, reports);
+    files_and_manifest(p, input, gates, blocking, out_dir)
+}
+
+/// The release gate of a package for this revision: the supplied ERC, DRC, MECH and DFM
+/// reports (each must be bound to this revision and input hash and have no errors), the
+/// mechanical-fit unknowns and the fail-closed engineering gates. Returns the per-report gate
+/// results and every blocking reason; the package is DRAFT unless the reasons are empty.
+pub fn release_gates(p: &Project, reports: &[&Report]) -> (Vec<GateResult>, Vec<String>) {
+    let input = project_hash(p);
+    let mut blocking = vec![];
     let mut gates = vec![];
     for need in ["ERC", "DRC", "MECH", "DFM"] {
         match reports.iter().find(|r| r.check == need) {
@@ -212,11 +227,53 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
             ));
         }
     }
-    let stem = p
-        .name
+    (gates, blocking)
+}
+
+/// Package status from the blocking reasons: DRAFT unless there are none.
+pub fn status_of(blocking: &[String]) -> PackageStatus {
+    if blocking.is_empty() {
+        PackageStatus::InternallyVerifiedReleaseCandidate
+    } else {
+        PackageStatus::Draft
+    }
+}
+
+/// The manifest statement for a status. Never a manufacturing-ready claim.
+pub fn statement_of(status: PackageStatus) -> String {
+    match status {
+        PackageStatus::Draft => "DRAFT — blocking issues listed; NOT for fabrication.".into(),
+        PackageStatus::InternallyVerifiedReleaseCandidate => "Internal automated checks passed for this exact revision. This is NOT a manufacturing-ready claim: independent electrical engineering review and fabricator DFM review are still required.".into(),
+    }
+}
+
+/// What no generated package verifies, listed in every manifest.
+pub fn not_verified() -> Vec<String> {
+    vec![
+        "Independent senior electronics engineering review".into(),
+        "Fabricator DFM review of these exact files".into(),
+        "Physical prototype / bench testing".into(),
+        "Checks listed as not implemented in the ERC/DRC/MECH/DFM reports".into(),
+    ]
+}
+
+/// File-name stem of a project's outputs: its name with every non-alphanumeric character
+/// replaced by `_`.
+pub fn file_stem(p: &Project) -> String {
+    p.name
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-        .collect::<String>();
+        .collect()
+}
+
+fn files_and_manifest(
+    p: &Project,
+    input: String,
+    gates: Vec<GateResult>,
+    blocking: Vec<String>,
+    out_dir: &Path,
+) -> Result<Manifest, String> {
+    let stem = file_stem(p);
     // One copper Gerber per layer in the stackup (top, inner layers, bottom).
     let st = &p.pcb.board.stackup;
     let mut files: Vec<(String, String, String)> = st
@@ -349,11 +406,7 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
             kind: kind.into(),
         });
     }
-    let status = if blocking.is_empty() {
-        PackageStatus::InternallyVerifiedReleaseCandidate
-    } else {
-        PackageStatus::Draft
-    };
+    let status = status_of(&blocking);
     let manifest = Manifest {
         project_id: p.id.clone(),
         project_name: p.name.clone(),
@@ -365,16 +418,8 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
         gates,
         blocking_reasons: blocking,
         files: entries,
-        statement: match status {
-            PackageStatus::Draft => "DRAFT — blocking issues listed; NOT for fabrication.".into(),
-            PackageStatus::InternallyVerifiedReleaseCandidate => "Internal automated checks passed for this exact revision. This is NOT a manufacturing-ready claim: independent electrical engineering review and fabricator DFM review are still required.".into(),
-        },
-        not_verified: vec![
-            "Independent senior electronics engineering review".into(),
-            "Fabricator DFM review of these exact files".into(),
-            "Physical prototype / bench testing".into(),
-            "Checks listed as not implemented in the ERC/DRC/MECH/DFM reports".into(),
-        ],
+        statement: statement_of(status),
+        not_verified: not_verified(),
     };
     let mjson = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
     eak_runtime::store::atomic_write(&out_dir.join("manifest.json"), mjson.as_bytes())
@@ -405,7 +450,7 @@ pub fn verify_package(dir: &Path) -> Result<Vec<String>, String> {
                     "gerber" => gerber::validate(&text).problems,
                     "drill" => drill::validate(&text).problems,
                     "stackup" => stackup::validate(&text),
-                    _ => vec![],
+                    other => outputs::validate_output(other, &data),
                 };
                 problems.extend(syn.into_iter().map(|s| format!("{}: {s}", f.name)));
             }

@@ -456,6 +456,112 @@ fn editor_flow_places_wires_routes_and_exports_gerbers() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// D3: the BOM dialog's preview and export, and the schematic/netlist documents, each in its
+/// own revision folder with a manifest that lists every file and stays DRAFT here (no outline).
+#[test]
+fn bom_and_document_exports_are_revision_bound_and_draft() {
+    use eak_manufacturing::bom_config::{BomColumn, BomConfig, BomField, Grouping, SortDir};
+    use eak_manufacturing::outputs::{BomFormat, BomRequest, OutputRequest};
+    let s = session();
+    assert!(
+        bom_table(&s, &BomConfig::default()).is_err(),
+        "no project open"
+    );
+    let d = tmpdir("outputs");
+    create_project(&s, &path(&d), "Outputs").unwrap();
+    for (rev, x) in [(0, 40.0), (1, 80.0)] {
+        let r = execute_command(
+            &s,
+            rev,
+            C::PlaceSymbol {
+                sheet_id: None,
+                component_id: "R_0603".into(),
+                position: Point::mm(x, -50.0),
+                rotation: Rotation::default(),
+                refdes: None,
+                value: None,
+            },
+        )
+        .unwrap();
+        assert!(r.accepted, "{:?}", r.error);
+    }
+    let config = BomConfig {
+        columns: vec![
+            BomColumn {
+                field: BomField::Designator,
+                header: Some("Ref".into()),
+                sort: SortDir::Desc,
+            },
+            BomColumn::new(BomField::Quantity),
+        ],
+        grouping: Grouping::Designator,
+        ..BomConfig::default()
+    };
+    let preview = bom_table(&s, &config).unwrap();
+    assert_eq!(preview.headers, ["Ref", "Quantity"]);
+    assert_eq!(preview.rows.len(), 2);
+
+    let bom = export_bom(
+        &s,
+        BomRequest {
+            config: config.clone(),
+            format: BomFormat::Xlsx,
+        },
+    )
+    .unwrap();
+    assert!(bom.out_dir.ends_with("bom"), "{}", bom.out_dir);
+    assert_eq!(bom.manifest.revision, 2);
+    assert_eq!(bom.manifest.status, eak_manufacturing::PackageStatus::Draft);
+    let kinds: Vec<&str> = bom.manifest.files.iter().map(|f| f.kind.as_str()).collect();
+    assert_eq!(kinds, ["bom-xlsx", "bom-config"]);
+    let dir = std::path::Path::new(&bom.out_dir);
+    assert!(eak_manufacturing::verify_package(dir).unwrap().is_empty());
+    // The saved configuration loads back as the same configuration.
+    let saved = bom
+        .manifest
+        .files
+        .iter()
+        .find(|f| f.kind == "bom-config")
+        .unwrap();
+    let json = std::fs::read_to_string(dir.join(&saved.name)).unwrap();
+    assert_eq!(BomConfig::from_json(&json).unwrap(), config);
+
+    let docs = export_documents(
+        &s,
+        OutputRequest {
+            schematic_pdf: true,
+            schematic_svg: true,
+            ipc_d_356: true,
+            netlist_json: true,
+            ..OutputRequest::default()
+        },
+    )
+    .unwrap();
+    assert!(docs.out_dir.ends_with("documents"), "{}", docs.out_dir);
+    let kinds: Vec<&str> = docs
+        .manifest
+        .files
+        .iter()
+        .map(|f| f.kind.as_str())
+        .collect();
+    assert_eq!(kinds, ["pdf", "svg", "ipc-d-356", "netlist-json"]);
+    assert!(docs
+        .manifest
+        .blocking_reasons
+        .iter()
+        .any(|b| b.contains("no outline")));
+    let checks: Vec<&str> = docs.reports.iter().map(|r| r.check.as_str()).collect();
+    assert_eq!(checks, ["ERC", "DRC", "MECH", "DFM"]);
+    assert!(
+        eak_manufacturing::verify_package(std::path::Path::new(&docs.out_dir))
+            .unwrap()
+            .is_empty()
+    );
+    assert!(export_documents(&s, OutputRequest::default()).is_err());
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 #[test]
 fn export_without_outline_or_project_fails_loudly() {
     let s = session();
@@ -640,6 +746,7 @@ fn route_step_result_commits_as_one_batch_and_undoes_in_one_step() {
         via_at_start: false,
         conflict: Default::default(),
         via: None,
+        pending: Default::default(),
     };
     assert!(route_step(&s, &req("N", Point::default(), Point::mm(1.0, 0.0))).is_err());
     let d = tmpdir("route-step");

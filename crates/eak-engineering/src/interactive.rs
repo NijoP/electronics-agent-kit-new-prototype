@@ -18,14 +18,19 @@
 //! A layer switch is requested with `via_at_start`: a through via is placed at `from` (checked on
 //! every copper layer) and the path continues on `layer`.
 //!
+//! In conflict mode `push`, before the walkaround, other-net tracks that block a direct path
+//! are moved aside with a 45-degree bump that keeps their ends (see `shove`); the moved tracks
+//! come back in `shoved` and are re-checked exactly against all copper and the board edge.
+//! The route being drawn sends its uncommitted segments, vias and moves as `pending`.
+//!
 //! The function never returns a segment or via that violates clearance to other-net copper or
 //! the board-edge clearance. Zones are not obstacles: their fill is derived and retreats from new
 //! copper (same rule as the autorouter). The result is a proposal only; the caller commits it as
 //! `AddTrack`/`AddVia` steps of one `Batch` command.
 
-use crate::copper::{distance, items, CopperItem, Core, Shape};
+use crate::copper::{distance, items, CopperItem, Core, ItemKind, Shape};
 use eak_core::geom::{point_in_polygon, segment_segment_distance};
-use eak_core::{CopperLayer, Nm, Point, Project};
+use eak_core::{CopperLayer, Id, Nm, Point, Project, Track, Via};
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
@@ -61,6 +66,48 @@ pub struct RouteStepRequest {
     /// Via drill and diameter override for `via_at_start`; the net-class via when omitted.
     #[serde(default)]
     pub via: Option<ViaSize>,
+    /// What the route being drawn holds but has not committed yet; the step treats the board
+    /// as if it were committed.
+    #[serde(default)]
+    pub pending: Pending,
+}
+
+/// Uncommitted copper of the route being drawn: its fixed segments and vias (on the route's
+/// net), and the tracks earlier push steps moved.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Pending {
+    #[serde(default)]
+    pub tracks: Vec<PendingTrack>,
+    #[serde(default)]
+    pub vias: Vec<StepVia>,
+    #[serde(default)]
+    pub shoved: Vec<ShovedTrack>,
+}
+
+impl Pending {
+    pub fn is_empty(&self) -> bool {
+        self.tracks.is_empty() && self.vias.is_empty() && self.shoved.is_empty()
+    }
+}
+
+/// One fixed segment of the route being drawn.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PendingTrack {
+    pub layer: CopperLayer,
+    pub width: Nm,
+    pub a: Point,
+    pub b: Point,
+}
+
+/// A committed track moved by push mode: the polyline that replaces track `id` (same layer,
+/// width and net). Its first and last points are the track's own ends, so it stays connected.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ShovedTrack {
+    pub id: Id,
+    pub layer: CopperLayer,
+    pub width: Nm,
+    pub net: String,
+    pub points: Vec<Point>,
 }
 
 /// How the route step treats other-net copper in the way of the direct path.
@@ -72,6 +119,9 @@ pub enum ConflictMode {
     Walkaround,
     /// Stop before the first obstacle (no walkaround).
     Block,
+    /// Push (shove) other-net tracks out of the direct path, keeping their ends and every
+    /// clearance; when that is not possible, walk around as in `Walkaround`.
+    Push,
 }
 
 /// A via size chosen for a layer switch (a preset or the net class).
@@ -127,6 +177,10 @@ pub struct RouteStepResult {
     pub min_gap: Option<ClearanceFeedback>,
     /// Why nothing (or only part) could be routed.
     pub message: Option<String>,
+    /// Push mode: the tracks moved out of the path, as full replacement polylines of the
+    /// committed tracks (a track an earlier step moved is moved again from its committed place).
+    #[serde(default)]
+    pub shoved: Vec<ShovedTrack>,
 }
 
 /// Upper bound on walkaround grid cells and A* expansions (keeps a step interactive).
@@ -248,6 +302,14 @@ fn direct_paths(a: Point, b: Point, mode: BendMode) -> Vec<Vec<RouteSegment>> {
 
 /// Compute one interactive route step. Never returns geometry that violates clearance.
 pub fn route_step(p: &Project, req: &RouteStepRequest) -> RouteStepResult {
+    let committed = p;
+    let owned;
+    let p = if req.pending.is_empty() {
+        p
+    } else {
+        owned = with_pending(p, req);
+        &owned
+    };
     let class = p.constraints.class_for(&req.net);
     let width = req.width.unwrap_or(class.track_width);
     let clearance = class.clearance.max(p.constraints.min_clearance);
@@ -265,6 +327,7 @@ pub fn route_step(p: &Project, req: &RouteStepRequest) -> RouteStepResult {
         blocking: vec![],
         min_gap: None,
         message: None,
+        shoved: vec![],
     };
     if req.net.is_empty() {
         res.message = Some("start the route on copper that belongs to a net".into());
@@ -359,9 +422,57 @@ pub fn route_step(p: &Project, req: &RouteStepRequest) -> RouteStepResult {
         }
     }
 
-    // 2. Walkaround (not in block mode, which stops before the obstacle).
+    // 2. Push mode: shove the blocking tracks out of a direct path.
+    if req.conflict == ConflictMode::Push {
+        for segs in &candidates {
+            let Some(shoved) = shove(committed, p, &copper, &rules, req, segs) else {
+                continue;
+            };
+            // The minimum gap is measured to the moved tracks at their new places.
+            let mut moved: Vec<CopperItem> = Vec::new();
+            for s in shoved.iter().filter(|s| s.layer == req.layer) {
+                for w in s.points.windows(2) {
+                    moved.push(CopperItem {
+                        kind: ItemKind::Track,
+                        object_id: s.id.clone(),
+                        sub: String::new(),
+                        layer: s.layer,
+                        net: s.net.clone(),
+                        shape: Shape {
+                            core: Core::Segment(w[0], w[1]),
+                            radius: s.width as f64 / 2.0,
+                        },
+                    });
+                }
+            }
+            let mut obstacles: Vec<&CopperItem> = moved.iter().collect();
+            for &o in &rules.obstacles {
+                if !shoved.iter().any(|s| part_of(o, &s.id)) {
+                    obstacles.push(o);
+                }
+            }
+            let after = Rules {
+                obstacles,
+                outline,
+                half_width: rules.half_width,
+                clearance: rules.clearance,
+                edge_clearance,
+            };
+            res.min_gap = after.min_gap(segs);
+            res.segments = segs.clone();
+            res.end = req.to;
+            res.reached = true;
+            // Nothing blocks the path any more: the blocking tracks were moved.
+            res.blocking.clear();
+            res.shoved = shoved;
+            return res;
+        }
+    }
+
+    // 3. Walkaround (not in block mode, which stops before the obstacle; push mode walks
+    // around when nothing can be pushed).
     let around = match req.conflict {
-        ConflictMode::Walkaround => walkaround(&rules, req),
+        ConflictMode::Walkaround | ConflictMode::Push => walkaround(&rules, req),
         ConflictMode::Block => None,
     };
     if let Some(segs) = around {
@@ -381,7 +492,7 @@ pub fn route_step(p: &Project, req: &RouteStepRequest) -> RouteStepResult {
         }
     }
 
-    // 3. Longest legal prefix of the preferred direct path.
+    // 4. Longest legal prefix of the preferred direct path.
     let mut segs = Vec::new();
     for s in &candidates[0] {
         if rules.legal(s.a, s.b) {
@@ -398,6 +509,283 @@ pub fn route_step(p: &Project, req: &RouteStepRequest) -> RouteStepResult {
     res.segments = segs;
     res.message = Some("no legal path to the cursor; stopped before the obstacle".into());
     res
+}
+
+/// Extra gap (nm) a pushed track keeps beyond the clearance, so rounding to whole nanometres
+/// never brings it below the rule.
+const SHOVE_MARGIN: f64 = 2_000.0;
+
+/// The project as the route being drawn sees it: its pending segments and vias added on its
+/// net, and every track an earlier push step moved replaced by its polyline (segment `k` of
+/// track `id` gets the id `id#k`). Pending vias are treated as through vias (the most copper).
+fn with_pending(p: &Project, req: &RouteStepRequest) -> Project {
+    let mut q = p.clone();
+    for (i, t) in req.pending.tracks.iter().enumerate() {
+        let id = format!("~route{i}");
+        q.pcb.tracks.insert(
+            id.clone(),
+            Track {
+                id,
+                layer: t.layer,
+                width: t.width,
+                a: t.a,
+                b: t.b,
+                net: req.net.clone(),
+                arc_deg: None,
+            },
+        );
+    }
+    for (i, v) in req.pending.vias.iter().enumerate() {
+        let id = format!("~via{i}");
+        q.pcb.vias.insert(
+            id.clone(),
+            Via {
+                id,
+                position: v.position,
+                drill: v.drill,
+                diameter: v.diameter,
+                net: req.net.clone(),
+                from: CopperLayer::Top,
+                to: CopperLayer::Bottom,
+            },
+        );
+    }
+    for s in &req.pending.shoved {
+        if q.pcb.tracks.remove(&s.id).is_none() {
+            continue;
+        }
+        for (k, w) in s.points.windows(2).enumerate() {
+            let id = format!("{}#{k}", s.id);
+            q.pcb.tracks.insert(
+                id.clone(),
+                Track {
+                    id,
+                    layer: s.layer,
+                    width: s.width,
+                    a: w[0],
+                    b: w[1],
+                    net: s.net.clone(),
+                    arc_deg: None,
+                },
+            );
+        }
+    }
+    q
+}
+
+/// Whether copper item `o` is (a segment of) track `id`.
+fn part_of(o: &CopperItem, id: &str) -> bool {
+    let rest = o.object_id.strip_prefix(id);
+    o.kind == ItemKind::Track && rest.is_some_and(|r| r.is_empty() || r.starts_with('#'))
+}
+
+/// Push mode: move the other-net tracks that block `segs` sideways out of the way with a
+/// 45-degree bump, keeping both of their ends (so they stay connected). A track is bumped from
+/// its committed place against the whole route so far (pending segments and `segs`), so one
+/// route makes one bump per track. Returns the moved tracks as full replacement polylines, or
+/// `None` when anything else blocks (a pad, a via, the board edge), a track cannot be bumped
+/// (the route touches or crosses its line, the bump would reach one of its ends, or copper of
+/// its own net joins it inside the bump), or a moved track would itself break a clearance (to
+/// the route, to other copper, to another moved track or to the board edge). One level only:
+/// a moved track never pushes a third one. The EAK-IR has no track lock, so every track can be
+/// pushed; pads, vias and zones never move.
+fn shove(
+    committed: &Project,
+    p: &Project,
+    copper: &[CopperItem],
+    rules: &Rules,
+    req: &RouteStepRequest,
+    segs: &[RouteSegment],
+) -> Option<Vec<ShovedTrack>> {
+    let c = &p.constraints;
+    // The clearance DRC asks between nets `x` and `y` (net classes and the board minimum).
+    let pair = |x: &str, y: &str| {
+        let k = c.class_for(x).clearance.max(c.class_for(y).clearance);
+        k.max(c.min_clearance) as f64
+    };
+    let mut blocked: Vec<&CopperItem> = Vec::new();
+    for s in segs {
+        if rules.edge_violation(s.a, s.b, rules.half_width).is_some() {
+            return None;
+        }
+        let shape = Shape {
+            core: Core::Segment(s.a, s.b),
+            radius: rules.half_width,
+        };
+        for &it in &rules.obstacles {
+            if distance(&shape, &it.shape) >= pair(&req.net, &it.net) - 1.0 {
+                continue;
+            }
+            if it.kind != ItemKind::Track {
+                return None;
+            }
+            blocked.push(it);
+        }
+    }
+    if blocked.is_empty() {
+        return None;
+    }
+
+    // The route so far on this layer (pending segments and this step's), with half widths.
+    let mut route: Vec<(RouteSegment, f64)> = Vec::new();
+    for s in segs {
+        route.push((s.clone(), rules.half_width));
+    }
+    for t in req.pending.tracks.iter().filter(|t| t.layer == req.layer) {
+        let s = RouteSegment { a: t.a, b: t.b };
+        route.push((s, t.width as f64 / 2.0));
+    }
+
+    let mut out: Vec<ShovedTrack> = Vec::new();
+    for it in &blocked {
+        // A track an earlier step moved shows as its segments `id#k`.
+        let id = match it.object_id.split_once('#') {
+            Some((orig, _)) => orig.to_string(),
+            None => it.object_id.clone(),
+        };
+        if out.iter().any(|s| s.id == id) {
+            continue;
+        }
+        let t = committed.pcb.tracks.get(&id)?;
+        let (a, b) = (t.a, t.b);
+        let hw = t.width as f64 / 2.0;
+        let len = a.dist(b);
+        if len < 1.0 {
+            return None;
+        }
+        let (ux, uy) = ((b.x - a.x) as f64 / len, (b.y - a.y) as f64 / len);
+        let along = |q: Point| (q.x - a.x) as f64 * ux + (q.y - a.y) as f64 * uy;
+        let side = |q: Point| (q.y - a.y) as f64 * ux - (q.x - a.x) as f64 * uy;
+        let gap = pair(&req.net, &t.net);
+        let body = Shape {
+            core: Core::Segment(a, b),
+            radius: hw,
+        };
+        let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+        let (mut d, mut reach, mut sign) = (0.0f64, 0.0f64, 0);
+        for (s, rhw) in &route {
+            let shape = Shape {
+                core: Core::Segment(s.a, s.b),
+                radius: *rhw,
+            };
+            if distance(&shape, &body) >= gap - 1.0 {
+                continue;
+            }
+            let (sa, sb) = (side(s.a), side(s.b));
+            // The route must stay on one side of the track's line.
+            if sa * sb <= 0.0 {
+                return None;
+            }
+            let sg = if sa > 0.0 { 1 } else { -1 };
+            if sign != 0 && sg != sign {
+                return None;
+            }
+            sign = sg;
+            let need = rhw + hw + gap + SHOVE_MARGIN;
+            reach = reach.max(need);
+            d = d.max(need - sa.abs().min(sb.abs()));
+            lo = lo.min(along(s.a).min(along(s.b)));
+            hi = hi.max(along(s.a).max(along(s.b)));
+        }
+        let d = d.ceil();
+        if sign == 0 || d <= 0.0 {
+            return None;
+        }
+        let (lo, hi) = (lo - reach - d, hi + reach + d);
+        if lo <= 0.0 || hi >= len {
+            return None;
+        }
+        // Away from the route: it is on the `sign` side of the track (left when > 0).
+        let (nx, ny) = (sign as f64 * uy, -sign as f64 * ux);
+        let at = |s: f64, off: f64| {
+            Point::new(
+                (a.x as f64 + ux * s + nx * off).round() as Nm,
+                (a.y as f64 + uy * s + ny * off).round() as Nm,
+            )
+        };
+        let bump = [at(lo, 0.0), at(lo + d, d), at(hi - d, d), at(hi, 0.0)];
+        // Copper of the track's own net joining it inside the bump would be cut off.
+        let section = Shape {
+            core: Core::Segment(bump[0], bump[3]),
+            radius: hw,
+        };
+        let joined = copper.iter().any(|o| {
+            o.layer == t.layer
+                && o.net == t.net
+                && !part_of(o, &id)
+                && distance(&o.shape, &section) <= 0.0
+        });
+        if joined {
+            return None;
+        }
+        out.push(ShovedTrack {
+            id,
+            layer: t.layer,
+            width: t.width,
+            net: t.net.clone(),
+            points: [vec![a], bump.to_vec(), vec![b]].concat(),
+        });
+    }
+
+    // Every moved track keeps every clearance at its new place.
+    let seg = |a: Point, b: Point, hw: f64| Shape {
+        core: Core::Segment(a, b),
+        radius: hw,
+    };
+    // This step's own layer-switch via at the start of the path (on every layer).
+    let class_via = c.class_for(&req.net).via_diameter;
+    let via_r = req.via.map_or(class_via, |v| v.diameter) as f64 / 2.0;
+    for s in &out {
+        let hw = s.width as f64 / 2.0;
+        for w in s.points.windows(2) {
+            if w[0] == w[1] {
+                continue;
+            }
+            let shape = seg(w[0], w[1], hw);
+            if rules.edge_violation(w[0], w[1], hw).is_some() {
+                return None;
+            }
+            // Other copper, pending route copper included (the old places of moved tracks
+            // excluded).
+            for o in copper {
+                if o.layer != s.layer || o.net == s.net || out.iter().any(|m| part_of(o, &m.id)) {
+                    continue;
+                }
+                if distance(&shape, &o.shape) < pair(&s.net, &o.net) - 1.0 {
+                    return None;
+                }
+            }
+            if req.via_at_start {
+                let gap = distance(&shape, &seg(req.from, req.from, via_r));
+                if gap < pair(&s.net, &req.net) - 1.0 {
+                    return None;
+                }
+            }
+            // This step's route segments.
+            if s.layer == req.layer {
+                for r in segs {
+                    let gap = distance(&shape, &seg(r.a, r.b, rules.half_width));
+                    if gap < pair(&s.net, &req.net) - 1.0 {
+                        return None;
+                    }
+                }
+            }
+            // The other moved tracks at their new places.
+            for m in &out {
+                if m.net == s.net || m.layer != s.layer {
+                    continue;
+                }
+                let mhw = m.width as f64 / 2.0;
+                for v in m.points.windows(2) {
+                    let gap = distance(&shape, &seg(v[0], v[1], mhw));
+                    if gap < pair(&s.net, &m.net) - 1.0 {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+    Some(out)
 }
 
 /// Furthest point `e` on `a..b` with `a..e` legal (binary search to 1 µm), if any.
@@ -603,6 +991,7 @@ mod tests {
             via_at_start: false,
             conflict: ConflictMode::Walkaround,
             via: None,
+            pending: Pending::default(),
         }
     }
 
@@ -802,6 +1191,161 @@ mod tests {
         let r = route_step(&p, &bad);
         assert!(r.via.is_none() && r.segments.is_empty() && !r.reached);
         assert!(r.message.is_some());
+    }
+
+    fn push(from: Point, to: Point) -> RouteStepRequest {
+        RouteStepRequest {
+            conflict: ConflictMode::Push,
+            ..req(from, to, BendMode::Diagonal45)
+        }
+    }
+
+    /// The moved track keeps its ends, stays one connected polyline and keeps the clearance
+    /// to the route and to every other-net copper item.
+    fn assert_shove_legal(p: &Project, r: &RouteStepResult) {
+        let copper = items(p);
+        for s in &r.shoved {
+            let t = &p.pcb.tracks[&s.id];
+            assert_eq!(s.points.first(), Some(&t.a), "{s:?}");
+            assert_eq!(s.points.last(), Some(&t.b), "{s:?}");
+            for w in s.points.windows(2) {
+                let shape = Shape {
+                    core: Core::Segment(w[0], w[1]),
+                    radius: s.width as f64 / 2.0,
+                };
+                for g in &r.segments {
+                    let route = Shape {
+                        core: Core::Segment(g.a, g.b),
+                        radius: r.width as f64 / 2.0,
+                    };
+                    let d = distance(&shape, &route);
+                    assert!(d >= r.clearance as f64 - 1.0, "{d} to the route");
+                }
+                for it in &copper {
+                    if it.net == s.net || it.object_id == s.id {
+                        continue;
+                    }
+                    let d = distance(&shape, &it.shape);
+                    assert!(d >= r.clearance as f64 - 1.0, "{d} to {}", it.label());
+                }
+            }
+        }
+    }
+
+    // Slice C3 push-and-shove (unrun: no local builds).
+    #[test]
+    fn push_mode_bumps_a_parallel_track_out_of_the_path() {
+        let mut p = board();
+        // Another net 0.3 mm beside the straight route: closer than width + clearance.
+        let (a, b) = (Point::mm(5.0, 10.3), Point::mm(45.0, 10.3));
+        add_track(&mut p, "gnd", "GND", a, b, 250_000);
+        let (from, to) = (Point::mm(10.0, 10.0), Point::mm(40.0, 10.0));
+        let walk = route_step(&p, &req(from, to, BendMode::Diagonal45));
+        assert!(walk.shoved.is_empty(), "walkaround mode never moves copper");
+        let r = route_step(&p, &push(from, to));
+        assert!(r.reached && !r.walkaround, "{r:?}");
+        assert_eq!(r.segments, vec![RouteSegment { a: from, b: to }]);
+        assert_eq!(r.shoved.len(), 1);
+        let s = &r.shoved[0];
+        assert_eq!((s.id.as_str(), s.net.as_str()), ("gnd", "GND"));
+        assert_eq!(s.width, 250_000);
+        assert_eq!(s.points.len(), 6, "a 45-degree bump: {s:?}");
+        // Pushed away from the route (to larger y), never towards it.
+        assert!(s.points.iter().all(|q| q.y >= a.y));
+        assert_shove_legal(&p, &r);
+        assert!(r.min_gap.unwrap().measured >= r.clearance as f64 - 1.0);
+    }
+
+    #[test]
+    fn push_mode_never_moves_pads_or_vias_and_walks_around_instead() {
+        let mut p = board();
+        p.pcb.vias.insert(
+            "v".into(),
+            Via {
+                id: "v".into(),
+                position: Point::mm(25.0, 10.4),
+                drill: 300_000,
+                diameter: 600_000,
+                net: "GND".into(),
+                from: CopperLayer::Top,
+                to: CopperLayer::Bottom,
+            },
+        );
+        let r = route_step(&p, &push(Point::mm(10.0, 10.0), Point::mm(40.0, 10.0)));
+        assert!(r.shoved.is_empty());
+        assert!(r.walkaround, "{r:?}");
+        assert_legal(&p, &r);
+    }
+
+    #[test]
+    fn push_mode_refuses_a_track_the_route_crosses_or_one_too_short_to_bump() {
+        let mut p = board();
+        // Crossing: the route would have to cut the track, so it walks around it.
+        add_track(
+            &mut p,
+            "x",
+            "GND",
+            Point::mm(25.0, 2.0),
+            Point::mm(25.0, 18.0),
+            250_000,
+        );
+        // Short: the bump would reach its ends, which would disconnect them.
+        add_track(
+            &mut p,
+            "s",
+            "VCC",
+            Point::mm(12.0, 30.3),
+            Point::mm(14.0, 30.3),
+            250_000,
+        );
+        let r = route_step(&p, &push(Point::mm(10.0, 10.0), Point::mm(40.0, 10.0)));
+        assert!(r.shoved.is_empty(), "{r:?}");
+        assert_legal(&p, &r);
+        let r = route_step(&p, &push(Point::mm(5.0, 30.0), Point::mm(20.0, 30.0)));
+        assert!(r.shoved.is_empty(), "{r:?}");
+        assert_legal(&p, &r);
+    }
+
+    #[test]
+    fn pending_moves_and_segments_are_part_of_the_board_for_the_next_step() {
+        let mut p = board();
+        add_track(
+            &mut p,
+            "gnd",
+            "GND",
+            Point::mm(5.0, 10.3),
+            Point::mm(45.0, 10.3),
+            250_000,
+        );
+        let first = route_step(&p, &push(Point::mm(10.0, 10.0), Point::mm(30.0, 10.0)));
+        assert_eq!(first.shoved.len(), 1, "{first:?}");
+        // The next step continues the route; the earlier move and segment are pending.
+        let next = RouteStepRequest {
+            pending: Pending {
+                tracks: vec![PendingTrack {
+                    layer: CopperLayer::Top,
+                    width: first.width,
+                    a: Point::mm(10.0, 10.0),
+                    b: Point::mm(30.0, 10.0),
+                }],
+                vias: vec![],
+                shoved: first.shoved.clone(),
+            },
+            ..push(Point::mm(30.0, 10.0), Point::mm(40.0, 10.0))
+        };
+        let r = route_step(&p, &next);
+        assert!(r.reached && !r.walkaround, "{r:?}");
+        // One bump of the committed track along the whole route so far (both steps).
+        assert_eq!(r.shoved.len(), 1, "{r:?}");
+        let s = &r.shoved[0];
+        assert_eq!(s.id, "gnd");
+        assert_eq!(s.points.len(), 6);
+        assert_eq!(s.points.first(), Some(&Point::mm(5.0, 10.3)));
+        assert_eq!(s.points.last(), Some(&Point::mm(45.0, 10.3)));
+        let limit = Point::mm(40.0, 0.0).x;
+        assert!(s.points[3].x > limit, "the bump covers the new step");
+        // The moved track's old place is not reported as blocking.
+        assert!(!r.blocking.iter().any(|b| b.object == "track gnd"), "{r:?}");
     }
 
     #[test]

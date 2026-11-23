@@ -46,6 +46,16 @@ export interface EditorContext {
   selection: SelectionRef;
   /** The sheet the schematic editor shows (document mode). */
   sheetId?: Id | null;
+  /**
+   * Editing operations the editor offers the action registry (slice B3), by registry action id:
+   * whether each can run now (or why not) and how to run it. The state is part of what is
+   * published, so menus re-render when it changes; `run` is always the latest callback.
+   */
+  ops?: Record<string, EditorOp>;
+}
+export interface EditorOp {
+  state: true | string;
+  run: () => void;
 }
 
 // ---- Store ---------------------------------------------------------------------------------
