@@ -629,8 +629,8 @@ pub fn run(p: &Project) -> Report {
         rule(
             "ERC-014",
             "Pin conflict matrix",
-            "Output/OpenCollector and PowerOut/OpenCollector (error); Bidirectional/PowerOut and Output/PowerIn (warning)",
-            "EAK",
+            "EasyEDA Pro matrix on EAK pin types: Output, PowerIn or PowerOut with OpenCollector, and Output with PowerIn (error); Bidirectional with Output, PowerIn or PowerOut (warning); Output-Output and Output-PowerOut are ERC-004",
+            "EasyEDA Pro pin-conflict matrix (observed; ADR-0043)",
         ),
         rule("ERC-015", "Undriven input net", "nets with Input pins and no possible driver", "EAK"),
         rule(
@@ -656,6 +656,7 @@ pub fn run(p: &Project) -> Report {
         ),
     ];
     let not_implemented = vec![
+        "Pin-conflict cells for EasyEDA pin types EAK does not have (open emitter, ground, high impedance, terminator, undefined): OE-OUT, OE-OC, OE-OE, Power-OE, Ground-IN/OUT/BI/Power, HiZ-IN/OUT/Power and every Undefined pairing".into(),
         "Bus contention timing between tri-state/bidirectional drivers".into(),
         "Hierarchical sheets (hierarchy not yet supported), including bus and port connection through hierarchy".into(),
         "Bus members named on the sheet without a bus entry (they still join by name; not reported)".into(),
@@ -673,8 +674,11 @@ pub fn run(p: &Project) -> Report {
     Report::new("ERC", p, rules, f, not_implemented, limitations)
 }
 
-/// ERC-014 pin-to-pin compatibility for pairs not covered by other rules: ERC-004 reports
-/// several Output/PowerOut drivers, ERC-002 no-connect pins. `None` means compatible.
+/// ERC-014 pin-to-pin compatibility after EasyEDA Pro's pin-conflict matrix (Phase 1 B5; the
+/// cells are in docs/decisions/0043-rule-configuration.md). EasyEDA's single Power type covers
+/// EAK's `PowerIn` and `PowerOut`. Pairs other rules report are left out: ERC-004 reports several
+/// Output/PowerOut drivers on a net (EasyEDA OUT-OUT, and Power-OUT for a power output), ERC-002
+/// no-connect pins. `None` means compatible (EasyEDA "ignore").
 pub fn pin_conflict(a: PinType, b: PinType) -> Option<(crate::Severity, &'static str)> {
     use PinType::*;
     let (a, b) = if a <= b { (a, b) } else { (b, a) };
@@ -687,13 +691,21 @@ pub fn pin_conflict(a: PinType, b: PinType) -> Option<(crate::Severity, &'static
             Error,
             "an open-collector output pulling low shorts the supply",
         )),
-        (Bidirectional, PowerOut) => Some((
-            Warning,
-            "a bidirectional pin driving a supply rail can short it",
+        (PowerIn, OpenCollector) => Some((
+            Error,
+            "an open-collector output pulling low shorts the rail feeding the power input",
         )),
         (Output, PowerIn) => Some((
+            Error,
+            "a logic output drives a power input: it fights the rail's source or cannot supply the load",
+        )),
+        (Output, Bidirectional) => Some((
             Warning,
-            "a logic output feeds a power input; check it can supply the load",
+            "a bidirectional pin driving against a push-pull output",
+        )),
+        (Bidirectional, PowerIn) | (Bidirectional, PowerOut) => Some((
+            Warning,
+            "a bidirectional pin driving a supply rail can short it",
         )),
         _ => None,
     }
