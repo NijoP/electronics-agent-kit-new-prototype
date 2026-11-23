@@ -12,7 +12,7 @@ import { modelRows, performanceRows, recoveryRows, taskRows } from "./shell/diag
 import { findSearch, publishFindSearch, requestFindPick, resetFindStore, useFindReveal } from "./shell/findResults";
 import { FindResultsTab } from "./shell/FindResultsTab";
 import { resetInspectorStore } from "./shell/inspectorModel";
-import { commitCells, commonValue, listModel, rowRange } from "./shell/propertyList";
+import { commitCells, commonValue, listModel, rowRange } from "./shell/propertyListModel";
 import { DocIdContext } from "./shell/viewState";
 import { DEFAULT_FIND } from "./tools/schematic/find";
 import { FindBar } from "./tools/schematic/FindBar";
