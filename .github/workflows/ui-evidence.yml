@@ -154,6 +154,17 @@ jobs:
           UI_SCENARIO: scenarios/d3-output.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # D2 (symbol and footprint editors): a part created in the editors places, syncs, passes DRC
+      # on a fixture board and exports.
+      - name: Run D2 editors scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/d2
+          UI_SCENARIO: scenarios/d2-editors.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       - name: Results to job summary
         if: always()
         run: |
@@ -167,6 +178,7 @@ jobs:
           cat "${{ runner.temp }}/ui-evidence/b2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no B2 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/d1/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D1 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/d3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D3 results file" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ runner.temp }}/ui-evidence/d2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D2 results file" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
@@ -197,4 +209,6 @@ jobs:
             ${{ runner.temp }}/ui-evidence/d3/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/d3/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/d3/tauri-driver.log
+            ${{ runner.temp }}/ui-evidence/d2/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/d2/UI_EVIDENCE.md
           if-no-files-found: warn

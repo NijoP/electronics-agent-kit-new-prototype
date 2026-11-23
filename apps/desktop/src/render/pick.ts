@@ -6,7 +6,7 @@
 import { GridIndex } from "./geometry";
 import type { PickHit, PickKind, PickOptions, RenderObject, Scene } from "./types";
 
-const PRIORITY: Record<PickKind, number> = { zone: 1, track: 2, footprint: 3, via: 4 };
+const PRIORITY: Record<PickKind, number> = { zone: 1, track: 2, footprint: 3, via: 4, graphic: 1, pad: 3, pin: 4 };
 
 export class PickIndex {
   private readonly items: RenderObject[];
