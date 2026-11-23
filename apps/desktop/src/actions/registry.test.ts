@@ -235,7 +235,7 @@ describe("slice E1: no dead or decorative entries", () => {
     const d = deps({ selected: "sym_r1", selectedSymbol: fixture(7).project.schematic.symbols.sym_r1 });
     const all = workspaceActions(d);
     // B3: without a schematic editor its editing set (Group and Ungroup included) says so.
-    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|finest|coarsest|No documents|Nothing is selected|No schematic editor is active|The 3D view is not drawing/;
+    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|Stitching needs|finest|coarsest|No documents|Nothing is selected|No schematic editor is active|The 3D view is not drawing/;
     for (const ctx of DOC_CONTEXTS)
       for (const a of visibleIn(all, ctx)) {
         const e = a.enabled();
