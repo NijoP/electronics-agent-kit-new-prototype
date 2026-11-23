@@ -23,7 +23,7 @@
     { "id": "d4-persisted", "do": "wait", "title": "D4: after the reload the Save tooltip still shows Ctrl+Alt+S (persisted)", "selector": "button.tb-btn[aria-label=\"Save\"][title$=\"(Ctrl+Alt+S)\"]" },
     { "id": "d4-open-2", "do": "menu", "title": "D4: Settings > Settings… again", "menu": "Settings", "item": "Settings", "expect": "[role=\"dialog\"][aria-label=\"Settings\"]", "shot": false },
     { "id": "d4-search", "do": "type", "title": "D4: tree search 'paper' finds Canvas colours", "selector": "input[aria-label=\"Search settings\"]", "value": "paper", "expect": "table[aria-label=\"Canvas colours\"]" },
-    { "id": "d4-colours", "do": "wait", "title": "D4: canvas colour table with the paper preset", "selector": "select[aria-label=\"Canvas colour preset\"] option[value=\"paper\"]" },
+    { "id": "d4-colours", "do": "wait", "title": "D4: canvas colour table with a colour input per object (Paper preset in the select)", "selector": "table[aria-label=\"Canvas colours\"] input[type=\"color\"][aria-label=\"Wire colour\"]" },
     { "id": "d4-esc", "do": "key", "title": "D4: Escape closes Settings", "keys": "Escape", "gone": "[role=\"dialog\"][aria-label=\"Settings\"]", "shot": false },
     { "id": "d4-open-3", "do": "menu", "title": "D4: Settings > Settings… a third time", "menu": "Settings", "item": "Settings", "expect": "[role=\"dialog\"][aria-label=\"Settings\"]", "shot": false },
     { "id": "d4-grid", "do": "click", "title": "D4: PCB grid defaults page", "selector": "[role=\"tree\"] button", "text": "PCB grid", "expect": "[role=\"dialog\"][aria-label=\"Settings\"] [role=\"group\"][aria-label=\"PCB grid\"]" }
