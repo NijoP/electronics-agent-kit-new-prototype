@@ -3,6 +3,7 @@ import {
   COMMON_VIAS,
   deleteTracks,
   draftLength,
+  draftShoved,
   feedbackText,
   loopTracks,
   MIL,
@@ -72,6 +73,7 @@ describe("route tool reducer", () => {
       via_at_start: false,
       conflict: "walkaround",
       via: null,
+      pending: { tracks: [], vias: [], shoved: [] },
     });
   });
 
@@ -390,5 +392,55 @@ describe("routing options (C3)", () => {
       expect(loopTracks(started(), chain, [], [])).toEqual([]);
       expect(routeBatch(started(), ["c1"])).toBeNull();
     });
+  });
+});
+
+// Slice C3 push-and-shove in the route tool. Written without running (no local builds): unrun.
+describe("push mode (C3)", () => {
+  const bump = (id: string, y: number): ShovedTrack => ({ id, layer: "top", width: 250_000, net: "GND", points: [P(0, 300), P(1, 300), P(2, y), P(8, y), P(9, 300), P(10, 300)] });
+  const pushed = (): RouteDraft => {
+    let d = routeReducer(started(), { type: "setConflict", conflict: "push" })!;
+    d = routeReducer(d, { type: "fix", step: report({ segments: [{ a: P(0, 0), b: P(4, 0) }], end: P(4, 0), shoved: [bump("gnd", 600)] }) })!;
+    return routeReducer(d, { type: "fix", step: report({ segments: [{ a: P(4, 0), b: P(9, 0) }], end: P(9, 0), shoved: [bump("gnd", 700)] }) })!;
+  };
+
+  it("sends push mode and the route so far (segments, vias, latest moves) as pending", () => {
+    const d = pushed();
+    const r = stepRequest(d, P(12, 0));
+    expect(r.conflict).toBe("push");
+    expect(r.pending.tracks).toEqual([
+      { layer: "top", width: 250_000, a: P(0, 0), b: P(4, 0) },
+      { layer: "top", width: 250_000, a: P(4, 0), b: P(9, 0) },
+    ]);
+    expect(r.pending.vias).toEqual([]);
+    // The later step's move of the same track replaces the earlier one.
+    expect(r.pending.shoved).toEqual([bump("gnd", 700)]);
+    expect(draftShoved(d)).toEqual([bump("gnd", 700)]);
+  });
+
+  it("commits the moved track as DeleteTrack + its polyline, in the route's one Batch", () => {
+    const b = routeBatch(pushed())!;
+    expect(b.type).toBe("Batch");
+    if (b.type !== "Batch") return;
+    expect(b.commands.map((c) => c.type)).toEqual(["DeleteTrack", ...Array(5).fill("AddTrack"), "AddTrack", "AddTrack"]);
+    expect(b.commands[0]).toEqual({ type: "DeleteTrack", track_id: "gnd" });
+    expect(b.commands[3]).toEqual({ type: "AddTrack", layer: "top", a: P(2, 700), b: P(8, 700), width: 250_000, net: "GND" });
+    // A track both pushed and on a removed loop is deleted once.
+    const twice = routeBatch(pushed(), ["gnd"])!;
+    expect(twice.type === "Batch" && twice.commands.filter((c) => c.type === "DeleteTrack").length).toBe(1);
+  });
+
+  it("stepping back drops that step's move; walkaround steps move nothing", () => {
+    const d = routeReducer(pushed(), { type: "back" })!;
+    expect(draftShoved(d)).toEqual([bump("gnd", 600)]);
+    const w = routeReducer(started(), { type: "fix", step: report({ segments: [{ a: P(0, 0), b: P(4, 0) }], end: P(4, 0) }) })!;
+    expect(draftShoved(w)).toEqual([]);
+    const wb = routeBatch(w)!;
+    expect(wb.type === "Batch" && wb.commands.map((c) => c.type)).toEqual(["AddTrack"]);
+  });
+
+  it("shows which tracks the step pushed", () => {
+    expect(feedbackText(report({ shoved: [bump("gnd", 600)] }))).toContain("pushed gnd");
+    expect(feedbackText(report({}))).not.toContain("pushed");
   });
 });
