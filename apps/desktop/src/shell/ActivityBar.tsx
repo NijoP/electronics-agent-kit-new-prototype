@@ -1,14 +1,14 @@
 // Left activity bar. Two kinds of entry:
 //  * workspaces (Schematic, PCB, and anything registered in registry.ts such as a 3D viewer or the
 //    terminal): each fills the editor area on its own, one at a time;
-//  * side views (Overview, Explorer, Design manager, Domain, Manufacturing): each switches the left
+//  * side views (Overview, Explorer, Design manager, Domain, Manufacturing, Assets): each switches the left
 //    dock, and pressing the active one collapses it. Editor panels live in the docks (Phase 1 A3):
 //    Layers in the right dock, the library in the bottom dock.
 import { tip } from "../design/shortcuts";
 import { Icons } from "./icons";
 import type { WorkspaceEntry } from "./registry";
 
-export type SideView = "overview" | "project" | "design" | "domain" | "manufacturing";
+export type SideView = "overview" | "project" | "design" | "domain" | "manufacturing" | "assets";
 
 export const SIDE_VIEWS: { id: SideView; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -16,6 +16,7 @@ export const SIDE_VIEWS: { id: SideView; label: string }[] = [
   { id: "design", label: "Design manager" },
   { id: "domain", label: "Domain" },
   { id: "manufacturing", label: "Manufacturing" },
+  { id: "assets", label: "Assets" },
 ];
 
 /** Built-in workspaces that open an editor document. */

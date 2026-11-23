@@ -57,6 +57,7 @@ import { useView3dControls } from "./viewer3d/controls";
 import { clampSize, DEFAULT_LAYOUT, LIMITS, useDockLayouts, type DockId, type LayoutWorkspace } from "./shell/layout";
 import { CanvasStrip } from "./shell/CanvasStrip";
 import { DesignManager } from "./shell/DesignManager";
+import { AssetsPanel } from "./shell/AssetsPanel";
 import { editorFor, pcbObjects, schematicPlace, type ManagerTab, type NetRow, type Target } from "./shell/designManagerData";
 import { RightDock, shownRightTab, type RightTab } from "./shell/RightDock";
 import { Inspector } from "./shell/Inspector";
@@ -969,6 +970,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
             <div className="side-scroll">
               <ManufacturingPanel result={exported} busy={busy} onExport={() => setDialog("export")} />
               <FabricatorPrepPanel revision={revision} onPrepared={setMessage} />
+            </div>
+          )}
+          {sideView === "assets" && (
+            <div className="side-scroll">
+              <AssetsPanel snapshot={snapshot} onOpenFile={openFile} onPart={(symbolId) => navigateManager({ kind: "component", symbolId }, null)} outputsKey={exported?.out_dir ?? null} />
             </div>
           )}
         </aside>

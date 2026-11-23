@@ -306,6 +306,26 @@ const handlers = {
     if (!r.accepted) throw new Error(`${s.command.type} rejected: ${JSON.stringify(r.error)}`);
     return `SETUP (IPC execute_command ${s.command.type} → revision ${r.revision_after}; not a UI action)`;
   },
+  // SETUP: a 3D model reference on a project-library part (licence and provenance recorded),
+  // through the same `UpsertComponentDefinition` the Library dock's Attach 3D model sends. Only
+  // the reference is stored (the IR keeps a path); the file is not needed for the Assets view.
+  async "fixture-model"(s) {
+    const snap = await ipc("current_project");
+    const def = snap.project.library?.[s.component];
+    if (!def) throw new Error(`no project-library part ${s.component} (place it first)`);
+    const model_ref = {
+      source: { kind: "file", path: s.path },
+      format: s.format,
+      quality: s.quality ?? null,
+      transform: { offset_mm: [0, 0, 0], rotation_deg: [0, 0, 0], scale: [1, 1, 1] },
+      licence: s.licence ?? null,
+      provenance: s.provenance,
+    };
+    const command = { type: "UpsertComponentDefinition", definition: { ...def, model3d: { kind: "box", color: "#808080", external_ref: null, ...def.model3d, model_ref } } };
+    const r = await ipc("execute_command", { expected_revision: snap.project.revision, command });
+    if (!r?.accepted) throw new Error(`UpsertComponentDefinition refused: ${JSON.stringify(r?.error)}`);
+    return `SETUP (IPC execute_command UpsertComponentDefinition: ${s.component} model ${s.path}; not a UI action)`;
+  },
   // SETUP: an open-source library folder (manifest with licence and source, plus one definition
   // copied from a built-in part under a new id), imported through the IPC the Library browser
   // uses. Needs an open project (the built-in part is read through library_search).

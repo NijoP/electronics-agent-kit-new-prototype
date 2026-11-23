@@ -861,3 +861,13 @@ button.danger { color: var(--err); border-color: var(--err); }
 .diag-state.warning { background: var(--warn-soft); color: var(--warn); }
 .diag-state.unknown { background: var(--bg-raised); color: var(--fg-dim); border: 1px dashed var(--line-strong); }
 .diag-state.info { background: var(--info-soft); color: var(--fg); }
+/* Assets view (slice E9): models, datasheets, libraries and outputs per revision. */
+.assets { display: grid; gap: var(--s-1h); padding: var(--s-1) var(--s-2); min-width: 0; }
+.assets .ui-section + .ui-section { border-top: 1px solid var(--line); padding-top: var(--s-1h); }
+.asset-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); min-width: 0; }
+.asset-item { display: grid; gap: var(--s-quarter); min-width: 0; }
+.asset-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-half); min-width: 0; }
+.asset-meta { color: var(--fg-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; min-width: 0; }
+.asset-parts { display: inline-flex; flex-wrap: wrap; gap: var(--s-half); }
+.asset-folder { display: grid; gap: var(--s-quarter); }
+.asset-problems { margin: 0; padding-left: var(--s-2); color: var(--warn); font-size: var(--fs-sm); }

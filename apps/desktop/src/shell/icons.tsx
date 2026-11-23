@@ -13,6 +13,7 @@ export const Icons = {
   parts: svg(<><rect x="8" y="8" width="8" height="8" rx="1" /><path d="M10 8V4M14 8V4M10 20v-4M14 20v-4M8 10H4M8 14H4M20 10h-4M20 14h-4" /></>),
   domain: svg(<><circle cx="12" cy="12" r="8" /><path d="M12 4a12 12 0 0 1 0 16M12 4a12 12 0 0 0 0 16M4 12h16" /></>),
   manufacturing: svg(<><path d="M4 18h16M6 18V9l4 3V9l4 3V6h4v12" /></>),
+  assets: svg(<><path d="M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" /><path d="M9 13.5l2 2 4-4" /></>),
   settings: svg(<><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></>),
   design: svg(<><path d="M5 5h6M5 5v14M5 12h5M5 19h5" /><rect x="11" y="3.5" width="8" height="3" rx="1" /><rect x="10" y="10.5" width="8" height="3" rx="1" /><rect x="10" y="17.5" width="8" height="3" rx="1" /></>),
   layers: svg(<><path d="M12 4l8 4-8 4-8-4z" /><path d="M4 12l8 4 8-4M4 16l8 4 8-4" /></>),
