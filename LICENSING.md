@@ -88,3 +88,10 @@ DESK's Python code is not used; the classifier is re-implemented in Rust.
 from ngspice is copied, linked or redistributed by EAK. The Debian package (ngspice 42,
 `/usr/share/doc/ngspice/copyright`) declares the upstream source as BSD-3-Clause (documentation
 BSD-3-Clause / CC-BY-SA-4.0 / public domain; some build-system files GPL-2+, not used by EAK).
+
+## Fonts
+The schematic symbol text uses JetBrains Mono NL Regular 2.304
+(`apps/desktop/src/assets/fonts/JetBrainsMonoNL-Regular.ttf`, unmodified), Copyright 2020 The
+JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono), under the SIL Open
+Font License 1.1 (`third_party/licenses/JetBrainsMono/OFL.txt`). It is bundled so that pin names and
+numbers measure the same on Windows, Linux and macOS (slice B2). The font is not sold by itself.
