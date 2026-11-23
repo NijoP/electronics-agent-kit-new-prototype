@@ -1,4 +1,4 @@
-// Annotate options (Phase 1 B5, ADR-0045): numbering order, scope and reset, sent as one typed
+// Annotate options (Phase 1 B5, ADR-0046): numbering order, scope and reset, sent as one typed
 // Annotate command; the engine refuses what has nothing to do and the dialog shows why.
 import { useState } from "react";
 import type { AnnotateOrder, AnnotateScope, Command, Id } from "../types";

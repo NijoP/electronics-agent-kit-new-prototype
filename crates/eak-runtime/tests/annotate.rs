@@ -1,4 +1,4 @@
-//! Annotate options (Phase 1 B5, ADR-0045): order (across / down within the sheet order), scope
+//! Annotate options (Phase 1 B5, ADR-0046): order (across / down within the sheet order), scope
 //! (unannotated / all / selection) and reset. Designators outside the scope never change and are
 //! never reused; `{"type":"Annotate"}` keeps its old meaning.
 

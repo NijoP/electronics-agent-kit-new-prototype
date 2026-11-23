@@ -337,16 +337,23 @@ function wireFields(s: Snapshot, ids: Id[]): PropModel {
 
 function labelFields(s: Snapshot, ids: Id[]): PropModel {
   const ls = ids.map((id) => s.project.schematic.labels[id]).filter(present);
-  // No rename command exists: a rename is the label deleted and placed again with the new
-  // name, in one Batch, so it is still one revision and one undo step.
-  const replace = (change: { name?: string; kind?: "net" | "power" }, label: string): Commit => {
+  // A rename keeps the label (and its id): `RenameNetLabel`, which also carries the net name onto
+  // the PCB and the constraints (ADR-0045); a Batch for several labels, so one undo step.
+  const rename = (name: string): Commit =>
+    batch(
+      ls.filter((l) => l.name !== name).map((l): Command => ({ type: "RenameNetLabel", label_id: l.id, name })),
+      `Rename ${plural(ls.length, "label")}`,
+    );
+  // The engine has no command to change a label's kind: the label is placed again with the other
+  // kind (same name, position and scope) in one Batch, so it is still one revision and one undo step.
+  const rekind = (kind: "net" | "power"): Commit => {
     const cmds: Command[] = ls
-      .filter((l) => (change.name !== undefined && change.name !== l.name) || (change.kind !== undefined && change.kind !== l.kind))
+      .filter((l) => l.kind !== kind)
       .flatMap((l): Command[] => [
         { type: "DeleteNetLabel", label_id: l.id },
-        { type: "AddNetLabel", sheet_id: l.sheet_id, name: change.name ?? l.name, position: l.position, kind: change.kind ?? l.kind },
+        { type: "AddNetLabel", sheet_id: l.sheet_id, name: l.name, position: l.position, kind, ...(l.scope ? { scope: l.scope } : {}) },
       ]);
-    return cmds.length ? { type: "Batch", commands: cmds, label } : null;
+    return cmds.length ? { type: "Batch", commands: cmds, label: `Change ${plural(ls.length, "label")} kind` } : null;
   };
   const axis = (k: "x" | "y"): PropField => ({
     id: k,
@@ -365,7 +372,7 @@ function labelFields(s: Snapshot, ids: Id[]): PropModel {
   return {
     title: ls.length === 1 ? `Label ${ls[0].name}` : plural(ls.length, "label"),
     fields: [
-      { id: "name", label: "Net name", ...common(ls.map((l) => l.name)), edit: { kind: "text", commit: (v) => (v.trim() ? replace({ name: v.trim() }, `Rename ${plural(ls.length, "label")}`) : "A net label needs a name.") } },
+      { id: "name", label: "Net name", ...common(ls.map((l) => l.name)), edit: { kind: "text", commit: (v) => (v.trim() ? rename(v.trim()) : "A net label needs a name.") } },
       {
         id: "kind",
         label: "Kind",
@@ -376,7 +383,7 @@ function labelFields(s: Snapshot, ids: Id[]): PropModel {
             { value: "net", label: "net label" },
             { value: "power", label: "power port" },
           ],
-          commit: (v) => replace({ kind: v as "net" | "power" }, `Change ${plural(ls.length, "label")} kind`),
+          commit: (v) => rekind(v as "net" | "power"),
         },
       },
       axis("x"),
@@ -442,17 +449,60 @@ function trackFields(s: Snapshot, ids: Id[]): PropModel {
 export function selectionModel(s: Snapshot, sel: SelectionRef): PropModel | null {
   const kinds = (Object.keys(NO_SELECTION) as (keyof SelectionRef)[]).filter((k) => sel[k].length > 0);
   if (kinds.length === 0) return null;
+  const grouping = groupField(s, sel);
   if (kinds.length > 1)
     return {
       title: `${selectionSize(sel)} objects`,
       fields: [
         ...kinds.map((k): PropField => ({ id: k, label: k[0].toUpperCase() + k.slice(1), value: String(sel[k].length) })),
+        ...(grouping ? [grouping] : []),
         unavailable("common", "Common fields", "Unavailable: objects of different kinds share no editable field; select one kind to edit it"),
       ],
     };
   const k = kinds[0];
   const build = { symbols: symbolFields, footprints: footprintFields, wires: wireFields, labels: labelFields, tracks: trackFields }[k];
-  return build(s, sel[k]);
+  const m = build(s, sel[k]);
+  return grouping ? { ...m, fields: [...m.fields, grouping] } : m;
+}
+
+const UNGROUPED = "none";
+const NEW_GROUP = "new";
+/**
+ * The Group row of a schematic selection (ADR-0045): the group(s) it touches, with "none" to
+ * ungroup them, or "group these objects" for two or more ungrouped objects. One command (a Batch
+ * for several groups), so one undo step. Null for PCB selections, which cannot be grouped.
+ */
+export function groupField(s: Snapshot, sel: SelectionRef): PropField | null {
+  const members = [...sel.symbols, ...sel.wires, ...sel.labels];
+  if (members.length === 0 || sel.footprints.length > 0 || sel.tracks.length > 0) return null;
+  const touched = Object.values(s.project.schematic.groups ?? {}).filter((g) => g.members.some((m) => members.includes(m)));
+  if (touched.length > 0) {
+    const ungroup = touched.map((g): Command => ({ type: "Ungroup", group_id: g.id }));
+    return {
+      id: "group",
+      label: "Group",
+      ...(touched.length === 1 ? { value: touched[0].id } : { value: "", mixed: true }),
+      edit: {
+        kind: "select",
+        options: [...touched.map((g) => ({ value: g.id, label: `${g.name} (${plural(g.members.length, "object")})` })), { value: UNGROUPED, label: "none (ungroup)" }],
+        commit: (v) => (v === UNGROUPED ? batch(ungroup, `Ungroup ${plural(touched.length, "group")}`) : null),
+      },
+    };
+  }
+  if (members.length < 2) return { id: "group", label: "Group", value: "not grouped (select two or more objects to group them)" };
+  return {
+    id: "group",
+    label: "Group",
+    value: UNGROUPED,
+    edit: {
+      kind: "select",
+      options: [
+        { value: UNGROUPED, label: "not grouped" },
+        { value: NEW_GROUP, label: `group these ${plural(members.length, "object")}` },
+      ],
+      commit: (v) => (v === NEW_GROUP ? { type: "Group", members, name: null } : null),
+    },
+  };
 }
 
 /** Document fields: sheet size and title block in the schematic, board and stack-up in the PCB. */

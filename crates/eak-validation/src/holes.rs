@@ -104,7 +104,7 @@ fn mm(v: f64) -> String {
 
 /// DRC-018: copper of another net (or unconnected copper) closer than `min` to the edge of a
 /// drilled hole, on the layers the hole's own copper spans. The clearance-matrix cell between
-/// holes and the copper item's class raises `min` for that item (Phase 1 C5, ADR-0045).
+/// holes and the copper item's class raises `min` for that item (Phase 1 C5, ADR-0046).
 pub fn copper_to_hole(p: &Project, min: Nm) -> Vec<Finding> {
     let items = copper::items(p);
     let cells = &p.constraints;

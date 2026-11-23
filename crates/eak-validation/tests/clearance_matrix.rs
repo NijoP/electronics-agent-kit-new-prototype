@@ -1,4 +1,4 @@
-//! Phase 1 C5 (ADR-0045): every clearance-matrix cell DRC enforces is enforced by a test here.
+//! Phase 1 C5 (ADR-0046): every clearance-matrix cell DRC enforces is enforced by a test here.
 //! Two objects of the cell's classes (or one object and the board outline) sit well apart for
 //! every default rule; the rule enforcing the cell is silent without the cell and fires once the
 //! cell asks for more than that distance. A configured cell no rule enforces is reported (DRC-002

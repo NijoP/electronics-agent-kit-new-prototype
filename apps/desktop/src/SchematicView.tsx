@@ -362,6 +362,9 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   const needSel = (): true | string => (S.isEmpty(sel) ? "Select something first" : idle());
   const needParts = (n: 1 | 2 | 3): true | string => (sel.symbols.length >= n ? idle() : n === 1 ? "Select a part first" : `Select ${n === 2 ? "two" : "three"} or more parts first`);
   const netSeed = sel.symbols.length === 0 && S.count(sel) === 1 ? (sel.wires[0] ?? sel.labels[0]) : null;
+  // ADR-0045: Group / Ungroup are engine commands, one revision and one undo step each.
+  const groupCmd = S.groupCommand(snapshot, sel);
+  const ungroupCmds = S.ungroupCommands(snapshot, sel);
   const ops: Record<string, EditorOp> | undefined =
     edit && actions
       ? {
@@ -387,6 +390,16 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
           "distribute-x": { state: needParts(3), run: () => actions.distribute("x") },
           "distribute-y": { state: needParts(3), run: () => actions.distribute("y") },
           array: { state: needSel(), run: () => setArraying(true) },
+          group: {
+            state: typeof groupCmd === "string" ? groupCmd : idle(),
+            run: () => {
+              if (typeof groupCmd !== "string") submit([groupCmd], `Group ${objects(S.count(sel))}`);
+            },
+          },
+          ungroup: {
+            state: ungroupCmds.length ? idle() : "The selection is not part of a group",
+            run: () => submit(ungroupCmds, `Ungroup ${ungroupCmds.length} groups`),
+          },
         }
       : undefined;
 
@@ -397,6 +410,14 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     if (!edit || !sheet || !actions || isTyping(e.target) || e.altKey || !isActiveEditor(docId)) return;
     const k = e.key.toLowerCase();
     if (e.ctrlKey || e.metaKey) {
+      if (k === "g") {
+        // Group / Ungroup (ADR-0045) run through the published ops, so they share the menu's state.
+        e.preventDefault();
+        const o = ops?.[e.shiftKey ? "ungroup" : "group"];
+        if (o && o.state === true) o.run();
+        else if (o && o.state !== true) edit.notify(o.state);
+        return;
+      }
       if (e.shiftKey) return;
       if (k === "c") actions.copy();
       else if (k === "x") actions.cut();
@@ -552,7 +573,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     const mode = S.pickMode(e);
     if (!o) return setSel(mode === "replace" ? S.EMPTY : sel);
     if (justPicked === o[1]) return;
-    setSel(S.pick(sel, o[0], o[1], mode));
+    setSel(S.pickGrouped(snapshot, sel, o[0], o[1], mode));
     if (o[0] === "symbol") onSelect(o[1]);
   };
   const dragHandler: DragHandler = {
@@ -565,7 +586,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       if (!o && tool !== "select") return false;
       if (o && !S.has(sel, o[0], o[1])) {
         pressed.current = o[1];
-        setSel(S.pick(sel, o[0], o[1], S.pickMode(e) === "replace" ? "replace" : "add"));
+        setSel(S.pickGrouped(snapshot, sel, o[0], o[1], S.pickMode(e) === "replace" ? "replace" : "add"));
         if (o[0] === "symbol") onSelect(o[1]);
       }
       setDrag({ mode: o ? "move" : "marquee", from: at, to: at, additive: S.pickMode(e) !== "replace" });
@@ -578,7 +599,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       if (!d) return;
       const to = fromView(x, y);
       if (d.mode === "marquee") {
-        const found = S.filtered(S.marquee(snapshot, sheet.id, S.rectOf(d.from, to)), filter);
+        const found = S.withGroups(snapshot, S.filtered(S.marquee(snapshot, sheet.id, S.rectOf(d.from, to)), filter));
         setSel(d.additive ? S.union(sel, found) : found);
         return;
       }
@@ -603,7 +624,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     if (!edit || !contextMenu) return;
     const o = pickAt(e);
     if (o && !S.has(sel, o[0], o[1])) {
-      setSel(S.pick(sel, o[0], o[1], "replace"));
+      setSel(S.pickGrouped(snapshot, sel, o[0], o[1], "replace"));
       if (o[0] === "symbol") onSelect(o[1]);
     }
     const label = !o ? `Sheet ${sheet.name}` : o[0] === "symbol" ? `Part ${schematic.symbols[o[1]]?.refdes ?? ""}`.trim() : o[0] === "label" ? `Net label ${schematic.labels[o[1]]?.name ?? ""}`.trim() : "Wire";

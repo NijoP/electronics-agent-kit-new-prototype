@@ -118,6 +118,36 @@ pub fn check(p: &Project) -> Vec<String> {
             e.push(format!("bus entry {k} has zero length"));
         }
     }
+    let mut grouped = std::collections::BTreeMap::new();
+    for (k, g) in &p.schematic.groups {
+        if &g.id != k {
+            e.push(format!("group key {k} != id {}", g.id));
+        }
+        if !p.schematic.sheets.contains_key(&g.sheet_id) {
+            e.push(format!("group {k} on missing sheet"));
+        }
+        if g.name.trim().is_empty() {
+            e.push(format!("group {k} has an empty name"));
+        }
+        if g.members.len() < crate::ir::MIN_GROUP_MEMBERS {
+            e.push(format!(
+                "group {k} has fewer than {} members",
+                crate::ir::MIN_GROUP_MEMBERS
+            ));
+        }
+        for m in &g.members {
+            match p.schematic.groupable_sheet(m) {
+                None => e.push(format!("group {k} references missing object {m}")),
+                Some(s) if *s != g.sheet_id => {
+                    e.push(format!("group {k} member {m} is on another sheet"))
+                }
+                Some(_) => {}
+            }
+            if let Some(other) = grouped.insert(m, k) {
+                e.push(format!("object {m} is in groups {other} and {k}"));
+            }
+        }
+    }
     for (k, f) in &p.pcb.footprints {
         if &f.id != k {
             e.push(format!("footprint key {k} != id {}", f.id));

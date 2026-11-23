@@ -102,7 +102,7 @@ describe("design rules dialog", () => {
   });
 });
 
-// Phase 1 B5/C5 (ADR-0045): rule tree, clearance matrix, net-to-net clearance and the ERC / DRC
+// Phase 1 B5/C5 (ADR-0046): rule tree, clearance matrix, net-to-net clearance and the ERC / DRC
 // rule tables. Each Apply is one typed command (a Batch when several rows change).
 describe("rule tables", () => {
   const erc: Report = {
@@ -195,7 +195,7 @@ describe("rule tables", () => {
   });
 });
 
-// Annotate options (Phase 1 B5, ADR-0045): order, scope and reset as one typed Annotate command.
+// Annotate options (Phase 1 B5, ADR-0046): order, scope and reset as one typed Annotate command.
 describe("Annotate options dialog", () => {
   const open = (selected?: string) => {
     const got: Command[] = [];

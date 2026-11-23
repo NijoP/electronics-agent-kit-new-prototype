@@ -19,10 +19,12 @@
 //!   tool options `pcb.routing`, added with their defaults (45-degree corners, walkaround,
 //!   net-class width and via, loop removal on). A v4 pad has no expansion of its own, which is
 //!   exactly the v4 meaning.
-//! * v5 -> v6 (ADR-0045): rule configuration. `constraints.rules` (per-rule enable and severity),
+//! * v5 → v6 (ADR-0045): object groups. The new collection `schematic.groups` is added empty;
+//!   a v5 project had no groups, so nothing else changes.
+//! * v6 → v7 (ADR-0046): rule configuration. `constraints.rules` (per-rule enable and severity),
 //!   `constraints.clearance_matrix` and `constraints.net_pair_rules` are new and absent means
-//!   empty: every rule enabled at its default severity and no extra clearances, exactly the v5
-//!   meaning. Only the version number changes; a v6 file is refused by v5 builds, which would
+//!   empty: every rule enabled at its default severity and no extra clearances, exactly the v6
+//!   meaning. Only the version number changes; a v7 file is refused by v6 builds, which would
 //!   otherwise drop a disabled rule's configuration and run it as enabled.
 
 use crate::ir::{Stackup, FR4_ER, SCHEMA_VERSION};
@@ -54,7 +56,10 @@ pub fn migrate(mut raw: Value) -> Result<Value, CoreError> {
         raw = v4_to_v5(raw);
     }
     if found <= 5 {
-        raw["schema_version"] = Value::from(6);
+        raw = v5_to_v6(raw);
+    }
+    if found <= 6 {
+        raw["schema_version"] = Value::from(7);
     }
     Ok(raw)
 }
@@ -127,6 +132,15 @@ fn v4_to_v5(mut raw: Value) -> Value {
         });
     }
     raw["schema_version"] = Value::from(5);
+    raw
+}
+
+fn v5_to_v6(mut raw: Value) -> Value {
+    if let Some(sch) = raw.get_mut("schematic").and_then(Value::as_object_mut) {
+        sch.entry("groups")
+            .or_insert_with(|| Value::Object(Default::default()));
+    }
+    raw["schema_version"] = Value::from(6);
     raw
 }
 
@@ -516,10 +530,121 @@ mod tests {
         assert_eq!(problems.len(), 3, "{problems:?}");
     }
 
-    /// v5 -> v6 (ADR-0045): a v5 file loads with no rule configuration, a project without one
+    /// A project with one group of a wire and a net label (schema v6, ADR-0045).
+    fn v6_project() -> Project {
+        use crate::{LabelKind, NetLabel, NetScope, Point, SchematicGroup, Wire};
+        let mut p = Project::new("v6-groups");
+        let sheet = p.first_sheet_id().unwrap().clone();
+        p.schematic.wires.insert(
+            "wir_1".into(),
+            Wire {
+                id: "wir_1".into(),
+                sheet_id: sheet.clone(),
+                a: Point::new(0, 0),
+                b: Point::new(2_540_000, 0),
+            },
+        );
+        p.schematic.labels.insert(
+            "lbl_1".into(),
+            NetLabel {
+                id: "lbl_1".into(),
+                sheet_id: sheet.clone(),
+                name: "SDA".into(),
+                position: Point::new(0, 0),
+                kind: LabelKind::Net,
+                scope: NetScope::Global,
+                power_style: None,
+            },
+        );
+        p.schematic.groups.insert(
+            "grp_1".into(),
+            SchematicGroup {
+                id: "grp_1".into(),
+                sheet_id: sheet,
+                name: "Group 1".into(),
+                members: vec!["lbl_1".into(), "wir_1".into()],
+            },
+        );
+        p
+    }
+
+    #[test]
+    fn v6_groups_round_trip_byte_stable() {
+        let p = v6_project();
+        assert!(
+            crate::integrity::check(&p).is_empty(),
+            "{:?}",
+            crate::integrity::check(&p)
+        );
+        let a = to_json(&p);
+        let q = from_json(&a).unwrap();
+        assert_eq!(p, q);
+        assert_eq!(a, to_json(&q));
+        let v: Value = serde_json::from_str(&a).unwrap();
+        assert_eq!(
+            v["schematic"]["groups"]["grp_1"]["members"],
+            serde_json::json!(["lbl_1", "wir_1"])
+        );
+    }
+
+    #[test]
+    fn v5_project_migrates_to_v6_with_identical_meaning() {
+        let mut current = v6_project();
+        current.schematic.groups.clear();
+        let mut v: Value = serde_json::from_str(&to_json(&current)).unwrap();
+        v["schema_version"] = Value::from(5);
+        v["schematic"].as_object_mut().unwrap().remove("groups");
+        let v5 = v.to_string();
+        assert!(!v5.contains("\"groups\""));
+        let p = from_json(&v5).expect("v5 project loads");
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
+        assert_eq!(p, current);
+        assert!(p.schematic.groups.is_empty());
+        let a = to_json(&p);
+        assert!(a.contains("\"groups\""), "v6 always writes the collection");
+        assert_eq!(a, to_json(&from_json(&a).unwrap()));
+    }
+
+    #[test]
+    fn invalid_groups_fail_integrity() {
+        use crate::SchematicGroup;
+        let mut p = v6_project();
+        let sheet = p.first_sheet_id().unwrap().clone();
+        // A member that does not exist, and a one-member group.
+        p.schematic
+            .groups
+            .get_mut("grp_1")
+            .unwrap()
+            .members
+            .push("sym_gone".into());
+        p.schematic.groups.insert(
+            "grp_2".into(),
+            SchematicGroup {
+                id: "grp_2".into(),
+                sheet_id: sheet,
+                name: "Lonely".into(),
+                members: vec!["wir_1".into()],
+            },
+        );
+        let Err(CoreError::Integrity(problems)) = from_json(&to_json(&p)) else {
+            panic!("integrity must refuse the project");
+        };
+        // missing member; grp_2 too small; wir_1 in two groups.
+        assert_eq!(problems.len(), 3, "{problems:?}");
+    }
+
+    #[test]
+    fn prune_groups_drops_deleted_members_and_dissolves_small_groups() {
+        let mut p = v6_project();
+        p.schematic.labels.remove("lbl_1");
+        assert_eq!(p.schematic.prune_groups(), vec!["Group 1".to_string()]);
+        assert!(p.schematic.groups.is_empty());
+    }
+
+    /// v6 → v7 (ADR-0046): a v6 file loads with no rule configuration, a project without one
     /// saves without the new keys, and a configured one round-trips through save and open.
     #[test]
-    fn v6_rule_configuration_migrates_and_round_trips() {
+    fn v7_rule_configuration_migrates_and_round_trips() {
         use crate::{ClearanceCell, NetPairRule, ObjectClass, RuleConfig, RuleSeverity};
         let plain = Project::new("v5-board");
         let json = to_json(&plain);
@@ -527,8 +652,8 @@ mod tests {
             assert!(!json.contains(k), "empty {k} must not be written");
         }
         let mut v: Value = serde_json::from_str(&json).unwrap();
-        v["schema_version"] = Value::from(5);
-        let p = from_json(&v.to_string()).expect("v5 project loads");
+        v["schema_version"] = Value::from(6);
+        let p = from_json(&v.to_string()).expect("v6 project loads");
         assert_eq!(p.schema_version, SCHEMA_VERSION);
         assert_eq!(p, plain);
 

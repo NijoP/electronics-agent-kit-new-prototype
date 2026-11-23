@@ -315,6 +315,30 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                 &["label_id", "position"],
             ),
         ),
+        RenameNetLabel { .. } => (
+            D::Schematic,
+            "Rename a net label in place (same id, position, kind and scope). PCB copper and constraints on a net the rename changes follow the new name; renaming to an existing net name joins the nets.",
+            obj(
+                &[("label_id", id("label id")), ("name", string("new net name"))],
+                &["label_id", "name"],
+            ),
+        ),
+        Group { .. } => (
+            D::Schematic,
+            "Group two or more symbols, wires and net labels of one sheet so they select and move together; an object is in at most one group. Grouping never changes connectivity.",
+            obj(
+                &[
+                    ("members", array(id("symbol, wire or net label id"), "objects to group")),
+                    ("name", nullable(string("group name; omit for Group N"))),
+                ],
+                &["members"],
+            ),
+        ),
+        Ungroup { .. } => (
+            D::Schematic,
+            "Dissolve a group; its objects stay where they are.",
+            obj(&[("group_id", id("group id"))], &["group_id"]),
+        ),
         SetNoConnect { .. } => (
             D::Schematic,
             "Mark a pin as intentionally unconnected (refused if it is already marked).",
@@ -944,6 +968,17 @@ pub fn command_samples() -> Vec<Command> {
             label_id: "l".into(),
             position: Point::new(2, 2),
         },
+        RenameNetLabel {
+            label_id: "l".into(),
+            name: "VBAT".into(),
+        },
+        Group {
+            members: vec!["s".into(), "w".into()],
+            name: Some("Filter".into()),
+        },
+        Ungroup {
+            group_id: "g".into(),
+        },
         SetNoConnect {
             symbol_id: "s".into(),
             pin: "3".into(),
@@ -1307,11 +1342,12 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 85 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
+        // 88 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
         // schematic commands of ADR-0040, the 16 PCB commands of ADR-0042 (15 schema-v4 edits plus
-        // SyncSchematicToPcbSelected), the 3 sheet commands of ADR-0043 and the 2 schema-v5
-        // commands of ADR-0044 and the 3 schema-v6 rule commands of ADR-0045); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 85);
+        // SyncSchematicToPcbSelected), the 3 sheet commands of ADR-0043, the 2 schema-v5 commands of
+        // ADR-0044, the 3 group and rename commands of ADR-0045 and the 3 schema-v7 rule commands
+        // of ADR-0046); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
+        assert_eq!(tools.len(), 88);
         for t in &tools {
             assert!(t
                 .spec

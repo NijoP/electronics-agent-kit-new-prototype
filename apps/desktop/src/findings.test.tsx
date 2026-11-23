@@ -128,13 +128,13 @@ describe("Real-time DRC toggle", () => {
   });
 });
 
-// ADR-0045 (AD-8): reports state disabled rules and severity overrides explicitly.
+// ADR-0046 (AD-8): reports state disabled rules and severity overrides explicitly.
 describe("Findings panel rule configuration", () => {
   it("lists a DISABLED rule and an overridden rule, even when the override made it pass", () => {
     const r = ercResult(7);
     r.report.overall = "FAIL";
     r.report.rule_results = [
-      { rule_id: "ERC-006", state: "DISABLED", reason: "disabled in the project's rule configuration: not evaluated, not a pass (ADR-0045)" },
+      { rule_id: "ERC-006", state: "DISABLED", reason: "disabled in the project's rule configuration: not evaluated, not a pass (ADR-0046)" },
       { rule_id: "ERC-001", state: "PASS", reason: "", severity_override: "info", default_state: "FAIL" },
       { rule_id: "ERC-009", state: "PASS", reason: "" },
     ];

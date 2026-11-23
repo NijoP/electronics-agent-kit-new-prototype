@@ -41,7 +41,7 @@ export function severityCounts(findings: Finding[]): Record<Severity, number> {
  * still in the current revision. Ids the snapshot does not hold (a net name, an object deleted
  * since the report ran) are shown as they are and cannot be navigated to.
  */
-/** A rule result the panel lists: not passing, or configured (disabled or overridden; ADR-0045). */
+/** A rule result the panel lists: not passing, or configured (disabled or overridden; ADR-0046). */
 export const notPlain = (x: RuleResult) => (x.state !== "PASS" && x.state !== "NOT_APPLICABLE") || !!x.severity_override;
 
 export function objectRef(s: Snapshot, id: Id): { label: string; present: boolean } {

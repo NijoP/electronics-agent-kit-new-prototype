@@ -265,7 +265,7 @@ pub fn run(p: &Project) -> Report {
         for nc in &c.net_classes {
             m = m.max(nc.clearance);
         }
-        // Clearance-matrix cells and net-pair rules (Phase 1 C5, ADR-0045).
+        // Clearance-matrix cells and net-pair rules (Phase 1 C5, ADR-0046).
         for cell in &c.clearance_matrix {
             m = m.max(cell.clearance);
         }
@@ -310,7 +310,7 @@ pub fn run(p: &Project) -> Report {
                     basis = format!("IPC-2221B {cond:?} for {dv:.0} V (unverified table)");
                 }
             }
-            // Phase 1 C5 (ADR-0045): the clearance-matrix cell of the two object classes and
+            // Phase 1 C5 (ADR-0046): the clearance-matrix cell of the two object classes and
             // the net-pair rule of the two nets raise the requirement; the largest rule wins.
             if let Some(m) = c.matrix_cell(classes[i], classes[j]) {
                 if m as f64 > req {
@@ -390,7 +390,7 @@ pub fn run(p: &Project) -> Report {
         let mut seen = BTreeSet::new();
         for (it, class) in items.iter().zip(&classes) {
             // The clearance-matrix cell between this item's class and the outline raises the
-            // edge clearance for it (Phase 1 C5, ADR-0045).
+            // edge clearance for it (Phase 1 C5, ADR-0046).
             let edge = c
                 .matrix_cell(*class, ObjectClass::Outline)
                 .map_or(edge, |m| edge.max(m as f64));
@@ -914,7 +914,7 @@ pub fn run(p: &Project) -> Report {
 
     // DRC-018 / DRC-019 / DRC-020: holes and silkscreen-to-edge.
     f.extend(holes::copper_to_hole(p, c.min_clearance));
-    // The hole/hole and silk/outline matrix cells raise these minimums (Phase 1 C5, ADR-0045).
+    // The hole/hole and silk/outline matrix cells raise these minimums (Phase 1 C5, ADR-0046).
     let (hole_min, hole_basis) = match c.matrix_cell(ObjectClass::Hole, ObjectClass::Hole) {
         Some(m) if m > HOLE_TO_HOLE_MIN => (m, "clearance matrix hole / hole"),
         _ => (HOLE_TO_HOLE_MIN, "EAK default"),
@@ -971,7 +971,7 @@ pub fn run(p: &Project) -> Report {
         "Pad shapes: rectangle, circle, oval (no rounded-rectangle or custom polygons)".into(),
         "Arc tracks and arc board edges are checked as chords with at most 10 µm error; the autorouter and auto-placer do not avoid keep-out regions (DRC-021 reports what they put there)".into(),
         "Text and dimensions on the documentation layer are not fabricated and not checked; silk text is not checked against other silk or the courtyards".into(),
-        "Clearance-matrix cells are checked by DRC only: the interactive router keeps net classes, declared voltages and net-pair rules but not the matrix, and the autorouter keeps neither the matrix nor net-pair rules (ADR-0045)".into(),
+        "Clearance-matrix cells are checked by DRC only: the interactive router keeps net classes, declared voltages and net-pair rules but not the matrix, and the autorouter keeps neither the matrix nor net-pair rules (ADR-0046)".into(),
     ];
     limitations.extend(undeclared_nets_not_evaluated(p));
     let (no_current, no_voltage) = undeclared_nets(p);
@@ -1016,7 +1016,7 @@ pub fn run(p: &Project) -> Report {
 }
 
 /// The rule that enforces a clearance-matrix cell, `None` when no rule does (Phase 1 C5,
-/// ADR-0045). Copper pairs are DRC-002 (between different nets), copper to holes DRC-018, holes
+/// ADR-0046). Copper pairs are DRC-002 (between different nets), copper to holes DRC-018, holes
 /// to holes DRC-019, copper to the outline DRC-005 and silkscreen to the outline DRC-020.
 pub fn matrix_cell_rule(a: ObjectClass, b: ObjectClass) -> Option<&'static str> {
     use ObjectClass::*;

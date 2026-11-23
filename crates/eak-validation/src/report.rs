@@ -181,7 +181,7 @@ impl Report {
         not_implemented: Vec<String>,
         limitations: Vec<String>,
     ) -> Report {
-        // The project's rule configuration (ADR-0045, AD-8): a disabled rule's findings are not
+        // The project's rule configuration (ADR-0046, AD-8): a disabled rule's findings are not
         // reported and an overridden rule's findings carry the configured severity. The state at
         // default severities is kept for overridden rules, for the gates.
         let cfg = &p.constraints.rules;
@@ -395,7 +395,7 @@ impl Report {
 
 /// Why a disabled rule has no result.
 pub const DISABLED_REASON: &str =
-    "disabled in the project's rule configuration: not evaluated, not a pass (ADR-0045)";
+    "disabled in the project's rule configuration: not evaluated, not a pass (ADR-0046)";
 
 impl From<eak_core::RuleSeverity> for Severity {
     fn from(s: eak_core::RuleSeverity) -> Severity {

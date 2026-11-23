@@ -20,6 +20,10 @@ import {
   distributeCommands,
   filtered,
   similar,
+  groupCommand,
+  pickGrouped,
+  ungroupCommands,
+  withGroups,
 } from "./selection";
 
 const mm = (v: number) => v * 1_000_000;
@@ -213,5 +217,41 @@ describe("slice B3: arrange, array, similar, filter, paste on another sheet", ()
     expect(cmds.map((c) => c.type)).toEqual(["PlaceSymbol", "AddWire", "AddNetLabel"]);
     expect(cmds[2]).toEqual({ type: "AddNetLabel", sheet_id: "sht_2", name: "GND", kind: "power", position: pt(84, 50), scope: "global", power_style: "ground" });
     expect(cmds[0]).toMatchObject({ refdes: null });
+  });
+});
+
+describe("groups (ADR-0045)", () => {
+  const grouped = (): Snapshot => {
+    const s = wired();
+    s.project.schematic.groups = { grp_1: { id: "grp_1", sheet_id: "sht_1", name: "Group 1", members: ["lab_1", "sym_r1", "wir_1"] } };
+    return s;
+  };
+
+  it("a click on a member selects the whole group; Ctrl/Cmd toggles the whole group off", () => {
+    const s = grouped();
+    const whole = { symbols: ["sym_r1"], wires: ["wir_1"], labels: ["lab_1"] };
+    expect(pickGrouped(s, EMPTY, "wire", "wir_1", "replace")).toEqual(whole);
+    const plus = pickGrouped(s, { ...EMPTY, symbols: ["sym_d1"] }, "symbol", "sym_r1", "add");
+    expect(plus).toEqual({ symbols: ["sym_d1", "sym_r1"], wires: ["wir_1"], labels: ["lab_1"] });
+    expect(pickGrouped(s, plus, "label", "lab_1", "toggle")).toEqual({ symbols: ["sym_d1"], wires: [], labels: [] });
+    // an ungrouped object picks as before
+    expect(pickGrouped(s, EMPTY, "symbol", "sym_d1", "replace")).toEqual(pick(EMPTY, "symbol", "sym_d1", "replace"));
+  });
+
+  it("a box that touches a member widens to the group", () => {
+    const s = grouped();
+    expect(withGroups(s, { ...EMPTY, labels: ["lab_1"] })).toEqual({ symbols: ["sym_r1"], wires: ["wir_1"], labels: ["lab_1"] });
+    const free = { ...EMPTY, symbols: ["sym_d1"] };
+    expect(withGroups(s, free)).toBe(free);
+  });
+
+  it("Group needs two or more ungrouped objects; Ungroup names every group the selection touches", () => {
+    const s = wired();
+    expect(groupCommand(s, { ...EMPTY, symbols: ["sym_r1"] })).toBe("Select two or more objects first");
+    expect(groupCommand(s, { ...EMPTY, symbols: ["sym_r1", "sym_d1"] })).toEqual({ type: "Group", members: ["sym_r1", "sym_d1"], name: null });
+    expect(ungroupCommands(s, { ...EMPTY, symbols: ["sym_r1"] })).toEqual([]);
+    const g = grouped();
+    expect(groupCommand(g, { ...EMPTY, symbols: ["sym_r1", "sym_d1"] })).toBe("Group 1 is already a group: ungroup it first");
+    expect(ungroupCommands(g, { ...EMPTY, wires: ["wir_1"] })).toEqual([{ type: "Ungroup", group_id: "grp_1" }]);
   });
 });

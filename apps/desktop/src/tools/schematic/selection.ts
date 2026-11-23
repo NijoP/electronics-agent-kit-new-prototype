@@ -2,7 +2,7 @@
 // rotating, deleting and pasting a selection. They only compute typed engine commands; the
 // caller submits them as one `Batch` (ADR-0013), so a multi-object edit is one revision and
 // one undo step. The engine snapshot stays the only design model.
-import type { Command, FlipAxis, Id, NetLabel, NetScope, Point, PowerStyle, Rotation, Snapshot, SymbolGeom, Wire } from "../../types";
+import type { Command, FlipAxis, Id, NetLabel, NetScope, Point, PowerStyle, Rotation, SchematicGroup, Snapshot, SymbolGeom, Wire } from "../../types";
 
 export type Kind = "symbol" | "wire" | "label";
 export interface Selection {
@@ -365,3 +365,67 @@ export function filtered(s: Selection, f: Filter): Selection {
   if (f.symbol && f.wire && f.label) return s;
   return { symbols: f.symbol ? s.symbols : [], wires: f.wire ? s.wires : [], labels: f.label ? s.labels : [] };
 }
+
+// ---- Groups (ADR-0045) ------------------------------------------------------------------------
+// A group is engine state (`Group` / `Ungroup` commands). The editor treats it as one object: a
+// click or a box that touches a member selects every member, so move, copy and delete act on the
+// whole group through the same commands as any multi-selection.
+
+const groupsOf = (snap: Snapshot): SchematicGroup[] => Object.values(snap.project.schematic.groups ?? {});
+
+/** The group `id` belongs to, if any. */
+export const groupOf = (snap: Snapshot, id: Id): SchematicGroup | undefined => groupsOf(snap).find((g) => g.members.includes(id));
+
+const kindOf = (snap: Snapshot, id: Id): Kind | null => {
+  const { symbols, wires, labels } = snap.project.schematic;
+  return id in symbols ? "symbol" : id in wires ? "wire" : id in labels ? "label" : null;
+};
+const ids = (s: Selection): Id[] => [...s.symbols, ...s.wires, ...s.labels];
+
+/** The existing objects among `members`, as a selection. */
+export function selectionOf(snap: Snapshot, members: readonly Id[]): Selection {
+  const out: Selection = { symbols: [], wires: [], labels: [] };
+  for (const m of members) {
+    const k = kindOf(snap, m);
+    if (k) out[listOf(k)].push(m);
+  }
+  return out;
+}
+
+/** `s` widened to every member of each group it touches. */
+export function withGroups(snap: Snapshot, s: Selection): Selection {
+  const chosen = new Set(ids(s));
+  const touched = groupsOf(snap).filter((g) => g.members.some((m) => chosen.has(m)));
+  return touched.reduce((acc, g) => union(acc, selectionOf(snap, g.members)), s);
+}
+
+/** A click on a grouped object acts on its whole group: plain and Shift select it, Ctrl/Cmd toggles it. */
+export function pickGrouped(snap: Snapshot, s: Selection, k: Kind, id: Id, mode: PickMode): Selection {
+  const g = groupOf(snap, id);
+  if (!g) return pick(s, k, id, mode);
+  const members = selectionOf(snap, g.members);
+  if (mode === "replace") return members;
+  if (mode === "toggle" && has(s, k, id)) {
+    const drop = new Set(ids(members));
+    return { symbols: s.symbols.filter((i) => !drop.has(i)), wires: s.wires.filter((i) => !drop.has(i)), labels: s.labels.filter((i) => !drop.has(i)) };
+  }
+  return union(s, members);
+}
+
+/** The groups the selection touches. */
+export const groupsIn = (snap: Snapshot, s: Selection): SchematicGroup[] => {
+  const chosen = new Set(ids(s));
+  return groupsOf(snap).filter((g) => g.members.some((m) => chosen.has(m)));
+};
+
+/** `Group` for the selection, or why it cannot be grouped. */
+export function groupCommand(snap: Snapshot, s: Selection): Command | string {
+  const members = ids(s);
+  if (members.length < 2) return "Select two or more objects first";
+  const g = groupsIn(snap, s)[0];
+  if (g) return `${g.name} is already a group: ungroup it first`;
+  return { type: "Group", members, name: null };
+}
+
+/** `Ungroup` for every group the selection touches (one `Batch` when there are several). */
+export const ungroupCommands = (snap: Snapshot, s: Selection): Command[] => groupsIn(snap, s).map((g): Command => ({ type: "Ungroup", group_id: g.id }));

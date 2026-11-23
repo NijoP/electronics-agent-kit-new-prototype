@@ -17,6 +17,7 @@ const COLLECTIONS: &[&[&str]] = &[
     &["schematic", "graphics"],
     &["schematic", "buses"],
     &["schematic", "bus_entries"],
+    &["schematic", "groups"],
     &["pcb", "footprints"],
     &["pcb", "tracks"],
     &["pcb", "vias"],

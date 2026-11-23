@@ -172,7 +172,28 @@ describe("slice B3 editing set in the schematic editor", () => {
     fireEvent.click(panel.getByRole("button", { name: /^Create 1 copy/ }));
     expect(sent[1]).toMatchObject({ type: "Batch", label: "Array 2×1: 1 copies" });
     expect(screen.queryByRole("group", { name: "Array" })).toBeNull();
-    // Group stays unavailable: no editor operation pretends to group
-    expect(ops().group).toBeUndefined();
+    // Group (ADR-0045): the whole selection becomes one Group command; nothing is grouped yet to ungroup
+    expect(ops().ungroup.state).toBe("The selection is not part of a group");
+    expect(ops().group.state).toBe(true);
+    const chosen = editorContext("sch:sht_1")!.selection;
+    act(() => ops().group.run());
+    const g = sent[2] as Extract<Command, { type: "Group" }>;
+    expect(g.type).toBe("Group");
+    expect([...g.members].sort()).toEqual([...chosen.symbols, ...chosen.wires, ...chosen.labels].sort());
+  });
+
+  it("a click on a grouped object selects its whole group; Ctrl+Shift+G ungroups it (one command)", () => {
+    const snap = twoSheets();
+    snap.project.schematic.groups = { grp_1: { id: "grp_1", sheet_id: "sht_1", name: "Group 1", members: ["lab_1", "sym_r1", "wir_1"] } };
+    const r = render(
+      <DocIdContext.Provider value="sch:sht_1">
+        <SchematicView snapshot={snap} selected={null} onSelect={() => {}} edit={edit()} sheetId="sht_1" />
+      </DocIdContext.Provider>,
+    );
+    clickOn(r.container.querySelector('[data-symbol-id="sym_r1"] rect.body')!, [50, 50]);
+    expect(editorContext("sch:sht_1")!.selection).toMatchObject({ symbols: ["sym_r1"], wires: ["wir_1"], labels: ["lab_1"] });
+    expect(editorContext("sch:sht_1")!.ops!.group.state).toBe("Group 1 is already a group: ungroup it first");
+    fireEvent.keyDown(window, { key: "G", ctrlKey: true, shiftKey: true });
+    expect(sent).toEqual([{ type: "Ungroup", group_id: "grp_1" }]);
   });
 });

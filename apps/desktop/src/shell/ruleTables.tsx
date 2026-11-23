@@ -1,4 +1,4 @@
-// Rule tables of the Design rules dialog (Phase 1 B5 and C5, ADR-0045): per-rule enable and
+// Rule tables of the Design rules dialog (Phase 1 B5 and C5, ADR-0046): per-rule enable and
 // severity override for ERC and DRC, the object x object clearance matrix and net-to-net
 // clearances. Every Apply is one typed engine command (a Batch when several change): the engine
 // validates and stores them in the IR constraints, and the checks read them from there.

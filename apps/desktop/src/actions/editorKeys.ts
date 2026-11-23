@@ -21,6 +21,7 @@ const SCHEMATIC: EditorKey[] = [
   { keys: "Mod+D", label: "Duplicate selection" },
   { keys: "Mod+A", label: "Select everything on the sheet (the selection filter applies)" },
   { keys: "Mod+F", label: "Find and replace designators, values and net labels" },
+  { keys: "Mod+G / Mod+Shift+G", label: "Group the selection / ungroup it" },
   { keys: "Right-click", label: "Actions for the clicked part, wire, label or sheet" },
   { keys: "Esc", label: "Clear the selection and the net highlight" },
   { keys: "/", label: "Wire and bus corner mode: orthogonal, 45°, any angle" },

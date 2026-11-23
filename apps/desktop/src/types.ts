@@ -205,6 +205,13 @@ export interface Cutout {
   id: Id;
   outline: Point[];
 }
+/** Symbols, wires and net labels of one sheet that select and move together (ADR-0045). */
+export interface SchematicGroup {
+  id: Id;
+  sheet_id: Id;
+  name: string;
+  members: Id[];
+}
 /** One change of the schematic-to-PCB update, named by its symbol (SyncSchematicToPcbSelected). */
 export type SyncChange =
   | { kind: "add_footprint" | "remove_footprint" | "refdes" | "part"; symbol_id: Id }
@@ -227,6 +234,8 @@ export interface Project {
     graphics?: Record<Id, SheetGraphic>;
     buses?: Record<Id, Bus>;
     bus_entries?: Record<Id, BusEntry>;
+    /** Object groups (IR v6, ADR-0045); absent only in fixtures that predate them. */
+    groups?: Record<Id, SchematicGroup>;
   };
   /** Free project properties for title blocks; absent when empty. */
   properties?: Record<string, string>;
@@ -339,6 +348,9 @@ export type Command =
   | { type: "SetNoConnect"; symbol_id: Id; pin: string }
   | { type: "DeleteNoConnect"; no_connect_id: Id }
   | { type: "MoveNetLabel"; label_id: Id; position: Point }
+  | { type: "RenameNetLabel"; label_id: Id; name: string }
+  | { type: "Group"; members: Id[]; name?: string | null }
+  | { type: "Ungroup"; group_id: Id }
   | { type: "SetBoardOutline"; points: Point[] }
   | { type: "MoveFootprint"; footprint_id: Id; position: Point; rotation: Rotation | null; side: Side | null }
   | { type: "SetFootprintLocked"; footprint_id: Id; locked: boolean }
@@ -443,7 +455,7 @@ export interface RuleResult {
   rule_id: string;
   state: CheckState;
   reason: string;
-  /** Severity the project's rule configuration gives the rule's findings (ADR-0045). */
+  /** Severity the project's rule configuration gives the rule's findings (ADR-0046). */
   severity_override?: Severity;
   /** The rule's state at its default severity, when the override changed it. */
   default_state?: CheckState;
@@ -1174,11 +1186,11 @@ export interface Constraints {
   net_voltages_v?: Record<string, number>;
   temp_rise_c: number;
   max_component_height?: Nm | null;
-  /** Per-rule enable and severity override (schema v6, ADR-0045). */
+  /** Per-rule enable and severity override (schema v7, ADR-0046). */
   rules?: Record<string, RuleConfig>;
-  /** Clearance matrix cells (schema v6, Phase 1 C5). */
+  /** Clearance matrix cells (schema v7, Phase 1 C5). */
   clearance_matrix?: ClearanceCell[];
-  /** Net-to-net clearances (schema v6, Phase 1 C5). */
+  /** Net-to-net clearances (schema v7, Phase 1 C5). */
   net_pair_rules?: NetPairRule[];
 }
 
@@ -1488,7 +1500,7 @@ export interface LibraryCatalogView {
   problems: string[];
 }
 
-/** Annotate numbering order within a sheet (ADR-0045): across = by Y then X, down = by X then Y. */
+/** Annotate numbering order within a sheet (ADR-0046): across = by Y then X, down = by X then Y. */
 export type AnnotateOrder = "across" | "down";
-/** Which symbols Annotate numbers or resets (ADR-0045). */
+/** Which symbols Annotate numbers or resets (ADR-0046). */
 export type AnnotateScope = "unannotated" | "all" | "selection";

@@ -1,10 +1,10 @@
-# ADR-0045: ERC severities, the pin-conflict matrix, per-rule configuration (AD-8) and the clearance matrix
+# ADR-0046: ERC severities, the pin-conflict matrix, per-rule configuration (AD-8) and the clearance matrix
 - **Date:** 2026-11-23
 - **Status:** Accepted. Part A (severity ladder mapping, pin-conflict matrix) and the findings
-  export, Part B (per-rule enable and severity override, schema v6) and Part C (clearance matrix
-  and net-pair rules, schema v6) are in effect, with Part D (Annotate options, a `Command` change). Schema v5 is ADR-0044 (pad expansion, routing
-  options); this record originally took number 0043 and then 0044, both claimed by slices that
-  landed first.
+  export, Part B (per-rule enable and severity override, schema v7) and Part C (clearance matrix
+  and net-pair rules, schema v7) are in effect, with Part D (Annotate options, a `Command` change). Schema v5 is ADR-0044 (pad expansion, routing
+  options) and schema v6 is ADR-0045 (object groups); this record originally took numbers 0043,
+  0044 and 0045, each claimed by a slice that landed first.
 - **Context:** Phase 1 slice B5 (plan gaps #19-#21) and C5 (#20, #33, #34). The plan's
   architecture decision AD-8 says rule severity overrides and enable flags live in the IR
   constraints and appear in reports, and a disabled rule is reported as `disabled`, never as
@@ -44,7 +44,7 @@
   EasyEDA types EAK does not have (Open Emitter, Ground, HiZ, Terminator, Undefined) are listed
   in the ERC report's `not_implemented`, never assumed compatible.
 
-## Part B: per-rule configuration (in effect, schema v6)
+## Part B: per-rule configuration (in effect, schema v7)
 - **IR:** `Constraints.rules: BTreeMap<rule id, RuleConfig>` with `RuleConfig { enabled: bool
   (default true), severity: Option<RuleSeverity> }` and `RuleSeverity` = `error | warning |
   info` (eak-core cannot use the validation crate's type). Empty by default and not written
@@ -72,7 +72,7 @@
   pin-conflict matrix (EasyEDA allows it) is not offered: an override applies to every finding
   of the rule.
 
-## Part C: clearance matrix and net-pair rules (Phase 1 C5, in effect, schema v6)
+## Part C: clearance matrix and net-pair rules (Phase 1 C5, in effect, schema v7)
 - **IR:** `Constraints.clearance_matrix: Vec<ClearanceCell { a, b, clearance }>` over the
   object classes track, SMD pad, TH pad, via, zone, hole, board outline and silkscreen (one entry
   per unordered pair, `a <= b`), and `Constraints.net_pair_rules: Vec<NetPairRule { net_a,

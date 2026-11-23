@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 6;
+pub const SCHEMA_VERSION: u32 = 7;
 
 pub type Id = String;
 
@@ -66,6 +66,10 @@ pub struct Schematic {
     /// Bus entries joining a member wire to a bus (schema v3).
     #[serde(default)]
     pub bus_entries: BTreeMap<Id, BusEntry>,
+    /// Object groups (schema v6, ADR-0045): sets of symbols, wires and net labels on one sheet
+    /// that select and move together. Never part of connectivity.
+    #[serde(default)]
+    pub groups: BTreeMap<Id, SchematicGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -198,6 +202,57 @@ impl Bus {
         self.points
             .windows(2)
             .any(|w| crate::geom::point_segment_distance(p, w[0], w[1]) <= tol)
+    }
+}
+
+/// A named set of schematic objects on one sheet that select and move together (schema v6,
+/// ADR-0045). Members are symbol, wire and net-label ids; an object belongs to at most one
+/// group. Grouping is an editing aid only: it never changes connectivity or any check.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SchematicGroup {
+    pub id: Id,
+    pub sheet_id: Id,
+    pub name: String,
+    /// Member ids, sorted, at least [`MIN_GROUP_MEMBERS`].
+    pub members: Vec<Id>,
+}
+
+/// Fewest members a group has; a group that would drop below this is dissolved.
+pub const MIN_GROUP_MEMBERS: usize = 2;
+
+impl Schematic {
+    /// Sheet of a groupable object (symbol, wire or net label), if `id` names one.
+    pub fn groupable_sheet(&self, id: &str) -> Option<&Id> {
+        self.symbols
+            .get(id)
+            .map(|s| &s.sheet_id)
+            .or_else(|| self.wires.get(id).map(|w| &w.sheet_id))
+            .or_else(|| self.labels.get(id).map(|l| &l.sheet_id))
+    }
+
+    /// The group `id` belongs to, if any.
+    pub fn group_of(&self, id: &str) -> Option<&SchematicGroup> {
+        self.groups
+            .values()
+            .find(|g| g.members.iter().any(|m| m == id))
+    }
+
+    /// Drop group members that no longer exist (deleted objects, deleted sheets) and dissolve
+    /// groups left with fewer than [`MIN_GROUP_MEMBERS`]. Returns the dissolved groups' names.
+    pub fn prune_groups(&mut self) -> Vec<String> {
+        let mut dissolved = vec![];
+        let ids: Vec<Id> = self.groups.keys().cloned().collect();
+        for gid in ids {
+            let mut g = self.groups.remove(&gid).expect("key listed above");
+            g.members
+                .retain(|m| self.groupable_sheet(m).is_some_and(|s| *s == g.sheet_id));
+            if g.members.len() < MIN_GROUP_MEMBERS {
+                dissolved.push(g.name);
+            } else {
+                self.groups.insert(gid, g);
+            }
+        }
+        dissolved
     }
 }
 
@@ -964,15 +1019,15 @@ pub struct Constraints {
     /// Maximum component height above board (enclosure constraint), if any.
     #[serde(default)]
     pub max_component_height: Option<Nm>,
-    /// Per-rule enable flag and severity override, by rule id (schema v6, ADR-0045 / AD-8).
+    /// Per-rule enable flag and severity override, by rule id (schema v7, ADR-0046 / AD-8).
     /// A rule without an entry runs with its default severity.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub rules: BTreeMap<String, RuleConfig>,
-    /// Object-class x object-class minimum clearances (schema v6, Phase 1 C5). One entry per
+    /// Object-class x object-class minimum clearances (schema v7, Phase 1 C5). One entry per
     /// unordered pair; DRC applies the larger of a cell and the other clearance rules.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clearance_matrix: Vec<ClearanceCell>,
-    /// Minimum clearance between two named nets (schema v6, Phase 1 C5).
+    /// Minimum clearance between two named nets (schema v7, Phase 1 C5).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub net_pair_rules: Vec<NetPairRule>,
 }

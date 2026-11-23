@@ -238,6 +238,24 @@ pub enum Command {
         label_id: Id,
         position: Point,
     },
+    /// Rename a net label in place: same id, position, kind, scope and style (ADR-0045). PCB
+    /// copper and constraints that named a net the rename changes follow the new name.
+    RenameNetLabel {
+        label_id: Id,
+        name: String,
+    },
+    /// Group symbols, wires and net labels of one sheet so they select and move together
+    /// (ADR-0045). Refused for fewer than two objects, objects on different sheets, or an
+    /// object that is already in a group. Omit `name` for the next free "Group N".
+    Group {
+        members: Vec<Id>,
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Dissolve a group; its objects stay exactly where they are.
+    Ungroup {
+        group_id: Id,
+    },
     /// Mark a pin as intentionally unconnected. Refused (nothing to do) when the pin already
     /// carries a no-connect marker, so a pin never gets two.
     SetNoConnect {
@@ -248,7 +266,7 @@ pub enum Command {
     DeleteNoConnect {
         no_connect_id: Id,
     },
-    /// Assign reference designators (options: Phase 1 B5, ADR-0045). `scope`: `unannotated`
+    /// Assign reference designators (options: Phase 1 B5, ADR-0046). `scope`: `unannotated`
     /// (the default: designators ending in '?' or empty), `all`, or `selection` (`symbols`).
     /// Numbering follows the sheet order, then `order`: `across` (the default: by Y, then X) or
     /// `down` (by X, then Y). `reset` returns the designators in scope to `<prefix>?` instead.
@@ -504,7 +522,7 @@ pub enum Command {
         net: String,
         volts: Option<f64>,
     },
-    /// Enable or disable one rule and/or override its report severity (ADR-0045, AD-8);
+    /// Enable or disable one rule and/or override its report severity (ADR-0046, AD-8);
     /// `config: None` clears it back to the default. A rule id no check declares is refused,
     /// so a typo cannot silently configure nothing. A disabled rule is reported as `DISABLED`.
     SetRuleConfig {
@@ -512,7 +530,7 @@ pub enum Command {
         #[serde(default)]
         config: Option<RuleConfig>,
     },
-    /// Set (`Some`) or clear (`None`) one clearance-matrix cell (Phase 1 C5, ADR-0045). The
+    /// Set (`Some`) or clear (`None`) one clearance-matrix cell (Phase 1 C5, ADR-0046). The
     /// pair is unordered.
     SetClearanceCell {
         a: ObjectClass,
@@ -520,7 +538,7 @@ pub enum Command {
         #[serde(default)]
         clearance: Option<Nm>,
     },
-    /// Set or clear the minimum copper clearance between two nets (Phase 1 C5, ADR-0045).
+    /// Set or clear the minimum copper clearance between two nets (Phase 1 C5, ADR-0046).
     SetNetPairClearance {
         net_a: String,
         net_b: String,
@@ -632,7 +650,9 @@ impl Command {
             | DeletePcbText { .. }
             | AddDimension { .. }
             | DeleteDimension { .. }
-            | SetRoutingOptions { .. } => ReversibleLocal,
+            | SetRoutingOptions { .. }
+            | Group { .. }
+            | Ungroup { .. } => ReversibleLocal,
             RenameSheet { .. }
             | SetNetLabelScope { .. }
             | AddBus { .. }
@@ -650,6 +670,7 @@ impl Command {
             | DeleteNetLabel { .. }
             | MoveWire { .. }
             | MoveNetLabel { .. }
+            | RenameNetLabel { .. }
             | UpsertComponentDefinition { .. }
             | AssignComponentFootprint { .. }
             | SetPadExpansion { .. }
@@ -1117,6 +1138,18 @@ fn next_refdes(p: &Project, prefix: &str) -> String {
         let r = format!("{prefix}{n}");
         if !p.schematic.symbols.values().any(|s| s.refdes == r) {
             return r;
+        }
+        n += 1;
+    }
+}
+
+/// The first free "Group N" name.
+fn next_group_name(p: &Project) -> String {
+    let mut n = 1;
+    loop {
+        let name = format!("Group {n}");
+        if !p.schematic.groups.values().any(|g| g.name == name) {
+            return name;
         }
         n += 1;
     }
@@ -1757,6 +1790,104 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 ));
             }
             l.position = *position;
+        }
+        RenameNetLabel { label_id, name } => {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(CommandError::Invalid("net name is empty".into()));
+            }
+            let l = p
+                .schematic
+                .labels
+                .get(label_id)
+                .ok_or_else(|| CommandError::NotFound(format!("label {label_id}")))?;
+            if l.name == name {
+                return Err(CommandError::NothingTo(format!(
+                    "rename: label is already named {name}"
+                )));
+            }
+            let before = netlist::build(p);
+            if let Some(l) = p.schematic.labels.get_mut(label_id) {
+                l.name = name.to_string();
+            }
+            let renamed = renamed_nets(&before, &netlist::build(p));
+            if !renamed.is_empty() {
+                rename_nets(p, &renamed);
+                let list: Vec<String> = renamed.iter().map(|(a, b)| format!("{a} → {b}")).collect();
+                warnings.push(format!(
+                    "renamed {} net(s) on the PCB and in constraints: {}",
+                    renamed.len(),
+                    list.join(", ")
+                ));
+                let joined = renamed
+                    .values()
+                    .any(|t| before.nets.values().any(|n| &n.name == t));
+                if joined {
+                    warnings.push(format!(
+                        "{name} already named a net: the rename joins those nets; run ERC"
+                    ));
+                }
+            }
+        }
+        Group { members, name } => {
+            let mut ids = members.clone();
+            ids.sort();
+            ids.dedup();
+            if ids.len() < MIN_GROUP_MEMBERS {
+                return Err(CommandError::Invalid(format!(
+                    "a group needs at least {MIN_GROUP_MEMBERS} objects"
+                )));
+            }
+            if ids.len() > MAX_BATCH {
+                return Err(CommandError::Invalid(format!(
+                    "a group can hold at most {MAX_BATCH} objects"
+                )));
+            }
+            let mut sheet: Option<Id> = None;
+            for m in &ids {
+                let Some(s) = p.schematic.groupable_sheet(m) else {
+                    return Err(CommandError::NotFound(format!(
+                        "schematic object {m} (only symbols, wires and net labels group)"
+                    )));
+                };
+                if *sheet.get_or_insert_with(|| s.clone()) != *s {
+                    return Err(CommandError::Invalid(
+                        "grouped objects must all be on one sheet".into(),
+                    ));
+                }
+                if let Some(g) = p.schematic.group_of(m) {
+                    return Err(CommandError::Precondition(format!(
+                        "{m} is already in group {}; ungroup it first",
+                        g.name
+                    )));
+                }
+            }
+            let name = match name.as_deref().map(str::trim) {
+                Some(n) if !n.is_empty() => n.to_string(),
+                _ => next_group_name(p),
+            };
+            if name.chars().count() > 100 {
+                return Err(CommandError::Invalid(
+                    "a group name is longer than 100 characters".into(),
+                ));
+            }
+            let id = new_id("grp");
+            p.schematic.groups.insert(
+                id.clone(),
+                SchematicGroup {
+                    id: id.clone(),
+                    sheet_id: sheet.expect("at least two members were checked"),
+                    name,
+                    members: ids,
+                },
+            );
+            created.push(id);
+        }
+        Ungroup { group_id } => {
+            p.schematic
+                .groups
+                .remove(group_id)
+                .ok_or_else(|| CommandError::NotFound(format!("group {group_id}")))?;
         }
         SetNoConnect { symbol_id, pin } => {
             let s = symbol(p, symbol_id)?;
@@ -3339,6 +3470,15 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 );
             }
         }
+    }
+    // Deleting an object (or its sheet) drops it from its group; a group left with one object
+    // is dissolved, so integrity always holds and the change is part of the same undo step.
+    let dissolved = p.schematic.prune_groups();
+    if !dissolved.is_empty() {
+        warnings.push(format!(
+            "dissolved group(s) left with fewer than {MIN_GROUP_MEMBERS} objects: {}",
+            dissolved.join(", ")
+        ));
     }
     Ok(Applied { created, warnings })
 }

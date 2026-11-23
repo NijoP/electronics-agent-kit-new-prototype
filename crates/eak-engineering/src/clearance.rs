@@ -29,7 +29,7 @@ pub fn voltage_clearance(
 
 /// The clearance (nm) DRC-002 requires between copper of nets `a` and `b` on `layer`.
 pub fn required(c: &Constraints, a: &str, b: &str, layer: CopperLayer) -> f64 {
-    // A net-pair rule (Phase 1 C5, ADR-0045) raises it like a net class does.
+    // A net-pair rule (Phase 1 C5, ADR-0046) raises it like a net class does.
     let k = c
         .min_clearance
         .max(c.class_for(a).clearance)
