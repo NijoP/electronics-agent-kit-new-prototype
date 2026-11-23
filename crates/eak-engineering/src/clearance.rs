@@ -42,8 +42,10 @@ mod tests {
     use eak_core::NetClass;
 
     fn constraints() -> Constraints {
-        let mut c = Constraints::default();
-        c.min_clearance = 150_000;
+        let mut c = Constraints {
+            min_clearance: 150_000,
+            ..Default::default()
+        };
         c.default_class.clearance = 200_000;
         c.net_classes.push(NetClass {
             name: "HV".into(),
