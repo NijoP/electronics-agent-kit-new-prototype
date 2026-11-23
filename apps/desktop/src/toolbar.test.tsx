@@ -89,7 +89,9 @@ describe("main toolbar", () => {
     expect(tb().queryByRole("button", { name: "Grid" })).toBeNull();
     const view = within(tb().getByRole("group", { name: "View" }));
     expect(view.getByRole("group", { name: "Schematic grid" })).toBeTruthy();
+    const u0 = view.getByLabelText("Unit") as HTMLSelectElement;
     fireEvent.change(view.getByLabelText("Unit"), { target: { value: "mil" } });
+    if ((view.getByLabelText("Unit") as HTMLSelectElement).value !== "mil") console.log("FLAKEDBG A2", JSON.stringify({ same: u0 === view.getByLabelText("Unit"), connected: u0.isConnected, ls: localStorage.getItem("eak.grid.schematic"), calls, toolbars: document.querySelectorAll("[role=toolbar]").length, hosts: document.querySelectorAll(".ws-host").length }));
     expect((view.getByLabelText("Grid spacing") as HTMLSelectElement).value).toBe("1.27");
     expect([...(view.getByLabelText("Grid spacing") as HTMLSelectElement).options].map((o) => o.text)).toEqual(["10 mil", "25 mil", "50 mil", "100 mil"]);
     expect(JSON.parse(localStorage.getItem("eak.grid.schematic")!)).toMatchObject({ unit: "mil", spacingMm: 1.27 });
@@ -157,6 +159,8 @@ describe("per-tab viewport", () => {
     await open();
     const fitted = viewBox();
     fireEvent.click(tb().getByRole("button", { name: "Zoom in" }));
+    await new Promise((r) => setTimeout(r, 300));
+    if (viewBox() === fitted) console.log("FLAKEDBG ZOOM", JSON.stringify({ calls, canvases: document.querySelectorAll("[aria-label=\"Schematic canvas\"]").length, active: document.querySelector("[role=tab][aria-selected=true]")?.textContent }));
     await waitFor(() => expect(viewBox()).not.toBe(fitted));
     const zoomed = viewBox();
     fireEvent.click(screen.getByRole("button", { name: "Close Sheet 1" }));
