@@ -1,9 +1,12 @@
 // Board outline tool panel: geometry menu (rectangle, rounded rectangle, circle, polygon),
 // exact numeric entry in mm or mil, live closure validation and a vertex table for exact
-// vertex editing. Every change is one typed `SetBoardOutline` through the engine (one undo step).
+// vertex editing, and an arc sweep per edge (`SetOutlineArc`). Every change is one typed command
+// through the engine (one undo step); a vertex insert or delete keeps the arc edges on their
+// edges in the same Batch (`drawTools.vertexEdit`).
 import { useState } from "react";
 import type { EditCtx } from "../../EditContext";
-import type { Point } from "../../types";
+import type { OutlineArc, Point } from "../../types";
+import * as D from "./drawTools";
 import * as O from "./outline";
 
 type Shape = "rectangle" | "rounded" | "circle" | "polygon";
@@ -18,12 +21,14 @@ interface Props {
   edit: EditCtx;
   /** The committed board outline. */
   outline: Point[];
+  /** Its arc edges (schema v4). */
+  arcs: OutlineArc[];
   /** Points clicked on the canvas (or typed) for the polygon being built. */
   corners: Point[];
   setCorners: (f: (c: Point[]) => Point[]) => void;
 }
 
-export function OutlinePanel({ edit, outline, corners, setCorners }: Props) {
+export function OutlinePanel({ edit, outline, arcs, corners, setCorners }: Props) {
   const [shape, setShape] = useState<Shape>("rectangle");
   const [unit, setUnit] = useState<O.Unit>("mm");
   const [f, setF] = useState({ x: "0", y: "0", w: "50", h: "30", r: "3", size: "40", vx: "", vy: "" });
@@ -67,6 +72,18 @@ export function OutlinePanel({ edit, outline, corners, setCorners }: Props) {
     const bad = O.validateOutline(pts);
     if (bad.length) return edit.notify(`Edit rejected: ${bad[0]}.`);
     void edit.execute({ type: "SetBoardOutline", points: pts });
+  };
+  const vertex = (op: "insert" | "delete", i: number) => {
+    const r = D.vertexEdit(outline, arcs, op, i);
+    if (typeof r === "string") return edit.notify(r);
+    const n = r.dropped.length;
+    if (n) edit.notify(`${n === 1 ? "Edge" : "Edges"} ${r.dropped.map((e) => e + 1).join(" and ")} lost ${n === 1 ? "its arc" : "their arcs"}: the deleted vertex joined the two edges into one straight edge.`);
+    void edit.execute(r.command);
+  };
+  const setArc = (edge: number, text: string) => {
+    const c = D.arcCommand(edge, text, arcs.find((a) => a.edge === edge)?.sweep_deg);
+    if (typeof c === "string") return edit.notify(c);
+    if (c) void edit.execute(c);
   };
   const addVertex = () => {
     const x = num(f.vx);
@@ -148,24 +165,30 @@ export function OutlinePanel({ edit, outline, corners, setCorners }: Props) {
       {outline.length >= 3 && (
         <details className="vertex-table">
           <summary>Vertices ({outline.length})</summary>
-          {outline.map((p, i) => (
-            <VertexRow
-              key={`${i}:${p.x},${p.y}:${unit}`}
-              i={i}
-              p={p}
-              unit={unit}
-              onMove={(q) => commit(O.moveVertex(outline, i, q))}
-              onDelete={() => commit(O.deleteVertex(outline, i))}
-              onInsert={() => commit(O.insertVertex(outline, i))}
-            />
-          ))}
+          {outline.map((p, i) => {
+            const sweep = arcs.find((a) => a.edge === i)?.sweep_deg;
+            return (
+              <VertexRow
+                key={`${i}:${p.x},${p.y}:${unit}:${sweep ?? 0}`}
+                i={i}
+                n={outline.length}
+                p={p}
+                unit={unit}
+                sweep={sweep}
+                onMove={(q) => commit(O.moveVertex(outline, i, q))}
+                onDelete={() => vertex("delete", i)}
+                onInsert={() => vertex("insert", i)}
+                onArc={(t) => setArc(i, t)}
+              />
+            );
+          })}
         </details>
       )}
     </div>
   );
 }
 
-function VertexRow({ i, p, unit, onMove, onDelete, onInsert }: { i: number; p: Point; unit: O.Unit; onMove: (p: Point) => void; onDelete: () => void; onInsert: () => void }) {
+function VertexRow({ i, n, p, unit, sweep, onMove, onDelete, onInsert, onArc }: { i: number; n: number; p: Point; unit: O.Unit; sweep: number | undefined; onMove: (p: Point) => void; onDelete: () => void; onInsert: () => void; onArc: (text: string) => void }) {
   const dp = unit === "mm" ? 3 : 1;
   const [x, setX] = useState(O.nmToUnit(p.x, unit).toFixed(dp));
   const [y, setY] = useState(O.nmToUnit(p.y, unit).toFixed(dp));
@@ -178,12 +201,27 @@ function VertexRow({ i, p, unit, onMove, onDelete, onInsert }: { i: number; p: P
     if (O.fmtLen(q.x, unit) !== O.fmtLen(p.x, unit) || O.fmtLen(q.y, unit) !== O.fmtLen(p.y, unit)) onMove(q);
   };
   const key = (e: React.KeyboardEvent) => e.key === "Enter" && go();
+  const [arc, setArc] = useState(sweep === undefined ? "" : String(sweep));
+  const arcGo = () => {
+    if (arc.trim() !== (sweep === undefined ? "" : String(sweep))) onArc(arc);
+  };
   return (
     <div className="vertex-row">
       <span>{i + 1}</span>
       <input aria-label={`Vertex ${i + 1} X`} inputMode="decimal" size={9} value={x} onChange={(e) => setX(e.target.value)} onBlur={go} onKeyDown={key} />
       <input aria-label={`Vertex ${i + 1} Y`} inputMode="decimal" size={9} value={y} onChange={(e) => setY(e.target.value)} onBlur={go} onKeyDown={key} />
-      <button type="button" title="Insert a vertex at the midpoint of the next edge" onClick={onInsert}>
+      <input
+        aria-label={`Edge ${i + 1} arc`}
+        title={`Edge ${i + 1} (vertex ${i + 1} to ${((i + 1) % n) + 1}) as an arc: sweep in degrees, positive counter-clockwise; empty or 0 = straight`}
+        inputMode="decimal"
+        size={5}
+        placeholder="arc°"
+        value={arc}
+        onChange={(e) => setArc(e.target.value)}
+        onBlur={arcGo}
+        onKeyDown={(e) => e.key === "Enter" && arcGo()}
+      />
+      <button type="button" title="Insert a vertex at the midpoint of the next edge (an arc edge is split in two halves)" onClick={onInsert}>
         +
       </button>
       <button type="button" title="Delete vertex" onClick={onDelete}>

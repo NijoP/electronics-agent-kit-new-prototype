@@ -9,6 +9,7 @@ import { Coords, GridLayer, Rulers, snapStepNm, useGridConfig } from "./grid";
 import * as P from "./tools/pcb/selection";
 import * as O from "./tools/pcb/outline";
 import { OutlinePanel } from "./tools/pcb/OutlinePanel";
+import * as D from "./tools/pcb/drawTools";
 import { layerCountOptions, layerKey, layerName, planeFill, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
 import { stepLayer, useLayerView, type LayerView } from "./layerView";
 import { isLockKind, lockProblem, objectLocked, pickableOn } from "./layerLock";
@@ -41,7 +42,7 @@ import {
   widthPresetValue,
   type RouteDraft,
 } from "./routeTool";
-import type { BendMode, Command, ConflictMode, CopperLayer, FillView, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
+import type { BendMode, Command, ConflictMode, CopperLayer, DrawLayer, FillView, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import { ToolOptionFields } from "./shell/Inspector";
 import { NO_SELECTION, useHasInspector, usePublishEditorContext, type OptionField } from "./shell/inspectorModel";
@@ -75,7 +76,8 @@ interface Props {
   zoneFills?: FillView[] | null;
 }
 
-type Tool = "select" | "outline" | "move" | "route" | "via" | "delete" | "zone";
+type Tool = "select" | "outline" | "move" | "route" | "via" | "delete" | "zone" | "region" | "cutout" | "text" | "dimension";
+/** The editor's tools; the first nine have digit keys (in this order). */
 export const TOOLS: [Tool, string][] = [
   ["select", "Select"],
   ["outline", "Board outline"],
@@ -84,7 +86,13 @@ export const TOOLS: [Tool, string][] = [
   ["via", "Via"],
   ["delete", "Delete"],
   ["zone", "Zone"],
+  ["region", "Keep-out"],
+  ["cutout", "Cut-out"],
+  ["text", "Text"],
+  ["dimension", "Dimension"],
 ];
+/** Hidden-layer key of a drawing layer (as the renderers file them). */
+const drawKey = (l: string) => (l === "top_silk" ? "top:silk" : l === "bottom_silk" ? "bottom:silk" : "outline");
 const CAPTURE = mmToNm(0.8);
 /** Tools under which pressing on a footprint and dragging moves it (instead of panning). */
 const MOVE_TOOLS: Tool[] = ["select", "move"];
@@ -175,6 +183,18 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const setLayer = lv.setActive;
   const layerColour = lv.colourOf;
   const [zoneClearance, setZoneClearance] = useState("");
+  // C4 drawing tools (keep-out, cut-out, text, dimension): their options and the text being moved.
+  const [regionForbid, setRegionForbid] = useState("all");
+  const [regionLayer, setRegionLayer] = useState("all");
+  const [regionName, setRegionName] = useState("");
+  const [regionMin, setRegionMin] = useState("");
+  const [regionMax, setRegionMax] = useState("");
+  const [textLayer, setTextLayer] = useState<DrawLayer>("top_silk");
+  const [dimLayer, setDimLayer] = useState<DrawLayer>("documentation");
+  const [textValue, setTextValue] = useState("");
+  const [textSize, setTextSize] = useState("");
+  const [dimOffset, setDimOffset] = useState("");
+  const [movingText, setMovingText] = useState<Id | null>(null);
   const highlighted = new Set(focus?.objects ?? []);
   const zoomTo = focus ? { bounds: focusBounds(snapshot, focus.objects, focus.location), n: focus.n } : null;
   const [net, setNet] = useState("");
@@ -315,6 +335,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     setProposal(null);
     setCorners([]);
     setPicked(null);
+    setMovingText(null);
   };
   const choose = (t: Tool) => {
     reset();
@@ -366,6 +387,31 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     if (!pts) return edit.notify("Outline needs two opposite corners or at least three points.");
     setCorners([]);
     void edit.execute({ type: "SetBoardOutline", points: pts });
+  };
+
+  /** Send a drawing-tool command, or tell the user why it cannot be sent. */
+  const draw = (c: Command | string) => {
+    if (!edit) return;
+    if (typeof c === "string") return edit.notify(c);
+    setCorners([]);
+    void edit.execute(c);
+  };
+  const widthLimit = (t: string): number | null | string => {
+    if (t.trim() === "") return null;
+    const w = widthFromMm(t);
+    return w === null || !(w > 0) ? "Region track-width limits must be positive millimetres." : w;
+  };
+  const finishRegion = () => {
+    const min = widthLimit(regionMin);
+    const max = widthLimit(regionMax);
+    if (typeof min === "string" || typeof max === "string") return edit?.notify((typeof min === "string" ? min : max) as string);
+    const l = regionLayer === "all" ? null : (order.find((o) => layerKey(o) === regionLayer) ?? null);
+    draw(D.regionCommand(corners, { layer: l, forbid: D.forbidOf(regionForbid), name: regionName, minWidth: min, maxWidth: max }));
+  };
+  const finishCutout = () => draw(D.cutoutCommand(corners, outline));
+  const rotateText = () => {
+    const t = movingText ? pcb.texts?.[movingText] : undefined;
+    if (t && edit) void edit.execute({ type: "MovePcbText", text_id: t.id, position: t.position, rotation: D.nextTextRotation(t.rotation) });
   };
 
   // The finished route as ONE Batch (one revision, one undo step), with the committed tracks it
@@ -471,6 +517,8 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     else if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selTrack) deleteSelectedTrack();
     else if (e.key === "Enter" && tool === "outline") finishOutline();
     else if (e.key === "Enter" && tool === "zone") finishZone();
+    else if (e.key === "Enter" && tool === "region") finishRegion();
+    else if (e.key === "Enter" && tool === "cutout") finishCutout();
     else if (k === "r" && footprintTool && sel.length) actions.rotate();
     else if (k === "f" && footprintTool && sel.length) actions.flip();
     else if (k === "l" && tool === "route") {
@@ -569,6 +617,9 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const movingIds = drag?.mode === "move" ? new Set(P.movable(snapshot, sel).ids) : null;
   const dragDelta = drag?.mode === "move" ? snapDelta(drag.from, drag.to) : null;
 
+  /** Pick tolerance in nm: a few screen pixels at the last canvas scale (0.3 mm in SVG). */
+  const tolNm = () => mmToNm(PICK_PX / (scaleRef.current > 0 ? scaleRef.current : 10));
+  const shownDrawing = (l: string) => !lv.hidden.has(drawKey(l));
   const onPoint = (x: number, y: number, e: React.PointerEvent) => {
     if (!edit || edit.busy) return;
     if (tool === "select") return selectClick(e, x, y);
@@ -583,7 +634,24 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     switch (tool) {
       case "outline":
       case "zone":
+      case "region":
+      case "cutout":
         return setCorners((c) => [...c, snap.point]);
+      case "dimension":
+        if (!corners.length) return setCorners([snap.point]);
+        return draw(D.dimensionCommand(corners[0], snap.point, dimLayer, dimOffset));
+      case "text": {
+        // Click a text to pick it up, then click where it goes; a click elsewhere places new text.
+        if (movingText) {
+          const t = pcb.texts?.[movingText];
+          setMovingText(null);
+          if (t && !samePoint(t.position, snap.point)) void edit.execute({ type: "MovePcbText", text_id: t.id, position: snap.point, rotation: null });
+          return;
+        }
+        const h = D.drawingAt(pcb, fromView(x, y), tolNm(), shownDrawing);
+        if (h?.kind === "text") return setMovingText(h.id);
+        return draw(D.textCommand(snap.point, textValue, textLayer, textSize));
+      }
       case "move": {
         if (!picked) {
           if (fpId) {
@@ -644,10 +712,16 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
         const v = hitAt(e, "data-via-id", x, y);
         const z = hitAt(e, "data-zone-id", x, y);
         const f = hitAt(e, "data-footprint-id", x, y);
+        // Drawing objects (C4) are hit-tested by geometry, the same in both renderers.
+        const dr = D.drawingAt(pcb, fromView(x, y), tolNm(), shownDrawing);
+        const small = dr && (dr.kind === "text" || dr.kind === "dimension");
         if (v) void edit.execute({ type: "DeleteVia", via_id: v });
         else if (t) void edit.execute({ type: "DeleteTrack", track_id: t });
+        else if (dr && small) void edit.execute(D.deleteDrawing(dr));
         // A footprint sits above the zone it is on; the engine refuses a locked one with the reason.
         else if (f) void edit.execute({ type: "DeleteFootprint", footprint_id: f });
+        // A keep-out or cut-out sits above the copper zone it is drawn over.
+        else if (dr) void edit.execute(D.deleteDrawing(dr));
         else if (z) void edit.execute({ type: "DeleteZone", zone_id: z });
         return;
       }
@@ -824,7 +898,25 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
               { kind: "text", name: "Zone clearance", label: "Clearance (mm)", value: zoneClearance, onChange: setZoneClearance, placeholder: "rule default" },
               { kind: "unavailable", name: "Zone fill", label: "Fill method, islands, priority", reason: "Unavailable: the engine fills every zone solid (0.1 mm raster, thermal reliefs, dead islands removed) and the EAK-IR has no fill-method, island or priority fields" },
             ]
-          : [];
+          : tool === "region"
+            ? [
+                { kind: "select", name: "Keep-out layers", label: "Layers", value: regionLayer, options: [{ value: "all", label: "All copper layers" }, ...plainLayers], onChange: setRegionLayer, title: "The copper layers the region applies to" },
+                { kind: "select", name: "Keep out", label: "Keep out", value: regionForbid, options: D.FORBID_PRESETS.map(([value, label]) => ({ value, label })), onChange: setRegionForbid, title: "What may not be inside the region (DRC-021); pours are kept out of the fill" },
+                { kind: "text", name: "Region name", label: "Name", value: regionName, onChange: setRegionName, placeholder: "optional" },
+                { kind: "text", name: "Region min width", label: "Min track (mm)", value: regionMin, onChange: setRegionMin, placeholder: "none", title: "Narrowest track allowed inside (DRC-022)" },
+                { kind: "text", name: "Region max width", label: "Max track (mm)", value: regionMax, onChange: setRegionMax, placeholder: "none", title: "Widest track allowed inside (DRC-022)" },
+              ]
+            : tool === "text" || tool === "dimension"
+              ? [
+                  { kind: "select", name: "Drawing layer", label: "Layer", value: tool === "text" ? textLayer : dimLayer, options: D.DRAW_LAYERS.map(([value, label]) => ({ value, label })), onChange: (v) => (tool === "text" ? setTextLayer : setDimLayer)(D.DRAW_LAYERS.find(([l]) => l === v)?.[0] ?? "documentation") },
+                  ...(tool === "text"
+                    ? ([
+                        { kind: "text", name: "PCB text", label: "Text", value: textValue, onChange: setTextValue, placeholder: "type the text" },
+                        { kind: "text", name: "Text height", label: "Height (mm)", value: textSize, onChange: setTextSize, placeholder: "1" },
+                      ] as OptionField[])
+                    : ([{ kind: "text", name: "Dimension offset", label: "Offset (mm)", value: dimOffset, onChange: setDimOffset, placeholder: "0", title: "Distance of the dimension line from the measured points (positive: to the left of A→B)" }] as OptionField[])),
+                ]
+              : [];
   usePublishEditorContext(docId, {
     editor: "pcb",
     tool,
@@ -842,7 +934,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   };
 
   return (
-    <section className={`view pcb-view${lv.outline ? " outline-view" : ""}`} aria-label="PCB view" data-flip={lv.flip ? "true" : undefined} data-outline-view={lv.outline ? "true" : undefined} data-zone-fills={zoneFills ? zoneFills.length : undefined}>
+    <section className={`view pcb-view${lv.outline ? " outline-view" : ""}`} aria-label="PCB view" data-flip={lv.flip ? "true" : undefined} data-outline-view={lv.outline ? "true" : undefined} data-zone-fills={zoneFills ? zoneFills.length : undefined} data-regions={Object.keys(pcb.regions ?? {}).length} data-cutouts={cutouts.length} data-texts={Object.keys(pcb.texts ?? {}).length} data-dimensions={Object.keys(pcb.dimensions ?? {}).length}>
       <header className="view-header">
         <span>PCB</span>
         {edit ? (
@@ -853,7 +945,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
                 type="button"
                 aria-pressed={tool === t}
                 className={tool === t ? "on" : ""}
-                title={`${label} (${i + 1})`}
+                title={i < 9 ? `${label} (${i + 1})` : `${label} (Place menu)`}
                 onClick={() => choose(t)}
               >
                 {label}
@@ -934,12 +1026,33 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
               </button>
             </>
           )}
+          {tool === "region" && (
+            <button type="button" onClick={finishRegion} disabled={corners.length < 2}>
+              Finish keep-out ({corners.length} pts)
+            </button>
+          )}
+          {tool === "cutout" && (
+            <button type="button" onClick={finishCutout} disabled={corners.length < 2}>
+              Finish cut-out ({corners.length} pts)
+            </button>
+          )}
+          {tool === "text" && movingText && (
+            <span className="selection-bar" role="group" aria-label="Text selection">
+              <span className="muted">{`text "${pcb.texts?.[movingText]?.text ?? ""}" picked`}</span>
+              <button type="button" title="Turn the picked text 90° (MovePcbText)" onClick={rotateText}>
+                Rotate 90°
+              </button>
+              <button type="button" title="Put the text down where it is (Esc)" onClick={() => setMovingText(null)}>
+                Cancel move
+              </button>
+            </span>
+          )}
           {tool === "outline" && edit && (
             <>
               <button type="button" onClick={finishOutline} disabled={corners.length < 2}>
                 Finish outline ({corners.length} pts)
               </button>
-              <OutlinePanel edit={edit} outline={outline} corners={corners} setCorners={setCorners} />
+              <OutlinePanel edit={edit} outline={outline} arcs={pcb.board.outline_arcs ?? []} corners={corners} setCorners={setCorners} />
             </>
           )}
           {tool === "select" && selTrack && (
@@ -1002,8 +1115,12 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
                 : "Click a pad (or track end) to start routing its net; airwires show what is still unrouted")}
             {tool === "select" && selTrack && ` · track ${selTrack.net} selected · Delete removes it`}
             {tool === "via" && "Click a pad, track end or point"}
-            {tool === "delete" && "Click a track, via, footprint or zone"}
+            {tool === "delete" && "Click a track, via, footprint, zone, keep-out, cut-out, text or dimension"}
             {tool === "zone" && "Pick layer and net, click two opposite corners (or 3+ points), then Enter"}
+            {tool === "region" && "Pick layers and what to keep out, click two opposite corners (or 3+ points), then Enter"}
+            {tool === "cutout" && "Click two opposite corners (or 3+ points) inside the board, then Enter"}
+            {tool === "text" && (movingText ? "Click where the text goes · Esc keeps it" : "Type the text, then click to place it · click a text to move it")}
+            {tool === "dimension" && (corners.length ? "Click the second point" : "Click the first point to measure from")}
           </span>
         </div>
       )}

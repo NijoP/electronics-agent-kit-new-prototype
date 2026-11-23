@@ -73,7 +73,7 @@ describe("action registry", () => {
     expect(pcb).toContain("Manufacturing");
     expect(pcb).not.toContain("Simulation");
     expect(labels("schematic", "Place")).toEqual(["Place part", "Wire", "Bus", "Bus entry", "Power port GND", "Power port +3V3", "Power port +5V", "Power port AGND", "Power port CHASSIS", "Net / power label", "Net port (this sheet)", "Off-page connector", "No connect", "Label pin", "Line", "Rectangle", "Circle", "Text", "Fan out net labels", "Fan out no-connects", "Part: Resistor"]);
-    expect(labels("pcb", "Place")).toEqual(["Via", "Board outline", "Copper zone"]);
+    expect(labels("pcb", "Place")).toEqual(["Via", "Board outline", "Copper zone", "Keep-out region", "Board cut-out", "PCB text", "Dimension"]);
     expect(labels("pcb", "Route")).toEqual(["Route track", "Auto-route all nets", "Clear all routing"]);
     expect(labels("schematic", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run ERC", "Annotate schematic", "Annotate options…"]);
     expect(labels("pcb", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run DRC", "Run DFM (Fabricator standard)", "Auto-place footprints", "Refill zones", "Stitch zones"]);
@@ -181,7 +181,7 @@ describe("toolbar icons, families and grid actions (slice A2)", () => {
     expect(ids("schematic", "sch-bus")).toEqual(["t-bus", "t-busentry"]);
     expect(ids("schematic", "sch-power")).toEqual(["t-power-0", "t-power-1", "t-power-2", "t-power-3", "t-power-4"]);
     expect(ids("schematic", "sch-graphics")).toEqual(["t-line", "t-rect", "t-circle", "t-text"]);
-    expect(ids("pcb", "pcb-regions")).toEqual(["t-outline", "t-zone"]);
+    expect(ids("pcb", "pcb-regions")).toEqual(["t-outline", "t-zone", "t-region"]);
     expect(ids("pcb", "pcb-checks")).toEqual(["drc", "dfm"]);
     for (const ctx of DOC_CONTEXTS)
       for (const g of toolbarFor(workspaceActions(deps()), ctx))

@@ -1,95 +1,45 @@
 {
-  "name": "C4 PCB objects and edits",
-  "description": "Slice C4 (schema v4, ADR-0042): a fixture project gets a board outline with one arc edge, a board cut-out, a keep-out region, an arc track inside that keep-out, silkscreen text and a dimension, each through the engine's execute_command IPC (SETUP: these objects have no drawing tool yet). In the real window the PCB editor then draws the arc edge (the board fill polygon has more vertices than the 4 corners) and the cut-out hole, the Delete tool says it deletes footprints too, and Design > Run DRC reports the track in the keep-out as DRC-021 (an error, never a pass).",
+  "name": "C4 PCB objects and drawing tools",
+  "description": "Slice C4 (schema v4, ADR-0042) and F5 (drawing tools). SETUP gives a fixture project a 40 × 30 mm board outline and one arc track through its centre (engine commands; neither is under test here). Every C4 object is then drawn in the real window with XTest input: the outline's first edge becomes a 40° arc from the vertex table (the board fill polygon gets more than its 4 corner points), a board cut-out and a keep-out region around the board centre are drawn with two canvas clicks each, silkscreen text is typed and placed, a dimension is measured with two clicks, and the Delete tool removes the text it is clicked on. Design > Run DRC then reports the arc track inside the UI-drawn keep-out as DRC-021 (an error, never a pass).",
   "steps": [
-    {
-      "id": "home",
-      "do": "wait",
-      "title": "Project Home visible",
-      "selector": "main.home h1",
-      "timeout": 60000
-    },
-    {
-      "id": "fixture",
-      "do": "fixture-project",
-      "title": "Create fixture project (schema v4)",
-      "name": "C4 PCB Objects Fixture",
-      "folder": "c4-pcb-objects-fixture"
-    },
-    {
-      "id": "open",
-      "do": "click",
-      "title": "Open fixture from Recent projects",
-      "selector": "button.home-row",
-      "text": "C4 PCB Objects Fixture",
-      "expect": "nav[aria-label=\"Application menu\"]"
-    },
-    {
-      "id": "pcb",
-      "do": "menu",
-      "title": "Open PCB",
-      "menu": "View",
-      "item": "Go to PCB editor",
-      "expect": "section[aria-label=\"PCB view\"]"
-    },
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project (schema v4)", "name": "C4 PCB Objects Fixture", "folder": "c4-pcb-objects-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "C4 PCB Objects Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "pcb", "do": "menu", "title": "Open PCB", "menu": "View", "item": "Go to PCB editor", "expect": "section[aria-label=\"PCB view\"]" },
+    { "id": "props", "do": "click", "title": "PCB right dock › Properties tab (the tool options)", "shot": false, "selector": "[role=\"tablist\"][aria-label=\"Right panel tabs\"] [role=\"tab\"]", "text": "Properties", "expect": "section[aria-label=\"Properties\"]" },
     {
       "id": "c4-setup",
       "do": "fixture-commands",
-      "title": "C4: outline with an arc edge, cut-out, keep-out, arc track, text and dimension (engine commands)",
+      "title": "C4: board outline and an arc track through the board centre (engine commands; not the tools under test)",
       "commands": [
         { "type": "SetBoardOutline", "points": [{ "x": 0, "y": 0 }, { "x": 40000000, "y": 0 }, { "x": 40000000, "y": 30000000 }, { "x": 0, "y": 30000000 }] },
-        { "type": "SetOutlineArc", "edge": 0, "sweep_deg": 40 },
-        { "type": "AddBoardCutout", "outline": [{ "x": 5000000, "y": 5000000 }, { "x": 9000000, "y": 5000000 }, { "x": 9000000, "y": 9000000 }, { "x": 5000000, "y": 9000000 }] },
-        { "type": "AddRegion", "name": "antenna keep-out", "outline": [{ "x": 18000000, "y": 10000000 }, { "x": 32000000, "y": 10000000 }, { "x": 32000000, "y": 20000000 }, { "x": 18000000, "y": 20000000 }], "layers": ["top"], "forbid": ["tracks", "vias"] },
-        { "type": "AddTrack", "layer": "top", "a": { "x": 20000000, "y": 15000000 }, "b": { "x": 30000000, "y": 15000000 }, "width": null, "net": "SIG", "arc_deg": 90 },
-        { "type": "AddPcbText", "layer": "top_silk", "position": { "x": 20000000, "y": 25000000 }, "text": "REV A" },
-        { "type": "AddDimension", "a": { "x": 0, "y": 30000000 }, "b": { "x": 40000000, "y": 30000000 }, "offset": 3000000 }
+        { "type": "AddTrack", "layer": "top", "a": { "x": 20000000, "y": 15000000 }, "b": { "x": 30000000, "y": 15000000 }, "width": null, "net": "SIG", "arc_deg": 90 }
       ],
-      "expect": "section[aria-label=\"PCB view\"] polygon.board-cutout"
+      "expect": "section[aria-label=\"PCB view\"] polygon.board"
     },
-    {
-      "id": "c4-cutout",
-      "do": "count",
-      "title": "C4: the cut-out is drawn as a hole in the board fill",
-      "selector": "section[aria-label=\"PCB view\"] polygon.board-cutout",
-      "equals": 1
-    },
-    {
-      "id": "c4-arc-edge",
-      "do": "check-attr",
-      "title": "C4: the arc edge is drawn (board fill has more than the 4 corner points)",
-      "selector": "section[aria-label=\"PCB view\"] polygon.board",
-      "attr": "points",
-      "minTokens": 8
-    },
-    {
-      "id": "c4-delete-tool",
-      "do": "click",
-      "title": "C4: Delete tool deletes footprints too (hint)",
-      "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button",
-      "text": "Delete",
-      "expect": "section[aria-label=\"PCB view\"] span.hint",
-      "expectText": "Click a track, via, footprint or zone"
-    },
-    {
-      "id": "c4-select-tool",
-      "do": "click",
-      "title": "C4: back to Select",
-      "shot": false,
-      "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button",
-      "text": "Select",
-      "expect": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button[aria-pressed=\"true\"]",
-      "expectText": "Select"
-    },
-    {
-      "id": "c4-drc",
-      "do": "menu",
-      "title": "C4: Design > Run DRC reports the arc track in the keep-out (DRC-021)",
-      "menu": "Design",
-      "item": "Run DRC",
-      "expect": "ul.findings li.finding.error code",
-      "expectText": "DRC-021",
-      "timeout": 60000
-    }
+    { "id": "c4-outline-tool", "do": "click", "title": "F5: Board outline tool shows the vertex table", "shot": false, "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button", "text": "Board outline", "expect": "details.vertex-table summary" },
+    { "id": "c4-vertices", "do": "click", "title": "F5: open the vertex table (one arc field per edge)", "selector": "details.vertex-table summary", "expect": "input[aria-label=\"Edge 1 arc\"]" },
+    { "id": "c4-arc-type", "do": "type", "title": "F5: type a 40° sweep into edge 1's arc field", "shot": false, "selector": "input[aria-label=\"Edge 1 arc\"]", "value": "40" },
+    { "id": "c4-arc-enter", "do": "key", "title": "F5: Enter sends SetOutlineArc for edge 1", "keys": "Return" },
+    { "id": "c4-arc-edge", "do": "check-attr", "title": "C4: the UI-drawn arc edge is drawn (board fill has more than the 4 corner points)", "selector": "section[aria-label=\"PCB view\"] polygon.board", "attr": "points", "minTokens": 8 },
+    { "id": "c4-cutout-tool", "do": "click", "title": "F5: Cut-out tool", "shot": false, "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button", "text": "Cut-out", "expect": "section[aria-label=\"PCB view\"] span.hint", "expectText": "Click two opposite corners (or 3+ points) inside the board" },
+    { "id": "c4-cutout-1", "do": "click", "title": "F5: cut-out first corner (canvas click, lower left of the centre)", "shot": false, "selector": "section[aria-label=\"PCB view\"] svg[aria-label=\"PCB canvas\"]", "dx": -150, "dy": 80 },
+    { "id": "c4-cutout-2", "do": "click", "title": "F5: cut-out opposite corner", "selector": "section[aria-label=\"PCB view\"] svg[aria-label=\"PCB canvas\"]", "dx": -110, "dy": 120, "expect": "section[aria-label=\"PCB view\"] button", "expectText": "Finish cut-out (2 pts)" },
+    { "id": "c4-cutout-finish", "do": "click", "title": "F5: Finish cut-out sends AddBoardCutout", "selector": "section[aria-label=\"PCB view\"] button", "text": "Finish cut-out", "expect": "section[aria-label=\"PCB view\"][data-cutouts=\"1\"]" },
+    { "id": "c4-cutout", "do": "count", "title": "C4: the UI-drawn cut-out is drawn as a hole in the board fill", "selector": "section[aria-label=\"PCB view\"] polygon.board-cutout", "equals": 1 },
+    { "id": "c4-region-tool", "do": "click", "title": "F5: Keep-out tool: what it keeps out is a tool option", "shot": false, "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button", "text": "Keep-out", "expect": "select[aria-label=\"Keep out\"]" },
+    { "id": "c4-region-1", "do": "click", "title": "F5: keep-out first corner (up and left of the board centre, where the arc track starts)", "shot": false, "selector": "section[aria-label=\"PCB view\"] svg[aria-label=\"PCB canvas\"]", "dx": -60, "dy": -60 },
+    { "id": "c4-region-2", "do": "click", "title": "F5: keep-out opposite corner", "selector": "section[aria-label=\"PCB view\"] svg[aria-label=\"PCB canvas\"]", "dx": 60, "dy": 60, "expect": "section[aria-label=\"PCB view\"] button", "expectText": "Finish keep-out (2 pts)" },
+    { "id": "c4-region-finish", "do": "click", "title": "F5: Finish keep-out sends AddRegion (tracks, vias, pads and pours; every copper layer)", "selector": "section[aria-label=\"PCB view\"] button", "text": "Finish keep-out", "expect": "section[aria-label=\"PCB view\"][data-regions=\"1\"]" },
+    { "id": "c4-text-tool", "do": "click", "title": "F5: Text tool: the text is a tool option", "shot": false, "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button", "text": "Text", "expect": "input[aria-label=\"PCB text\"]" },
+    { "id": "c4-text-type", "do": "type", "title": "F5: type the silkscreen text", "shot": false, "selector": "input[aria-label=\"PCB text\"]", "value": "REV B" },
+    { "id": "c4-text-place", "do": "click", "title": "F5: a canvas click places the text (AddPcbText)", "selector": "section[aria-label=\"PCB view\"] svg[aria-label=\"PCB canvas\"]", "dx": 150, "dy": -100, "expect": "section[aria-label=\"PCB view\"][data-texts=\"1\"]" },
+    { "id": "c4-dim-tool", "do": "click", "title": "F5: Dimension tool", "shot": false, "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button", "text": "Dimension", "expect": "section[aria-label=\"PCB view\"] span.hint", "expectText": "Click the first point" },
+    { "id": "c4-dim-1", "do": "click", "title": "F5: dimension first point", "shot": false, "selector": "section[aria-label=\"PCB view\"] svg[aria-label=\"PCB canvas\"]", "dx": -150, "dy": -150, "expect": "section[aria-label=\"PCB view\"] span.hint", "expectText": "Click the second point" },
+    { "id": "c4-dim-2", "do": "click", "title": "F5: the second click sends AddDimension", "selector": "section[aria-label=\"PCB view\"] svg[aria-label=\"PCB canvas\"]", "dx": 150, "dy": -150, "expect": "section[aria-label=\"PCB view\"][data-dimensions=\"1\"]" },
+    { "id": "c4-delete-tool", "do": "click", "title": "C4: Delete tool deletes the drawing objects too (hint)", "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button", "text": "Delete", "expect": "section[aria-label=\"PCB view\"] span.hint", "expectText": "Click a track, via, footprint, zone, keep-out, cut-out, text or dimension" },
+    { "id": "c4-delete-text", "do": "click", "title": "F5: a Delete click on the placed text removes it (DeletePcbText)", "selector": "section[aria-label=\"PCB view\"] svg[aria-label=\"PCB canvas\"]", "dx": 150, "dy": -108, "expect": "section[aria-label=\"PCB view\"][data-texts=\"0\"]" },
+    { "id": "c4-select-tool", "do": "click", "title": "C4: back to Select", "shot": false, "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button", "text": "Select", "expect": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button[aria-pressed=\"true\"]", "expectText": "Select" },
+    { "id": "c4-drc", "do": "menu", "title": "C4: Design > Run DRC reports the arc track in the UI-drawn keep-out (DRC-021)", "menu": "Design", "item": "Run DRC", "expect": "ul.findings li.finding.error code", "expectText": "DRC-021", "timeout": 60000 }
   ]
 }
