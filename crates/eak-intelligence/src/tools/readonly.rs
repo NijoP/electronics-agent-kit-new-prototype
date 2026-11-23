@@ -205,7 +205,7 @@ fn summary(p: &Project) -> Value {
         "name": p.name,
         "revision": p.revision,
         "requirements": p.requirements,
-        "sheets": p.schematic.sheets.values().map(|s| json!({"id": s.id, "name": s.name})).collect::<Vec<_>>(),
+        "sheets": p.sheets_in_order().iter().map(|s| json!({"id": s.id, "name": s.name})).collect::<Vec<_>>(),
         "symbols": p.schematic.symbols.values().map(|s| json!({
             "id": s.id, "refdes": s.refdes, "component_id": s.component_id, "value": s.value,
             "sheet_id": s.sheet_id, "position": s.position, "rotation": s.rotation,

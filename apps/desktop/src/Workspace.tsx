@@ -64,6 +64,7 @@ import { SettingsDialog } from "./settings/SettingsDialog";
 import { useKeymap } from "./settings/keymap";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
+import { sheetsInOrder } from "./shell/sheets";
 import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
@@ -662,7 +663,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       run: () => setSelected(sy.id),
     })),
     ...netNames(snapshot).map((n) => ({ id: `net-${n}`, label: n, group: "Net", run: () => showNet(n) })),
-    ...Object.values(snapshot.project.schematic.sheets).map((sh) => ({
+    ...sheetsInOrder(snapshot.project.schematic).map((sh) => ({
       id: `sheet-${sh.id}`,
       label: sh.name,
       group: "Sheet",
@@ -854,7 +855,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
             </div>
           )}
           {sideView === "design" && (
-            <DesignManager snapshot={snapshot} conn={conn} selected={selected} activeDoc={activeId} tab={dmTab} onTab={setDmTab} onNavigate={navigateManager} />
+            <DesignManager snapshot={snapshot} conn={conn} selected={selected} activeDoc={activeId} tab={dmTab} onTab={setDmTab} onNavigate={navigateManager} onCommand={execute} busy={busy} />
           )}
           {sideView === "domain" && (
             <div className="panel-body">

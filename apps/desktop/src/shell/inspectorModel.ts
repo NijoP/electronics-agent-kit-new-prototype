@@ -12,6 +12,7 @@ import { LAYER_COUNTS, layerKey, layerName, stackLayers } from "../layers";
 import { trackEdit, widthFromMm } from "../routeTool";
 import type { Command, CopperLayer, Id, Point, Rotation, Side, Snapshot } from "../types";
 import { mm } from "../viewport";
+import { sheetsInOrder } from "./sheets";
 
 // ---- Tool option schema --------------------------------------------------------------------
 
@@ -490,7 +491,7 @@ export function documentModel(s: Snapshot, pcb: boolean, sheetId?: Id | null): P
       ],
     };
   }
-  const sheet = (sheetId ? schematic.sheets[sheetId] : undefined) ?? Object.values(schematic.sheets)[0];
+  const sheet = (sheetId ? schematic.sheets[sheetId] : undefined) ?? sheetsInOrder(schematic)[0];
   return {
     title: sheet ? `Sheet ${sheet.name}` : "Schematic document",
     fields: [
