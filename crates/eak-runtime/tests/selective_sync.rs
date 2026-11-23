@@ -80,8 +80,11 @@ fn refused(e: &mut Engine, changes: Vec<SyncChange>) -> String {
 
 #[test]
 fn selecting_every_change_equals_the_full_sync() {
+    // Compare with the full sync of the same project (fixture ids and auto net names differ
+    // between builds).
     let mut a = schematic();
-    let mut b = schematic();
+    let mut full = a.project().clone();
+    command::apply(&mut full, &C::SyncSchematicToPcb).unwrap();
     let all = preview(&a);
     assert!(all.len() > 3);
     let rev = a.project().revision;
@@ -93,8 +96,7 @@ fn selecting_every_change_equals_the_full_sync() {
         "{:?}",
         r.warnings
     );
-    assert!(run(&mut b, C::SyncSchematicToPcb).accepted);
-    assert_eq!(by_symbol(a.project()), by_symbol(b.project()));
+    assert_eq!(by_symbol(a.project()), by_symbol(&full));
     assert!(preview(&a).is_empty(), "nothing left to sync");
 }
 
@@ -140,6 +142,8 @@ fn a_subset_applies_only_what_was_chosen_and_undoes_as_one_step() {
 fn reference_changes_can_be_applied_alone() {
     let mut e = schematic();
     assert!(run(&mut e, C::SyncSchematicToPcb).accepted);
+    // SetRefdes keeps the footprint in step itself, so make the PCB drift the way an older file
+    // or an external edit would: load a project whose footprint still has an old reference.
     let s = e
         .project()
         .schematic
@@ -148,17 +152,17 @@ fn reference_changes_can_be_applied_alone() {
         .next()
         .unwrap()
         .clone();
-    assert!(
-        run(
-            &mut e,
-            C::SetRefdes {
-                symbol_id: s.id.clone(),
-                refdes: "X99".into(),
-            }
-        )
-        .accepted
-    );
+    let mut drifted = e.project().clone();
+    drifted
+        .pcb
+        .footprints
+        .values_mut()
+        .find(|f| f.symbol_id == s.id)
+        .unwrap()
+        .refdes = "OLD9".into();
+    let mut e = Engine::in_memory(drifted);
     let pending = preview(&e);
+    assert_eq!(pending.len(), 1, "{pending:?}");
     let refdes = SyncChange::Refdes {
         symbol_id: s.id.clone(),
     };
@@ -170,7 +174,7 @@ fn reference_changes_can_be_applied_alone() {
         },
     );
     assert!(r.accepted, "{:?}", r.error);
-    assert_eq!(by_symbol(e.project())[&s.id].0, "X99");
+    assert_eq!(by_symbol(e.project())[&s.id].0, s.refdes);
 }
 
 #[test]
