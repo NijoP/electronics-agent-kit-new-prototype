@@ -55,6 +55,8 @@ export interface ActionDeps {
   onTheme: () => void;
   resetLayout: () => void;
   onSettings: () => void;
+  /** Opens Settings (hotkeys, canvas colours, grid defaults, theme). */
+  preferences: () => void;
   palette: () => void;
   quickOpen: () => void;
   help: () => void;
@@ -135,6 +137,7 @@ export function commonActions(d: ActionDeps): Action[] {
     { id: "palette", label: "Command palette", short: "Commands", whileTyping: true, menu: "Tools", toolbar: "app", icon: "palette", palette: false, enabled: () => true, run: d.palette },
     { id: "quick-open", label: "Go to part, net or sheet…", whileTyping: true, menu: "Tools", enabled: () => true, run: d.quickOpen },
 
+    { id: "preferences", label: "Settings…", title: "Hotkeys, canvas colours, grid defaults and theme", whileTyping: true, menu: "Settings", enabled: () => true, run: d.preferences },
     { id: "settings", label: "Model settings", menu: "Settings", enabled: () => true, run: d.onSettings },
     { id: "theme", label: "Light theme", menu: "Settings", checked: d.theme === "light", enabled: () => true, run: d.onTheme },
 

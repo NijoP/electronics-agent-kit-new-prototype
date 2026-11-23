@@ -14,7 +14,7 @@ EAK is licensed under the [O'Saasy License](LICENSE) (<https://osaasy.dev>), cop
 | keyring 3 (`apple-native`, `windows-native`, `sync-secret-service`, `crypto-rust`) | MIT OR Apache-2.0 | OS credential storage for model API keys (`apps/desktop/src-tauri`); transitive backends not yet inventoried |
 | ureq 3 (`rustls` feature; optional, `remote-http`) | MIT OR Apache-2.0 | HTTPS client for model providers (`eak-intelligence`) |
 
-Document writers without a dependency (slice D3, ADR-0040): the XLSX workbook
+Document writers without a dependency (slice D3, ADR-0041): the XLSX workbook
 (`eak-manufacturing::xlsx`, over the crate's own stored-ZIP writer) and the schematic PDF/SVG
 (`eak-manufacturing::schematic_doc`, standard Helvetica fonts, not embedded) are EAK's own code
 under the project licence. No third-party spreadsheet or PDF writer is used.

@@ -26,11 +26,59 @@ export interface Stackup {
   dielectric: string;
 }
 
+// ---- Schema v3 schematic primitives (ADR-0040). Optional: the UI does not draw them yet.
+export type LineStyle = "solid" | "dashed" | "dotted" | "dash_dot";
+export interface Stroke {
+  width: Nm;
+  style: LineStyle;
+}
+export type Graphic =
+  | { kind: "line"; a: Point; b: Point; stroke?: Stroke }
+  | { kind: "polyline"; points: Point[]; stroke?: Stroke }
+  | { kind: "arc"; center: Point; radius: Nm; start_deg: number; end_deg: number; stroke?: Stroke }
+  | { kind: "circle"; center: Point; radius: Nm; fill?: boolean; stroke?: Stroke }
+  | { kind: "rectangle"; min: Point; max: Point; fill?: boolean; stroke?: Stroke }
+  | { kind: "polygon"; points: Point[]; fill?: boolean; stroke?: Stroke }
+  | { kind: "text"; position: Point; text: string; size: Nm; rotation?: Rotation };
+export type FieldSource =
+  | { source: "project_name" | "project_revision" | "sheet_name" | "sheet_number" | "sheet_count" }
+  | { source: "property"; key: string }
+  | { source: "text"; text: string };
+export interface DrawingFormat {
+  border: boolean;
+  zone_columns: number;
+  zone_rows: number;
+  title_block: { label: string; value: FieldSource }[];
+}
+export interface SheetGraphic {
+  id: Id;
+  sheet_id: Id;
+  graphic: Graphic;
+}
+export interface Bus {
+  id: Id;
+  sheet_id: Id;
+  name: string;
+  points: Point[];
+}
+export interface BusEntry {
+  id: Id;
+  sheet_id: Id;
+  bus_id: Id;
+  bus_point: Point;
+  wire_point: Point;
+}
+export type NetScope = "local" | "global" | "off_page";
+export type PowerStyle = "ground" | "rail" | "chassis";
+export type SymbolField = "refdes" | "value" | "name" | "footprint" | "manufacturer" | "mpn";
+
 export interface Sheet {
   id: Id;
   name: string;
   width: Nm;
   height: Nm;
+  /** Border, zones and title block; absent = none. */
+  format?: DrawingFormat;
 }
 export interface SymbolInstance {
   id: Id;
@@ -42,6 +90,8 @@ export interface SymbolInstance {
   rotation: Rotation;
   /** Mirrored about the local Y axis before rotation (ADR-0016); absent when not mirrored. */
   mirror?: boolean;
+  /** Field visibility that differs from the default (refdes and value shown, others hidden). */
+  field_visibility?: Partial<Record<SymbolField, boolean>>;
 }
 /** Sheet axis of a symbol flip (ADR-0016). */
 export type FlipAxis = "horizontal" | "vertical";
@@ -57,6 +107,9 @@ export interface NetLabel {
   name: string;
   position: Point;
   kind: "net" | "power";
+  /** Absent = global. */
+  scope?: NetScope;
+  power_style?: PowerStyle;
 }
 export interface NoConnect {
   id: Id;
@@ -113,7 +166,12 @@ export interface Project {
     wires: Record<Id, Wire>;
     labels: Record<Id, NetLabel>;
     no_connects: Record<Id, NoConnect>;
+    graphics?: Record<Id, SheetGraphic>;
+    buses?: Record<Id, Bus>;
+    bus_entries?: Record<Id, BusEntry>;
   };
+  /** Free project properties for title blocks; absent when empty. */
+  properties?: Record<string, string>;
   pcb: {
     board: { outline: Point[]; stackup?: Stackup };
     footprints: Record<Id, FootprintInstance>;
@@ -746,7 +804,17 @@ export interface AiProposal {
 }
 // ---- Phase 5: component library (mirrors eak-core `library.rs`)
 export type PinType = "input" | "output" | "bidirectional" | "passive" | "power_in" | "power_out" | "open_collector" | "no_connect";
-export interface SymbolPin { number: string; name: string; electrical_type: PinType; position: Point }
+export interface SymbolPin {
+  number: string;
+  name: string;
+  electrical_type: PinType;
+  position: Point;
+  /** Schema v3 pin geometry; optional in fixtures. */
+  length?: Nm;
+  orientation?: "right" | "left" | "up" | "down";
+  name_visible?: boolean;
+  number_visible?: boolean;
+}
 export interface PadDef {
   number: string;
   kind: "smd" | "tht";
@@ -768,6 +836,8 @@ export interface SymbolDef {
   pins: SymbolPin[];
   body_half_w: number;
   body_half_h: number;
+  /** Body drawing (schema v3); optional in fixtures. */
+  graphics?: Graphic[];
 }
 export interface ComponentDef {
   id: string;

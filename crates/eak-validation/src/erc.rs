@@ -575,6 +575,8 @@ pub fn run(p: &Project) -> Report {
         }
     }
 
+    bus_and_port_checks(p, &nl, &mut f);
+
     let rules = vec![
         rule(
             "ERC-001",
@@ -637,10 +639,30 @@ pub fn run(p: &Project) -> Report {
             "PowerOut pin on a ground net (error); power net without a declared voltage (warning)",
             "EAK",
         ),
+        rule("ERC-017", "Illegal bus name", "bus names must be NAME[m..n] or {A,B,...}", "EAK (ADR-0040)"),
+        rule(
+            "ERC-018",
+            "Bus entry member",
+            "the wire on a bus entry must carry a label naming a member of its bus",
+            "EAK (ADR-0040)",
+        ),
+        rule("ERC-019", "Bus entry off its bus", "a bus entry's bus point must lie on its bus", "EAK (ADR-0040)"),
+        rule("ERC-020", "Bus port name", "a label on a bus must carry the bus name", "EAK (ADR-0040)"),
+        rule(
+            "ERC-021",
+            "Unmatched off-page connector",
+            "an off-page connector needs a same-name off-page or global label on another sheet",
+            "EAK (ADR-0040)",
+        ),
     ];
     let not_implemented = vec![
         "Bus contention timing between tri-state/bidirectional drivers".into(),
-        "Hierarchical sheet / bus consistency (hierarchy not yet supported)".into(),
+        "Hierarchical sheets (hierarchy not yet supported), including bus and port connection through hierarchy".into(),
+        "Bus members named on the sheet without a bus entry (they still join by name; not reported)".into(),
+        "Bus and wire drawn over each other without a bus entry".into(),
+        "Bus, bus entry and port positions on the schematic grid".into(),
+        "Net classes generated from buses".into(),
+        "Only one net name per bus group (bus aliases)".into(),
         "Analog simulation, operating-point and tolerance analysis".into(),
         "Component stress/derating beyond capacitor voltage".into(),
     ];
@@ -674,5 +696,133 @@ pub fn pin_conflict(a: PinType, b: PinType) -> Option<(crate::Severity, &'static
             "a logic output feeds a power input; check it can supply the load",
         )),
         _ => None,
+    }
+}
+
+/// ERC-017..021: bus names, bus entries, bus ports and off-page connectors (ADR-0040).
+fn bus_and_port_checks(p: &Project, nl: &netlist::Netlist, f: &mut Vec<Finding>) {
+    use eak_core::{NetScope, ON_SEGMENT_TOL_NM};
+    let sch = &p.schematic;
+    for (id, b) in &sch.buses {
+        let info = nl.buses.get(id);
+        if info.is_none_or(|i| i.members.is_none()) {
+            f.push(
+                finding(
+                    "ERC-017",
+                    Error,
+                    format!("bus name '{}' is not a legal bus name", b.name),
+                    vec![id.clone()],
+                    b.points.first().copied(),
+                )
+                .fix(format!(
+                    "Rename bus '{}' to a range such as D[0..7] or a list such as {{SDA,SCL}}.",
+                    b.name
+                )),
+            );
+        }
+        for lid in info.map(|i| i.port_label_ids.as_slice()).unwrap_or(&[]) {
+            let Some(l) = sch.labels.get(lid) else {
+                continue;
+            };
+            if l.name.trim() != b.name.trim() {
+                f.push(
+                    finding(
+                        "ERC-020",
+                        Warning,
+                        format!(
+                            "label '{}' on bus '{}' does not carry the bus name",
+                            l.name, b.name
+                        ),
+                        vec![lid.clone(), id.clone()],
+                        Some(l.position),
+                    )
+                    .fix(format!(
+                        "Rename the label to '{}', or move it off the bus if it names a member net.",
+                        b.name
+                    )),
+                );
+            }
+        }
+    }
+    for (id, e) in &sch.bus_entries {
+        let Some(b) = sch.buses.get(&e.bus_id) else {
+            continue;
+        };
+        if !b.touches(e.bus_point, ON_SEGMENT_TOL_NM) {
+            f.push(
+                finding(
+                    "ERC-019",
+                    Error,
+                    format!("bus entry is not on bus '{}'", b.name),
+                    vec![id.clone(), b.id.clone()],
+                    Some(e.bus_point),
+                )
+                .fix("Move the bus entry onto its bus, or delete it."),
+            );
+        }
+        let members = nl.buses.get(&b.id).and_then(|i| i.members.clone());
+        let net = nl
+            .bus_entries
+            .get(id)
+            .cloned()
+            .flatten()
+            .and_then(|n| nl.nets.get(&n));
+        let names = net.map(|n| n.label_names.clone()).unwrap_or_default();
+        let is_member = members
+            .as_ref()
+            .is_some_and(|m| names.iter().any(|n| m.contains(n)));
+        if !is_member {
+            let what = if names.is_empty() {
+                "an unnamed wire".to_string()
+            } else {
+                format!("net {}", names.join(", "))
+            };
+            f.push(
+                finding(
+                    "ERC-018",
+                    Error,
+                    format!(
+                        "bus entry on '{}' connects {what}, which is not a member of the bus",
+                        b.name
+                    ),
+                    vec![id.clone(), b.id.clone()],
+                    Some(e.wire_point),
+                )
+                .fix(format!(
+                    "Label the wire on this entry with a member of '{}' ({}), or delete the entry.",
+                    b.name,
+                    members
+                        .map(|m| m.join(", "))
+                        .unwrap_or_else(|| "the bus name is not legal".into())
+                )),
+            );
+        }
+    }
+    for (id, l) in &sch.labels {
+        if l.scope != NetScope::OffPage {
+            continue;
+        }
+        let partner = sch
+            .labels
+            .values()
+            .any(|o| o.sheet_id != l.sheet_id && o.name == l.name && o.connects_globally());
+        if !partner {
+            f.push(
+                finding(
+                    "ERC-021",
+                    Warning,
+                    format!(
+                        "off-page connector {} has no matching connector on another sheet",
+                        l.name
+                    ),
+                    vec![id.clone()],
+                    Some(l.position),
+                )
+                .fix(format!(
+                    "Add an off-page connector or global label named {} on the sheet this signal continues on, or make this label local.",
+                    l.name
+                )),
+            );
+        }
     }
 }

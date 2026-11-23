@@ -482,6 +482,8 @@ fn undriven_rail_fix_names_the_connector_power_port() {
             pin: "1".into(),
             name: "+5V".into(),
             kind: eak_core::LabelKind::Power,
+            scope: Default::default(),
+            power_style: None,
         },
         actor: eak_runtime::Actor {
             kind: eak_runtime::ActorKind::Cli,

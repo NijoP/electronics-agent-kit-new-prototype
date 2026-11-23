@@ -37,7 +37,7 @@ function deps(over: Partial<ActionDeps> = {}): ActionDeps {
     edaViews: [{ id: "viewer3d", label: "3D view", shortcut: "Mod+3" }],
     dialog: fn(), save: fn(), undo: fn(), redo: fn(), close: fn(), openRecent: fn(), execute: fn(), check: fn(), syncPcb: fn(),
     refillZones: fn(), rotateSel: fn(), deleteSel: fn(), tool: fn(), zoomBy: fn(), fit: fn(), select: fn(), toggleSplit: fn(),
-    showSide: fn(), toggleSide: fn(), toggleBottom: fn(), showBottom: fn(), toggleRight: fn(), showRight: fn(), onTheme: fn(), resetLayout: fn(), onSettings: fn(),
+    showSide: fn(), toggleSide: fn(), toggleBottom: fn(), showBottom: fn(), toggleRight: fn(), showRight: fn(), onTheme: fn(), resetLayout: fn(), onSettings: fn(), preferences: fn(),
     palette: fn(), quickOpen: fn(), help: fn(), about: fn(), sideView: "project", notify: fn(), open: fn(), closeAll: fn(), showWorkspace: fn(), switchTo: fn(), placePart: fn(),
     grid: { kind: "schematic", cfg: GRID_KINDS.schematic.defaults, set: fn() },
     toolbarLabels: false,

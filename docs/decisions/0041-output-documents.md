@@ -1,4 +1,4 @@
-# ADR-0040 Output documents: configurable BOM, schematic PDF/SVG, IPC-D-356 and JSON netlists
+# ADR-0041 Output documents: configurable BOM, schematic PDF/SVG, IPC-D-356 and JSON netlists
 
 Status: accepted (Phase 1 slice D3). No contract change: EAK-IR, `Command`, `CommandResponse`
 and the report types are unchanged; the existing manufacturing `Manifest` is reused as is.

@@ -5,6 +5,7 @@
 //!
 //! * `geom`     – exact integer geometry (nanometres).
 //! * `library`  – native component / symbol / footprint definitions.
+//! * `graphic`  – drawing primitives for symbol bodies and sheets (schema v3, ADR-0040).
 //! * `libmeta`  – library identity, scope, maturity, catalogue and committed-definition references (ADR-0035).
 //! * `sexpr`    – bounded S-expression reader for library interchange files (import groundwork).
 //! * `ir`       – project, schematic, PCB, constraints, manufacturing config.
@@ -17,6 +18,7 @@
 pub mod builtin;
 pub mod datasheet;
 pub mod geom;
+pub mod graphic;
 pub mod integrity;
 pub mod ir;
 pub mod kicad_import;
@@ -28,6 +30,7 @@ pub mod sexpr;
 pub mod units;
 
 pub use geom::{Nm, Point, Rect, Rotation};
+pub use graphic::{Graphic, LineStyle, Stroke};
 pub use ir::*;
 pub use library::*;
 

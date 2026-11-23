@@ -37,6 +37,9 @@ export function formatShortcut(spec: string, mac = isMac()): string {
 /** Tooltip text: "Undo (Ctrl+Z)". */
 export const tip = (label: string, spec?: string) => (spec ? `${label} (${formatShortcut(spec)})` : label);
 
+/** Letter or digit of a physical key code ("KeyW" → "w"), so Alt+W matches where Alt changes `key` (macOS). */
+const codeKey = (code: string | undefined) => (code && /^(Key[A-Z]|Digit\d)$/.test(code) ? code.slice(-1).toLowerCase() : undefined);
+
 /** True when the keyboard event matches the spec. */
 export function matches(e: KeyboardEvent, spec: string): boolean {
   const parts = spec.split("+");
@@ -45,7 +48,7 @@ export function matches(e: KeyboardEvent, spec: string): boolean {
   const wantShift = parts.includes("Shift");
   const wantAlt = parts.includes("Alt");
   return (
-    (e.ctrlKey || e.metaKey) === wantMod && e.shiftKey === wantShift && e.altKey === wantAlt && e.key.toLowerCase() === key
+    (e.ctrlKey || e.metaKey) === wantMod && e.shiftKey === wantShift && e.altKey === wantAlt && (e.key.toLowerCase() === key || (!/^[\x20-\x7e]$/.test(e.key) && codeKey(e.code) === key))
   );
 }
 
@@ -65,6 +68,7 @@ export const DEFAULT_KEYMAP: Readonly<Record<string, readonly string[]>> = {
   "ws-schematic": [SHORTCUTS.showSchematic],
   "ws-pcb": [SHORTCUTS.showPcb],
   "show-project": [SHORTCUTS.showExplorer],
+  preferences: ["Mod+,"],
   save: [SHORTCUTS.save],
   undo: [SHORTCUTS.undo],
   redo: [SHORTCUTS.redo, "Mod+Y"],

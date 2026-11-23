@@ -1,6 +1,6 @@
 {
   "name": "E2 editor correctness and atomicity",
-  "description": "Opens an isolated software fixture project and drives the schematic with real X input: places a part, clicks the placed part with the Place tool (no second part on top), marks a pin No connect and clicks it again (the marker is removed with DeleteNoConnect), draws an L-shaped wire (one Batch: one revision) and undoes it once (both legs go: one undo step). Then the PCB layer-count select lists 2..16 copper layers. Then (fix place-selbar) the canvas keeps its position when a selection appears, and Place menu picks switch the tool while Place is armed.",
+  "description": "Opens an isolated software fixture project and drives the schematic with real X input: places a part, clicks the placed part with the Place tool (no second part on top), marks a pin No connect and clicks it again (the marker is removed with DeleteNoConnect), draws an L-shaped wire (one Batch: one revision) and undoes it once (both legs go: one undo step). Then the PCB layer-count select lists 2..16 copper layers. Then (fix place-selbar) the canvas keeps its position when a selection appears, and Place menu picks switch the tool while Place is armed. Then (A5) the inspector in the right dock shows the Label tool's options, the selected part's fields (a Value edit is one SetSymbolValue), the document with the title block unavailable, and in the PCB the routing options while Route is active.",
   "steps": [
     {
       "id": "home",
@@ -262,6 +262,81 @@
       "shot": false
     },
     {
+      "id": "a5-label-tool",
+      "do": "menu",
+      "title": "A5: Place › Net / power label: the inspector shows the Label tool's options",
+      "menu": "Place",
+      "item": "Net / power label",
+      "expect": "section[aria-label=\"Properties\"][data-mode=\"tool\"] input[aria-label=\"Net name\"]"
+    },
+    {
+      "id": "a5-label-strip",
+      "do": "absent",
+      "title": "A5: the option is not duplicated in the editor's strip",
+      "selector": "section[aria-label=\"Schematic view\"] input[aria-label=\"Net name\"]",
+      "shot": false
+    },
+    {
+      "id": "a5-label-esc",
+      "do": "key",
+      "title": "A5: Esc back to Select",
+      "keys": "Escape",
+      "shot": false
+    },
+    {
+      "id": "a5-select",
+      "do": "click",
+      "title": "A5: select the part: the inspector shows its fields",
+      "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] rect.body",
+      "expect": "section[aria-label=\"Properties\"][data-mode=\"selection\"] input[aria-label=\"Value\"]"
+    },
+    {
+      "id": "a5-value",
+      "do": "type",
+      "title": "A5: type into the inspector's Value field",
+      "selector": "section[aria-label=\"Properties\"] input[aria-label=\"Value\"]",
+      "value": "7",
+      "shot": false
+    },
+    {
+      "id": "a5-value-commit",
+      "do": "key",
+      "title": "A5: Enter commits the value as one SetSymbolValue",
+      "keys": "Return",
+      "expect": "footer.status span.msg",
+      "expectText": "SetSymbolValue"
+    },
+    {
+      "id": "a5-esc",
+      "do": "key",
+      "title": "A5: Esc clears the canvas selection (Edit › Clear selection clears the workspace selection)",
+      "keys": "Escape",
+      "shot": false
+    },
+    {
+      "id": "a5-clear",
+      "do": "menu",
+      "title": "A5: Edit › Clear selection: the inspector shows the document (sheet size)",
+      "menu": "Edit",
+      "item": "Clear selection",
+      "expect": "section[aria-label=\"Properties\"][data-mode=\"document\"] [data-field=\"size\"]"
+    },
+    {
+      "id": "a5-title-block",
+      "do": "wait",
+      "title": "A5: the title block is shown as unavailable (IR v3, B1), not as a control",
+      "selector": "section[aria-label=\"Properties\"] [data-field=\"title-block\"] .unavail",
+      "text": "Unavailable",
+      "shot": false
+    },
+    {
+      "id": "a5-menu-rest",
+      "do": "key",
+      "title": "A5: Esc returns the menu bar to rest before the next menu",
+      "keys": "Escape",
+      "shot": false
+    },
+    {
       "id": "pcb",
       "do": "menu",
       "title": "Open PCB",
@@ -275,6 +350,37 @@
       "title": "E2: PCB layer-count select offers 2..16 (8 options, was 2/4/6/8)",
       "selector": "select[aria-label=\"Copper layers\"] option",
       "equals": 8
+    },
+    {
+      "id": "a5-pcb-props",
+      "do": "click",
+      "title": "A5: PCB right dock › Properties tab",
+      "selector": "[role=\"tablist\"][aria-label=\"Right panel tabs\"] [role=\"tab\"]",
+      "text": "Properties",
+      "expect": "section[aria-label=\"Properties\"][data-mode=\"document\"] [data-field=\"stackup\"]"
+    },
+    {
+      "id": "a5-route",
+      "do": "click",
+      "title": "A5: Route tool: the inspector shows the routing options",
+      "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button",
+      "text": "Route",
+      "expect": "section[aria-label=\"Properties\"][data-mode=\"tool\"] input[aria-label=\"Track width\"]"
+    },
+    {
+      "id": "a5-route-strip",
+      "do": "absent",
+      "title": "A5: the strip keeps the route actions, not the options",
+      "selector": "section[aria-label=\"PCB view\"] input[aria-label=\"Track width\"]",
+      "shot": false
+    },
+    {
+      "id": "a5-route-off",
+      "do": "click",
+      "title": "A5: Select tool: the inspector leaves the tool options",
+      "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button",
+      "text": "Select",
+      "expect": "section[aria-label=\"Properties\"]:not([data-mode=\"tool\"])"
     }
   ]
 }
