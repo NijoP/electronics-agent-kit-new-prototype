@@ -675,3 +675,7 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .outline-view .via circle { stroke: var(--c-via); }
 .outline-view .drill { display: none; }
 .track-outline { fill: none; stroke-width: 0.05; }
+/* The PCB view has a fourth row (the layer tab strip): the canvas always takes the last, flexible
+   row, so the strip is never laid under the canvas (it was: the strip took the 1fr row). */
+.view.pcb-view { grid-template-rows: auto auto auto minmax(0, 1fr); }
+.view.pcb-view > .canvas, .view.pcb-view > .canvas-stack { grid-row: 4; }
