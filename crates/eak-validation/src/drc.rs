@@ -464,7 +464,7 @@ pub fn run(p: &Project) -> Report {
         }
     }
 
-    // DRC-021 keep-out regions and DRC-022 constraint-region track widths (schema v4, ADR-0041).
+    // DRC-021 keep-out regions and DRC-022 constraint-region track widths (schema v4, ADR-0042).
     for r in p.pcb.regions.values() {
         let mut seen = BTreeSet::new();
         for it in &items {
@@ -920,8 +920,8 @@ pub fn run(p: &Project) -> Report {
         rule("DRC-018", "Copper-to-hole clearance", format!("other-net copper ≥ {} (min clearance) from drill edges, on the layers each hole spans", mm(c.min_clearance as f64)), "Project constraints"),
         rule("DRC-019", "Hole-to-hole spacing", format!("drill edges ≥ {} apart", mm(HOLE_TO_HOLE_MIN as f64)), "EAK default (common fabricator practice; unverified)"),
         rule("DRC-020", "Silkscreen-to-board-edge clearance", format!("legend ink ≥ {} inside the outline", mm(SILK_TO_EDGE_MIN as f64)), "EAK default (common fabricator practice; unverified)"),
-        rule("DRC-021", "Keep-out regions", "tracks, vias and component pads may not touch a region that forbids them on its layers; copper pours are kept out of the fill", "EAK (ADR-0041)"),
-        rule("DRC-022", "Constraint-region track width", "tracks touching a region must be within its min/max track width", "EAK (ADR-0041)"),
+        rule("DRC-021", "Keep-out regions", "tracks, vias and component pads may not touch a region that forbids them on its layers; copper pours are kept out of the fill", "EAK (ADR-0042)"),
+        rule("DRC-022", "Constraint-region track width", "tracks touching a region must be within its min/max track width", "EAK (ADR-0042)"),
         rule("DRC-023", "Silkscreen text and dimensions", format!("silk text and dimension labels ≥ {} high and drawable by the stroke font", mm(MIN_SILK_TEXT as f64)), "EAK default (common fabricator practice; unverified)"),
     ];
     let not_implemented = vec![
@@ -932,6 +932,7 @@ pub fn run(p: &Project) -> Report {
             .into(),
         "Silkscreen overlap/legibility, solder-mask sliver and paste checks".into(),
         "Acid traps and copper slivers".into(),
+        "Region clearance rules, keep-outs on silkscreen or mask layers, and priority between overlapping regions".into(),
     ];
     let mut limitations: Vec<String> = vec![
         "Zone fill connectivity is evaluated on a 0.1 mm raster; necks narrower than the raster may be misjudged".into(),

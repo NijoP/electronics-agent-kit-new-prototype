@@ -264,7 +264,7 @@ pub fn silkscreen(p: &Project, side: Side) -> String {
 }
 
 /// Board profile: the outline (arc edges as G02/G03 arcs) and every board cut-out, drawn
-/// at 0.1 mm (schema v4, ADR-0041).
+/// at 0.1 mm (schema v4, ADR-0042).
 pub fn outline(p: &Project) -> String {
     const PROFILE_WIDTH: Nm = 100_000;
     let mut w = Writer::new();

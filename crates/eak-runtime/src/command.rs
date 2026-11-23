@@ -243,6 +243,12 @@ pub enum Command {
     },
     /// Forward-annotate: create/update/remove footprints and pad nets from the schematic.
     SyncSchematicToPcb,
+    /// Forward-annotate only the chosen `changes` of what `SyncSchematicToPcb` would do now,
+    /// as one revision (ADR-0042). Refused if a chosen change is not part of the current sync
+    /// (the preview it came from is out of date) or a pad net is chosen without its new footprint.
+    SyncSchematicToPcbSelected {
+        changes: Vec<SyncChange>,
+    },
     MoveFootprint {
         footprint_id: Id,
         position: Point,
@@ -263,7 +269,7 @@ pub enum Command {
         width: Option<Nm>,
         net: String,
         /// Make the track an arc from `a` to `b` of this sweep in degrees (positive
-        /// counter-clockwise); omit for a straight track (ADR-0041).
+        /// counter-clockwise); omit for a straight track (ADR-0042).
         #[serde(default)]
         arc_deg: Option<f64>,
     },
@@ -271,13 +277,13 @@ pub enum Command {
         track_id: Id,
     },
     /// Drag a track segment by `by`; ends of same-net tracks on the same layer that met its old
-    /// ends follow it, so the route stays joined (ADR-0041).
+    /// ends follow it, so the route stays joined (ADR-0042).
     MoveTrack {
         track_id: Id,
         by: Point,
     },
     /// Change a track's width, layer, end points or arc sweep (`arc_deg: 0` makes it straight).
-    /// Omitted fields keep their value (ADR-0041).
+    /// Omitted fields keep their value (ADR-0042).
     EditTrack {
         track_id: Id,
         #[serde(default)]
@@ -309,7 +315,7 @@ pub enum Command {
         via_id: Id,
     },
     /// Move a via; ends of same-net tracks on the layers it spans that ended on it are dragged
-    /// with it (ADR-0041).
+    /// with it (ADR-0042).
     MoveVia {
         via_id: Id,
         position: Point,
@@ -324,7 +330,7 @@ pub enum Command {
         zone_id: Id,
     },
     /// Change a zone's outline, net, layer or clearance; omitted fields keep their value
-    /// (ADR-0041).
+    /// (ADR-0042).
     EditZone {
         zone_id: Id,
         #[serde(default)]
@@ -337,11 +343,11 @@ pub enum Command {
         clearance: Option<Nm>,
     },
     /// Remove a footprint from the board (refused while locked). Its tracks stay; while its
-    /// symbol exists, the next schematic → PCB sync places it again (ADR-0041).
+    /// symbol exists, the next schematic → PCB sync places it again (ADR-0042).
     DeleteFootprint {
         footprint_id: Id,
     },
-    /// Add a keep-out and/or constraint region (ADR-0041). `layers` empty or omitted = every
+    /// Add a keep-out and/or constraint region (ADR-0042). `layers` empty or omitted = every
     /// copper layer; `forbid` lists what may not be inside; the width limits apply to tracks
     /// inside. At least one keep-out object or width limit is required.
     AddRegion {
@@ -360,7 +366,7 @@ pub enum Command {
     DeleteRegion {
         region_id: Id,
     },
-    /// Add text on a silk or documentation layer (ADR-0041).
+    /// Add text on a silk or documentation layer (ADR-0042).
     AddPcbText {
         layer: DrawLayer,
         position: Point,
@@ -383,7 +389,7 @@ pub enum Command {
     DeletePcbText {
         text_id: Id,
     },
-    /// Add an aligned linear dimension of `a`-`b` (ADR-0041); defaults: documentation layer,
+    /// Add an aligned linear dimension of `a`-`b` (ADR-0042); defaults: documentation layer,
     /// no offset, millimetres, 2 decimals, 1 mm text.
     AddDimension {
         #[serde(default)]
@@ -402,7 +408,7 @@ pub enum Command {
     DeleteDimension {
         dimension_id: Id,
     },
-    /// Add a hole milled through the board, inside the board outline (ADR-0041).
+    /// Add a hole milled through the board, inside the board outline (ADR-0042).
     AddBoardCutout {
         outline: Vec<Point>,
     },
@@ -410,7 +416,7 @@ pub enum Command {
         cutout_id: Id,
     },
     /// Make board outline edge `edge` (from vertex `edge` to the next) an arc of `sweep_deg`
-    /// degrees, positive counter-clockwise; `null` or 0 makes it straight (ADR-0041).
+    /// degrees, positive counter-clockwise; `null` or 0 makes it straight (ADR-0042).
     SetOutlineArc {
         edge: usize,
         #[serde(default)]
@@ -547,6 +553,7 @@ impl Command {
             | SetStackup { .. }
             | SetLayerCount { .. }
             | SyncSchematicToPcb
+            | SyncSchematicToPcbSelected { .. }
             | AddTrack { .. }
             | DeleteTrack { .. }
             | AddVia { .. }
@@ -601,6 +608,94 @@ pub enum CommandError {
     Storage(String),
     #[error("nothing to {0}")]
     NothingTo(String),
+}
+
+/// One change `SyncSchematicToPcb` would make, named by the schematic symbol it is about, so a
+/// footprint the sync would create needs no id (ADR-0042). Used to apply part of an ECO preview.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SyncChange {
+    /// Create the footprint of a symbol that has none (staged outside the board).
+    AddFootprint { symbol_id: Id },
+    /// Remove a footprint whose symbol no longer exists (`symbol_id` is the footprint's).
+    RemoveFootprint { symbol_id: Id },
+    /// Copy the symbol's reference designator to its footprint.
+    Refdes { symbol_id: Id },
+    /// Copy the symbol's component (part) to its footprint.
+    Part { symbol_id: Id },
+    /// Set, change or clear the net of one pad of the symbol's footprint.
+    PadNet { symbol_id: Id, pad: String },
+}
+
+impl SyncChange {
+    fn label(&self) -> String {
+        match self {
+            SyncChange::AddFootprint { symbol_id } => format!("add footprint for {symbol_id}"),
+            SyncChange::RemoveFootprint { symbol_id } => {
+                format!("remove footprint of {symbol_id}")
+            }
+            SyncChange::Refdes { symbol_id } => format!("reference of {symbol_id}"),
+            SyncChange::Part { symbol_id } => format!("part of {symbol_id}"),
+            SyncChange::PadNet { symbol_id, pad } => format!("net of pad {pad} of {symbol_id}"),
+        }
+    }
+}
+
+/// The changes that turn `before` into `after` (the result of `SyncSchematicToPcb` on it), one
+/// per footprint added or removed, reference, part and pad net, in a stable order. Pad nets of a
+/// footprint being added are listed too: they apply only with that footprint.
+pub fn sync_changes(before: &Project, after: &Project) -> Vec<SyncChange> {
+    let by_symbol = |p: &Project| -> BTreeMap<Id, FootprintInstance> {
+        p.pcb
+            .footprints
+            .values()
+            .map(|f| (f.symbol_id.clone(), f.clone()))
+            .collect()
+    };
+    let (b, a) = (by_symbol(before), by_symbol(after));
+    let mut out = Vec::new();
+    let pad_changes = |s: &Id, old: &BTreeMap<String, String>, new: &BTreeMap<String, String>| {
+        let mut pads: Vec<&String> = old.keys().chain(new.keys()).collect();
+        pads.sort();
+        pads.dedup();
+        pads.into_iter()
+            .filter(|pad| old.get(*pad) != new.get(*pad))
+            .map(|pad| SyncChange::PadNet {
+                symbol_id: s.clone(),
+                pad: pad.clone(),
+            })
+            .collect::<Vec<_>>()
+    };
+    let empty = BTreeMap::new();
+    for (s, fa) in &a {
+        match b.get(s) {
+            None => {
+                out.push(SyncChange::AddFootprint {
+                    symbol_id: s.clone(),
+                });
+                out.extend(pad_changes(s, &empty, &fa.pad_nets));
+            }
+            Some(fb) => {
+                if fb.refdes != fa.refdes {
+                    out.push(SyncChange::Refdes {
+                        symbol_id: s.clone(),
+                    });
+                }
+                if fb.component_id != fa.component_id {
+                    out.push(SyncChange::Part {
+                        symbol_id: s.clone(),
+                    });
+                }
+                out.extend(pad_changes(s, &fb.pad_nets, &fa.pad_nets));
+            }
+        }
+    }
+    for s in b.keys().filter(|s| !a.contains_key(*s)) {
+        out.push(SyncChange::RemoveFootprint {
+            symbol_id: s.clone(),
+        });
+    }
+    out
 }
 
 pub struct Applied {
@@ -1753,6 +1848,108 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             }
             if !created.is_empty() {
                 warnings.push(format!("{} new footprint(s) staged outside the board; place them (AutoPlace or manual)", created.len()));
+            }
+        }
+        SyncSchematicToPcbSelected { changes } => {
+            if changes.is_empty() {
+                return Err(CommandError::Invalid(
+                    "choose at least one change to apply (or run SyncSchematicToPcb for all)"
+                        .into(),
+                ));
+            }
+            // The full sync, computed on a copy exactly as SyncSchematicToPcb would do it now.
+            let mut full = p.clone();
+            let all = apply(&mut full, &SyncSchematicToPcb)?;
+            let possible = sync_changes(p, &full);
+            let chosen: std::collections::BTreeSet<&SyncChange> = changes.iter().collect();
+            if chosen.len() != changes.len() {
+                return Err(CommandError::Invalid("a change is listed twice".into()));
+            }
+            let stale: Vec<String> = chosen
+                .iter()
+                .filter(|c| !possible.contains(**c))
+                .map(|c| c.label())
+                .collect();
+            if !stale.is_empty() {
+                return Err(CommandError::Invalid(format!(
+                    "not part of the schematic-to-PCB update at this revision: {}; preview the update again",
+                    stale.join(", ")
+                )));
+            }
+            let full_fp = |s: &Id| full.pcb.footprints.values().find(|f| &f.symbol_id == s);
+            // Footprints first, so pad nets can land on a footprint added in the same command.
+            for c in &chosen {
+                match c {
+                    SyncChange::AddFootprint { symbol_id } => {
+                        let mut fp = full_fp(symbol_id).expect("listed by sync_changes").clone();
+                        fp.pad_nets.clear();
+                        created.push(fp.id.clone());
+                        p.pcb.footprints.insert(fp.id.clone(), fp);
+                    }
+                    SyncChange::RemoveFootprint { symbol_id } => {
+                        let id = p
+                            .pcb
+                            .footprints
+                            .values()
+                            .find(|f| &f.symbol_id == symbol_id)
+                            .map(|f| f.id.clone())
+                            .expect("listed by sync_changes");
+                        warnings.push(format!("removed footprint {id} (symbol deleted)"));
+                        p.pcb.footprints.remove(&id);
+                    }
+                    _ => {}
+                }
+            }
+            for c in &chosen {
+                let (SyncChange::Refdes { symbol_id }
+                | SyncChange::Part { symbol_id }
+                | SyncChange::PadNet { symbol_id, .. }) = c
+                else {
+                    continue;
+                };
+                let src = full_fp(symbol_id).expect("listed by sync_changes").clone();
+                let Some(fp) = p
+                    .pcb
+                    .footprints
+                    .values_mut()
+                    .find(|f| &f.symbol_id == symbol_id)
+                else {
+                    return Err(CommandError::Invalid(format!(
+                        "{} needs the footprint it belongs to: choose adding that footprint too",
+                        c.label()
+                    )));
+                };
+                match c {
+                    SyncChange::Refdes { .. } => fp.refdes = src.refdes,
+                    SyncChange::Part { .. } => fp.component_id = src.component_id,
+                    SyncChange::PadNet { pad, .. } => match src.pad_nets.get(pad) {
+                        Some(net) => {
+                            fp.pad_nets.insert(pad.clone(), net.clone());
+                        }
+                        None => {
+                            fp.pad_nets.remove(pad);
+                        }
+                    },
+                    _ => {}
+                }
+            }
+            // Keep the full sync's notes that concern what was applied or left out (parts it
+            // would not place), and say how much is left.
+            warnings.extend(all.warnings.into_iter().filter(|w| {
+                !w.starts_with("removed footprint") && !w.contains("new footprint(s) staged")
+            }));
+            if !created.is_empty() {
+                warnings.push(format!(
+                    "{} new footprint(s) staged outside the board; place them (AutoPlace or manual)",
+                    created.len()
+                ));
+            }
+            if chosen.len() < possible.len() {
+                warnings.push(format!(
+                    "applied {} of {} schematic-to-PCB changes; the PCB still differs from the schematic until the rest are applied",
+                    chosen.len(),
+                    possible.len()
+                ));
             }
         }
         MoveFootprint {

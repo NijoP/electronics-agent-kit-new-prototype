@@ -1,4 +1,4 @@
-# ADR-0041: EAK-IR schema v4, PCB objects (keepout and constraint regions, text, dimensions, arcs, cut-outs) and PCB edit commands
+# ADR-0042: EAK-IR schema v4, PCB objects (keepout and constraint regions, text, dimensions, arcs, cut-outs) and PCB edit commands
 - **Date:** 2026-11-23
 - **Context:** Phase 1 slice C4 (plan gaps #30-#32). Schema v3 could not edit a track, via or zone
   after placing it (delete and redraw only), could not delete a footprint, and had no keep-out
@@ -49,7 +49,7 @@
     (`eak_engineering::silk::raw_legend`), so DRC-015/DRC-020 check them and the legend Gerber
     prints them; documentation-layer objects are drawings only and are not fabricated.
   - Integrity checks the new objects (ids, simple polygons, sweeps, sizes).
-- **Decision (`Command`, `eak-runtime`):** 15 new variants, 76 commands in total.
+- **Decision (`Command`, `eak-runtime`):** 16 new variants, 77 commands in total.
   - `MoveTrack { track_id, by }` moves a segment and stretches the ends of same-net tracks on the
     same layer that met its old ends (drag segment). `EditTrack { track_id, width, layer, a, b,
     arc_deg }` changes any of these; `arc_deg: 0` makes the track straight.
@@ -68,8 +68,20 @@
     deltas cover the four new collections. The agent tools, the harness routing/placement command
     lists and the task-invalidation map (`Change::BoardOutline` for cut-outs and outline arcs,
     `Change::Rules` for regions, `Change::Footprint` for `DeleteFootprint`) include them.
-- **Decision (DRC, `eak-validation`):** DRC-021 keep-out: a forbidden track, via, footprint pad,
-  or zone outline inside or crossing a keep-out on a layer it applies to (error). DRC-022
+  - `SyncSchematicToPcbSelected { changes: [SyncChange] }` (requested by the C2 ECO preview, ADR-0041)
+    applies only the chosen changes of what `SyncSchematicToPcb` would do now, as one revision
+    and one undo step. A `SyncChange` is `add_footprint`, `remove_footprint`, `refdes`, `part` or
+    `pad_net` (with `pad`), each named by its schematic `symbol_id`, so a footprint the sync would
+    create needs no id (its id is random per run). The engine recomputes the full sync on a copy
+    and copies over only the chosen changes; `eak_runtime::sync_changes(before, after)` lists the
+    changes of a sync result in the same terms. Refused (nothing changes) when the list is empty or
+    repeats a change, when a chosen change is not part of the sync at this revision (the preview
+    is out of date: preview again), or when a pad net of a new footprint is chosen without that
+    footprint. The response says how many of the update's changes were applied. It carries the
+    same ERC gate and task phase as `SyncSchematicToPcb` in the harness, and the same class.
+- **Decision (DRC, `eak-validation`):** DRC-021 keep-out: a forbidden track, via or footprint pad
+  inside or crossing a keep-out on a layer it applies to (error); a keep-out that forbids zones
+  is honoured by the zone fill, so a pour never reports it. DRC-022
   constraint region: a track inside a region narrower than its `min_track_width` or wider than its
   `max_track_width` (error). DRC-023 drawing layer: silk text or a dimension label smaller than the
   0.8 mm legibility minimum, or a character the stroke font cannot draw (warning). DRC-005 also

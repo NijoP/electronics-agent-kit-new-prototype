@@ -474,7 +474,7 @@ pub fn fill_zone_raw(p: &Project, zone_id: &str, copper: &[CopperItem]) -> Optio
     let board = p.pcb.board.outline_path();
     let edge = p.constraints.board_edge_clearance as f64;
     // Cut-outs are board edge too; keep-outs that forbid zones on this layer stay empty
-    // (schema v4, ADR-0041).
+    // (schema v4, ADR-0042).
     let cutouts: Vec<&Vec<Point>> = p.pcb.cutouts.values().map(|c| &c.outline).collect();
     let keepouts: Vec<&Vec<Point>> = p
         .pcb

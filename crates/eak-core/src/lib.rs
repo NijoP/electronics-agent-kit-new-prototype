@@ -9,7 +9,7 @@
 //! * `libmeta`  – library identity, scope, maturity, catalogue and committed-definition references (ADR-0035).
 //! * `sexpr`    – bounded S-expression reader for library interchange files (import groundwork).
 //! * `ir`       – project, schematic, PCB, constraints, manufacturing config.
-//! * `pcb_objects` – PCB arcs, keep-out and constraint regions, cut-outs, text, dimensions (schema v4, ADR-0041).
+//! * `pcb_objects` – PCB arcs, keep-out and constraint regions, cut-outs, text, dimensions (schema v4, ADR-0042).
 //! * `integrity`– structural validation of a whole project (dangling references etc.).
 //! * `migrate`  – schema version handling; unknown/newer schemas fail safely.
 //! * `builtin`  – the built-in, provenance-tagged starter component library.

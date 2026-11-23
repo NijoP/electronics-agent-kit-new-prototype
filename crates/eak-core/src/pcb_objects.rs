@@ -1,4 +1,4 @@
-//! PCB objects of schema v4 (ADR-0041): arc geometry for tracks and board edges, keep-out and
+//! PCB objects of schema v4 (ADR-0042): arc geometry for tracks and board edges, keep-out and
 //! constraint regions, board cut-outs, PCB text and dimensions.
 //!
 //! Arcs are stored exactly (end points and a sweep angle) and flattened with a bounded chord

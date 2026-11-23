@@ -682,7 +682,7 @@ pub struct Board {
     /// Closed outline polygon (counter-clockwise preferred). Empty = no outline yet.
     pub outline: Vec<Point>,
     pub stackup: Stackup,
-    /// Arc edges of the outline (schema v4, ADR-0041); every other edge is straight. Omitted
+    /// Arc edges of the outline (schema v4, ADR-0042); every other edge is straight. Omitted
     /// when empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub outline_arcs: Vec<crate::pcb_objects::OutlineArc>,
@@ -729,7 +729,7 @@ pub struct Track {
     pub a: Point,
     pub b: Point,
     pub net: String,
-    /// Arc track (schema v4, ADR-0041): the track runs from `a` to `b` along a circular arc of
+    /// Arc track (schema v4, ADR-0042): the track runs from `a` to `b` along a circular arc of
     /// this sweep in degrees, positive counter-clockwise. `None` = straight; omitted when straight.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arc_deg: Option<f64>,
@@ -825,7 +825,7 @@ pub struct Pcb {
     pub tracks: BTreeMap<Id, Track>,
     pub vias: BTreeMap<Id, Via>,
     pub zones: BTreeMap<Id, Zone>,
-    /// Keep-out and constraint regions (schema v4, ADR-0041).
+    /// Keep-out and constraint regions (schema v4, ADR-0042).
     #[serde(default)]
     pub regions: BTreeMap<Id, crate::pcb_objects::Region>,
     /// Text on silk or documentation layers (schema v4).

@@ -56,7 +56,7 @@ pub fn classify_command(command_type: &str) -> Option<Change> {
         "SetDesignRules" | "UpsertNetClass" => Some(Change::Rules),
         "SetBoardOutline" | "SetStackup" | "SetLayerCount" | "SetOutlineArc" | "AddBoardCutout"
         | "DeleteBoardCutout" => Some(Change::BoardOutline),
-        // Keep-out and constraint regions are design rules for placement and routing (ADR-0041).
+        // Keep-out and constraint regions are design rules for placement and routing (ADR-0042).
         "AddRegion" | "DeleteRegion" => Some(Change::Rules),
         "DeleteFootprint" => Some(Change::Footprint {
             pin_map_changed: false,

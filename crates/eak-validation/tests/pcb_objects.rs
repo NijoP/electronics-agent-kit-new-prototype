@@ -1,4 +1,4 @@
-//! Schema v4 PCB objects in DRC (ADR-0041): keep-out and constraint regions (DRC-021/022),
+//! Schema v4 PCB objects in DRC (ADR-0042): keep-out and constraint regions (DRC-021/022),
 //! silk text and dimensions (DRC-023), board cut-outs and arc edges (DRC-005/009).
 
 use eak_core::geom::polygon_area2;

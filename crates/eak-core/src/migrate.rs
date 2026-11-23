@@ -11,7 +11,7 @@
 //!   `schematic.graphics`, `schematic.buses` and `schematic.bus_entries` are added empty. Labels
 //!   load as global, sheets without a drawing format and instances with default field
 //!   visibility, which is exactly the v2 meaning.
-//! * v3 → v4 (ADR-0041): PCB objects. The new collections `pcb.regions`, `pcb.texts`,
+//! * v3 → v4 (ADR-0042): PCB objects. The new collections `pcb.regions`, `pcb.texts`,
 //!   `pcb.dimensions` and `pcb.cutouts` are added empty. Tracks without `arc_deg` are straight and
 //!   a board without `outline_arcs` has straight edges, which is exactly the v3 meaning.
 

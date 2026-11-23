@@ -224,7 +224,7 @@ const ROUTING_COMMANDS: &[&str] = &[
 
 /// The phase a committed command moves a task to, if it is a phase-defining command.
 fn command_phase(command: &str, symbols: usize) -> Option<Phase> {
-    if command == "SyncSchematicToPcb" {
+    if command == "SyncSchematicToPcb" || command == "SyncSchematicToPcbSelected" {
         Some(Phase::SyncingPcb)
     } else if PLACEMENT_COMMANDS.contains(&command) {
         Some(Phase::Placement)

@@ -197,6 +197,21 @@ pub fn region_object() -> Value {
         "object kind a keep-out forbids",
     )
 }
+/// Schema of one `SyncChange` (a change of the schematic-to-PCB update, named by its symbol).
+pub fn sync_change() -> Value {
+    let kind = |k: &str| enumeration(&[k], "change kind");
+    let sym = || string("schematic symbol id the change is about");
+    json!({
+        "description": "one change of the schematic-to-PCB update, as an ECO preview lists it",
+        "anyOf": [
+            obj(&[("kind", kind("add_footprint")), ("symbol_id", sym())], &["kind", "symbol_id"]),
+            obj(&[("kind", kind("remove_footprint")), ("symbol_id", sym())], &["kind", "symbol_id"]),
+            obj(&[("kind", kind("refdes")), ("symbol_id", sym())], &["kind", "symbol_id"]),
+            obj(&[("kind", kind("part")), ("symbol_id", sym())], &["kind", "symbol_id"]),
+            obj(&[("kind", kind("pad_net")), ("symbol_id", sym()), ("pad", string("pad number"))], &["kind", "symbol_id", "pad"]),
+        ],
+    })
+}
 pub fn dimension_unit() -> Value {
     enumeration(&["mm", "mil", "inch"], "dimension label unit")
 }

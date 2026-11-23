@@ -1,4 +1,4 @@
-//! Schema v4 PCB objects and edits (ADR-0041): every new command works through the engine
+//! Schema v4 PCB objects and edits (ADR-0042): every new command works through the engine
 //! (accepted, refused with a reason that leaves the project untouched, undoable).
 
 use eak_core::*;

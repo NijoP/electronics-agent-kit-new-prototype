@@ -400,6 +400,14 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Forward-annotate: create/update/remove footprints and pad nets from the schematic.",
             obj(&[], &[]),
         ),
+        SyncSchematicToPcbSelected { .. } => (
+            D::Pcb,
+            "Apply only the chosen changes of the schematic-to-PCB update (as an ECO preview lists them), as one revision. Refused if a change is no longer part of the update; a pad net of a new footprint needs that footprint chosen too.",
+            obj(
+                &[("changes", array(sync_change(), "changes to apply"))],
+                &["changes"],
+            ),
+        ),
         MoveFootprint { .. } => (
             D::Pcb,
             "Move/rotate/flip a footprint. Tracks are not dragged; locked footprints refuse.",
@@ -899,6 +907,17 @@ pub fn command_samples() -> Vec<Command> {
             board_thickness: None,
         },
         SyncSchematicToPcb,
+        SyncSchematicToPcbSelected {
+            changes: vec![
+                eak_runtime::command::SyncChange::AddFootprint {
+                    symbol_id: "s".into(),
+                },
+                eak_runtime::command::SyncChange::PadNet {
+                    symbol_id: "s".into(),
+                    pad: "1".into(),
+                },
+            ],
+        },
         MoveFootprint {
             footprint_id: "f".into(),
             position: p,
@@ -1130,10 +1149,11 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 76 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
-        // schematic commands of ADR-0040 and the 15 schema-v4 PCB commands of ADR-0041); keep in
+        // 77 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
+        // schematic commands of ADR-0040 and the 16 PCB commands of ADR-0042: 15 schema-v4 edits
+        // plus SyncSchematicToPcbSelected); keep in
         // step with REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 76);
+        assert_eq!(tools.len(), 77);
         for t in &tools {
             assert!(t
                 .spec

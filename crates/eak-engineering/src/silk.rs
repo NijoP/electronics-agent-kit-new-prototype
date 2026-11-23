@@ -142,7 +142,7 @@ pub fn placed_text(
         .collect()
 }
 
-/// Legend strokes of the PCB text and dimensions on the silk of `side` (schema v4, ADR-0041).
+/// Legend strokes of the PCB text and dimensions on the silk of `side` (schema v4, ADR-0042).
 /// Documentation-layer objects are not fabricated and have none.
 pub fn drawing_strokes(p: &Project, side: Side) -> Vec<Stroke> {
     let mirror = side == Side::Bottom;
