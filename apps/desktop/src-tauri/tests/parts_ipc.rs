@@ -1,7 +1,9 @@
 //! Parts search / import / BOM / Fabricator preparation through the desktop command layer,
 //! headless. Distributor is replaced by a local HTTP server; the live site is never contacted.
 
-use eak_desktop::parts::{fabricator_prepare, manufacturing_preview, parts_import, parts_search};
+use eak_desktop::parts::{
+    fabricator_prepare, manufacturing_preview, part_standardisation, parts_import, parts_search,
+};
 use eak_desktop::*;
 use eak_manufacturing::distributor::{DistributorProvider, UreqFetch};
 use eak_manufacturing::provider::Resilient;
@@ -247,4 +249,24 @@ fn assembly_attestations_are_written_through_the_engine_and_journalled() {
         eak_runtime::engine::read_record_journal(&d, "sourcing").len(),
         1
     );
+}
+
+/// Phase 1 D1 (gap #38): the standardisation view runs the SOURCING check over the placed parts,
+/// offline and read-only, and says what it does not check.
+#[test]
+fn part_standardisation_runs_the_sourcing_check_without_writing() {
+    let (s, d) = routed_project("standardise");
+    let revision = current_project(&s).unwrap().project.revision;
+    let r = part_standardisation(&s).unwrap();
+    assert_eq!(r.check, "SOURCING");
+    assert_eq!(r.revision, revision);
+    // Fixture parts carry no supplier records: missing sourcing data is reported, never passed.
+    assert!(!r.findings.is_empty());
+    assert!(r.findings.iter().all(|f| f.rule_id.starts_with("SRC-")));
+    assert!(!r.not_implemented.is_empty());
+    assert!(!r.limitations.is_empty());
+    assert!(!d.join("sourcing").exists());
+    assert_eq!(current_project(&s).unwrap().project.revision, revision);
+    // No project open: refused, not an empty pass.
+    assert!(part_standardisation(&session()).is_err());
 }

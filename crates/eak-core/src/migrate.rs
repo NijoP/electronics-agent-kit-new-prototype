@@ -196,7 +196,17 @@ mod tests {
     fn v2_fixture() -> (Project, String) {
         let mut p = Project::new("v2-board");
         for id in ["R_0603", "LED_0603", "CONN_1x04_P2.54"] {
-            let def = crate::builtin::get(id).expect("built-in part");
+            let mut def = crate::builtin::get(id).expect("built-in part");
+            // A v2 file only held box symbols: reduce the drawn built-ins (slice B2) to the
+            // box v2 could express, so the migrated project can equal this one.
+            def.symbol.graphics.clear();
+            for pin in &mut def.symbol.pins {
+                pin.length = 0;
+                pin.orientation = Default::default();
+                pin.name_visible = true;
+                pin.number_visible = true;
+            }
+            def.symbol.upgrade_box();
             p.library.insert(def.id.clone(), def);
         }
         let mut v: Value = serde_json::from_str(&to_json(&p)).unwrap();

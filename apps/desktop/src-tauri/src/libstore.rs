@@ -446,6 +446,8 @@ pub struct SupplierInfo {
     pub distributor: String,
     pub stock: Option<u64>,
     pub as_of_unix_s: u64,
+    /// Quantity breaks as the supplier stated them (ADR-0028 offer data, never identity).
+    pub price_breaks: Vec<eak_core::OfferPrice>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -588,6 +590,7 @@ pub fn browse(
                     distributor: part.to_string(),
                     stock: r.stock,
                     as_of_unix_s: r.retrieved_at_unix_s,
+                    price_breaks: r.offer().map(|o| o.price_breaks).unwrap_or_default(),
                 })
         });
         entries.push(Entry {

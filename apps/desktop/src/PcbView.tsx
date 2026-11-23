@@ -14,19 +14,29 @@ import { useLayerView, type LayerView } from "./layerView";
 import { focusBounds, type Focus } from "./pcbFocus";
 import {
   deleteTracks,
+  draftLength,
   feedbackText,
   finishOn,
+  loopTracks,
+  mmText,
+  netLengthText,
+  netTrackLength,
   nextConnections,
   padAt,
+  parseVia,
   ripUpAndReroute,
   routeBatch,
   routeReducer,
   startProblem,
   stepRequest,
   trackEdit,
+  viaPresets,
   widthFromMm,
+  widthPresets,
+  widthPresetValue,
+  type RouteDraft,
 } from "./routeTool";
-import type { BendMode, Command, CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
+import type { BendMode, Command, ConflictMode, CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import { ToolOptionFields } from "./shell/Inspector";
 import { NO_SELECTION, useHasInspector, usePublishEditorContext, type OptionField } from "./shell/inspectorModel";
@@ -136,6 +146,10 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const [mode, setMode] = useState<BendMode>("diagonal45");
   // Track width for new routes (mm text; empty = net-class width).
   const [widthText, setWidthText] = useState("");
+  // C3 routing options: via preset ("" = net class), obstacle handling and loop removal.
+  const [viaChoice, setViaChoice] = useState("");
+  const [conflict, setConflict] = useState<ConflictMode>("walkaround");
+  const [removeLoops, setRemoveLoops] = useState(true);
   // Select tool: one committed track picked for editing (width, layer, delete).
   const [trackSel, setTrackSel] = useState<Id | null>(null);
   const [trackWidthText, setTrackWidthText] = useState("");
@@ -271,9 +285,12 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     void edit.execute({ type: "SetBoardOutline", points: pts });
   };
 
-  // Commit the whole route as ONE Batch (one revision, one undo step).
+  // The finished route as ONE Batch (one revision, one undo step), with the committed tracks it
+  // makes redundant removed in the same Batch when loop removal is on.
+  const routeCommand = (d: RouteDraft) =>
+    routeBatch(d, removeLoops ? loopTracks(d, Object.values(pcb.tracks), Object.values(pcb.vias), snapshot.geometry.footprints) : []);
   const finishRoute = () => {
-    const cmd = draft ? routeBatch(draft) : null;
+    const cmd = draft ? routeCommand(draft) : null;
     dispatch({ type: "cancel" });
     setProposal(null);
     if (cmd && edit) void edit.execute(cmd);
@@ -292,10 +309,18 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     setWidthText(text);
     dispatch({ type: "setWidth", width: widthFromMm(text) });
   };
+  const changeVia = (v: string) => {
+    setViaChoice(v);
+    dispatch({ type: "setVia", via: parseVia(v) });
+  };
+  const changeConflict = (c: ConflictMode) => {
+    setConflict(c);
+    dispatch({ type: "setConflict", conflict: c });
+  };
   const startRoute = (n: string, at: Point) => {
     setNet(n);
     setTrackSel(null);
-    dispatch({ type: "start", net: n, layer, at, mode, width: widthFromMm(widthText) });
+    dispatch({ type: "start", net: n, layer, at, mode, width: widthFromMm(widthText), conflict, via: parseVia(viaChoice) });
   };
   const deleteSelectedTrack = () => {
     const cmd = selTrack ? deleteTracks([selTrack.id]) : null;
@@ -500,7 +525,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             if (!s.reached) edit.notify(feedbackText(s));
             else if (ends) {
               const fixed = routeReducer(d, { type: "fix", step: s });
-              const cmd = fixed ? routeBatch(fixed) : null;
+              const cmd = fixed ? routeCommand(fixed) : null;
               dispatch({ type: "cancel" });
               setProposal(null);
               if (cmd) void edit.execute(cmd);
@@ -601,13 +626,36 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     { kind: "select", name: "Layer", label: "Layer", value: layerKey(layer), options: layerOpts, onChange: (v) => changeLayer(order.find((o) => layerKey(o) === v) ?? "top") },
     { kind: "select", name: "Net", label: "Net", value: net, options: [{ value: "", label: "net…" }, ...nets.map((n) => ({ value: n, label: n }))], onChange: setNet },
   ];
+  // C3: presets and the live net length follow the net being routed (else the picked net).
+  const lengthNet = draft?.net ?? net;
+  const widthChoices = widthPresets(snapshot.project.constraints, lengthNet, widthFromMm(widthText));
   const plainLayers = order.map((o) => ({ value: layerKey(o), label: layerName(o) }));
   const options: OptionField[] = !edit
     ? []
     : tool === "route"
       ? [
           ...layerNet,
+          {
+            kind: "select",
+            name: "Width preset",
+            label: "Width",
+            value: widthPresetValue(widthChoices, widthFromMm(widthText)),
+            options: widthChoices,
+            onChange: (v) => {
+              if (v !== "custom") changeWidth(v === "" ? "" : mmText(Number(v)));
+            },
+            title: "Track width: the net class, another class's width or a common width (or type one below)",
+          },
           { kind: "text", name: "Track width", label: "Width (mm)", value: widthText, onChange: changeWidth, placeholder: "net class", title: "Track width for this route; empty uses the net-class width" },
+          {
+            kind: "select",
+            name: "Via preset",
+            label: "Via size",
+            value: viaChoice,
+            options: viaPresets(snapshot.project.constraints, lengthNet),
+            onChange: changeVia,
+            title: "Drill / diameter of the via placed when the route changes layer",
+          },
           {
             kind: "select",
             name: "Bend mode",
@@ -620,7 +668,46 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             onChange: (v) => v !== mode && toggleMode(),
             title: "45° or 90° corners (/)",
           },
-          { kind: "info", name: "Route via", label: "Via", value: "L or Via + switch layer; rule drill and diameter" },
+          { kind: "unavailable", name: "Arc corners", label: "Arc corners", reason: "Unavailable: arc corners need arc tracks, which the EAK-IR does not have yet" },
+          {
+            kind: "select",
+            name: "Obstacle mode",
+            label: "Obstacles",
+            value: conflict,
+            options: [
+              { value: "walkaround", label: "Walk around" },
+              { value: "block", label: "Block (stop before)" },
+            ],
+            onChange: (v) => changeConflict(v === "block" ? "block" : "walkaround"),
+            title: "Walk around other-net copper, or stop before it",
+          },
+          { kind: "unavailable", name: "Push mode", label: "Push", reason: "Unavailable: push-and-shove of other tracks is not implemented yet" },
+          {
+            kind: "select",
+            name: "Remove loops",
+            label: "Loops",
+            value: removeLoops ? "on" : "off",
+            options: [
+              { value: "on", label: "Remove loops" },
+              { value: "off", label: "Keep loops" },
+            ],
+            onChange: (v) => setRemoveLoops(v === "on"),
+            title: "When a finished route joins two points its net already joins by an unbranched track chain, delete that chain in the same undo step",
+          },
+          {
+            kind: "select",
+            name: "Ratsnest",
+            label: "Ratsnest",
+            value: lv.airwires ? "shown" : "hidden",
+            options: [
+              { value: "shown", label: "Shown" },
+              { value: "hidden", label: "Hidden" },
+            ],
+            onChange: (v) => lv.setAirwires(v === "shown"),
+            title: "Show or hide the airwires of unrouted connections",
+          },
+          { kind: "info", name: "Net length", label: "Net length", value: lengthNet ? netLengthText(netTrackLength(Object.values(pcb.tracks), lengthNet), draftLength(draft, live)) : "pick a net or start a route" },
+          { kind: "info", name: "Route via", label: "Via", value: "L or Via + switch layer; the via size above" },
         ]
       : tool === "via"
         ? [
@@ -702,6 +789,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               {draft && (
                 <>
                   <span className="route-net" aria-label="Active net">Routing {draft.net} · {layerName(draft.layer)}{draft.viaPending ? " · via next" : ""}</span>
+                  <span className="route-net muted" aria-label="Live net length" title="Committed tracks of the net plus the route being drawn">{`net length ${netLengthText(netTrackLength(Object.values(pcb.tracks), draft.net), draftLength(draft, live))}`}</span>
                   <button type="button" title="Place a via here and continue on the next copper layer (L)" onClick={() => changeLayer(order[(order.findIndex((o) => sameLayer(o, layer)) + 1) % order.length])}>
                     Via + switch layer
                   </button>

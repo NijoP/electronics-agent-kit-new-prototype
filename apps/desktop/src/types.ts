@@ -242,7 +242,13 @@ export interface Project {
       refdes_prefix: string;
       default_value: string;
       distributor?: string | null;
-      symbol: { pins: { number: string; name: string }[] };
+      /** Full v3 symbol in engine snapshots; test fixtures may give only pin numbers and names. */
+      symbol: {
+        pins: (Pick<SymbolPin, "number" | "name"> & Partial<SymbolPin>)[];
+        body_half_w?: Nm;
+        body_half_h?: Nm;
+        graphics?: Graphic[];
+      };
     }
   >;
 }
@@ -876,6 +882,25 @@ export interface ComponentDef {
   /** Box-body style and optional real 3D model reference (optional only in test fixtures). */
   model3d?: Model3d;
   provenance: string;
+  /** Supplier offers (ADR-0028): commercial data, not identity. Omitted by the engine when empty. */
+  supplier_offers?: SupplierOffer[];
+}
+/** One quantity break; the price is decimal text exactly as the supplier stated it (eak_core::OfferPrice). */
+export interface OfferPrice {
+  min_quantity: number;
+  unit_price: string;
+  currency: string;
+}
+/** Mirrors `eak_core::SupplierOffer`: stock, price and lifecycle go stale and never prove suitability. */
+export interface SupplierOffer {
+  supplier: string;
+  supplier_part: string;
+  url?: string | null;
+  stock?: number | null;
+  price_breaks?: OfferPrice[];
+  lifecycle?: string | null;
+  fetched_at_unix_s?: number | null;
+  source_sha256?: string | null;
 }
 export type ModelFormat = "step" | "wrl" | "glb";
 /** Offset (mm, footprint coordinates: x right, y down, z up), rotation (deg about model x/y/z, Rz*Ry*Rx), scale (> 0). */
@@ -958,6 +983,12 @@ export interface SimResult {
 
 /** Interactive routing (eak_engineering::interactive). Points are board nm. */
 export type BendMode = "diagonal45" | "orthogonal90";
+/** What the route step does with other-net copper in the way (eak_engineering::interactive). */
+export type ConflictMode = "walkaround" | "block";
+export interface ViaSize {
+  drill: Nm;
+  diameter: Nm;
+}
 export interface RouteStepRequest {
   net: string;
   layer: CopperLayer;
@@ -966,6 +997,9 @@ export interface RouteStepRequest {
   mode: BendMode;
   width: Nm | null;
   via_at_start: boolean;
+  conflict: ConflictMode;
+  /** Via size for `via_at_start`; null uses the net-class via. */
+  via: ViaSize | null;
 }
 export interface RouteSegment {
   a: Point;
@@ -1240,7 +1274,8 @@ export interface LibraryEntry2 {
   unverified_ratings: number;
   has_datasheet: boolean;
   in_project: boolean;
-  supplier: { distributor: string; stock: number | null; as_of_unix_s: number } | null;
+  /** From a stored sourcing record; `price_breaks` is absent from older builds. */
+  supplier: { distributor: string; stock: number | null; as_of_unix_s: number; price_breaks?: OfferPrice[] } | null;
 }
 
 export interface Facet {

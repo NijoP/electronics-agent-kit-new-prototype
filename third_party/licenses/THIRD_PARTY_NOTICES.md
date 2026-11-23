@@ -11,3 +11,9 @@ derived file carries the upstream copyright notice and a "Modified by EAK" note.
 ## three.js (npm dependency, 3D board viewer)
 
 MIT licence, Copyright (c) 2010-2026 three.js authors. Used unmodified as an npm package by `apps/desktop/src/viewer3d`; no source is vendored.
+
+## JetBrains Mono (bundled font, schematic symbol text)
+
+JetBrains Mono NL Regular 2.304, Copyright 2020 The JetBrains Mono Project Authors
+(https://github.com/JetBrains/JetBrainsMono), SIL Open Font License 1.1: [`JetBrainsMono/OFL.txt`](JetBrainsMono/OFL.txt).
+Shipped unmodified as `apps/desktop/src/assets/fonts/JetBrainsMonoNL-Regular.ttf`.

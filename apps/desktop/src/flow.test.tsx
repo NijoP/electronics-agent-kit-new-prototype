@@ -102,6 +102,27 @@ beforeEach(() => {
           unverified_ratings: 0,
           def: { ...c, manufacturer: null, mpn: null, distributor: null, datasheet: null, symbol: { pins: [], body_half_w: 1_000_000, body_half_h: 1_000_000 }, footprint: { name: "R_0603", pads: [], courtyard_half_w: 1_000_000, courtyard_half_h: 1_000_000, body_height: null }, pin_map: {}, ratings: [], provenance: "test" },
         }));
+      case "library_browse":
+        // Phase 1 D1: the Library dock browses through `library_browse`.
+        return {
+          entries: LIB.map((c) => ({
+            scope: { kind: "builtin" },
+            scope_label: "builtin",
+            id: c.id,
+            favourite: false,
+            tags: [],
+            recent_rank: null,
+            unverified_ratings: 0,
+            has_datasheet: false,
+            in_project: false,
+            supplier: null,
+            def: { ...c, manufacturer: null, mpn: null, distributor: null, datasheet: null, symbol: { pins: [], body_half_w: 1_000_000, body_half_h: 1_000_000 }, footprint: { name: "R_0603", pads: [], courtyard_half_w: 1_000_000, courtyard_half_h: 1_000_000, body_height: null }, pin_map: {}, ratings: [], provenance: "test" },
+          })),
+          facets: { sources: [{ value: "builtin", count: LIB.length }], categories: [], manufacturers: [], packages: [], tags: [] },
+          total: LIB.length,
+          problems: [],
+          imported: [],
+        };
       case "library_footprint_candidates":
         return [];
       case "connectivity":
