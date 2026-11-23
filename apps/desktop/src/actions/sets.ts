@@ -284,7 +284,7 @@ export function view3dActions(d: ActionDeps): Action[] {
   const v = d.view3d ?? null;
   const has = (): true | string => (v ? true : "The 3D view is not drawing (no WebGL in this window)");
   const probe = (kind: "pcb" | "schematic") => (): true | string =>
-    !d.selectedSymbol ? "Select a part first (click it in the 3D view)" : kind === "pcb" && !d.fpOfSelected ? "The selected part has no PCB footprint (run Update PCB first)" : d.probeTo ? true : "Cross-probing is not available here";
+    !v ? has() : !d.selectedSymbol ? "Select a part first (click it in the 3D view)" : kind === "pcb" && !d.fpOfSelected ? "The selected part has no PCB footprint (run Update PCB first)" : d.probeTo ? true : "Cross-probing is not available here";
   return [
     ...PRESETS.map<Action>((p, i) => ({ id: `v3d-${p.id}`, label: p.id === "iso" ? "Isometric view (fit)" : `${p.label} view`, title: p.title, docs: V3D, menu: "View", sep: i === 0, enabled: has, run: () => v?.preset(p.id) })),
     { id: "v3d-reset", label: "Reset view", title: "Isometric, perspective and fit to the board; clears any measurement", docs: V3D, menu: "View", toolbar: "view", icon: "fit", enabled: has, run: () => v?.reset() },
