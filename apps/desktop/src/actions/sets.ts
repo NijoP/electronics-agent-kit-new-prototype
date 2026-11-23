@@ -11,6 +11,7 @@ import type { View3dControls } from "../viewer3d/controls";
 import { PRESETS } from "../viewer3d/view";
 import type { Action, DocContext, SplitId } from "./types";
 import { powerPortProblem, powerPorts } from "../settings/powerPorts";
+import { stitchBlocked } from "../shell/planes";
 import { fanOutCommand, type PowerPreset } from "../tools/schematic/placeTools";
 
 export interface ActionDeps {
@@ -322,6 +323,15 @@ export function pcbActions(d: ActionDeps): Action[] {
       icon: "refill",
       enabled: () => (Object.keys(d.snapshot.project.pcb.zones).length === 0 ? "No copper zones to refill" : idle()),
       run: d.refillZones,
+    },
+    {
+      id: "stitch-zones",
+      label: "Stitch zones",
+      title: "Join every net's pours across copper layers with stitching vias, and reach SMD pads the fill misses (StitchZones, all nets)",
+      docs: PCB,
+      menu: "Design",
+      enabled: () => stitchBlocked(d.snapshot, null) ?? idle(),
+      run: () => d.execute({ type: "StitchZones", net: null }),
     },
   ];
 }

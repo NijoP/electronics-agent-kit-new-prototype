@@ -76,7 +76,7 @@ describe("action registry", () => {
     expect(labels("pcb", "Place")).toEqual(["Via", "Board outline", "Copper zone"]);
     expect(labels("pcb", "Route")).toEqual(["Route track", "Auto-route all nets", "Clear all routing"]);
     expect(labels("schematic", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run ERC", "Annotate schematic"]);
-    expect(labels("pcb", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run DRC", "Run DFM (Fabricator standard)", "Auto-place footprints", "Refill zones"]);
+    expect(labels("pcb", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run DRC", "Run DFM (Fabricator standard)", "Auto-place footprints", "Refill zones", "Stitch zones"]);
     // the 3D view has no editing tools at all, only the board outputs and shared chrome
     expect(labels("3d", "Place")).toBeNull();
     expect(labels("3d", "Manufacturing")).toContain("Export manufacturing files…");
