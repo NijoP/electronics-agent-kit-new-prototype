@@ -197,7 +197,12 @@ const SCHEMATIC_COMMANDS: &[&str] = &[
     "AssignComponentFootprint",
 ];
 
-const PLACEMENT_COMMANDS: &[&str] = &["AutoPlace", "MoveFootprint", "SetFootprintLocked"];
+const PLACEMENT_COMMANDS: &[&str] = &[
+    "AutoPlace",
+    "MoveFootprint",
+    "SetFootprintLocked",
+    "DeleteFootprint",
+];
 
 const ROUTING_COMMANDS: &[&str] = &[
     "AutoRoute",
@@ -207,6 +212,12 @@ const ROUTING_COMMANDS: &[&str] = &[
     "DeleteVia",
     "AddZone",
     "DeleteZone",
+    "MoveTrack",
+    "EditTrack",
+    "MoveVia",
+    "EditZone",
+    "AddRegion",
+    "DeleteRegion",
     "StitchZones",
     "ClearRouting",
 ];

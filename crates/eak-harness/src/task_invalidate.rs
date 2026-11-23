@@ -54,7 +54,13 @@ pub fn classify_command(command_type: &str) -> Option<Change> {
         "AddRequirement" => Some(Change::Requirements),
         "SetNetCurrent" | "SetNetVoltage" | "SetManufacturing" => Some(Change::Constraints),
         "SetDesignRules" | "UpsertNetClass" => Some(Change::Rules),
-        "SetBoardOutline" | "SetStackup" | "SetLayerCount" => Some(Change::BoardOutline),
+        "SetBoardOutline" | "SetStackup" | "SetLayerCount" | "SetOutlineArc" | "AddBoardCutout"
+        | "DeleteBoardCutout" => Some(Change::BoardOutline),
+        // Keep-out and constraint regions are design rules for placement and routing (ADR-0041).
+        "AddRegion" | "DeleteRegion" => Some(Change::Rules),
+        "DeleteFootprint" => Some(Change::Footprint {
+            pin_map_changed: false,
+        }),
         _ => None,
     }
 }
@@ -333,6 +339,12 @@ mod tests {
         assert_eq!(classify_command("MoveSymbol"), None);
         assert_eq!(classify_command("SetComponentProperties"), None);
         assert_eq!(classify_command("AutoRoute"), None);
+        assert_eq!(classify_command("AddRegion"), Some(Change::Rules));
+        assert_eq!(
+            classify_command("AddBoardCutout"),
+            Some(Change::BoardOutline)
+        );
+        assert_eq!(classify_command("AddPcbText"), None);
     }
 
     #[test]

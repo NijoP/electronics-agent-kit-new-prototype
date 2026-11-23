@@ -1,7 +1,9 @@
 //! Typed design commands. The UI and the AI agent submit exactly these values; there is
 //! no other mutation path into EAK-IR.
 
-use eak_core::geom::{point_segment_distance, polygon_self_intersects};
+use eak_core::geom::{
+    point_in_polygon, point_segment_distance, polygon_self_intersects, segments_intersect,
+};
 use eak_core::*;
 use eak_engineering::{netlist, placer, router};
 use serde::{Deserialize, Serialize};
@@ -260,9 +262,34 @@ pub enum Command {
         #[serde(default)]
         width: Option<Nm>,
         net: String,
+        /// Make the track an arc from `a` to `b` of this sweep in degrees (positive
+        /// counter-clockwise); omit for a straight track (ADR-0041).
+        #[serde(default)]
+        arc_deg: Option<f64>,
     },
     DeleteTrack {
         track_id: Id,
+    },
+    /// Drag a track segment by `by`; ends of same-net tracks on the same layer that met its old
+    /// ends follow it, so the route stays joined (ADR-0041).
+    MoveTrack {
+        track_id: Id,
+        by: Point,
+    },
+    /// Change a track's width, layer, end points or arc sweep (`arc_deg: 0` makes it straight).
+    /// Omitted fields keep their value (ADR-0041).
+    EditTrack {
+        track_id: Id,
+        #[serde(default)]
+        width: Option<Nm>,
+        #[serde(default)]
+        layer: Option<CopperLayer>,
+        #[serde(default)]
+        a: Option<Point>,
+        #[serde(default)]
+        b: Option<Point>,
+        #[serde(default)]
+        arc_deg: Option<f64>,
     },
     AddVia {
         position: Point,
@@ -281,6 +308,12 @@ pub enum Command {
     DeleteVia {
         via_id: Id,
     },
+    /// Move a via; ends of same-net tracks on the layers it spans that ended on it are dragged
+    /// with it (ADR-0041).
+    MoveVia {
+        via_id: Id,
+        position: Point,
+    },
     AddZone {
         layer: CopperLayer,
         net: String,
@@ -289,6 +322,99 @@ pub enum Command {
     },
     DeleteZone {
         zone_id: Id,
+    },
+    /// Change a zone's outline, net, layer or clearance; omitted fields keep their value
+    /// (ADR-0041).
+    EditZone {
+        zone_id: Id,
+        #[serde(default)]
+        outline: Option<Vec<Point>>,
+        #[serde(default)]
+        net: Option<String>,
+        #[serde(default)]
+        layer: Option<CopperLayer>,
+        #[serde(default)]
+        clearance: Option<Nm>,
+    },
+    /// Remove a footprint from the board (refused while locked). Its tracks stay; while its
+    /// symbol exists, the next schematic → PCB sync places it again (ADR-0041).
+    DeleteFootprint {
+        footprint_id: Id,
+    },
+    /// Add a keep-out and/or constraint region (ADR-0041). `layers` empty or omitted = every
+    /// copper layer; `forbid` lists what may not be inside; the width limits apply to tracks
+    /// inside. At least one keep-out object or width limit is required.
+    AddRegion {
+        #[serde(default)]
+        name: Option<String>,
+        outline: Vec<Point>,
+        #[serde(default)]
+        layers: Vec<CopperLayer>,
+        #[serde(default)]
+        forbid: Vec<RegionObject>,
+        #[serde(default)]
+        min_track_width: Option<Nm>,
+        #[serde(default)]
+        max_track_width: Option<Nm>,
+    },
+    DeleteRegion {
+        region_id: Id,
+    },
+    /// Add text on a silk or documentation layer (ADR-0041).
+    AddPcbText {
+        layer: DrawLayer,
+        position: Point,
+        text: String,
+        /// Character height; omit for 1 mm.
+        #[serde(default)]
+        size: Option<Nm>,
+        /// Stroke width; omit for the 0.16 mm legend width.
+        #[serde(default)]
+        stroke_width: Option<Nm>,
+        #[serde(default)]
+        rotation: Option<Rotation>,
+    },
+    MovePcbText {
+        text_id: Id,
+        position: Point,
+        #[serde(default)]
+        rotation: Option<Rotation>,
+    },
+    DeletePcbText {
+        text_id: Id,
+    },
+    /// Add an aligned linear dimension of `a`-`b` (ADR-0041); defaults: documentation layer,
+    /// no offset, millimetres, 2 decimals, 1 mm text.
+    AddDimension {
+        #[serde(default)]
+        layer: Option<DrawLayer>,
+        a: Point,
+        b: Point,
+        #[serde(default)]
+        offset: Option<Nm>,
+        #[serde(default)]
+        unit: Option<DimensionUnit>,
+        #[serde(default)]
+        precision: Option<u8>,
+        #[serde(default)]
+        text_size: Option<Nm>,
+    },
+    DeleteDimension {
+        dimension_id: Id,
+    },
+    /// Add a hole milled through the board, inside the board outline (ADR-0041).
+    AddBoardCutout {
+        outline: Vec<Point>,
+    },
+    DeleteBoardCutout {
+        cutout_id: Id,
+    },
+    /// Make board outline edge `edge` (from vertex `edge` to the next) an arc of `sweep_deg`
+    /// degrees, positive counter-clockwise; `null` or 0 makes it straight (ADR-0041).
+    SetOutlineArc {
+        edge: usize,
+        #[serde(default)]
+        sweep_deg: Option<f64>,
     },
     AutoPlace {
         #[serde(default)]
@@ -393,7 +519,12 @@ impl Command {
             | AddSheetGraphic { .. }
             | MoveSheetGraphic { .. }
             | DeleteSheetGraphic { .. }
-            | SetSheetFormat { .. } => ReversibleLocal,
+            | SetSheetFormat { .. }
+            | AddPcbText { .. }
+            | MovePcbText { .. }
+            | DeletePcbText { .. }
+            | AddDimension { .. }
+            | DeleteDimension { .. } => ReversibleLocal,
             SetNetLabelScope { .. }
             | AddBus { .. }
             | MoveBus { .. }
@@ -422,6 +553,16 @@ impl Command {
             | DeleteVia { .. }
             | AddZone { .. }
             | DeleteZone { .. }
+            | MoveTrack { .. }
+            | EditTrack { .. }
+            | MoveVia { .. }
+            | EditZone { .. }
+            | DeleteFootprint { .. }
+            | AddRegion { .. }
+            | DeleteRegion { .. }
+            | AddBoardCutout { .. }
+            | DeleteBoardCutout { .. }
+            | SetOutlineArc { .. }
             | AutoPlace { .. }
             | AutoRoute { .. }
             | StitchZones { .. }
@@ -550,6 +691,90 @@ fn check_bus_entry(b: &Bus, bus_point: Point, wire_point: Point) -> Result<(), C
             "the bus point must lie on bus {}",
             b.name
         )));
+    }
+    Ok(())
+}
+
+/// Refuse a value whose own validation found problems.
+fn refuse_problems(problems: Vec<String>) -> Result<(), CommandError> {
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(CommandError::Invalid(problems.join("; ")))
+    }
+}
+
+fn check_polygon(what: &str, pts: &[Point]) -> Result<(), CommandError> {
+    if pts.len() < 3 || polygon_self_intersects(pts) {
+        return Err(CommandError::Invalid(format!(
+            "{what} outline must be a simple polygon with at least 3 vertices"
+        )));
+    }
+    Ok(())
+}
+
+fn check_arc(arc_deg: Option<f64>) -> Result<(), CommandError> {
+    if arc_deg.is_some_and(|s| !valid_sweep(s)) {
+        return Err(CommandError::Invalid(
+            "arc sweep must be finite, non-zero and less than 360 degrees either way".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Whether any edge of closed polygon `a` touches or crosses any edge of closed polygon `b`.
+fn edges_cross(a: &[Point], b: &[Point]) -> bool {
+    (0..a.len()).any(|i| {
+        (0..b.len())
+            .any(|j| segments_intersect(a[i], a[(i + 1) % a.len()], b[j], b[(j + 1) % b.len()]))
+    })
+}
+
+/// Whether two closed polygons share any area or boundary.
+fn polygons_overlap(a: &[Point], b: &[Point]) -> bool {
+    edges_cross(a, b)
+        || a.iter().any(|q| point_in_polygon(*q, b))
+        || b.iter().any(|q| point_in_polygon(*q, a))
+}
+
+/// Track ends of net `net` on `layers` that sit exactly at `at`, as (track id, is end `a`),
+/// leaving out track `skip`.
+fn attached_ends(
+    p: &Project,
+    net: &str,
+    layers: &[CopperLayer],
+    at: Point,
+    skip: &str,
+) -> Vec<(Id, bool)> {
+    let mut out = Vec::new();
+    for t in p.pcb.tracks.values() {
+        if t.id == skip || t.net != net || !layers.contains(&t.layer) {
+            continue;
+        }
+        if t.a == at {
+            out.push((t.id.clone(), true));
+        }
+        if t.b == at {
+            out.push((t.id.clone(), false));
+        }
+    }
+    out
+}
+
+/// Move the listed track ends to `to`; refuses a move that would shrink a track to nothing.
+fn set_ends(p: &mut Project, ends: &[(Id, bool)], to: Point) -> Result<(), CommandError> {
+    for (id, is_a) in ends {
+        let t = p.pcb.tracks.get_mut(id).expect("listed from the project");
+        if *is_a {
+            t.a = to;
+        } else {
+            t.b = to;
+        }
+        if t.a == t.b {
+            return Err(CommandError::Invalid(format!(
+                "the move would shrink connected track {id} to zero length"
+            )));
+        }
     }
     Ok(())
 }
@@ -1422,7 +1647,17 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     "board outline must be a simple polygon with at least 3 vertices".into(),
                 ));
             }
+            // Arc edges stay while every edge still exists and the shape stays simple (a vertex
+            // drag); otherwise edge numbers change meaning and the edges become straight.
+            let keep = points.len() == p.pcb.board.outline.len()
+                && validate_outline_arcs(points, &p.pcb.board.outline_arcs).is_empty();
             p.pcb.board.outline = points.clone();
+            if !keep && !p.pcb.board.outline_arcs.is_empty() {
+                p.pcb.board.outline_arcs.clear();
+                warnings.push(
+                    "the outline's arc edges were made straight; shape them again with SetOutlineArc".into(),
+                );
+            }
         }
         SetStackup { stackup } => set_stackup(p, stackup)?,
         SetLayerCount {
@@ -1564,10 +1799,12 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             b,
             width,
             net,
+            arc_deg,
         } => {
             if a == b {
                 return Err(CommandError::Invalid("track has zero length".into()));
             }
+            check_arc(arc_deg.filter(|s| *s != 0.0))?;
             require_layer(p, *layer, "track")?;
             let w = width.unwrap_or(p.constraints.class_for(net).track_width);
             if w <= 0 {
@@ -1588,7 +1825,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     a: *a,
                     b: *b,
                     net: net.clone(),
-                    arc_deg: None,
+                    arc_deg: arc_deg.filter(|s| *s != 0.0),
                 },
             );
             created.push(id);
@@ -1692,6 +1929,367 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 .zones
                 .remove(zone_id)
                 .ok_or_else(|| CommandError::NotFound(format!("zone {zone_id}")))?;
+        }
+        MoveTrack { track_id, by } => {
+            if *by == Point::default() {
+                return Err(CommandError::NothingTo("move: the offset is zero".into()));
+            }
+            let t = p
+                .pcb
+                .tracks
+                .get(track_id)
+                .cloned()
+                .ok_or_else(|| CommandError::NotFound(format!("track {track_id}")))?;
+            let layers = [t.layer];
+            // Collect both ends' neighbours before moving anything, so an end moved onto the
+            // other old end is not moved twice.
+            let at_a = attached_ends(p, &t.net, &layers, t.a, &t.id);
+            let at_b = attached_ends(p, &t.net, &layers, t.b, &t.id);
+            set_ends(p, &at_a, t.a.plus(*by))?;
+            set_ends(p, &at_b, t.b.plus(*by))?;
+            let m = p.pcb.tracks.get_mut(track_id).expect("exists");
+            m.a = t.a.plus(*by);
+            m.b = t.b.plus(*by);
+            let followed = at_a.len() + at_b.len();
+            if followed > 0 {
+                warnings.push(format!(
+                    "{followed} connected track end(s) followed the segment"
+                ));
+            }
+            if p.pcb
+                .vias
+                .values()
+                .any(|v| v.net == t.net && (v.position == t.a || v.position == t.b))
+            {
+                warnings.push(
+                    "a via at an old end of the segment stays where it is; move it with MoveVia or check DRC".into(),
+                );
+            }
+        }
+        EditTrack {
+            track_id,
+            width,
+            layer,
+            a,
+            b,
+            arc_deg,
+        } => {
+            let before = p
+                .pcb
+                .tracks
+                .get(track_id)
+                .cloned()
+                .ok_or_else(|| CommandError::NotFound(format!("track {track_id}")))?;
+            let mut t = before.clone();
+            if let Some(w) = width {
+                if *w <= 0 {
+                    return Err(CommandError::Invalid("track width must be positive".into()));
+                }
+                t.width = *w;
+            }
+            if let Some(l) = layer {
+                require_layer(p, *l, "track")?;
+                t.layer = *l;
+            }
+            if let Some(a) = a {
+                t.a = *a;
+            }
+            if let Some(b) = b {
+                t.b = *b;
+            }
+            if let Some(s) = arc_deg {
+                check_arc(Some(*s).filter(|s| *s != 0.0))?;
+                t.arc_deg = Some(*s).filter(|s| *s != 0.0);
+            }
+            if t.a == t.b {
+                return Err(CommandError::Invalid("track has zero length".into()));
+            }
+            if t == before {
+                return Err(CommandError::NothingTo(
+                    "edit: the track already has these values".into(),
+                ));
+            }
+            if t.width < p.constraints.min_track_width {
+                warnings.push(
+                    "track is narrower than the minimum track width (DRC will report it)".into(),
+                );
+            }
+            if t.layer != before.layer {
+                warnings.push(
+                    "connected tracks and vias stay on their layers; add a via where the route changes layer".into(),
+                );
+            }
+            p.pcb.tracks.insert(track_id.clone(), t);
+        }
+        MoveVia { via_id, position } => {
+            let v = p
+                .pcb
+                .vias
+                .get(via_id)
+                .cloned()
+                .ok_or_else(|| CommandError::NotFound(format!("via {via_id}")))?;
+            if v.position == *position {
+                return Err(CommandError::NothingTo(
+                    "move: the via is already there".into(),
+                ));
+            }
+            let layers = v.layers(&p.pcb.board.stackup);
+            let ends = attached_ends(p, &v.net, &layers, v.position, "");
+            set_ends(p, &ends, *position)?;
+            p.pcb.vias.get_mut(via_id).expect("exists").position = *position;
+            if !ends.is_empty() {
+                warnings.push(format!("{} track end(s) followed the via", ends.len()));
+            }
+        }
+        EditZone {
+            zone_id,
+            outline,
+            net,
+            layer,
+            clearance,
+        } => {
+            let before = p
+                .pcb
+                .zones
+                .get(zone_id)
+                .cloned()
+                .ok_or_else(|| CommandError::NotFound(format!("zone {zone_id}")))?;
+            let mut z = before.clone();
+            if let Some(o) = outline {
+                check_polygon("zone", o)?;
+                z.outline = o.clone();
+            }
+            if let Some(n) = net {
+                z.net = n.clone();
+            }
+            if let Some(l) = layer {
+                require_layer(p, *l, "zone")?;
+                z.layer = *l;
+            }
+            if let Some(c) = clearance {
+                if *c < 0 {
+                    return Err(CommandError::Invalid(
+                        "zone clearance must not be negative".into(),
+                    ));
+                }
+                z.clearance = *c;
+                if *c < p.constraints.min_clearance {
+                    warnings.push(
+                        "zone clearance is below the minimum clearance (DRC will report the copper it lets too close)".into(),
+                    );
+                }
+            }
+            if z == before {
+                return Err(CommandError::NothingTo(
+                    "edit: the zone already has these values".into(),
+                ));
+            }
+            p.pcb.zones.insert(zone_id.clone(), z);
+        }
+        DeleteFootprint { footprint_id } => {
+            let fp = p
+                .pcb
+                .footprints
+                .get(footprint_id)
+                .ok_or_else(|| CommandError::NotFound(format!("footprint {footprint_id}")))?;
+            if fp.locked {
+                return Err(CommandError::Precondition(format!(
+                    "{} is locked; unlock it before deleting it",
+                    fp.refdes
+                )));
+            }
+            let (refdes, symbol) = (fp.refdes.clone(), fp.symbol_id.clone());
+            p.pcb.footprints.remove(footprint_id);
+            if p.schematic.symbols.contains_key(&symbol) {
+                warnings.push(format!(
+                    "{refdes} is still in the schematic, so the next schematic → PCB sync places it again; delete the symbol to remove the part"
+                ));
+            }
+        }
+        AddRegion {
+            name,
+            outline,
+            layers,
+            forbid,
+            min_track_width,
+            max_track_width,
+        } => {
+            for l in layers {
+                require_layer(p, *l, "region")?;
+            }
+            let id = new_id("rgn");
+            let r = Region {
+                id: id.clone(),
+                name: name.as_deref().unwrap_or("").trim().to_string(),
+                outline: outline.clone(),
+                layers: layers.clone(),
+                forbid: forbid.iter().copied().collect(),
+                min_track_width: *min_track_width,
+                max_track_width: *max_track_width,
+            };
+            refuse_problems(r.validate())?;
+            p.pcb.regions.insert(id.clone(), r);
+            created.push(id);
+        }
+        DeleteRegion { region_id } => {
+            p.pcb
+                .regions
+                .remove(region_id)
+                .ok_or_else(|| CommandError::NotFound(format!("region {region_id}")))?;
+        }
+        AddPcbText {
+            layer,
+            position,
+            text,
+            size,
+            stroke_width,
+            rotation,
+        } => {
+            let id = new_id("txt");
+            let t = PcbText {
+                id: id.clone(),
+                layer: *layer,
+                position: *position,
+                text: text.clone(),
+                size: size.unwrap_or(DEFAULT_DIMENSION_TEXT_NM),
+                stroke_width: stroke_width.unwrap_or(0),
+                rotation: rotation.unwrap_or_default(),
+            };
+            refuse_problems(t.validate())?;
+            p.pcb.texts.insert(id.clone(), t);
+            created.push(id);
+        }
+        MovePcbText {
+            text_id,
+            position,
+            rotation,
+        } => {
+            let t = p
+                .pcb
+                .texts
+                .get_mut(text_id)
+                .ok_or_else(|| CommandError::NotFound(format!("PCB text {text_id}")))?;
+            let r = rotation.unwrap_or(t.rotation);
+            if t.position == *position && t.rotation == r {
+                return Err(CommandError::NothingTo(
+                    "move: the text is already there".into(),
+                ));
+            }
+            t.position = *position;
+            t.rotation = r;
+        }
+        DeletePcbText { text_id } => {
+            p.pcb
+                .texts
+                .remove(text_id)
+                .ok_or_else(|| CommandError::NotFound(format!("PCB text {text_id}")))?;
+        }
+        AddDimension {
+            layer,
+            a,
+            b,
+            offset,
+            unit,
+            precision,
+            text_size,
+        } => {
+            let id = new_id("dim");
+            let d = PcbDimension {
+                id: id.clone(),
+                layer: layer.unwrap_or(DrawLayer::Documentation),
+                a: *a,
+                b: *b,
+                offset: offset.unwrap_or(0),
+                unit: unit.unwrap_or_default(),
+                precision: precision.unwrap_or(2),
+                text_size: text_size.unwrap_or(0),
+            };
+            refuse_problems(d.validate())?;
+            p.pcb.dimensions.insert(id.clone(), d);
+            created.push(id);
+        }
+        DeleteDimension { dimension_id } => {
+            p.pcb
+                .dimensions
+                .remove(dimension_id)
+                .ok_or_else(|| CommandError::NotFound(format!("dimension {dimension_id}")))?;
+        }
+        AddBoardCutout { outline } => {
+            check_polygon("cut-out", outline)?;
+            let board = p.pcb.board.outline_path();
+            if board.len() < 3 {
+                return Err(CommandError::Precondition(
+                    "set a board outline before adding a cut-out".into(),
+                ));
+            }
+            if outline.iter().any(|q| !point_in_polygon(*q, &board)) || edges_cross(outline, &board)
+            {
+                return Err(CommandError::Invalid(
+                    "a cut-out must lie inside the board outline without touching its edge".into(),
+                ));
+            }
+            if let Some(c) = p
+                .pcb
+                .cutouts
+                .values()
+                .find(|c| polygons_overlap(outline, &c.outline))
+            {
+                return Err(CommandError::Invalid(format!(
+                    "the cut-out overlaps cut-out {}",
+                    c.id
+                )));
+            }
+            let id = new_id("cut");
+            p.pcb.cutouts.insert(
+                id.clone(),
+                Cutout {
+                    id: id.clone(),
+                    outline: outline.clone(),
+                },
+            );
+            created.push(id);
+        }
+        DeleteBoardCutout { cutout_id } => {
+            p.pcb
+                .cutouts
+                .remove(cutout_id)
+                .ok_or_else(|| CommandError::NotFound(format!("cut-out {cutout_id}")))?;
+        }
+        SetOutlineArc { edge, sweep_deg } => {
+            let n = p.pcb.board.outline.len();
+            if n < 3 {
+                return Err(CommandError::Precondition(
+                    "set a board outline before shaping its edges".into(),
+                ));
+            }
+            if *edge >= n {
+                return Err(CommandError::Invalid(format!(
+                    "edge {edge} does not exist: the outline has {n} edges (0 to {})",
+                    n - 1
+                )));
+            }
+            let mut arcs: Vec<OutlineArc> = p
+                .pcb
+                .board
+                .outline_arcs
+                .iter()
+                .copied()
+                .filter(|a| a.edge != *edge)
+                .collect();
+            if let Some(s) = sweep_deg.filter(|s| *s != 0.0) {
+                arcs.push(OutlineArc {
+                    edge: *edge,
+                    sweep_deg: s,
+                });
+            }
+            arcs.sort_by_key(|a| a.edge);
+            refuse_problems(validate_outline_arcs(&p.pcb.board.outline, &arcs))?;
+            if arcs == p.pcb.board.outline_arcs {
+                return Err(CommandError::NothingTo(format!(
+                    "arc: edge {edge} already has that shape"
+                )));
+            }
+            p.pcb.board.outline_arcs = arcs;
         }
         AutoPlace { grid } => {
             if p.pcb.board.outline.len() < 3 {

@@ -685,6 +685,7 @@ fn route_step_result_commits_as_one_batch_and_undoes_in_one_step() {
             b: sg.b,
             width: Some(step.step.width),
             net: net.clone(),
+            arc_deg: None,
         })
         .collect();
     let n = commands.len();

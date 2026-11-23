@@ -185,6 +185,21 @@ pub fn copper_layer() -> Value {
 pub fn side() -> Value {
     enumeration(&["top", "bottom"], "board side")
 }
+pub fn draw_layer() -> Value {
+    enumeration(
+        &["top_silk", "bottom_silk", "documentation"],
+        "drawing layer: top or bottom silkscreen (fabricated), or documentation (not fabricated)",
+    )
+}
+pub fn region_object() -> Value {
+    enumeration(
+        &["tracks", "vias", "components", "zones"],
+        "object kind a keep-out forbids",
+    )
+}
+pub fn dimension_unit() -> Value {
+    enumeration(&["mm", "mil", "inch"], "dimension label unit")
+}
 
 pub fn stackup() -> Value {
     let layer = obj(
