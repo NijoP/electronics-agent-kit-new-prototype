@@ -2,13 +2,13 @@
 //  * placement "app" (default): a top-level environment next to "Project / EDA" in the app bar,
 //    such as the Terminal Workspace. It fills the whole main area and stays mounted (hidden) while
 //    another workspace is shown, so switching never kills its processes;
-//  * placement "eda": an independent view inside the EDA workspace next to Schematic and PCB
-//    (an activity-bar entry), such as the 3D board viewer.
+//  * placement "eda": a document of the EDA workspace next to Schematic and PCB, such as the 3D
+//    board viewer: an activity-bar entry that opens it as a document tab (slice C6).
 // A module in `src/workspaces/` named `*.workspace.ts(x)` is imported at start-up (workspaces.ts)
 // and calls `registerWorkspace`. Nothing is registered by default: an entry exists only when a
 // module that opens something real registers it, so there are no placeholder controls.
 import { useSyncExternalStore, type ReactNode } from "react";
-import type { OpenProject } from "../types";
+import type { Command, CopperLayer, OpenProject } from "../types";
 
 /** What the shell tells a workspace. */
 export interface WorkspaceContext {
@@ -22,6 +22,18 @@ export interface WorkspaceContext {
   openProjects: OpenProject[];
   /** True while this workspace is the one shown (it stays mounted, hidden, when another is). */
   active: boolean;
+  // Placement "eda" only (a document of the EDA workspace, such as the 3D view):
+  /** Engine symbol id selected in the editors (cross-probe in). */
+  selected?: string | null;
+  /** Selects an engine symbol id in the editors (cross-probe out). */
+  select?: (symbolId: string) => void;
+  /** Opens the PCB or the schematic on the current selection. */
+  probeTo?: (kind: "pcb" | "schematic") => void;
+  /** Runs a typed engine command the way the editors do (same busy state, same log). */
+  execute?: (c: Command) => Promise<void>;
+  busy?: boolean;
+  /** Display colour of a copper layer in the PCB layer manager (user override or default). */
+  layerColour?: (l: CopperLayer) => string;
 }
 
 export interface WorkspaceEntry {

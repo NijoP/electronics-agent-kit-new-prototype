@@ -57,7 +57,11 @@ function probes(): ActionDeps[] {
     // B3: a schematic editor offering every editing operation (clipboard, arrange, find, net highlight)
     editorOp: () => ({ enabled: () => true, run: vi.fn() }),
   });
-  return [deps(), rich, deps({ busy: true }), deps({ grid: null })];
+  // The 3D document with a drawing viewer (C6): a measurement on screen and a part with a model.
+  const fn = () => vi.fn();
+  const view3d = { projection: "perspective" as const, measuring: true, measured: true, labels: true, modelCount: 1, preset: fn(), reset: fn(), zoomBy: fn(), setProjection: fn(), toggleMeasure: fn(), clearMeasure: fn(), toggleLabels: fn(), reloadModels: fn() };
+  const in3d = deps({ selected: "sym_r1", selectedSymbol: snap.project.schematic.symbols.sym_r1, fpOfSelected: snap.project.pcb.footprints.fp_r1, view3d, probeTo: fn() });
+  return [deps(), rich, deps({ busy: true }), deps({ grid: null }), in3d];
 }
 
 function audit(): Audit {

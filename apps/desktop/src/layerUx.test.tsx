@@ -245,3 +245,17 @@ describe("persistence per project view", () => {
     expect(sanitizePrefs({ locked: ["top", 2], flip: "yes", outline: true })).toMatchObject({ locked: ["top"], flip: false, outline: true });
   });
 });
+
+describe("locks cover the schema v4 PCB edit commands (C4)", () => {
+  it("track, zone, via, footprint and outline edits on a locked layer are refused", () => {
+    const s = fixture();
+    const top = new Set(["top"]);
+    expect(lockProblem(s, top, { type: "MoveTrack", track_id: "trk_1", by: pt(1, 0) })).toMatch(/F\.Cu is locked/);
+    expect(lockProblem(s, new Set(["bottom"]), { type: "EditTrack", track_id: "trk_1", layer: "bottom" })).toMatch(/B\.Cu is locked/);
+    expect(lockProblem(s, new Set(["bottom"]), { type: "EditZone", zone_id: "zon_1", clearance: null })).toMatch(/B\.Cu is locked/);
+    expect(lockProblem(s, top, { type: "MoveVia", via_id: "via_1", position: pt(2, 2) })).toMatch(/F\.Cu is locked/);
+    expect(lockProblem(s, top, { type: "DeleteFootprint", footprint_id: "fp_r1" })).toMatch(/F\.Cu is locked/);
+    expect(lockProblem(s, new Set(["outline"]), { type: "AddBoardCutout", outline: [] })).toMatch(/Board outline is locked/);
+    expect(lockProblem(s, new Set(["bottom"]), { type: "MoveTrack", track_id: "trk_1", by: pt(1, 0) })).toBeNull();
+  });
+});

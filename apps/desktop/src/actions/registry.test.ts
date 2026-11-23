@@ -84,6 +84,36 @@ describe("action registry", () => {
     expect(labels("home", "Edit")).toEqual(["Undo", "Redo", "Clear selection"]);
   });
 
+  it("the 3D document has its own menu set (C6/E6), driving the viewer's published controls", () => {
+    const fn = () => vi.fn();
+    const v3d = { projection: "perspective" as const, measuring: false, measured: false, labels: true, modelCount: 0, preset: fn(), reset: fn(), zoomBy: fn(), setProjection: fn(), toggleMeasure: fn(), clearMeasure: fn(), toggleLabels: fn(), reloadModels: fn() };
+    const snap = fixture(7);
+    const probeTo = vi.fn();
+    const d = deps({ view3d: v3d, probeTo, selected: "sym_r1", selectedSymbol: snap.project.schematic.symbols.sym_r1, fpOfSelected: snap.project.pcb.footprints.fp_r1 });
+    const view = labels("3d", "View", d)!;
+    for (const l of ["Top view", "Bottom view", "Front view", "Back view", "Left view", "Right view", "Isometric view (fit)", "Reset view", "Orthographic projection", "Placeholder labels", "Show selection in PCB", "Show selection in schematic"]) expect(view, l).toContain(l);
+    expect(labels("3d", "Tools", d)).toEqual(expect.arrayContaining(["Measure distance", "Clear measurement", "Reload 3D models"]));
+    // none of it leaks into the editors
+    expect(labels("pcb", "View", d)).not.toContain("Top view");
+    expect(labels("schematic", "Tools", d)).not.toContain("Measure distance");
+    const item = (label: string, menu = "View", dd = d) => menusFor(workspaceActions(dd), "3d").find((m) => m.label === menu)!.items.find((i) => i.label === label)!;
+    item("Front view").run!();
+    expect(v3d.preset).toHaveBeenLastCalledWith("front");
+    item("Orthographic projection").run!();
+    expect(v3d.setProjection).toHaveBeenLastCalledWith("orthographic");
+    item("Measure distance", "Tools").run!();
+    expect(v3d.toggleMeasure).toHaveBeenCalled();
+    item("Show selection in PCB").run!();
+    expect(probeTo).toHaveBeenLastCalledWith("pcb");
+    // state-dependent entries say why they are off
+    expect(item("Clear measurement", "Tools").disabled).toBe("No measurement on screen");
+    expect(item("Reload 3D models", "Tools").disabled).toBe("No part references a 3D model file");
+    expect(toolbarFor(workspaceActions(d), "3d").flat().map((b) => b.id)).toEqual(expect.arrayContaining(["v3d-zin", "v3d-zout", "v3d-reset", "v3d-measure"]));
+    // without a drawing viewer (no WebGL) the camera actions are disabled with the reason
+    expect(item("Top view", "View", deps()).disabled).toMatch(/not drawing/);
+    expect(item("Show selection in PCB", "View", deps({ view3d: v3d, probeTo })).disabled).toMatch(/Select a part first/);
+  });
+
   // Regression: with a full library the Place menu listed ~30 parts before Wire, Net / power
   // label, No connect and Label pin, so those tools sat below the bottom of the window and a
   // pick from the menu (e.g. while Place was armed) never reached them. Tools now come first.
@@ -201,7 +231,7 @@ describe("slice E1: no dead or decorative entries", () => {
     const d = deps({ selected: "sym_r1", selectedSymbol: fixture(7).project.schematic.symbols.sym_r1 });
     const all = workspaceActions(d);
     // B3: without a schematic editor its editing set says so; Group is plainly unavailable (no IR object).
-    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|finest|coarsest|No documents|Nothing is selected|No schematic editor is active|^Unavailable: EAK-IR has no group/;
+    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|finest|coarsest|No documents|Nothing is selected|No schematic editor is active|^Unavailable: EAK-IR has no group|The 3D view is not drawing/;
     for (const ctx of DOC_CONTEXTS)
       for (const a of visibleIn(all, ctx)) {
         const e = a.enabled();

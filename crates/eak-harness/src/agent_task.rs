@@ -160,6 +160,9 @@ pub struct Event<'a> {
 
 const SCHEMATIC_COMMANDS: &[&str] = &[
     "AddSheet",
+    "RenameSheet",
+    "DeleteSheet",
+    "ReorderSheets",
     "PlaceSymbol",
     "MoveSymbol",
     "RotateSymbol",
@@ -197,7 +200,12 @@ const SCHEMATIC_COMMANDS: &[&str] = &[
     "AssignComponentFootprint",
 ];
 
-const PLACEMENT_COMMANDS: &[&str] = &["AutoPlace", "MoveFootprint", "SetFootprintLocked"];
+const PLACEMENT_COMMANDS: &[&str] = &[
+    "AutoPlace",
+    "MoveFootprint",
+    "SetFootprintLocked",
+    "DeleteFootprint",
+];
 
 const ROUTING_COMMANDS: &[&str] = &[
     "AutoRoute",
@@ -207,13 +215,19 @@ const ROUTING_COMMANDS: &[&str] = &[
     "DeleteVia",
     "AddZone",
     "DeleteZone",
+    "MoveTrack",
+    "EditTrack",
+    "MoveVia",
+    "EditZone",
+    "AddRegion",
+    "DeleteRegion",
     "StitchZones",
     "ClearRouting",
 ];
 
 /// The phase a committed command moves a task to, if it is a phase-defining command.
 fn command_phase(command: &str, symbols: usize) -> Option<Phase> {
-    if command == "SyncSchematicToPcb" {
+    if command == "SyncSchematicToPcb" || command == "SyncSchematicToPcbSelected" {
         Some(Phase::SyncingPcb)
     } else if PLACEMENT_COMMANDS.contains(&command) {
         Some(Phase::Placement)

@@ -133,6 +133,27 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Add a schematic sheet.",
             obj(&[("name", string("sheet name"))], &["name"]),
         ),
+        RenameSheet { .. } => (
+            D::Schematic,
+            "Rename a sheet (names are unique). Nets named only by the sheet's local labels (<sheet>/<label>) are renamed on the PCB and in the constraints too.",
+            obj(
+                &[("sheet_id", id("sheet id")), ("name", string("new sheet name"))],
+                &["sheet_id", "name"],
+            ),
+        ),
+        DeleteSheet { .. } => (
+            D::Schematic,
+            "Delete an empty sheet. Refused while anything is on it (delete its contents first, in the same Batch) and for the last sheet.",
+            obj(&[("sheet_id", id("sheet id"))], &["sheet_id"]),
+        ),
+        ReorderSheets { .. } => (
+            D::Schematic,
+            "Put the sheets in a new order; lists every sheet id exactly once.",
+            obj(
+                &[("sheet_ids", array(id("sheet id"), "every sheet id, in the new order"))],
+                &["sheet_ids"],
+            ),
+        ),
         PlaceSymbol { .. } => (
             D::Schematic,
             "Place a component symbol on a sheet (imports a built-in component if needed).",
@@ -400,6 +421,14 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Forward-annotate: create/update/remove footprints and pad nets from the schematic.",
             obj(&[], &[]),
         ),
+        SyncSchematicToPcbSelected { .. } => (
+            D::Pcb,
+            "Apply only the chosen changes of the schematic-to-PCB update (as an ECO preview lists them), as one revision. Refused if a change is no longer part of the update; a pad net of a new footprint needs that footprint chosen too.",
+            obj(
+                &[("changes", array(sync_change(), "changes to apply"))],
+                &["changes"],
+            ),
+        ),
         MoveFootprint { .. } => (
             D::Pcb,
             "Move/rotate/flip a footprint. Tracks are not dragged; locked footprints refuse.",
@@ -423,7 +452,7 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
         ),
         AddTrack { .. } => (
             D::Pcb,
-            "Add a copper track segment on a net.",
+            "Add a copper track segment on a net (straight, or an arc when arc_deg is given).",
             obj(
                 &[
                     ("layer", copper_layer()),
@@ -431,6 +460,7 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                     ("b", point("end")),
                     ("width", nullable(nm("track width; omit for the net class width"))),
                     ("net", string("net name")),
+                    ("arc_deg", nullable(number("make it an arc of this sweep in degrees, positive counter-clockwise; omit for straight"))),
                 ],
                 &["layer", "a", "b", "net"],
             ),
@@ -477,6 +507,150 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             D::Pcb,
             "Delete a copper zone.",
             obj(&[("zone_id", id("zone id"))], &["zone_id"]),
+        ),
+        MoveTrack { .. } => (
+            D::Pcb,
+            "Drag a track segment by an offset; same-net track ends on its layer that met its old ends follow it.",
+            obj(
+                &[("track_id", id("track id")), ("by", point("offset to move by"))],
+                &["track_id", "by"],
+            ),
+        ),
+        EditTrack { .. } => (
+            D::Pcb,
+            "Change a track's width, layer, end points or arc sweep (arc_deg 0 = straight); omitted fields keep their value.",
+            obj(
+                &[
+                    ("track_id", id("track id")),
+                    ("width", nullable(nm("new width"))),
+                    ("layer", nullable(copper_layer())),
+                    ("a", nullable(point("new start"))),
+                    ("b", nullable(point("new end"))),
+                    ("arc_deg", nullable(number("arc sweep in degrees, positive counter-clockwise; 0 = straight"))),
+                ],
+                &["track_id"],
+            ),
+        ),
+        MoveVia { .. } => (
+            D::Pcb,
+            "Move a via; same-net track ends that ended on it (on the layers it spans) follow it.",
+            obj(
+                &[("via_id", id("via id")), ("position", point("new via centre"))],
+                &["via_id", "position"],
+            ),
+        ),
+        EditZone { .. } => (
+            D::Pcb,
+            "Change a copper zone's outline, net, layer or clearance; omitted fields keep their value.",
+            obj(
+                &[
+                    ("zone_id", id("zone id")),
+                    ("outline", nullable(points("new zone outline"))),
+                    ("net", nullable(string("new net name"))),
+                    ("layer", nullable(copper_layer())),
+                    ("clearance", nullable(nm("clearance to other nets"))),
+                ],
+                &["zone_id"],
+            ),
+        ),
+        DeleteFootprint { .. } => (
+            D::Pcb,
+            "Remove a footprint from the board (refused while locked). Its tracks stay; while its symbol exists the next schematic-to-PCB sync places it again.",
+            obj(&[("footprint_id", id("footprint id"))], &["footprint_id"]),
+        ),
+        AddRegion { .. } => (
+            D::Pcb,
+            "Add a keep-out and/or constraint region: forbid tracks, vias, components or zones inside it, and/or limit the width of tracks inside it.",
+            obj(
+                &[
+                    ("name", nullable(string("region name"))),
+                    ("outline", points("region outline (simple polygon)")),
+                    ("layers", array(copper_layer(), "copper layers it applies to; empty or omitted = every layer")),
+                    ("forbid", array(region_object(), "objects not allowed inside (keep-out)")),
+                    ("min_track_width", nullable(nm("narrowest track allowed inside"))),
+                    ("max_track_width", nullable(nm("widest track allowed inside"))),
+                ],
+                &["outline"],
+            ),
+        ),
+        DeleteRegion { .. } => (
+            D::Pcb,
+            "Delete a keep-out or constraint region.",
+            obj(&[("region_id", id("region id"))], &["region_id"]),
+        ),
+        AddPcbText { .. } => (
+            D::Pcb,
+            "Add text on the top silk, bottom silk or documentation layer (stroke font, anchored at the baseline centre).",
+            obj(
+                &[
+                    ("layer", draw_layer()),
+                    ("position", point("baseline centre")),
+                    ("text", string("one line of text")),
+                    ("size", nullable(nm("character height; omit for 1 mm"))),
+                    ("stroke_width", nullable(nm("stroke width; omit for 0.16 mm"))),
+                    ("rotation", nullable(rotation())),
+                ],
+                &["layer", "position", "text"],
+            ),
+        ),
+        MovePcbText { .. } => (
+            D::Pcb,
+            "Move (and optionally rotate) PCB text.",
+            obj(
+                &[
+                    ("text_id", id("PCB text id")),
+                    ("position", point("new baseline centre")),
+                    ("rotation", nullable(rotation())),
+                ],
+                &["text_id", "position"],
+            ),
+        ),
+        DeletePcbText { .. } => (
+            D::Pcb,
+            "Delete PCB text.",
+            obj(&[("text_id", id("PCB text id"))], &["text_id"]),
+        ),
+        AddDimension { .. } => (
+            D::Pcb,
+            "Add an aligned linear dimension between two points (default: documentation layer, mm, 2 decimals).",
+            obj(
+                &[
+                    ("layer", nullable(draw_layer())),
+                    ("a", point("first measured point")),
+                    ("b", point("second measured point")),
+                    ("offset", nullable(nm("distance of the dimension line from a-b, positive to the left of a->b"))),
+                    ("unit", nullable(dimension_unit())),
+                    ("precision", nullable(integer("decimals shown, 0-6"))),
+                    ("text_size", nullable(nm("label height; omit for 1 mm"))),
+                ],
+                &["a", "b"],
+            ),
+        ),
+        DeleteDimension { .. } => (
+            D::Pcb,
+            "Delete a dimension.",
+            obj(&[("dimension_id", id("dimension id"))], &["dimension_id"]),
+        ),
+        AddBoardCutout { .. } => (
+            D::Pcb,
+            "Add a hole milled through the board (simple polygon inside the board outline, not touching it or another cut-out).",
+            obj(&[("outline", points("cut-out outline"))], &["outline"]),
+        ),
+        DeleteBoardCutout { .. } => (
+            D::Pcb,
+            "Delete a board cut-out.",
+            obj(&[("cutout_id", id("cut-out id"))], &["cutout_id"]),
+        ),
+        SetOutlineArc { .. } => (
+            D::Pcb,
+            "Make board outline edge `edge` (from vertex edge to the next vertex) an arc; null or 0 makes it straight.",
+            obj(
+                &[
+                    ("edge", integer("edge index, 0-based")),
+                    ("sweep_deg", nullable(number("arc sweep in degrees, positive counter-clockwise"))),
+                ],
+                &["edge"],
+            ),
         ),
         AutoPlace { .. } => (
             D::Pcb,
@@ -594,6 +768,16 @@ pub fn command_samples() -> Vec<Command> {
             definition: Box::new(def),
         },
         AddSheet { name: "s".into() },
+        RenameSheet {
+            sheet_id: "sht".into(),
+            name: "Power".into(),
+        },
+        DeleteSheet {
+            sheet_id: "sht".into(),
+        },
+        ReorderSheets {
+            sheet_ids: vec!["sht".into()],
+        },
         PlaceSymbol {
             sheet_id: None,
             component_id: "c".into(),
@@ -754,6 +938,17 @@ pub fn command_samples() -> Vec<Command> {
             board_thickness: None,
         },
         SyncSchematicToPcb,
+        SyncSchematicToPcbSelected {
+            changes: vec![
+                eak_runtime::command::SyncChange::AddFootprint {
+                    symbol_id: "s".into(),
+                },
+                eak_runtime::command::SyncChange::PadNet {
+                    symbol_id: "s".into(),
+                    pad: "1".into(),
+                },
+            ],
+        },
         MoveFootprint {
             footprint_id: "f".into(),
             position: p,
@@ -770,6 +965,7 @@ pub fn command_samples() -> Vec<Command> {
             b: Point::new(5, 5),
             width: Some(250_000),
             net: "N".into(),
+            arc_deg: Some(-45.0),
         },
         DeleteTrack {
             track_id: "t".into(),
@@ -791,6 +987,81 @@ pub fn command_samples() -> Vec<Command> {
         },
         DeleteZone {
             zone_id: "z".into(),
+        },
+        MoveTrack {
+            track_id: "t".into(),
+            by: Point::new(1_000_000, 0),
+        },
+        EditTrack {
+            track_id: "t".into(),
+            width: Some(300_000),
+            layer: Some(CopperLayer::Inner(1)),
+            a: Some(p),
+            b: None,
+            arc_deg: Some(90.0),
+        },
+        MoveVia {
+            via_id: "v".into(),
+            position: Point::new(2, 2),
+        },
+        EditZone {
+            zone_id: "z".into(),
+            outline: Some(vec![p, Point::new(2, 0), Point::new(2, 2)]),
+            net: Some("GND".into()),
+            layer: None,
+            clearance: Some(250_000),
+        },
+        DeleteFootprint {
+            footprint_id: "f".into(),
+        },
+        AddRegion {
+            name: Some("antenna".into()),
+            outline: vec![p, Point::new(1, 0), Point::new(1, 1)],
+            layers: vec![CopperLayer::Top],
+            forbid: vec![RegionObject::Tracks, RegionObject::Zones],
+            min_track_width: None,
+            max_track_width: Some(500_000),
+        },
+        DeleteRegion {
+            region_id: "r".into(),
+        },
+        AddPcbText {
+            layer: DrawLayer::TopSilk,
+            position: p,
+            text: "REV A".into(),
+            size: Some(1_200_000),
+            stroke_width: None,
+            rotation: Some(Rotation::R90),
+        },
+        MovePcbText {
+            text_id: "x".into(),
+            position: Point::new(3, 3),
+            rotation: None,
+        },
+        DeletePcbText {
+            text_id: "x".into(),
+        },
+        AddDimension {
+            layer: Some(DrawLayer::Documentation),
+            a: p,
+            b: Point::new(10, 0),
+            offset: Some(2_000_000),
+            unit: Some(DimensionUnit::Mil),
+            precision: Some(1),
+            text_size: None,
+        },
+        DeleteDimension {
+            dimension_id: "d".into(),
+        },
+        AddBoardCutout {
+            outline: vec![p, Point::new(1, 0), Point::new(1, 1)],
+        },
+        DeleteBoardCutout {
+            cutout_id: "c".into(),
+        },
+        SetOutlineArc {
+            edge: 1,
+            sweep_deg: Some(45.0),
         },
         AutoPlace {
             grid: Some(500_000),
@@ -909,9 +1180,11 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 61 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect and the 14 schema-v3
-        // schematic commands of ADR-0040); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 61);
+        // 80 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
+        // schematic commands of ADR-0040, the 16 PCB commands of ADR-0042 (15 schema-v4 edits plus
+        // SyncSchematicToPcbSelected) and the 3 sheet commands of ADR-0043); keep in step with
+        // REQUIREMENTS_TRACEABILITY INT-04.
+        assert_eq!(tools.len(), 80);
         for t in &tools {
             assert!(t
                 .spec

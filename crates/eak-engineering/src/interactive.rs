@@ -531,6 +531,7 @@ fn with_pending(p: &Project, req: &RouteStepRequest) -> Project {
                 a: t.a,
                 b: t.b,
                 net: req.net.clone(),
+                arc_deg: None,
             },
         );
     }
@@ -564,6 +565,7 @@ fn with_pending(p: &Project, req: &RouteStepRequest) -> Project {
                     a: w[0],
                     b: w[1],
                     net: s.net.clone(),
+                    arc_deg: None,
                 },
             );
         }
@@ -973,6 +975,7 @@ mod tests {
                 a,
                 b,
                 net: net.into(),
+                arc_deg: None,
             },
         );
     }

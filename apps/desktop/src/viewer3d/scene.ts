@@ -55,8 +55,11 @@ export interface BoardScene {
 const rotDeg = (r: unknown) => ({ R90: 90, R180: 180, R270: 270 } as Record<string, number>)[String(r)] ?? 0;
 const pt = (p: Point): [number, number] => [toMm(p.x), toMm(p.y)];
 
-/** Centre heights per copper layer: outer layers sit on the surfaces, inner ones are spread evenly. */
-export function layerHeights(layers: CopperLayer[], thickness: number, copper: number[]): SceneLayer[] {
+/**
+ * Centre heights per copper layer: outer layers sit on the surfaces, inner ones are spread evenly.
+ * `colourOf` is the PCB layer manager's colour (user override or default), so 3D and PCB agree.
+ */
+export function layerHeights(layers: CopperLayer[], thickness: number, copper: number[], colourOf: (l: CopperLayer) => string = layerColour): SceneLayer[] {
   const n = layers.length;
   return layers.map((l, i) => {
     const ct = Math.max(copper[i] ?? OZ_MM, 0.02);
@@ -64,11 +67,11 @@ export function layerHeights(layers: CopperLayer[], thickness: number, copper: n
     if (i === 0) y = thickness / 2 + ct / 2;
     else if (i === n - 1) y = -thickness / 2 - ct / 2;
     else y = thickness / 2 - (thickness * i) / (n - 1);
-    return { key: layerKey(l), name: layerName(l), colour: layerColour(l), y, thickness: ct };
+    return { key: layerKey(l), name: layerName(l), colour: colourOf(l), y, thickness: ct };
   });
 }
 
-export function buildScene(s: Snapshot): BoardScene {
+export function buildScene(s: Snapshot, colourOf: (l: CopperLayer) => string = layerColour): BoardScene {
   const p = s.project;
   const stackup = p.pcb.board.stackup;
   const order = stackLayers(stackup).map((l) => l.layer);
@@ -77,7 +80,7 @@ export function buildScene(s: Snapshot): BoardScene {
     const sl = stackup?.layers.find((x) => layerKey(x.layer) === layerKey(l));
     return (sl?.copper_oz ?? 1) * OZ_MM;
   });
-  const layers = layerHeights(order, thickness, copper);
+  const layers = layerHeights(order, thickness, copper, colourOf);
   const byKey = new Map(layers.map((l) => [l.key, l]));
   const top = layers[0];
   const bottom = layers[layers.length - 1];

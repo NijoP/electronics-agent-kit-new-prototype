@@ -221,6 +221,27 @@ describe("PCB editor", () => {
     expect(sent[1]).toEqual([{ type: "DeleteVia", via_id: "via_1" }]);
   });
 
+  it("deletes a footprint with the Delete tool and draws schema v4 objects (ADR-0042)", () => {
+    const snap = fixture();
+    const pcb = snap.project.pcb;
+    pcb.tracks["trk_arc"] = { id: "trk_arc", layer: "top", width: 250_000, a: { x: 30_000_000, y: 5_000_000 }, b: { x: 34_000_000, y: 5_000_000 }, net: "N1", arc_deg: 90 };
+    pcb.cutouts = { cut_1: { id: "cut_1", outline: [{ x: 2_000_000, y: 2_000_000 }, { x: 4_000_000, y: 2_000_000 }, { x: 4_000_000, y: 4_000_000 }] } };
+    pcb.regions = { rgn_1: { id: "rgn_1", outline: [{ x: 5_000_000, y: 2_000_000 }, { x: 7_000_000, y: 2_000_000 }, { x: 7_000_000, y: 4_000_000 }], forbid: ["vias"] } };
+    pcb.texts = { txt_1: { id: "txt_1", layer: "top_silk", position: { x: 15_000_000, y: 2_000_000 }, text: "REV A", size: 1_000_000 } };
+    pcb.dimensions = { dim_1: { id: "dim_1", layer: "documentation", a: { x: 0, y: 0 }, b: { x: 10_000_000, y: 0 }, offset: -2_000_000, unit: "mm", precision: 2, text_size: 0 } };
+    const { container } = render(<PcbView snapshot={snap} selected={null} onSelect={() => {}} edit={edit()} />);
+    expect(container.querySelector('[data-track-id="trk_arc"] polyline.track')!.getAttribute("points")!.split(" ").length).toBeGreaterThan(5);
+    expect(container.querySelectorAll("polygon.board-cutout")).toHaveLength(1);
+    expect(container.querySelector('[data-region-id="rgn_1"]')!.getAttribute("class")).toContain("keepout");
+    expect(container.querySelector('[data-text-id="txt_1"]')!.textContent).toBe("REV A");
+    expect(container.querySelector('[data-dimension-id="dim_1"] text')!.textContent).toBe("10.00 mm");
+    tool("Delete");
+    const court = container.querySelector('[data-footprint-id="fp_r1"] .courtyard')!;
+    fireEvent.pointerDown(court, { clientX: 1, clientY: 1, button: 0, buttons: 1 });
+    fireEvent.pointerUp(court, { clientX: 1, clientY: 1, button: 0 });
+    expect(sent[0]).toEqual([{ type: "DeleteFootprint", footprint_id: "fp_r1" }]);
+  });
+
   it("moves a footprint with two clicks and flips the selected one", () => {
     const { container } = render(<PcbView snapshot={fixture()} selected="sym_r1" onSelect={() => {}} edit={edit()} />);
     tool("Move");

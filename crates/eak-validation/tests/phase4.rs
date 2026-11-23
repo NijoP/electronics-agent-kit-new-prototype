@@ -203,7 +203,9 @@ fn drc_copper_to_hole_and_hole_to_hole() {
         .not_implemented
         .iter()
         .any(|s| s.contains("Copper-to-hole")));
-    assert!(r.not_implemented.iter().any(|s| s.contains("Keepout")));
+    // Keep-outs are checked since schema v4 (DRC-021, ADR-0042): no longer listed as missing.
+    assert!(!r.not_implemented.iter().any(|s| s.contains("Keepout")));
+    declared(&r, &["DRC-021"]);
 
     let bad = drc::run(&via_near_hole(&p, 0.05));
     let f = fired(&bad, "DRC-018");

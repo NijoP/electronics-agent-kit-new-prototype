@@ -761,7 +761,8 @@ fn design(
 /// Whether a command is, or (in a batch) contains, the PCB synchronisation the ERC gate guards.
 pub(crate) fn carries_pcb_sync(c: &eak_runtime::Command) -> bool {
     match c {
-        eak_runtime::Command::SyncSchematicToPcb => true,
+        eak_runtime::Command::SyncSchematicToPcb
+        | eak_runtime::Command::SyncSchematicToPcbSelected { .. } => true,
         eak_runtime::Command::Batch { commands, .. } => commands.iter().any(carries_pcb_sync),
         _ => false,
     }

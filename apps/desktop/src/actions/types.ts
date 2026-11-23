@@ -8,7 +8,7 @@ import type { ToolbarGroupId } from "../shell/Toolbar";
  * What the editor area shows, which decides the chrome:
  *  * "home": the project workspace with no document open;
  *  * "schematic", "pcb": that editor is the active document;
- *  * "3d": a registered EDA view (today the 3D board viewer) fills the editor area;
+ *  * "3d": a registered EDA view (today the 3D board viewer) is the active document tab;
  *  * "file": a project file is open in the file viewer (common actions only).
  */
 export type DocContext = "home" | "schematic" | "pcb" | "3d" | "file";
@@ -71,5 +71,5 @@ export interface Action {
   contextSep?: boolean;
 }
 
-/** Context of an editor-area document kind ("schematic", "pcb", "file"; nothing open is "home"). */
-export const docContext = (kind: string | undefined): DocContext => (kind === "schematic" || kind === "pcb" || kind === "file" ? kind : "home");
+/** Context of an editor-area document kind ("schematic", "pcb", "file"; a view tab is "3d"; nothing open is "home"). */
+export const docContext = (kind: string | undefined): DocContext => (kind === "schematic" || kind === "pcb" || kind === "file" ? kind : kind === "view" ? "3d" : "home");

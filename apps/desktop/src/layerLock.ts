@@ -51,7 +51,20 @@ export function commandLayers(s: Snapshot, c: Command): string[] {
     case "Batch":
       return [...new Set(c.commands.flatMap((x) => commandLayers(s, x)))];
     case "SetBoardOutline":
+    case "SetOutlineArc":
+    case "AddBoardCutout":
+    case "DeleteBoardCutout":
       return ["outline"];
+    case "MoveTrack":
+      return objectLayers(s, "track", c.track_id);
+    case "EditTrack":
+      return [...new Set([...objectLayers(s, "track", c.track_id), ...(c.layer ? [layerKey(c.layer)] : [])])];
+    case "EditZone":
+      return [...new Set([...objectLayers(s, "zone", c.zone_id), ...(c.layer ? [layerKey(c.layer)] : [])])];
+    case "MoveVia":
+      return objectLayers(s, "via", c.via_id);
+    case "DeleteFootprint":
+      return [footprintSide(s, c.footprint_id)];
     case "MoveFootprint":
       return [...new Set([footprintSide(s, c.footprint_id), ...(c.side ? [c.side === "bottom" ? "bottom" : "top"] : [])])];
     case "SetFootprintLocked":

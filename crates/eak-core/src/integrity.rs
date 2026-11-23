@@ -4,6 +4,7 @@
 
 use crate::geom::polygon_self_intersects;
 use crate::ir::Project;
+use crate::pcb_objects::{valid_sweep, validate_outline_arcs};
 
 pub fn check(p: &Project) -> Vec<String> {
     let mut e = Vec::new();
@@ -144,6 +145,11 @@ pub fn check(p: &Project) -> Vec<String> {
         if t.a == t.b {
             e.push(format!("track {k} has zero length"));
         }
+        if t.arc_deg.is_some_and(|s| !valid_sweep(s)) {
+            e.push(format!(
+                "track {k} arc sweep must be finite, non-zero and below a full turn"
+            ));
+        }
     }
     for (k, v) in &p.pcb.vias {
         if &v.id != k {
@@ -164,6 +170,43 @@ pub fn check(p: &Project) -> Vec<String> {
     let o = &p.pcb.board.outline;
     if !o.is_empty() && (o.len() < 3 || polygon_self_intersects(o)) {
         e.push("board outline is not a simple polygon".into());
+    }
+    e.extend(validate_outline_arcs(o, &p.pcb.board.outline_arcs));
+    for (k, r) in &p.pcb.regions {
+        if &r.id != k {
+            e.push(format!("region key {k} != id {}", r.id));
+        }
+        e.extend(r.validate().into_iter().map(|m| format!("region {k}: {m}")));
+    }
+    for (k, t) in &p.pcb.texts {
+        if &t.id != k {
+            e.push(format!("PCB text key {k} != id {}", t.id));
+        }
+        e.extend(
+            t.validate()
+                .into_iter()
+                .map(|m| format!("PCB text {k}: {m}")),
+        );
+    }
+    for (k, d) in &p.pcb.dimensions {
+        if &d.id != k {
+            e.push(format!("dimension key {k} != id {}", d.id));
+        }
+        e.extend(
+            d.validate()
+                .into_iter()
+                .map(|m| format!("dimension {k}: {m}")),
+        );
+    }
+    for (k, c) in &p.pcb.cutouts {
+        if &c.id != k {
+            e.push(format!("cut-out key {k} != id {}", c.id));
+        }
+        e.extend(
+            c.validate()
+                .into_iter()
+                .map(|m| format!("cut-out {k}: {m}")),
+        );
     }
     e.extend(p.pcb.board.stackup.validate());
     e
