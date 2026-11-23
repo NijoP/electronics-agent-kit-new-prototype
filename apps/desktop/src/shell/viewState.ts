@@ -1,7 +1,7 @@
 // Per-document canvas state shared between the workspace and the canvases without touching the
 // editors: which document a canvas belongs to (context), its last viewport (kept across tab
 // closes and sessions), and imperative zoom / tool controls the toolbar drives.
-import { createContext, useContext, useEffect, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useSyncExternalStore } from "react";
 import type { Bounds, ViewBox } from "../viewport";
 
 export const DocIdContext = createContext<string | null>(null);
@@ -58,7 +58,9 @@ export interface CanvasControls {
 const canvases = new Map<string, CanvasControls>();
 export const canvasControls = (docId: string | null) => (docId ? canvases.get(docId) : undefined);
 export function useRegisterCanvas(docId: string | null, c: CanvasControls): void {
-  useEffect(() => {
+  // Layout effect: the controls exist in the same commit as the canvas DOM, so a toolbar click right
+  // after the canvas appears cannot hit a not-yet-registered canvas (CI flake in toolbar.test zoom).
+  useLayoutEffect(() => {
     if (!docId) return;
     canvases.set(docId, c);
     return () => {
@@ -71,7 +73,7 @@ const tools = new Map<string, (tool: string) => boolean>();
 /** Returns true when the editor accepted the tool id. */
 export const setEditorTool = (docId: string | null, tool: string): boolean => (docId ? (tools.get(docId)?.(tool) ?? false) : false);
 export function useRegisterTools(docId: string | null, set: (tool: string) => boolean): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!docId) return;
     tools.set(docId, set);
     return () => {
