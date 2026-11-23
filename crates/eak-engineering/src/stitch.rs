@@ -490,6 +490,7 @@ mod tests {
                 a: Point::mm(20.0, 0.5),
                 b: Point::mm(20.0, 19.5),
                 net: "SIG".into(),
+                arc_deg: None,
             },
         );
         p
@@ -521,6 +522,7 @@ mod tests {
                     a: t.a,
                     b: t.b,
                     net: t.net.clone(),
+                    arc_deg: None,
                 },
             );
         }

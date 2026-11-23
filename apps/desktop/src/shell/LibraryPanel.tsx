@@ -13,16 +13,16 @@ import type { Command, ComponentDef, FootprintCandidate, FootprintDef, LibraryEn
 
 const FORMAT_BY_EXT: Record<string, ModelFormat> = { step: "step", stp: "step", wrl: "wrl", glb: "glb" };
 const formatOf = (path: string): ModelFormat | null => FORMAT_BY_EXT[path.split(".").pop()?.toLowerCase() ?? ""] ?? null;
-const QUALITIES: { value: ModelQuality | ""; label: string }[] = [
+export const QUALITIES: { value: ModelQuality | ""; label: string }[] = [
   { value: "", label: "Not declared (shown as unclassified)" },
   { value: "VENDOR_EXACT", label: "Vendor exact" },
   { value: "LIBRARY_VERIFIED", label: "Library verified" },
   { value: "DERIVED_VALIDATED", label: "Derived, validated" },
 ];
 type Xyz = [string, string, string];
-interface ModelForm { path: string; quality: ModelQuality | ""; licence: string; provenance: string; offset: Xyz; rotation: Xyz; scale: Xyz }
+export interface ModelForm { path: string; quality: ModelQuality | ""; licence: string; provenance: string; offset: Xyz; rotation: Xyz; scale: Xyz }
 const emptyModelForm = (): ModelForm => ({ path: "", quality: "", licence: "", provenance: "", offset: ["0", "0", "0"], rotation: ["0", "0", "0"], scale: ["1", "1", "1"] });
-const modelFormOf = (m: ModelRef | null | undefined): ModelForm =>
+export const modelFormOf = (m: ModelRef | null | undefined): ModelForm =>
   m
     ? { path: m.source.path, quality: m.quality ?? "", licence: m.licence ?? "", provenance: m.provenance, offset: m.transform.offset_mm.map(String) as Xyz, rotation: m.transform.rotation_deg.map(String) as Xyz, scale: m.transform.scale.map(String) as Xyz }
     : emptyModelForm();

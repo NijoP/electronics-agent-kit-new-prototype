@@ -21,6 +21,10 @@ const COLLECTIONS: &[&[&str]] = &[
     &["pcb", "tracks"],
     &["pcb", "vias"],
     &["pcb", "zones"],
+    &["pcb", "regions"],
+    &["pcb", "texts"],
+    &["pcb", "dimensions"],
+    &["pcb", "cutouts"],
 ];
 /// Whole-value sections.
 const SECTIONS: &[&[&str]] = &[

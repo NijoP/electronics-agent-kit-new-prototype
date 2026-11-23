@@ -37,6 +37,7 @@ fn track_width_uses_its_own_layer_copper_weight() {
             a: Point::mm(1.0, 1.0),
             b: Point::mm(10.0, 1.0),
             net: "VOUT".into(),
+            arc_deg: None,
         },
     );
     assert_eq!(current_findings(&p), 0, "2 oz bottom copper carries 3 A");

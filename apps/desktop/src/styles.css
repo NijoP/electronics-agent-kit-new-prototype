@@ -188,6 +188,16 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .no-connect { stroke: var(--err); stroke-width: 0.25; fill: none; }
 .board { fill: var(--c-board); stroke: var(--accent); stroke-width: 0.15; }
 .zone { fill-opacity: 0.25; stroke-width: 0.05; }
+/* Schema v4 PCB objects (ADR-0042): cut-outs are holes in the board fill; regions are tinted, dashed
+   outlines (keep-outs stronger); text and dimensions follow their layer (documentation is muted). */
+.board-cutout { fill: var(--bg-canvas); stroke: none; pointer-events: none; }
+.pcb-region { fill: var(--c-violation); fill-opacity: 0.05; stroke: var(--c-violation); stroke-width: 0.1; stroke-dasharray: 0.6 0.4; pointer-events: none; }
+.pcb-region.keepout { fill-opacity: 0.12; }
+.pcb-drawing { pointer-events: none; }
+.pcb-drawing line { stroke: var(--c-text); stroke-width: 0.15; stroke-linecap: round; }
+.pcb-drawing text, text.pcb-drawing { fill: var(--c-text); text-anchor: middle; }
+.pcb-drawing.documentation line { stroke: var(--c-courtyard); }
+.pcb-drawing.documentation text, text.pcb-drawing.documentation { fill: var(--c-courtyard); }
 .zone.top { fill: var(--c-copper-top); stroke: var(--c-copper-top); }
 .zone.bottom { fill: var(--c-copper-bottom); stroke: var(--c-copper-bottom); }
 .track { stroke-linecap: round; }
@@ -547,8 +557,19 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 
 
 /* 3D board viewer (src/viewer3d) */
-.ws-host > .viewer3d { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg-app); }
-.v3d-bar { display: flex; align-items: center; gap: var(--s-1); padding: var(--s-1) var(--s-2); border-bottom: 1px solid var(--line); }
+.viewer3d { min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--bg-app); }
+.ws-host > .viewer3d { flex: 1; }
+.v3d-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); padding: var(--s-1) var(--s-2); border-bottom: 1px solid var(--line); }
+.v3d-bar button[aria-pressed="true"] { background: var(--bg-active); border-color: var(--accent); }
+.v3d-side section { display: flex; flex-direction: column; gap: var(--s-half); padding-bottom: var(--s-1); border-bottom: 1px solid var(--line); }
+.v3d-side .row { display: flex; flex-wrap: wrap; gap: var(--s-half); }
+.v3d-side select, .v3d-side input:not([type]) { min-width: 0; width: 100%; }
+.v3d-stack { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.v3d-stack th, .v3d-stack td { text-align: left; padding: 1px var(--s-half); border-bottom: 1px solid var(--line); }
+.v3d-stack tr[data-kind="dielectric"] td { color: var(--fg-dim); }
+/* Placeholder labels over the canvas: never pointer targets, so orbit and picking still work. */
+.v3d-labels { position: absolute; inset: 0; pointer-events: none; }
+.v3d-ph { padding: 1px 4px; border-radius: var(--r-1); background: var(--bg-panel); border: 1px solid var(--warn); color: var(--warn); font-size: var(--fs-xs); white-space: nowrap; }
 .v3d-hint { margin-left: auto; color: var(--fg-dim); font-size: var(--fs-sm); }
 .v3d-main { flex: 1; min-height: 0; display: flex; }
 .v3d-canvas { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
@@ -659,6 +680,17 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .dm-list { padding: 0 var(--s-1) var(--s-2); }
 .dm-list button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dm-group { font-size: var(--fs-xs); letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-dim); padding: var(--s-1) var(--s-1) 0; }
+/* Phase 1 B6: Pages-tab sheet actions (Add sheet; per sheet Rename, move up/down, Delete). */
+.dm-actions { display: flex; gap: var(--s-1); padding: 0 var(--s-2) var(--s-1); flex: none; }
+.dm-row { display: flex; align-items: center; min-width: 0; }
+.dm-row > button { flex: 1; min-width: 0; }
+.dm-sheet-actions { display: flex; gap: 2px; flex: none; }
+.dm-list .dm-sheet-actions button { width: auto; padding: 0 var(--s-half); font-size: var(--fs-xs); color: var(--fg-dim); }
+.dm-rename { display: flex; flex-wrap: wrap; gap: var(--s-half); align-items: center; padding: var(--s-half) var(--s-1); }
+.dm-rename input { flex: 1; min-width: 6em; }
+.dm-list .dm-rename button { width: auto; }
+.dm-rename .error { flex-basis: 100%; margin: 0; font-size: var(--fs-xs); }
+button.danger { color: var(--err); border-color: var(--err); }
 .props { margin: 0 var(--s-2); display: grid; gap: var(--s-half); font-size: var(--fs-sm); }
 .props > div { display: grid; grid-template-columns: minmax(0, 9em) minmax(0, 1fr); gap: var(--s-1); }
 .props dt { color: var(--fg-dim); }

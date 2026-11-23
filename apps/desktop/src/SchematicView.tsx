@@ -47,6 +47,7 @@ import { GraphicShape, SheetGraphics } from "./tools/schematic/SheetGraphics";
 import { powerPortProblem, usePowerPorts } from "./settings/powerPorts";
 import { reportCanvas } from "./shell/viewState";
 import "./tools/schematic/schematic.css";
+import { sheetsInOrder } from "./shell/sheets";
 
 interface Props {
   snapshot: Snapshot;
@@ -146,7 +147,7 @@ const single = (s: S.Selection): [S.Kind, Id] | null =>
 
 export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = [], armPart, sheetId: docSheet, contextMenu }: Props) {
   const { schematic } = snapshot.project;
-  const sheets = Object.values(schematic.sheets);
+  const sheets = sheetsInOrder(schematic);
   const [sheetId, setSheetId] = useState<Id | undefined>(docSheet ?? sheets[0]?.id);
   useEffect(() => {
     if (docSheet) setSheetId(docSheet);

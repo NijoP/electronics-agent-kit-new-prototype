@@ -1,0 +1,32 @@
+{
+  "name": "C6 3D as a document",
+  "description": "Slices C6 and E6: on an isolated fixture with one placed part synced to the PCB, View › Go to 3D opens the 3D view as its own document tab with its own menu set (no Place menu; camera presets, projection, measure, cross-probe). The properties panel lists the IR stack-up (2 copper layers and the dielectric of a new project), the board's solder mask from the project, and the part as a labelled placeholder (no 3D model attached). Selecting the part offers model assignment and cross-probing: Show in PCB opens the PCB editor. Back in 3D, the board label, the projection toggle, a side preset from the View menu, Reset and the measure tool drive the WebGL view; these last steps need WebGL in the window and come after a step that checks it.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "C6 3D Fixture", "folder": "c6-3d-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "C6 3D Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]", "shot": false },
+    { "id": "place-tool", "do": "click", "title": "Place tool", "shot": false, "selector": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button", "text": "Place", "expect": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button[aria-pressed=\"true\"]", "expectText": "Place" },
+    { "id": "place", "do": "click", "title": "Place one part (PlaceSymbol accepted)", "shot": false, "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "expect": "footer.status span.msg", "expectText": "PlaceSymbol" },
+    { "id": "esc", "do": "key", "title": "Leave the Place tool", "keys": "Escape", "shot": false },
+    { "id": "sync", "do": "click", "title": "Update PCB: review", "shot": false, "selector": "button.tb-btn[aria-label=\"Update PCB\"]", "expect": "[role=\"dialog\"][aria-label=\"Update PCB: review changes\"] tr[data-eco-row]" },
+    { "id": "sync-apply", "do": "click", "title": "Apply the sync (the part gets a footprint)", "shot": false, "selector": "[role=\"dialog\"][aria-label=\"Update PCB: review changes\"] button.primary", "text": "Apply changes", "expect": "[role=\"dialog\"][aria-label=\"Update PCB report\"]" },
+    { "id": "sync-close", "do": "key", "title": "Close the report", "keys": "Escape", "gone": "[role=\"dialog\"][aria-label=\"Update PCB report\"]", "shot": false },
+    { "id": "c6-open", "do": "menu", "title": "C6: View › Go to 3D opens the 3D document", "menu": "View", "item": "Go to 3D", "expect": "[aria-label=\"3D board viewer\"] aside[aria-label=\"3D properties\"]" },
+    { "id": "c6-tab", "do": "wait", "title": "C6: 3D is the active document tab", "selector": "[role=\"tablist\"][aria-label=\"Documents\"] [role=\"tab\"][aria-selected=\"true\"]", "text": "3D", "shot": false },
+    { "id": "c6-no-place", "do": "absent", "title": "C6: the editors' Place menu is not part of the 3D menu set", "selector": "nav[aria-label=\"Application menu\"] button.menu-btn", "text": "Place", "shot": false },
+    { "id": "c6-stackup", "do": "count", "title": "C6: stack-up table = the IR stack-up (2 copper layers, 1 dielectric)", "selector": "table[aria-label=\"Stack-up layers\"] tbody tr", "equals": 3 },
+    { "id": "c6-stackup-src", "do": "wait", "title": "C6: the stack-up is read from the project", "selector": "section[aria-label=\"Stack-up\"] [data-source=\"ir\"]", "text": "From the project stack-up", "shot": false },
+    { "id": "c6-mask", "do": "wait", "title": "C6: board solder mask from the project's manufacturing settings", "selector": "section[aria-label=\"Board appearance\"] select[aria-label=\"Solder mask colour\"]", "shot": false },
+    { "id": "c6-placeholder", "do": "wait", "title": "C6: the part without a model is a labelled placeholder", "selector": "section[aria-label=\"3D model quality\"] li[data-status=\"MISSING\"] span.muted", "text": "— no 3D model attached" },
+    { "id": "c6-select", "do": "click", "title": "C6: select the part in 3D: model assignment and cross-probe appear", "selector": "section[aria-label=\"3D model quality\"] li button", "expect": "section[aria-label=\"Selected part\"] input[aria-label=\"Selected part 3D model path\"]" },
+    { "id": "c6-probe-pcb", "do": "click", "title": "C6: Show in PCB opens the PCB editor on the part", "selector": "section[aria-label=\"Selected part\"] button", "text": "Show in PCB", "expect": "section[aria-label=\"PCB view\"]" },
+    { "id": "c6-back", "do": "click", "title": "C6: back to the 3D tab", "shot": false, "selector": "[role=\"tablist\"][aria-label=\"Documents\"] [role=\"tab\"]", "text": "3D", "expect": "[aria-label=\"3D board viewer\"] aside[aria-label=\"3D properties\"]" },
+    { "id": "e6-webgl", "do": "absent", "title": "E6: WebGL is available in this window (the steps below need it)", "selector": ".v3d-msg", "text": "WebGL is not available", "shot": false },
+    { "id": "c6-label", "do": "wait", "title": "C6: the placeholder is labelled on the board itself", "selector": ".v3d-labels .v3d-ph" },
+    { "id": "e6-ortho", "do": "click", "title": "E6: projection toggle: orthographic", "selector": "[role=\"toolbar\"][aria-label=\"3D view\"] button", "text": "Orthographic", "expect": "[aria-label=\"3D board viewer\"][data-projection=\"orthographic\"]" },
+    { "id": "e6-front", "do": "menu", "title": "E6: View › Front view (side preset from the 3D menu set)", "menu": "View", "item": "Front view" },
+    { "id": "e6-reset", "do": "click", "title": "E6: Reset returns to perspective iso", "selector": "[role=\"toolbar\"][aria-label=\"3D view\"] button", "text": "Reset", "expect": "[aria-label=\"3D board viewer\"][data-projection=\"perspective\"]" },
+    { "id": "e6-measure", "do": "click", "title": "E6: Measure tool armed", "selector": "[role=\"toolbar\"][aria-label=\"3D view\"] button", "text": "Measure", "expect": "[role=\"status\"][aria-label=\"3D status\"]", "expectText": "Measure: click the first point" }
+  ]
+}
