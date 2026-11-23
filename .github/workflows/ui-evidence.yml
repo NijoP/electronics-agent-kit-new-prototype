@@ -144,6 +144,16 @@ jobs:
           UI_SCENARIO: scenarios/d1-library.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # C6/E6 (3D as a document): tab, menu set, IR stack-up, placeholders, cross-probe, camera.
+      - name: Run C6 3D scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/c6
+          UI_SCENARIO: scenarios/c6-3d.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       - name: Results to job summary
         if: always()
         run: |
@@ -156,6 +166,7 @@ jobs:
           cat "${{ runner.temp }}/ui-evidence/c3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no C3 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/b2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no B2 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/d1/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D1 results file" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ runner.temp }}/ui-evidence/c6/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no C6 results file" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
@@ -183,4 +194,6 @@ jobs:
             ${{ runner.temp }}/ui-evidence/d1/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/d1/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/d1/tauri-driver.log
+            ${{ runner.temp }}/ui-evidence/c6/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/c6/UI_EVIDENCE.md
           if-no-files-found: warn

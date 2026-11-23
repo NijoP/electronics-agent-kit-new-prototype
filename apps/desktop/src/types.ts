@@ -25,6 +25,13 @@ export interface Stackup {
   board_thickness: Nm;
   dielectric: string;
 }
+/** Mirrors `eak_core::ManufacturingConfig`. */
+export interface ManufacturingConfig {
+  fabricator_profile: string;
+  surface_finish: string;
+  solder_mask_color: string;
+  mask_expansion: Nm;
+}
 
 // ---- Schema v3 schematic primitives (ADR-0040). Optional: the UI does not draw them yet.
 export type LineStyle = "solid" | "dashed" | "dotted" | "dash_dot";
@@ -172,6 +179,8 @@ export interface Project {
   };
   /** Free project properties for title blocks; absent when empty. */
   properties?: Record<string, string>;
+  /** Fabrication settings (`SetManufacturing`); absent only in fixtures that predate them. */
+  manufacturing?: ManufacturingConfig;
   pcb: {
     board: { outline: Point[]; stackup?: Stackup };
     footprints: Record<Id, FootprintInstance>;
@@ -283,6 +292,7 @@ export type Command =
   | { type: "SetNetVoltage"; net: string; volts: number | null }
   | { type: "SetLayerCount"; count: number; board_thickness?: Nm | null }
   | { type: "SetStackup"; stackup: Stackup }
+  | { type: "SetManufacturing"; config: ManufacturingConfig }
   | { type: "DeleteVia"; via_id: Id }
   | { type: "Annotate" }
   | { type: "SyncSchematicToPcb" }

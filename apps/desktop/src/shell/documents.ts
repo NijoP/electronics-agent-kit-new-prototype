@@ -5,12 +5,13 @@
 import type { Id, Snapshot } from "../types";
 import { baseName, fileDocId, isFileDoc, relOfFileDoc } from "./files";
 
-export type DocKind = "schematic" | "pcb" | "file";
+/** "view": a registered EDA view (the 3D board viewer) open as a document tab (slice C6). */
+export type DocKind = "schematic" | "pcb" | "file" | "view";
 export interface Doc {
   id: string;
   kind: DocKind;
   title: string;
-  /** Engine id: sheet id for schematics, project id for the (single) PCB board, relative path for a file. */
+  /** Engine id: sheet id for schematics, project id for the (single) PCB board, relative path for a file, registry id for a view. */
   ref: Id;
 }
 
@@ -22,6 +23,11 @@ export function availableDocs(s: Snapshot): Doc[] {
 /** Read-only viewer documents for project files opened from the explorer. */
 export const fileDoc = (rel: string): Doc => ({ id: fileDocId(rel), kind: "file", title: baseName(rel), ref: rel });
 export const fileDocs = (ids: string[]): Doc[] => ids.filter(isFileDoc).map((id) => fileDoc(relOfFileDoc(id)));
+
+/** Document id of a registered EDA view (`shell/registry.ts`, placement "eda"). */
+export const viewDocId = (viewId: string) => `view:${viewId}`;
+export const isViewDoc = (id: string) => id.startsWith("view:");
+export const viewDoc = (viewId: string, label: string): Doc => ({ id: viewDocId(viewId), kind: "view", title: label, ref: viewId });
 
 const key = (projectId: Id) => `eak.docs.${projectId}`;
 
@@ -42,8 +48,9 @@ export function loadDocState(s: Snapshot): DocState {
   try {
     const raw = JSON.parse(localStorage.getItem(key(s.project.id)) ?? "null") as Partial<DocState> | null;
     if (raw && Array.isArray(raw.open)) {
-      // File viewer tabs are not engine documents: keep them; the viewer reports a vanished file itself.
-      const open = raw.open.filter((id): id is string => typeof id === "string" && (valid.has(id) || isFileDoc(id)));
+      // File viewer and view tabs are not engine documents: keep them; the viewer reports a vanished
+      // file itself, and a view that is no longer registered is dropped by the workspace.
+      const open = raw.open.filter((id): id is string => typeof id === "string" && (valid.has(id) || isFileDoc(id) || isViewDoc(id)));
       const active = typeof raw.active === "string" && open.includes(raw.active) ? raw.active : (open[0] ?? null);
       return { open, active };
     }
@@ -78,8 +85,8 @@ export function visibleDocs(st: DocState, docs: Doc[], split: boolean): Doc[] {
   const byId = new Map(docs.map((d) => [d.id, d]));
   const active = st.active ? byId.get(st.active) : undefined;
   if (!active) return [];
-  if (!split || active.kind === "file") return [active];
-  const other = st.open.map((id) => byId.get(id)).find((d) => d && d.kind !== "file" && d.kind !== active.kind);
+  if (!split || active.kind === "file" || active.kind === "view") return [active];
+  const other = st.open.map((id) => byId.get(id)).find((d) => d && (d.kind === "schematic" || d.kind === "pcb") && d.kind !== active.kind);
   if (!other) return [active];
   return active.kind === "schematic" ? [active, other] : [other, active];
 }

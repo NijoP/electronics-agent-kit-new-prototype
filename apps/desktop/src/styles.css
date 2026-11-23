@@ -542,8 +542,19 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 
 
 /* 3D board viewer (src/viewer3d) */
-.ws-host > .viewer3d { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg-app); }
-.v3d-bar { display: flex; align-items: center; gap: var(--s-1); padding: var(--s-1) var(--s-2); border-bottom: 1px solid var(--line); }
+.viewer3d { min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--bg-app); }
+.ws-host > .viewer3d { flex: 1; }
+.v3d-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); padding: var(--s-1) var(--s-2); border-bottom: 1px solid var(--line); }
+.v3d-bar button[aria-pressed="true"] { background: var(--bg-active); border-color: var(--accent); }
+.v3d-side section { display: flex; flex-direction: column; gap: var(--s-half); padding-bottom: var(--s-1); border-bottom: 1px solid var(--line); }
+.v3d-side .row { display: flex; flex-wrap: wrap; gap: var(--s-half); }
+.v3d-side select, .v3d-side input:not([type]) { min-width: 0; width: 100%; }
+.v3d-stack { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.v3d-stack th, .v3d-stack td { text-align: left; padding: 1px var(--s-half); border-bottom: 1px solid var(--line); }
+.v3d-stack tr[data-kind="dielectric"] td { color: var(--fg-dim); }
+/* Placeholder labels over the canvas: never pointer targets, so orbit and picking still work. */
+.v3d-labels { position: absolute; inset: 0; pointer-events: none; }
+.v3d-ph { padding: 1px 4px; border-radius: var(--r-1); background: var(--bg-panel); border: 1px solid var(--warn); color: var(--warn); font-size: var(--fs-xs); white-space: nowrap; }
 .v3d-hint { margin-left: auto; color: var(--fg-dim); font-size: var(--fs-sm); }
 .v3d-main { flex: 1; min-height: 0; display: flex; }
 .v3d-canvas { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
