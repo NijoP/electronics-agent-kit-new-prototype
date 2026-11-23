@@ -815,3 +815,13 @@ button.danger { color: var(--err); border-color: var(--err); }
 .sel-filter ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-half); }
 .sel-filter label { display: flex; gap: var(--s-1); align-items: center; }
 .sel-filter button { align-self: flex-start; }
+/* Assets view (slice E9): models, datasheets, libraries and outputs per revision. */
+.assets { display: grid; gap: var(--s-1h); padding: var(--s-1) var(--s-2); min-width: 0; }
+.assets .ui-section + .ui-section { border-top: 1px solid var(--line); padding-top: var(--s-1h); }
+.asset-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); min-width: 0; }
+.asset-item { display: grid; gap: var(--s-quarter); min-width: 0; }
+.asset-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-half); min-width: 0; }
+.asset-meta { color: var(--fg-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; min-width: 0; }
+.asset-parts { display: inline-flex; flex-wrap: wrap; gap: var(--s-half); }
+.asset-folder { display: grid; gap: var(--s-quarter); }
+.asset-problems { margin: 0; padding-left: var(--s-2); color: var(--warn, var(--fg-dim)); font-size: var(--fs-sm); }

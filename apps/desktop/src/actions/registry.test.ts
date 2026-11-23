@@ -278,7 +278,7 @@ describe("dock actions (slice A3)", () => {
     expect(view("schematic").map((i) => i.label)).not.toContain("Show Layers");
     expect(view("pcb").map((i) => i.label)).toContain("Show Layers");
     // the activity bar views no longer include the panels that moved into the docks
-    expect(SIDE_VIEWS.map((v) => v.id)).toEqual(["overview", "project", "design", "domain", "manufacturing"]);
+    expect(SIDE_VIEWS.map((v) => v.id)).toEqual(["overview", "project", "design", "domain", "manufacturing", "assets"]);
     runAction(all.find((a) => a.id === "show-layers")!);
     expect(d.showRight).toHaveBeenLastCalledWith("layers");
     runAction(all.find((a) => a.id === "library")!);
