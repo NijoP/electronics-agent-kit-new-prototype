@@ -20,7 +20,8 @@ export interface Box {
 export type Pt = [number, number];
 
 /** What a pick can return: the IR object a render object stands for. */
-export type PickKind = "footprint" | "track" | "via" | "zone";
+/** `pin`, `pad` and `graphic` are the symbol and footprint editors' objects (D2): a pin or pad number, a graphic index. */
+export type PickKind = "footprint" | "track" | "via" | "zone" | "pin" | "pad" | "graphic";
 export interface PickRef {
   kind: PickKind;
   id: Id;

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, pickModelFile } from "../api";
 import { setDraggedComponent, EAK_COMPONENT_MIME } from "../dragState";
 import { LibraryManager } from "./LibraryManager";
+import { newPartDefinition, newPartIdProblem } from "../partEditor/model";
 import type { Command, ComponentDef, FootprintCandidate, FootprintDef, LibraryEntry, LibraryPart, ModelFormat, ModelQuality, ModelRef } from "../types";
 
 const FORMAT_BY_EXT: Record<string, ModelFormat> = { step: "step", stp: "step", wrl: "wrl", glb: "glb" };
@@ -95,6 +96,48 @@ interface Props {
   /** Arm the Place tool with this part (the full entry, so a personal or imported part that is
    *  not in the built-in list is placed as itself, never replaced by another part). */
   onPlace: (p: LibraryEntry) => void;
+  /** Open the symbol or footprint editor of a project-library part (D2); absent: no editors here. */
+  onEdit?: (kind: "symbol" | "footprint", componentId: string) => void;
+}
+
+/** "New part…": creates a two-pin starting definition in the project library and opens its symbol editor (D2). */
+function NewPart({ busy, taken, execute, onEdit }: { busy: boolean; taken: Set<string>; execute: Props["execute"]; onEdit: NonNullable<Props["onEdit"]> }) {
+  const [f, setF] = useState({ id: "", name: "", prefix: "U", category: "custom" });
+  const problem = newPartIdProblem(f.id, taken) ?? (!f.name.trim() ? "Enter a part name." : !f.prefix.trim() ? "Enter a reference prefix (U, R, J…)." : null);
+  const create = async () => {
+    if (problem) return;
+    const id = f.id.trim();
+    await execute({ type: "UpsertComponentDefinition", definition: newPartDefinition(id, f.name.trim(), f.prefix.trim(), f.category.trim() || "custom") });
+    // Opens only if the engine accepted it: a part document exists only for a project-library part.
+    onEdit("symbol", id);
+    setF({ id: "", name: "", prefix: f.prefix, category: f.category });
+  };
+  return (
+    <details className="new-part">
+      <summary>New part…</summary>
+      <p className="muted">Starts a two-pin box symbol on a two-pad SMD footprint in the project library, then opens the symbol editor. Edit both before placing it.</p>
+      <label className="field">
+        <span>New part id</span>
+        <input aria-label="New part id" value={f.id} onChange={(e) => setF({ ...f, id: e.target.value })} placeholder="e.g. MY_SENSOR" />
+      </label>
+      <label className="field">
+        <span>New part name</span>
+        <input aria-label="New part name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      </label>
+      <label className="field">
+        <span>New part reference prefix</span>
+        <input aria-label="New part reference prefix" value={f.prefix} onChange={(e) => setF({ ...f, prefix: e.target.value })} />
+      </label>
+      <label className="field">
+        <span>New part category</span>
+        <input aria-label="New part category" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} />
+      </label>
+      {problem && f.id !== "" && <p className="muted">{problem}</p>}
+      <button type="button" className="primary" disabled={busy || !!problem} title={problem ?? "Create the part (UpsertComponentDefinition) and open its symbol editor"} onClick={() => void create()}>
+        Create part
+      </button>
+    </details>
+  );
 }
 
 const emptyToNull = (s: string) => (s.trim() === "" ? null : s.trim());
@@ -113,7 +156,9 @@ export function sourceLabel(p: Pick<LibraryPart, "source" | "in_project">): stri
   return p.in_project ? `${lib} (copy in project)` : `${lib}; placing copies it into the project`;
 }
 
-export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
+export function LibraryPanel({ revision, busy, execute, onPlace, onEdit }: Props) {
+  // Every part id any library already uses (a new part must not shadow one).
+  const [allIds, setAllIds] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [source, setSource] = useState("all");
@@ -147,7 +192,11 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
     let live = true;
     api
       .librarySearch("", "", "all")
-      .then((r) => live && setCategories([...new Set(r.map((p) => p.def.category))].sort()))
+      .then((r) => {
+        if (!live) return;
+        setCategories([...new Set(r.map((p) => p.def.category))].sort());
+        setAllIds(new Set(r.map((p) => p.id)));
+      })
       .catch(() => undefined);
     return () => {
       live = false;
@@ -207,6 +256,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
   return (
     <div className="panel-body library-panel">
       <LibraryManager revision={revision} onChanged={() => setLibGen((n) => n + 1)} />
+      {onEdit && <NewPart busy={busy} taken={allIds} execute={execute} onEdit={onEdit} />}
       <input aria-label="Search library" placeholder="Search name, MPN, Distributor, footprint…" value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="row">
         <select aria-label="Category filter" value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -308,6 +358,16 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
           </div>
           {sel.in_project ? (
             <>
+              {onEdit && (
+                <div className="row">
+                  <button type="button" onClick={() => onEdit("symbol", sel.id)} title="Open the symbol editor: pin table, body graphics, pin-to-pad map (saved with UpsertComponentDefinition)">
+                    Edit symbol
+                  </button>
+                  <button type="button" onClick={() => onEdit("footprint", sel.id)} title="Open the footprint editor: pads, drill, courtyard (saved with AssignComponentFootprint)">
+                    Edit footprint
+                  </button>
+                </div>
+              )}
               <h3>Part properties</h3>
               {(Object.keys(LABELS) as (keyof typeof LABELS)[]).map((k) => (
                 <label key={k} className="field">
@@ -377,7 +437,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace }: Props) {
           ) : (
             <>
               <p data-testid="lib-model-readonly" className="muted">3D model: {sel.def.model3d?.model_ref ? `${sel.def.model3d.model_ref.format.toUpperCase()} · ${sel.def.model3d.model_ref.quality ?? "quality not declared"} · ${sel.def.model3d.model_ref.provenance}` : "none (approximate box)"}</p>
-            <p className="muted">Add the part to the project to edit its properties or footprint.</p>
+            <p className="muted">Add the part to the project to edit its properties, symbol or footprint.</p>
             </>
           )}
         </section>

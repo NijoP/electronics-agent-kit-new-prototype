@@ -15,6 +15,7 @@ import { setDraggedComponent, EAK_COMPONENT_MIME } from "../dragState";
 import { LibraryBrowser } from "../LibraryBrowser";
 import { PartsPanel } from "../PartsPanel";
 import type { Command, ComponentDef, LibraryBrowse, LibraryEntry, LibraryEntry2, Report } from "../types";
+import type { PartDocKind } from "./documents";
 import { FootprintPreview, LibraryPanel, SymbolPreview, entryOf } from "./LibraryPanel";
 import {
   COMMON_PARTS,
@@ -669,6 +670,8 @@ interface Props extends PlaceProps {
   execute: (c: Command | Command[]) => Promise<void>;
   /** Called after a distributor import so the workspace re-reads the engine snapshot. */
   onImported: (message: string) => Promise<void>;
+  /** Opens the symbol or footprint editor of a project-library part (slice D2). */
+  onEdit?: (kind: PartDocKind, componentId: string) => void;
 }
 
 function readOffline(): boolean {
@@ -679,7 +682,7 @@ function readOffline(): boolean {
   }
 }
 
-export function LibraryDock({ revision, busy, execute, onPlace, onImported }: Props) {
+export function LibraryDock({ revision, busy, execute, onPlace, onImported, onEdit }: Props) {
   const [mode, setMode] = useState<Mode>("browse");
   const [offline, setOfflineState] = useState(readOffline);
   const [more, setMore] = useState(false);
@@ -710,7 +713,7 @@ export function LibraryDock({ revision, busy, execute, onPlace, onImported }: Pr
       {mode === "standard" && <PartStandardisation revision={revision} />}
       {mode === "manage" && (
         <div className="lib-manage">
-          <LibraryPanel revision={revision} busy={busy} execute={execute} onPlace={onPlace} />
+          <LibraryPanel revision={revision} busy={busy} execute={execute} onPlace={onPlace} onEdit={onEdit} />
           <details open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
             <summary>Favourites, tags, personal copies, KiCad and open-source imports</summary>
             {more && <LibraryBrowser />}

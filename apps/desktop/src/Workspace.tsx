@@ -24,6 +24,7 @@ import { ProjectOverview } from "./shell/ProjectOverview";
 import { LibraryDock } from "./shell/LibraryDock";
 import { StatusBar } from "./shell/StatusBar";
 import { ExportDialog } from "./shell/ExportDialog";
+import { BomExportDialog, DocumentExportDialog } from "./shell/OutputDialogs";
 import { RulesDialog } from "./shell/RulesDialog";
 import { NewProjectDialog, OpenProjectDialog } from "./shell/ProjectDialogs";
 import { Toolbar } from "./shell/Toolbar";
@@ -44,7 +45,8 @@ import { useTasks } from "./shell/tasks";
 import { fileDocId, type FileEntry } from "./shell/files";
 import { listWorkspaces, useRegistryVersion, type WorkspaceContext } from "./shell/registry";
 import "./shell/workspaces";
-import { availableDocs, closeDoc, fileDocs, loadDocState, openDoc, remapFileDocs, saveDocState, viewDoc, viewDocId, visibleDocs } from "./shell/documents";
+import { availableDocs, closeDoc, fileDocs, loadDocState, openDoc, partDocId, partDocs, remapFileDocs, saveDocState, viewDoc, viewDocId, visibleDocs, type PartDocKind } from "./shell/documents";
+import { PartEditor } from "./partEditor/PartEditor";
 import { useView3dControls } from "./viewer3d/controls";
 import { clampSize, DEFAULT_LAYOUT, LIMITS, useDockLayouts, type DockId, type LayoutWorkspace } from "./shell/layout";
 import { CanvasStrip } from "./shell/CanvasStrip";
@@ -61,7 +63,7 @@ import { SettingsDialog } from "./settings/SettingsDialog";
 import { useKeymap } from "./settings/keymap";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
-import type { OpenProject, RecentProject, Check, CheckResult, Command, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
+import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
   initial: Snapshot;
@@ -99,7 +101,7 @@ const writeFlag = (key: string, on: boolean) => {
 };
 
 export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged }: Props) {
-  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules">(null);
+  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs">(null);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [snapshot, setSnapshot] = useState(initial);
   const [events, setEvents] = useState<EngineEvent[]>([]);
@@ -117,6 +119,10 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const [docState, setDocState] = useState(() => loadDocState(initial));
   // One view at a time by default: Schematic and PCB are separate documents; split is opt-in.
   const [split, setSplit] = useState(false);
+  // Symbol/footprint editor documents with a draft the engine does not have yet (D2).
+  const [dirtyParts, setDirtyParts] = useState<ReadonlySet<string>>(new Set());
+  const markPartDirty = (id: string, dirty: boolean) =>
+    setDirtyParts((s) => (s.has(id) === dirty ? s : dirty ? new Set(s).add(id) : new Set([...s].filter((x) => x !== id))));
   // Grid settings of both editors (shared with their snapping) and the toolbar labels option.
   const schGrid = useGridConfig("schematic");
   const pcbGrid = useGridConfig("pcb");
@@ -189,7 +195,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     const extra = armedEntry && !known.has(armedEntry.id) && !imported.some((l) => l.id === armedEntry.id) ? [armedEntry] : [];
     return [...baseLibrary, ...imported, ...extra];
   }, [baseLibrary, snapshot.project.library, armedEntry]);
-  const docs = [...availableDocs(snapshot), ...fileDocs(docState.open), ...edaViews.map((w) => viewDoc(w.id, w.label))];
+  const docs = [...availableDocs(snapshot), ...fileDocs(docState.open), ...partDocs(docState.open, snapshot), ...edaViews.map((w) => viewDoc(w.id, w.label))];
   // Only documents the engine still has stay open (the snapshot is authoritative).
   const liveIds = new Set(docs.map((d) => d.id));
   const openIds = docState.open.filter((id) => liveIds.has(id));
@@ -223,7 +229,15 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   // the only "unconfirmed" states are writes blocked (every engine document) or a command in
   // flight (the active document, which issued it). File viewers are not engine documents.
   const docMarker = (d: { id: string; kind: string } | undefined): string | null =>
-    !d || d.kind === "file" || d.kind === "view" ? null : snapshot.blocked ? `Writes are blocked: ${snapshot.blocked}` : busy && d.id === activeId ? "A command is in flight; the engine has not confirmed it yet" : null;
+    !d || d.kind === "file" || d.kind === "view"
+      ? null
+      : dirtyParts.has(d.id)
+        ? "Unsaved changes in this editor; Save sends them to the engine"
+        : snapshot.blocked
+          ? `Writes are blocked: ${snapshot.blocked}`
+          : busy && d.id === activeId
+            ? "A command is in flight; the engine has not confirmed it yet"
+            : null;
   const [domain, setDomain] = useState<DomainReport | null>(null);
   const [domainError, setDomainError] = useState<string | null>(null);
 
@@ -468,6 +482,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const syncTo = async (evaluated: number) => {
     if (evaluated !== revision) await refresh();
     else await pullEvents();
+  };
+  // D3 BOM and document exports (their dialogs run the export and show the manifest).
+  const outputExported = (r: ExportResult) => {
+    setMessage(`Exported ${r.manifest.files.length} file(s) to ${r.out_dir} (${r.manifest.status}, revision ${r.manifest.revision})`);
+    void syncTo(r.manifest.revision).catch((e) => setMessage(String(e)));
   };
   const undo = () => submit(() => api.undo(revision));
   const redo = () => submit(() => api.redo(revision));
@@ -879,6 +898,15 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
                       ) : d.kind === "view" ? (
                         // A registered view document (3D): mounted from its first opening until its tab is closed.
                         (edaViews.find((w) => w.id === d.ref)?.render(wsCtx(visible)) ?? null)
+                      ) : d.kind === "symbol" || d.kind === "footprint" ? (
+                        <PartEditor
+                          kind={d.kind}
+                          def={snapshot.project.library![d.ref] as unknown as ComponentDef}
+                          disabled={snapshot.blocked ? `Writes are blocked: ${snapshot.blocked}` : busy ? "An engine command is running" : null}
+                          placedOnPcb={Object.values(snapshot.project.pcb.footprints).filter((f) => f.component_id === d.ref).length}
+                          execute={edit.execute}
+                          onDirty={(dirty) => markPartDirty(d.id, dirty)}
+                        />
                       ) : (
                         <FileViewer projectId={snapshot.project.id} rel={d.ref} revision={revision} />
                       )}
@@ -886,7 +914,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
                   </DocIdContext.Provider>
                 );
               })}
-              {noParts && activeKind !== "view" && (
+              {noParts && (activeKind === "schematic" || activeKind === "pcb") && (
                 <div className="canvas-empty" aria-label="Empty design">
                   <strong>An empty design</strong>
                   <span>Open the Library tab of the bottom panel to place a part, or press {formatShortcut(SHORTCUTS.quickOpen)} to go anywhere.</span>
@@ -918,6 +946,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
                   busy={busy}
                   execute={edit.execute}
                   onPlace={placePart}
+                  onEdit={(kind: PartDocKind, id: string) => open(partDocId(kind, id))}
                   onImported={async (m) => {
                     setMessage(m);
                     await refresh();
@@ -958,6 +987,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       {dialog === "new" && <NewProjectDialog onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
       {dialog === "open" && <OpenProjectDialog recent={recent} onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
       {dialog === "rules" && <RulesDialog snapshot={snapshot} busy={busy} apply={edit.execute} onClose={() => setDialog(null)} />}
+      {dialog === "bom" && <BomExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
+      {dialog === "outputs" && <DocumentExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "export" && (
         <ExportDialog
           result={exported}

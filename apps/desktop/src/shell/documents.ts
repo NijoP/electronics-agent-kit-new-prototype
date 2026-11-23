@@ -6,13 +6,37 @@ import type { Id, Snapshot } from "../types";
 import { baseName, fileDocId, isFileDoc, relOfFileDoc } from "./files";
 
 /** "view": a registered EDA view (the 3D board viewer) open as a document tab (slice C6). */
-export type DocKind = "schematic" | "pcb" | "file" | "view";
+export type DocKind = "schematic" | "pcb" | "file" | "symbol" | "footprint" | "view";
 export interface Doc {
   id: string;
   kind: DocKind;
   title: string;
-  /** Engine id: sheet id for schematics, project id for the (single) PCB board, relative path for a file, registry id for a view. */
+  /**
+   * Engine id: sheet id for schematics, project id for the (single) PCB board, relative path for a
+   * file, component id (project library) for the symbol and footprint editors (D2), registry id for
+   * a view (C6).
+   */
   ref: Id;
+}
+
+// Symbol and footprint editors (D2): one document per project-library part and editor.
+const PART_PREFIX = { symbol: "part-sym:", footprint: "part-fp:" } as const;
+export type PartDocKind = keyof typeof PART_PREFIX;
+export const partDocId = (kind: PartDocKind, componentId: string) => `${PART_PREFIX[kind]}${componentId}`;
+export const isPartDoc = (id: string) => id.startsWith(PART_PREFIX.symbol) || id.startsWith(PART_PREFIX.footprint);
+/** The editor kind and component id of a part document id, or null. */
+export function partOfDoc(id: string): { kind: PartDocKind; componentId: string } | null {
+  for (const kind of ["symbol", "footprint"] as const) if (id.startsWith(PART_PREFIX[kind])) return { kind, componentId: id.slice(PART_PREFIX[kind].length) };
+  return null;
+}
+/** Open part editor documents whose component is still in the project library. */
+export function partDocs(ids: string[], s: Snapshot): Doc[] {
+  const lib = s.project.library ?? {};
+  return ids.flatMap((id) => {
+    const p = partOfDoc(id);
+    if (!p || !lib[p.componentId]) return [];
+    return [{ id, kind: p.kind, title: `${p.kind === "symbol" ? "Symbol" : "Footprint"}: ${p.componentId}`, ref: p.componentId }];
+  });
 }
 
 export function availableDocs(s: Snapshot): Doc[] {
@@ -50,7 +74,8 @@ export function loadDocState(s: Snapshot): DocState {
     if (raw && Array.isArray(raw.open)) {
       // File viewer and view tabs are not engine documents: keep them; the viewer reports a vanished
       // file itself, and a view that is no longer registered is dropped by the workspace.
-      const open = raw.open.filter((id): id is string => typeof id === "string" && (valid.has(id) || isFileDoc(id) || isViewDoc(id)));
+      const lib = s.project.library ?? {};
+      const open = raw.open.filter((id): id is string => typeof id === "string" && (valid.has(id) || isFileDoc(id) || isViewDoc(id) || !!lib[partOfDoc(id)?.componentId ?? ""]));
       const active = typeof raw.active === "string" && open.includes(raw.active) ? raw.active : (open[0] ?? null);
       return { open, active };
     }
@@ -85,8 +110,9 @@ export function visibleDocs(st: DocState, docs: Doc[], split: boolean): Doc[] {
   const byId = new Map(docs.map((d) => [d.id, d]));
   const active = st.active ? byId.get(st.active) : undefined;
   if (!active) return [];
-  if (!split || active.kind === "file" || active.kind === "view") return [active];
-  const other = st.open.map((id) => byId.get(id)).find((d) => d && (d.kind === "schematic" || d.kind === "pcb") && d.kind !== active.kind);
+  const board = (k: DocKind) => k === "schematic" || k === "pcb";
+  if (!split || !board(active.kind)) return [active];
+  const other = st.open.map((id) => byId.get(id)).find((d) => d && board(d.kind) && d.kind !== active.kind);
   if (!other) return [active];
   return active.kind === "schematic" ? [active, other] : [other, active];
 }

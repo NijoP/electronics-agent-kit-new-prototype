@@ -522,6 +522,55 @@ export interface ExportFile {
   sha256: string;
   kind: string;
 }
+// ---- D3 output documents (crates/eak-manufacturing/src/{bom_config,outputs}.rs) ----
+export type BomField =
+  | "comment"
+  | "designator"
+  | "quantity"
+  | "footprint"
+  | "component_id"
+  | "manufacturer"
+  | "mpn"
+  | "distributor_part"
+  | "smd"
+  | "placed"
+  | "assembled"
+  | "stock"
+  | "unit_price_usd"
+  | "price_as_of"
+  | "issues";
+export type SortDir = "none" | "asc" | "desc";
+export interface BomColumn {
+  field: BomField;
+  header?: string;
+  sort: SortDir;
+}
+export type FilterOp = "equals" | "not_equals" | "contains" | "is_empty" | "not_empty";
+export interface FilterRule {
+  field: BomField;
+  op: FilterOp;
+  value: string;
+}
+export interface BomConfig {
+  version: number;
+  columns: BomColumn[];
+  grouping: "part" | "designator";
+  exclude: FilterRule[];
+}
+export interface BomTable {
+  fields: BomField[];
+  headers: string[];
+  rows: string[][];
+  removed: number;
+  parts: number;
+}
+export type BomFormat = "csv" | "xlsx";
+export interface OutputRequest {
+  schematic_pdf: boolean;
+  schematic_svg: boolean;
+  ipc_d_356: boolean;
+  netlist_json: boolean;
+}
 export interface ExportResult {
   out_dir: string;
   manifest: {
@@ -925,7 +974,15 @@ export interface SimResult {
 /** Interactive routing (eak_engineering::interactive). Points are board nm. */
 export type BendMode = "diagonal45" | "orthogonal90";
 /** What the route step does with other-net copper in the way (eak_engineering::interactive). */
-export type ConflictMode = "walkaround" | "block";
+export type ConflictMode = "walkaround" | "block" | "push";
+/** A committed track moved by push mode: the polyline that replaces track `id` (ends kept). */
+export interface ShovedTrack {
+  id: Id;
+  layer: CopperLayer;
+  width: Nm;
+  net: string;
+  points: Point[];
+}
 export interface ViaSize {
   drill: Nm;
   diameter: Nm;
@@ -941,6 +998,12 @@ export interface RouteStepRequest {
   conflict: ConflictMode;
   /** Via size for `via_at_start`; null uses the net-class via. */
   via: ViaSize | null;
+  /** The route so far, uncommitted: its segments, vias and the tracks earlier steps pushed. */
+  pending: {
+    tracks: { layer: CopperLayer; width: Nm; a: Point; b: Point }[];
+    vias: { position: Point; drill: Nm; diameter: Nm }[];
+    shoved: ShovedTrack[];
+  };
 }
 export interface RouteSegment {
   a: Point;
@@ -967,6 +1030,8 @@ export interface RouteStepReport {
   blocking: ClearanceFeedback[];
   min_gap: ClearanceFeedback | null;
   message: string | null;
+  /** Push mode: tracks moved out of the path (absent from older engines). */
+  shoved?: ShovedTrack[];
 }
 /** Net class (EAK-IR); lengths in nm. */
 export interface NetClass {

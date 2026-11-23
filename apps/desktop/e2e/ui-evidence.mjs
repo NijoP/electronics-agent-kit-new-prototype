@@ -254,6 +254,11 @@ async function run(st, fn) {
     evidence = String(e?.message ?? e).split("\n")[0];
   }
   if (!file && st.shot !== false) file = shot(st.id);
+  // Evidence that was expected but not taken is a failure, not a pass without a picture.
+  if (!file && st.shot !== false) {
+    result = "FAIL";
+    evidence = `no screenshot taken${evidence ? `; ${evidence}` : ""}`;
+  }
   const row = { id: st.id, title: st.title ?? st.do, result, evidence, file, ms: Date.now() - t0 };
   results.push(row);
   console.log(`${result.padEnd(4)} ${row.id} ${row.title} — ${evidence}`);
@@ -275,6 +280,15 @@ const handlers = {
     await browser.execute(() => window.location.reload());
     await waitRect("button.home-row", s.name, 30000);
     return `SETUP (IPC create_project, isolated software fixture "${s.name}"; not a UI action)`;
+  },
+  // SETUP: one typed engine command on the active project through the same IPC the UI's
+  // api.execute uses (for example a fixture board outline). Run it before the project is opened
+  // from Recent projects, so the UI loads the result.
+  async "fixture-command"(s) {
+    const snap = await ipc("current_project");
+    const r = await ipc("execute_command", { expected_revision: snap.project.revision, command: s.command });
+    if (!r.accepted) throw new Error(`${s.command.type} rejected: ${JSON.stringify(r.error)}`);
+    return `SETUP (IPC execute_command ${s.command.type} → revision ${r.revision_after}; not a UI action)`;
   },
   // SETUP: an open-source library folder (manifest with licence and source, plus one definition
   // copied from a built-in part under a new id), imported through the IPC the Library browser
@@ -491,4 +505,5 @@ const md = [
 ].join("\n");
 fs.writeFileSync(path.join(OUT, "UI_EVIDENCE.md"), md);
 console.log(`\n${results.length} rows, ${failed} failed; results in ${OUT}`);
-process.exit(failed === 0 ? 0 : 1);
+// A scenario that recorded no rows proved nothing: that fails too.
+process.exit(failed === 0 && results.length > 0 ? 0 : 1);
