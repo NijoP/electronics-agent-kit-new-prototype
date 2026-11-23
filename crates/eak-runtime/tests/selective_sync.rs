@@ -217,3 +217,59 @@ fn the_wire_form_is_tagged_by_kind() {
         })
     );
 }
+
+/// The ECO dialog's Apply (C2): a `Batch` holding either the full sync or only the checked
+/// changes, decoded from the JSON the desktop sends. Either way one revision and one undo step.
+fn dialog_apply(e: &mut Engine, changes: Option<&[SyncChange]>) -> CommandResponse {
+    let inner = match changes {
+        Some(c) => serde_json::json!({"type": "SyncSchematicToPcbSelected", "changes": c}),
+        None => serde_json::json!({"type": "SyncSchematicToPcb"}),
+    };
+    let label = "Update PCB from schematic";
+    let batch = serde_json::json!({"type": "Batch", "commands": [inner], "label": label});
+    run(e, serde_json::from_value(batch).unwrap())
+}
+
+#[test]
+fn the_dialogs_partial_apply_is_one_revision_and_one_undo() {
+    let mut e = schematic();
+    let all = preview(&e);
+    let before = e.project().clone();
+    // Check two footprints to add (without their pad nets), leave the rest unchecked.
+    let adds: Vec<SyncChange> = all
+        .iter()
+        .filter(|c| matches!(c, SyncChange::AddFootprint { .. }))
+        .take(2)
+        .cloned()
+        .collect();
+    assert_eq!(adds.len(), 2, "{all:?}");
+    let rev = e.project().revision;
+    let r = dialog_apply(&mut e, Some(&adds));
+    assert!(r.accepted, "{:?}", r.error);
+    assert_eq!(e.project().revision, rev + 1, "one revision");
+    assert_eq!(e.project().pcb.footprints.len(), 2);
+    let fps = &e.project().pcb.footprints;
+    assert!(fps.values().all(|f| f.pad_nets.is_empty()));
+    // What was left unchecked is what the next preview lists.
+    let rest = preview(&e);
+    assert_eq!(rest.len(), all.len() - 2);
+    assert!(adds.iter().all(|a| !rest.contains(a)));
+    // One undo restores the project as it was before Apply.
+    assert!(e.undo(rev + 1, &Actor::human()).accepted);
+    assert_eq!(by_symbol(e.project()), by_symbol(&before));
+    assert_eq!(preview(&e), all);
+}
+
+#[test]
+fn the_dialogs_full_apply_is_one_revision_and_one_undo() {
+    let mut e = schematic();
+    let all = preview(&e);
+    let rev = e.project().revision;
+    let r = dialog_apply(&mut e, None);
+    assert!(r.accepted, "{:?}", r.error);
+    assert_eq!(e.project().revision, rev + 1, "one revision");
+    assert!(preview(&e).is_empty(), "nothing left to sync");
+    assert!(e.undo(rev + 1, &Actor::human()).accepted);
+    assert!(e.project().pcb.footprints.is_empty());
+    assert_eq!(preview(&e), all);
+}
