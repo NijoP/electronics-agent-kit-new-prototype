@@ -10,7 +10,8 @@ import * as P from "./tools/pcb/selection";
 import * as O from "./tools/pcb/outline";
 import { OutlinePanel } from "./tools/pcb/OutlinePanel";
 import { layerCountOptions, layerKey, layerName, planeFill, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
-import { useLayerView, type LayerView } from "./layerView";
+import { stepLayer, useLayerView, type LayerView } from "./layerView";
+import { lockProblem, objectLocked, pickableOn } from "./layerLock";
 import { focusBounds, type Focus } from "./pcbFocus";
 import {
   deleteTracks,
@@ -102,9 +103,45 @@ export function pcbBounds(s: Snapshot): Bounds {
   return boundsOf(outline.length ? outline : parts) ?? { minX: 0, minY: -80, maxX: 100, maxY: 0 };
 }
 
-export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], onStatus, layerView, focus, airwires }: Props) {
+/** A track drawn as its outline (outline view): the rectangle around the segment, square ends. */
+function segOutline(x1: number, y1: number, x2: number, y2: number, w: number): string {
+  const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+  const nx = (-(y2 - y1) / len) * (w / 2);
+  const ny = ((x2 - x1) / len) * (w / 2);
+  const ex = ((x2 - x1) / len) * (w / 2);
+  const ey = ((y2 - y1) / len) * (w / 2);
+  return [
+    [x1 - ex + nx, y1 - ey + ny],
+    [x2 + ex + nx, y2 + ey + ny],
+    [x2 + ex - nx, y2 + ey - ny],
+    [x1 - ex - nx, y1 - ey - ny],
+  ]
+    .map((p) => p.join(","))
+    .join(" ");
+}
+
+export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPreview = [], onStatus, layerView, focus, airwires }: Props) {
   const ownView = useLayerView(null);
   const lv = layerView ?? ownView;
+  // Layer locks (C1): nothing on a locked layer can be selected, and no command that would change
+  // a locked layer is sent (`layerLock.ts`); the user is told which layer to unlock.
+  const locks = lv.locked;
+  const edit: EditCtx | undefined =
+    editProp && locks.size
+      ? {
+          ...editProp,
+          execute: (c) => {
+            for (const x of Array.isArray(c) ? c : [c]) {
+              const why = lockProblem(snapshot, locks, x);
+              if (why) {
+                editProp.notify(why);
+                return Promise.resolve();
+              }
+            }
+            return editProp.execute(c);
+          },
+        }
+      : editProp;
   const { pcb } = snapshot.project;
   const outline = pcb.board.outline;
   const [tool, setTool] = useState<Tool>("select");
@@ -113,7 +150,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const stack = stackLayers(pcb.board.stackup);
   const order = stack.map((s) => s.layer);
   const shown = (l: CopperLayer) => !lv.hidden.has(layerKey(l));
-  const toggle = lv.toggle;
+  const edgeShown = !lv.hidden.has("outline");
+  // SVG view: copper off the active layer (or on a locked one) lets the pointer through.
+  const offLayer = (l: CopperLayer) => layerKey(l) !== activeKey || lv.locked.has(layerKey(l));
   // The active layer must exist in the current stackup (it may have been removed).
   const layer: CopperLayer = order.find((o) => layerKey(o) === lv.active) ?? order[0] ?? "top";
   const setLayer = lv.setActive;
@@ -138,7 +177,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   // Select tool: one committed track picked for editing (width, layer, delete).
   const [trackSel, setTrackSel] = useState<Id | null>(null);
   const [trackWidthText, setTrackWidthText] = useState("");
-  const selTrack = trackSel ? pcb.tracks[trackSel] : undefined;
+  // A track on a layer locked after it was picked drops out of the selection.
+  const selTrack = trackSel && !objectLocked(snapshot, locks, "track", trackSel) ? pcb.tracks[trackSel] : undefined;
   // Net highlight: selecting a track lights every track, via and zone of its net.
   const hiNet = selTrack?.net ?? null;
   const netHit = (net: string) => (hiNet !== null && net === hiNet ? " net-hit" : "");
@@ -167,7 +207,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const pressed = useRef<Id | null>(null);
   const footprint = snapshot.geometry.footprints.find((f) => f.symbol_id === selected);
   const pruned = P.prune(selRaw, snapshot);
-  const sel = pruned.length ? pruned : footprint ? [footprint.id] : [];
+  const fpLocked = (id: Id) => objectLocked(snapshot, locks, "footprint", id);
+  const sel = (pruned.length ? pruned : footprint ? [footprint.id] : []).filter((id) => !fpLocked(id));
   const one = sel.length === 1 ? snapshot.geometry.footprints.find((f) => f.id === sel[0]) : undefined;
   const lockedCount = sel.filter((id) => pcb.footprints[id]?.locked).length;
   // Footprint edits (R, F, the selection bar) belong to the Select and Move tools only.
@@ -182,8 +223,11 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const colourKey = order.map((l) => lv.colourOf(l)).join(",");
   const sceneAirwires = lv.airwires ? (airwires ?? null) : null;
   const scene = useMemo(
-    () => (useCanvas ? buildPcbScene(snapshot, { order, hidden: lv.hidden, colourOf: lv.colourOf, activeLayer: activeKey, airwires: sceneAirwires }) : null),
-    [useCanvas, snapshot, hiddenKey, colourKey, activeKey, sceneAirwires],
+    () =>
+      useCanvas
+        ? buildPcbScene(snapshot, { order, hidden: lv.hidden, colourOf: lv.colourOf, activeLayer: activeKey, airwires: sceneAirwires, outlineView: lv.outline })
+        : null,
+    [useCanvas, snapshot, hiddenKey, colourKey, activeKey, sceneAirwires, lv.outline],
   );
   const picker = useMemo(() => (scene ? new PickIndex(scene) : null), [scene]);
   const byKey = useMemo(() => new Map<string, RenderObject>((scene?.objects ?? []).map((o) => [o.key, o])), [scene]);
@@ -195,11 +239,19 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
    * render object at the view point (x, y), returned only when it is of the asked kind, which is
    * how the topmost SVG element behaves. Outline vertex handles stay SVG in both renderers.
    */
+  // C1: picking is active-layer-exclusive (tracks and zones only on the active layer, vias on any
+  // layer they span, footprints everywhere) and nothing on a locked layer is ever returned.
   const hitAt = (e: { target: EventTarget }, attr: string, x: number, y: number): string | null => {
-    if (!picker || !(attr in ATTR_KIND)) return hit(e, attr);
-    const s = scaleRef.current > 0 ? scaleRef.current : 10;
-    const top = picker.pick(x, y, { tol: PICK_PX / s });
-    return top && top.ref.kind === ATTR_KIND[attr] ? top.ref.id : null;
+    const kind = attr in ATTR_KIND ? ATTR_KIND[attr] : null;
+    let id: string | null;
+    if (!picker || !kind) id = hit(e, attr);
+    else {
+      const s = scaleRef.current > 0 ? scaleRef.current : 10;
+      const top = picker.pick(x, y, { tol: PICK_PX / s, activeLayer: activeKey });
+      id = top && top.ref.kind === kind ? top.ref.id : null;
+    }
+    if (id === null || !kind) return id;
+    return pickableOn(snapshot, kind, id, activeKey) && !objectLocked(snapshot, locks, kind, id) ? id : null;
   };
 
   const hasZone = (l: CopperLayer) => Object.values(pcb.zones).some((z) => sameLayer(z.layer, l));
@@ -284,6 +336,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   };
   // Mid-route a layer change means "via here, continue on that layer" (the engine checks the via).
   const changeLayer = (next: CopperLayer) => {
+    if (draft && locks.has(layerKey(next))) return edit?.notify(`${layerName(next)} is locked: unlock it in the Layers panel to route on it.`);
     setLayer(next);
     if (draft) dispatch({ type: "switchLayer", layer: next });
   };
@@ -292,6 +345,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     dispatch({ type: "setWidth", width: widthFromMm(text) });
   };
   const startRoute = (n: string, at: Point) => {
+    if (locks.has(layerKey(layer))) return edit?.notify(`${layerName(layer)} is locked: unlock it in the Layers panel, or make another layer active.`);
     setNet(n);
     setTrackSel(null);
     dispatch({ type: "start", net: n, layer, at, mode, width: widthFromMm(widthText) });
@@ -332,8 +386,18 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     if (e.ctrlKey || e.metaKey) {
       if (k === "a" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
-        setSel(snapshot.geometry.footprints.map((f) => f.id));
+        setSel(snapshot.geometry.footprints.map((f) => f.id).filter((id) => !fpLocked(id)));
       }
+      return;
+    }
+    if (e.altKey && (k === "t" || k === "b" || e.code === "KeyT" || e.code === "KeyB")) {
+      e.preventDefault();
+      changeLayer(k === "t" || e.code === "KeyT" ? (order[0] ?? "top") : (order[order.length - 1] ?? "bottom"));
+      return;
+    }
+    if (e.key === "+" || e.key === "=" || e.key === "-") {
+      e.preventDefault();
+      changeLayer(stepLayer(order, layer, e.key === "-" ? -1 : 1));
       return;
     }
     const digit = Number(e.key);
@@ -392,6 +456,10 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       if (tool === "outline") {
         const vi = hitAt(e, "data-outline-vertex", x, y);
         if (vi === null) return false;
+        if (locks.has("outline")) {
+          edit.notify("Board outline is locked: unlock it in the Layers panel to edit.");
+          return false;
+        }
         setVdrag({ i: Number(vi), to: snapPoint(at, GRID, [], CAPTURE).point });
         return true;
       }
@@ -427,7 +495,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       if (!d) return;
       const to = fromView(x, y);
       if (d.mode === "marquee") {
-        const found = P.marquee(snapshot, P.rectOf(d.from, to));
+        const found = P.marquee(snapshot, P.rectOf(d.from, to)).filter((id) => !fpLocked(id));
         setSel(d.additive ? [...sel, ...found.filter((f) => !sel.includes(f))] : found);
         return;
       }
@@ -646,7 +714,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   };
 
   return (
-    <section className="view" aria-label="PCB view">
+    <section className={`view${lv.outline ? " outline-view" : ""}`} aria-label="PCB view" data-flip={lv.flip ? "true" : undefined} data-outline-view={lv.outline ? "true" : undefined}>
       <header className="view-header">
         <span>PCB</span>
         {edit ? (
@@ -825,18 +893,62 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             ))}
           </select>
         )}
-        {stack.map((s) => (
-          <label key={layerKey(s.layer)} style={{ color: layerColour(s.layer) }}>
-            <input
-              type="checkbox"
-              checked={shown(s.layer)}
-              onChange={() => toggle(s.layer)}
-              aria-label={`Show ${layerName(s.layer)}`}
-            />{" "}
-            {layerName(s.layer)}
-            {s.kind === "plane" ? " ▭" : ""}
-          </label>
-        ))}
+        <div
+          className="layer-tabs"
+          role="tablist"
+          aria-label="Active copper layer"
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+            e.preventDefault();
+            e.stopPropagation();
+            changeLayer(stepLayer(order, layer, e.key === "ArrowRight" ? 1 : -1));
+          }}
+        >
+          {stack.map((s) => {
+            const k = layerKey(s.layer);
+            const on = k === activeKey;
+            const isLocked = locks.has(k);
+            const isHidden = !shown(s.layer);
+            return (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                tabIndex={on ? 0 : -1}
+                data-layer={k}
+                data-locked={isLocked ? "true" : undefined}
+                data-hidden={isHidden ? "true" : undefined}
+                className={`layer-tab${on ? " on" : ""}${isLocked ? " locked" : ""}${isHidden ? " off" : ""}`}
+                title={`${layerName(s.layer)}: make it the active layer (+ / - step, Alt+T / Alt+B top / bottom)${isLocked ? " · locked" : ""}${isHidden ? " · hidden" : ""}`}
+                onClick={() => changeLayer(s.layer)}
+              >
+                <span className="swatch" aria-hidden="true" style={{ background: layerColour(s.layer) }} />
+                {layerName(s.layer)}
+                {s.kind === "plane" ? " ▭" : ""}
+                {isLocked && <span className="tab-flag" aria-hidden="true">🔒</span>}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          aria-pressed={lv.flip}
+          className={lv.flip ? "on" : ""}
+          title="Flip board: view the board from the bottom (mirrored left to right)"
+          onClick={() => lv.setFlip(!lv.flip)}
+        >
+          Flip board
+        </button>
+        <button
+          type="button"
+          aria-pressed={lv.outline}
+          className={lv.outline ? "on" : ""}
+          title="Outline view: draw tracks, pads, vias and zones as outlines"
+          onClick={() => lv.setOutline(!lv.outline)}
+        >
+          Outline view
+        </button>
         {edit && !stack.every((s) => s.kind !== "plane" || hasZone(s.layer)) && (
           <button type="button" onClick={fillPlanes} disabled={!outline.length || !net}>
             Fill planes with net
@@ -846,6 +958,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       <Canvas
         label="PCB canvas"
         bounds={pcbBounds(snapshot)}
+        mirror={lv.flip}
         zoomTo={zoomTo && zoomTo.bounds ? { bounds: zoomTo.bounds, n: zoomTo.n } : null}
         tool={!!edit && tool !== "select"}
         onPoint={scene ? canvasPoint : edit ? onPoint : undefined}
@@ -853,7 +966,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         onDrag={edit && (MOVE_TOOLS.includes(tool) || tool === "outline") ? dragHandler : undefined}
         underlay={(vb) => (
           <>
-            {outline.length > 0 && <polygon className="board" points={poly(shownOutline)} />}
+            {outline.length > 0 && edgeShown && <polygon className="board" points={poly(shownOutline)} />}
             <GridLayer vb={vb} kind="pcb" cfg={grid} />
           </>
         )}
@@ -867,7 +980,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             : undefined
         }
       >
-        {!scene && outline.length > 0 && <polygon className="board-edge" points={poly(shownOutline)} />}
+        {!scene && outline.length > 0 && edgeShown && <polygon className="board-edge" points={poly(shownOutline)} />}
         {edit && tool === "outline" &&
           shownOutline.map((p, i) => {
             const [cx, cy] = toView(p);
@@ -880,7 +993,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             <polygon
               key={z.id}
               data-zone-id={z.id}
-              className={`zone ${layerKey(z.layer)}${highlighted.has(z.id) ? " finding-hit" : ""}${netHit(z.net)}`}
+              className={`zone ${layerKey(z.layer)}${highlighted.has(z.id) ? " finding-hit" : ""}${netHit(z.net)}${offLayer(z.layer) ? " off-layer" : ""}`}
               style={{ fill: layerColour(z.layer), stroke: layerColour(z.layer) }}
               points={poly(z.outline)}
             >
@@ -894,10 +1007,16 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           const [x1, y1] = toView(t.a);
           const [x2, y2] = toView(t.b);
           return (
-            <g key={t.id} data-track-id={t.id} className={`${highlighted.has(t.id) ? "finding-hit" : ""}${t.id === trackSel ? " selected-track" : ""}${netHit(t.net)}` || undefined}>
-              <line className={`track ${layerKey(t.layer)}`} style={{ stroke: layerColour(t.layer) }} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={mm(t.width)}>
-                <title>{`${t.net} (${layerName(t.layer)})`}</title>
-              </line>
+            <g key={t.id} data-track-id={t.id} className={`${highlighted.has(t.id) ? "finding-hit" : ""}${t.id === trackSel ? " selected-track" : ""}${netHit(t.net)}${offLayer(t.layer) ? " off-layer" : ""}` || undefined}>
+              {lv.outline ? (
+                <polygon className={`track-outline ${layerKey(t.layer)}`} style={{ stroke: layerColour(t.layer) }} points={segOutline(x1, y1, x2, y2, mm(t.width))}>
+                  <title>{`${t.net} (${layerName(t.layer)})`}</title>
+                </polygon>
+              ) : (
+                <line className={`track ${layerKey(t.layer)}`} style={{ stroke: layerColour(t.layer) }} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={mm(t.width)}>
+                  <title>{`${t.net} (${layerName(t.layer)})`}</title>
+                </line>
+              )}
               <line className="hit" x1={x1} y1={y1} x2={x2} y2={y2} />
             </g>
           );

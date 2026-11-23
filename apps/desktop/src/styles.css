@@ -658,3 +658,20 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .inspector-fields .unavailable dt { opacity: 0.7; }
 .unavail { color: var(--fg-dim); font-family: inherit; font-size: var(--fs-xs); font-style: italic; }
 .tool-options .unavail, .tool-options .opt-info { color: var(--fg-dim); }
+
+/* C1 layer UX: panel groups, lock and active marker; canvas layer tab strip; outline view. */
+.layer-group { font-size: var(--fs-sm); color: var(--text-muted, inherit); opacity: 0.75; padding: var(--s-half) var(--s-1) 0; text-transform: uppercase; letter-spacing: 0.04em; }
+.layer-marker { width: 1em; text-align: center; color: var(--accent); }
+.layer-row.locked .grow { opacity: 0.6; }
+.layer-tabs { display: inline-flex; gap: 2px; align-items: center; }
+.layer-tab { display: inline-flex; align-items: center; gap: var(--s-half); }
+.layer-tab.on { background: var(--accent-soft); box-shadow: inset 0 -2px 0 var(--accent); }
+.layer-tab.off { opacity: 0.55; }
+.layer-tab .swatch { width: 10px; height: 10px; border-radius: 2px; border: 1px solid var(--line-strong); }
+.layer-tab .tab-flag { font-size: 0.8em; }
+.off-layer { pointer-events: none; }
+.outline-view .zone { fill: none !important; stroke-width: 0.05; }
+.outline-view .pad rect, .outline-view .via circle { fill: none; stroke: var(--c-pad); stroke-width: 0.05; }
+.outline-view .via circle { stroke: var(--c-via); }
+.outline-view .drill { display: none; }
+.track-outline { fill: none; stroke-width: 0.05; }

@@ -1,0 +1,26 @@
+{
+  "name": "C1 layer UX",
+  "description": "Phase 1 slice C1 in the real window: the PCB canvas layer tab strip (one tab per copper layer), a tab click and the layer keys (- / + step with wrap-around, Alt+T top) changing the active layer and the status bar, the Layers panel grouped Top / Bottom / Mechanical with a lock check box, a locked F.Cu shown on its tab, the flip-board and outline view modes as renderer modes, and after a webview reload the lock and the view modes restored for this project.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "C1 Layers Fixture", "folder": "c1-layers-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "C1 Layers Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "pcb", "do": "menu", "title": "Open PCB", "menu": "View", "item": "Go to PCB editor", "expect": "section[aria-label=\"PCB view\"]" },
+    { "id": "c1-tabs", "do": "count", "title": "C1: the canvas layer tab strip has one tab per copper layer (F.Cu, B.Cu)", "selector": "[role=\"tablist\"][aria-label=\"Active copper layer\"] [role=\"tab\"]", "equals": 2 },
+    { "id": "c1-tab-bottom", "do": "click", "title": "C1: clicking the B.Cu tab makes it the active layer", "selector": "[role=\"tablist\"][aria-label=\"Active copper layer\"] [role=\"tab\"]", "text": "B.Cu", "expect": "[role=\"tab\"][data-layer=\"bottom\"][aria-selected=\"true\"]" },
+    { "id": "c1-status-bottom", "do": "wait", "title": "C1: the status bar shows the active layer", "selector": "footer.status span.item", "text": "Layer Bottom" },
+    { "id": "c1-key-minus", "do": "key", "title": "C1: - steps to the previous copper layer (F.Cu)", "keys": "minus", "expect": "[role=\"tab\"][data-layer=\"top\"][aria-selected=\"true\"]" },
+    { "id": "c1-key-minus-wrap", "do": "key", "title": "C1: - again wraps around to B.Cu", "keys": "minus", "expect": "[role=\"tab\"][data-layer=\"bottom\"][aria-selected=\"true\"]" },
+    { "id": "c1-key-alt-t", "do": "key", "title": "C1: Alt+T jumps to the top layer", "keys": "alt+t", "expect": "[role=\"tab\"][data-layer=\"top\"][aria-selected=\"true\"]" },
+    { "id": "c1-panel", "do": "wait", "title": "C1: Layers panel in the right dock, grouped, with the active-layer marker", "selector": "aside[aria-label=\"Right panel\"] ul[aria-label=\"Layers\"] li.layer-row[aria-current=\"true\"][data-layer=\"top\"]" },
+    { "id": "c1-mechanical", "do": "wait", "title": "C1: Mechanical group lists the board outline", "selector": "ul[aria-label=\"Mechanical layers\"] li[data-layer=\"outline\"]" },
+    { "id": "c1-lock", "do": "click", "title": "C1: lock F.Cu in the Layers panel; its tab shows the lock", "selector": "input[aria-label=\"Lock F.Cu\"]", "expect": "[role=\"tab\"][data-layer=\"top\"][data-locked=\"true\"]" },
+    { "id": "c1-flip", "do": "click", "title": "C1: Flip board mirrors the canvas (renderer mode)", "selector": "section[aria-label=\"PCB view\"] button[aria-pressed]", "text": "Flip board", "expect": "section[aria-label=\"PCB view\"][data-flip=\"true\"]" },
+    { "id": "c1-outline", "do": "click", "title": "C1: Outline view (renderer mode)", "selector": "section[aria-label=\"PCB view\"] button[aria-pressed]", "text": "Outline view", "expect": "section[aria-label=\"PCB view\"][data-outline-view=\"true\"]" },
+    { "id": "c1-reload", "do": "reload", "title": "C1: reload the webview (same app data)", "expect": "button.home-row", "expectText": "C1 Layers Fixture", "shot": false },
+    { "id": "c1-reopen", "do": "click", "title": "C1: reopen the fixture", "selector": "button.home-row", "text": "C1 Layers Fixture", "expect": "nav[aria-label=\"Application menu\"]", "shot": false },
+    { "id": "c1-pcb-again", "do": "menu", "title": "C1: PCB again", "menu": "View", "item": "Go to PCB editor", "expect": "section[aria-label=\"PCB view\"]", "shot": false },
+    { "id": "c1-persisted-lock", "do": "wait", "title": "C1: after the reload F.Cu is still locked (per project view)", "selector": "[role=\"tab\"][data-layer=\"top\"][data-locked=\"true\"]" },
+    { "id": "c1-persisted-view", "do": "wait", "title": "C1: and the flip-board and outline views are still on", "selector": "section[aria-label=\"PCB view\"][data-flip=\"true\"][data-outline-view=\"true\"]" }
+  ]
+}
