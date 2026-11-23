@@ -16,7 +16,7 @@ import { netAt, netMembers, sheetGroups, type NetHighlight } from "./tools/schem
 import { Canvas, type DragHandler, type DropHandler } from "./Canvas";
 import { getDraggedComponent, setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
 import { isTyping, type EditCtx } from "./EditContext";
-import { mmToNm, segments, snapPoint } from "./editing";
+import { mmToNm, snapPoint } from "./editing";
 import { Coords, GridLayer, snapStepNm, useGridConfig } from "./grid";
 import type { Command, FlipAxis, Id, Point, Rotation, Snapshot, SymbolGeom, SymbolInstance } from "./types";
 import { powerPortShape, powerStyleOf, symbolDrawing, type DrawableSymbol } from "./render/symbolDraw";
@@ -28,6 +28,24 @@ import { NO_SELECTION, ROTATION_CHOICES, useHasInspector, usePublishEditorContex
 import { sheetNoConnects, toggleNoConnect } from "./tools/schematic/noConnect";
 import * as S from "./tools/schematic/selection";
 import { junctionPoints } from "./tools/schematic/junctions";
+import {
+  ENTRY_DIR_LABELS,
+  GRAPHIC_TOOLS,
+  LABEL_SCOPE,
+  WIRE_MODES,
+  busAt,
+  busEntryWirePoint,
+  constrainAxis,
+  graphicFrom,
+  nextWireMode,
+  powerPortCommand,
+  wireLegs,
+  type GraphicTool,
+  type WireMode,
+} from "./tools/schematic/placeTools";
+import { GraphicShape, SheetGraphics } from "./tools/schematic/SheetGraphics";
+import { powerPortProblem, usePowerPorts } from "./settings/powerPorts";
+import { reportCanvas } from "./shell/viewState";
 import "./tools/schematic/schematic.css";
 import { sheetsInOrder } from "./shell/sheets";
 
@@ -46,7 +64,23 @@ interface Props {
   contextMenu?: (target: CanvasTarget) => ContextItem[];
 }
 
-type Tool = "select" | "place" | "wire" | "connect" | "label" | "move" | "delete" | "noconnect" | "pinlabel";
+type Tool =
+  | "select"
+  | "place"
+  | "wire"
+  | "connect"
+  | "label"
+  | "move"
+  | "delete"
+  | "noconnect"
+  | "pinlabel"
+  | "bus"
+  | "busentry"
+  | "power"
+  | "netport"
+  | "offpage"
+  | GraphicTool;
+/** The editor's own tool buttons; digit keys 1-9 select them in this order. */
 export const TOOLS: [Tool, string][] = [
   ["select", "Select"],
   ["place", "Place"],
@@ -58,6 +92,26 @@ export const TOOLS: [Tool, string][] = [
   ["noconnect", "No connect"],
   ["pinlabel", "Pin label"],
 ];
+/**
+ * Place tools of slice B4, armed from the main toolbar's split buttons and the Place menu (no
+ * digit key): bus and bus entry, power ports from the Settings list, the sheet-local net port and
+ * the off-page connector, and the sheet graphics and text.
+ */
+export const PLACE_TOOLS: [Tool, string][] = [
+  ["bus", "Bus"],
+  ["busentry", "Bus entry"],
+  ["power", "Power port"],
+  ["netport", "Net port"],
+  ["offpage", "Off-page connector"],
+  ["line", "Line"],
+  ["rect", "Rectangle"],
+  ["circle", "Circle"],
+  ["text", "Text"],
+];
+const ALL_TOOLS = [...TOOLS, ...PLACE_TOOLS];
+/** Tools that draw a leg from the last clicked point (corner modes, Shift lock). */
+const LEG_TOOLS: Tool[] = ["wire", "bus"];
+const isGraphicTool = (t: Tool): t is GraphicTool => (GRAPHIC_TOOLS as readonly string[]).includes(t);
 /** Tools under which pressing on an object and dragging moves it (instead of panning the view). */
 const MOVE_TOOLS: Tool[] = ["select", "place", "move"];
 const CAPTURE = mmToNm(1.5);
@@ -73,6 +127,16 @@ const objectAt = (e: { target: EventTarget }): [S.Kind, Id] | null => {
   if (l) return ["label", l];
   const w = hit(e, "data-wire-id");
   return w ? ["wire", w] : null;
+};
+
+/** Bus, bus entry or sheet drawing under the pointer (Delete tool). */
+const drawnAt = (e: { target: EventTarget }): Command | null => {
+  const be = hit(e, "data-bus-entry-id");
+  if (be) return { type: "DeleteBusEntry", entry_id: be };
+  const b = hit(e, "data-bus-id");
+  if (b) return { type: "DeleteBus", bus_id: b };
+  const g = hit(e, "data-graphic-id");
+  return g ? { type: "DeleteSheetGraphic", graphic_id: g } : null;
 };
 
 type Drag = { mode: "move" | "marquee"; from: Point; to: Point; additive: boolean };
@@ -105,6 +169,18 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   const [hover, setHover] = useState<Point | null>(null);
   const [selRaw, setSel] = useState<S.Selection>(S.EMPTY);
   const [drag, setDrag] = useState<Drag | null>(null);
+  // B4 place tools: leg mode and bend of wires and buses, the Shift axis lock, the bus being drawn,
+  // the bus entry direction, the text tool's text and the power-port list entry armed.
+  const [wireMode, setWireMode] = useState<WireMode>("90");
+  const [bendFlip, setBendFlip] = useState(false);
+  const [shiftDown, setShiftDown] = useState(false);
+  const [busName, setBusName] = useState("D[0..7]");
+  const [busPts, setBusPts] = useState<Point[]>([]);
+  const [entryDir, setEntryDir] = useState(0);
+  const [gfxText, setGfxText] = useState("Note");
+  const [powerIdx, setPowerIdx] = useState(0);
+  const ports = usePowerPorts();
+  const port = ports[powerIdx];
   const [grid] = useGridConfig("schematic");
   // Grid step in nm; with snap off, points and moves land on whole nanometres.
   const step = mmToNm(grid.spacingMm);
@@ -137,6 +213,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     setStart(null);
     setPin(null);
     setPicked(null);
+    setBusPts([]);
   };
   const choose = (t: Tool) => {
     reset();
@@ -145,10 +222,37 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   };
   const docId = useDocId();
   useRegisterTools(docId, (t) => {
-    const hit = TOOLS.find(([id]) => id === t);
+    // "power:<n>" arms the Power port tool with entry n of the Settings list.
+    const m = /^power:(\d+)$/.exec(t);
+    if (m) {
+      setPowerIdx(Number(m[1]));
+      choose("power");
+      return true;
+    }
+    const hit = ALL_TOOLS.find(([id]) => id === t);
     if (hit) choose(hit[0]);
     return !!hit;
   });
+  // Shift held: the next wire or bus point keeps to the dominant axis (EasyEDA behaviour).
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => e.key === "Shift" && setShiftDown(true);
+    const up = (e: KeyboardEvent) => e.key === "Shift" && setShiftDown(false);
+    const blur = () => setShiftDown(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
+  // The canvas strip's dX / dY count from the last committed wire or bus point, so they show the
+  // leg being drawn (the strip reads view coordinates: millimetres, Y down).
+  const legFrom = tool === "bus" ? (busPts[busPts.length - 1] ?? null) : tool === "wire" || isGraphicTool(tool) ? start : null;
+  useEffect(() => {
+    if (legFrom) reportCanvas(docId, { anchor: { x: mm(legFrom.x), y: -mm(legFrom.y) } });
+  }, [docId, legFrom?.x, legFrom?.y]);
   useEffect(() => {
     if (!armPart) return;
     setPartId(armPart.id);
@@ -165,6 +269,15 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     if (c && edit) void edit.execute(c);
   };
   const objects = (n: number) => `${n} object${n === 1 ? "" : "s"}`;
+  /** Bus tool: send the vertices clicked so far as one AddBus. */
+  const finishBus = () => {
+    const pts = busPts;
+    setBusPts([]);
+    if (!sheet || !edit || pts.length < 2) return;
+    const name = busName.trim();
+    if (!name) return edit.notify("Enter a bus name first.");
+    void edit.execute({ type: "AddBus", sheet_id: sheet.id, name, points: pts });
+  };
 
   // Selection actions, shared by the keyboard shortcuts and the selection bar buttons. Each is
   // one engine command (a Batch for several objects).
@@ -302,6 +415,18 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       }
       return;
     }
+    // Wire and bus legs: "/" cycles 90° / 45° / any angle, Space flips the bend; Enter finishes a bus.
+    if (LEG_TOOLS.includes(tool) && (e.key === "/" || e.key === " ")) {
+      e.preventDefault();
+      if (e.key === "/") setWireMode((m) => nextWireMode(m));
+      else setBendFlip((f) => !f);
+      return;
+    }
+    if (tool === "bus" && e.key === "Enter") {
+      e.preventDefault();
+      finishBus();
+      return;
+    }
     const digit = Number(e.key);
     if (digit >= 1 && digit <= TOOLS.length) choose(TOOLS[digit - 1][0]);
     else if (e.key === "Escape") {
@@ -315,7 +440,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       setTool("select");
     } else if (k === "w") choose("wire");
     else if (k === "r") {
-      if (tool === "place" || externalDrag) {
+      if (tool === "busentry") setEntryDir((d) => (d + 1) % 4);
+      else if (tool === "place" || externalDrag) {
         setPlaceRotation((r) => nextRotation(r));
       } else {
         actions.rotate();
@@ -354,16 +480,44 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
               onChange: (v) => setLabelKind(v as "net" | "power"),
             },
           ]
-        : tool === "wire"
+        : LEG_TOOLS.includes(tool)
           ? [
-              { kind: "info", name: "Wire corners", label: "Corners", value: "horizontal leg, then vertical; pins snap" },
-              { kind: "unavailable", name: "Wire style", label: "Width, colour, line style", reason: "Unavailable: the EAK-IR has no wire style fields yet (IR v3, slice B1)" },
+              ...(tool === "bus" ? [{ kind: "text" as const, name: "Bus name", label: "Bus name", value: busName, onChange: setBusName, placeholder: "D[0..7] or {SDA,SCL}", title: "Members: D[0..7] gives D0..D7; {SDA,SCL} lists them" }] : []),
+              { kind: "select", name: "Wire corners", label: "Corners", value: wireMode, options: WIRE_MODES.map((m) => ({ value: m.id, label: m.label })), onChange: (v) => setWireMode(v as WireMode), title: "Corner mode of the next leg (/ cycles it)" },
+              {
+                kind: "select",
+                name: "Wire bend",
+                label: "Bend",
+                value: bendFlip ? "flip" : "first",
+                options: wireMode === "45" ? [{ value: "first", label: "diagonal first" }, { value: "flip", label: "straight first" }] : [{ value: "first", label: "horizontal first" }, { value: "flip", label: "vertical first" }],
+                onChange: (v) => setBendFlip(v === "flip"),
+                title: "Which leg comes first (Space flips it); Shift keeps the point on one axis",
+              },
+              ...(tool === "wire" ? [{ kind: "unavailable" as const, name: "Wire style", label: "Width, colour, line style", reason: "Unavailable: the EAK-IR has no wire style fields yet (IR v3, slice B1)" }] : []),
             ]
-          : [];
+          : tool === "busentry"
+            ? [{ kind: "select", name: "Entry direction", label: "Direction", value: String(entryDir), options: ENTRY_DIR_LABELS.map((l, i) => ({ value: String(i), label: l })), onChange: (v) => setEntryDir(Number(v)), title: "Where the member wire leaves the bus (R turns it)" }]
+            : tool === "power"
+              ? [
+                  {
+                    kind: "select",
+                    name: "Power port",
+                    label: "Port",
+                    value: String(powerIdx),
+                    options: ports.map((p, i) => ({ value: String(i), label: `${p.name || "(unnamed)"} (${p.style})` })),
+                    onChange: (v) => setPowerIdx(Number(v)),
+                    title: "Entries of Settings › Power ports",
+                  },
+                ]
+              : tool === "netport" || tool === "offpage"
+                ? [{ kind: "text", name: "Net name", label: "Net name", value: labelName, onChange: setLabelName }]
+                : tool === "text"
+                  ? [{ kind: "text", name: "Text", label: "Text", value: gfxText, onChange: setGfxText }]
+                  : [];
   usePublishEditorContext(docId, {
     editor: "schematic",
     tool,
-    toolLabel: TOOLS.find(([t]) => t === tool)?.[1] ?? tool,
+    toolLabel: ALL_TOOLS.find(([t]) => t === tool)?.[1] ?? tool,
     options,
     selection: { ...NO_SELECTION, symbols: sel.symbols, wires: sel.wires, labels: sel.labels },
     sheetId: sheet?.id ?? null,
@@ -543,6 +697,10 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     },
   };
 
+  /** Shift lock: the next leg keeps to the dominant axis from its start. */
+  const legEnd = (from: Point, p: Point): Point => (shiftDown ? constrainAxis(from, p) : p);
+  /** The grid point under view (x, y); buses and bus entries do not capture pins. */
+  const gridAt = (x: number, y: number): Point => snapPoint(fromView(x, y), GRID, [], 0).point;
   const onPoint = (x: number, y: number, e: React.PointerEvent) => {
     if (!edit || edit.busy) return;
     if (tool === "select") return selectClick(e);
@@ -579,10 +737,53 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       }
       case "wire": {
         if (!start) return setStart(snap.point);
-        const legs = segments(start, snap.point, false);
-        setStart(snap.point);
+        const end = legEnd(start, snap.point);
+        const legs = wireLegs(start, end, wireMode, bendFlip);
+        setStart(end);
         // An L-shaped wire is two legs sent as ONE Batch: one revision, one undo, all-or-nothing.
         submit(legs.map(([a, b]) => ({ type: "AddWire" as const, sheet_id: sheet.id, a, b })), "Wire");
+        return;
+      }
+      case "bus": {
+        const p = gridAt(x, y);
+        const last = busPts[busPts.length - 1];
+        if (!last) return setBusPts([p]);
+        const end = legEnd(last, p);
+        // Clicking the last vertex again finishes the bus.
+        if (end.x === last.x && end.y === last.y) return finishBus();
+        setBusPts([...busPts, ...wireLegs(last, end, wireMode, bendFlip).map(([, b]) => b)]);
+        return;
+      }
+      case "busentry": {
+        const p = gridAt(x, y);
+        const bus = busAt(snapshot, sheet.id, p);
+        if (!bus) return edit.notify("Click on a bus: a bus entry starts on a bus (draw one with the Bus tool).");
+        void edit.execute({ type: "AddBusEntry", bus_id: bus, bus_point: p, wire_point: busEntryWirePoint(p, entryDir) });
+        return;
+      }
+      case "power": {
+        if (!port) return edit.notify("The power-port list is empty: add entries in Settings › Power ports.");
+        const bad = powerPortProblem(port);
+        if (bad) return edit.notify(`${bad} for this power port (Settings › Power ports).`);
+        void edit.execute(powerPortCommand(sheet.id, port, snap.point));
+        return;
+      }
+      case "netport":
+      case "offpage": {
+        const name = labelName.trim();
+        if (!name) return edit.notify("Enter a net name first.");
+        void edit.execute({ type: "AddNetLabel", sheet_id: sheet.id, name, position: snap.point, kind: "net", scope: LABEL_SCOPE[tool] });
+        return;
+      }
+      case "line":
+      case "rect":
+      case "circle":
+      case "text": {
+        if (tool !== "text" && !start) return setStart(snap.point);
+        const g = graphicFrom(tool, start ?? snap.point, snap.point, gfxText);
+        setStart(null);
+        if (!g) return edit.notify(tool === "text" ? "Enter the text first." : "Click a second, different point.");
+        void edit.execute({ type: "AddSheetGraphic", sheet_id: sheet.id, graphic: g });
         return;
       }
       case "connect": {
@@ -640,19 +841,30 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         if (symId) void edit.execute({ type: "DeleteSymbol", symbol_id: symId });
         else if (labelId) void edit.execute({ type: "DeleteNetLabel", label_id: labelId });
         else if (wireId) void edit.execute({ type: "DeleteWire", wire_id: wireId });
+        else {
+          const c = drawnAt(e);
+          if (c) void edit.execute(c);
+        }
         return;
       }
     }
   };
 
-  const preview =
-    hover && tool === "wire" && start
-      ? segments(start, snapPoint(hover, GRID, pins.map((p) => p.at), CAPTURE).point, false)
-      : [];
+  // Live previews of the B4 tools at the snapped pointer: the wire or bus legs (in the corner mode,
+  // with the Shift lock), the shape a graphic tool will draw, and where a bus entry would go.
+  const gridOnly = tool === "bus" || tool === "busentry";
+  const hoverSnap = hover ? snapPoint(hover, GRID, gridOnly ? [] : pins.map((p) => p.at), gridOnly ? 0 : CAPTURE).point : null;
+  const legStart = tool === "wire" ? start : tool === "bus" ? (busPts[busPts.length - 1] ?? null) : null;
+  const legTarget = hoverSnap && legStart ? legEnd(legStart, hoverSnap) : hoverSnap;
+  const preview = legStart && legTarget ? wireLegs(legStart, legTarget, wireMode, bendFlip) : [];
+  const gfxPreview = hoverSnap && isGraphicTool(tool) && tool !== "text" && start ? graphicFrom(tool, start, hoverSnap) : null;
+  const entryPreview = hoverSnap && tool === "busentry" ? { a: hoverSnap, b: busEntryWirePoint(hoverSnap, entryDir), onBus: !!busAt(snapshot, sheet.id, hoverSnap) } : null;
+  // Crosshair guides through the snapped pointer while a place tool is armed.
+  const guide = edit && tool !== "select" && tool !== "move" ? legTarget : null;
 
 
   return (
-    <section className="view" aria-label="Schematic view">
+    <section className="view" aria-label="Schematic view" data-tool={tool} data-wire-mode={wireMode}>
       <header className="view-header">
         <span>Schematic</span>
         {sheets.length > 1 && (
@@ -737,6 +949,14 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
             {tool === "delete" && "Click a symbol, wire or label"}
             {tool === "noconnect" && "Click a pin to mark it intentionally unconnected (the ERC-001 remedy); click a marked pin to remove its marker"}
             {tool === "pinlabel" && "Click a pin to put the net label on it"}
+            {LEG_TOOLS.includes(tool) &&
+              `${tool === "bus" ? (busPts.length ? "Click the next vertex · click the last one again or Enter finishes" : "Click the bus start") : ""} · / corners (${WIRE_MODES.find((m) => m.id === wireMode)?.label}) · Space flips the bend · Shift locks the axis · Esc stops`}
+            {tool === "busentry" && `Click on a bus to add an entry (${ENTRY_DIR_LABELS[entryDir]}; R turns it); draw the member wire from its free end and name it`}
+            {tool === "power" && (port ? `Click to place power port ${port.name} · the list is in Settings › Power ports` : "The power-port list is empty: add entries in Settings › Power ports")}
+            {tool === "netport" && "Click to drop a sheet-local net port (joins this sheet only)"}
+            {tool === "offpage" && "Click to drop an off-page connector (joins every sheet)"}
+            {(tool === "line" || tool === "rect" || tool === "circle") && (start ? "Click the second point" : `Click the first point of the ${tool === "rect" ? "rectangle" : tool === "circle" ? "circle (its centre)" : "line"}`)}
+            {tool === "text" && "Click to put the text on the sheet"}
           </span>
         </div>
       )}
@@ -756,6 +976,13 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
           </>
         )}
       >
+        <SheetGraphics snapshot={snapshot} sheetId={sheet.id} />
+        {guide && (
+          <g className="guides" data-guide="crosshair" pointerEvents="none">
+            <line x1={0} y1={toView(guide)[1]} x2={mm(sheet.width)} y2={toView(guide)[1]} />
+            <line x1={toView(guide)[0]} y1={-mm(sheet.height)} x2={toView(guide)[0]} y2={0} />
+          </g>
+        )}
         {Object.values(schematic.wires)
           .filter((w) => w.sheet_id === sheet.id)
           .map((w) => {
@@ -778,8 +1005,23 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         {preview.map(([a, b], i) => {
           const [x1, y1] = toView(a);
           const [x2, y2] = toView(b);
-          return <line key={i} className="wire preview" x1={x1} y1={y1} x2={x2} y2={y2} />;
+          return <line key={i} className={`${tool === "bus" ? "bus" : "wire"} preview`} x1={x1} y1={y1} x2={x2} y2={y2} />;
         })}
+        {busPts.length > 1 && <polyline className="bus preview" points={busPts.map((p) => toView(p).join(",")).join(" ")} />}
+        {gfxPreview && (
+          <g className="sheet-graphic preview" pointerEvents="none">
+            <GraphicShape g={gfxPreview} />
+          </g>
+        )}
+        {entryPreview && (
+          <line
+            className={`bus-entry preview${entryPreview.onBus ? "" : " off"}`}
+            x1={toView(entryPreview.a)[0]}
+            y1={toView(entryPreview.a)[1]}
+            x2={toView(entryPreview.b)[0]}
+            y2={toView(entryPreview.b)[1]}
+          />
+        )}
         {movePreview.flatMap((c) => {
           if (c.type !== "MoveWire") return [];
           const [x1, y1] = toView(c.a);
@@ -829,7 +1071,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
                 key={l.id}
                 data-label-id={l.id}
                 data-power-style={style ?? undefined}
-                className={`label ${l.kind}${S.has(sel, "label", l.id) ? " selected" : ""}${hiM?.labels.has(l.id) ? " net-hi" : ""}`}
+                data-scope={l.kind === "net" ? (l.scope ?? "global") : undefined}
+                className={`label ${l.kind}${l.kind === "net" && l.scope === "local" ? " local" : ""}${S.has(sel, "label", l.id) ? " selected" : ""}${hiM?.labels.has(l.id) ? " net-hi" : ""}`}
                 transform={labelShift(l.id)}
               >
                 <circle cx={x} cy={y} r={0.5} />
@@ -837,6 +1080,13 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
                   <>
                     <path className="power-port" d={port.d} />
                     <text x={port.text.x} y={port.text.y} style={{ textAnchor: "middle" }}>
+                      {l.name}
+                    </text>
+                  </>
+                ) : l.scope === "off_page" ? (
+                  <>
+                    <path className="port-shape" d={offPageShape(x, y, l.name)} />
+                    <text x={x + 1.6} y={y + 0.55}>
                       {l.name}
                     </text>
                   </>
@@ -994,4 +1244,10 @@ function Marquee({ from, to }: { from: Point; to: Point }) {
   const [x1, y1] = toView(from);
   const [x2, y2] = toView(to);
   return <rect className="marquee" x={Math.min(x1, x2)} y={Math.min(y1, y2)} width={Math.abs(x2 - x1)} height={Math.abs(y2 - y1)} />;
+}
+
+/** Off-page connector outline at view point (x, y): a pentagon arrow around the net name. */
+function offPageShape(x: number, y: number, name: string): string {
+  const w = Math.max(2, name.length + 0.8);
+  return `M${x} ${y}L${x + 1} ${y - 1.2}H${x + 1 + w}L${x + 2 + w} ${y}L${x + 1 + w} ${y + 1.2}H${x + 1}Z`;
 }

@@ -21,3 +21,15 @@ describe("junctionPoints", () => {
     expect(junctionPoints([w("a", 0, 0, 20, 0)], [{ x: 0, y: 0 }])).toEqual([]);
   });
 });
+
+describe("junctionPoints (slice B4)", () => {
+  it("draws a dot where a wire end lands on a 45° wire (T-join on a diagonal)", () => {
+    expect(junctionPoints([w("d", 0, 0, 20, 20), w("t", 10, 10, 30, 10)], [])).toEqual([{ x: 10, y: 10 }]);
+  });
+  it("draws no dot where only pins meet, with no wire end", () => {
+    expect(junctionPoints([], [{ x: 5, y: 5 }, { x: 5, y: 5 }, { x: 5, y: 5 }])).toEqual([]);
+  });
+  it("a point near but off a diagonal is not a T-join", () => {
+    expect(junctionPoints([w("d", 0, 0, 20, 20), w("t", 10, 11, 30, 11)], [])).toEqual([]);
+  });
+});
