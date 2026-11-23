@@ -1,4 +1,5 @@
 /* EAK desktop styles. Colours, spacing and motion come from design/tokens.css. */
+@font-face { font-family: "EAK Symbol"; src: url("./assets/fonts/JetBrainsMonoNL-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: block; }
 :root { font-family: var(--font); font-size: var(--fs-md); background: var(--bg-app); color: var(--fg); }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; overflow: hidden; }
@@ -168,6 +169,17 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .symbol .body { fill: var(--c-sym-fill); stroke: var(--c-sym-line); stroke-width: 0.25; }
 .symbol .pin { stroke: var(--c-sym-line); stroke-width: 0.2; }
 .symbol .pin-end { fill: var(--c-sym-line); }
+/* Slice B2 symbol drawing: fill modes of v3 graphics, pin texts, hit area, power ports. */
+.symbol .body.fill-solid { fill: var(--c-sym-line); }
+.symbol .body.fill-none, .symbol.selected .body.fill-none, .symbol.ai-preview .body.fill-none { fill: none; }
+.symbol.selected .body.fill-solid { fill: var(--accent); }
+.symbol .sym-hit { fill: transparent; stroke: none; }
+.canvas .sym-text { font-family: var(--font-symbol); fill: var(--c-sym-line); }
+.canvas .sym-text.pin-number { fill: var(--fg-dim); }
+.label .power-port { fill: none; stroke: var(--c-power); stroke-width: 0.25; }
+.label.selected .power-port { stroke: var(--accent); }
+.place-ghost .body, .place-ghost .pin { fill: none; stroke: var(--accent); stroke-width: 0.25; }
+.place-ghost .body.fill-solid, .place-ghost .pin-end, .place-ghost .sym-text { fill: var(--accent); }
 .symbol.selected .body { stroke: var(--accent); stroke-width: 0.5; fill: var(--c-sym-sel-fill); }
 .symbol.ai-preview .body, .footprint.ai-preview .courtyard { stroke: var(--c-preview); stroke-width: 0.5; stroke-dasharray: 0.8 0.5; fill: color-mix(in srgb, var(--c-preview) 14%, transparent); }
 .label circle { fill: var(--c-wire); }

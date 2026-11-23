@@ -6,6 +6,7 @@
 //! as datasheet facts. Replace or verify before manufacturing use.
 
 use crate::geom::{mm, Point};
+use crate::graphic::{Graphic, LineStyle, Stroke};
 use crate::library::*;
 use std::collections::BTreeMap;
 
@@ -330,6 +331,274 @@ fn sot23_transistor(
             "{GENERIC}; pinout {}/{}/{} is the most common SOT-23 assignment, check the chosen part",
             names[0], names[1], names[2]
         ),
+    }
+}
+
+// ---- Symbol drawings (slice B2). Library coordinates in mm, Y up, origin at the symbol centre.
+// Pin connection points never move (connectivity and existing projects stay valid); each pin is
+// given the length that reaches its drawing, and the box extents keep serving selection.
+
+fn line(a: (f64, f64), b: (f64, f64)) -> Graphic {
+    Graphic::Line {
+        a: Point::mm(a.0, a.1),
+        b: Point::mm(b.0, b.1),
+        stroke: Stroke::default(),
+    }
+}
+
+/// A line drawn heavier than the default (capacitor plates, base and gate bars).
+fn bar(a: (f64, f64), b: (f64, f64)) -> Graphic {
+    Graphic::Line {
+        a: Point::mm(a.0, a.1),
+        b: Point::mm(b.0, b.1),
+        stroke: Stroke {
+            width: mm(0.3),
+            style: LineStyle::Solid,
+        },
+    }
+}
+
+fn polyline(pts: &[(f64, f64)]) -> Graphic {
+    Graphic::Polyline {
+        points: pts.iter().map(|p| Point::mm(p.0, p.1)).collect(),
+        stroke: Stroke::default(),
+    }
+}
+
+fn polygon(pts: &[(f64, f64)], fill: bool) -> Graphic {
+    Graphic::Polygon {
+        points: pts.iter().map(|p| Point::mm(p.0, p.1)).collect(),
+        fill,
+        stroke: Stroke::default(),
+    }
+}
+
+fn rect(min: (f64, f64), max: (f64, f64), style: LineStyle) -> Graphic {
+    Graphic::Rectangle {
+        min: Point::mm(min.0, min.1),
+        max: Point::mm(max.0, max.1),
+        fill: false,
+        stroke: Stroke { width: 0, style },
+    }
+}
+
+fn circle(c: (f64, f64), r: f64) -> Graphic {
+    Graphic::Circle {
+        center: Point::mm(c.0, c.1),
+        radius: mm(r),
+        fill: false,
+        stroke: Stroke::default(),
+    }
+}
+
+fn arc(c: (f64, f64), r: f64, start_deg: f64, end_deg: f64) -> Graphic {
+    Graphic::Arc {
+        center: Point::mm(c.0, c.1),
+        radius: mm(r),
+        start_deg,
+        end_deg,
+        stroke: Stroke::default(),
+    }
+}
+
+/// Points `pin` from its connection point to `inner` on the drawing (an axis-aligned step).
+fn reach(pin: &mut SymbolPin, inner: (f64, f64)) {
+    let to = Point::mm(inner.0, inner.1);
+    let (dx, dy) = (to.x - pin.position.x, to.y - pin.position.y);
+    debug_assert!(dx == 0 || dy == 0, "pin {} is not axis aligned", pin.number);
+    (pin.orientation, pin.length) = if dx > 0 {
+        (PinOrientation::Right, dx)
+    } else if dx < 0 {
+        (PinOrientation::Left, -dx)
+    } else if dy > 0 {
+        (PinOrientation::Up, dy)
+    } else {
+        (PinOrientation::Down, -dy)
+    };
+}
+
+/// Two-terminal drawing between pins at x = -5.08 and +5.08: each pin reaches `inner_x` on its
+/// side. Names and numbers are hidden, as is usual for passives and diodes.
+fn two_terminal(s: &mut SymbolDef, graphics: Vec<Graphic>, inner_x: f64) {
+    s.graphics = graphics;
+    for p in &mut s.pins {
+        let side = if p.position.x < 0 { -1.0 } else { 1.0 };
+        reach(p, (side * inner_x, 0.0));
+        p.name_visible = false;
+        p.number_visible = false;
+    }
+}
+
+/// Three-terminal transistor on the SOT-23 symbol layout: control pin at (-5.08, 0), the
+/// emitter / source at (2.54, -5.08), the collector / drain at (2.54, 5.08). Pin names are
+/// shown by the drawing itself; numbers stay visible.
+fn transistor(s: &mut SymbolDef, graphics: Vec<Graphic>, control_x: f64) {
+    s.graphics = graphics;
+    for p in &mut s.pins {
+        let inner = if p.position.x < 0 {
+            (control_x, 0.0)
+        } else if p.position.y < 0 {
+            (2.54, -2.54)
+        } else {
+            (2.54, 2.54)
+        };
+        reach(p, inner);
+        p.name_visible = false;
+    }
+}
+
+fn resistor() -> Vec<Graphic> {
+    // IEC rectangle.
+    vec![rect((-2.54, -1.0), (2.54, 1.0), LineStyle::Solid)]
+}
+
+fn capacitor() -> Vec<Graphic> {
+    vec![
+        bar((-0.38, -1.0), (-0.38, 1.0)),
+        bar((0.38, -1.0), (0.38, 1.0)),
+    ]
+}
+
+/// Polarised capacitor: pin 1 (+) on the flat plate, pin 2 on the curved one.
+fn capacitor_polarised() -> Vec<Graphic> {
+    vec![
+        bar((-0.38, -1.0), (-0.38, 1.0)),
+        arc((1.98, 0.0), 1.6, 141.32, 218.68),
+        line((-1.65, 1.15), (-1.05, 1.15)),
+        line((-1.35, 0.85), (-1.35, 1.45)),
+    ]
+}
+
+fn inductor() -> Vec<Graphic> {
+    [-1.905, -0.635, 0.635, 1.905]
+        .iter()
+        .map(|&x| arc((x, 0.0), 0.635, 0.0, 180.0))
+        .collect()
+}
+
+/// Diode with the cathode (pin 1) on the left. `kind`: plain, Schottky or LED.
+fn diode(kind: &str) -> Vec<Graphic> {
+    let led = kind == "LED";
+    let mut g = vec![polygon(&[(1.0, 1.0), (1.0, -1.0), (-1.0, 0.0)], !led)];
+    if kind == "Schottky" {
+        g.push(polyline(&[
+            (-1.4, 0.6),
+            (-1.4, 1.0),
+            (-1.0, 1.0),
+            (-1.0, -1.0),
+            (-0.6, -1.0),
+            (-0.6, -0.6),
+        ]));
+    } else {
+        g.push(line((-1.0, 1.0), (-1.0, -1.0)));
+    }
+    if led {
+        // Two emission arrows.
+        for dx in [0.0, 0.9] {
+            g.push(line((dx, 1.2), (dx + 0.8, 2.0)));
+            g.push(polygon(
+                &[(dx + 0.8, 2.0), (dx + 0.34, 1.82), (dx + 0.62, 1.54)],
+                true,
+            ));
+        }
+    }
+    g
+}
+
+fn bjt(pnp: bool) -> Vec<Graphic> {
+    let arrow = if pnp {
+        // On the emitter, pointing in towards the base.
+        [(0.31, -1.21), (1.27, -1.37), (0.91, -1.97)]
+    } else {
+        // On the emitter, pointing out.
+        [(1.9, -2.16), (1.31, -1.4), (0.95, -2.0)]
+    };
+    vec![
+        circle((0.64, 0.0), 2.8),
+        bar((-0.64, 1.9), (-0.64, -1.9)),
+        line((-0.64, 0.64), (2.54, 2.54)),
+        line((-0.64, -0.64), (2.54, -2.54)),
+        polygon(&arrow, true),
+    ]
+}
+
+/// Enhancement MOSFET, body tied to the source.
+fn mosfet(p_channel: bool) -> Vec<Graphic> {
+    let (arrow, body_from) = if p_channel {
+        // Pointing out of the channel.
+        ([(0.45, 0.0), (-0.41, 0.4), (-0.41, -0.4)], 0.45)
+    } else {
+        // Pointing into the channel.
+        ([(-0.51, 0.0), (0.35, 0.4), (0.35, -0.4)], 0.35)
+    };
+    vec![
+        bar((-1.27, -1.9), (-1.27, 1.9)),
+        bar((-0.51, 1.0), (-0.51, 2.0)),
+        bar((-0.51, -0.5), (-0.51, 0.5)),
+        bar((-0.51, -2.0), (-0.51, -1.0)),
+        polyline(&[(-0.51, 1.5), (2.54, 1.5), (2.54, 2.54)]),
+        polyline(&[(-0.51, -1.5), (2.54, -1.5), (2.54, -2.54)]),
+        polyline(&[(body_from, 0.0), (2.54, 0.0), (2.54, -1.5)]),
+        polygon(&arrow, true),
+    ]
+}
+
+/// Quartz crystal between pins at x = -5.08 / +5.08; a case pin (GND) gets a dashed case.
+fn crystal(s: &mut SymbolDef) {
+    let cased = s.pins.len() > 2;
+    let mut g = Vec::new();
+    if cased {
+        g.push(rect((-2.03, -2.29), (2.03, 2.29), LineStyle::Dashed));
+    }
+    g.extend([
+        bar((-1.27, -1.27), (-1.27, 1.27)),
+        bar((1.27, -1.27), (1.27, 1.27)),
+        rect((-0.64, -1.52), (0.64, 1.52), LineStyle::Solid),
+    ]);
+    s.graphics = g;
+    for p in &mut s.pins {
+        let inner = if p.position.x < 0 {
+            (-1.27, 0.0)
+        } else if p.position.x > 0 {
+            (1.27, 0.0)
+        } else {
+            (0.0, -2.29)
+        };
+        reach(p, inner);
+        p.name_visible = false;
+        p.number_visible = cased;
+    }
+}
+
+/// Normally-open push button.
+fn push_button() -> Vec<Graphic> {
+    vec![
+        circle((-1.91, 0.0), 0.38),
+        circle((1.91, 0.0), 0.38),
+        line((-2.29, 1.27), (2.29, 1.27)),
+        line((0.0, 1.27), (0.0, 2.29)),
+    ]
+}
+
+/// Gives a built-in part its schematic drawing. Parts without a specific symbol (ICs,
+/// connectors, modules) keep the rectangle of their box, which is their usual symbol.
+fn draw_symbol(c: &mut ComponentDef) {
+    let polarised = c.symbol.pins.first().is_some_and(|p| p.name == "+");
+    let mos = c.symbol.pins.iter().any(|p| p.name == "G");
+    let value = c.default_value.as_str();
+    let s = &mut c.symbol;
+    match c.category.as_str() {
+        "Resistor" => two_terminal(s, resistor(), 2.54),
+        "Capacitor" if polarised => two_terminal(s, capacitor_polarised(), 0.38),
+        "Capacitor" => two_terminal(s, capacitor(), 0.38),
+        "Inductor" => two_terminal(s, inductor(), 2.54),
+        "LED" => two_terminal(s, diode("LED"), 1.0),
+        "Diode" => two_terminal(s, diode(value), 1.0),
+        "Transistor" if mos => transistor(s, mosfet(value == "PMOS"), -1.27),
+        "Transistor" => transistor(s, bjt(value == "PNP"), -0.64),
+        "Crystal" => crystal(s),
+        "Switch" => two_terminal(s, push_button(), 2.29),
+        _ => s.upgrade_box(),
     }
 }
 
@@ -786,9 +1055,9 @@ pub fn components() -> Vec<ComponentDef> {
     // shortcut: no USB-C receptacle; its shell and locating pegs need slotted / non-plated
     // holes that FootprintDef cannot express. Add one when the footprint model gains them.
 
-    // Schema v3 (ADR-0040): every box body is also drawn as its rectangle graphic.
+    // Schema v3 (ADR-0040): every part gets its drawing (slice B2); the rest keep their box.
     for c in &mut v {
-        c.symbol.upgrade_box();
+        draw_symbol(c);
     }
     v
 }
@@ -1427,11 +1696,142 @@ mod tests {
             serde_json::from_str(include_str!("../tests/fixtures/builtin_m1_parts.json"))
                 .expect("fixture parses");
         assert_eq!(golden.len(), 8);
-        // The fixture is schema v2; the only change since is the v3 box upgrade (ADR-0040).
+        // The fixture is schema v2. Since then only the drawing changed: the v3 graphics
+        // (ADR-0040, slice B2) and each pin's length, orientation and text visibility. Pin
+        // numbers, names, types and connection points, the body box and everything else stay.
         for mut g in golden {
             assert!(g.symbol.graphics.is_empty(), "{} fixture is v2", g.id);
-            g.symbol.upgrade_box();
-            assert_eq!(get(&g.id).as_ref(), Some(&g), "{} changed", g.id);
+            let now = get(&g.id).unwrap_or_else(|| panic!("{} missing", g.id));
+            assert_eq!(now.symbol.pins.len(), g.symbol.pins.len(), "{} pins", g.id);
+            g.symbol.graphics = now.symbol.graphics.clone();
+            for (old, new) in g.symbol.pins.iter_mut().zip(&now.symbol.pins) {
+                old.length = new.length;
+                old.orientation = new.orientation;
+                old.name_visible = new.name_visible;
+                old.number_visible = new.number_visible;
+            }
+            assert_eq!(now, g, "{} changed", g.id);
+        }
+    }
+
+    /// One line per symbol: graphic kinds, then each pin as number:orientation/length in µm,
+    /// with N when its name is shown and # when its number is shown.
+    fn drawing(id: &str) -> String {
+        let c = get(id).unwrap_or_else(|| panic!("{id} missing"));
+        let kinds: Vec<String> = c
+            .symbol
+            .graphics
+            .iter()
+            .map(|g| {
+                serde_json::to_value(g).unwrap()["kind"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect();
+        let pins: Vec<String> = c
+            .symbol
+            .pins
+            .iter()
+            .map(|p| {
+                format!(
+                    "{}:{:?}/{}{}{}",
+                    p.number,
+                    p.orientation,
+                    p.length / 1000,
+                    if p.name_visible { "N" } else { "" },
+                    if p.number_visible { "#" } else { "" }
+                )
+            })
+            .collect();
+        format!("{} | {}", kinds.join(","), pins.join(" "))
+    }
+
+    #[test]
+    fn built_in_symbol_drawings_snapshot() {
+        // Slice B2 acceptance: the 7 everyday symbol shapes, plus crystal, switch and an IC box.
+        let want = [
+            ("R_0603", "rectangle | 1:Right/2540 2:Left/2540"),
+            ("C_0603", "line,line | 1:Right/4700 2:Left/4700"),
+            ("L_0603", "arc,arc,arc,arc | 1:Right/2540 2:Left/2540"),
+            (
+                "LED_0603",
+                "polygon,line,line,polygon,line,polygon | 1:Right/4080 2:Left/4080",
+            ),
+            ("D_SOD-123", "polygon,line | 1:Right/4080 2:Left/4080"),
+            (
+                "Q_NPN_SOT-23",
+                "circle,line,line,line,polygon | 1:Right/4440# 2:Up/2540# 3:Down/2540#",
+            ),
+            (
+                "Q_NMOS_SOT-23",
+                "line,line,line,line,polyline,polyline,polyline,polygon | \
+                 1:Right/3810# 2:Up/2540# 3:Down/2540#",
+            ),
+            ("D_SMA", "polygon,polyline | 1:Right/4080 2:Left/4080"),
+            (
+                "CP_Elec_6.3x5.4",
+                "line,arc,line,line | 1:Right/4700 2:Left/4700",
+            ),
+            (
+                "XTAL_3225",
+                "rectangle,line,line,rectangle | 1:Right/3810# 2:Up/2790# 3:Left/3810#",
+            ),
+            (
+                "SW_Tactile_6x6_THT",
+                "circle,circle,line,line | 1:Right/2790 2:Left/2790",
+            ),
+            (
+                "AMS1117-3.3_SOT-223",
+                "rectangle | 1:Up/2540N# 2:Left/2540N# 3:Right/2540N#",
+            ),
+        ];
+        for (id, expected) in want {
+            assert_eq!(drawing(id), expected, "{id}");
+        }
+    }
+
+    /// Bounding box (nm) of a graphic: arcs and circles use their whole circle.
+    fn graphic_box(g: &Graphic) -> (Nm, Nm, Nm, Nm) {
+        let pts: Vec<Point> = match g {
+            Graphic::Line { a, b, .. } => vec![*a, *b],
+            Graphic::Polyline { points, .. } | Graphic::Polygon { points, .. } => points.clone(),
+            Graphic::Arc { center, radius, .. } | Graphic::Circle { center, radius, .. } => vec![
+                Point::new(center.x - radius, center.y - radius),
+                Point::new(center.x + radius, center.y + radius),
+            ],
+            Graphic::Rectangle { min, max, .. } => vec![*min, *max],
+            Graphic::Text { position, .. } => vec![*position],
+        };
+        let xs = pts.iter().map(|p| p.x);
+        let ys = pts.iter().map(|p| p.y);
+        (
+            xs.clone().min().unwrap(),
+            ys.clone().min().unwrap(),
+            xs.max().unwrap(),
+            ys.max().unwrap(),
+        )
+    }
+
+    #[test]
+    fn every_built_in_pin_reaches_its_drawing() {
+        for c in components() {
+            let s = &c.symbol;
+            assert!(!s.graphics.is_empty(), "{} has no drawing", c.id);
+            for p in &s.pins {
+                let d = match p.orientation {
+                    PinOrientation::Right => Point::new(p.length, 0),
+                    PinOrientation::Left => Point::new(-p.length, 0),
+                    PinOrientation::Up => Point::new(0, p.length),
+                    PinOrientation::Down => Point::new(0, -p.length),
+                };
+                let end = p.position.plus(d);
+                let touches = s.graphics.iter().any(|g| {
+                    let (x0, y0, x1, y1) = graphic_box(g);
+                    (x0..=x1).contains(&end.x) && (y0..=y1).contains(&end.y)
+                });
+                assert!(touches, "{} pin {} ends off its drawing", c.id, p.number);
+            }
         }
     }
 

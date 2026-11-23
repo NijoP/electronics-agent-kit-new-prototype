@@ -6,7 +6,9 @@ import { getDraggedComponent, setDraggedComponent, EAK_COMPONENT_MIME } from "./
 import { isTyping, type EditCtx } from "./EditContext";
 import { mmToNm, segments, snapPoint } from "./editing";
 import { Coords, GridLayer, snapStepNm, useGridConfig } from "./grid";
-import type { Command, FlipAxis, Id, Point, Rotation, Snapshot, SymbolDef, SymbolGeom, SymbolInstance, SymbolPin } from "./types";
+import type { Command, FlipAxis, Id, Point, Rotation, Snapshot, SymbolGeom, SymbolInstance } from "./types";
+import { powerPortShape, powerStyleOf, symbolDrawing, type DrawableSymbol } from "./render/symbolDraw";
+import { SymbolSvg } from "./tools/schematic/SymbolSvg";
 import { boundsOf, fromView, mm, toView } from "./viewport";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import { ToolOptionFields } from "./shell/Inspector";
@@ -635,6 +637,12 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
           const [x, y] = toView(s.position);
           const hw = mm(s.half_w);
           const hh = mm(s.half_h);
+          const inst = schematic.symbols[s.id];
+          const drawing = symbolDrawing(
+            inst ? libSymbol(snapshot, inst.component_id) : undefined,
+            { position: s.position, rotation: inst?.rotation ?? "R0", mirror: inst?.mirror },
+            s,
+          );
           return (
             <g
               key={s.id}
@@ -644,20 +652,9 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
               onClick={() => onSelect(s.id)}
             >
               <title>{`${s.refdes} ${s.value}`}</title>
-              {s.pins.map((p) => {
-                const [px, py] = toView(p.position);
-                // Pin stub from the body edge to the connection point.
-                const ex = Math.min(Math.max(px, x - hw), x + hw);
-                const ey = Math.min(Math.max(py, y - hh), y + hh);
-                const active = pin?.symbol === s.id && pin.pin === p.number;
-                return (
-                  <g key={p.number}>
-                    <line className="pin" x1={ex} y1={ey} x2={px} y2={py} />
-                    <circle className={active ? "pin-end active" : "pin-end"} cx={px} cy={py} r={active ? 0.8 : 0.4} />
-                  </g>
-                );
-              })}
-              <rect className="body" x={x - hw} y={y - hh} width={2 * hw} height={2 * hh} />
+              {/* Whole-body hit area: open drawings (a capacitor's plates) are thin to click. */}
+              <rect className="sym-hit" x={x - hw} y={y - hh} width={2 * hw} height={2 * hh} />
+              <SymbolSvg drawing={drawing} activePin={pin?.symbol === s.id ? pin.pin : null} />
               {S.has(sel, "symbol", s.id) && <SelectionBox s={s} />}
               <text className="refdes" x={x} y={y - hh - 1}>
                 {s.refdes}
@@ -672,17 +669,29 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
           .filter((l) => l.sheet_id === sheet.id)
           .map((l) => {
             const [x, y] = toView(l.position);
+            const style = l.kind === "power" ? powerStyleOf(l.name, l.power_style) : null;
+            const port = style ? powerPortShape(style, x, y) : null;
             return (
               <g
                 key={l.id}
                 data-label-id={l.id}
+                data-power-style={style ?? undefined}
                 className={`label ${l.kind}${S.has(sel, "label", l.id) ? " selected" : ""}`}
                 transform={labelShift(l.id)}
               >
                 <circle cx={x} cy={y} r={0.5} />
-                <text x={x + 1} y={y - 0.8}>
-                  {l.name}
-                </text>
+                {port ? (
+                  <>
+                    <path className="power-port" d={port.d} />
+                    <text x={port.text.x} y={port.text.y} style={{ textAnchor: "middle" }}>
+                      {l.name}
+                    </text>
+                  </>
+                ) : (
+                  <text x={x + 1} y={y - 0.8}>
+                    {l.name}
+                  </text>
+                )}
               </g>
             );
           })}
@@ -764,8 +773,9 @@ function SelectionBox({ s }: { s: SymbolGeom }) {
 }
 
 /**
- * Where the Place tool will drop the part: its body outline at the snapped cursor (when the
- * definition or an existing instance gives the size) and a crosshair on the origin.
+ * Where the Place tool will drop the part: its symbol drawing at the snapped cursor, turned by
+ * the place rotation exactly as the engine will place it, inside a dashed outline of its body
+ * (when the definition or an existing instance gives the size), and a crosshair on the origin.
  */
 function PlaceGhost({
   snapshot,
@@ -780,19 +790,22 @@ function PlaceGhost({
   at: Point;
   rotation?: Rotation;
 }) {
-  const def = snapshot.project.library?.[componentId]?.symbol as SymbolDef | undefined;
+  const def = libSymbol(snapshot, componentId);
   const twin = Object.values(snapshot.project.schematic.symbols).find(
     (s) => s.component_id === componentId && (s.rotation === "R0" || s.rotation === "R180"),
   );
   const geom = twin && snapshot.geometry.symbols.find((g) => g.id === twin.id);
-  const hw = def?.body_half_w ?? geom?.half_w ?? 2_000_000;
-  const hh = def?.body_half_h ?? geom?.half_h ?? 1_500_000;
+  const w0 = def?.body_half_w ?? geom?.half_w ?? 2_000_000;
+  const h0 = def?.body_half_h ?? geom?.half_h ?? 1_500_000;
+  const turned = rotation === "R90" || rotation === "R270";
+  const [hw, hh] = turned ? [h0, w0] : [w0, h0];
   const [x, y] = toView(at);
-  const rotDeg = rotation === "R90" ? 90 : rotation === "R180" ? 180 : rotation === "R270" ? 270 : 0;
-  const rotTransform = rotDeg !== 0 ? `rotate(${rotDeg} ${x} ${y})` : undefined;
+  const full = def ? symbolDrawing(def, { position: at, rotation }, { half_w: hw, half_h: hh, pins: [] }) : null;
+  // Without v3 graphics the dashed outline already is the body.
+  const drawing = full && !def?.graphics?.length ? { ...full, body: [] } : full;
 
   return (
-    <g className="place-ghost" data-place-ghost={componentId} transform={rotTransform} style={{ pointerEvents: "none" }}>
+    <g className="place-ghost" data-place-ghost={componentId} style={{ pointerEvents: "none" }}>
       <rect
         x={x - mm(hw)}
         y={y - mm(hh)}
@@ -805,23 +818,21 @@ function PlaceGhost({
         strokeWidth={0.3}
       />
       <path d={`M${x - 1.27} ${y}H${x + 1.27}M${x} ${y - 1.27}V${y + 1.27}`} stroke="var(--accent)" strokeWidth={0.4} />
-      {def?.pins?.map((p: SymbolPin) => {
-        const px = x + mm(p.position.x);
-        const py = y - mm(p.position.y);
-        return (
-          <g key={p.number}>
-            <circle cx={px} cy={py} r={0.35} fill="var(--accent)" />
-            <text x={px + 0.5} y={py - 0.5} fontSize={1} fill="currentColor" opacity={0.7}>
-              {p.number}
-            </text>
-          </g>
-        );
-      })}
+      {drawing && (
+        <g className="ghost-symbol">
+          <SymbolSvg drawing={drawing} />
+        </g>
+      )}
       <text x={x} y={y - mm(hh) - 1} textAnchor="middle" fontSize={1.8} fill="currentColor" fontWeight="bold">
         {name} {rotation !== "R0" ? `(${rotation})` : ""}
       </text>
     </g>
   );
+}
+
+/** A part's symbol definition in the project library (built-ins are copied in when placed). */
+function libSymbol(snapshot: Snapshot, componentId: string): DrawableSymbol | undefined {
+  return snapshot.project.library?.[componentId]?.symbol;
 }
 
 /** Marquee rectangle while dragging a selection box. */

@@ -104,6 +104,16 @@ jobs:
           UI_SCENARIO: scenarios/b1-ir-v3.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # B2 (symbol rendering): built-in and imported KiCad symbols drawn from their v3 graphics.
+      - name: Run B2 scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/b2
+          UI_SCENARIO: scenarios/b2-symbols.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       - name: Results to job summary
         if: always()
         run: |
@@ -112,6 +122,7 @@ jobs:
           cat "${{ runner.temp }}/ui-evidence/e3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no E3 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/d4/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D4 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/b1/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no B1 results file" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ runner.temp }}/ui-evidence/b2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no B2 results file" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
@@ -130,4 +141,6 @@ jobs:
             ${{ runner.temp }}/ui-evidence/d4/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b1/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/b1/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/b2/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/b2/UI_EVIDENCE.md
           if-no-files-found: warn
