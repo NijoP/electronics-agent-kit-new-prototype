@@ -55,6 +55,7 @@ import type {
   OpenProject,
 } from "./types";
 import type { FileContent, FileEntry, GitStatus } from "./shell/files";
+import type { SyncPreview } from "./shell/ecoPreview";
 import type { EngineChange } from "./shell/syncReport";
 
 // Terminal workspace commands: must match `TERMINAL_COMMANDS` in src-tauri/src/terminal.rs.
@@ -153,6 +154,8 @@ export const IPC_COMMANDS = [
   "switch_project",
   "close_project_by_id",
   "operation_changes",
+  "sync_preview",
+  "sync_preview_export",
   "project_files",
   "project_file_read",
   "project_file_create",
@@ -302,6 +305,10 @@ export const api = {
   switchProject: (projectId: string) => call<Snapshot>("switch_project", { project_id: projectId }),
   closeProjectById: (projectId: string) => call<Snapshot | null>("close_project_by_id", { project_id: projectId }),
   operationChanges: (projectId: string, opId: string) => call<EngineChange[]>("operation_changes", { project_id: projectId, op_id: opId }),
+  // ECO preview (slice C2): what Update PCB would change at `revision`, computed by the engine on a
+  // copy (read-only); the export saves that preview as project evidence.
+  syncPreview: (revision: number) => call<SyncPreview>("sync_preview", { expected_revision: revision }),
+  syncPreviewExport: (revision: number, excluded: string[]) => call<string>("sync_preview_export", { expected_revision: revision, excluded }),
   projectFiles: (projectId: string, rel: string) => call<FileEntry[]>("project_files", { project_id: projectId, rel }),
   projectFileRead: (projectId: string, rel: string) => call<FileContent>("project_file_read", { project_id: projectId, rel }),
   projectFileCreate: (projectId: string, rel: string, isDir: boolean) =>

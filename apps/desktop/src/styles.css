@@ -1,4 +1,5 @@
 /* EAK desktop styles. Colours, spacing and motion come from design/tokens.css. */
+@font-face { font-family: "EAK Symbol"; src: url("./assets/fonts/JetBrainsMonoNL-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: block; }
 :root { font-family: var(--font); font-size: var(--fs-md); background: var(--bg-app); color: var(--fg); }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; overflow: hidden; }
@@ -168,6 +169,17 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .symbol .body { fill: var(--c-sym-fill); stroke: var(--c-sym-line); stroke-width: 0.25; }
 .symbol .pin { stroke: var(--c-sym-line); stroke-width: 0.2; }
 .symbol .pin-end { fill: var(--c-sym-line); }
+/* Slice B2 symbol drawing: fill modes of v3 graphics, pin texts, hit area, power ports. */
+.symbol .body.fill-solid { fill: var(--c-sym-line); }
+.symbol .body.fill-none, .symbol.selected .body.fill-none, .symbol.ai-preview .body.fill-none { fill: none; }
+.symbol.selected .body.fill-solid { fill: var(--accent); }
+.symbol .sym-hit { fill: transparent; stroke: none; }
+.canvas .sym-text { font-family: var(--font-symbol); fill: var(--c-sym-line); }
+.canvas .sym-text.pin-number { fill: var(--fg-dim); }
+.label .power-port { fill: none; stroke: var(--c-power); stroke-width: 0.25; }
+.label.selected .power-port { stroke: var(--accent); }
+.place-ghost .body, .place-ghost .pin { fill: none; stroke: var(--accent); stroke-width: 0.25; }
+.place-ghost .body.fill-solid, .place-ghost .pin-end, .place-ghost .sym-text { fill: var(--accent); }
 .symbol.selected .body { stroke: var(--accent); stroke-width: 0.5; fill: var(--c-sym-sel-fill); }
 .symbol.ai-preview .body, .footprint.ai-preview .courtyard { stroke: var(--c-preview); stroke-width: 0.5; stroke-dasharray: 0.8 0.5; fill: color-mix(in srgb, var(--c-preview) 14%, transparent); }
 .label circle { fill: var(--c-wire); }
@@ -444,6 +456,20 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .sr-section ul { list-style: none; padding: 0; margin: 0; font-size: var(--fs-sm); max-height: none; }
 .sr-section li { cursor: default; padding: 1px 0; }
 .sr-foot { font-size: var(--fs-sm); margin-top: var(--s-1); }
+/* ECO preview (Update PCB review, slice C2) */
+.eco-preview { width: min(860px, 94vw); padding: var(--s-2); }
+.eco-bar { display: flex; gap: var(--s-2); align-items: center; margin: var(--s-1) 0; font-size: var(--fs-sm); }
+.eco-table-wrap { max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-1); }
+.eco-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.eco-table th, .eco-table td { text-align: left; padding: var(--s-quarter) var(--s-1); border-bottom: 1px solid var(--line); }
+.eco-table thead th { position: sticky; top: 0; background: var(--bg-raised); color: var(--fg-dim); font-weight: var(--fw-medium); }
+.eco-table .eco-group th { background: var(--bg-panel); color: var(--fg-dim); }
+.eco-table tr.off td { color: var(--fg-faint); }
+.eco-warnings { margin-top: var(--s-1); font-size: var(--fs-sm); }
+.eco-warnings h4 { margin: 0 0 4px; font-size: var(--fs-sm); }
+.eco-warnings ul { list-style: none; padding: 0; margin: 0; max-height: none; }
+.eco-warnings li { cursor: default; color: var(--warn); }
+.eco-reason { font-size: var(--fs-sm); color: var(--warn); margin: var(--s-1) 0 0; }
 .dlg-actions { display: flex; gap: var(--s-1); justify-content: flex-end; margin-top: var(--s-2); }
 .tasks ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .task.running .task-state { color: var(--accent); } .task.failed .task-state { color: var(--err); } .task.done .task-state { color: var(--ok); }

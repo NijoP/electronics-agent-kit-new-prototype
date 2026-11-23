@@ -1,0 +1,105 @@
+{
+  "name": "C3 routing options",
+  "description": "Slice C3 (routing experience): with the Route tool active, the right dock's inspector shows the routing options: width presets from the net classes, the via preset, 45/90 corners with arc corners marked unavailable, the obstacle mode (walk around or block; push marked unavailable), loop removal, the ratsnest toggle and the live net-length readout.",
+  "steps": [
+    {
+      "id": "home",
+      "do": "wait",
+      "title": "Project Home visible",
+      "selector": "main.home h1",
+      "timeout": 60000
+    },
+    {
+      "id": "fixture",
+      "do": "fixture-project",
+      "title": "Create fixture project",
+      "name": "C3 Routing Fixture",
+      "folder": "c3-routing-fixture"
+    },
+    {
+      "id": "open",
+      "do": "click",
+      "title": "Open fixture from Recent projects",
+      "selector": "button.home-row",
+      "text": "C3 Routing Fixture",
+      "expect": "nav[aria-label=\"Application menu\"]"
+    },
+    {
+      "id": "pcb",
+      "do": "menu",
+      "title": "Open PCB",
+      "menu": "View",
+      "item": "Go to PCB editor",
+      "expect": "section[aria-label=\"PCB view\"]"
+    },
+    {
+      "id": "props",
+      "do": "click",
+      "title": "PCB right dock › Properties tab",
+      "selector": "[role=\"tablist\"][aria-label=\"Right panel tabs\"] [role=\"tab\"]",
+      "text": "Properties",
+      "expect": "section[aria-label=\"Properties\"]"
+    },
+    {
+      "id": "c3-route",
+      "do": "click",
+      "title": "C3: Route tool: the inspector shows the width preset",
+      "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button",
+      "text": "Route",
+      "expect": "section[aria-label=\"Properties\"][data-mode=\"tool\"] select[aria-label=\"Width preset\"]"
+    },
+    {
+      "id": "c3-via-preset",
+      "do": "wait",
+      "title": "C3: via preset select",
+      "selector": "section[aria-label=\"Properties\"] select[aria-label=\"Via preset\"]",
+      "shot": false
+    },
+    {
+      "id": "c3-obstacles",
+      "do": "count",
+      "title": "C3: obstacle mode offers walk around and block",
+      "selector": "section[aria-label=\"Properties\"] select[aria-label=\"Obstacle mode\"] option",
+      "equals": 2,
+      "shot": false
+    },
+    {
+      "id": "c3-push-unavailable",
+      "do": "wait",
+      "title": "C3: push mode is marked unavailable, not offered",
+      "selector": "section[aria-label=\"Properties\"] [data-field=\"Push mode\"] .unavail",
+      "text": "Unavailable",
+      "shot": false
+    },
+    {
+      "id": "c3-arc-unavailable",
+      "do": "wait",
+      "title": "C3: arc corners are marked unavailable",
+      "selector": "section[aria-label=\"Properties\"] [data-field=\"Arc corners\"] .unavail",
+      "text": "Unavailable",
+      "shot": false
+    },
+    {
+      "id": "c3-loops",
+      "do": "count",
+      "title": "C3: loop removal on/off",
+      "selector": "section[aria-label=\"Properties\"] select[aria-label=\"Remove loops\"] option",
+      "equals": 2,
+      "shot": false
+    },
+    {
+      "id": "c3-ratsnest",
+      "do": "count",
+      "title": "C3: ratsnest shown/hidden",
+      "selector": "section[aria-label=\"Properties\"] select[aria-label=\"Ratsnest\"] option",
+      "equals": 2,
+      "shot": false
+    },
+    {
+      "id": "c3-net-length",
+      "do": "wait",
+      "title": "C3: live net-length readout",
+      "selector": "section[aria-label=\"Properties\"] [data-field=\"Net length\"]"
+    }
+  ]
+}
