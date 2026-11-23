@@ -15,8 +15,11 @@
 //! Coordinates are taken in millimetres exactly as written. The symbol y-axis direction is not
 //! converted (a note says so), because EAK's convention was not changed by this module.
 
-use crate::geom::{Nm, Point};
-use crate::library::{FootprintDef, PadDef, PadKind, PadShape, PinType, SymbolDef, SymbolPin};
+use crate::geom::{Nm, Point, Rotation};
+use crate::graphic::{Graphic, LineStyle, Stroke};
+use crate::library::{
+    FootprintDef, PadDef, PadKind, PadShape, PinOrientation, PinType, SymbolDef, SymbolPin,
+};
 use crate::sexpr::{parse, Limits, Node, ParseError};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -193,6 +196,223 @@ fn rejected(report: &mut ImportReport, name: &str, why: &str) {
 
 /// Parse a symbol library. A library that does not parse is an `Err`; individual bad symbols are
 /// reported as `Rejected` items.
+/// Whether a `(pin_names …)` / `(pin_numbers …)` node hides its texts: KiCad 6/7 write a bare
+/// `hide`, KiCad 8 writes `(hide yes)`.
+fn hides(n: Option<&Node>) -> bool {
+    n.is_some_and(|n| {
+        items(n).iter().any(|c| match c {
+            Node::Atom(a) => a == "hide",
+            _ => {
+                c.head() == Some("hide")
+                    && items(c).get(1).and_then(Node::text).unwrap_or("yes") == "yes"
+            }
+        })
+    })
+}
+
+/// A point from a `(start x y)` / `(xy x y)`-style node, in mm.
+fn xy(n: Option<&Node>) -> Option<(f64, f64)> {
+    let n = n?;
+    Some((num_at(n, 1)?, num_at(n, 2)?))
+}
+
+fn to_point(p: (f64, f64)) -> Point {
+    Point::mm(p.0, p.1)
+}
+
+fn stroke_of(g: &Node) -> Stroke {
+    let s = g.child("stroke");
+    let width = s
+        .and_then(|s| s.child("width"))
+        .and_then(|w| num_at(w, 1))
+        .map_or(0, |w| mm_nm(w).max(0));
+    let style = match s
+        .and_then(|s| s.child("type"))
+        .and_then(|t| items(t).get(1))
+        .and_then(Node::text)
+    {
+        Some("dash") => LineStyle::Dashed,
+        Some("dot") => LineStyle::Dotted,
+        Some("dash_dot") | Some("dash_dot_dot") => LineStyle::DashDot,
+        _ => LineStyle::Solid,
+    };
+    Stroke { width, style }
+}
+
+/// KiCad fills `outline` and `color` are solid; `none` and `background` are not (the renderer
+/// gives closed shapes the symbol background).
+fn solid_fill(g: &Node) -> bool {
+    matches!(
+        g.child("fill")
+            .and_then(|f| f.child("type"))
+            .and_then(|t| items(t).get(1))
+            .and_then(Node::text),
+        Some("outline") | Some("color")
+    )
+}
+
+/// Centre and radius of the circle through three points (mm); `None` when they are collinear.
+fn circle_through(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<((f64, f64), f64)> {
+    let d = 2.0 * (a.0 * (b.1 - c.1) + b.0 * (c.1 - a.1) + c.0 * (a.1 - b.1));
+    if d.abs() < 1e-12 {
+        return None;
+    }
+    let (a2, b2, c2) = (
+        a.0 * a.0 + a.1 * a.1,
+        b.0 * b.0 + b.1 * b.1,
+        c.0 * c.0 + c.1 * c.1,
+    );
+    let ux = (a2 * (b.1 - c.1) + b2 * (c.1 - a.1) + c2 * (a.1 - b.1)) / d;
+    let uy = (a2 * (c.0 - b.0) + b2 * (a.0 - c.0) + c2 * (b.0 - a.0)) / d;
+    Some(((ux, uy), (a.0 - ux).hypot(a.1 - uy)))
+}
+
+/// One `.kicad_sym` drawing item as a v3 graphic (slice B2). `Err` names the unsupported item
+/// for the import report.
+fn kicad_graphic(g: &Node) -> Result<Graphic, String> {
+    let kind = g.head().unwrap_or("");
+    let bad = |what: &str| format!("symbol_graphics/{what}");
+    let stroke = stroke_of(g);
+    let fill = solid_fill(g);
+    match kind {
+        "rectangle" => {
+            let (s, e) = (xy(g.child("start")), xy(g.child("end")));
+            let (Some(s), Some(e)) = (s, e) else {
+                return Err(bad("rectangle_without_corners"));
+            };
+            Ok(Graphic::Rectangle {
+                min: to_point((s.0.min(e.0), s.1.min(e.1))),
+                max: to_point((s.0.max(e.0), s.1.max(e.1))),
+                fill,
+                stroke,
+            })
+        }
+        "polyline" => {
+            let points: Vec<Point> = g
+                .child("pts")
+                .map(|pts| {
+                    pts.children("xy")
+                        .filter_map(|p| xy(Some(p)))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+                .into_iter()
+                .map(to_point)
+                .collect();
+            Ok(match points.len() {
+                2 => Graphic::Line {
+                    a: points[0],
+                    b: points[1],
+                    stroke,
+                },
+                n if fill && n >= 3 => Graphic::Polygon {
+                    points,
+                    fill,
+                    stroke,
+                },
+                _ => Graphic::Polyline { points, stroke },
+            })
+        }
+        "circle" => {
+            let (Some(c), Some(r)) = (
+                xy(g.child("center")),
+                g.child("radius").and_then(|r| num_at(r, 1)),
+            ) else {
+                return Err(bad("circle_without_centre"));
+            };
+            Ok(Graphic::Circle {
+                center: to_point(c),
+                radius: mm_nm(r),
+                fill,
+                stroke,
+            })
+        }
+        "arc" => {
+            // KiCad 6+ arcs: start, mid and end points; drawn counter-clockwise through mid.
+            let (Some(s), Some(m), Some(e)) =
+                (xy(g.child("start")), xy(g.child("mid")), xy(g.child("end")))
+            else {
+                return Err(bad("arc_without_mid"));
+            };
+            let Some((c, r)) = circle_through(s, m, e) else {
+                return Err(bad("arc_collinear"));
+            };
+            let deg = |p: (f64, f64)| (p.1 - c.1).atan2(p.0 - c.0).to_degrees();
+            let ccw = |from: f64, to: f64| (to - from).rem_euclid(360.0);
+            let (a_s, a_m, a_e) = (deg(s), deg(m), deg(e));
+            let (start_deg, end_deg) = if ccw(a_s, a_m) < ccw(a_s, a_e) {
+                (a_s, a_e)
+            } else {
+                (a_e, a_s)
+            };
+            Ok(Graphic::Arc {
+                center: to_point(c),
+                radius: mm_nm(r),
+                start_deg,
+                end_deg,
+                stroke,
+            })
+        }
+        "text" => {
+            let text = items(g).get(1).and_then(Node::text).unwrap_or("");
+            let Some(at) = xy(g.child("at")) else {
+                return Err(bad("text_without_position"));
+            };
+            // Symbol text angles are written in tenths of a degree.
+            let tenths = g.child("at").and_then(|a| num_at(a, 3)).unwrap_or(0.0);
+            let rotation = match ((tenths / 10.0).rem_euclid(360.0) / 90.0).round() as i64 % 4 {
+                1 => Rotation::R90,
+                2 => Rotation::R180,
+                3 => Rotation::R270,
+                _ => Rotation::R0,
+            };
+            let size = g
+                .child("effects")
+                .and_then(|e| e.child("font"))
+                .and_then(|f| f.child("size"))
+                .and_then(|s| num_at(s, 1))
+                .unwrap_or(1.27);
+            Ok(Graphic::Text {
+                position: to_point(at),
+                text: text.to_string(),
+                size: mm_nm(size),
+                rotation,
+            })
+        }
+        other => Err(bad(other)),
+    }
+}
+
+/// Half-extents (mm) of the box centred on the origin that holds every graphic.
+fn graphics_half_extents(graphics: &[Graphic]) -> Option<(f64, f64)> {
+    let mut hw: Nm = 0;
+    let mut hh: Nm = 0;
+    let mut grow = |p: Point| {
+        hw = hw.max(p.x.abs());
+        hh = hh.max(p.y.abs());
+    };
+    for g in graphics {
+        match g {
+            Graphic::Line { a, b, .. } => {
+                grow(*a);
+                grow(*b);
+            }
+            Graphic::Polyline { points, .. } | Graphic::Polygon { points, .. } => {
+                points.iter().for_each(|p| grow(*p));
+            }
+            Graphic::Arc { center, radius, .. } | Graphic::Circle { center, radius, .. } => {
+                grow(Point::new(center.x.abs() + radius, center.y.abs() + radius));
+            }
+            Graphic::Rectangle { min, max, .. } => {
+                grow(*min);
+                grow(*max);
+            }
+            Graphic::Text { position, .. } => grow(*position),
+        }
+    }
+    (hw > 0 && hh > 0).then_some((hw as f64 / 1e6, hh as f64 / 1e6))
+}
+
 pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, ParseError> {
     let root = parse(src, limits)?;
     let mut report = ImportReport {
@@ -255,6 +475,9 @@ pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, P
         let mut pins: Vec<SymbolPin> = Vec::new();
         let mut numbers: BTreeSet<String> = BTreeSet::new();
         let mut body: Option<(f64, f64)> = None;
+        let mut graphics: Vec<Graphic> = Vec::new();
+        let names_hidden = hides(sym.child("pin_names"));
+        let numbers_hidden = hides(sym.child("pin_numbers"));
         let mut units: BTreeSet<u32> = BTreeSet::new();
         for sub in sym.children("symbol") {
             // Sub-symbol names are `<name>_<unit>_<style>`; style 2 is the alternate drawing.
@@ -277,21 +500,33 @@ pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, P
             for g in items(sub) {
                 match g.head() {
                     Some("pin") | None => {}
-                    Some("rectangle") => {
-                        let sx = g.child("start").and_then(|n| num_at(n, 1));
-                        let sy = g.child("start").and_then(|n| num_at(n, 2));
-                        let ex = g.child("end").and_then(|n| num_at(n, 1));
-                        let ey = g.child("end").and_then(|n| num_at(n, 2));
-                        if let (Some(sx), Some(sy), Some(ex), Some(ey)) = (sx, sy, ex, ey) {
-                            let (w, h) = ((ex - sx).abs() / 2.0, (ey - sy).abs() / 2.0);
-                            body = Some(match body {
-                                Some((bw, bh)) => (bw.max(w), bh.max(h)),
-                                None => (w, h),
-                            });
+                    Some(kind) => {
+                        if kind == "rectangle" {
+                            let sx = g.child("start").and_then(|n| num_at(n, 1));
+                            let sy = g.child("start").and_then(|n| num_at(n, 2));
+                            let ex = g.child("end").and_then(|n| num_at(n, 1));
+                            let ey = g.child("end").and_then(|n| num_at(n, 2));
+                            if let (Some(sx), Some(sy), Some(ex), Some(ey)) = (sx, sy, ex, ey) {
+                                let (w, h) = ((ex - sx).abs() / 2.0, (ey - sy).abs() / 2.0);
+                                body = Some(match body {
+                                    Some((bw, bh)) => (bw.max(w), bh.max(h)),
+                                    None => (w, h),
+                                });
+                            }
                         }
-                    }
-                    Some(other) => {
-                        count(&mut report.unsupported, format!("symbol_graphics/{other}"))
+                        // The drawing itself (slice B2): every graphic v3 can hold is kept.
+                        match kicad_graphic(g) {
+                            Ok(graphic) => {
+                                let problems = graphic.validate();
+                                if problems.is_empty() {
+                                    graphics.push(graphic);
+                                } else {
+                                    notes
+                                        .push(format!("{kind} not drawn: {}", problems.join("; ")));
+                                }
+                            }
+                            Err(why) => count(&mut report.unsupported, why),
+                        }
                     }
                 }
             }
@@ -342,11 +577,23 @@ pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, P
                         "pin {number} is hidden in the source; imported as a normal pin"
                     ));
                 }
+                // KiCad's pin angle is the direction from the connection point to the body.
+                let angle = p.child("at").and_then(|a| num_at(a, 3)).unwrap_or(0.0);
+                let orientation = match (angle.rem_euclid(360.0) / 90.0).round() as i64 % 4 {
+                    1 => PinOrientation::Up,
+                    2 => PinOrientation::Left,
+                    3 => PinOrientation::Down,
+                    _ => PinOrientation::Right,
+                };
+                let length = p
+                    .child("length")
+                    .and_then(|l| num_at(l, 1))
+                    .map_or(0, |l| mm_nm(l).max(0));
                 pins.push(SymbolPin {
-                    length: 0,
-                    orientation: Default::default(),
-                    name_visible: true,
-                    number_visible: true,
+                    length,
+                    orientation,
+                    name_visible: !names_hidden,
+                    number_visible: !numbers_hidden,
                     number,
                     name: if pname == "~" { String::new() } else { pname },
                     electrical_type: ty,
@@ -361,7 +608,7 @@ pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, P
             rejected(&mut report, &name, "symbol has no usable pins");
             continue;
         }
-        let (bw, bh) = match body {
+        let (bw, bh) = match body.or_else(|| graphics_half_extents(&graphics)) {
             Some(b) => b,
             None => {
                 notes.push("no body rectangle; size derived from pin positions".into());
@@ -379,7 +626,16 @@ pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, P
         symbols.push(SymbolImport {
             name: name.clone(),
             item_id,
-            def: SymbolDef::boxed(pins, mm_nm(bw), mm_nm(bh)),
+            def: if graphics.is_empty() {
+                SymbolDef::boxed(pins, mm_nm(bw), mm_nm(bh))
+            } else {
+                SymbolDef {
+                    pins,
+                    body_half_w: mm_nm(bw),
+                    body_half_h: mm_nm(bh),
+                    graphics,
+                }
+            },
             footprint: property(sym, "Footprint"),
             datasheet: property(sym, "Datasheet").filter(|d| d != "~"),
             refdes_prefix: refdes,
@@ -686,12 +942,107 @@ mod tests {
             2,
             "EMPTY and the duplicate must be rejected visibly"
         );
+        // The drawing comes along (slice B2): the body rectangle and the 2-point polyline.
         assert_eq!(
-            r.report.unsupported.get("symbol_graphics/polyline"),
-            Some(&1)
+            s.def.graphics,
+            vec![
+                Graphic::Rectangle {
+                    min: Point::mm(-1.0, -2.0),
+                    max: Point::mm(1.0, 2.0),
+                    fill: false,
+                    stroke: Stroke::default(),
+                },
+                Graphic::Line {
+                    a: Point::mm(0.0, 0.0),
+                    b: Point::mm(1.0, 1.0),
+                    stroke: Stroke::default(),
+                },
+            ]
         );
+        assert!(r
+            .report
+            .unsupported
+            .keys()
+            .all(|k| !k.starts_with("symbol_graphics")));
+        // Pin geometry: KiCad's angle points from the connection point to the body.
+        let p1 = &s.def.pins[0];
+        assert_eq!(
+            (p1.orientation, p1.length),
+            (PinOrientation::Down, 1_270_000)
+        );
+        let p2 = &s.def.pins[1];
+        assert_eq!((p2.orientation, p2.length), (PinOrientation::Up, 1_270_000));
+        assert!(p1.name_visible && p1.number_visible);
         let notes = &r.report.items[0].notes;
         assert!(notes.iter().any(|n| n.contains("free mapped to passive")));
+    }
+
+    #[test]
+    fn symbol_import_keeps_arcs_circles_fills_text_and_hidden_pin_texts() {
+        let src = r#"(kicad_symbol_lib (version 20231120) (generator "x")
+          (symbol "AMP" (pin_names (offset 0.254) hide) (pin_numbers (hide yes))
+            (property "Reference" "U" (at 0 0 0))
+            (symbol "AMP_0_1"
+              (polyline (pts (xy -2.54 2.54) (xy 2.54 0) (xy -2.54 -2.54))
+                (stroke (width 0.254) (type dash)) (fill (type background)))
+              (polyline (pts (xy -2.54 2.54) (xy 2.54 0) (xy -2.54 -2.54)) (fill (type outline)))
+              (arc (start -1 0) (mid 0 1) (end 1 0) (stroke (width 0)))
+              (circle (center 0 0) (radius 0.5) (fill (type outline)))
+              (text "+" (at -1.5 1 900) (effects (font (size 1 1))))
+              (bezier (pts (xy 0 0) (xy 1 1) (xy 2 0) (xy 3 1))))
+            (symbol "AMP_1_1"
+              (pin input line (at -5.08 0 0) (length 2.54) (name "IN") (number "1"))
+              (pin output line (at 5.08 0 180) (length 2.54) (name "OUT") (number "2")))))"#;
+        let r = import_symbol_lib(src, Limits::default()).unwrap();
+        let d = &r.symbols[0].def;
+        assert_eq!(d.graphics.len(), 5, "{:?}", d.graphics);
+        // A filled-background polyline stays open; an outline-filled one is a solid polygon.
+        assert!(matches!(
+            &d.graphics[0],
+            Graphic::Polyline { points, stroke }
+                if points.len() == 3 && stroke.style == LineStyle::Dashed && stroke.width == 254_000
+        ));
+        assert!(
+            matches!(&d.graphics[1], Graphic::Polygon { fill: true, points, .. } if points.len() == 3)
+        );
+        // The arc runs counter-clockwise from 0 to 180 degrees through its mid point (0, 1).
+        let Graphic::Arc {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+            ..
+        } = &d.graphics[2]
+        else {
+            panic!("arc expected: {:?}", d.graphics[2]);
+        };
+        assert_eq!((*center, *radius), (Point::new(0, 0), 1_000_000));
+        assert!(start_deg.abs() < 1e-9 && (end_deg - 180.0).abs() < 1e-9);
+        assert!(matches!(
+            &d.graphics[3],
+            Graphic::Circle {
+                fill: true,
+                radius: 500_000,
+                ..
+            }
+        ));
+        assert_eq!(
+            d.graphics[4],
+            Graphic::Text {
+                position: Point::mm(-1.5, 1.0),
+                text: "+".into(),
+                size: 1_000_000,
+                rotation: Rotation::R90,
+            }
+        );
+        assert_eq!(r.report.unsupported.get("symbol_graphics/bezier"), Some(&1));
+        // No rectangle: the box holds the drawing.
+        assert_eq!((d.body_half_w, d.body_half_h), (2_540_000, 2_540_000));
+        // pin_names hide and pin_numbers (hide yes) hide every pin's texts.
+        assert!(d.pins.iter().all(|p| !p.name_visible && !p.number_visible));
+        assert_eq!(d.pins[1].orientation, PinOrientation::Left);
+        // The imported definition is valid as it stands.
+        assert!(d.graphics.iter().all(|g| g.validate().is_empty()));
     }
 
     #[test]

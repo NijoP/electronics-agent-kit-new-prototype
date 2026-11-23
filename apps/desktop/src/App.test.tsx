@@ -65,6 +65,8 @@ beforeEach(() => {
       }
       case "execute_command":
         return response(String((args.command as { type: string }).type), false);
+      case "sync_preview":
+        return { revision, changes: [{ path: ["pcb", "footprints"], key: "fp_new", before: null, after: { id: "fp_new", symbol_id: "sym_r9", component_id: "R_0603", refdes: "R9", pad_nets: {} } }], warnings: [] };
       case "domain_classification":
         return domainReport(revision);
       case "run_check":
@@ -131,10 +133,13 @@ describe("desktop shell flow", () => {
     const input = await screen.findByRole("textbox", { name: "Search commands" });
     fireEvent.change(input, { target: { value: "Update PCB" } });
     fireEvent.keyDown(input, { key: "Enter" });
+    // Update PCB opens the engine's read-only preview (slice C2); Apply sends one Batch.
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("rejected"));
+    expect(calls.find((c) => c.cmd === "sync_preview")!.args).toEqual({ expected_revision: 7 });
     expect(calls.find((c) => c.cmd === "execute_command")!.args).toEqual({
       expected_revision: 7,
-      command: { type: "SyncSchematicToPcb" },
+      command: { type: "Batch", commands: [{ type: "SyncSchematicToPcb" }], label: "Update PCB from schematic" },
     });
   });
 

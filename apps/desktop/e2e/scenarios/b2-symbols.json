@@ -1,0 +1,80 @@
+{
+  "name": "B2 symbol rendering",
+  "description": "Slice B2: schematic symbols drawn from their schema v3 graphics (ADR-0040). In an isolated fixture project, with real X input, five built-in parts (resistor, MLCC, LED, NPN BJT, N-channel MOSFET) are armed through Quick open and placed, and one KiCad symbol library (an original EAK test op-amp written by the scenario, imported through the IPC the KiCad import dialog commits with; licence and source recorded) is placed from the Library tab. The DOM counts check that each part draws its own body (not a box), that the imported symbol shows its pin names, and that pin numbers appear only where the definition shows them. Screenshots show the sheet zoomed in. Power-port shapes are covered by unit tests (render/symbolDraw.test.tsx): choosing the power kind needs a native select popup.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "B2 Symbols Fixture", "folder": "b2-symbols-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "B2 Symbols Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    {
+      "id": "fixture-kicad",
+      "do": "fixture-kicad-symbol",
+      "title": "Import an original KiCad test symbol library",
+      "file": "eak_b2_opamp",
+      "licence": "CC0-1.0",
+      "source": "https://example.org/eak-b2-symbols",
+      "lines": [
+        "(kicad_symbol_lib (version 20231120) (generator \"eak_ui_evidence\")",
+        "  (symbol \"EAK_B2_OPAMP\" (pin_names (offset 0.254)) (in_bom yes) (on_board yes)",
+        "    (property \"Reference\" \"U\" (at 0 6.35 0) (effects (font (size 1.27 1.27))))",
+        "    (property \"Value\" \"EAK_B2_OPAMP\" (at 0 -6.35 0) (effects (font (size 1.27 1.27))))",
+        "    (symbol \"EAK_B2_OPAMP_0_1\"",
+        "      (polyline (pts (xy -5.08 5.08) (xy 5.08 0) (xy -5.08 -5.08) (xy -5.08 5.08)) (stroke (width 0.254) (type default)) (fill (type background)))",
+        "      (text \"B2\" (at 0 0 0) (effects (font (size 1 1)))))",
+        "    (symbol \"EAK_B2_OPAMP_1_1\"",
+        "      (pin input line (at -7.62 2.54 0) (length 2.54) (name \"IN+\" (effects (font (size 1.27 1.27)))) (number \"3\" (effects (font (size 1.27 1.27)))))",
+        "      (pin input line (at -7.62 -2.54 0) (length 2.54) (name \"IN-\" (effects (font (size 1.27 1.27)))) (number \"2\" (effects (font (size 1.27 1.27)))))",
+        "      (pin output line (at 7.62 0 180) (length 2.54) (name \"OUT\" (effects (font (size 1.27 1.27)))) (number \"1\" (effects (font (size 1.27 1.27))))))))"
+      ]
+    },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]" },
+
+    { "id": "b2-r-open", "do": "key", "title": "B2: Quick open", "keys": "ctrl+p", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b2-r-type", "do": "type", "title": "B2: resistor", "value": "Resistor 0603", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"] [role=\"option\"][aria-selected=\"true\"]", "expectText": "Resistor 0603", "shot": false },
+    { "id": "b2-r-arm", "do": "key", "title": "B2: Enter arms Place", "keys": "Return", "gone": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b2-r-place", "do": "click", "title": "B2: place the resistor", "selector": "svg[aria-label=\"Schematic canvas\"]", "dx": -100, "dy": -60, "shot": false },
+    { "id": "b2-r-count", "do": "count", "title": "B2: one part placed", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 1, "shot": false },
+
+    { "id": "b2-c-open", "do": "key", "title": "B2: Quick open", "keys": "ctrl+p", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b2-c-type", "do": "type", "title": "B2: capacitor", "value": "Capacitor 0603", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"] [role=\"option\"][aria-selected=\"true\"]", "expectText": "Capacitor 0603", "shot": false },
+    { "id": "b2-c-arm", "do": "key", "title": "B2: Enter arms Place", "keys": "Return", "gone": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b2-c-place", "do": "click", "title": "B2: place the capacitor", "selector": "svg[aria-label=\"Schematic canvas\"]", "dx": 0, "dy": -60, "shot": false },
+    { "id": "b2-c-count", "do": "count", "title": "B2: two parts placed", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 2, "shot": false },
+
+    { "id": "b2-led-open", "do": "key", "title": "B2: Quick open", "keys": "ctrl+p", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b2-led-type", "do": "type", "title": "B2: LED", "value": "LED 0603", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"] [role=\"option\"][aria-selected=\"true\"]", "expectText": "LED 0603", "shot": false },
+    { "id": "b2-led-arm", "do": "key", "title": "B2: Enter arms Place", "keys": "Return", "gone": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b2-led-place", "do": "click", "title": "B2: place the LED", "selector": "svg[aria-label=\"Schematic canvas\"]", "dx": 100, "dy": -60, "shot": false },
+    { "id": "b2-led-count", "do": "count", "title": "B2: three parts placed", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 3, "shot": false },
+
+    { "id": "b2-npn-open", "do": "key", "title": "B2: Quick open", "keys": "ctrl+p", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b2-npn-type", "do": "type", "title": "B2: NPN BJT", "value": "NPN BJT", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"] [role=\"option\"][aria-selected=\"true\"]", "expectText": "NPN BJT", "shot": false },
+    { "id": "b2-npn-arm", "do": "key", "title": "B2: Enter arms Place", "keys": "Return", "gone": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b2-npn-place", "do": "click", "title": "B2: place the NPN BJT", "selector": "svg[aria-label=\"Schematic canvas\"]", "dx": -100, "dy": 60, "shot": false },
+    { "id": "b2-npn-count", "do": "count", "title": "B2: four parts placed", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 4, "shot": false },
+
+    { "id": "b2-nmos-open", "do": "key", "title": "B2: Quick open", "keys": "ctrl+p", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b2-nmos-type", "do": "type", "title": "B2: N-channel MOSFET", "value": "N-channel MOSFET", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"] [role=\"option\"][aria-selected=\"true\"]", "expectText": "N-channel MOSFET", "shot": false },
+    { "id": "b2-nmos-arm", "do": "key", "title": "B2: Enter arms Place", "keys": "Return", "gone": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b2-nmos-place", "do": "click", "title": "B2: place the N-channel MOSFET", "selector": "svg[aria-label=\"Schematic canvas\"]", "dx": 0, "dy": 60, "shot": false },
+    { "id": "b2-nmos-count", "do": "count", "title": "B2: five parts placed", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 5, "shot": false },
+
+    { "id": "b2-library", "do": "click", "title": "B2: Library tab of the bottom dock", "selector": "section[aria-label=\"Bottom panel\"] [role=\"tab\"]", "text": "Library", "expect": "input[aria-label=\"Search library\"]", "shot": false },
+    { "id": "b2-kicad-search", "do": "type", "title": "B2: the imported KiCad symbol is listed", "selector": "input[aria-label=\"Search library\"]", "value": "EAK_B2", "expect": "ul[aria-label=\"Library parts\"] button", "expectText": "EAK_B2_OPAMP" },
+    { "id": "b2-kicad-select", "do": "click", "title": "B2: select it", "selector": "ul[aria-label=\"Library parts\"] button", "text": "EAK_B2_OPAMP", "expect": "section.lib-detail button.primary", "expectText": "Place on schematic", "shot": false },
+    { "id": "b2-kicad-arm", "do": "click", "title": "B2: Place on schematic arms the Place tool", "selector": "section.lib-detail button.primary", "text": "Place on schematic", "expect": "footer.status span.msg", "expectText": "Place tool armed with EAK_B2_OPAMP", "shot": false },
+    { "id": "b2-kicad-place", "do": "click", "title": "B2: place the imported symbol", "selector": "svg[aria-label=\"Schematic canvas\"]", "dx": 100, "dy": 60, "expect": "footer.status span.msg", "expectText": "Batch → revision", "shot": false },
+    { "id": "b2-count", "do": "count", "title": "B2: six parts on the sheet", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 6, "shot": false },
+
+    { "id": "b2-select-tool", "do": "key", "title": "B2: Esc back to Select (no place ghost)", "keys": "Escape", "shot": false },
+    { "id": "b2-zoom-1", "do": "menu", "title": "B2: View › Zoom in", "menu": "View", "item": "Zoom in", "shot": false },
+    { "id": "b2-zoom-2", "do": "menu", "title": "B2: View › Zoom in", "menu": "View", "item": "Zoom in", "shot": false },
+    { "id": "b2-symbols", "do": "shot", "title": "B2: the six symbols drawn from their graphics (zoomed in)" },
+
+    { "id": "b2-box-only-resistor", "do": "count", "title": "B2: only the resistor (IEC rectangle) draws a rectangle body", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] rect.body", "equals": 1, "shot": false },
+    { "id": "b2-paths", "do": "count", "title": "B2: drawn bodies: capacitor 2 + LED 6 + NPN 4 + NMOS 8 + imported op-amp 1 path elements", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] path.body", "equals": 21, "shot": false },
+    { "id": "b2-npn-circle", "do": "count", "title": "B2: the NPN BJT draws its circle", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] circle.body", "equals": 1, "shot": false },
+    { "id": "b2-pin-names", "do": "count", "title": "B2: pin names IN+, IN-, OUT on the imported symbol only", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] text.pin-name", "equals": 3, "shot": false },
+    { "id": "b2-pin-numbers", "do": "count", "title": "B2: pin numbers on the transistors and the op-amp (3 each), hidden on R, C and LED", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] text.pin-number", "equals": 9, "shot": false },
+    { "id": "b2-kicad-text", "do": "count", "title": "B2: the imported symbol's own text graphic", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] text.sym-text.text", "equals": 1, "shot": false }
+  ]
+}
