@@ -887,7 +887,11 @@ fn release_check_reads_saved_reports_and_never_releases_with_a_not_run_gate() {
         assert_ne!(state(&after, id), "NOT_RUN", "{id}");
         assert!(saved(id, 0), "{id} evidence saved");
     }
-    assert_eq!(after.status, PackageStatus::Draft, "no outline: still DRAFT");
+    assert_eq!(
+        after.status,
+        PackageStatus::Draft,
+        "no outline: still DRAFT"
+    );
     let reread = release_check(&s).unwrap();
     for id in CHECKS {
         assert_eq!(state(&reread, id), state(&after, id), "{id}");

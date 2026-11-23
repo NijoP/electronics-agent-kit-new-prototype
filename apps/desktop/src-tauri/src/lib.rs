@@ -1117,7 +1117,10 @@ const RELEASE_REPORTS: [(&str, &str); 4] = [
     ("ERC", "Electrical rules check (ERC) on this revision"),
     ("DRC", "Design rules check (DRC) on this revision"),
     ("MECH", "Mechanical fit check (MECH) on this revision"),
-    ("DFM", "Design for manufacture (DFM, Fabricator standard) on this revision"),
+    (
+        "DFM",
+        "Design for manufacture (DFM, Fabricator standard) on this revision",
+    ),
 ];
 
 /// The saved `check` report for exactly this project, revision and input; `None` when it was
