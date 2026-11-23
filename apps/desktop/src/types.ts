@@ -133,6 +133,8 @@ export interface Track {
   a: Point;
   b: Point;
   net: string;
+  /** Schema v4 (ADR-0042): a circular arc from `a` to `b` sweeping this many degrees (positive = counter-clockwise, Y up); absent = straight. */
+  arc_deg?: number;
 }
 export interface Via {
   id: Id;
@@ -151,6 +153,53 @@ export interface Zone {
   outline: Point[];
   clearance: Nm;
 }
+
+// Schema v4 PCB objects (ADR-0042). All optional on the project so older snapshots still type-check.
+export type DrawLayer = "top_silk" | "bottom_silk" | "documentation";
+export type RegionObject = "tracks" | "vias" | "components" | "zones";
+export type DimensionUnit = "mm" | "mil" | "inch";
+export interface OutlineArc {
+  edge: number;
+  sweep_deg: number;
+}
+/** Keep-out (forbids objects) and/or constraint region (track width limits). */
+export interface Region {
+  id: Id;
+  name?: string;
+  outline: Point[];
+  /** Empty or absent = every copper layer. */
+  layers?: CopperLayer[];
+  forbid?: RegionObject[];
+  min_track_width?: Nm;
+  max_track_width?: Nm;
+}
+export interface PcbText {
+  id: Id;
+  layer: DrawLayer;
+  position: Point;
+  text: string;
+  size: Nm;
+  stroke_width?: Nm;
+  rotation?: Rotation;
+}
+export interface PcbDimension {
+  id: Id;
+  layer: DrawLayer;
+  a: Point;
+  b: Point;
+  offset: Nm;
+  unit: DimensionUnit;
+  precision: number;
+  text_size: Nm;
+}
+export interface Cutout {
+  id: Id;
+  outline: Point[];
+}
+/** One change of the schematic-to-PCB update, named by its symbol (SyncSchematicToPcbSelected). */
+export type SyncChange =
+  | { kind: "add_footprint" | "remove_footprint" | "refdes" | "part"; symbol_id: Id }
+  | { kind: "pad_net"; symbol_id: Id; pad: string };
 
 /** Canonical EAK-IR project (fields the shell renders). */
 export interface Project {
@@ -173,11 +222,15 @@ export interface Project {
   /** Free project properties for title blocks; absent when empty. */
   properties?: Record<string, string>;
   pcb: {
-    board: { outline: Point[]; stackup?: Stackup };
+    board: { outline: Point[]; stackup?: Stackup; outline_arcs?: OutlineArc[] };
     footprints: Record<Id, FootprintInstance>;
     tracks: Record<Id, Track>;
     vias: Record<Id, Via>;
     zones: Record<Id, Zone>;
+    regions?: Record<Id, Region>;
+    texts?: Record<Id, PcbText>;
+    dimensions?: Record<Id, PcbDimension>;
+    cutouts?: Record<Id, Cutout>;
   };
   /** Definitions in the project's own library (built-ins copied in, and imported parts). */
   library?: Record<
@@ -266,7 +319,7 @@ export type Command =
   | { type: "SetBoardOutline"; points: Point[] }
   | { type: "MoveFootprint"; footprint_id: Id; position: Point; rotation: Rotation | null; side: Side | null }
   | { type: "SetFootprintLocked"; footprint_id: Id; locked: boolean }
-  | { type: "AddTrack"; layer: CopperLayer; a: Point; b: Point; width: Nm | null; net: string }
+  | { type: "AddTrack"; layer: CopperLayer; a: Point; b: Point; width: Nm | null; net: string; arc_deg?: number | null }
   | { type: "DeleteTrack"; track_id: Id }
   | { type: "AddVia"; position: Point; net: string; drill: Nm | null; diameter: Nm | null; from?: CopperLayer | null; to?: CopperLayer | null }
   | { type: "AddZone"; layer: CopperLayer; net: string; outline: Point[]; clearance: Nm | null }
@@ -280,6 +333,22 @@ export type Command =
   | { type: "DeleteVia"; via_id: Id }
   | { type: "Annotate" }
   | { type: "SyncSchematicToPcb" }
+  | { type: "SyncSchematicToPcbSelected"; changes: SyncChange[] }
+  | { type: "MoveTrack"; track_id: Id; by: Point }
+  | { type: "EditTrack"; track_id: Id; width?: Nm | null; layer?: CopperLayer | null; a?: Point | null; b?: Point | null; arc_deg?: number | null }
+  | { type: "MoveVia"; via_id: Id; position: Point }
+  | { type: "EditZone"; zone_id: Id; outline?: Point[] | null; net?: string | null; layer?: CopperLayer | null; clearance?: Nm | null }
+  | { type: "DeleteFootprint"; footprint_id: Id }
+  | { type: "AddRegion"; name?: string | null; outline: Point[]; layers?: CopperLayer[]; forbid?: RegionObject[]; min_track_width?: Nm | null; max_track_width?: Nm | null }
+  | { type: "DeleteRegion"; region_id: Id }
+  | { type: "AddPcbText"; layer: DrawLayer; position: Point; text: string; size?: Nm | null; stroke_width?: Nm | null; rotation?: Rotation | null }
+  | { type: "MovePcbText"; text_id: Id; position: Point; rotation?: Rotation | null }
+  | { type: "DeletePcbText"; text_id: Id }
+  | { type: "AddDimension"; layer?: DrawLayer | null; a: Point; b: Point; offset?: Nm | null; unit?: DimensionUnit | null; precision?: number | null; text_size?: Nm | null }
+  | { type: "DeleteDimension"; dimension_id: Id }
+  | { type: "AddBoardCutout"; outline: Point[] }
+  | { type: "DeleteBoardCutout"; cutout_id: Id }
+  | { type: "SetOutlineArc"; edge: number; sweep_deg: number | null }
   | { type: "AutoPlace"; grid: Nm | null }
   | { type: "AutoRoute"; nets: string[] | null }
   | { type: "ClearRouting"; net: string | null }

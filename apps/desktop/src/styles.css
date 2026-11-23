@@ -176,6 +176,16 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .no-connect { stroke: var(--err); stroke-width: 0.25; fill: none; }
 .board { fill: var(--c-board); stroke: var(--accent); stroke-width: 0.15; }
 .zone { fill-opacity: 0.25; stroke-width: 0.05; }
+/* Schema v4 PCB objects (ADR-0042): cut-outs are holes in the board fill; regions are tinted, dashed
+   outlines (keep-outs stronger); text and dimensions follow their layer (documentation is muted). */
+.board-cutout { fill: var(--bg-canvas); stroke: none; pointer-events: none; }
+.pcb-region { fill: var(--c-violation); fill-opacity: 0.05; stroke: var(--c-violation); stroke-width: 0.1; stroke-dasharray: 0.6 0.4; pointer-events: none; }
+.pcb-region.keepout { fill-opacity: 0.12; }
+.pcb-drawing { pointer-events: none; }
+.pcb-drawing line { stroke: var(--c-text); stroke-width: 0.15; stroke-linecap: round; }
+.pcb-drawing text, text.pcb-drawing { fill: var(--c-text); text-anchor: middle; }
+.pcb-drawing.documentation line { stroke: var(--c-courtyard); }
+.pcb-drawing.documentation text, text.pcb-drawing.documentation { fill: var(--c-courtyard); }
 .zone.top { fill: var(--c-copper-top); stroke: var(--c-copper-top); }
 .zone.bottom { fill: var(--c-copper-bottom); stroke: var(--c-copper-bottom); }
 .track { stroke-linecap: round; }

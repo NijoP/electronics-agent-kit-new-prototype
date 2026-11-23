@@ -33,6 +33,7 @@ import { NO_SELECTION, useHasInspector, usePublishEditorContext, type OptionFiel
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 import { usePcbRenderer, type PcbRenderer } from "./render/flag";
 import { buildPcbScene } from "./render/pcbScene";
+import { dimensionDrawing, outlinePath, trackPath } from "./render/pcbObjects";
 import { PcbSceneCanvas } from "./render/PcbSceneCanvas";
 import { ATTR_KIND, PickIndex } from "./render/pick";
 import type { OverlayItem, OverlayScene, RenderObject } from "./render/types";
@@ -438,6 +439,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     cancel: () => (setDrag(null), setVdrag(null)),
   };
   const shownOutline = vdrag && outline[vdrag.i] ? O.moveVertex(outline, vdrag.i, vdrag.to) : outline;
+  // The board shape as drawn: arc edges (schema v4) flattened; a vertex drag keeps the edge count.
+  const boardShape = outlinePath(shownOutline, pcb.board.outline_arcs);
+  const cutouts = Object.values(pcb.cutouts ?? {});
   const movingIds = drag?.mode === "move" ? new Set(P.movable(snapshot, sel).ids) : null;
   const dragDelta = drag?.mode === "move" ? snapDelta(drag.from, drag.to) : null;
 
@@ -515,9 +519,12 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         const t = hitAt(e, "data-track-id", x, y);
         const v = hitAt(e, "data-via-id", x, y);
         const z = hitAt(e, "data-zone-id", x, y);
+        const f = hitAt(e, "data-footprint-id", x, y);
         if (v) void edit.execute({ type: "DeleteVia", via_id: v });
-        else if (z && !t) void edit.execute({ type: "DeleteZone", zone_id: z });
         else if (t) void edit.execute({ type: "DeleteTrack", track_id: t });
+        // A footprint sits above the zone it is on; the engine refuses a locked one with the reason.
+        else if (f) void edit.execute({ type: "DeleteFootprint", footprint_id: f });
+        else if (z) void edit.execute({ type: "DeleteZone", zone_id: z });
         return;
       }
     }
@@ -805,7 +812,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
                 : "Click a pad (or track end) to start routing its net; airwires show what is still unrouted")}
             {tool === "select" && selTrack && ` · track ${selTrack.net} selected · Delete removes it`}
             {tool === "via" && "Click a pad, track end or point"}
-            {tool === "delete" && "Click a track, via or zone"}
+            {tool === "delete" && "Click a track, via, footprint or zone"}
             {tool === "zone" && "Pick layer and net, click two opposite corners (or 3+ points), then Enter"}
           </span>
         </div>
@@ -853,7 +860,10 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         onDrag={edit && (MOVE_TOOLS.includes(tool) || tool === "outline") ? dragHandler : undefined}
         underlay={(vb) => (
           <>
-            {outline.length > 0 && <polygon className="board" points={poly(shownOutline)} />}
+            {outline.length > 0 && <polygon className="board" points={poly(boardShape)} />}
+            {cutouts.map((c) => (
+              <polygon key={c.id} className="board-cutout" data-cutout-id={c.id} points={poly(c.outline)} />
+            ))}
             <GridLayer vb={vb} kind="pcb" cfg={grid} />
           </>
         )}
@@ -867,7 +877,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             : undefined
         }
       >
-        {!scene && outline.length > 0 && <polygon className="board-edge" points={poly(shownOutline)} />}
+        {!scene && outline.length > 0 && <polygon className="board-edge" points={poly(boardShape)} />}
+        {!scene && <PcbDrawings pcb={pcb} />}
         {edit && tool === "outline" &&
           shownOutline.map((p, i) => {
             const [cx, cy] = toView(p);
@@ -893,6 +904,18 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           .map((t) => {
           const [x1, y1] = toView(t.a);
           const [x2, y2] = toView(t.b);
+          if (t.arc_deg) {
+            // Arc track (schema v4): drawn as its chords.
+            const pts = poly(trackPath(t));
+            return (
+              <g key={t.id} data-track-id={t.id} className={`${highlighted.has(t.id) ? "finding-hit" : ""}${t.id === trackSel ? " selected-track" : ""}${netHit(t.net)}` || undefined}>
+                <polyline className={`track ${layerKey(t.layer)}`} style={{ stroke: layerColour(t.layer), fill: "none" }} points={pts} strokeWidth={mm(t.width)}>
+                  <title>{`${t.net} (${layerName(t.layer)}, arc ${t.arc_deg}°)`}</title>
+                </polyline>
+                <polyline className="hit" points={pts} style={{ fill: "none" }} />
+              </g>
+            );
+          }
           return (
             <g key={t.id} data-track-id={t.id} className={`${highlighted.has(t.id) ? "finding-hit" : ""}${t.id === trackSel ? " selected-track" : ""}${netHit(t.net)}` || undefined}>
               <line className={`track ${layerKey(t.layer)}`} style={{ stroke: layerColour(t.layer) }} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={mm(t.width)}>
@@ -1006,5 +1029,48 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
         </div>
       )}
     </section>
+  );
+}
+
+/** Schema v4 drawing objects in the SVG renderer (ADR-0042): keep-out / constraint regions,
+ *  cut-out edges, PCB text and dimensions. Decoration only; they are edited through commands. */
+function PcbDrawings({ pcb }: { pcb: Snapshot["project"]["pcb"] }) {
+  const cls = (layer: string) => `pcb-drawing ${layer}`;
+  return (
+    <g className="pcb-drawings">
+      {Object.values(pcb.regions ?? {}).map((r) => (
+        <polygon key={r.id} className={`pcb-region${(r.forbid ?? []).length ? " keepout" : ""}`} data-region-id={r.id} points={poly(r.outline)}>
+          <title>{`${r.name || ((r.forbid ?? []).length ? "keep-out" : "constraint region")}${(r.forbid ?? []).length ? `: no ${(r.forbid ?? []).join(", ")}` : ""}`}</title>
+        </polygon>
+      ))}
+      {Object.values(pcb.cutouts ?? {}).map((c) => (
+        <polygon key={c.id} className="board-edge cutout-edge" points={poly(c.outline)} />
+      ))}
+      {Object.values(pcb.texts ?? {}).map((t) => {
+        const [x, y] = toView(t.position);
+        const turn = t.rotation === "R90" ? -90 : t.rotation === "R180" ? 180 : t.rotation === "R270" ? 90 : 0;
+        return (
+          <text key={t.id} className={cls(t.layer)} data-text-id={t.id} x={x} y={y} fontSize={mm(t.size)} transform={turn ? `rotate(${turn} ${x} ${y})` : undefined}>
+            {t.text}
+          </text>
+        );
+      })}
+      {Object.values(pcb.dimensions ?? {}).map((d) => {
+        const g = dimensionDrawing(d);
+        const [lx, ly] = toView(g.labelAt);
+        return (
+          <g key={d.id} className={cls(d.layer)} data-dimension-id={d.id}>
+            {g.lines.map(([a, b], i) => {
+              const [x1, y1] = toView(a);
+              const [x2, y2] = toView(b);
+              return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />;
+            })}
+            <text x={lx} y={ly} fontSize={mm(g.textSize)} transform={g.labelRotation ? `rotate(-90 ${lx} ${ly})` : undefined}>
+              {g.label}
+            </text>
+          </g>
+        );
+      })}
+    </g>
   );
 }
