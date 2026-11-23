@@ -31,6 +31,7 @@ impl Circuit {
                 position: Point::mm(x, 20.0),
                 rotation: Rotation::R0,
                 mirror: false,
+                field_visibility: Default::default(),
             },
         );
         self.label(net1, x - 5.08);
@@ -47,6 +48,8 @@ impl Circuit {
                 name: name.into(),
                 position: Point::mm(x, 20.0),
                 kind: Default::default(),
+                scope: Default::default(),
+                power_style: None,
             },
         );
     }

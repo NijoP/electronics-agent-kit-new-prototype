@@ -37,7 +37,7 @@ Scenarios are JSON files in `apps/desktop/e2e/scenarios/`; the workflow runs
 one more `node ui-evidence.mjs` line with its own `UI_SCENARIO` and `UI_OUT`) instead of a new
 job. `scenarios/e2-editor.json` (slice E2, editor correctness) is such a second scenario: it
 runs in its own step with `UI_OUT` under `ui-evidence/e2`, and its rows are added to the job
-summary and its screenshots to the same artifact. Its `fx-*` steps (fix place-selbar) check that the schematic canvas does not move when a selection appears and that Place menu picks (Wire, No connect, Net / power label) switch the tool while Place is armed. `scenarios/e3-engine-provenance.json` (slice E3) is a third, under `ui-evidence/e3`. Each step has an `id` (used in screenshot names), a `do` type and an optional `title`.
+summary and its screenshots to the same artifact. Its `fx-*` steps (fix place-selbar) check that the schematic canvas does not move when a selection appears and that Place menu picks (Wire, No connect, Net / power label) switch the tool while Place is armed. `scenarios/e3-engine-provenance.json` (slice E3) is a third, under `ui-evidence/e3`. `scenarios/b1-ir-v3.json` (slice B1, IR schema v3, no UI of its own) is a fourth, under `ui-evidence/b1`: a regression check that a v3 project opens and a placed part is drawn. Each step has an `id` (used in screenshot names), a `do` type and an optional `title`.
 Every step except `each-menu` takes one screenshot after it runs (set `"shot": false` to skip).
 
 | `do` | Fields | What it does |

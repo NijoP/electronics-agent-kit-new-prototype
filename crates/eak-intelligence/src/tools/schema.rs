@@ -60,6 +60,119 @@ pub fn label_kind() -> Value {
         "net = ordinary label; power = power port that drives the net",
     )
 }
+pub fn net_scope() -> Value {
+    enumeration(
+        &["local", "global", "off_page"],
+        "local = joins same-name labels on its sheet only; global (default) and off_page = join on every sheet",
+    )
+}
+pub fn power_style() -> Value {
+    enumeration(&["ground", "rail", "chassis"], "power-port drawing style")
+}
+pub fn symbol_field() -> Value {
+    enumeration(
+        &[
+            "refdes",
+            "value",
+            "name",
+            "footprint",
+            "manufacturer",
+            "mpn",
+        ],
+        "symbol text field",
+    )
+}
+
+fn stroke() -> Value {
+    obj(
+        &[
+            ("width", nm("line width; 0 = default")),
+            (
+                "style",
+                enumeration(&["solid", "dashed", "dotted", "dash_dot"], "line style"),
+            ),
+        ],
+        &[],
+    )
+}
+
+/// Schema of a `Graphic` (drawing primitive, tagged by `kind`).
+pub fn graphic() -> Value {
+    let kind = |k: &str| enumeration(&[k], "primitive kind");
+    let fill = || boolean("filled");
+    json!({
+        "description": "drawing primitive: line, polyline, arc, circle, rectangle, polygon or text (Y up, nanometres)",
+        "anyOf": [
+            obj(&[("kind", kind("line")), ("a", point("start")), ("b", point("end")), ("stroke", stroke())], &["kind", "a", "b"]),
+            obj(&[("kind", kind("polyline")), ("points", points("2 or more vertices")), ("stroke", stroke())], &["kind", "points"]),
+            obj(
+                &[
+                    ("kind", kind("arc")),
+                    ("center", point("centre")),
+                    ("radius", nm("radius")),
+                    ("start_deg", number("start angle, degrees counter-clockwise from +X")),
+                    ("end_deg", number("end angle, degrees")),
+                    ("stroke", stroke()),
+                ],
+                &["kind", "center", "radius", "start_deg", "end_deg"],
+            ),
+            obj(&[("kind", kind("circle")), ("center", point("centre")), ("radius", nm("radius")), ("fill", fill()), ("stroke", stroke())], &["kind", "center", "radius"]),
+            obj(&[("kind", kind("rectangle")), ("min", point("lower-left corner")), ("max", point("upper-right corner")), ("fill", fill()), ("stroke", stroke())], &["kind", "min", "max"]),
+            obj(&[("kind", kind("polygon")), ("points", points("3 or more vertices")), ("fill", fill()), ("stroke", stroke())], &["kind", "points"]),
+            obj(
+                &[
+                    ("kind", kind("text")),
+                    ("position", point("anchor")),
+                    ("text", string("text")),
+                    ("size", nm("character height")),
+                    ("rotation", rotation()),
+                ],
+                &["kind", "position", "text", "size"],
+            ),
+        ],
+    })
+}
+
+/// Schema of a `DrawingFormat` (sheet border, zones, title block).
+pub fn drawing_format() -> Value {
+    let source = json!({
+        "description": "where the field text comes from",
+        "anyOf": [
+            obj(
+                &[(
+                    "source",
+                    enumeration(
+                        &["project_name", "project_revision", "sheet_name", "sheet_number", "sheet_count"],
+                        "project or sheet value",
+                    ),
+                )],
+                &["source"],
+            ),
+            obj(&[("source", enumeration(&["property"], "project property")), ("key", string("property key"))], &["source", "key"]),
+            obj(&[("source", enumeration(&["text"], "fixed text")), ("text", string("text"))], &["source", "text"]),
+        ],
+    });
+    let field = obj(
+        &[("label", string("field label")), ("value", source)],
+        &["label", "value"],
+    );
+    obj(
+        &[
+            ("border", boolean("draw a border")),
+            (
+                "zone_columns",
+                integer("numbered reference zones across (0 = none, max 26)"),
+            ),
+            (
+                "zone_rows",
+                integer("lettered reference zones down (0 = none, max 26)"),
+            ),
+            ("title_block", array(field, "title-block fields")),
+        ],
+        &["border", "zone_columns", "zone_rows", "title_block"],
+    )
+}
+
 pub fn copper_layer() -> Value {
     json!({
         "description": "copper layer: \"top\", \"bottom\", or {\"inner\": n} for the n-th inner layer from the top (1-based)",
@@ -215,14 +328,31 @@ pub fn component_def() -> Value {
                 "position",
                 point("connection point relative to symbol origin"),
             ),
+            ("length", nm("pin line length from the connection point")),
+            (
+                "orientation",
+                enumeration(
+                    &["right", "left", "up", "down"],
+                    "direction from the connection point towards the body",
+                ),
+            ),
+            ("name_visible", boolean("show the pin name")),
+            ("number_visible", boolean("show the pin number")),
         ],
         &["number", "name", "electrical_type", "position"],
     );
     let symbol = obj(
         &[
             ("pins", array(pin, "symbol pins")),
-            ("body_half_w", nm("body half width")),
-            ("body_half_h", nm("body half height")),
+            ("body_half_w", nm("body bounding half width")),
+            ("body_half_h", nm("body bounding half height")),
+            (
+                "graphics",
+                array(
+                    graphic(),
+                    "body drawing in symbol coordinates; omit for a box of the half extents",
+                ),
+            ),
         ],
         &["pins", "body_half_w", "body_half_h"],
     );

@@ -142,6 +142,10 @@ mod tests {
 
     fn pin(n: &str, t: PinType) -> SymbolPin {
         SymbolPin {
+            length: 0,
+            orientation: Default::default(),
+            name_visible: true,
+            number_visible: true,
             number: n.into(),
             name: n.into(),
             electrical_type: t,
@@ -163,6 +167,7 @@ mod tests {
 
     fn sym(pins: Vec<SymbolPin>) -> SymbolDef {
         SymbolDef {
+            graphics: Vec::new(),
             pins,
             body_half_w: 1_000_000,
             body_half_h: 1_000_000,

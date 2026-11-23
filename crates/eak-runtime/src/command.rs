@@ -17,6 +17,13 @@ pub enum Command {
     AddRequirement {
         text: String,
     },
+    /// Set (or, with a null or blank value, remove) a free project property that title blocks
+    /// can show (ADR-0040).
+    SetProjectProperty {
+        key: String,
+        #[serde(default)]
+        value: Option<String>,
+    },
     // ---- library
     /// Copy a built-in library component definition into the project library.
     ImportLibraryComponent {
@@ -110,6 +117,12 @@ pub enum Command {
         position: Point,
         #[serde(default)]
         kind: LabelKind,
+        /// How far the label reaches; omit for global (ADR-0040).
+        #[serde(default)]
+        scope: NetScope,
+        /// Drawing style of a power port (power labels only).
+        #[serde(default)]
+        power_style: Option<PowerStyle>,
     },
     /// Place a label directly on a pin's connection point.
     LabelPin {
@@ -118,6 +131,78 @@ pub enum Command {
         name: String,
         #[serde(default)]
         kind: LabelKind,
+        #[serde(default)]
+        scope: NetScope,
+        #[serde(default)]
+        power_style: Option<PowerStyle>,
+    },
+    /// Change how far a net label reaches: local (its sheet), global or off-page (ADR-0040).
+    SetNetLabelScope {
+        label_id: Id,
+        scope: NetScope,
+    },
+    /// Set or clear (null) the drawing style of a power port.
+    SetPowerPortStyle {
+        label_id: Id,
+        #[serde(default)]
+        style: Option<PowerStyle>,
+    },
+    /// Show or hide one text field of a placed symbol.
+    SetFieldVisibility {
+        symbol_id: Id,
+        field: SymbolField,
+        visible: bool,
+    },
+    /// Draw a named bus (`D[0..7]`, `{SDA,SCL}`) as a polyline. A bus is not a conductor:
+    /// members connect through named wires on bus entries (ADR-0040).
+    AddBus {
+        sheet_id: Option<Id>,
+        name: String,
+        points: Vec<Point>,
+    },
+    /// Replace a bus's polyline (move or reshape it). Entries left off the new path are
+    /// reported by ERC-019.
+    MoveBus {
+        bus_id: Id,
+        points: Vec<Point>,
+    },
+    /// Delete a bus and its bus entries.
+    DeleteBus {
+        bus_id: Id,
+    },
+    /// Join a member wire to a bus: `bus_point` must lie on the bus, a wire attaches at
+    /// `wire_point`.
+    AddBusEntry {
+        bus_id: Id,
+        bus_point: Point,
+        wire_point: Point,
+    },
+    MoveBusEntry {
+        entry_id: Id,
+        bus_point: Point,
+        wire_point: Point,
+    },
+    DeleteBusEntry {
+        entry_id: Id,
+    },
+    /// Draw a line, shape or text on a sheet (drawing only, never connectivity).
+    AddSheetGraphic {
+        sheet_id: Option<Id>,
+        graphic: Graphic,
+    },
+    /// Move a sheet drawing by `by`.
+    MoveSheetGraphic {
+        graphic_id: Id,
+        by: Point,
+    },
+    DeleteSheetGraphic {
+        graphic_id: Id,
+    },
+    /// Set a sheet's border, zones and title block, or remove them (null).
+    SetSheetFormat {
+        sheet_id: Id,
+        #[serde(default)]
+        format: Option<DrawingFormat>,
     },
     DeleteNetLabel {
         label_id: Id,
@@ -301,8 +386,22 @@ impl Command {
             | SetFootprintLocked { .. }
             | Annotate
             | SetSymbolValue { .. }
-            | SetRefdes { .. } => ReversibleLocal,
-            AddWire { .. }
+            | SetRefdes { .. }
+            | SetProjectProperty { .. }
+            | SetPowerPortStyle { .. }
+            | SetFieldVisibility { .. }
+            | AddSheetGraphic { .. }
+            | MoveSheetGraphic { .. }
+            | DeleteSheetGraphic { .. }
+            | SetSheetFormat { .. } => ReversibleLocal,
+            SetNetLabelScope { .. }
+            | AddBus { .. }
+            | MoveBus { .. }
+            | DeleteBus { .. }
+            | AddBusEntry { .. }
+            | MoveBusEntry { .. }
+            | DeleteBusEntry { .. }
+            | AddWire { .. }
             | ConnectPins { .. }
             | LabelPin { .. }
             | SetNoConnect { .. }
@@ -418,6 +517,43 @@ fn set_stackup(p: &mut Project, stackup: &Stackup) -> Result<(), CommandError> {
     Ok(())
 }
 
+/// Refuse a power style on a label that is not a power port.
+fn check_power_style(kind: LabelKind, style: &Option<PowerStyle>) -> Result<(), CommandError> {
+    if style.is_some() && kind != LabelKind::Power {
+        return Err(CommandError::Invalid(
+            "only power ports (kind power) have a power style".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// A bus needs a name and a polyline of 2 or more points without zero-length segments.
+fn check_bus(name: &str, points: &[Point]) -> Result<(), CommandError> {
+    if name.trim().is_empty() {
+        return Err(CommandError::Invalid("bus name is empty".into()));
+    }
+    if points.len() < 2 || points.windows(2).any(|w| w[0] == w[1]) {
+        return Err(CommandError::Invalid(
+            "a bus needs at least 2 points and no zero-length segment".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// A bus entry must start on its bus and have length.
+fn check_bus_entry(b: &Bus, bus_point: Point, wire_point: Point) -> Result<(), CommandError> {
+    if bus_point == wire_point {
+        return Err(CommandError::Invalid("bus entry has zero length".into()));
+    }
+    if !b.touches(bus_point, ON_SEGMENT_TOL_NM) {
+        return Err(CommandError::Invalid(format!(
+            "the bus point must lie on bus {}",
+            b.name
+        )));
+    }
+    Ok(())
+}
+
 fn sheet_or_first(p: &Project, s: &Option<Id>) -> Result<Id, CommandError> {
     match s {
         Some(id) if p.schematic.sheets.contains_key(id) => Ok(id.clone()),
@@ -520,6 +656,29 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             });
             created.push(id);
         }
+        SetProjectProperty { key, value } => {
+            let key = key.trim();
+            if key.is_empty() {
+                return Err(CommandError::Invalid("property key is empty".into()));
+            }
+            match value.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+                Some(v) if p.properties.get(key).is_some_and(|old| old == v) => {
+                    return Err(CommandError::NothingTo(format!(
+                        "property: {key} already has that value"
+                    )));
+                }
+                Some(v) => {
+                    p.properties.insert(key.into(), v.into());
+                }
+                None => {
+                    if p.properties.remove(key).is_none() {
+                        return Err(CommandError::NothingTo(format!(
+                            "property: {key} is not set"
+                        )));
+                    }
+                }
+            }
+        }
         ImportLibraryComponent { component_id } => {
             if p.library.contains_key(component_id) {
                 return Err(CommandError::NothingTo(format!(
@@ -529,6 +688,9 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             ensure_component(p, component_id, &mut warnings)?;
         }
         UpsertComponentDefinition { definition } => {
+            // A definition without graphics is a v2 box symbol: draw its box (ADR-0040).
+            let mut definition = definition.clone();
+            definition.symbol.upgrade_box();
             let problems = definition.validate();
             if !problems.is_empty() {
                 return Err(CommandError::Invalid(problems.join("; ")));
@@ -551,8 +713,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     }
                 }
             }
-            p.library
-                .insert(definition.id.clone(), (**definition).clone());
+            p.library.insert(definition.id.clone(), *definition);
         }
         SetComponentProperties {
             component_id,
@@ -621,6 +782,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     name: name.clone(),
                     width: 297_000_000,
                     height: 210_000_000,
+                    format: None,
                 },
             );
             created.push(id);
@@ -658,6 +820,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     position: *position,
                     rotation: *rotation,
                     mirror: false,
+                    field_visibility: BTreeMap::new(),
                 },
             );
             created.push(id);
@@ -891,11 +1054,14 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             name,
             position,
             kind,
+            scope,
+            power_style,
         } => {
             let sheet = sheet_or_first(p, sheet_id)?;
             if name.trim().is_empty() {
                 return Err(CommandError::Invalid("net name is empty".into()));
             }
+            check_power_style(*kind, power_style)?;
             let id = new_id("lbl");
             p.schematic.labels.insert(
                 id.clone(),
@@ -905,6 +1071,8 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     name: name.trim().into(),
                     position: *position,
                     kind: *kind,
+                    scope: *scope,
+                    power_style: *power_style,
                 },
             );
             created.push(id);
@@ -914,7 +1082,10 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             pin,
             name,
             kind,
+            scope,
+            power_style,
         } => {
+            check_power_style(*kind, power_style)?;
             let s = symbol(p, symbol_id)?.clone();
             let pos = p
                 .pin_position(&s, pin)
@@ -931,6 +1102,8 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     name: name.trim().into(),
                     position: pos,
                     kind: *kind,
+                    scope: *scope,
+                    power_style: *power_style,
                 },
             );
             created.push(id);
@@ -985,6 +1158,242 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 .no_connects
                 .remove(no_connect_id)
                 .ok_or_else(|| CommandError::NotFound(format!("no-connect {no_connect_id}")))?;
+        }
+        SetNetLabelScope { label_id, scope } => {
+            let l = p
+                .schematic
+                .labels
+                .get_mut(label_id)
+                .ok_or_else(|| CommandError::NotFound(format!("label {label_id}")))?;
+            if l.scope == *scope {
+                return Err(CommandError::NothingTo(format!(
+                    "scope: label {} is already {scope:?}",
+                    l.name
+                )));
+            }
+            l.scope = *scope;
+            if l.kind == LabelKind::Power && *scope == NetScope::Local {
+                warnings.push(format!(
+                    "{} is a power port; power ports connect on every sheet whatever their scope",
+                    l.name
+                ));
+            }
+        }
+        SetPowerPortStyle { label_id, style } => {
+            let l = p
+                .schematic
+                .labels
+                .get_mut(label_id)
+                .ok_or_else(|| CommandError::NotFound(format!("label {label_id}")))?;
+            check_power_style(l.kind, style)?;
+            if l.power_style == *style {
+                return Err(CommandError::NothingTo(format!(
+                    "power style: {} already has that style",
+                    l.name
+                )));
+            }
+            l.power_style = *style;
+        }
+        SetFieldVisibility {
+            symbol_id,
+            field,
+            visible,
+        } => {
+            let s = p
+                .schematic
+                .symbols
+                .get_mut(symbol_id)
+                .ok_or_else(|| CommandError::NotFound(format!("symbol {symbol_id}")))?;
+            if s.field_visible(*field) == *visible {
+                return Err(CommandError::NothingTo(format!(
+                    "field visibility: {} {field:?} is already {}",
+                    s.refdes,
+                    if *visible { "shown" } else { "hidden" }
+                )));
+            }
+            if *visible == field.visible_by_default() {
+                s.field_visibility.remove(field);
+            } else {
+                s.field_visibility.insert(*field, *visible);
+            }
+        }
+        AddBus {
+            sheet_id,
+            name,
+            points,
+        } => {
+            let sheet = sheet_or_first(p, sheet_id)?;
+            check_bus(name, points)?;
+            if bus_members(name).is_none() {
+                warnings.push(format!(
+                    "'{}' is not a legal bus name (NAME[m..n] or {{A,B}}); ERC-017 reports it",
+                    name.trim()
+                ));
+            }
+            let id = new_id("bus");
+            p.schematic.buses.insert(
+                id.clone(),
+                Bus {
+                    id: id.clone(),
+                    sheet_id: sheet,
+                    name: name.trim().into(),
+                    points: points.clone(),
+                },
+            );
+            created.push(id);
+        }
+        MoveBus { bus_id, points } => {
+            let b = p
+                .schematic
+                .buses
+                .get_mut(bus_id)
+                .ok_or_else(|| CommandError::NotFound(format!("bus {bus_id}")))?;
+            check_bus(&b.name, points)?;
+            if b.points == *points {
+                return Err(CommandError::NothingTo(
+                    "move: bus already has that path".into(),
+                ));
+            }
+            b.points = points.clone();
+            let b = b.clone();
+            let off = p
+                .schematic
+                .bus_entries
+                .values()
+                .filter(|e| e.bus_id == *bus_id && !b.touches(e.bus_point, ON_SEGMENT_TOL_NM))
+                .count();
+            if off > 0 {
+                warnings.push(format!(
+                    "{off} bus entr{} no longer on bus {}; move them (MoveBusEntry) or run ERC (ERC-019)",
+                    if off == 1 { "y is" } else { "ies are" },
+                    b.name
+                ));
+            }
+        }
+        DeleteBus { bus_id } => {
+            p.schematic
+                .buses
+                .remove(bus_id)
+                .ok_or_else(|| CommandError::NotFound(format!("bus {bus_id}")))?;
+            let before = p.schematic.bus_entries.len();
+            p.schematic.bus_entries.retain(|_, e| e.bus_id != *bus_id);
+            let removed = before - p.schematic.bus_entries.len();
+            if removed > 0 {
+                warnings.push(format!(
+                    "removed {removed} bus entr{} of the deleted bus",
+                    if removed == 1 { "y" } else { "ies" }
+                ));
+            }
+        }
+        AddBusEntry {
+            bus_id,
+            bus_point,
+            wire_point,
+        } => {
+            let b = p
+                .schematic
+                .buses
+                .get(bus_id)
+                .ok_or_else(|| CommandError::NotFound(format!("bus {bus_id}")))?;
+            check_bus_entry(b, *bus_point, *wire_point)?;
+            let id = new_id("be");
+            let sheet_id = b.sheet_id.clone();
+            p.schematic.bus_entries.insert(
+                id.clone(),
+                BusEntry {
+                    id: id.clone(),
+                    sheet_id,
+                    bus_id: bus_id.clone(),
+                    bus_point: *bus_point,
+                    wire_point: *wire_point,
+                },
+            );
+            created.push(id);
+        }
+        MoveBusEntry {
+            entry_id,
+            bus_point,
+            wire_point,
+        } => {
+            let e = p
+                .schematic
+                .bus_entries
+                .get(entry_id)
+                .ok_or_else(|| CommandError::NotFound(format!("bus entry {entry_id}")))?;
+            if (e.bus_point, e.wire_point) == (*bus_point, *wire_point) {
+                return Err(CommandError::NothingTo(
+                    "move: bus entry already at that position".into(),
+                ));
+            }
+            let b = p
+                .schematic
+                .buses
+                .get(&e.bus_id)
+                .ok_or_else(|| CommandError::NotFound(format!("bus {}", e.bus_id)))?;
+            check_bus_entry(b, *bus_point, *wire_point)?;
+            let e = p.schematic.bus_entries.get_mut(entry_id).expect("checked");
+            e.bus_point = *bus_point;
+            e.wire_point = *wire_point;
+        }
+        DeleteBusEntry { entry_id } => {
+            p.schematic
+                .bus_entries
+                .remove(entry_id)
+                .ok_or_else(|| CommandError::NotFound(format!("bus entry {entry_id}")))?;
+        }
+        AddSheetGraphic { sheet_id, graphic } => {
+            let sheet = sheet_or_first(p, sheet_id)?;
+            let problems = graphic.validate();
+            if !problems.is_empty() {
+                return Err(CommandError::Invalid(problems.join("; ")));
+            }
+            let id = new_id("gfx");
+            p.schematic.graphics.insert(
+                id.clone(),
+                SheetGraphic {
+                    id: id.clone(),
+                    sheet_id: sheet,
+                    graphic: graphic.clone(),
+                },
+            );
+            created.push(id);
+        }
+        MoveSheetGraphic { graphic_id, by } => {
+            let g = p
+                .schematic
+                .graphics
+                .get_mut(graphic_id)
+                .ok_or_else(|| CommandError::NotFound(format!("sheet graphic {graphic_id}")))?;
+            if *by == Point::default() {
+                return Err(CommandError::NothingTo("move: the offset is zero".into()));
+            }
+            g.graphic = g.graphic.translated(*by);
+        }
+        DeleteSheetGraphic { graphic_id } => {
+            p.schematic
+                .graphics
+                .remove(graphic_id)
+                .ok_or_else(|| CommandError::NotFound(format!("sheet graphic {graphic_id}")))?;
+        }
+        SetSheetFormat { sheet_id, format } => {
+            if let Some(f) = format {
+                let problems = f.validate();
+                if !problems.is_empty() {
+                    return Err(CommandError::Invalid(problems.join("; ")));
+                }
+            }
+            let s = p
+                .schematic
+                .sheets
+                .get_mut(sheet_id)
+                .ok_or_else(|| CommandError::NotFound(format!("sheet {sheet_id}")))?;
+            if s.format == *format {
+                return Err(CommandError::NothingTo(format!(
+                    "format: sheet {} already has that drawing format",
+                    s.name
+                )));
+            }
+            s.format = format.clone();
         }
         Annotate => {
             let ids: Vec<Id> = p
