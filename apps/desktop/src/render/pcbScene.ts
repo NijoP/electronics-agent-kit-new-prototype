@@ -18,13 +18,49 @@ import type { Box, DrawOp, Pt, RenderLayer, RenderObject, Scene } from "./types"
 export interface PcbSceneOptions {
   /** Copper layers in stack order, top first. */
   order: CopperLayer[];
-  /** Hidden copper layer keys (their zones, tracks and net names are left out, as in the SVG view). */
+  /**
+   * Hidden layer keys: copper layers (their zones, tracks and net names are left out, as in the SVG
+   * view) and "outline" (the board edge).
+   */
   hidden: Set<string>;
   colourOf: (l: CopperLayer) => string;
   /** Active copper layer key: sets which board side is drawn opaque. */
   activeLayer: string;
   /** Unrouted connections to draw as ratsnest, or null to hide them. */
   airwires: [string, Point, Point][] | null;
+  /** Outline view (slice C1): tracks, pads, vias and zones drawn as outlines, not filled. */
+  outlineView?: boolean;
+}
+
+/** Outline-view line width in view mm. */
+export const OUTLINE_VIEW_MM = 0.05;
+
+/** The outline-view form of a drawing op: fills become strokes, a track its rectangle outline. */
+export function outlineOp(op: DrawOp): DrawOp {
+  switch (op.t) {
+    case "seg": {
+      const [ax, ay] = op.a;
+      const [bx, by] = op.b;
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      const h = op.width / 2;
+      const ux = ((bx - ax) / len) * h;
+      const uy = ((by - ay) / len) * h;
+      const pts: Pt[] = [
+        [ax - ux - uy, ay - uy + ux],
+        [bx + ux - uy, by + uy + ux],
+        [bx + ux + uy, by + uy - ux],
+        [ax - ux + uy, ay - uy - ux],
+      ];
+      return { t: "poly", pts, stroke: op.colour, lineWidth: OUTLINE_VIEW_MM, alpha: op.alpha };
+    }
+    case "poly":
+      return { ...op, fill: undefined, stroke: op.stroke ?? op.fill, lineWidth: OUTLINE_VIEW_MM };
+    case "rect":
+    case "circle":
+      return op.fill ? { ...op, fill: undefined, stroke: op.fill, lineWidth: OUTLINE_VIEW_MM } : op;
+    default:
+      return op;
+  }
 }
 
 /** Pad-number and net-name size in screen pixels. */
@@ -235,7 +271,7 @@ export function buildPcbScene(s: Snapshot, o: PcbSceneOptions): Scene {
 
   // Board edge (the board fill stays in the SVG underlay, under the grid).
   const outline = pcb.board.outline.map(toView);
-  if (outline.length) {
+  if (outline.length && !o.hidden.has("outline")) {
     objects.push({
       key: "outline",
       ref: null,
@@ -263,7 +299,14 @@ export function buildPcbScene(s: Snapshot, o: PcbSceneOptions): Scene {
     });
   });
 
+  // Outline view: copper objects keep their geometry and picking, drawn as outlines. Holes are
+  // left out (their background fill would otherwise hide the pad outline under them).
+  const drawn = o.outlineView
+    ? objects
+        .filter((ob) => ob.layerKey !== "drill")
+        .map((ob) => (ob.ref ? { ...ob, ops: ob.ops.map(outlineOp), sig: `outline|${ob.sig}` } : ob))
+    : objects;
   let bounds: Box | null = null;
-  for (const ob of objects) bounds = union(bounds, ob.bbox);
-  return { layers, objects, bounds };
+  for (const ob of drawn) bounds = union(bounds, ob.bbox);
+  return { layers, objects: drawn, bounds };
 }

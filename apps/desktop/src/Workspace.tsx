@@ -30,6 +30,8 @@ import { Toolbar } from "./shell/Toolbar";
 import { canvasControls, DocIdContext, setActiveEditor, setEditorTool } from "./shell/viewState";
 import { LayerManager } from "./shell/LayerManager";
 import { useLayerView } from "./layerView";
+import { lockProblem } from "./layerLock";
+import { statusLayerName } from "./layers";
 import type { Focus } from "./pcbFocus";
 import { findingKey, probeTarget } from "./EngineeringMonitor";
 import { DocTabs } from "./shell/DocTabs";
@@ -357,11 +359,28 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       await refresh();
     });
 
-  const execute = (command: Command) => submit(() => api.execute(revision, command));
+  // C1: a command that would change a locked PCB layer is not sent (toolbar, inspector, editors).
+  const lockRefusal = (commands: Command | Command[]): string | null => {
+    for (const c of Array.isArray(commands) ? commands : [commands]) {
+      const why = lockProblem(snapshot, layerView.locked, c);
+      if (why) return why;
+    }
+    return null;
+  };
+  const refuse = (why: string) => {
+    setMessage(why);
+    return Promise.resolve();
+  };
+  const execute = (command: Command) => {
+    const why = lockRefusal(command);
+    return why ? refuse(why) : submit(() => api.execute(revision, command));
+  };
   // Chain commands so each one carries the revision the previous one produced; stop at the
   // first rejection (the engine already left the project untouched for it).
-  const executeAll = (commands: Command | Command[]) =>
-    guarded(async () => {
+  const executeAll = (commands: Command | Command[]): Promise<void> => {
+    const why = lockRefusal(commands);
+    if (why) return refuse(why);
+    return guarded(async () => {
       let rev = revision;
       let last: CommandResponse | null = null;
       for (const c of Array.isArray(commands) ? commands : [commands]) {
@@ -377,6 +396,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         );
       await refresh();
     });
+  };
   const edit: EditCtx = { execute: executeAll, busy, library, notify: setMessage };
   // "Update PCB from schematic" (slice C2, ADR-0041): first the engine's read-only preview of what
   // SyncSchematicToPcb would change, reviewed in the ECO dialog. Nothing changes until Apply.
@@ -943,7 +963,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       <StatusBar
         project={snapshot.project.name}
         revision={revision}
-        layer={ctx === "pcb" ? (status.layer === "top" ? "Top" : "Bottom") : null}
+        layer={ctx === "pcb" ? statusLayerName(status.layer) : null}
         grid={activeGrid ? `${formatLength(activeGrid.cfg.spacingMm, activeGrid.cfg.unit)}${activeGrid.cfg.snap ? "" : " (snap off)"}` : null}
         drc={results.drc}
         selection={selLabel ? `Selected ${selLabel}` : null}

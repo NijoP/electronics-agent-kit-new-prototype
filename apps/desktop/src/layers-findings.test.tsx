@@ -41,7 +41,7 @@ describe("pure helpers", () => {
     expect(focusBounds(s, [], pt(5, 5))).not.toBeNull();
   });
   it("layer prefs reject malformed storage", () => {
-    expect(sanitizePrefs({ colours: { top: "red", in1: "#aabbcc" }, hidden: [1, "in1"], active: 3 })).toEqual({ active: "top", hidden: ["in1"], colours: { in1: "#aabbcc" }, airwires: true });
+    expect(sanitizePrefs({ colours: { top: "red", in1: "#aabbcc" }, hidden: [1, "in1"], active: 3 })).toEqual({ active: "top", hidden: ["in1"], locked: [], colours: { in1: "#aabbcc" }, airwires: true, flip: false, outline: false });
   });
 });
 
@@ -121,9 +121,10 @@ describe("zone tool", () => {
     expect(z).toMatchObject({ type: "AddZone", layer: "top", net: "GND", clearance: 300_000 });
     expect(z.outline).toHaveLength(4);
   });
-  it("the delete tool removes a zone through DeleteZone", () => {
+  it("the delete tool removes a zone through DeleteZone (on the zone's own layer: picking is active-layer-exclusive)", () => {
     const { container } = render(<PcbView snapshot={fixture()} selected={null} onSelect={() => {}} edit={edit()} />);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("tab", { name: "B.Cu" }));
     const zone = container.querySelector("[data-zone-id]")!;
     fireEvent.pointerDown(zone, { clientX: 500, clientY: 500, button: 0, buttons: 1 });
     fireEvent.pointerUp(zone, { clientX: 500, clientY: 500, button: 0 });
