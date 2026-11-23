@@ -276,6 +276,18 @@ const handlers = {
     await waitRect("button.home-row", s.name, 30000);
     return `SETUP (IPC create_project, isolated software fixture "${s.name}"; not a UI action)`;
   },
+  // SETUP: typed engine commands for the open project, each through the same `execute_command` IPC
+  // the editors use, at the current revision. Every command must be accepted. Used where the
+  // objects under test have no drawing tool yet (schema v4 objects, ADR-0042).
+  async "fixture-commands"(s) {
+    for (const command of s.commands) {
+      const snap = await ipc("current_project");
+      const r = await ipc("execute_command", { expected_revision: snap.project.revision, command });
+      if (!r?.accepted) throw new Error(`${command.type} refused: ${JSON.stringify(r?.error)}`);
+    }
+    if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
+    return `SETUP (IPC execute_command: ${s.commands.map((c) => c.type).join(", ")}; not a UI action)${s.expect ? `; then visible: ${s.expect}` : ""}`;
+  },
   // SETUP: an open-source library folder (manifest with licence and source, plus one definition
   // copied from a built-in part under a new id), imported through the IPC the Library browser
   // uses. Needs an open project (the built-in part is read through library_search).
@@ -373,7 +385,11 @@ const handlers = {
     await waitRect(s.selector, s.text, s.timeout ?? 15000);
     const v = await attrOf(s.selector, s.attr);
     if (s.equalsVar && v !== vars[s.equalsVar]) throw new Error(`${s.attr} is ${v}, expected ${vars[s.equalsVar]} (saved as ${s.equalsVar})`);
-    return `${s.selector} ${s.attr}=${v}${s.equalsVar ? ` (equals saved ${s.equalsVar})` : ""}`;
+    // `minTokens`: the value has at least that many whitespace-separated parts (e.g. polygon points).
+    const tokens = String(v ?? "").trim().split(/\s+/).filter(Boolean).length;
+    if (s.minTokens && tokens < s.minTokens) throw new Error(`${s.attr} has ${tokens} part(s), expected at least ${s.minTokens}`);
+    const shown = s.minTokens ? `${tokens} part(s), at least ${s.minTokens}` : v;
+    return `${s.selector} ${s.attr}=${shown}${s.equalsVar ? ` (equals saved ${s.equalsVar})` : ""}`;
   },
   // Reloads the webview (a new UI session with the same app data), then waits for `expect`.
   async reload(s) {
