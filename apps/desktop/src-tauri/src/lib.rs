@@ -379,10 +379,23 @@ pub fn snapshot(e: &Engine) -> Snapshot {
     }
 }
 
+/// Normalise a folder path typed or pasted by the user: trim whitespace and strip one pair
+/// of matching surrounding quotes. Windows Explorer's "Copy as path" yields `"C:\dir name"`,
+/// and a literal `"` is never valid in a Windows path, so the quotes are never meaningful.
+pub(crate) fn clean_path_input(path: &str) -> &str {
+    let path = path.trim();
+    for q in ['"', '\''] {
+        if let Some(inner) = path.strip_prefix(q).and_then(|rest| rest.strip_suffix(q)) {
+            return inner.trim();
+        }
+    }
+    path
+}
+
 /// Project folders must be given as absolute paths so nothing is written relative to
 /// whatever directory the app happened to start in.
 fn project_dir(path: &str) -> Result<PathBuf, String> {
-    let path = path.trim();
+    let path = clean_path_input(path);
     if path.is_empty() {
         return Err("enter a project folder path".into());
     }
@@ -639,9 +652,9 @@ pub fn events_since(s: &Session, seq: u64) -> Result<Vec<Event>, String> {
 
 pub fn acknowledge_recovery(s: &Session) -> Result<Snapshot, String> {
     s.with_engine(|e| {
-        e.acknowledge_recovery();
-        snapshot(e)
-    })
+        e.acknowledge_recovery()?;
+        Ok(snapshot(e))
+    })?
 }
 
 /// Run ERC, DRC or DFM on the current revision and record the report as evidence.
@@ -1193,16 +1206,29 @@ fn release_check_of(dir: Option<&Path>, p: &Project) -> ReleaseCheck {
     let (_, blocking, gate_report) = eak_manufacturing::release_gates_with_report(p, &refs);
     let mut gates = vec![];
     for (check, title) in RELEASE_REPORTS {
-        let prefix = format!("{check} ");
+        // "DRC reports 2 error(s)" and the per-rule "DRC: DRC-002 is UNKNOWN: …" lines.
+        let (prefix, rule_prefix) = (format!("{check} "), format!("{check}: "));
         let reasons: Vec<String> = blocking
             .iter()
-            .filter(|b| b.starts_with(&prefix) || (check == "MECH" && b.contains("MECH-0")))
+            .filter(|b| {
+                b.starts_with(&prefix)
+                    || b.starts_with(&rule_prefix)
+                    || (check == "MECH" && b.contains("MECH-0"))
+            })
             .cloned()
             .collect();
         let report = reports.iter().find(|r| r.check == check);
+        // ADR-0048: a report with an UNKNOWN rule is UNKNOWN, never PASS, even with 0 errors.
+        let unknown = |r: &Report| {
+            let u = eak_validation::CheckState::Unknown;
+            r.rule_results
+                .iter()
+                .any(|rr| rr.state == u || rr.default_state == Some(u))
+        };
         let state = match report {
             None => "NOT_RUN",
             Some(r) if r.outcome == eak_validation::Outcome::Errors => "FAIL",
+            Some(r) if unknown(r) => "UNKNOWN",
             Some(_) if reasons.is_empty() => "PASS",
             Some(_) => "UNKNOWN",
         };

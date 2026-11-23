@@ -99,7 +99,9 @@ and otherwise say so and build the source. Those releases are made only by the `
 whose `ci` run is green: unsigned Tauri bundles (Linux `.deb`/AppImage, Windows NSIS setup, macOS arm64 and x64
 `.dmg`), the `eak` CLI + `eak-mcp` archives, `SHA256SUMS`, and `provenance.json` (commit SHA, the green CI run,
 toolchain versions, checksums). The installer verifies SHA-256 against `SHA256SUMS` before installing. Older
-releases such as v0.1.4 are never picked.
+releases such as v0.1.4 are never picked. Version-tag releases (v0.1.5-rc.1 and later, published when a
+`vX.Y.Z[-suffix]` tag matching the app version is pushed) are not picked automatically either: install one with
+`EAK_VERSION=<tag>` or with the per-OS commands in the [README](../README.md#install).
 - Force the source build: Linux/macOS `curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.sh | bash -s -- --source`;
   Windows `$env:EAK_INSTALL_MODE='source'; irm https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.ps1 | iex`
 - Force prebuilt only (fails if none is published): `--prebuilt` / `$env:EAK_INSTALL_MODE='prebuilt'`.

@@ -232,4 +232,19 @@ describe("Annotate options dialog", () => {
     open();
     expect((screen.getByRole("option", { name: "Selected symbol" }) as HTMLOptionElement).disabled).toBe(true);
   });
+
+  it("stays open with a reason when the engine refuses the command or is busy (S18)", async () => {
+    const onClose = vi.fn();
+    render(<AnnotateDialog busy={false} apply={async () => false} onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Annotate" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/Not applied/);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("a busy Annotate button says why it is disabled", () => {
+    render(<AnnotateDialog busy={true} apply={async () => true} onClose={vi.fn()} />);
+    const b = screen.getByRole("button", { name: "Annotate" });
+    expect((b as HTMLButtonElement).disabled).toBe(true);
+    expect(b.getAttribute("title")).toMatch(/Another command is running/);
+  });
 });

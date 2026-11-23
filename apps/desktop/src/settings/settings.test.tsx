@@ -10,7 +10,7 @@ import { actionForKey, keysOf, menusFor, paletteFor, toolbarFor } from "../actio
 import { workspaceActions, type ActionDeps } from "../actions/sets";
 import type { Action } from "../actions/types";
 import { applyColours, PAPER, resetColourStore, setColour, setColourPreset } from "./canvasColours";
-import { bind, conflictFor, conflicts, EASYEDA_STYLE, EDITOR_RESERVED, getKeymap, normalize, parseKeymap, resetKeymapStore, setPreset, specOf } from "./keymap";
+import { bind, conflictFor, conflicts, EASYEDA_STYLE, EDITOR_RESERVED, getKeymap, normalize, parseKeymap, resetKeymapStore, setPreset, SHELL_RESERVED, specOf } from "./keymap";
 import { SettingsDialog } from "./SettingsDialog";
 
 function deps(): ActionDeps {
@@ -72,6 +72,18 @@ describe("key map", () => {
     expect(conflictFor(all(), byId("t-via"), "X")).toBeNull();
   });
 
+  it("F8 (audit S8): the PCB layer keys and the shell keys outside the registry are refused with a reason", () => {
+    expect(conflictFor(all(), byId("t-route"), "Alt+T")).toMatch(/Alt\+T is used by the pcb editor/);
+    for (const k of ["Alt+B", "+", "Shift++", "=", "-"]) expect(conflictFor(all(), byId("t-route"), k), k).toMatch(/pcb editor/);
+    // a schematic-only action may still use a PCB-only key
+    expect(conflictFor(all(), byId("t-wire"), "Alt+T")).toBeNull();
+    expect(conflictFor(all(), byId("undo"), "Mod+Shift+T")).toMatch(/new terminal space; it cannot be rebound/);
+    expect(conflictFor(all(), byId("undo"), "Mod+O")).toMatch(/Project Home/);
+    expect(conflictFor(all(), byId("undo"), "Mod+N")).toMatch(/Project Home/);
+    expect(bind(all(), byId("undo"), "Mod+Shift+T")).not.toBeNull();
+    expect(keysOf(byId("undo"))).toEqual(["Mod+Z"]);
+  });
+
   it("both presets are free of conflicts and of editor-owned keys; the EasyEDA-style map only names real actions", () => {
     const ids = new Set(all().map((a) => a.id));
     for (const id of Object.keys(EASYEDA_STYLE)) expect(ids.has(id), id).toBe(true);
@@ -85,6 +97,9 @@ describe("key map", () => {
         }
     }
     expect(keysOf(byId("t-wire"))).toEqual(["Alt+W"]);
+    // F8 (audit S8): Route moved off Alt+T, the PCB editor's top-layer key
+    expect(keysOf(byId("t-route"))).toEqual(["Alt+R"]);
+    for (const a of all()) for (const k of keysOf(a)) expect(SHELL_RESERVED[normalize(k)], `${a.id} ${k}`).toBeUndefined();
     expect(keysOf(byId("save"))).toEqual(["Mod+S"]);
     expect(getKeymap().preset).toBe("easyeda-style");
   });

@@ -4,7 +4,7 @@
 // the effective binding from here, so a rebinding shows in menus, toolbar tooltips, the command
 // palette, Help and the key handler at once. A view preference, not design data.
 import { useSyncExternalStore } from "react";
-import { DEFAULT_KEYMAP } from "../design/shortcuts";
+import { DEFAULT_KEYMAP, HOME_SHORTCUTS, SHORTCUTS } from "../design/shortcuts";
 import type { Action, DocContext } from "../actions/types";
 import { DOC_CONTEXTS } from "../actions/types";
 
@@ -28,7 +28,8 @@ export const EASYEDA_STYLE: Readonly<Record<string, readonly string[]>> = {
   "t-bus": ["Alt+B"],
   "t-noconnect": ["Alt+Q"],
   "t-place": ["Alt+P"],
-  "t-route": ["Alt+T"],
+  // Alt+T / Alt+B are the PCB editor's top / bottom layer keys, so Route takes Alt+R.
+  "t-route": ["Alt+R"],
   "t-via": ["Alt+V"],
   "t-zone": ["Alt+Z"],
   "t-outline": ["Alt+O"],
@@ -169,6 +170,23 @@ export const EDITOR_RESERVED: Readonly<Record<string, readonly DocContext[]>> = 
   "Mod+G": ["schematic"],
   "Mod+Shift+G": ["schematic"],
   "Mod+A": EDITING,
+  // PCB layer keys (`PcbView.tsx` key handler): top / bottom copper, next / previous layer.
+  "Alt+T": ["pcb"],
+  "Alt+B": ["pcb"],
+  "+": ["pcb"],
+  "Shift++": ["pcb"],
+  "=": ["pcb"],
+  "-": ["pcb"],
+};
+
+/**
+ * Keys the app shell handles outside the action registry (`App.tsx`, `ProjectHome.tsx`): never
+ * bindable to an action, because the shell listener would run as well.
+ */
+export const SHELL_RESERVED: Readonly<Record<string, string>> = {
+  [SHORTCUTS.newTerminalSpace]: "opens a new terminal space",
+  [HOME_SHORTCUTS.openProject]: "opens a project folder on Project Home",
+  [HOME_SHORTCUTS.newProject]: "starts a new project on Project Home",
 };
 
 const ctxOf = (a: Pick<Action, "docs">): readonly DocContext[] => a.docs ?? DOC_CONTEXTS;
@@ -181,6 +199,8 @@ const overlap = (x: readonly DocContext[], y: readonly DocContext[]) => x.some((
 export function conflictFor(actions: readonly Action[], target: Action, spec: string): string | null {
   const n = normalize(spec);
   if (n === "Escape") return "Escape closes dialogs and clears the selection; it cannot be rebound";
+  const shell = SHELL_RESERVED[n];
+  if (shell) return `${n} ${shell}; it cannot be rebound`;
   const reserved = EDITOR_RESERVED[n];
   if (reserved && overlap(reserved, ctxOf(target))) return `${n} is used by the ${reserved.filter((c) => ctxOf(target).includes(c)).join(" and ")} editor`;
   for (const b of actions) {
@@ -208,6 +228,12 @@ export function conflicts(actions: readonly Action[]): { key: string; a: string;
     }),
   );
   return out;
+}
+
+/** First effective key of the action with this id, re-rendering the caller on a rebinding: for tooltips outside the registry's menus and toolbar. */
+export function useActionKey(id: string): string | undefined {
+  useKeymap();
+  return effectiveKeys({ id })[0];
 }
 
 /** For tests: forget the stored key map. */

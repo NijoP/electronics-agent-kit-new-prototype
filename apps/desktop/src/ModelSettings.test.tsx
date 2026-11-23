@@ -12,6 +12,8 @@ type Call = { cmd: string; args: Record<string, any> };
 let calls: Call[];
 let providers: ProviderView[];
 let modelListFails: boolean;
+// When true, `performance_settings` fails (S21: the Performance section must say so, with Retry).
+let performanceFails: boolean;
 let nextReport: ConnectionReport;
 const SECRET = "sk-ui-secret-123";
 
@@ -95,6 +97,7 @@ beforeEach(() => {
   calls = [];
   providers = [];
   modelListFails = false;
+  performanceFails = false;
   nextReport = connected;
   mockIPC((cmd, payload) => {
     const args = (payload ?? {}) as Record<string, any>;
@@ -103,6 +106,9 @@ beforeEach(() => {
     switch (cmd) {
       case "recent_projects":
         return [];
+      case "performance_settings":
+        if (performanceFails) throw "settings file unreadable";
+        return { mode: "balanced", custom: { analysis_jobs: 2, background_jobs: 1, cache_budget_mb: 256, pixel_ratio_cap: 2, antialias: true, scrollback_lines: 5000 } };
       case "model_catalog":
         return CATALOG;
       case "model_providers":
@@ -312,5 +318,19 @@ describe("model provider settings", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect((await screen.findByRole("alert")).textContent).toContain("needs a base URL");
+  });
+});
+
+// S21: the Performance section vanished silently when its settings could not be read.
+describe("Performance settings read error", () => {
+  it("shows why the settings could not be read and reads them again on Retry", async () => {
+    performanceFails = true;
+    await openPanel();
+    const perf = await screen.findByRole("region", { name: "Performance" });
+    expect((await within(perf).findByRole("alert")).textContent).toContain("settings file unreadable");
+    performanceFails = false;
+    fireEvent.click(within(perf).getByRole("button", { name: "Retry" }));
+    expect(await screen.findByLabelText(/Performance mode/)).toBeTruthy();
+    expect(calls.filter((c) => c.cmd === "performance_settings").length).toBe(2);
   });
 });

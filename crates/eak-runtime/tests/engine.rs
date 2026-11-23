@@ -313,7 +313,25 @@ fn interrupted_operation_is_reconciled_on_open() {
         C::SetProjectName { name: "z".into() },
     );
     assert!(!r.accepted);
-    e.acknowledge_recovery();
+    // Regression (old PR #11): the block used to live only in memory, so simply reopening
+    // the project (the next CLI or agent invocation) lifted it without any acknowledgement.
+    drop(e);
+    let mut e = Engine::open(&dir, false).unwrap();
+    assert!(e.recovery.reconciled.is_empty(), "already reconciled");
+    let reason = e
+        .blocked_reason()
+        .expect("block survives reopen")
+        .to_string();
+    assert!(reason.contains("op_weird"), "{reason}");
+    assert!(
+        !run(
+            &mut e,
+            Actor::human(),
+            C::SetProjectName { name: "z".into() }
+        )
+        .accepted
+    );
+    e.acknowledge_recovery().unwrap();
     assert!(
         run(
             &mut e,
@@ -323,6 +341,11 @@ fn interrupted_operation_is_reconciled_on_open() {
         .accepted
     );
     drop(e);
+    // Acknowledgement is durable too.
+    assert!(Engine::open(&dir, false)
+        .unwrap()
+        .blocked_reason()
+        .is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -65,7 +65,7 @@ export function ReleaseCheckDialog({ revision, busy, onClose }: { revision: numb
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal output-dialog" role="dialog" aria-label="Release check" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
+      <div className="modal output-dialog" role="dialog" aria-modal="true" aria-label="Release check" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
         <div className="modal-head">
           <h2>Release check</h2>
           <button type="button" onClick={onClose}>

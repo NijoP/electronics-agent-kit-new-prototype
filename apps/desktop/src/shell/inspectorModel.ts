@@ -34,9 +34,11 @@ export interface SelectionRef {
   labels: Id[];
   footprints: Id[];
   tracks: Id[];
+  vias: Id[];
+  zones: Id[];
 }
-export const NO_SELECTION: SelectionRef = { symbols: [], wires: [], labels: [], footprints: [], tracks: [] };
-export const selectionSize = (s: SelectionRef) => s.symbols.length + s.wires.length + s.labels.length + s.footprints.length + s.tracks.length;
+export const NO_SELECTION: SelectionRef = { symbols: [], wires: [], labels: [], footprints: [], tracks: [], vias: [], zones: [] };
+export const selectionSize = (s: SelectionRef) => (Object.keys(NO_SELECTION) as (keyof SelectionRef)[]).reduce((n, k) => n + s[k].length, 0);
 
 export interface EditorContext {
   editor: "schematic" | "pcb";
@@ -442,6 +444,94 @@ function trackFields(s: Snapshot, ids: Id[]): PropModel {
   };
 }
 
+/** F2 (M2): a via's position is edited with `MoveVia` (one command per via, a Batch for several). */
+function viaFields(s: Snapshot, ids: Id[]): PropModel {
+  const vs = ids.map((id) => s.project.pcb.vias[id]).filter(present);
+  const order = stackLayers(s.project.pcb.board.stackup).map((l) => l.layer);
+  const span = (v: (typeof vs)[number]) => {
+    const from = v.from ?? order[0] ?? "top";
+    const to = v.to ?? order[order.length - 1] ?? "bottom";
+    return `${layerName(from)} – ${layerName(to)}`;
+  };
+  const axis = (k: "x" | "y"): PropField => ({
+    id: k,
+    label: `${k.toUpperCase()} (mm)`,
+    ...common(vs.map((v) => fmt(v.position[k]))),
+    edit: {
+      kind: "text",
+      commit: (v) => {
+        const n = parseMm(v);
+        if (typeof n === "string") return n;
+        const cmds: Command[] = vs.filter((x) => x.position[k] !== n).map((x): Command => ({ type: "MoveVia", via_id: x.id, position: withAxis(x.position, k, n) }));
+        return batch(cmds, `Set ${k.toUpperCase()} of ${plural(cmds.length, "via")}`);
+      },
+    },
+  });
+  const noEdit = "Unavailable: the engine has no command to change a placed via's net, drill, diameter or span; delete it and place a new one";
+  return {
+    title: vs.length === 1 ? `Via ${vs[0].net}` : plural(vs.length, "via"),
+    fields: [
+      { id: "net", label: "Net", ...common(vs.map((v) => v.net)) },
+      axis("x"),
+      axis("y"),
+      { id: "drill", label: "Drill (mm)", ...common(vs.map((v) => fmt(v.drill))) },
+      { id: "diameter", label: "Diameter (mm)", ...common(vs.map((v) => fmt(v.diameter))) },
+      { id: "span", label: "Span", ...common(vs.map(span)) },
+      unavailable("via-edit", "Change net, size or span", noEdit),
+    ],
+  };
+}
+
+/** F2 (M2): a zone's net, layer and clearance are edited with `EditZone` (a Batch for several). */
+function zoneFields(s: Snapshot, ids: Id[]): PropModel {
+  const zs = ids.map((id) => s.project.pcb.zones[id]).filter(present);
+  const order = stackLayers(s.project.pcb.board.stackup).map((l) => l.layer);
+  const nets = [...new Set([...s.geometry.footprints.flatMap((f) => f.pads.map((p) => p.net)), ...Object.values(s.project.pcb.tracks).map((t) => t.net), ...zs.map((z) => z.net)])]
+    .filter((n): n is string => !!n)
+    .sort();
+  const edit = (change: (z: (typeof zs)[number]) => Command | null, label: string): Commit => batch(zs.map(change).filter((c): c is Command => c !== null), label);
+  return {
+    title: zs.length === 1 ? `Zone ${zs[0].net}` : plural(zs.length, "zone"),
+    fields: [
+      {
+        id: "net",
+        label: "Net",
+        ...common(zs.map((z) => z.net)),
+        edit: { kind: "select", options: nets.map((n) => ({ value: n, label: n })), commit: (v) => edit((z) => (z.net === v ? null : { type: "EditZone", zone_id: z.id, net: v }), `Set net of ${plural(zs.length, "zone")}`) },
+      },
+      {
+        id: "layer",
+        label: "Layer",
+        ...common(zs.map((z) => layerKey(z.layer))),
+        edit: {
+          kind: "select",
+          options: order.map((l) => ({ value: layerKey(l), label: layerName(l) })),
+          commit: (v) => {
+            const l = order.find((o) => layerKey(o) === v);
+            return l ? edit((z) => (layerKey(z.layer) === v ? null : { type: "EditZone", zone_id: z.id, layer: l }), `Move ${plural(zs.length, "zone")} to ${layerName(l)}`) : null;
+          },
+        },
+      },
+      {
+        id: "clearance",
+        label: "Clearance (mm)",
+        ...common(zs.map((z) => fmt(z.clearance))),
+        edit: {
+          kind: "text",
+          commit: (v) => {
+            const n = parseMm(v);
+            if (typeof n === "string") return n;
+            if (n < 0) return "Zone clearance cannot be negative.";
+            return edit((z) => (z.clearance === n ? null : { type: "EditZone", zone_id: z.id, clearance: n }), `Set clearance of ${plural(zs.length, "zone")}`);
+          },
+        },
+      },
+      { id: "outline", label: "Outline", ...common(zs.map((z) => `${z.outline.length} points`)) },
+      unavailable("fill", "Fill method, islands, priority", "Unavailable: the engine fills every zone solid and the EAK-IR has no fill-method, island or priority fields"),
+    ],
+  };
+}
+
 /**
  * Field rows for a selection. Objects of one kind show their common fields (a value that
  * differs is "mixed"); a selection of several kinds lists what it holds.
@@ -460,7 +550,7 @@ export function selectionModel(s: Snapshot, sel: SelectionRef): PropModel | null
       ],
     };
   const k = kinds[0];
-  const build = { symbols: symbolFields, footprints: footprintFields, wires: wireFields, labels: labelFields, tracks: trackFields }[k];
+  const build = { symbols: symbolFields, footprints: footprintFields, wires: wireFields, labels: labelFields, tracks: trackFields, vias: viaFields, zones: zoneFields }[k];
   const m = build(s, sel[k]);
   return grouping ? { ...m, fields: [...m.fields, grouping] } : m;
 }
@@ -474,7 +564,7 @@ const NEW_GROUP = "new";
  */
 export function groupField(s: Snapshot, sel: SelectionRef): PropField | null {
   const members = [...sel.symbols, ...sel.wires, ...sel.labels];
-  if (members.length === 0 || sel.footprints.length > 0 || sel.tracks.length > 0) return null;
+  if (members.length === 0 || sel.footprints.length > 0 || sel.tracks.length > 0 || sel.vias.length > 0 || sel.zones.length > 0) return null;
   const touched = Object.values(s.project.schematic.groups ?? {}).filter((g) => g.members.some((m) => members.includes(m)));
   if (touched.length > 0) {
     const ungroup = touched.map((g): Command => ({ type: "Ungroup", group_id: g.id }));

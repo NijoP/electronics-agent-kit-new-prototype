@@ -6,6 +6,8 @@ import { IPC_COMMANDS } from "./api";
 import { App } from "./App";
 import { shellCmd } from "./shell.test-data";
 import { fixture } from "./fixture.test-data";
+import { bind } from "./settings/keymap";
+import type { Action } from "./actions/types";
 import { forgetViewports, loadViewport, sanitizeViewBox, saveViewport } from "./shell/viewState";
 import type { CommandResponse } from "./types";
 
@@ -47,6 +49,9 @@ beforeEach(() => {
         return [];
       case "execute_command":
         executed.push(args.command);
+        revision += 1;
+        return resp();
+      case "undo":
         revision += 1;
         return resp();
       case "simulation_status":
@@ -198,6 +203,39 @@ describe("design rules entry point", () => {
     await open();
     fireEvent.click(tb().getByRole("button", { name: "Design rules" }));
     expect(await screen.findByRole("dialog", { name: "Design rules" })).toBeTruthy();
+  });
+
+  it("F8 (audit S9): Ctrl+Z with Design rules open does not undo behind the modal dialog; closed, it does", async () => {
+    await open();
+    fireEvent.click(tb().getByRole("button", { name: "Design rules" }));
+    const dialog = await screen.findByRole("dialog", { name: "Design rules" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    const bottomShown = () => screen.queryByRole("region", { name: "Bottom panel" }) !== null;
+    const shownBefore = bottomShown();
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "j", ctrlKey: true });
+    await act(() => new Promise<void>((r) => setTimeout(r, 0)));
+    expect(calls).not.toContain("undo");
+    expect(bottomShown()).toBe(shownBefore);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Design rules" })).toBeNull());
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    await waitFor(() => expect(calls).toContain("undo"));
+  });
+});
+
+describe("tooltips follow the key map (F8, audit S24)", () => {
+  it("rebinding Bottom panel and Explorer changes the dock and activity-bar tooltips", async () => {
+    await open();
+    const hide = () => screen.getByRole("button", { name: "Hide bottom panel" });
+    expect(hide().title).toBe("Hide panel (Ctrl+J)");
+    expect(within(screen.getByRole("navigation", { name: "Activity bar" })).getByRole("button", { name: "Explorer" }).title).toContain("(Ctrl+Shift+E)");
+    act(() => {
+      expect(bind([], { id: "toggle-bottom", label: "Bottom panel" } as Action, "Mod+Alt+J")).toBeNull();
+      expect(bind([], { id: "show-project", label: "Explorer" } as Action, "Mod+Alt+E")).toBeNull();
+    });
+    expect(hide().title).toBe("Hide panel (Ctrl+Alt+J)");
+    expect(within(screen.getByRole("navigation", { name: "Activity bar" })).getByRole("button", { name: "Explorer" }).title).toContain("(Ctrl+Alt+E)");
   });
 });
 

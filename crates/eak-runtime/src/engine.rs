@@ -178,12 +178,28 @@ impl Engine {
         let mut e = Engine::in_memory(project);
         e.dir = Some(dir.to_path_buf());
         e._lock = Some(lock);
-        if recovery
+        // Reconciliation records the UNKNOWN_OUTCOME in the journal, so a later open no
+        // longer sees it as pending. The write block is therefore persisted separately and
+        // only cleared by an explicit acknowledgement: reopening never lifts it silently.
+        let block_file = dir.join(store::RECOVERY_BLOCK_FILE);
+        let unknown: Vec<&str> = recovery
             .reconciled
             .iter()
-            .any(|(_, s)| *s == EntryState::UnknownOutcome)
-        {
-            e.blocked = Some("an interrupted operation has an unknown outcome; inspect the project and acknowledge recovery before editing".into());
+            .filter(|(_, s)| *s == EntryState::UnknownOutcome)
+            .map(|(op, _)| op.as_str())
+            .collect();
+        if !unknown.is_empty() {
+            let reason = format!(
+                "interrupted operation(s) {} have an unknown outcome; inspect the project and acknowledge recovery before editing",
+                unknown.join(", ")
+            );
+            store::atomic_write(&block_file, reason.as_bytes())
+                .map_err(|err| format!("cannot persist the recovery block: {err}"))?;
+        }
+        if block_file.exists() {
+            let reason = std::fs::read_to_string(&block_file)
+                .map_err(|err| format!("cannot read {}: {err}", block_file.display()))?;
+            e.blocked = Some(reason);
         }
         e.recovery = recovery;
         e.rebuild_history();
@@ -248,7 +264,16 @@ impl Engine {
     pub fn blocked_reason(&self) -> Option<&str> {
         self.blocked.as_deref()
     }
-    pub fn acknowledge_recovery(&mut self) {
+    /// The user accepts the on-disk state after an UNKNOWN_OUTCOME recovery; lifts the
+    /// persisted write block.
+    pub fn acknowledge_recovery(&mut self) -> Result<(), String> {
+        if let Some(dir) = &self.dir {
+            match std::fs::remove_file(dir.join(store::RECOVERY_BLOCK_FILE)) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(format!("cannot clear the recovery block: {e}")),
+            }
+        }
         self.blocked = None;
         self.emit(
             "recovery_acknowledged",
@@ -256,6 +281,7 @@ impl Engine {
             &Actor::human().label(),
             "user accepted the on-disk state after recovery".into(),
         );
+        Ok(())
     }
     pub fn events_since(&self, seq: u64) -> Vec<Event> {
         self.events

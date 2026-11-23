@@ -234,3 +234,51 @@ pub fn build_pcb_layers(engine: &mut Engine, copper_layers: u8) -> Result<Vec<St
     warnings.push(format!("revision {}", b.engine.project().revision));
     Ok(warnings)
 }
+
+/// Declares a voltage and a current, through typed commands, for every copper net of the board
+/// that has none, so every voltage- and current-based DRC rule is evaluated (ADR-0048: a rule
+/// left UNKNOWN blocks the release). Fixture ratings for this logic-level reference design, not
+/// engineering data: GND 0 V and 0.3 A (the return of the 3V3 rail), any other net 3.3 V and
+/// 0.02 A. Declared values are kept.
+pub fn declare_undeclared_nets(engine: &mut Engine) -> Result<(), String> {
+    let p = engine.project();
+    let nets: std::collections::BTreeSet<String> = eak_engineering::copper::items(p)
+        .into_iter()
+        .map(|i| i.net)
+        .filter(|n| !n.is_empty())
+        .collect();
+    let c = &p.constraints;
+    let no_voltage: Vec<String> = nets
+        .iter()
+        .filter(|n| !c.net_voltages_v.contains_key(*n))
+        .cloned()
+        .collect();
+    let no_current: Vec<String> = nets
+        .iter()
+        .filter(|n| !c.net_currents_a.contains_key(*n))
+        .cloned()
+        .collect();
+    let mut b = Builder {
+        engine,
+        actor: Actor {
+            kind: crate::engine::ActorKind::Cli,
+            name: "fixture".into(),
+            session: None,
+        },
+    };
+    for net in no_voltage {
+        let volts = if net == "GND" { 0.0 } else { 3.3 };
+        b.run(C::SetNetVoltage {
+            net,
+            volts: Some(volts),
+        })?;
+    }
+    for net in no_current {
+        let amps = if net == "GND" { 0.3 } else { 0.02 };
+        b.run(C::SetNetCurrent {
+            net,
+            amps: Some(amps),
+        })?;
+    }
+    Ok(())
+}

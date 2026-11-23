@@ -138,7 +138,7 @@ function Install-EakSource {
     if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) { Fail 'This script is for Windows.' @('On Linux/macOS run: curl -fsSL https://raw.githubusercontent.com/NijoP/electronics-agent-kit-new-prototype/main/install.sh | bash') }
     if (-not [Environment]::Is64BitOperatingSystem) { Fail '32-bit Windows is not supported (x64 only).' }
     $arch = $env:PROCESSOR_ARCHITEW6432; if (-not $arch) { $arch = $env:PROCESSOR_ARCHITECTURE }
-    if ($arch -ne 'AMD64') { Fail "unsupported architecture $arch: only Windows 10/11 x64 is supported" @('Windows ARM64 is not supported yet; see docs/PLATFORM_SUPPORT.md.') }
+    if ($arch -ne 'AMD64') { Fail "unsupported architecture ${arch}: only Windows 10/11 x64 is supported" @('Windows ARM64 is not supported yet; see docs/PLATFORM_SUPPORT.md.') }
     $os = [Environment]::OSVersion.Version
     if ($os.Major -lt 10) { Fail "Windows $os is too old (Windows 10 or 11 required)" }
     Info "windows-x86_64 (Windows $os), PowerShell $($PSVersionTable.PSVersion)"
@@ -380,6 +380,9 @@ function Install-EakSource {
       $psExe = (Get-Process -Id $PID).Path
       $bp = Start-Process -FilePath $psExe -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File ' + (Quote-Arg (Join-Path $src 'scripts\build.ps1')) + ' -ResultFile ' + (Quote-Arg $result)) `
         -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru -NoNewWindow
+      # Windows PowerShell 5.1: without touching Handle while the process runs, ExitCode reads as
+      # $null after exit, and `$null -ne 0` would report every successful build as failed.
+      $null = $bp.Handle
       $t0 = Get-Date
       while (-not $bp.HasExited) {
         Start-Sleep -Seconds 20

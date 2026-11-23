@@ -155,6 +155,28 @@ fn invalid_requests_fail_safely() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// Regression: Windows Explorer "Copy as path" wraps the folder in double quotes
+/// (`"C:\test of eak"`); the quotes and surrounding blanks must not make it "not absolute".
+#[test]
+fn quoted_project_paths_are_accepted() {
+    let d = tmpdir("quoted path");
+    let s = session();
+    let snap = create_project(&s, &format!("  \"{}\" ", path(&d)), "Quoted").unwrap();
+    assert_eq!(snap.dir.as_deref(), Some(path(&d).as_str()));
+    close_project(&s).unwrap();
+
+    let again = open_project(&s, &format!("'{}'", path(&d)), false).unwrap();
+    assert_eq!(again.project.id, snap.project.id);
+    close_project(&s).unwrap();
+
+    // Stripping quotes never turns a relative or empty path into a valid one.
+    assert!(create_project(&s, "\"relative/dir\"", "x")
+        .unwrap_err()
+        .contains("absolute"));
+    assert!(open_project(&s, "\"\"", false).is_err());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 #[test]
 fn locked_project_needs_explicit_take_over() {
     let d = tmpdir("lock");
@@ -1009,6 +1031,51 @@ fn release_check_reads_saved_reports_and_never_releases_with_a_not_run_gate() {
         assert_eq!(state(&next, id), "NOT_RUN", "{id}: revision 0 evidence");
     }
     assert_eq!(next.status, PackageStatus::Draft);
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// F1 / S1 regression (ADR-0048): a saved DRC report with 0 errors but DRC-002 UNKNOWN (nets
+/// with no declared voltage) is shown UNKNOWN, never PASS; its UNKNOWN rule is a blocking
+/// reason naming DRC-002, the clearances gate is UNKNOWN, and the status stays DRAFT.
+#[test]
+fn release_check_shows_a_report_with_an_unknown_rule_as_unknown_and_blocks() {
+    use eak_manufacturing::PackageStatus;
+    use eak_validation::CheckState;
+    let d = tmpdir("release-unknown");
+    {
+        let mut e = Engine::create(&d, "Release Unknown").unwrap();
+        fixtures::build_schematic(&mut e).unwrap();
+        fixtures::build_pcb(&mut e).unwrap();
+    }
+    let s = session();
+    open_project(&s, &path(&d), false).unwrap();
+    let p = current_project(&s).unwrap().project;
+    let drc_r = eak_validation::drc::run(&p);
+    assert_eq!(drc_r.errors, 0, "{:?}", drc_r.findings);
+    assert_eq!(drc_r.state_of("DRC-002"), CheckState::Unknown);
+
+    let c = run_release_checks(&s).unwrap();
+    let row = |id: &str| c.gates.iter().find(|g| g.id == id).unwrap().clone();
+    let drc_row = row("drc");
+    assert_eq!(drc_row.state, "UNKNOWN", "{drc_row:?}");
+    assert!(
+        drc_row.reasons.iter().any(|r| r.contains("DRC-002")),
+        "{drc_row:?}"
+    );
+    assert!(
+        c.blocking
+            .iter()
+            .any(|b| b.starts_with("DRC: DRC-002 is UNKNOWN")),
+        "{:?}",
+        c.blocking
+    );
+    assert_eq!(row("clearances").state, "UNKNOWN");
+    assert_eq!(c.status, PackageStatus::Draft);
+    // Reading again gives the same verdict from the saved report.
+    let states =
+        |c: &ReleaseCheck| -> Vec<String> { c.gates.iter().map(|g| g.state.clone()).collect() };
+    assert_eq!(states(&release_check(&s).unwrap()), states(&c));
     close_project(&s).unwrap();
     let _ = std::fs::remove_dir_all(&d);
 }

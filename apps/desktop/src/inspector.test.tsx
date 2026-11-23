@@ -163,7 +163,7 @@ describe("selection mode", () => {
     });
     const t = selectionModel(s, { ...NO_SELECTION, tracks: ["trk_1"] })!;
     expect(field(t.fields, "width").value).toBe("0.250");
-    expect(commit(field(t.fields, "width"), "0.4")).toMatchObject({ type: "Batch" });
+    expect(commit(field(t.fields, "width"), "0.4")).toEqual({ type: "EditTrack", track_id: "trk_1", width: 400_000 });
     expect(commit(field(t.fields, "width"), "-1")).toMatch(/not a positive width/);
     const w = selectionModel(s, { ...NO_SELECTION, wires: ["wir_1"] })!;
     expect(field(w.fields, "style").unavailable).toMatch(/^Unavailable/);

@@ -303,26 +303,21 @@ export function layerChangeVias(t: Track, to: CopperLayer, board: BoardCopper): 
 }
 
 /**
- * Change a committed track's width and/or layer as ONE undoable `Batch` (delete + re-add with
- * the same end points and net). A layer change also adds the vias that keep its ends connected
- * (`layerChangeVias`) when `board` is given, and is refused when it cannot. Null when nothing
- * changes.
+ * Change a committed track's width and/or layer in place with `EditTrack`, so the track keeps its
+ * id (and stays selected). A layer change also adds the vias that keep its ends connected
+ * (`layerChangeVias`) when `board` is given, in ONE `Batch` with the edit (one undo step), and is
+ * refused when it cannot. Null when nothing changes.
  */
 export function trackEdit(t: Track, change: { width?: Nm; layer?: CopperLayer }, board?: BoardCopper): Command | { refuse: string } | null {
   const width = change.width ?? t.width;
   const layer = change.layer ?? t.layer;
-  if (!(width > 0) || (width === t.width && sameLayer(layer, t.layer))) return null;
-  const keep = board && !sameLayer(layer, t.layer) ? layerChangeVias(t, layer, board) : { vias: [] };
+  const newWidth = width !== t.width;
+  const newLayer = !sameLayer(layer, t.layer);
+  if (!(width > 0) || (!newWidth && !newLayer)) return null;
+  const keep = board && newLayer ? layerChangeVias(t, layer, board) : { vias: [] };
   if ("refuse" in keep) return keep;
-  return {
-    type: "Batch",
-    commands: [
-      { type: "DeleteTrack", track_id: t.id },
-      { type: "AddTrack", layer, a: t.a, b: t.b, width, net: t.net },
-      ...keep.vias,
-    ],
-    label: `Edit track ${t.net}`,
-  };
+  const edit: Command = { type: "EditTrack", track_id: t.id, ...(newWidth ? { width } : {}), ...(newLayer ? { layer } : {}) };
+  return keep.vias.length ? { type: "Batch", commands: [edit, ...keep.vias], label: `Edit track ${t.net}` } : edit;
 }
 
 /** Delete several tracks as one undo step. */

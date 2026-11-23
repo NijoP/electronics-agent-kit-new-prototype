@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { api, describeError } from "./api";
 import { CataloguePanel } from "./CataloguePanel";
+import { ExternalUrl } from "./ExternalUrl";
 import { setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
 import type { DistributorView, PartsSearch, SourcingRecord } from "./types";
 
@@ -22,6 +23,8 @@ export function distributorUnconfigured(host: string): boolean {
     return true;
   }
 }
+
+type DistState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; view: DistributorView };
 
 interface Props {
   revision: number;
@@ -46,16 +49,14 @@ function Row({ r, onImport, busy }: { r: SourcingRecord; onImport?: (distributor
       <td>{price(r)}</td>
       <td>
         {r.datasheet_url ? (
-          <a href={r.datasheet_url} target="_blank" rel="noreferrer">
-            datasheet
-          </a>
+          <ExternalUrl url={r.datasheet_url} label="datasheet" />
         ) : (
           "—"
         )}
       </td>
       <td>
         {onImport && distributor && (
-          <button type="button" disabled={busy} onClick={() => onImport(distributor)} aria-label={`Import ${distributor}`}>
+          <button type="button" disabled={busy} onClick={() => onImport(distributor)} aria-label={`Import ${distributor}`} title={busy ? "A search or import is running" : "Import this part into the project library"}>
             Import
           </button>
         )}
@@ -99,21 +100,24 @@ export function PartsPanel({ revision, onImported }: Props) {
     });
 
   const [catalogueOpen, setCatalogueOpen] = useState(false);
-  // The backend reports the distributor host it would call; null until known (or unreadable, when
-  // the catalogue stays available and reports its own errors).
-  const [dist, setDist] = useState<DistributorView | null>(null);
+  // The backend reports the distributor host it would call. Fail closed (S20): until the settings
+  // are read and name a real host, the catalogue, live results and live import stay hidden.
+  const [dist, setDist] = useState<DistState>({ kind: "loading" });
+  const [distGen, setDistGen] = useState(0);
   useEffect(() => {
     let live = true;
+    setDist({ kind: "loading" });
     api
       .distributorSettings()
-      .then((v) => live && setDist(v))
-      .catch(() => undefined);
+      .then((v) => live && setDist({ kind: "ok", view: v }))
+      .catch((e) => live && setDist({ kind: "error", message: String(e).replace(/^Error: /, "") }));
     return () => {
       live = false;
     };
-  }, []);
-  const unconfigured = dist !== null && distributorUnconfigured(dist.host);
-  const live = unconfigured ? undefined : result?.live;
+  }, [distGen]);
+  const unconfigured = dist.kind === "ok" && distributorUnconfigured(dist.view.host);
+  const available = dist.kind === "ok" && !unconfigured;
+  const live = available ? result?.live : undefined;
   return (
     <section className="parts" aria-label="Parts search">
       <h2>Parts</h2>
@@ -124,10 +128,10 @@ export function PartsPanel({ revision, onImported }: Props) {
         }}
       >
         <label>
-          {unconfigured ? "Part number or keyword" : "Distributor part number or keyword"}
+          {unconfigured || dist.kind === "error" ? "Part number or keyword" : "Distributor part number or keyword"}
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="C25804" />
         </label>
-        <button type="submit" disabled={busy || query.trim() === ""}>
+        <button type="submit" disabled={busy || query.trim() === ""} title={busy ? "A search or import is running" : query.trim() === "" ? "Type a part number or keyword first" : "Search the EAK library, stored records and (when configured) Distributor"}>
           Search
         </button>
       </form>
@@ -135,11 +139,24 @@ export function PartsPanel({ revision, onImported }: Props) {
         <section className="empty-state" role="note" aria-label="Distributor not configured">
           <strong>Distributor not configured</strong>
           <p className="muted">
-            This build has no distributor host (its placeholder {dist?.host} is a reserved name that never resolves), so the supplier
+            This build has no distributor host (its placeholder {dist.kind === "ok" ? dist.view.host : ""} is a reserved name that never resolves), so the supplier
             catalogue, live stock and prices and live import are unavailable. Search still finds parts in the EAK library and records stored with this
             project.
           </p>
         </section>
+      ) : dist.kind === "error" ? (
+        <section className="empty-state" role="alert" aria-label="Distributor settings unavailable">
+          <strong>Distributor settings could not be read</strong>
+          <p className="muted">
+            {dist.message}. The supplier catalogue, live stock and prices and live import stay hidden until they can be read. Search still finds parts in the
+            EAK library and records stored with this project.
+          </p>
+          <button type="button" onClick={() => setDistGen((n) => n + 1)}>
+            Retry
+          </button>
+        </section>
+      ) : dist.kind === "loading" ? (
+        <p className="muted">Reading the distributor settings…</p>
       ) : (
         <p className="muted">
           Only the text you type is sent to Distributor, signed with your own API credentials. Stock and prices are a snapshot, not a quote.
@@ -184,7 +201,7 @@ export function PartsPanel({ revision, onImported }: Props) {
           </table>
         </>
       )}
-      {!unconfigured && (
+      {available && (
         <details open={catalogueOpen} onToggle={(e) => setCatalogueOpen(e.currentTarget.open)}>
           <summary>Distributor catalogue: credentials, categories, manufacturers, paged search</summary>
           {catalogueOpen && <CataloguePanel busy={busy} onImport={(distributor) => void importPart(distributor)} />}

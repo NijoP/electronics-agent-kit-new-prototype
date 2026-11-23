@@ -5,6 +5,7 @@
 //    dock, and pressing the active one collapses it. Editor panels live in the docks (Phase 1 A3):
 //    Layers in the right dock, the library in the bottom dock.
 import { tip } from "../design/shortcuts";
+import { effectiveKeys, useKeymap } from "../settings/keymap";
 import { Icons } from "./icons";
 import type { WorkspaceEntry } from "./registry";
 
@@ -19,11 +20,17 @@ export const SIDE_VIEWS: { id: SideView; label: string }[] = [
   { id: "assets", label: "Assets" },
 ];
 
-/** Built-in workspaces that open an editor document. */
+/** Built-in workspaces that open an editor document, with the registry action whose key opens each. */
 export const EDITOR_WORKSPACES = [
-  { id: "schematic", label: "Schematic", shortcut: "Mod+1" },
-  { id: "pcb", label: "PCB", shortcut: "Mod+2" },
+  { id: "schematic", label: "Schematic", action: "ws-schematic" },
+  { id: "pcb", label: "PCB", action: "ws-pcb" },
 ] as const;
+
+/** Registry action whose key opens each side view (none for the others). */
+const SIDE_ACTIONS: Partial<Record<SideView, string>> = { project: "show-project", design: "show-design" };
+
+/** First effective key of a registry action (the user's rebinding, else the preset's). */
+const keyOf = (id: string | undefined) => (id ? effectiveKeys({ id })[0] : undefined);
 
 interface Props {
   sideView: SideView;
@@ -39,11 +46,12 @@ interface Props {
 }
 
 export function ActivityBar({ sideView, sideOpen, onSide, workspace, onWorkspace, registered, onSettings, theme, onTheme }: Props) {
+  useKeymap(); // tooltips follow a rebinding
   const side = (id: SideView) => {
     const v = SIDE_VIEWS.find((x) => x.id === id)!;
     const on = sideOpen && sideView === id;
     return (
-      <button key={id} type="button" className={on ? "ab on" : "ab"} aria-label={v.label} aria-pressed={on} title={tip(on ? `${v.label} (press again to collapse the side panel)` : v.label, id === "project" ? "Mod+Shift+E" : id === "design" ? "Mod+Shift+D" : undefined)} onClick={() => onSide(id)}>
+      <button key={id} type="button" className={on ? "ab on" : "ab"} aria-label={v.label} aria-pressed={on} title={tip(on ? `${v.label} (press again to collapse the side panel)` : v.label, keyOf(SIDE_ACTIONS[id]))} onClick={() => onSide(id)}>
         {Icons[id]}
       </button>
     );
@@ -57,7 +65,7 @@ export function ActivityBar({ sideView, sideOpen, onSide, workspace, onWorkspace
     <nav className="activity-bar" aria-label="Activity bar">
       {side("overview")}
       {side("project")}
-      {EDITOR_WORKSPACES.map((w) => ws(w.id, w.label, Icons[w.id], w.shortcut))}
+      {EDITOR_WORKSPACES.map((w) => ws(w.id, w.label, Icons[w.id], keyOf(w.action)))}
       {registered.map((w) => ws(w.id, w.label, w.icon, w.shortcut))}
       <span className="ab-sep" role="separator" />
       {SIDE_VIEWS.filter((v) => v.id !== "project" && v.id !== "overview").map((v) => side(v.id))}

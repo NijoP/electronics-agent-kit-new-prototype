@@ -531,6 +531,7 @@ pub mod cmd {
     #[tauri::command(rename_all = "snake_case")]
     pub async fn distributor_test_connection(app: AppHandle) -> Result<DistributorView, String> {
         blocking(app, Priority::P4, |_| {
+            crate::parts::require_configured(PRODUCTION_BASE)?;
             let l = distributor();
             Ok(test_connection(&l.settings, &l.catalogue))
         })
@@ -543,6 +544,7 @@ pub mod cmd {
         refresh: bool,
     ) -> Result<Reply<Vec<CategoryNode>>, String> {
         blocking(app, Priority::P4, move |_| {
+            crate::parts::require_configured(PRODUCTION_BASE)?;
             Ok(categories(&distributor().catalogue, refresh))
         })
         .await
@@ -554,6 +556,7 @@ pub mod cmd {
         refresh: bool,
     ) -> Result<Reply<Vec<Manufacturer>>, String> {
         blocking(app, Priority::P4, move |_| {
+            crate::parts::require_configured(PRODUCTION_BASE)?;
             Ok(manufacturers(&distributor().catalogue, refresh))
         })
         .await
@@ -565,6 +568,7 @@ pub mod cmd {
         query: CatalogueQuery,
     ) -> Result<Reply<Results>, String> {
         blocking(app, Priority::P4, move |s| {
+            crate::parts::require_configured(PRODUCTION_BASE)?;
             let defs = crate::libstore::all_defs(
                 crate::libstore::store(),
                 &crate::libstore::project_library(s),
