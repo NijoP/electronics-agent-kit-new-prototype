@@ -290,7 +290,11 @@ fn kicad_graphic(g: &Node) -> Result<Graphic, String> {
         "polyline" => {
             let points: Vec<Point> = g
                 .child("pts")
-                .map(|pts| pts.children("xy").filter_map(|p| xy(Some(p))).collect())
+                .map(|pts| {
+                    pts.children("xy")
+                        .filter_map(|p| xy(Some(p)))
+                        .collect::<Vec<_>>()
+                })
                 .unwrap_or_default()
                 .into_iter()
                 .map(to_point)
