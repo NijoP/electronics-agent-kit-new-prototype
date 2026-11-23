@@ -144,9 +144,19 @@ beforeEach(() => {
           p.project.revision = before;
           return { ...resp(c.type, before), accepted: false, revision_after: before, error: { code: "StaleRevision", message: { expected: args.expected_revision, actual: before } } };
         }
-        if (steps.some((s) => s.type === "SyncSchematicToPcb")) {
-          syncChanges = fakeSyncDelta(p);
+        // SyncSchematicToPcbSelected: only the chosen footprints, each with only its chosen pad nets.
+        const selected = steps.find((s) => s.type === "SyncSchematicToPcbSelected") as unknown as { changes: { kind: string; symbol_id: string; pad?: string }[] } | undefined;
+        if (selected) {
+          const chosen = selected.changes;
+          syncChanges = fakeSyncDelta(p)
+            .map((d) => d as { after: { symbol_id: string; pad_nets: Record<string, string> } })
+            .filter((d) => chosen.some((c) => c.kind === "add_footprint" && c.symbol_id === d.after.symbol_id))
+            .map((d) => ({ ...d, after: { ...d.after, pad_nets: Object.fromEntries(Object.entries(d.after.pad_nets).filter(([pad]) => chosen.some((c) => c.kind === "pad_net" && c.symbol_id === d.after.symbol_id && c.pad === pad))) } }));
+        }
+        if (selected || steps.some((s) => s.type === "SyncSchematicToPcb")) {
+          if (!selected) syncChanges = fakeSyncDelta(p);
           for (const sy of Object.values(p.project.schematic.symbols)) {
+            if (selected && !selected.changes.some((c) => c.kind === "add_footprint" && c.symbol_id === sy.id)) continue;
             const fid = `fp_${sy.id}`;
             p.project.pcb.footprints[fid] = { id: fid, symbol_id: sy.id, component_id: sy.component_id, refdes: sy.refdes, position: { x: 50_000_000, y: 0 }, rotation: "R0", side: "top", locked: false };
             p.geometry.footprints.push({ id: fid, symbol_id: sy.id, refdes: sy.refdes, side: "top", position: { x: 50_000_000, y: 0 }, half_w: 1_500_000, half_h: 800_000, pads: [] });
@@ -270,7 +280,7 @@ describe("end-to-end flow", () => {
     expect(fp().checked).toBe(false);
     expect(net().checked).toBe(false);
     expect(apply().disabled).toBe(true);
-    expect(within(eco).getByRole("note").textContent).toMatch(/2 change\(s\) unchecked.*not available yet/);
+    expect(within(eco).getByRole("note").textContent).toMatch(/^No change checked/);
     fireEvent.click(apply());
     // the export lists what was left unchecked; the report itself is recomputed by the engine
     fireEvent.click(within(eco).getByRole("button", { name: "Export report" }));
@@ -286,6 +296,43 @@ describe("end-to-end flow", () => {
     expect(screen.queryByRole("dialog", { name: "Update PCB: review changes" })).toBeNull();
     expect(executed()).toEqual([]);
     expect(Object.keys(proj!.project.pcb.footprints)).toHaveLength(0);
+  });
+
+  it("3d. C2: with some changes unchecked, Apply sends only the checked ones as one Batch (SyncSchematicToPcbSelected); the rest stay for the next update", async () => {
+    await createFromHome();
+    await placeResistor();
+    // A second part, added straight to the fake engine's schematic (setup, not a UI action).
+    proj!.project.schematic.symbols.sym_2 = { ...proj!.project.schematic.symbols.sym_1, id: "sym_2", refdes: "R2" };
+    calls.length = 0;
+    fireEvent.click(toolbar().getByRole("button", { name: "Update PCB" }));
+    let eco = await screen.findByRole("dialog", { name: "Update PCB: review changes" });
+    const rev = proj!.project.revision;
+    // leave R2 (and the pad net that needs its footprint) out
+    fireEvent.click(within(eco).getByRole("checkbox", { name: "Apply Add Footprint R2" }));
+    expect((within(eco).getByRole("checkbox", { name: "Apply Add Pad net R2.1" }) as HTMLInputElement).checked).toBe(false);
+    expect(within(eco).getByRole("note").textContent).toMatch(/^Applying 2 of 4 change\(s\) as one undo step/);
+    fireEvent.click(within(eco).getByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(executed()).toEqual(["Batch"]));
+    expect(execCalls()[0].args).toEqual({
+      expected_revision: rev,
+      command: {
+        type: "Batch",
+        commands: [{ type: "SyncSchematicToPcbSelected", changes: [{ kind: "add_footprint", symbol_id: "sym_1" }, { kind: "pad_net", symbol_id: "sym_1", pad: "1" }] }],
+        label: "Update PCB from schematic (2 selected change(s))",
+      },
+    });
+    const dlg = await screen.findByRole("dialog", { name: "Update PCB report" });
+    const added = within(dlg).getByRole("region", { name: "Components added" }).textContent ?? "";
+    expect(added).toContain("R1");
+    expect(added).not.toContain("R2");
+    expect(Object.keys(proj!.project.pcb.footprints)).toEqual(["fp_sym_1"]);
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Update PCB report" })).toBeNull());
+    // the change left unchecked is what the next Update PCB lists
+    fireEvent.click(toolbar().getByRole("button", { name: "Update PCB" }));
+    eco = await screen.findByRole("dialog", { name: "Update PCB: review changes" });
+    expect(within(eco).getByRole("checkbox", { name: "Apply Add Footprint R2" })).toBeTruthy();
+    expect(within(eco).queryByRole("checkbox", { name: "Apply Add Footprint R1" })).toBeNull();
   });
 
   it("3c. C2: a preview made stale by another change is rejected on Apply and nothing is applied", async () => {

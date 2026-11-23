@@ -71,7 +71,7 @@ import { useKeymap } from "./settings/keymap";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
 import { sheetsInOrder } from "./shell/sheets";
-import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
+import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot, SyncChange } from "./types";
 
 interface Props {
   initial: Snapshot;
@@ -446,11 +446,12 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         (d) => d,
       );
     });
-  // Apply the reviewed preview: the sync as one Batch at the previewed revision (a project that
-  // moved on since the preview rejects it as stale, spec AG-03), then a report built from the
-  // engine's own journalled change list for that operation, so it cannot disagree with what was
-  // applied.
-  const applyEco = (preview: SyncPreview) =>
+  // Apply the reviewed preview as one Batch at the previewed revision (a project that moved on
+  // since the preview rejects it as stale, spec AG-03): the full sync when every change is
+  // checked, otherwise only the checked ones (SyncSchematicToPcbSelected, ADR-0042), so a partial
+  // apply is one revision and one undo step. Then a report built from the engine's own journalled
+  // change list for that operation, so it cannot disagree with what was applied.
+  const applyEco = (preview: SyncPreview, changes: SyncChange[] | null) =>
     guarded(async () => {
       setEcoDialog(null);
       const pid = snapshot.project.id;
@@ -458,7 +459,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       await track(
         "Update PCB",
         async () => {
-          const r = await api.execute(revision, { type: "Batch", commands: [{ type: "SyncSchematicToPcb" }], label: "Update PCB from schematic" });
+          const command: Command = changes ? { type: "SyncSchematicToPcbSelected", changes } : { type: "SyncSchematicToPcb" };
+          const label = changes ? `Update PCB from schematic (${changes.length} selected change(s))` : "Update PCB from schematic";
+          const r = await api.execute(revision, { type: "Batch", commands: [command], label });
           if (!r.accepted) {
             if (r.error?.code === "NothingTo") {
               const report = buildSyncReport([], snapshot.project.pcb);
@@ -1107,7 +1110,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         <EcoPreviewDialog
           preview={ecoDialog}
           busy={busy}
-          onApply={() => applyEco(ecoDialog)}
+          onApply={(changes) => applyEco(ecoDialog, changes)}
           onExport={(excluded) => api.syncPreviewExport(ecoDialog.revision, excluded)}
           onClose={() => setEcoDialog(null)}
         />

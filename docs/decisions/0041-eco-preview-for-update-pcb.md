@@ -35,9 +35,14 @@
   - Apply sends `Batch { commands: [SyncSchematicToPcb] }` at the previewed revision, so a project
     that moved on since the preview is rejected with `StaleRevision` (AG-03) and nothing changes.
     The Update PCB report is then built from the operation's journalled changes, as before.
-  - **Partial apply is not available yet.** While any change is unchecked, Apply is disabled and
-    the dialog says why. Unchecked changes are therefore never applied, but the user cannot apply
-    only some of them. Selective apply needs a new command (option 2), requested from slice C4.
+  - **Partial apply** (2026-11-23, after C4 landed `SyncSchematicToPcbSelected`, ADR-0042): each
+    row names the engine `SyncChange` it applies (a deleted footprint's pad nets have none: they
+    leave with it, so toggling one toggles the footprint). With some changes unchecked, Apply sends
+    `Batch { commands: [SyncSchematicToPcbSelected { changes }] }` at the previewed revision: one
+    revision, one undo step, the unchecked changes listed again by the next Update PCB. With every
+    change checked it still sends the full `SyncSchematicToPcb`. Nothing checked, or a row the
+    selective command cannot name (none today: the sync only touches footprints), refuses a
+    partial apply with the reason. No IR or `Command` change.
   - Back-annotation (PCB → schematic reference and value changes) is a later slice.
 - **Consequences:** the preview equals the applied delta by construction; the property test
   `apps/desktop/src-tauri/tests/eco.rs` checks it on random edit sequences (and stale rejection,

@@ -1,16 +1,18 @@
 // "Update PCB" review (ECO preview, Phase 1 C2, ADR-0041): every change the schematic-to-PCB sync
 // would make, from the engine's read-only `sync_preview`, grouped by action or object with a
-// checkbox per change. Nothing changes until Apply, which sends the sync as one Batch at the
-// previewed revision (a project that moved on rejects it as stale).
+// checkbox per change. Nothing changes until Apply, which sends one Batch at the previewed revision
+// (a project that moved on rejects it as stale): the full sync with every change checked, or only
+// the checked changes through SyncSchematicToPcbSelected (ADR-0042). Either way one undo step.
 import { useMemo, useState } from "react";
+import type { SyncChange } from "../types";
 import { applyState, buildEcoRows, groupRows, toggleRow, type EcoGroupBy, type SyncPreview } from "./ecoPreview";
 import { useEscape } from "./useEscape";
 
 interface Props {
   preview: SyncPreview;
   busy: boolean;
-  /** Apply the whole previewed change list (only offered when every change is checked). */
-  onApply: () => void;
+  /** Apply the previewed changes: null for all of them, otherwise only the checked ones. */
+  onApply: (changes: SyncChange[] | null) => void;
   /** Save the engine's preview as project evidence; resolves to the saved file path. */
   onExport: (excluded: string[]) => Promise<string>;
   onClose: () => void;
@@ -96,10 +98,15 @@ export function EcoPreviewDialog({ preview, busy, onApply, onExport, onClose }: 
           </section>
         )}
         {state.reason && <p className="eco-reason" role="note">{state.reason}</p>}
+        {state.ok && state.changes && (
+          <p className="eco-partial" role="note">
+            Applying {state.count} of {rows.length} change(s) as one undo step; the unchecked ones stay listed the next time you update the PCB.
+          </p>
+        )}
         {exported && <p role={exported.ok ? undefined : "alert"} aria-live="polite" className={exported.ok ? "muted" : "explorer-error"}>{exported.text}</p>}
         <div className="dlg-actions">
           <button type="button" onClick={exportReport} disabled={busy} title="Save this preview as evidence/eco-r<revision>.json in the project">Export report</button>
-          <button type="button" className="primary" onClick={onApply} disabled={busy || !state.ok} title={state.reason ?? `Apply ${rows.length} change(s) as one undo step`}>Apply changes</button>
+          <button type="button" className="primary" onClick={() => onApply(state.changes)} disabled={busy || !state.ok} title={state.reason ?? `Apply ${state.count === rows.length ? rows.length : `${state.count} of ${rows.length}`} change(s) as one undo step`}>Apply changes</button>
           <button type="button" onClick={onClose}>Cancel</button>
         </div>
       </div>
