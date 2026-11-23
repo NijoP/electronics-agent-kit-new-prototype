@@ -142,6 +142,8 @@ describe("main toolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: /R1 330/ }));
     fireEvent.click(tb().getByRole("button", { name: "Rotate selection" }));
     await waitFor(() => expect(executed).toEqual([{ type: "RotateSymbol", symbol_id: "sym_r1", rotation: "R90" }]));
+    // Delete's state comes from the editor's published operations, one render after the engine is idle.
+    await waitFor(() => expect((tb().getByRole("button", { name: "Delete selection" }) as HTMLButtonElement).disabled).toBe(false));
     vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     fireEvent.click(tb().getByRole("button", { name: "Delete selection" }));
     expect(executed).toHaveLength(1);

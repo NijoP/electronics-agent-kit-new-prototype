@@ -7,7 +7,7 @@ import type { Point, Wire } from "../../types";
 const key = (p: Point) => `${p.x},${p.y}`;
 
 /** True when `p` lies strictly inside the axis-aligned wire a-b (integer nm, exact). */
-function onInterior(p: Point, a: Point, b: Point): boolean {
+export function onInterior(p: Point, a: Point, b: Point): boolean {
   if (a.x === b.x && p.x === a.x) {
     const lo = Math.min(a.y, b.y);
     const hi = Math.max(a.y, b.y);

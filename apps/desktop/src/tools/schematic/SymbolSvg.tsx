@@ -36,7 +36,7 @@ export function SymbolText({ t }: { t: TextPrim }) {
 }
 
 /** Pins (behind the body, so a box covers its stubs), the body, then the texts. */
-export function SymbolSvg({ drawing, activePin }: { drawing: SymbolDrawing; activePin?: string | null }) {
+export function SymbolSvg({ drawing, activePin, hiPins }: { drawing: SymbolDrawing; activePin?: string | null; hiPins?: ReadonlySet<string> }) {
   return (
     <>
       {drawing.pins.map((p) => {
@@ -44,7 +44,7 @@ export function SymbolSvg({ drawing, activePin }: { drawing: SymbolDrawing; acti
         return (
           <g key={p.number} data-pin={p.number}>
             {(p.at[0] !== p.inner[0] || p.at[1] !== p.inner[1]) && <line className="pin" x1={p.inner[0]} y1={p.inner[1]} x2={p.at[0]} y2={p.at[1]} />}
-            <circle className={active ? "pin-end active" : "pin-end"} cx={p.at[0]} cy={p.at[1]} r={active ? 0.8 : 0.4} />
+            <circle className={`pin-end${active ? " active" : ""}${hiPins?.has(p.number) ? " net-hi" : ""}`} cx={p.at[0]} cy={p.at[1]} r={active ? 0.8 : 0.4} />
           </g>
         );
       })}

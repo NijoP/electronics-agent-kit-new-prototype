@@ -6,7 +6,7 @@ import { matches } from "../design/shortcuts";
 import { effectiveKeys } from "../settings/keymap";
 import type { Menu } from "../shell/MenuBar";
 import type { ToolbarGroup, ToolbarGroupId } from "../shell/Toolbar";
-import { MENU_ORDER, type Action, type DocContext } from "./types";
+import { MENU_ORDER, type Action, type CanvasTarget, type DocContext } from "./types";
 
 /** Toolbar groups, left to right. */
 export const TOOLBAR_ORDER: readonly ToolbarGroupId[] = ["file", "edit", "view", "checks", "mfg", "app"];
@@ -28,7 +28,7 @@ export function menusFor(actions: readonly Action[], ctx: DocContext): Menu[] {
     label: name,
     items: shown
       .filter((a) => a.menu === name)
-      .map((a) => ({ label: a.label, run: a.run, shortcut: keysOf(a)[0], disabled: reason(a), checked: a.checked, destructive: a.destructive, sep: a.sep })),
+      .map((a) => ({ label: a.label, run: a.run, shortcut: keysOf(a)[0] ?? a.hint, disabled: reason(a), checked: a.checked, destructive: a.destructive, sep: a.sep })),
   })).filter((m) => m.items.length > 0);
 }
 
@@ -44,7 +44,7 @@ export function toolbarFor(actions: readonly Action[], ctx: DocContext): Toolbar
 export function paletteFor(actions: readonly Action[], ctx: DocContext): PaletteAction[] {
   return visibleIn(actions, ctx)
     .filter((a) => a.palette !== false)
-    .map((a) => ({ id: a.id, label: a.label, run: a.run, disabled: a.enabled() !== true, destructive: a.destructive, shortcut: keysOf(a)[0], group: a.paletteGroup ?? a.menu }));
+    .map((a) => ({ id: a.id, label: a.label, run: a.run, disabled: a.enabled() !== true, destructive: a.destructive, shortcut: keysOf(a)[0] ?? a.hint, group: a.paletteGroup ?? a.menu }));
 }
 
 /** The visible action bound to this key event, if any (typing: focus is in a text field). */
@@ -58,4 +58,28 @@ export function runAction(a: Action, confirm: (m: string) => boolean = (m) => wi
   if (a.destructive && !confirm(`${a.label}: this is a destructive change. Continue?`)) return false;
   a.run();
   return true;
+}
+
+/** One entry of the canvas context menu. */
+export interface ContextItem {
+  id: string;
+  label: string;
+  shortcut?: string;
+  /** When set the entry is disabled and this says why. */
+  disabled?: string;
+  destructive?: boolean;
+  sep?: boolean;
+  /** Runs the action the way the menu bar does (enabled only, destructive ones confirmed). */
+  run: () => void;
+}
+
+/**
+ * The canvas context menu for what a right-click hit (slice B3): exactly the registry actions of
+ * the context that list that target, in registry order. Nothing else can appear in it, so it
+ * never offers an operation the menus, palette and keys do not have.
+ */
+export function contextMenuFor(actions: readonly Action[], ctx: DocContext, target: CanvasTarget, confirm?: (m: string) => boolean): ContextItem[] {
+  return visibleIn(actions, ctx)
+    .filter((a) => a.context?.includes(target))
+    .map((a) => ({ id: a.id, label: a.label, shortcut: keysOf(a)[0] ?? a.hint, disabled: reason(a), destructive: a.destructive, sep: a.contextSep, run: () => void runAction(a, confirm) }));
 }

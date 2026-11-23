@@ -54,6 +54,8 @@ function probes(): ActionDeps[] {
     selected: "sym_r1",
     selectedSymbol: snap.project.schematic.symbols.sym_r1,
     fpOfSelected: snap.project.pcb.footprints.fp_r1,
+    // B3: a schematic editor offering every editing operation (clipboard, arrange, find, net highlight)
+    editorOp: () => ({ enabled: () => true, run: vi.fn() }),
   });
   // The 3D document with a drawing viewer (C6): a measurement on screen and a part with a model.
   const fn = () => vi.fn();
