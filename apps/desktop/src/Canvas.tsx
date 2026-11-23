@@ -1,7 +1,7 @@
 // SVG canvas with wheel zoom (about the cursor) and drag pan. When `onPoint` is given a
 // click (pointer released without dragging) reports the view-space point under it, and
 // `onHover` tracks the cursor so editors can draw rubber-band previews.
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { clientToView, fit, pan, visibleViewBox, zoomAt, type Bounds, type Size, type ViewBox } from "./viewport";
 import { loadViewport, reportCanvas, saveViewport, useDocId, useRegisterCanvas } from "./shell/viewState";
 
@@ -33,6 +33,13 @@ interface Props {
    * `children` then hold only the live tool previews. Given the visible view box and pane size.
    */
   scene?: (vb: ViewBox, size: Size) => ReactNode;
+  /**
+   * Mirror the view left to right (the PCB's flip-board view). Everything drawn is mirrored on
+   * screen; pointer positions are mapped back, so tools keep working in design coordinates.
+   */
+  mirror?: boolean;
+  /** Right-click on the canvas (the editor opens its context menu; slice B3). */
+  onContextMenu?: (e: ReactMouseEvent<SVGSVGElement>) => void;
 }
 
 export interface DragHandler {
@@ -57,7 +64,11 @@ interface PointerSample {
   buttons: number;
 }
 
-export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay, scene }: Props) {
+export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay, scene, onContextMenu, mirror = false }: Props) {
+  const mirrorRef = useRef(mirror);
+  mirrorRef.current = mirror;
+  /** Pane x of a client x: measured from the right edge while the view is mirrored. */
+  const paneX = (clientX: number, r: DOMRect) => (mirrorRef.current ? r.right - clientX : clientX - r.left);
   const ref = useRef<SVGSVGElement>(null);
   const docId = useDocId();
   // A restored viewport (this tab's last zoom/pan, kept across tab closes and sessions) wins over fit.
@@ -120,7 +131,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return;
       setVb((v) => {
-        const [cx, cy] = clientToView(v, r, e.clientX - r.left, e.clientY - r.top);
+        const [cx, cy] = clientToView(v, r, paneX(e.clientX, r), e.clientY - r.top);
         return zoomAt(v, e.deltaY > 0 ? 1.15 : 1 / 1.15, cx, cy);
       });
     };
@@ -135,7 +146,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
     if (r.width === 0 || r.height === 0) return null;
     const cx = typeof e.clientX === "number" && !Number.isNaN(e.clientX) ? e.clientX : r.left + r.width / 2;
     const cy = typeof e.clientY === "number" && !Number.isNaN(e.clientY) ? e.clientY : r.top + r.height / 2;
-    return clientToView(vbRef.current, r, cx - r.left, cy - r.top);
+    return clientToView(vbRef.current, r, paneX(cx, r), cy - r.top);
   };
 
   // Pointer moves: the first move of a frame is handled at once (no added latency); further
@@ -159,7 +170,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
     if (tool && !g?.moved && !g?.middle) return;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
-    setVb((v) => pan(v, r, m.clientX - d.x, m.clientY - d.y));
+    setVb((v) => pan(v, r, (mirror ? -1 : 1) * (m.clientX - d.x), m.clientY - d.y));
     drag.current = { x: m.clientX, y: m.clientY };
   };
   const moveRef = useRef(handleMove);
@@ -180,9 +191,12 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
     [],
   );
 
+  const flipStyle = mirror ? { transform: "scaleX(-1)" } : undefined;
   const svg = (
     <svg
       ref={ref}
+      style={scene ? undefined : flipStyle}
+      data-mirror={mirror ? "true" : undefined}
       className={`${tool ? "canvas tool" : "canvas"}${scene ? " canvas-top" : ""}`}
       role="img"
       aria-label={label}
@@ -244,6 +258,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
       onDoubleClick={() => {
         if (!tool) setVb(fit(bounds));
       }}
+      onContextMenu={onContextMenu}
       onDragEnter={(e) => {
         const p = toView(e);
         if (p) onDropTarget?.onDragEnter?.(p[0], p[1], e);
@@ -272,7 +287,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
   );
   if (!scene) return svg;
   return (
-    <div className="canvas-stack">
+    <div className="canvas-stack" style={flipStyle}>
       <svg className="canvas-under" aria-hidden="true" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} preserveAspectRatio="xMidYMid meet">
         {underlay?.(visible)}
       </svg>

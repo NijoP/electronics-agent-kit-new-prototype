@@ -2,10 +2,13 @@
 //! thermal-relief spokes, silkscreen over soldermask openings and schematic/PCB consistency.
 
 use crate::holes;
-use crate::report::{finding, rule, Finding, Report, Severity::*};
+use crate::report::{finding, rule, Bound, Finding, Report, Severity::*};
 use crate::state::CheckState;
-use eak_core::geom::{point_in_polygon, point_segment_distance, polygon_self_intersects, to_mm};
-use eak_core::{CopperLayer, Nm, PadKind, Point, Project, Rect, Side};
+use eak_core::geom::{
+    point_in_polygon, point_segment_distance, polygon_self_intersects, segment_segment_distance,
+    to_mm,
+};
+use eak_core::{CopperLayer, Nm, PadKind, Point, Project, Rect, RegionObject, Side};
 use eak_engineering::copper::{self, distance, Core, ItemKind};
 use eak_engineering::ipc::{self, ClearanceCondition};
 use eak_engineering::{netlist, silk};
@@ -43,7 +46,9 @@ fn gap_point(a: &Rect, b: &Rect, gap: f64) -> Point {
 pub fn run(p: &Project) -> Report {
     let c = &p.constraints;
     let mut f: Vec<Finding> = Vec::new();
-    let outline = &p.pcb.board.outline;
+    // Arc edges (schema v4) are checked on the flattened outline (chord error ≤ 10 µm).
+    let outline_path = p.pcb.board.outline_path();
+    let outline = &outline_path;
     let has_outline = outline.len() >= 3 && !polygon_self_intersects(outline);
     if !has_outline {
         f.push(
@@ -424,6 +429,176 @@ pub fn run(p: &Project) -> Report {
         }
     }
 
+    // DRC-005 (schema v4): copper inside a board cut-out or within the edge clearance of its edge.
+    {
+        let edge = c.board_edge_clearance as f64;
+        for cut in p.pcb.cutouts.values() {
+            let mut seen = BTreeSet::new();
+            for it in &items {
+                let (d, at) = core_to_ring(&it.shape.core, &cut.outline);
+                let gap = d - it.shape.radius;
+                let label = it.label();
+                if gap < edge - 1.0 && seen.insert(label.clone()) {
+                    let mut fd = finding(
+                        "DRC-005",
+                        Error,
+                        format!(
+                            "{label} is inside cut-out {} or within {} of its edge",
+                            cut.id,
+                            mm(edge)
+                        ),
+                        vec![it.object_id.clone(), cut.id.clone()],
+                        Some(at),
+                    )
+                    .key(&format!("{label}|{}", cut.id));
+                    if gap.is_finite() {
+                        fd = fd.mm_min(gap.max(0.0) / 1e6, edge / 1e6);
+                    }
+                    f.push(fd.fix(format!(
+                        "Move {label} so its copper stays at least {} from the edge of cut-out {}, or move the cut-out.",
+                        mm(edge),
+                        cut.id
+                    )));
+                }
+            }
+        }
+    }
+
+    // DRC-021 keep-out regions and DRC-022 constraint-region track widths (schema v4, ADR-0042).
+    for r in p.pcb.regions.values() {
+        let mut seen = BTreeSet::new();
+        for it in &items {
+            if !r.applies_to(it.layer) {
+                continue;
+            }
+            let (d, at) = core_to_ring(&it.shape.core, &r.outline);
+            if d - it.shape.radius > 0.0 {
+                continue;
+            }
+            let label = it.label();
+            let what = match it.kind {
+                ItemKind::Track => RegionObject::Tracks,
+                ItemKind::Via => RegionObject::Vias,
+                ItemKind::Pad => RegionObject::Components,
+                ItemKind::Zone => RegionObject::Zones,
+            };
+            if r.forbids(what) && seen.insert(("DRC-021", label.clone())) {
+                f.push(
+                    finding(
+                        "DRC-021",
+                        Error,
+                        format!(
+                            "{label} on {} is inside {}, which keeps out {}",
+                            it.layer.name(),
+                            r.label(),
+                            region_object_name(what)
+                        ),
+                        vec![it.object_id.clone(), r.id.clone()],
+                        Some(at),
+                    )
+                    .key(&format!("{label}|{}", r.id))
+                    .fix(format!(
+                        "Move {label} out of {}, or change the region if {} are allowed there.",
+                        r.label(),
+                        region_object_name(what)
+                    )),
+                );
+            }
+            if it.kind != ItemKind::Track {
+                continue;
+            }
+            let Some(t) = p.pcb.tracks.get(&it.object_id) else {
+                continue;
+            };
+            let narrow = r.min_track_width.filter(|w| t.width < *w);
+            let wide = r.max_track_width.filter(|w| t.width > *w);
+            let (limit, word, bound) = match (narrow, wide) {
+                (Some(w), _) => (w, "narrower than the minimum", Bound::Min),
+                (None, Some(w)) => (w, "wider than the maximum", Bound::Max),
+                (None, None) => continue,
+            };
+            if seen.insert(("DRC-022", label.clone())) {
+                f.push(
+                    finding(
+                        "DRC-022",
+                        Error,
+                        format!(
+                            "track {} is {} wide, {word} {} of {}",
+                            t.id,
+                            mm(t.width as f64),
+                            mm(limit as f64),
+                            r.label()
+                        ),
+                        vec![t.id.clone(), r.id.clone()],
+                        Some(at),
+                    )
+                    .key(&format!("{label}|{}", r.id))
+                    .measured(to_mm(t.width), "mm")
+                    .required(bound, to_mm(limit), "mm")
+                    .fix(format!(
+                        "Set track {} to a width the region allows ({}), or reroute it outside {}.",
+                        t.id,
+                        region_width_range(r),
+                        r.label()
+                    )),
+                );
+            }
+        }
+    }
+
+    // DRC-023: PCB text and dimension labels on the silk must be legible and drawable.
+    let labels = p
+        .pcb
+        .texts
+        .values()
+        .map(|t| (t.id.clone(), t.text.clone(), t.size, t.layer, t.position))
+        .chain(p.pcb.dimensions.values().map(|d| {
+            let g = d.drawing();
+            (d.id.clone(), g.label, g.text_size, d.layer, g.label_at)
+        }));
+    for (id, text, size, layer, at) in labels {
+        if layer.silk_side().is_none() {
+            continue;
+        }
+        if size < MIN_SILK_TEXT {
+            f.push(
+                finding(
+                    "DRC-023",
+                    Warning,
+                    format!(
+                        "silkscreen text \"{text}\" ({id}) is {} high, below the {} legibility minimum",
+                        mm(size as f64),
+                        mm(MIN_SILK_TEXT as f64)
+                    ),
+                    vec![id.clone()],
+                    Some(at),
+                )
+                .key("size")
+                .mm_min(to_mm(size), to_mm(MIN_SILK_TEXT))
+                .fix(format!(
+                    "Make {id} at least {} high, or move it to the documentation layer.",
+                    mm(MIN_SILK_TEXT as f64)
+                )),
+            );
+        }
+        let missing: String = text.chars().filter(|ch| !silk::has_glyph(*ch)).collect();
+        if !missing.is_empty() {
+            f.push(
+                finding(
+                    "DRC-023",
+                    Warning,
+                    format!(
+                        "silkscreen text \"{text}\" ({id}) has characters the stroke font cannot draw ({missing}); they print as boxes"
+                    ),
+                    vec![id.clone()],
+                    Some(at),
+                )
+                .key("glyph")
+                .fix("Use letters, digits, space and - + _ . / only on the silkscreen."),
+            );
+        }
+    }
+
     // DRC-004: unrouted connections; DRC-013 zone islands.
     let conn = copper::analyse(p);
     for (net, groups) in &conn.net_groups {
@@ -729,7 +904,7 @@ pub fn run(p: &Project) -> Report {
         rule("DRC-002", "Copper clearance", format!("min {}, net classes, declared net voltages", mm(c.min_clearance as f64)), "Project constraints; IPC-2221B Table 6-1 B2 for declared voltages (table unverified against standard text)"),
         rule("DRC-003", "Shorts between nets", "", "EAK"),
         rule("DRC-004", "Unrouted connections", "physical copper connectivity incl. zone fill islands (0.1 mm raster)", "EAK"),
-        rule("DRC-005", "Board edge clearance", mm(c.board_edge_clearance as f64), "Project constraints"),
+        rule("DRC-005", "Board edge clearance", format!("{} from the outline (arc edges flattened, chord error ≤ 10 µm) and from every board cut-out", mm(c.board_edge_clearance as f64)), "Project constraints"),
         rule("DRC-006", "Drill size / annular ring", format!("drill ≥ {}, ring ≥ {}", mm(c.min_drill as f64), mm(c.min_annular_ring as f64)), "Project constraints"),
         rule("DRC-007", "Courtyard overlap", "", "EAK"),
         rule("DRC-008", "Track current capacity", format!("ΔT {} °C, copper weight of each track's own layer ({})", c.temp_rise_c, p.pcb.board.stackup.layers.iter().map(|l| format!("{} {} oz", l.layer.name(), l.copper_oz)).collect::<Vec<_>>().join(", ")), "IPC-2221 (via DESK audit; verified_against_standard = false)"),
@@ -745,6 +920,9 @@ pub fn run(p: &Project) -> Report {
         rule("DRC-018", "Copper-to-hole clearance", format!("other-net copper ≥ {} (min clearance) from drill edges, on the layers each hole spans", mm(c.min_clearance as f64)), "Project constraints"),
         rule("DRC-019", "Hole-to-hole spacing", format!("drill edges ≥ {} apart", mm(HOLE_TO_HOLE_MIN as f64)), "EAK default (common fabricator practice; unverified)"),
         rule("DRC-020", "Silkscreen-to-board-edge clearance", format!("legend ink ≥ {} inside the outline", mm(SILK_TO_EDGE_MIN as f64)), "EAK default (common fabricator practice; unverified)"),
+        rule("DRC-021", "Keep-out regions", "tracks, vias and component pads may not touch a region that forbids them on its layers; copper pours are kept out of the fill", "EAK (ADR-0042)"),
+        rule("DRC-022", "Constraint-region track width", "tracks touching a region must be within its min/max track width", "EAK (ADR-0042)"),
+        rule("DRC-023", "Silkscreen text and dimensions", format!("silk text and dimension labels ≥ {} high and drawable by the stroke font", mm(MIN_SILK_TEXT as f64)), "EAK default (common fabricator practice; unverified)"),
     ];
     let not_implemented = vec![
         "Controlled impedance and signal integrity".into(),
@@ -753,14 +931,16 @@ pub fn run(p: &Project) -> Report {
         "Creepage (surface path) analysis — only voltage-based clearance (air gap) is checked"
             .into(),
         "Silkscreen overlap/legibility, solder-mask sliver and paste checks".into(),
-        "Keepout areas: EAK-IR has no keepout objects yet (needs a schema change and ADR)".into(),
         "Acid traps and copper slivers".into(),
+        "Region clearance rules, keep-outs on silkscreen or mask layers, and priority between overlapping regions".into(),
     ];
     let mut limitations: Vec<String> = vec![
         "Zone fill connectivity is evaluated on a 0.1 mm raster; necks narrower than the raster may be misjudged".into(),
         "Thermal reliefs: relief gap and spoke width are derived from the zone clearance and net class (no per-zone/per-pad relief settings in the IR yet); vias and tracks connect solidly".into(),
         "The autorouter works on the two outer layers with through vias; inner-layer routing, blind and buried vias are placed by hand. Via aspect ratio and drill-to-layer-span limits are not checked".into(),
         "Pad shapes: rectangle, circle, oval (no rounded-rectangle or custom polygons)".into(),
+        "Arc tracks and arc board edges are checked as chords with at most 10 µm error; the autorouter and auto-placer do not avoid keep-out regions (DRC-021 reports what they put there)".into(),
+        "Text and dimensions on the documentation layer are not fabricated and not checked; silk text is not checked against other silk or the courtyards".into(),
     ];
     limitations.extend(undeclared_nets_not_evaluated(p));
     let (no_current, no_voltage) = undeclared_nets(p);
@@ -834,6 +1014,62 @@ pub fn undeclared_nets_not_evaluated(p: &Project) -> Vec<String> {
         ));
     }
     out
+}
+
+/// DRC-023 minimum silkscreen character height (EAK default, common fabricator practice;
+/// unverified).
+pub const MIN_SILK_TEXT: Nm = 800_000;
+
+fn region_object_name(o: RegionObject) -> &'static str {
+    match o {
+        RegionObject::Tracks => "tracks",
+        RegionObject::Vias => "vias",
+        RegionObject::Components => "component pads",
+        RegionObject::Zones => "copper pours",
+    }
+}
+
+fn region_width_range(r: &eak_core::Region) -> String {
+    match (r.min_track_width, r.max_track_width) {
+        (Some(lo), Some(hi)) => format!("{} to {}", mm(lo as f64), mm(hi as f64)),
+        (Some(lo), None) => format!("at least {}", mm(lo as f64)),
+        (None, Some(hi)) => format!("at most {}", mm(hi as f64)),
+        (None, None) => "any width".into(),
+    }
+}
+
+/// Distance from a copper core to the boundary of the closed `ring`, with a point to report it
+/// at; minus infinity when the core reaches inside the ring (or the ring lies inside a polygon
+/// core).
+fn core_to_ring(core: &Core, ring: &[Point]) -> (f64, Point) {
+    let segs: Vec<(Point, Point)> = match core {
+        Core::Segment(a, b) => vec![(*a, *b)],
+        Core::Polygon(poly) => (0..poly.len())
+            .map(|i| (poly[i], poly[(i + 1) % poly.len()]))
+            .collect(),
+    };
+    let Some(&(first, _)) = segs.first() else {
+        return (f64::INFINITY, Point::default());
+    };
+    if let (Core::Polygon(poly), Some(r0)) = (core, ring.first()) {
+        if point_in_polygon(*r0, poly) {
+            return (f64::NEG_INFINITY, *r0);
+        }
+    }
+    let mut best = (f64::INFINITY, first);
+    for &(a, b) in &segs {
+        if point_in_polygon(a, ring) {
+            return (f64::NEG_INFINITY, a);
+        }
+        for (k, &c0) in ring.iter().enumerate() {
+            let c1 = ring[(k + 1) % ring.len()];
+            let d = segment_segment_distance(a, b, c0, c1);
+            if d < best.0 {
+                best = (d, a);
+            }
+        }
+    }
+    best
 }
 
 /// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, unverified).

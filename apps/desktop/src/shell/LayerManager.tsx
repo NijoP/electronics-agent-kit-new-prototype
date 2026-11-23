@@ -1,8 +1,10 @@
-// PCB Layer Manager: lists the copper layers of the engine's stackup with active-layer, show/
-// hide and colour controls (display state), and the stackup itself (kind, copper weight,
-// dielectric) which is edited only through the SetLayerCount / SetStackup engine commands.
+// PCB Layer Manager: the copper layers of the engine's stackup grouped top / inner / bottom, and
+// the mechanical layer (board outline), each with active-layer, show / hide, lock and colour
+// controls and colour presets (all display state), and the
+// stackup itself (kind, copper weight, dielectric), edited only through the SetLayerCount /
+// SetStackup engine commands.
 import { layerCountOptions, layerKey, layerName, stackLayers } from "../layers";
-import type { LayerView } from "../layerView";
+import { COLOUR_PRESETS, type LayerView } from "../layerView";
 import type { Command, CopperLayer, Snapshot, Stackup, StackupLayer } from "../types";
 
 interface Props {
@@ -13,7 +15,6 @@ interface Props {
   busy: boolean;
 }
 
-
 /** A full engine Stackup with one layer replaced; fields the engine did not report keep defaults. */
 export function withLayer(s: Snapshot, layer: CopperLayer, patch: Partial<StackupLayer>): Stackup | null {
   const st = s.project.pcb.board.stackup;
@@ -21,10 +22,14 @@ export function withLayer(s: Snapshot, layer: CopperLayer, patch: Partial<Stacku
   return { ...st, layers: st.layers.map((l) => (layerKey(l.layer) === layerKey(layer) ? { ...l, ...patch } : l)) };
 }
 
+/** Copper group of a layer for the panel's headings. */
+export const layerGroup = (l: CopperLayer): "Top" | "Inner" | "Bottom" => (l === "top" ? "Top" : l === "bottom" ? "Bottom" : "Inner");
+
 export function LayerManager({ snapshot, view, unrouted, edit, busy }: Props) {
   const stack = stackLayers(snapshot.project.pcb.board.stackup);
   const st = snapshot.project.pcb.board.stackup;
   const entries = st?.layers ?? [];
+  const order = stack.map((s) => s.layer);
   return (
     <div className="panel-body layer-manager">
       <h3>Copper layers</h3>
@@ -42,20 +47,50 @@ export function LayerManager({ snapshot, view, unrouted, edit, busy }: Props) {
         </select>
       </label>
       <ul className="layer-list" aria-label="Layers">
-        {stack.map((s) => {
+        {stack.map((s, i) => {
           const k = layerKey(s.layer);
+          const name = layerName(s.layer);
           const active = view.active === k;
-          return (
-            <li key={k} className={active ? "layer-row active" : "layer-row"}>
-              <input type="radio" name="active-layer" aria-label={`Active layer ${layerName(s.layer)}`} checked={active} onChange={() => view.setActive(s.layer)} title="Active routing layer" />
-              <input type="checkbox" aria-label={`Show ${layerName(s.layer)}`} checked={!view.hidden.has(k)} onChange={() => view.toggle(s.layer)} title="Show / hide" />
-              <input type="color" aria-label={`Colour ${layerName(s.layer)}`} value={view.colourOf(s.layer)} onChange={(e) => view.setColour(s.layer, e.target.value)} title="Layer colour (display only)" />
-              <span className="grow">{layerName(s.layer)}</span>
+          const locked = view.locked.has(k);
+          const group = layerGroup(s.layer);
+          const head = i === 0 || layerGroup(stack[i - 1].layer) !== group;
+          return [
+            head && (
+              <li key={`group-${group}`} role="presentation" className="layer-group">
+                {group}
+              </li>
+            ),
+            <li key={k} className={`layer-row${active ? " active" : ""}${locked ? " locked" : ""}`} data-layer={k} aria-current={active ? "true" : undefined}>
+              <span className="layer-marker" aria-hidden="true" title={active ? "Active layer" : undefined}>{active ? "✎" : ""}</span>
+              <input type="radio" name="active-layer" aria-label={`Active layer ${name}`} checked={active} onChange={() => view.setActive(s.layer)} title="Active layer: new tracks, zones and picks use it" />
+              <input type="checkbox" aria-label={`Show ${name}`} checked={!view.hidden.has(k)} onChange={() => view.toggle(s.layer)} title="Show / hide" />
+              <input type="checkbox" className="lock" aria-label={`Lock ${name}`} checked={locked} onChange={() => view.toggleLock(s.layer)} title="Lock: objects on this layer cannot be selected or edited" />
+              <input type="color" aria-label={`Colour ${name}`} value={view.colourOf(s.layer)} onChange={(e) => view.setColour(s.layer, e.target.value)} title="Layer colour (display only)" />
+              <span className="grow">{name}</span>
+              {locked && <span className="tag plain" title="Locked layer">locked</span>}
               <span className="tag plain">{s.kind}</span>
-            </li>
-          );
+            </li>,
+          ];
         })}
       </ul>
+      <h3>Mechanical</h3>
+      <ul className="layer-list" aria-label="Mechanical layers">
+        <li className={`layer-row${view.locked.has("outline") ? " locked" : ""}`} data-layer="outline">
+          <span className="layer-marker" aria-hidden="true" />
+          <input type="checkbox" aria-label="Show Board outline" checked={!view.hidden.has("outline")} onChange={() => view.toggle("outline")} title="Show / hide" />
+          <input type="checkbox" className="lock" aria-label="Lock Board outline" checked={view.locked.has("outline")} onChange={() => view.toggleLock("outline")} title="Lock: the outline cannot be edited" />
+          <span className="grow">Board outline (Edge.Cuts)</span>
+        </li>
+      </ul>
+      <label className="row">
+        <span className="muted">Colour preset</span>
+        <select aria-label="Colour preset" value="" onChange={(e) => e.target.value && view.applyPreset(e.target.value, order)}>
+          <option value="">Apply a preset…</option>
+          {COLOUR_PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>{p.label}</option>
+          ))}
+        </select>
+      </label>
       <label className="row">
         <input type="checkbox" checked={view.airwires} onChange={(e) => view.setAirwires(e.target.checked)} />
         <span>Show airwires</span>

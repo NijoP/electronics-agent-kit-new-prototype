@@ -205,18 +205,22 @@ pub fn items(p: &Project) -> Vec<CopperItem> {
             }
         }
     }
+    // An arc track (schema v4) is its flattened centre line: one segment item per chord, all
+    // with the track's id, so connectivity treats them as one conductor.
     for t in p.pcb.tracks.values() {
-        out.push(CopperItem {
-            kind: ItemKind::Track,
-            object_id: t.id.clone(),
-            sub: String::new(),
-            layer: t.layer,
-            net: t.net.clone(),
-            shape: Shape {
-                core: Core::Segment(t.a, t.b),
-                radius: t.width as f64 / 2.0,
-            },
-        });
+        for w in t.path().windows(2) {
+            out.push(CopperItem {
+                kind: ItemKind::Track,
+                object_id: t.id.clone(),
+                sub: String::new(),
+                layer: t.layer,
+                net: t.net.clone(),
+                shape: Shape {
+                    core: Core::Segment(w[0], w[1]),
+                    radius: t.width as f64 / 2.0,
+                },
+            });
+        }
     }
     for v in p.pcb.vias.values() {
         for layer in v.layers(&p.pcb.board.stackup) {
@@ -467,8 +471,18 @@ pub fn fill_zone_raw(p: &Project, zone_id: &str, copper: &[CopperItem]) -> Optio
     // A filled cell's copper reaches up to ~0.71 pitch from its centre, so every keep-out
     // is inflated by that much to keep the true clearance on the raster.
     let halo = pitch as f64 * 0.71;
-    let board = &p.pcb.board.outline;
+    let board = p.pcb.board.outline_path();
     let edge = p.constraints.board_edge_clearance as f64;
+    // Cut-outs are board edge too; keep-outs that forbid zones on this layer stay empty
+    // (schema v4, ADR-0042).
+    let cutouts: Vec<&Vec<Point>> = p.pcb.cutouts.values().map(|c| &c.outline).collect();
+    let keepouts: Vec<&Vec<Point>> = p
+        .pcb
+        .regions
+        .values()
+        .filter(|r| r.forbids(eak_core::RegionObject::Zones) && r.applies_to(z.layer))
+        .map(|r| &r.outline)
+        .collect();
     // `allowed`: inside the zone and board-edge rule, clear of other-net copper.
     let mut allowed = vec![false; n];
     for r in 0..grid.rows {
@@ -478,8 +492,17 @@ pub fn fill_zone_raw(p: &Project, zone_id: &str, copper: &[CopperItem]) -> Optio
                 continue;
             }
             if board.len() >= 3
-                && (!point_in_polygon(pt, board) || poly_boundary_dist(pt, board) < edge)
+                && (!point_in_polygon(pt, &board) || poly_boundary_dist(pt, &board) < edge)
             {
+                continue;
+            }
+            if cutouts
+                .iter()
+                .any(|h| point_in_polygon(pt, h) || poly_boundary_dist(pt, h) < edge)
+            {
+                continue;
+            }
+            if keepouts.iter().any(|k| point_in_polygon(pt, k)) {
                 continue;
             }
             allowed[r * grid.cols + c] = true;
@@ -915,6 +938,7 @@ mod tests {
                 a: Point::mm(11.6, 8.5),
                 b: Point::mm(11.6, 11.5),
                 net: "SIG".into(),
+                arc_deg: None,
             },
         );
         let f = fill(&p);

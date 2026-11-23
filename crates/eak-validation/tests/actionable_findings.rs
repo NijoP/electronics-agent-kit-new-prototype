@@ -24,6 +24,7 @@ fn track(p: &mut Project, id: &str, net: &str, width: f64, a: (f64, f64), b: (f6
             a: Point::mm(a.0, a.1),
             b: Point::mm(b.0, b.1),
             net: net.into(),
+            arc_deg: None,
         },
     );
 }

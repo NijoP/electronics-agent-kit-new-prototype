@@ -8,7 +8,7 @@ import type { ToolbarGroupId } from "../shell/Toolbar";
  * What the editor area shows, which decides the chrome:
  *  * "home": the project workspace with no document open;
  *  * "schematic", "pcb": that editor is the active document;
- *  * "3d": a registered EDA view (today the 3D board viewer) fills the editor area;
+ *  * "3d": a registered EDA view (today the 3D board viewer) is the active document tab;
  *  * "file": a project file is open in the file viewer (common actions only).
  */
 export type DocContext = "home" | "schematic" | "pcb" | "3d" | "file";
@@ -17,6 +17,9 @@ export const DOC_CONTEXTS: readonly DocContext[] = ["home", "schematic", "pcb", 
 /** Top-level menus, in menu-bar order. A menu with no visible action is not shown. */
 export const MENU_ORDER = ["File", "Edit", "View", "Place", "Route", "Design", "Simulation", "Manufacturing", "Project", "Tools", "Settings", "Help"] as const;
 export type MenuName = (typeof MENU_ORDER)[number];
+
+/** What a right-click on the canvas hit (slice B3): a schematic object kind, or the empty sheet. */
+export type CanvasTarget = "symbol" | "wire" | "label" | "sheet";
 
 /** Toolbar split-button families. */
 export type SplitId = "sch-marks" | "pcb-regions" | "pcb-checks";
@@ -57,7 +60,16 @@ export interface Action {
   destructive?: boolean;
   /** The key also works while a text field has focus (default false; e.g. Save, palette). */
   whileTyping?: boolean;
+  /**
+   * A key the active editor handles itself (it owns the canvas focus), shown beside the entry only;
+   * the registry key handler never runs it, so the key cannot fire twice.
+   */
+  hint?: string;
+  /** Canvas context-menu entry for these right-click targets (slice B3; EAK's version of EasyEDA `s20`). */
+  context?: readonly CanvasTarget[];
+  /** Divider above the entry in the canvas context menu. */
+  contextSep?: boolean;
 }
 
-/** Context of an editor-area document kind ("schematic", "pcb", "file"; nothing open is "home"). */
-export const docContext = (kind: string | undefined): DocContext => (kind === "schematic" || kind === "pcb" || kind === "file" ? kind : "home");
+/** Context of an editor-area document kind ("schematic", "pcb", "file"; a view tab is "3d"; nothing open is "home"). */
+export const docContext = (kind: string | undefined): DocContext => (kind === "schematic" || kind === "pcb" || kind === "file" ? kind : kind === "view" ? "3d" : "home");

@@ -19,7 +19,10 @@ const SCHEMATIC: EditorKey[] = [
   { keys: "Delete / Backspace", label: "Delete selection" },
   { keys: "Mod+C / Mod+X / Mod+V", label: "Copy / cut / paste" },
   { keys: "Mod+D", label: "Duplicate selection" },
-  { keys: "Mod+A", label: "Select everything on the sheet" },
+  { keys: "Mod+A", label: "Select everything on the sheet (the selection filter applies)" },
+  { keys: "Mod+F", label: "Find and replace designators, values and net labels" },
+  { keys: "Right-click", label: "Actions for the clicked part, wire, label or sheet" },
+  { keys: "Esc", label: "Clear the selection and the net highlight" },
 ];
 
 const PCB: EditorKey[] = [
@@ -29,6 +32,8 @@ const PCB: EditorKey[] = [
   { keys: "Backspace", label: "Undo the last route segment (Route tool)" },
   { keys: "/", label: "Change the route corner mode (Route tool)" },
   { keys: "L", label: "Next copper layer (Route tool)" },
+  { keys: "+ / -", label: "Next / previous copper layer (any tool; while routing, a via)" },
+  { keys: "Alt+T / Alt+B", label: "Top / bottom copper layer" },
   { keys: "Mod+A", label: "Select every footprint" },
 ];
 

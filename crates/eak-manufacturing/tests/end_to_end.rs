@@ -184,6 +184,7 @@ fn drc_detects_injected_short_and_clearance_violation() {
             b: eak_core::Point::mm(39.0, 15.0),
             width: None,
             net: "+5V".into(),
+            arc_deg: None,
         },
         approval: None,
     });

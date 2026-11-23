@@ -101,7 +101,6 @@ fn v2_project_migrates_to_v3_with_the_same_netlist_and_pad_nets() {
         .any(|l| l.kind == LabelKind::Power));
     let migrated = from_json(&as_v2(&original)).expect("v2 project loads");
     assert_eq!(migrated.schema_version, SCHEMA_VERSION);
-    assert_eq!(SCHEMA_VERSION, 3);
 
     let (a, b) = (netlist::build(&original), netlist::build(&migrated));
     assert_eq!(a.nets, b.nets, "same nets");

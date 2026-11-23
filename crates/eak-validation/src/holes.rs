@@ -205,7 +205,8 @@ pub fn hole_to_hole(p: &Project, min: Nm, rule_id: &str, basis: &str) -> Vec<Fin
 /// DRC-020: generated silkscreen legend closer than `min` to the board outline, or outside
 /// it. One finding per side, at the worst stroke.
 pub fn silk_to_edge(p: &Project, min: Nm) -> Vec<Finding> {
-    let o = &p.pcb.board.outline;
+    let path = p.pcb.board.outline_path();
+    let o = &path;
     if o.len() < 3 {
         return vec![];
     }

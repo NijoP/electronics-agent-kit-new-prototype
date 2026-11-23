@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 pub type Id = String;
 
@@ -77,6 +77,14 @@ pub struct Sheet {
     /// Border, zones and title block (schema v3). `None` = no drawing format (every v2 sheet).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<DrawingFormat>,
+    /// Place in the sheet order (ADR-0043): sheets list by `(order, id)`. Absent (0) in every
+    /// file written before sheets could be reordered, so those keep their id order.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub order: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// Where a title-block field takes its text from.
@@ -682,6 +690,26 @@ pub struct Board {
     /// Closed outline polygon (counter-clockwise preferred). Empty = no outline yet.
     pub outline: Vec<Point>,
     pub stackup: Stackup,
+    /// Arc edges of the outline (schema v4, ADR-0042); every other edge is straight. Omitted
+    /// when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outline_arcs: Vec<crate::pcb_objects::OutlineArc>,
+}
+
+impl Board {
+    /// The outline with its arc edges flattened (chord error ≤ 10 µm): the board shape that DRC,
+    /// the zone fill and the edge checks use. Equal to `outline` when no edge is an arc.
+    pub fn outline_path(&self) -> Vec<Point> {
+        crate::pcb_objects::flatten_outline(&self.outline, &self.outline_arcs)
+    }
+
+    /// Sweep of outline edge `edge`, if it is an arc.
+    pub fn edge_sweep(&self, edge: usize) -> Option<f64> {
+        self.outline_arcs
+            .iter()
+            .find(|a| a.edge == edge)
+            .map(|a| a.sweep_deg)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -709,6 +737,34 @@ pub struct Track {
     pub a: Point,
     pub b: Point,
     pub net: String,
+    /// Arc track (schema v4, ADR-0042): the track runs from `a` to `b` along a circular arc of
+    /// this sweep in degrees, positive counter-clockwise. `None` = straight; omitted when straight.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc_deg: Option<f64>,
+}
+
+impl Track {
+    /// Centre line: `[a, b]` for a straight track, the flattened arc (chord error ≤ 10 µm) for
+    /// an arc track.
+    pub fn path(&self) -> Vec<Point> {
+        match self.arc_deg {
+            Some(s) => crate::pcb_objects::arc_points(
+                self.a,
+                self.b,
+                s,
+                crate::pcb_objects::ARC_FLATTEN_ERR_NM,
+            ),
+            None => vec![self.a, self.b],
+        }
+    }
+
+    /// Centre-line length in nanometres (the true arc length for an arc track).
+    pub fn length(&self) -> f64 {
+        match self.arc_deg {
+            Some(s) => crate::pcb_objects::arc_length(self.a, self.b, s),
+            None => self.a.dist(self.b),
+        }
+    }
 }
 
 fn via_top() -> CopperLayer {
@@ -777,6 +833,18 @@ pub struct Pcb {
     pub tracks: BTreeMap<Id, Track>,
     pub vias: BTreeMap<Id, Via>,
     pub zones: BTreeMap<Id, Zone>,
+    /// Keep-out and constraint regions (schema v4, ADR-0042).
+    #[serde(default)]
+    pub regions: BTreeMap<Id, crate::pcb_objects::Region>,
+    /// Text on silk or documentation layers (schema v4).
+    #[serde(default)]
+    pub texts: BTreeMap<Id, crate::pcb_objects::PcbText>,
+    /// Linear dimensions on silk or documentation layers (schema v4).
+    #[serde(default)]
+    pub dimensions: BTreeMap<Id, crate::pcb_objects::PcbDimension>,
+    /// Holes milled through the board (schema v4).
+    #[serde(default)]
+    pub cutouts: BTreeMap<Id, crate::pcb_objects::Cutout>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -880,6 +948,7 @@ impl Project {
                 width: 297_000_000,
                 height: 210_000_000,
                 format: None,
+                order: 0,
             },
         );
         Project {
@@ -902,11 +971,17 @@ impl Project {
 
     /// 1-based position of a sheet in the project's sheet order, if it exists.
     pub fn sheet_number(&self, sheet_id: &str) -> Option<usize> {
-        self.schematic
-            .sheets
-            .keys()
-            .position(|k| k == sheet_id)
+        self.sheets_in_order()
+            .iter()
+            .position(|s| s.id == sheet_id)
             .map(|i| i + 1)
+    }
+
+    /// The sheets in the project's sheet order: by `order`, then id (ADR-0043).
+    pub fn sheets_in_order(&self) -> Vec<&Sheet> {
+        let mut v: Vec<&Sheet> = self.schematic.sheets.values().collect();
+        v.sort_by(|a, b| a.order.cmp(&b.order).then_with(|| a.id.cmp(&b.id)));
+        v
     }
 
     /// Text a title-block field shows on `sheet`.
@@ -926,7 +1001,7 @@ impl Project {
     }
 
     pub fn first_sheet_id(&self) -> Option<&Id> {
-        self.schematic.sheets.keys().next()
+        self.sheets_in_order().into_iter().next().map(|s| &s.id)
     }
 
     /// Absolute position of a symbol pin.
@@ -1164,5 +1239,38 @@ mod schematic_v3_tests {
         assert!(b.touches(Point::new(5_000, 0), ON_SEGMENT_TOL_NM));
         assert!(b.touches(Point::new(10_000, 4_000), ON_SEGMENT_TOL_NM));
         assert!(!b.touches(Point::new(5_000, 5_000), ON_SEGMENT_TOL_NM));
+    }
+
+    #[test]
+    fn sheets_list_by_order_then_id_and_order_0_is_not_written() {
+        let mut p = Project::new("o");
+        let first = p.first_sheet_id().unwrap().clone();
+        let mk = |id: &str, order: u32| Sheet {
+            id: id.into(),
+            name: id.into(),
+            width: 1,
+            height: 1,
+            format: None,
+            order,
+        };
+        p.schematic.sheets.insert("a".into(), mk("a", 0));
+        p.schematic.sheets.insert("z".into(), mk("z", 0));
+        // Every sheet at order 0 (any file from before reordering): id order.
+        let ids = |p: &Project| {
+            p.sheets_in_order()
+                .iter()
+                .map(|s| s.id.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(ids(&p), vec!["a".to_string(), first.clone(), "z".into()]);
+        assert!(!crate::to_json(&p).contains("\"order\""));
+        p.schematic.sheets.get_mut("z").unwrap().order = 1;
+        p.schematic.sheets.get_mut(&first).unwrap().order = 2;
+        p.schematic.sheets.get_mut("a").unwrap().order = 3;
+        assert_eq!(ids(&p), vec!["z".to_string(), first.clone(), "a".into()]);
+        assert_eq!(p.first_sheet_id(), Some(&"z".to_string()));
+        assert_eq!(p.sheet_number("a"), Some(3));
+        let q = crate::from_json(&crate::to_json(&p)).unwrap();
+        assert_eq!(p, q);
     }
 }

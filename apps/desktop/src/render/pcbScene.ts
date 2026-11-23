@@ -14,17 +14,54 @@ import type { CopperLayer, Point, Snapshot } from "../types";
 import { mm, toView } from "../viewport";
 import { boxOfPts, grow, inBox, inPoly, polyEdgeDist, rectPoly, segDist, union } from "./geometry";
 import type { Box, DrawOp, Pt, RenderLayer, RenderObject, Scene } from "./types";
+import { dimensionDrawing, outlinePath, trackPath } from "./pcbObjects";
 
 export interface PcbSceneOptions {
   /** Copper layers in stack order, top first. */
   order: CopperLayer[];
-  /** Hidden copper layer keys (their zones, tracks and net names are left out, as in the SVG view). */
+  /**
+   * Hidden layer keys: copper layers (their zones, tracks and net names are left out, as in the SVG
+   * view) and "outline" (the board edge).
+   */
   hidden: Set<string>;
   colourOf: (l: CopperLayer) => string;
   /** Active copper layer key: sets which board side is drawn opaque. */
   activeLayer: string;
   /** Unrouted connections to draw as ratsnest, or null to hide them. */
   airwires: [string, Point, Point][] | null;
+  /** Outline view (slice C1): tracks, pads, vias and zones drawn as outlines, not filled. */
+  outlineView?: boolean;
+}
+
+/** Outline-view line width in view mm. */
+export const OUTLINE_VIEW_MM = 0.05;
+
+/** The outline-view form of a drawing op: fills become strokes, a track its rectangle outline. */
+export function outlineOp(op: DrawOp): DrawOp {
+  switch (op.t) {
+    case "seg": {
+      const [ax, ay] = op.a;
+      const [bx, by] = op.b;
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      const h = op.width / 2;
+      const ux = ((bx - ax) / len) * h;
+      const uy = ((by - ay) / len) * h;
+      const pts: Pt[] = [
+        [ax - ux - uy, ay - uy + ux],
+        [bx + ux - uy, by + uy + ux],
+        [bx + ux + uy, by + uy - ux],
+        [ax - ux + uy, ay - uy - ux],
+      ];
+      return { t: "poly", pts, stroke: op.colour, lineWidth: OUTLINE_VIEW_MM, alpha: op.alpha };
+    }
+    case "poly":
+      return { ...op, fill: undefined, stroke: op.stroke ?? op.fill, lineWidth: OUTLINE_VIEW_MM };
+    case "rect":
+    case "circle":
+      return op.fill ? { ...op, fill: undefined, stroke: op.fill, lineWidth: OUTLINE_VIEW_MM } : op;
+    default:
+      return op;
+  }
 }
 
 /** Pad-number and net-name size in screen pixels. */
@@ -106,16 +143,19 @@ export function buildPcbScene(s: Snapshot, o: PcbSceneOptions): Scene {
     const w = mm(t.width);
     const c = o.colourOf(t.layer);
     const lk = layerKey(t.layer);
+    // An arc track (schema v4) is drawn and picked as its chords.
+    const path = trackPath(t).map(toView);
+    const segs = path.slice(1).map((q, i): [Pt, Pt] => [path[i], q]);
     objects.push({
       key: `track:${t.id}`,
       ref: { kind: "track", id: t.id },
       layerKey: `${lk}:copper`,
-      bbox: boxOfPts([a, b], w / 2),
-      hit: (x, y, tol) => segDist(x, y, a, b) <= w / 2 + tol,
-      pathPts: [a, b],
+      bbox: boxOfPts(path, w / 2),
+      hit: (x, y, tol) => segs.some(([p, q]) => segDist(x, y, p, q) <= w / 2 + tol),
+      pathPts: path,
       pickLayers: [lk],
-      ops: [{ t: "seg", a, b, width: w, colour: c }],
-      sig: `${a}|${b}|${w}|${c}`,
+      ops: segs.map(([p, q]): DrawOp => ({ t: "seg", a: p, b: q, width: w, colour: c })),
+      sig: `${path.join(";")}|${w}|${c}`,
     });
     if (t.net) {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -233,9 +273,72 @@ export function buildPcbScene(s: Snapshot, o: PcbSceneOptions): Scene {
     });
   }
 
-  // Board edge (the board fill stays in the SVG underlay, under the grid).
-  const outline = pcb.board.outline.map(toView);
-  if (outline.length) {
+  // Schema v4 drawing objects (ADR-0042): decoration only, not pickable. Silk text sits on its
+  // side's silk; documentation text, dimensions, regions and cut-outs sit with the outline.
+  const drawLayer = (l: string) => (l === "top_silk" ? "top:silk" : l === "bottom_silk" ? "bottom:silk" : "outline");
+  const drawColour = (l: string) => (l === "documentation" ? "--c-courtyard" : "--c-text");
+  for (const r of Object.values(pcb.regions ?? {})) {
+    const pts = r.outline.map(toView);
+    const keepout = (r.forbid ?? []).length > 0;
+    objects.push({
+      key: `region:${r.id}`,
+      ref: null,
+      layerKey: "outline",
+      bbox: boxOfPts(pts, 0.1),
+      hit: () => false,
+      pathPts: pts,
+      ops: [{ t: "poly", pts, fill: "--c-violation", stroke: "--c-violation", lineWidth: 0.1, alpha: keepout ? 0.12 : 0.05 }],
+      sig: `${pts.join(";")}|${keepout}`,
+    });
+  }
+  for (const cut of Object.values(pcb.cutouts ?? {})) {
+    const pts = cut.outline.map(toView);
+    objects.push({
+      key: `cutout:${cut.id}`,
+      ref: null,
+      layerKey: "outline",
+      bbox: boxOfPts(pts, 0.1),
+      hit: () => false,
+      pathPts: pts,
+      ops: [{ t: "poly", pts, fill: "--bg-canvas", stroke: "--accent", lineWidth: 0.15 }],
+      sig: pts.join(";"),
+    });
+  }
+  for (const tx of Object.values(pcb.texts ?? {})) {
+    const [x, y] = toView(tx.position);
+    const size = mm(tx.size);
+    const w = size * 0.8 * tx.text.length;
+    objects.push({
+      key: `text:${tx.id}`,
+      ref: null,
+      layerKey: drawLayer(tx.layer),
+      bbox: { minX: x - w / 2, minY: y - size, maxX: x + w / 2, maxY: y },
+      hit: () => false,
+      ops: [{ t: "text", x, y, text: tx.text, size, colour: drawColour(tx.layer), minPx: 4 }],
+      sig: `${x},${y},${size},${tx.text},${tx.layer}`,
+    });
+  }
+  for (const d of Object.values(pcb.dimensions ?? {})) {
+    const g = dimensionDrawing(d);
+    const colour = drawColour(d.layer);
+    const ops: DrawOp[] = g.lines.map(([p, q]) => ({ t: "seg", a: toView(p), b: toView(q), width: 0.15, colour }));
+    const [lx, ly] = toView(g.labelAt);
+    ops.push({ t: "text", x: lx, y: ly, text: g.label, size: mm(g.textSize), colour, minPx: 4 });
+    const pts = g.lines.flat().map(toView);
+    objects.push({
+      key: `dimension:${d.id}`,
+      ref: null,
+      layerKey: drawLayer(d.layer),
+      bbox: boxOfPts([...pts, [lx, ly]], mm(g.textSize)),
+      hit: () => false,
+      ops,
+      sig: `${pts.join(";")}|${g.label}|${d.layer}`,
+    });
+  }
+
+  // Board edge (the board fill stays in the SVG underlay, under the grid); arc edges flattened.
+  const outline = outlinePath(pcb.board.outline, pcb.board.outline_arcs).map(toView);
+  if (outline.length && !o.hidden.has("outline")) {
     objects.push({
       key: "outline",
       ref: null,
@@ -263,7 +366,14 @@ export function buildPcbScene(s: Snapshot, o: PcbSceneOptions): Scene {
     });
   });
 
+  // Outline view: copper objects keep their geometry and picking, drawn as outlines. Holes are
+  // left out (their background fill would otherwise hide the pad outline under them).
+  const drawn = o.outlineView
+    ? objects
+        .filter((ob) => ob.layerKey !== "drill")
+        .map((ob) => (ob.ref ? { ...ob, ops: ob.ops.map(outlineOp), sig: `outline|${ob.sig}` } : ob))
+    : objects;
   let bounds: Box | null = null;
-  for (const ob of objects) bounds = union(bounds, ob.bbox);
-  return { layers, objects, bounds };
+  for (const ob of drawn) bounds = union(bounds, ob.bbox);
+  return { layers, objects: drawn, bounds };
 }

@@ -27,6 +27,7 @@ fn add(p: &mut Project, id: &str, net: &str, a: Point, b: Point, width: Nm) {
         a,
         b,
         net: net.into(),
+        arc_deg: None,
     };
     p.pcb.tracks.insert(id.into(), t);
 }

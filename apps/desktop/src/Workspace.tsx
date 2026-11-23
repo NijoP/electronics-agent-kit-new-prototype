@@ -11,7 +11,7 @@ import type { EditCtx } from "./EditContext";
 import { PcbView } from "./PcbView";
 import { SchematicView } from "./SchematicView";
 import { formatShortcut, SHORTCUTS } from "./design/shortcuts";
-import { actionForKey, keysOf, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./actions/registry";
+import { actionForKey, contextMenuFor, keysOf, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./actions/registry";
 import { workspaceActions } from "./actions/sets";
 import { editorKeys } from "./actions/editorKeys";
 import { APP_VERSION } from "./version";
@@ -32,6 +32,8 @@ import { Toolbar } from "./shell/Toolbar";
 import { canvasControls, DocIdContext, setActiveEditor, setEditorTool } from "./shell/viewState";
 import { LayerManager } from "./shell/LayerManager";
 import { useLayerView } from "./layerView";
+import { lockProblem } from "./layerLock";
+import { statusLayerName } from "./layers";
 import type { Focus } from "./pcbFocus";
 import { findingKey, probeTarget } from "./EngineeringMonitor";
 import { DocTabs } from "./shell/DocTabs";
@@ -46,14 +48,17 @@ import { useTasks } from "./shell/tasks";
 import { fileDocId, type FileEntry } from "./shell/files";
 import { listWorkspaces, useRegistryVersion, type WorkspaceContext } from "./shell/registry";
 import "./shell/workspaces";
-import { availableDocs, closeDoc, fileDocs, loadDocState, openDoc, partDocId, partDocs, remapFileDocs, saveDocState, visibleDocs, type PartDocKind } from "./shell/documents";
+import { availableDocs, closeDoc, fileDocs, loadDocState, openDoc, partDocId, partDocs, remapFileDocs, saveDocState, viewDoc, viewDocId, visibleDocs, type PartDocKind } from "./shell/documents";
 import { PartEditor } from "./partEditor/PartEditor";
+import { useView3dControls } from "./viewer3d/controls";
 import { clampSize, DEFAULT_LAYOUT, LIMITS, useDockLayouts, type DockId, type LayoutWorkspace } from "./shell/layout";
 import { CanvasStrip } from "./shell/CanvasStrip";
 import { DesignManager } from "./shell/DesignManager";
 import { editorFor, pcbObjects, schematicPlace, type ManagerTab, type NetRow, type Target } from "./shell/designManagerData";
 import { RightDock, shownRightTab, type RightTab } from "./shell/RightDock";
 import { Inspector } from "./shell/Inspector";
+import { editorContext, useEditorContext } from "./shell/inspectorModel";
+import { SelectionFilter } from "./shell/SelectionFilter";
 import type { Bounds } from "./viewport";
 import { MenuBar } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
@@ -63,6 +68,7 @@ import { SettingsDialog } from "./settings/SettingsDialog";
 import { useKeymap } from "./settings/keymap";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
+import { sheetsInOrder } from "./shell/sheets";
 import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
 
 interface Props {
@@ -129,28 +135,14 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const schGrid = useGridConfig("schematic");
   const pcbGrid = useGridConfig("pcb");
   const [tbLabels, setTbLabels] = useState(() => readFlag(TB_LABELS_KEY));
-  const [workspace, setWorkspace] = useState<string>(() => {
-    try {
-      return localStorage.getItem(`eak.workspace.${initial.project.id}`) ?? "editor";
-    } catch {
-      return "editor";
-    }
-  });
-  const [visitedViews, setVisitedViews] = useState<ReadonlySet<string>>(new Set());
   const [syncDialog, setSyncDialog] = useState<null | { report: SyncReport | null; error: string | null; revision: number }>(null);
   // ECO review of a pending Update PCB (slice C2): the engine's read-only preview at one revision.
   const [ecoDialog, setEcoDialog] = useState<SyncPreview | null>(null);
   const { tasks, track, clearFinished } = useTasks();
   useRegistryVersion();
+  // Registered EDA views (the 3D board viewer) open as document tabs next to the editors (C6).
   const edaViews = listWorkspaces("eda").map((w, i) => ({ ...w, shortcut: w.shortcut ?? (i < 7 ? `Mod+${3 + i}` : undefined) }));
-  const wsId = workspace !== "editor" && edaViews.some((w) => w.id === workspace) ? workspace : "editor";
-  useEffect(() => {
-    try {
-      localStorage.setItem(`eak.workspace.${initial.project.id}`, workspace);
-    } catch {
-      /* storage unavailable */
-    }
-  }, [initial.project.id, workspace]);
+  const view3d = useView3dControls();
   const [help, setHelp] = useState(false);
   const [about, setAbout] = useState(false);
   const [prefs, setPrefs] = useState(false);
@@ -179,7 +171,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     setSelected((s) => reconcileSelection(s, snapshot.project));
   }, [snapshot]);
   onScreen.current = { projectId: snapshot.project.id, revision };
-  const rank = (k: string) => (k === "schematic" ? 0 : k === "pcb" ? 1 : 2);
+  const rank = (k: string) => (k === "schematic" ? 0 : k === "pcb" ? 1 : k === "view" ? 3 : 2);
+  // What a view document (3D) gets: the selection and cross-probing, the engine path the editors
+  // use, and the PCB layer manager's colours.
   const wsCtx = (active: boolean): WorkspaceContext => ({
     projectId: snapshot.project.id,
     projectName: snapshot.project.name,
@@ -187,6 +181,12 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     revision,
     openProjects: projects,
     active,
+    selected,
+    select: setSelected,
+    probeTo,
+    execute: (c) => edit.execute(c),
+    busy,
+    layerColour: layerView.colourOf,
   });
   // Built-in parts plus parts imported into this project (e.g. from Distributor), so an imported
   // part can be placed from the part picker.
@@ -208,7 +208,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     const extra = armedEntry && !known.has(armedEntry.id) && !imported.some((l) => l.id === armedEntry.id) ? [armedEntry] : [];
     return [...baseLibrary, ...imported, ...extra];
   }, [baseLibrary, snapshot.project.library, armedEntry]);
-  const docs = [...availableDocs(snapshot), ...fileDocs(docState.open), ...partDocs(docState.open, snapshot)];
+  const docs = [...availableDocs(snapshot), ...fileDocs(docState.open), ...partDocs(docState.open, snapshot), ...edaViews.map((w) => viewDoc(w.id, w.label))];
   // Only documents the engine still has stay open (the snapshot is authoritative).
   const liveIds = new Set(docs.map((d) => d.id));
   const openIds = docState.open.filter((id) => liveIds.has(id));
@@ -218,7 +218,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const shown = visibleDocs(effective, docs, split);
   const activeKind = docs.find((d) => d.id === activeId)?.kind;
   // The workspace whose dock layout is shown (spec UI-01: layout persists per workspace).
-  const ctx: DocContext = wsId !== "editor" ? "3d" : docContext(activeKind);
+  const ctx: DocContext = docContext(activeKind);
   const layout = docks.get(ctx);
   const sideOpen = layout.left.open;
   const bottomOpen = layout.bottom.open;
@@ -234,14 +234,15 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const showRight = (tab: RightTab, ws: LayoutWorkspace = ctx) => docks.patch(ws, "right", { tab, open: true });
   const resize = (dock: DockId, delta: number) => docks.patch(ctx, dock, (d) => ({ size: clampSize(dock, d.size + delta) }));
   const resetSize = (dock: DockId) => docks.patch(ctx, dock, { size: DEFAULT_LAYOUT[dock].size });
-  // Editors listen on window: while this workspace (or its editor area) is hidden none may act.
-  setActiveEditor(visible && wsId === "editor" ? activeId : "__hidden__");
+  // Editors listen on window: while this workspace is hidden none may act (a view tab being
+  // active leaves no editor active either, since its id is no editor's).
+  setActiveEditor(visible ? activeId : "__hidden__");
   const openDocs = openIds.map((id) => docs.find((d) => d.id === id)!);
   // Per-document marker (A-SAVE): the engine writes every accepted command before it returns, so
   // the only "unconfirmed" states are writes blocked (every engine document) or a command in
   // flight (the active document, which issued it). File viewers are not engine documents.
   const docMarker = (d: { id: string; kind: string } | undefined): string | null =>
-    !d || d.kind === "file"
+    !d || d.kind === "file" || d.kind === "view"
       ? null
       : dirtyParts.has(d.id)
         ? "Unsaved changes in this editor; Save sends them to the engine"
@@ -379,11 +380,28 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       await refresh();
     });
 
-  const execute = (command: Command) => submit(() => api.execute(revision, command));
+  // C1: a command that would change a locked PCB layer is not sent (toolbar, inspector, editors).
+  const lockRefusal = (commands: Command | Command[]): string | null => {
+    for (const c of Array.isArray(commands) ? commands : [commands]) {
+      const why = lockProblem(snapshot, layerView.locked, c);
+      if (why) return why;
+    }
+    return null;
+  };
+  const refuse = (why: string) => {
+    setMessage(why);
+    return Promise.resolve();
+  };
+  const execute = (command: Command) => {
+    const why = lockRefusal(command);
+    return why ? refuse(why) : submit(() => api.execute(revision, command));
+  };
   // Chain commands so each one carries the revision the previous one produced; stop at the
   // first rejection (the engine already left the project untouched for it).
-  const executeAll = (commands: Command | Command[]) =>
-    guarded(async () => {
+  const executeAll = (commands: Command | Command[]): Promise<void> => {
+    const why = lockRefusal(commands);
+    if (why) return refuse(why);
+    return guarded(async () => {
       let rev = revision;
       let last: CommandResponse | null = null;
       for (const c of Array.isArray(commands) ? commands : [commands]) {
@@ -399,6 +417,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         );
       await refresh();
     });
+  };
   const edit: EditCtx = { execute: executeAll, busy, library, notify: setMessage };
   // "Update PCB from schematic" (slice C2, ADR-0041): first the engine's read-only preview of what
   // SyncSchematicToPcb would change, reviewed in the ECO dialog. Nothing changes until Apply.
@@ -571,27 +590,37 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   };
 
   const open = (id: string) => {
-    setWorkspace("editor");
     setDocState((st) => openDoc({ open: openIds, active: st.active }, id));
   };
   const showKind = (kind: "schematic" | "pcb") => {
-    setWorkspace("editor");
     if (shown.some((d) => d.kind === kind)) return;
     const d = docs.find((x) => x.kind === kind);
     if (d) open(d.id);
   };
   // Activity-bar / shortcut navigation: "schematic" and "pcb" open that editor on its own;
-  // anything else is a registered EDA view (e.g. 3D) that fills the editor area.
+  // anything else is a registered EDA view (e.g. 3D) that opens as its own document tab (C6).
   const showWorkspace = (id: string) => {
     if (id === "schematic" || id === "pcb") {
       const active = docs.find((d) => d.id === activeId);
-      if (wsId === "editor" && active?.kind === id) return;
+      if (active?.kind === id) return;
       const same = openIds.map((i) => docs.find((d) => d.id === i)).find((d) => d?.kind === id) ?? docs.find((d) => d.kind === id);
       if (same) open(same.id);
-      else setWorkspace("editor");
+    } else if (edaViews.some((w) => w.id === id)) open(viewDocId(id));
+  };
+  // Cross-probe from the 3D document: open the PCB zoomed to the selected footprint, or the
+  // schematic sheet that holds the selected symbol (the selection itself is shared).
+  const probeTo = (kind: "pcb" | "schematic") => {
+    const sym = selected ? snapshot.project.schematic.symbols[selected] : undefined;
+    if (!sym) return;
+    if (kind === "pcb") {
+      const fp = Object.values(snapshot.project.pcb.footprints).find((f) => f.symbol_id === sym.id);
+      const d = docs.find((x) => x.kind === "pcb");
+      if (!fp || !d) return;
+      open(d.id);
+      setFocus({ n: Date.now(), objects: [fp.id], location: null });
     } else {
-      setWorkspace(id);
-      setVisitedViews((v) => new Set(v).add(id));
+      const d = docs.find((x) => x.kind === "schematic" && x.ref === sym.sheet_id);
+      if (d) open(d.id);
     }
   };
   const openFile = (entry: FileEntry) => open(fileDocId(entry.rel));
@@ -706,7 +735,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       run: () => setSelected(sy.id),
     })),
     ...netNames(snapshot).map((n) => ({ id: `net-${n}`, label: n, group: "Net", run: () => showNet(n) })),
-    ...Object.values(snapshot.project.schematic.sheets).map((sh) => ({
+    ...sheetsInOrder(snapshot.project.schematic).map((sh) => ({
       id: `sheet-${sh.id}`,
       label: sh.name,
       group: "Sheet",
@@ -766,7 +795,16 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const gridKind = ctx === "schematic" || ctx === "pcb" ? ctx : null;
   const [gridCfg, setGridCfg] = gridKind === "pcb" ? pcbGrid : schGrid;
   const activeGrid = gridKind ? { kind: gridKind, cfg: gridCfg, set: setGridCfg } : null;
+  // B3: the active editor's own editing operations (clipboard, arrange, find, net highlight), read
+  // from the context it publishes; subscribing re-renders the menus when their state changes.
+  const editorDoc = visible && activeKind !== "view" ? activeId : null;
+  useEditorContext(editorDoc);
+  const editorOp = (op: string) => {
+    const o = editorContext(editorDoc)?.ops?.[op];
+    return o ? { enabled: () => editorContext(editorDoc)?.ops?.[op]?.state ?? o.state, run: () => (editorContext(editorDoc)?.ops?.[op] ?? o).run() } : null;
+  };
   const allActions = workspaceActions({
+    editorOp,
     snapshot, busy, selected, selectedSymbol, fpOfSelected, theme, sideOpen, bottomOpen, rightOpen, split, recent, library, docs, openIds, projects,
     sideViews: SIDE_VIEWS,
     edaViews,
@@ -794,6 +832,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     open, closeAll, showWorkspace, switchTo, placePart,
     grid: activeGrid,
     toolbarLabels: tbLabels,
+    view3d,
+    probeTo,
     toggleToolbarLabels: () => {
       writeFlag(TB_LABELS_KEY, !tbLabels);
       setTbLabels(!tbLabels);
@@ -847,7 +887,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           sideView={sideView}
           sideOpen={sideOpen}
           onSide={toggleSideView}
-          workspace={wsId !== "editor" ? wsId : activeKind === "schematic" || activeKind === "pcb" ? activeKind : ""}
+          workspace={activeKind === "view" ? (docs.find((d) => d.id === activeId)?.ref ?? "") : activeKind === "schematic" || activeKind === "pcb" ? activeKind : ""}
           onWorkspace={showWorkspace}
           registered={edaViews}
           onSettings={onSettings}
@@ -889,7 +929,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
             </div>
           )}
           {sideView === "design" && (
-            <DesignManager snapshot={snapshot} conn={conn} selected={selected} activeDoc={activeId} tab={dmTab} onTab={setDmTab} onNavigate={navigateManager} />
+            <DesignManager snapshot={snapshot} conn={conn} selected={selected} activeDoc={activeId} tab={dmTab} onTab={setDmTab} onNavigate={navigateManager} onCommand={execute} busy={busy} />
           )}
           {sideView === "domain" && (
             <div className="panel-body">
@@ -912,7 +952,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           {projects.length > 1 && (
             <ProjectTabs projects={projects} onSwitch={switchTo} onClose={closeProjectTab} onOpen={() => setDialog("open")} disabled={busy ? "An engine command is running" : undefined} />
           )}
-          <div className="editor-area" hidden={wsId !== "editor"}>
+          <div className="editor-area">
             <DocTabs docs={openDocs} active={activeId} marker={docMarker} onSelect={open} onClose={closeOne} onCloseAll={closeAll} split={split} onSplit={() => setSplit((v) => !v)} />
             <div className={`views ${shown.length > 1 ? "split" : "single"}`}>
               {openDocs.length === 0 && (
@@ -930,9 +970,12 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
                   <DocIdContext.Provider key={d.id} value={d.id}>
                     <div className={visible ? "view-slot" : "view-slot off"} onPointerDownCapture={() => d.id !== activeId && open(d.id)}>
                       {d.kind === "schematic" ? (
-                        <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} armPart={armPart} sheetId={d.ref} />
+                        <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} armPart={armPart} sheetId={d.ref} contextMenu={(t) => contextMenuFor(allActions, "schematic", t)} />
                       ) : d.kind === "pcb" ? (
                         <PcbView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} onStatus={setStatus} layerView={layerView} focus={focus} airwires={conn && conn.revision === revision ? conn.ratsnest : null} />
+                      ) : d.kind === "view" ? (
+                        // A registered view document (3D): mounted from its first opening until its tab is closed.
+                        (edaViews.find((w) => w.id === d.ref)?.render(wsCtx(visible)) ?? null)
                       ) : d.kind === "symbol" || d.kind === "footprint" ? (
                         <PartEditor
                           kind={d.kind}
@@ -949,7 +992,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
                   </DocIdContext.Provider>
                 );
               })}
-              {noParts && wsId === "editor" && (activeKind === "schematic" || activeKind === "pcb") && (
+              {noParts && (activeKind === "schematic" || activeKind === "pcb") && (
                 <div className="canvas-empty" aria-label="Empty design">
                   <strong>An empty design</strong>
                   <span>Open the Library tab of the bottom panel to place a part, or press {formatShortcut(SHORTCUTS.quickOpen)} to go anywhere.</span>
@@ -958,13 +1001,6 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
             </div>
             {activeGrid && <CanvasStrip docId={activeId} cfg={activeGrid.cfg} />}
           </div>
-          {edaViews
-            .filter((w) => w.id === wsId || visitedViews.has(w.id))
-            .map((w) => (
-              <div key={w.id} className="ws-host" hidden={wsId !== w.id}>
-                {w.render(wsCtx(wsId === w.id))}
-              </div>
-            ))}
           {bottomOpen && (
             <Splitter orientation="horizontal" label="Resize bottom panel" value={layout.bottom.size} min={LIMITS.bottom[0]} max={LIMITS.bottom[1]} onResize={(d) => resize("bottom", -d)} onReset={() => resetSize("bottom")} />
           )}
@@ -1010,10 +1046,12 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         )}
         {rightOpen ? (
           <RightDock pcb={ctx === "pcb"} tab={rightTab} onTab={(t) => showRight(t)} onClose={() => setRightOpen(false)}>
-            {rightTab === "layers" ? (
+            {rightTab === "filter" ? (
+              <SelectionFilter />
+            ) : rightTab === "layers" ? (
               <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
             ) : (
-              <Inspector snapshot={snapshot} docId={wsId === "editor" ? activeId : null} selected={selected} pcb={ctx === "pcb"} edit={edit} />
+              <Inspector snapshot={snapshot} docId={activeKind === "view" ? null : activeId} selected={selected} pcb={ctx === "pcb"} edit={edit} />
             )}
           </RightDock>
         ) : (
@@ -1023,7 +1061,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       <StatusBar
         project={snapshot.project.name}
         revision={revision}
-        layer={ctx === "pcb" ? (status.layer === "top" ? "Top" : "Bottom") : null}
+        layer={ctx === "pcb" ? statusLayerName(status.layer) : null}
         grid={activeGrid ? `${formatLength(activeGrid.cfg.spacingMm, activeGrid.cfg.unit)}${activeGrid.cfg.snap ? "" : " (snap off)"}` : null}
         drc={results.drc}
         selection={selLabel ? `Selected ${selLabel}` : null}

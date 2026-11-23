@@ -1,6 +1,18 @@
 // Schematic editor: draws the active sheet from the engine snapshot and turns tool
 // clicks into typed engine commands (place, wire, label, move, rotate, delete, edit).
-import { useEffect, useRef, useState } from "react";
+// Slice B3 adds the editing set: clipboard across sheets, arrange, array, find/replace, find
+// similar, net highlight, the selection filter and a canvas context menu generated from the
+// action registry. Every multi-object edit is one Batch: one revision, one undo step.
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { api } from "./api";
+import type { ContextItem } from "./actions/registry";
+import type { CanvasTarget } from "./actions/types";
+import { CanvasContextMenu } from "./shell/CanvasContextMenu";
+import { ArrayPanel } from "./tools/schematic/ArrayPanel";
+import { clipboard, setClipboard } from "./tools/schematic/clipboard";
+import { useSelectFilter } from "./tools/schematic/filter";
+import { FindBar } from "./tools/schematic/FindBar";
+import { netAt, netMembers, sheetGroups, type NetHighlight } from "./tools/schematic/nets";
 import { Canvas, type DragHandler, type DropHandler } from "./Canvas";
 import { getDraggedComponent, setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
 import { isTyping, type EditCtx } from "./EditContext";
@@ -12,11 +24,12 @@ import { SymbolSvg } from "./tools/schematic/SymbolSvg";
 import { boundsOf, fromView, mm, toView } from "./viewport";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import { ToolOptionFields } from "./shell/Inspector";
-import { NO_SELECTION, ROTATION_CHOICES, useHasInspector, usePublishEditorContext, type OptionField } from "./shell/inspectorModel";
+import { NO_SELECTION, ROTATION_CHOICES, useHasInspector, usePublishEditorContext, type EditorOp, type OptionField } from "./shell/inspectorModel";
 import { sheetNoConnects, toggleNoConnect } from "./tools/schematic/noConnect";
 import * as S from "./tools/schematic/selection";
 import { junctionPoints } from "./tools/schematic/junctions";
 import "./tools/schematic/schematic.css";
+import { sheetsInOrder } from "./shell/sheets";
 
 interface Props {
   snapshot: Snapshot;
@@ -29,6 +42,8 @@ interface Props {
   armPart?: { id: string; n: number } | null;
   /** Engine sheet id this document shows (from the document tab). */
   sheetId?: Id;
+  /** Canvas context menu for a right-click target: the action registry's entries for it (slice B3). */
+  contextMenu?: (target: CanvasTarget) => ContextItem[];
 }
 
 type Tool = "select" | "place" | "wire" | "connect" | "label" | "move" | "delete" | "noconnect" | "pinlabel";
@@ -62,9 +77,13 @@ const objectAt = (e: { target: EventTarget }): [S.Kind, Id] | null => {
 
 type Drag = { mode: "move" | "marquee"; from: Point; to: Point; additive: boolean };
 
-export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = [], armPart, sheetId: docSheet }: Props) {
+/** The one selected object, if exactly one is selected. */
+const single = (s: S.Selection): [S.Kind, Id] | null =>
+  S.count(s) !== 1 ? null : s.symbols.length ? ["symbol", s.symbols[0]] : s.wires.length ? ["wire", s.wires[0]] : ["label", s.labels[0]];
+
+export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = [], armPart, sheetId: docSheet, contextMenu }: Props) {
   const { schematic } = snapshot.project;
-  const sheets = Object.values(schematic.sheets);
+  const sheets = sheetsInOrder(schematic);
   const [sheetId, setSheetId] = useState<Id | undefined>(docSheet ?? sheets[0]?.id);
   useEffect(() => {
     if (docSheet) setSheetId(docSheet);
@@ -73,6 +92,11 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   const [partId, setPartId] = useState("");
   const [placeRotation, setPlaceRotation] = useState<Rotation>("R0");
   const [externalDrag, setExternalDrag] = useState<{ componentId: string; name: string; at: Point } | null>(null);
+  const [hi, setHi] = useState<NetHighlight | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [arraying, setArraying] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number; target: CanvasTarget; label: string } | null>(null);
+  const filter = useSelectFilter();
   const [labelName, setLabelName] = useState("NET1");
   const [labelKind, setLabelKind] = useState<"net" | "power">("net");
   const [start, setStart] = useState<Point | null>(null);
@@ -81,7 +105,6 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   const [hover, setHover] = useState<Point | null>(null);
   const [selRaw, setSel] = useState<S.Selection>(S.EMPTY);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const clip = useRef<S.Clip | null>(null);
   const [grid] = useGridConfig("schematic");
   // Grid step in nm; with snap off, points and moves land on whole nanometres.
   const step = mmToNm(grid.spacingMm);
@@ -155,18 +178,104 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     copy: () => {
       const c = S.copy(snapshot, sel);
       if (c) {
-        clip.current = c;
+        setClipboard(c);
         edit?.notify(`Copied ${objects(S.count(sel))}.`);
       }
       return c;
     },
-    paste: () => clip.current && submit(S.pasteCommands(clip.current, sheet.id, S.pasteOffset(clip.current, hover, step)), "Paste"),
+    /** Copy, then delete the originals (one command, a Batch for several). */
+    cut: () => {
+      const c = S.copy(snapshot, sel);
+      if (!c) return;
+      setClipboard(c);
+      edit?.notify(`Cut ${objects(S.count(sel))}.`);
+      submit(S.deleteCommands(sel), `Cut ${objects(S.count(sel))}`);
+      setSel(S.EMPTY);
+    },
+    /** Pastes the window's clipboard (copied on any sheet) at the pointer: new objects, nets by label name only. */
+    paste: () => {
+      const c = clipboard();
+      if (c) submit(S.pasteCommands(c, sheet.id, S.pasteOffset(c, hover, step)), "Paste");
+    },
     /** Copy-and-paste in one step, four grid steps up and right of the original. */
     duplicate: () => {
       const c = S.copy(snapshot, sel);
       if (c) submit(S.pasteCommands(c, sheet.id, S.pasteOffset(c, null, step)), `Duplicate ${objects(S.count(sel))}`);
     },
+    selectAll: () => setSel(S.filtered(S.marquee(snapshot, sheet.id, S.rectOf({ x: -1e15, y: -1e15 }, { x: 1e15, y: 1e15 })), filter)),
+    similar: () => {
+      const o = single(sel);
+      if (!o) return;
+      const found = S.filtered(S.similar(snapshot, sheet.id, o[0], o[1]), filter);
+      setSel(found);
+      edit?.notify(`Find similar: ${objects(S.count(found))} selected on this sheet.`);
+    },
+    align: (how: S.Align) => {
+      const c = S.alignCommands(snapshot, sheet.id, sel, how);
+      if (c.length) submit(c, `Align ${objects(sel.symbols.length)}`);
+      else edit?.notify("The selected parts are already aligned.");
+    },
+    distribute: (axis: "x" | "y") => {
+      const c = S.distributeCommands(snapshot, sheet.id, sel, axis);
+      if (c.length) submit(c, `Distribute ${objects(sel.symbols.length)}`);
+      else edit?.notify("The selected parts are already evenly spaced.");
+    },
+    array: (cols: number, rows: number, stepXmm: number, stepYmm: number) => {
+      const c = S.copy(snapshot, sel);
+      if (!c) return;
+      setArraying(false);
+      submit(S.arrayCommands(c, sheet.id, cols, rows, { x: mmToNm(stepXmm), y: mmToNm(stepYmm) }), `Array ${cols}×${rows}: ${cols * rows - 1} copies`);
+    },
+    /** Highlights the net of a wire or label: the engine netlist names it, the sheet's drawing shows it. */
+    highlight: (id: Id) => {
+      const groups = sheetGroups(snapshot, sheet.id);
+      const show = (rows: { name: string; pins: string[]; label_names: string[] }[] | null, note: string) => {
+        const h = netAt(groups, rows, id);
+        if (!h) return edit?.notify("Select a wire or net label to highlight its net.");
+        setHi(h);
+        const m = netMembers(groups, h);
+        edit?.notify(`${h.name ? `Net ${h.name}` : "An unnamed net"} highlighted: ${m.wires.size} wire(s), ${m.pinKeys.size} pin(s), ${m.labels.size} label(s) on this sheet${note}.`);
+      };
+      api.netlist().then(
+        (rows) => show(rows, ""),
+        () => show(null, " (engine netlist unavailable: only what is drawn connected here)"),
+      );
+    },
   };
+
+  // B3: the operations the action registry runs on this editor (menus, palette, canvas context
+  // menu). Each state is true or the reason it cannot run; published with the editor context.
+  const idle = (): true | string => (edit?.busy ? "An engine command is running" : true);
+  const needSel = (): true | string => (S.isEmpty(sel) ? "Select something first" : idle());
+  const needParts = (n: 1 | 2 | 3): true | string => (sel.symbols.length >= n ? idle() : n === 1 ? "Select a part first" : `Select ${n === 2 ? "two" : "three"} or more parts first`);
+  const netSeed = sel.symbols.length === 0 && S.count(sel) === 1 ? (sel.wires[0] ?? sel.labels[0]) : null;
+  const ops: Record<string, EditorOp> | undefined =
+    edit && actions
+      ? {
+          rotate: { state: needParts(1), run: actions.rotate },
+          "flip-h": { state: needParts(1), run: () => actions.flip("horizontal") },
+          "flip-v": { state: needParts(1), run: () => actions.flip("vertical") },
+          delete: { state: needSel(), run: () => window.confirm(`Delete ${objects(S.count(sel))}? This is a destructive change.`) && actions.remove() },
+          cut: { state: needSel(), run: actions.cut },
+          copy: { state: S.isEmpty(sel) ? "Select something first" : true, run: () => void actions.copy() },
+          paste: { state: clipboard() ? idle() : "Nothing to paste: copy or cut first", run: actions.paste },
+          duplicate: { state: needSel(), run: actions.duplicate },
+          "select-all": { state: true, run: actions.selectAll },
+          "find-similar": { state: single(sel) ? true : "Select exactly one object first", run: actions.similar },
+          find: { state: true, run: () => setFinding(true) },
+          "highlight-net": { state: netSeed ? true : "Select one wire or net label first", run: () => netSeed && actions.highlight(netSeed) },
+          "clear-highlight": { state: hi ? true : "No net is highlighted", run: () => setHi(null) },
+          "align-left": { state: needParts(2), run: () => actions.align("left") },
+          "align-right": { state: needParts(2), run: () => actions.align("right") },
+          "align-top": { state: needParts(2), run: () => actions.align("top") },
+          "align-bottom": { state: needParts(2), run: () => actions.align("bottom") },
+          "align-center-x": { state: needParts(2), run: () => actions.align("center-x") },
+          "align-center-y": { state: needParts(2), run: () => actions.align("center-y") },
+          "distribute-x": { state: needParts(3), run: () => actions.distribute("x") },
+          "distribute-y": { state: needParts(3), run: () => actions.distribute("y") },
+          array: { state: needSel(), run: () => setArraying(true) },
+        }
+      : undefined;
 
   // Keyboard shortcuts act on the current selection through the same commands. Undo/redo
   // (Ctrl+Z, Ctrl+Shift+Z) are workspace-wide and handled by the workspace.
@@ -177,9 +286,8 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     if (e.ctrlKey || e.metaKey) {
       if (e.shiftKey) return;
       if (k === "c") actions.copy();
-      else if (k === "x") {
-        if (actions.copy()) actions.remove();
-      } else if (k === "v" && clip.current) {
+      else if (k === "x") actions.cut();
+      else if (k === "v" && clipboard()) {
         e.preventDefault();
         actions.paste();
       } else if (k === "d") {
@@ -187,7 +295,10 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         actions.duplicate();
       } else if (k === "a") {
         e.preventDefault();
-        setSel(S.marquee(snapshot, sheet.id, S.rectOf({ x: -1e15, y: -1e15 }, { x: 1e15, y: 1e15 })));
+        actions.selectAll();
+      } else if (k === "f") {
+        e.preventDefault();
+        setFinding(true);
       }
       return;
     }
@@ -198,6 +309,9 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       setDrag(null);
       setExternalDrag(null);
       setSel(S.EMPTY);
+      setHi(null);
+      setMenu(null);
+      setArraying(false);
       setTool("select");
     } else if (k === "w") choose("wire");
     else if (k === "r") {
@@ -253,6 +367,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     options,
     selection: { ...NO_SELECTION, symbols: sel.symbols, wires: sel.wires, labels: sel.labels },
     sheetId: sheet?.id ?? null,
+    ops,
   });
   const inspector = useHasInspector();
   if (!sheet) return <p className="empty">This project has no schematic sheet.</p>;
@@ -270,8 +385,14 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   // rubber-banded) under the Select, Place and Move tools; pressing an unselected object first
   // makes it the selection, so only that object moves. A drag on empty sheet draws a marquee
   // (Select tool; Shift/Ctrl add) or pans (other tools). Middle-button drag always pans.
-  const selectClick = (e: React.PointerEvent) => {
+  // The selection filter (right dock > Filter): a kind switched off is not picked by a click, a
+  // box, Select all or Find similar; the press then acts as on the empty sheet.
+  const pickAt = (e: { target: EventTarget }): [S.Kind, Id] | null => {
     const o = objectAt(e);
+    return o && filter[o[0]] ? o : null;
+  };
+  const selectClick = (e: React.PointerEvent) => {
+    const o = pickAt(e);
     const justPicked = pressed.current;
     pressed.current = null;
     const mode = S.pickMode(e);
@@ -284,7 +405,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     start: (x, y, e) => {
       if (!edit || edit.busy) return false;
       const at = fromView(x, y);
-      const o = objectAt(e);
+      const o = pickAt(e);
       pressed.current = null;
       downOnObject.current = !!o;
       if (!o && tool !== "select") return false;
@@ -303,7 +424,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       if (!d) return;
       const to = fromView(x, y);
       if (d.mode === "marquee") {
-        const found = S.marquee(snapshot, sheet.id, S.rectOf(d.from, to));
+        const found = S.filtered(S.marquee(snapshot, sheet.id, S.rectOf(d.from, to)), filter);
         setSel(d.additive ? S.union(sel, found) : found);
         return;
       }
@@ -320,6 +441,21 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
     const l = schematic.labels[id];
     return `translate(${mm(c.position.x - l.position.x)} ${-mm(c.position.y - l.position.y)})`;
   };
+
+  // B3: right-click opens the canvas context menu the action registry generates for what was hit.
+  // An unselected object becomes the selection first (a selected one keeps the whole selection).
+  const onContext = (e: ReactMouseEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    if (!edit || !contextMenu) return;
+    const o = pickAt(e);
+    if (o && !S.has(sel, o[0], o[1])) {
+      setSel(S.pick(sel, o[0], o[1], "replace"));
+      if (o[0] === "symbol") onSelect(o[1]);
+    }
+    const label = !o ? `Sheet ${sheet.name}` : o[0] === "symbol" ? `Part ${schematic.symbols[o[1]]?.refdes ?? ""}`.trim() : o[0] === "label" ? `Net label ${schematic.labels[o[1]]?.name ?? ""}`.trim() : "Wire";
+    setMenu({ x: e.clientX, y: e.clientY, target: o ? o[0] : "sheet", label });
+  };
+  const hiM = hi ? netMembers(sheetGroups(snapshot, sheet.id), hi) : null;
 
   const dropTarget: DropHandler = {
     onDragEnter: (x, y, e) => {
@@ -548,6 +684,22 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         )}
         <Coords at={hover} unit={grid.unit} />
       </header>
+      {edit && finding && (
+        <FindBar
+          snapshot={snapshot}
+          sheetId={sheet.id}
+          busy={edit.busy}
+          onSelect={(hits) => {
+            setTool("select");
+            setSel(S.filtered({ symbols: hits.filter((h) => h.kind === "symbol").map((h) => h.id), wires: [], labels: hits.filter((h) => h.kind === "label").map((h) => h.id) }, filter));
+          }}
+          onReplace={submit}
+          onClose={() => setFinding(false)}
+        />
+      )}
+      {edit && arraying && actions && (
+        <ArrayPanel stepMm={Math.round(8 * grid.spacingMm * 1000) / 1000} busy={edit.busy} onCreate={actions.array} onClose={() => setArraying(false)} />
+      )}
       {edit && (
         <div className="tool-options">
           {!inspector && <ToolOptionFields fields={options} layout="strip" />}
@@ -574,7 +726,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
           <span className="muted hint">
             {tool === "select" &&
               (S.isEmpty(sel)
-                ? "Click or drag a box to select (Shift adds, Ctrl toggles) · W wire · Ctrl+V paste · middle-drag pans"
+                ? "Click or drag a box to select (Shift adds, Ctrl toggles) · right-click for actions · W wire · Ctrl+V paste · Ctrl+F find · middle-drag pans"
                 : `${objects(S.count(sel))} selected · drag to move · R rotate · X/Y flip · Del delete · Ctrl+C/X/V/D copy/cut/paste/duplicate · Esc clear`)}
             {tool === "place" && `Click sheet to place · R rotate (${placeRotation}) · Esc cancel`}
             {externalDrag && `Drop component to place · R rotate (${placeRotation})`}
@@ -596,6 +748,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         onHover={(x, y) => setHover(fromView(x, y))}
         onDrag={edit && MOVE_TOOLS.includes(tool) ? dragHandler : undefined}
         onDropTarget={dropTarget}
+        onContextMenu={edit ? onContext : undefined}
         underlay={(vb) => (
           <>
             <rect className="sheet" x={0} y={-mm(sheet.height)} width={mm(sheet.width)} height={mm(sheet.height)} />
@@ -609,7 +762,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
             const [x1, y1] = toView(w.a);
             const [x2, y2] = toView(w.b);
             return (
-              <g key={w.id} data-wire-id={w.id} className={S.has(sel, "wire", w.id) ? "selected" : undefined}>
+              <g key={w.id} data-wire-id={w.id} className={[S.has(sel, "wire", w.id) ? "selected" : "", hiM?.wires.has(w.id) ? "net-hi" : ""].filter(Boolean).join(" ") || undefined}>
                 <line className="wire" x1={x1} y1={y1} x2={x2} y2={y2} />
                 <line className="hit" x1={x1} y1={y1} x2={x2} y2={y2} />
               </g>
@@ -654,7 +807,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
               <title>{`${s.refdes} ${s.value}`}</title>
               {/* Whole-body hit area: open drawings (a capacitor's plates) are thin to click. */}
               <rect className="sym-hit" x={x - hw} y={y - hh} width={2 * hw} height={2 * hh} />
-              <SymbolSvg drawing={drawing} activePin={pin?.symbol === s.id ? pin.pin : null} />
+              <SymbolSvg drawing={drawing} activePin={pin?.symbol === s.id ? pin.pin : null} hiPins={hiM ? new Set(drawing.pins.map((p) => p.number).filter((n) => hiM.pinKeys.has(`${s.id}/${n}`))) : undefined} />
               {S.has(sel, "symbol", s.id) && <SelectionBox s={s} />}
               <text className="refdes" x={x} y={y - hh - 1}>
                 {s.refdes}
@@ -676,7 +829,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
                 key={l.id}
                 data-label-id={l.id}
                 data-power-style={style ?? undefined}
-                className={`label ${l.kind}${S.has(sel, "label", l.id) ? " selected" : ""}`}
+                className={`label ${l.kind}${S.has(sel, "label", l.id) ? " selected" : ""}${hiM?.labels.has(l.id) ? " net-hi" : ""}`}
                 transform={labelShift(l.id)}
               >
                 <circle cx={x} cy={y} r={0.5} />
@@ -724,6 +877,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         {drag?.mode === "marquee" && <Marquee from={drag.from} to={drag.to} />}
         {start && <circle className="anchor" cx={toView(start)[0]} cy={toView(start)[1]} r={0.6} />}
       </Canvas>
+      {menu && contextMenu && <CanvasContextMenu key={`${menu.x},${menu.y},${menu.target}`} x={menu.x} y={menu.y} label={menu.label} items={contextMenu(menu.target)} onClose={() => setMenu(null)} />}
     </section>
   );
 }

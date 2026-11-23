@@ -87,7 +87,7 @@ fn erc_pin_conflict_matrix() {
     assert!(erc::pin_conflict(PinType::Passive, PinType::PowerOut).is_none());
 }
 
-/// Phase 1 B5 (ADR-0043): every EasyEDA Pro matrix cell that maps onto EAK pin types, with its
+/// Phase 1 B5 (ADR-0044): every EasyEDA Pro matrix cell that maps onto EAK pin types, with its
 /// EasyEDA severity; every other pairing is compatible ("ignore") or reported by another rule.
 #[test]
 fn erc_pin_conflict_matrix_follows_easyeda() {
@@ -243,7 +243,9 @@ fn drc_copper_to_hole_and_hole_to_hole() {
         .not_implemented
         .iter()
         .any(|s| s.contains("Copper-to-hole")));
-    assert!(r.not_implemented.iter().any(|s| s.contains("Keepout")));
+    // Keep-outs are checked since schema v4 (DRC-021, ADR-0042): no longer listed as missing.
+    assert!(!r.not_implemented.iter().any(|s| s.contains("Keepout")));
+    declared(&r, &["DRC-021"]);
 
     let bad = drc::run(&via_near_hole(&p, 0.05));
     let f = fired(&bad, "DRC-018");

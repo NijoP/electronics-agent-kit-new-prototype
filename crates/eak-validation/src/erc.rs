@@ -630,7 +630,7 @@ pub fn run(p: &Project) -> Report {
             "ERC-014",
             "Pin conflict matrix",
             "EasyEDA Pro matrix on EAK pin types: Output, PowerIn or PowerOut with OpenCollector, and Output with PowerIn (error); Bidirectional with Output, PowerIn or PowerOut (warning); Output-Output and Output-PowerOut are ERC-004",
-            "EasyEDA Pro pin-conflict matrix (observed; ADR-0043)",
+            "EasyEDA Pro pin-conflict matrix (observed; ADR-0044)",
         ),
         rule("ERC-015", "Undriven input net", "nets with Input pins and no possible driver", "EAK"),
         rule(
@@ -675,7 +675,7 @@ pub fn run(p: &Project) -> Report {
 }
 
 /// ERC-014 pin-to-pin compatibility after EasyEDA Pro's pin-conflict matrix (Phase 1 B5; the
-/// cells are in docs/decisions/0043-rule-configuration.md). EasyEDA's single Power type covers
+/// cells are in docs/decisions/0044-rule-configuration.md). EasyEDA's single Power type covers
 /// EAK's `PowerIn` and `PowerOut`. Pairs other rules report are left out: ERC-004 reports several
 /// Output/PowerOut drivers on a net (EasyEDA OUT-OUT, and Power-OUT for a power output), ERC-002
 /// no-connect pins. `None` means compatible (EasyEDA "ignore").

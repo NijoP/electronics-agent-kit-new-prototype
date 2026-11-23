@@ -1,4 +1,4 @@
-# ADR-0043: ERC severities, the pin-conflict matrix and per-rule configuration (AD-8)
+# ADR-0044: ERC severities, the pin-conflict matrix and per-rule configuration (AD-8)
 - **Date:** 2026-11-23
 - **Status:** Accepted in parts. Part A (severity ladder mapping, pin-conflict matrix) and the
   findings export are in effect. Part B (per-rule enable and severity override in the IR

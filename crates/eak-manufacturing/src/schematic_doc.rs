@@ -91,9 +91,8 @@ pub fn pages(p: &Project, tb: &TitleBlock) -> Vec<Page> {
     let sheets: Vec<(String, String, f64, f64)> = if p.schematic.sheets.is_empty() {
         vec![(String::new(), "Sheet 1".into(), 297.0, 210.0)]
     } else {
-        p.schematic
-            .sheets
-            .values()
+        p.sheets_in_order()
+            .into_iter()
             .map(|s| {
                 (
                     s.id.clone(),

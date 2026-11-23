@@ -356,6 +356,7 @@ mod tests {
                 width: 297_000_000,
                 height: 210_000_000,
                 format: None,
+                order: 0,
             },
         );
     }
