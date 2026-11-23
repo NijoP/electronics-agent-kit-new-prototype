@@ -908,6 +908,12 @@ export interface SimResult {
 
 /** Interactive routing (eak_engineering::interactive). Points are board nm. */
 export type BendMode = "diagonal45" | "orthogonal90";
+/** What the route step does with other-net copper in the way (eak_engineering::interactive). */
+export type ConflictMode = "walkaround" | "block";
+export interface ViaSize {
+  drill: Nm;
+  diameter: Nm;
+}
 export interface RouteStepRequest {
   net: string;
   layer: CopperLayer;
@@ -916,6 +922,9 @@ export interface RouteStepRequest {
   mode: BendMode;
   width: Nm | null;
   via_at_start: boolean;
+  conflict: ConflictMode;
+  /** Via size for `via_at_start`; null uses the net-class via. */
+  via: ViaSize | null;
 }
 export interface RouteSegment {
   a: Point;

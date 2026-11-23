@@ -15,6 +15,7 @@
 
 pub mod ai;
 pub mod catalogue;
+pub mod eco;
 pub mod kicad;
 pub mod libcatalog;
 pub mod libstore;
@@ -1032,7 +1033,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 78] = [
+pub const IPC_COMMANDS: [&str; 80] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -1098,6 +1099,8 @@ pub const IPC_COMMANDS: [&str; 78] = [
     "switch_project",
     "close_project_by_id",
     "operation_changes",
+    "sync_preview",
+    "sync_preview_export",
     "project_files",
     "project_file_read",
     "project_file_create",
@@ -1515,6 +1518,8 @@ pub fn run() {
             workspace::cmd::switch_project,
             workspace::cmd::close_project_by_id,
             workspace::cmd::operation_changes,
+            eco::cmd::sync_preview,
+            eco::cmd::sync_preview_export,
             workspace::cmd::project_files,
             workspace::cmd::project_file_read,
             workspace::cmd::project_file_create,

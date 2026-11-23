@@ -8,7 +8,8 @@
 //!    larger of the net-class clearance and the board minimum;
 //! 2. the direct 45-degree (or 90-degree) two-segment paths are tried first;
 //! 3. if both are blocked, a local A* walkaround on a fine grid finds a path around the
-//!    obstacles. A grid cell is only passable when a track centred anywhere within 0.75 of a
+//!    obstacles (conflict mode `walkaround`, the default; `block` skips this step). A grid
+//!    cell is only passable when a track centred anywhere within 0.75 of a
 //!    pitch of it keeps the clearance, so a straight link between neighbouring passable cells
 //!    is legal by construction; every segment is still re-checked exactly afterwards;
 //! 4. if no legal path reaches the cursor, the longest legal prefix of the direct path is
@@ -54,6 +55,30 @@ pub struct RouteStepRequest {
     /// Place a through via at `from` before continuing on `layer` (layer switch).
     #[serde(default)]
     pub via_at_start: bool,
+    /// What to do when other-net copper is in the way.
+    #[serde(default)]
+    pub conflict: ConflictMode,
+    /// Via drill and diameter override for `via_at_start`; the net-class via when omitted.
+    #[serde(default)]
+    pub via: Option<ViaSize>,
+}
+
+/// How the route step treats other-net copper in the way of the direct path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictMode {
+    /// Go around obstacles (local A* walkaround), else stop before them.
+    #[default]
+    Walkaround,
+    /// Stop before the first obstacle (no walkaround).
+    Block,
+}
+
+/// A via size chosen for a layer switch (a preset or the net class).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViaSize {
+    pub drill: Nm,
+    pub diameter: Nm,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -272,10 +297,18 @@ pub fn route_step(p: &Project, req: &RouteStepRequest) -> RouteStepResult {
     }
 
     if req.via_at_start {
+        let size = req.via.unwrap_or(ViaSize {
+            drill: class.via_drill,
+            diameter: class.via_diameter,
+        });
+        if size.drill <= 0 || size.diameter <= size.drill {
+            res.message = Some("the via diameter must be larger than its drill".into());
+            return res;
+        }
         let via_rules = Rules {
             obstacles: copper.iter().filter(|i| i.net != req.net).collect(),
             outline,
-            half_width: class.via_diameter as f64 / 2.0,
+            half_width: size.diameter as f64 / 2.0,
             clearance: clearance as f64,
             edge_clearance,
         };
@@ -287,8 +320,8 @@ pub fn route_step(p: &Project, req: &RouteStepRequest) -> RouteStepResult {
         }
         res.via = Some(StepVia {
             position: req.from,
-            drill: class.via_drill,
-            diameter: class.via_diameter,
+            drill: size.drill,
+            diameter: size.diameter,
         });
     }
 
@@ -326,8 +359,12 @@ pub fn route_step(p: &Project, req: &RouteStepRequest) -> RouteStepResult {
         }
     }
 
-    // 2. Walkaround.
-    if let Some(segs) = walkaround(&rules, req) {
+    // 2. Walkaround (not in block mode, which stops before the obstacle).
+    let around = match req.conflict {
+        ConflictMode::Walkaround => walkaround(&rules, req),
+        ConflictMode::Block => None,
+    };
+    if let Some(segs) = around {
         if !segs.is_empty() && segs.iter().all(|s| rules.legal(s.a, s.b)) {
             res.min_gap = rules.min_gap(&segs);
             res.end = segs.last().map_or(req.from, |s| s.b);
@@ -563,6 +600,8 @@ mod tests {
             mode,
             width: None,
             via_at_start: false,
+            conflict: ConflictMode::Walkaround,
+            via: None,
         }
     }
 
@@ -703,6 +742,65 @@ mod tests {
         assert!(!r.segments.is_empty(), "the legal prefix is drawn");
         assert!(r.end.x < Point::mm(20.0, 0.0).x);
         assert_legal(&p, &r);
+    }
+
+    // Slice C3 (unrun: no local builds): block mode stops before the wall that walkaround
+    // mode goes around.
+    #[test]
+    fn block_mode_stops_before_an_obstacle_instead_of_walking_around() {
+        let mut p = board();
+        add_track(
+            &mut p,
+            "wall",
+            "GND",
+            Point::mm(15.0, 2.0),
+            Point::mm(15.0, 25.0),
+            500_000,
+        );
+        let block = RouteStepRequest {
+            conflict: ConflictMode::Block,
+            ..req(
+                Point::mm(5.0, 10.0),
+                Point::mm(25.0, 10.0),
+                BendMode::Diagonal45,
+            )
+        };
+        let r = route_step(&p, &block);
+        assert!(!r.reached && !r.walkaround, "{r:?}");
+        assert!(r.blocking.iter().any(|b| b.object == "track wall"));
+        assert!(r.end.x < Point::mm(15.0, 0.0).x);
+        assert_legal(&p, &r);
+    }
+
+    #[test]
+    fn layer_switch_uses_the_via_preset_and_refuses_a_bad_one() {
+        let p = board();
+        let size = ViaSize {
+            drill: 200_000,
+            diameter: 450_000,
+        };
+        let switch = RouteStepRequest {
+            layer: CopperLayer::Bottom,
+            via_at_start: true,
+            via: Some(size),
+            ..req(
+                Point::mm(5.0, 10.0),
+                Point::mm(15.0, 10.0),
+                BendMode::Diagonal45,
+            )
+        };
+        let v = route_step(&p, &switch).via.expect("via inserted");
+        assert_eq!((v.drill, v.diameter), (200_000, 450_000));
+        let bad = RouteStepRequest {
+            via: Some(ViaSize {
+                drill: 400_000,
+                diameter: 400_000,
+            }),
+            ..switch
+        };
+        let r = route_step(&p, &bad);
+        assert!(r.via.is_none() && r.segments.is_empty() && !r.reached);
+        assert!(r.message.is_some());
     }
 
     #[test]

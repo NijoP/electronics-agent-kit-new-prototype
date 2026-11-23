@@ -104,6 +104,26 @@ jobs:
           UI_SCENARIO: scenarios/b1-ir-v3.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # C2 (ECO preview): Update PCB opens the engine's read-only preview; Apply sends one Batch.
+      - name: Run C2 ECO preview scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/c2
+          UI_SCENARIO: scenarios/c2-eco.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # C3 (routing experience): the Route tool's routing options in the inspector.
+      - name: Run C3 routing scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/c3
+          UI_SCENARIO: scenarios/c3-routing.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # D1 (library dock): its own fresh app instance and fixture.
       - name: Run D1 library dock scenario under Xvfb
         if: always()
@@ -122,6 +142,8 @@ jobs:
           cat "${{ runner.temp }}/ui-evidence/e3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no E3 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/d4/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D4 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/b1/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no B1 results file" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ runner.temp }}/ui-evidence/c2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no C2 results file" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ runner.temp }}/ui-evidence/c3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no C3 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/d1/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D1 results file" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload screenshots and results
         if: always()
@@ -141,6 +163,10 @@ jobs:
             ${{ runner.temp }}/ui-evidence/d4/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b1/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/b1/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/c2/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/c2/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/c3/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/c3/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/d1/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/d1/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/d1/tauri-driver.log

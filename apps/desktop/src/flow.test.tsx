@@ -36,6 +36,15 @@ function blank(name: string, withOutline: boolean): Snapshot {
   s.can_undo = false;
   return s;
 }
+/** The fake engine's SyncSchematicToPcb delta: one footprint (pad 1 on N1) per symbol not on the PCB yet. */
+function fakeSyncDelta(p: Snapshot): unknown[] {
+  return Object.values(p.project.schematic.symbols)
+    .filter((sy) => !p.project.pcb.footprints[`fp_${sy.id}`])
+    .map((sy) => {
+      const fid = `fp_${sy.id}`;
+      return { path: ["pcb", "footprints"], key: fid, before: null, after: { id: fid, symbol_id: sy.id, component_id: sy.component_id, refdes: sy.refdes, side: "top", locked: false, pad_nets: { "1": "N1" } } };
+    });
+}
 const resp = (command: string, before: number): CommandResponse => ({ op_id: "o", command, class: "reversible_local", accepted: true, revision_before: before, revision_after: before + 1, created: [], affected: [], warnings: [], error: null, validation_note: "" });
 const exportResult = (rev: number): ExportResult => ({
   out_dir: "/p/output/rev-" + rev,
@@ -130,15 +139,26 @@ beforeEach(() => {
           p.project.schematic.symbols[id] = { id, sheet_id: "sht_1", component_id: c.component_id!, refdes: `R${n}`, value: "10k", position: { x: n * 10_000_000, y: 50_000_000 }, rotation: "R0" };
           p.geometry.symbols.push({ id, sheet_id: "sht_1", refdes: `R${n}`, value: "10k", position: { x: n * 10_000_000, y: 50_000_000 }, half_w: 2_000_000, half_h: 1_000_000, pins: [] });
         }
-        if (c.type === "SyncSchematicToPcb")
+        const steps: { type: string }[] = c.type === "Batch" ? (args.command as { commands: { type: string }[] }).commands : [c];
+        if (c.type === "Batch" && args.expected_revision !== before) {
+          p.project.revision = before;
+          return { ...resp(c.type, before), accepted: false, revision_after: before, error: { code: "StaleRevision", message: { expected: args.expected_revision, actual: before } } };
+        }
+        if (steps.some((s) => s.type === "SyncSchematicToPcb")) {
+          syncChanges = fakeSyncDelta(p);
           for (const sy of Object.values(p.project.schematic.symbols)) {
             const fid = `fp_${sy.id}`;
-            syncChanges.push({ path: ["pcb", "footprints"], key: fid, before: null, after: { id: fid, symbol_id: sy.id, component_id: sy.component_id, refdes: sy.refdes, side: "top", locked: false, pad_nets: { "1": "N1" } } });
             p.project.pcb.footprints[fid] = { id: fid, symbol_id: sy.id, component_id: sy.component_id, refdes: sy.refdes, position: { x: 50_000_000, y: 0 }, rotation: "R0", side: "top", locked: false };
             p.geometry.footprints.push({ id: fid, symbol_id: sy.id, refdes: sy.refdes, side: "top", position: { x: 50_000_000, y: 0 }, half_w: 1_500_000, half_h: 800_000, pads: [] });
           }
+        }
         return resp(c.type, before);
       }
+      case "sync_preview":
+        if (args.expected_revision !== proj!.project.revision) throw new Error(`stale revision: command expected ${args.expected_revision}, project is at ${proj!.project.revision}`);
+        return { revision: proj!.project.revision, changes: fakeSyncDelta(proj!), warnings: [] };
+      case "sync_preview_export":
+        return `/p/evidence/eco-r${String(proj!.project.revision).padStart(6, "0")}.json`;
       case "run_check":
         return { report: { check: String(args.check).toUpperCase(), project_id: proj!.project.id, revision: proj!.project.revision, input_sha256: "x", tool: "t", findings: [], outcome: "NO_ERRORS_IN_IMPLEMENTED_CHECKS", errors: 0, warnings: 0, not_implemented: ["bus checks"], limitations: [] }, evidence_path: null };
       case "export_manufacturing":
@@ -202,14 +222,24 @@ describe("end-to-end flow", () => {
     await waitFor(() => expect(screen.getAllByText(/R1/).length).toBeGreaterThan(0));
   });
 
-  it("3. Update PCB runs SyncSchematicToPcb and reports what the engine added; the PCB opens only on request", async () => {
+  it("3. Update PCB previews the change list, applies it as one Batch, and reports what the engine added; the PCB opens only on request", async () => {
     await createFromHome();
     await placeResistor();
     calls.length = 0;
     fireEvent.click(toolbar().getByRole("button", { name: "Update PCB" }));
-    await waitFor(() => expect(executed()).toEqual(["SyncSchematicToPcb"]));
+    // C2: a read-only preview first; nothing is executed until Apply.
+    const eco = await screen.findByRole("dialog", { name: "Update PCB: review changes" });
     // ADR-0036 gate: ERC ran on this revision before the schematic was synchronised (unrun test).
     expect(ran("run_check").map((c) => c.args.check)).toEqual(["erc"]);
+    expect(ran("sync_preview")).toHaveLength(1);
+    const rev = proj!.project.revision;
+    expect(ran("sync_preview")[0].args).toEqual({ expected_revision: rev });
+    expect(executed()).toEqual([]);
+    expect(within(eco).getByRole("checkbox", { name: "Apply Add Footprint R1" })).toBeTruthy();
+    expect(within(eco).getByRole("checkbox", { name: "Apply Add Pad net R1.1" })).toBeTruthy();
+    fireEvent.click(within(eco).getByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(executed()).toEqual(["Batch"]));
+    expect(execCalls()[0].args).toEqual({ expected_revision: rev, command: { type: "Batch", commands: [{ type: "SyncSchematicToPcb" }], label: "Update PCB from schematic" } });
     const dlg = await screen.findByRole("dialog", { name: "Update PCB report" });
     // the report comes from the engine's own change list for that operation
     expect(ran("operation_changes")).toHaveLength(1);
@@ -223,6 +253,55 @@ describe("end-to-end flow", () => {
     expect(screen.queryByRole("dialog", { name: "Update PCB report" })).toBeNull();
     await waitFor(() => expect(screen.getByRole("img", { name: "PCB canvas" }).closest(".view-slot")!.className).not.toContain("off"));
     await waitFor(() => expect(document.querySelector("[data-footprint-id]")).toBeTruthy());
+  });
+
+  it("3b. C2: unchecked changes are not applied; a pad net follows its footprint; Export report saves the engine's preview", async () => {
+    await createFromHome();
+    await placeResistor();
+    calls.length = 0;
+    fireEvent.click(toolbar().getByRole("button", { name: "Update PCB" }));
+    const eco = await screen.findByRole("dialog", { name: "Update PCB: review changes" });
+    const fp = () => within(eco).getByRole("checkbox", { name: "Apply Add Footprint R1" }) as HTMLInputElement;
+    const net = () => within(eco).getByRole("checkbox", { name: "Apply Add Pad net R1.1" }) as HTMLInputElement;
+    const apply = () => within(eco).getByRole("button", { name: "Apply changes" }) as HTMLButtonElement;
+    expect(apply().disabled).toBe(false);
+    // unchecking the footprint unchecks the pad net that needs it
+    fireEvent.click(fp());
+    expect(fp().checked).toBe(false);
+    expect(net().checked).toBe(false);
+    expect(apply().disabled).toBe(true);
+    expect(within(eco).getByRole("note").textContent).toMatch(/2 change\(s\) unchecked.*not available yet/);
+    fireEvent.click(apply());
+    // the export lists what was left unchecked; the report itself is recomputed by the engine
+    fireEvent.click(within(eco).getByRole("button", { name: "Export report" }));
+    await within(eco).findByText(/Report saved: \/p\/evidence\/eco-r/);
+    expect(ran("sync_preview_export")[0].args).toEqual({ expected_revision: proj!.project.revision, excluded: ["fp+:sym_1", "net:sym_1:1"] });
+    // checking the pad net checks its footprint again
+    fireEvent.click(net());
+    expect(fp().checked).toBe(true);
+    // group by object
+    fireEvent.change(within(eco).getByRole("combobox", { name: "Group changes by" }), { target: { value: "object" } });
+    expect(within(eco).getByRole("rowgroup", { name: "Pad net (1)" })).toBeTruthy();
+    fireEvent.click(within(eco).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Update PCB: review changes" })).toBeNull();
+    expect(executed()).toEqual([]);
+    expect(Object.keys(proj!.project.pcb.footprints)).toHaveLength(0);
+  });
+
+  it("3c. C2: a preview made stale by another change is rejected on Apply and nothing is applied", async () => {
+    await createFromHome();
+    await placeResistor();
+    calls.length = 0;
+    fireEvent.click(toolbar().getByRole("button", { name: "Update PCB" }));
+    const eco = await screen.findByRole("dialog", { name: "Update PCB: review changes" });
+    const previewed = proj!.project.revision;
+    proj!.project.revision += 1; // a terminal agent moved the project on while the dialog was open
+    fireEvent.click(within(eco).getByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(executed()).toEqual(["Batch"]));
+    expect(execCalls()[0].args.expected_revision).toBe(previewed);
+    const dlg = await screen.findByRole("dialog", { name: "Update PCB report" });
+    expect(within(dlg).getByRole("alert").textContent).toContain("StaleRevision");
+    expect(Object.keys(proj!.project.pcb.footprints)).toHaveLength(0);
   });
 
   it("4. ERC and DRC run from the toolbar and show in the Findings tab", async () => {
