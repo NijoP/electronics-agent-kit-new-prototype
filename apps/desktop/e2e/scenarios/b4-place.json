@@ -25,21 +25,21 @@
     { "id": "b4-offpage-drawn", "do": "count", "title": "B4: the off-page connector is drawn as one", "selector": "section[aria-label=\"Schematic view\"] g[data-scope=\"off_page\"] path.port-shape", "equals": 1, "shot": false },
 
     { "id": "b4-bus-menu", "do": "menu", "title": "B4: Place › Bus", "menu": "Place", "item": "Bus", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"bus\"]", "shot": false },
-    { "id": "b4-bus-a", "do": "click", "title": "B4: bus start", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -220, "dy": 140, "shot": false },
-    { "id": "b4-bus-b", "do": "click", "title": "B4: bus vertex", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 0, "dy": 140, "shot": false },
+    { "id": "b4-bus-a", "do": "click", "title": "B4: bus start", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -220, "dy": 100, "shot": false },
+    { "id": "b4-bus-b", "do": "click", "title": "B4: bus vertex", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -40, "dy": 100, "shot": false },
     { "id": "b4-bus-enter", "do": "key", "title": "B4: Enter finishes the bus (one AddBus named D[0..7])", "keys": "Return", "expect": "footer.status span.msg", "expectText": "AddBus" },
     { "id": "b4-bus-drawn", "do": "count", "title": "B4: the bus is drawn", "selector": "section[aria-label=\"Schematic view\"] g[data-bus-id] polyline.bus", "equals": 1, "shot": false },
 
     { "id": "b4-entry-menu", "do": "menu", "title": "B4: Place › Bus entry", "menu": "Place", "item": "Bus entry", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"busentry\"]", "shot": false },
-    { "id": "b4-entry", "do": "click", "title": "B4: click on the bus: AddBusEntry", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -110, "dy": 140, "expect": "footer.status span.msg", "expectText": "AddBusEntry" },
+    { "id": "b4-entry", "do": "click", "title": "B4: click on the bus: AddBusEntry", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -130, "dy": 100, "expect": "footer.status span.msg", "expectText": "AddBusEntry" },
     { "id": "b4-entry-drawn", "do": "count", "title": "B4: the bus entry is drawn", "selector": "section[aria-label=\"Schematic view\"] g[data-bus-entry-id]", "equals": 1, "shot": false },
 
     { "id": "b4-text-menu", "do": "menu", "title": "B4: Place › Text", "menu": "Place", "item": "Text", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"text\"]", "shot": false },
-    { "id": "b4-text", "do": "click", "title": "B4: put text on the sheet (AddSheetGraphic)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 160, "dy": 180, "expect": "footer.status span.msg", "expectText": "AddSheetGraphic" },
+    { "id": "b4-text", "do": "click", "title": "B4: put text on the sheet (AddSheetGraphic)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -200, "dy": 20, "expect": "footer.status span.msg", "expectText": "AddSheetGraphic" },
     { "id": "b4-text-drawn", "do": "count", "title": "B4: the text is drawn", "selector": "section[aria-label=\"Schematic view\"] g[data-graphic-kind=\"text\"]", "equals": 1, "shot": false },
     { "id": "b4-rect-menu", "do": "menu", "title": "B4: Place › Rectangle", "menu": "Place", "item": "Rectangle", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"rect\"]", "shot": false },
-    { "id": "b4-rect-a", "do": "click", "title": "B4: rectangle first corner", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 160, "dy": -220, "shot": false },
-    { "id": "b4-rect-b", "do": "click", "title": "B4: rectangle second corner (AddSheetGraphic)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 260, "dy": -170, "expect": "footer.status span.msg", "expectText": "AddSheetGraphic" },
+    { "id": "b4-rect-a", "do": "click", "title": "B4: rectangle first corner", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 150, "dy": -50, "shot": false },
+    { "id": "b4-rect-b", "do": "click", "title": "B4: rectangle second corner (AddSheetGraphic)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 210, "dy": 10, "expect": "footer.status span.msg", "expectText": "AddSheetGraphic" },
     { "id": "b4-rect-drawn", "do": "count", "title": "B4: the rectangle is drawn", "selector": "section[aria-label=\"Schematic view\"] g[data-graphic-kind=\"rectangle\"]", "equals": 1 },
 
     { "id": "b4-place-tool", "do": "click", "title": "B4: Place tool", "shot": false, "selector": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button", "text": "Place", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"place\"]" },
