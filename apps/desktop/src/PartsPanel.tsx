@@ -8,7 +8,6 @@ import { useEffect, useState } from "react";
 import { api, describeError } from "./api";
 import { CataloguePanel } from "./CataloguePanel";
 import { setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
-import { LibraryBrowser } from "./LibraryBrowser";
 import type { DistributorView, PartsSearch, SourcingRecord } from "./types";
 
 /**
@@ -100,7 +99,6 @@ export function PartsPanel({ revision, onImported }: Props) {
     });
 
   const [catalogueOpen, setCatalogueOpen] = useState(false);
-  const [libraryOpen, setLibraryOpen] = useState(false);
   // The backend reports the distributor host it would call; null until known (or unreadable, when
   // the catalogue stays available and reports its own errors).
   const [dist, setDist] = useState<DistributorView | null>(null);
@@ -192,10 +190,6 @@ export function PartsPanel({ revision, onImported }: Props) {
           {catalogueOpen && <CataloguePanel busy={busy} onImport={(distributor) => void importPart(distributor)} />}
         </details>
       )}
-      <details open={libraryOpen} onToggle={(e) => setLibraryOpen(e.currentTarget.open)}>
-        <summary>Component library: built-in, project, personal and open-source scopes</summary>
-        {libraryOpen && <LibraryBrowser />}
-      </details>
       {result && result.library.length > 0 && (
         <>
           <h3>EAK library</h3>

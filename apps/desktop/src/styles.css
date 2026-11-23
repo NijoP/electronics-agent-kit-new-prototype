@@ -664,6 +664,29 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .props dt { color: var(--fg-dim); }
 .props dd { margin: 0; overflow-wrap: anywhere; font-family: var(--mono); }
 .bottom-library { display: grid; gap: var(--s-2); }
+/* Phase 1 D1 Library dock: scopes and categories | results grid | preview. */
+.library-dock { display: grid; gap: var(--s-1); min-width: 0; }
+.library-dock .tabs { height: var(--h-md); padding: 0; background: transparent; }
+.library-dock .tabs .tab { height: var(--h-md); }
+.lib-kinds input[type="search"] { margin-left: auto; min-width: 0; width: min(28ch, 40%); }
+.lib-dock { display: grid; grid-template-columns: minmax(10em, 14em) minmax(0, 1fr) minmax(12em, 20em); gap: var(--s-2); min-width: 0; align-items: start; }
+.lib-dock-nav { display: grid; gap: var(--s-1); min-width: 0; }
+.lib-dock-nav .tree button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-dock-nav .tree .tree { padding-left: var(--s-2); }
+.lib-offline { display: flex; align-items: center; gap: var(--s-half); font-size: var(--fs-sm); }
+.lib-dock-main { display: grid; gap: var(--s-1); min-width: 0; overflow-x: auto; }
+.lib-grid td button { border-color: transparent; background: transparent; padding: 0 var(--s-half); text-align: left; }
+.lib-grid td button.on { background: var(--accent-soft); }
+.lib-grid td { white-space: nowrap; }
+.pager { display: flex; align-items: center; gap: var(--s-1); }
+.lib-dock-preview { display: grid; gap: var(--s-1); min-width: 0; }
+.lib-dock-preview h4 { margin: 0; }
+.lib-common { display: grid; gap: var(--s-1); }
+.lib-common-group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
+.lib-common-group strong { min-width: 12em; }
+.lib-standard { display: grid; gap: var(--s-1); }
+.lib-standard .row { display: flex; gap: var(--s-2); align-items: start; justify-content: space-between; }
+.lib-manage { display: grid; gap: var(--s-2); }
 .canvas-strip { display: flex; align-items: center; gap: var(--s-2); height: var(--h-sm); padding: 0 var(--s-2); flex: none; border-top: 1px solid var(--line); background: var(--bg-panel); color: var(--fg-dim); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; }
 .canvas-strip .strip-val { font-family: var(--mono); color: var(--fg); display: inline-block; min-width: 7ch; text-align: right; }
 .canvas-strip .strip-unit { color: var(--fg); }

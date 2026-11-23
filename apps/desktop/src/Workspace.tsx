@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, describeError } from "./api";
 import { DomainPanel } from "./DomainPanel";
 import { ManufacturingPanel as FabricatorPrepPanel } from "./ManufacturingPanel";
-import { PartsPanel as DistributorPartsPanel } from "./PartsPanel";
 import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
 import { PcbView } from "./PcbView";
@@ -22,7 +21,7 @@ import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
 import { ManufacturingPanel, netNames } from "./shell/panels";
 import { ProjectOverview } from "./shell/ProjectOverview";
-import { LibraryPanel } from "./shell/LibraryPanel";
+import { LibraryDock } from "./shell/LibraryDock";
 import { StatusBar } from "./shell/StatusBar";
 import { ExportDialog } from "./shell/ExportDialog";
 import { BomExportDialog, DocumentExportDialog } from "./shell/OutputDialogs";
@@ -916,16 +915,16 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
               activeFinding={activeFinding}
               onClose={() => setBottomOpen(false)}
               library={
-                <>
-                  <LibraryPanel revision={revision} busy={busy} execute={edit.execute} onPlace={placePart} />
-                  <DistributorPartsPanel
-                    revision={revision}
-                    onImported={async (m) => {
-                      setMessage(m);
-                      await refresh();
-                    }}
-                  />
-                </>
+                <LibraryDock
+                  revision={revision}
+                  busy={busy}
+                  execute={edit.execute}
+                  onPlace={placePart}
+                  onImported={async (m) => {
+                    setMessage(m);
+                    await refresh();
+                  }}
+                />
               }
             />
           )}

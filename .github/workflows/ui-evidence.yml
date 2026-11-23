@@ -134,6 +134,16 @@ jobs:
           UI_SCENARIO: scenarios/b2-symbols.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # D1 (library dock): its own fresh app instance and fixture.
+      - name: Run D1 library dock scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/d1
+          UI_SCENARIO: scenarios/d1-library.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # D3 (output documents: BOM dialog, schematic PDF/SVG, netlists): its own fresh instance.
       - name: Run D3 output scenario under Xvfb
         if: always()
@@ -155,6 +165,7 @@ jobs:
           cat "${{ runner.temp }}/ui-evidence/c2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no C2 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/c3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no C3 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/b2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no B2 results file" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ runner.temp }}/ui-evidence/d1/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D1 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/d3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D3 results file" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload screenshots and results
         if: always()
@@ -180,6 +191,9 @@ jobs:
             ${{ runner.temp }}/ui-evidence/c3/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b2/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/b2/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/d1/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/d1/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/d1/tauri-driver.log
             ${{ runner.temp }}/ui-evidence/d3/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/d3/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/d3/tauri-driver.log

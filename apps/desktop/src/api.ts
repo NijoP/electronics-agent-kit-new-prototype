@@ -30,6 +30,7 @@ import type {
   LibraryPart,
   FootprintCandidate,
   ManufacturingPreview,
+  Report,
   PartsSearch,
   AssemblyClass,
   CatalogueQuery,
@@ -149,6 +150,7 @@ export const IPC_COMMANDS = [
   "assembly_attest",
   "assembly_import_parts_file",
   "manufacturing_preview",
+  "part_standardisation",
   "fabricator_prepare",
   "open_projects",
   "switch_project",
@@ -298,6 +300,8 @@ export const api = {
   assemblyImportPartsFile: (path: string) =>
     call<{ file: string; recorded: number; unknown_class: number }>("assembly_import_parts_file", { path }),
   manufacturingPreview: () => call<ManufacturingPreview>("manufacturing_preview"),
+  /** Part standardisation (D1): the SOURCING check over the placed parts and the stored supplier records (read-only, offline). */
+  partStandardisation: () => call<Report>("part_standardisation"),
   fabricatorPrepare: (outDir: string) => call<PrepareResult>("fabricator_prepare", { out_dir: outDir }),
   // IDE shell: several open projects (one active) and the sandboxed project file explorer. Every
   // file call names its project, so a late call from one project can never act on another.
