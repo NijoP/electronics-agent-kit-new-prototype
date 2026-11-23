@@ -138,6 +138,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Feature | Status | Evidence / note |
 |---|---|---|
 | Gerber, Excellon, BOM, CPL, manifest | integ | `end_to_end.rs`; editor flow export test. Gerbers not opened in an external viewer; nothing fabricated |
+| Configurable BOM (columns, headers, sort, grouping, filters; CSV and XLSX), schematic PDF/SVG with title block, IPC-D-356 and JSON netlists (slice D3) | integ | `eak-manufacturing` `bom_config`, `xlsx`, `schematic_doc`, `netlist_export`, `outputs` tests; `src-tauri/tests/ipc.rs` `bom_and_document_exports_are_revision_bound_and_draft`; vitest `shell/outputs.test.tsx`; CI ui-evidence `d3-output.json`. ADR-0040. Not opened in a fabricator tool; no compare |
 | Release gate (DRAFT unless the exact revision is verified) | integ | `end_to_end.rs` |
 | GenCAD, IPC-2581, ODB++ | - | |
 | SPICE netlist export + ngspice `.op`/`.tran` + node table + transient plot | integ | `eak-simulation` tests (real ngspice 42; skipped with a printed reason only when absent), `simulation.test.tsx`; ADR-0013. R/C/L/D/LED/V/I only, generic diode models, no AC/sweep/manufacturer models; optional runtime dependency |

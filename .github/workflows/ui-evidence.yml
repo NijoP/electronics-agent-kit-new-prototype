@@ -85,12 +85,23 @@ jobs:
           UI_SCENARIO: scenarios/e3-engine-provenance.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # D3 (output documents: BOM dialog, schematic PDF/SVG, netlists): its own fresh instance.
+      - name: Run D3 output scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/d3
+          UI_SCENARIO: scenarios/d3-output.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       - name: Results to job summary
         if: always()
         run: |
           cat "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/e2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no E2 results file" >> "$GITHUB_STEP_SUMMARY"
           cat "${{ runner.temp }}/ui-evidence/e3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no E3 results file" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ runner.temp }}/ui-evidence/d3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D3 results file" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
@@ -105,4 +116,7 @@ jobs:
             ${{ runner.temp }}/ui-evidence/e3/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/e3/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/e3/tauri-driver.log
+            ${{ runner.temp }}/ui-evidence/d3/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/d3/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/d3/tauri-driver.log
           if-no-files-found: warn
