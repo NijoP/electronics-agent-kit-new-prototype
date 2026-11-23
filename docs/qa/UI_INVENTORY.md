@@ -18,7 +18,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 ## Summary
 
 - Action registry: 136 controls: 0 unavailable with a reason, 0 violations (0 allowlisted).
-- Component scan: 498 controls: 1 unavailable with a reason, 0 violations (0 allowlisted).
+- Component scan: 497 controls: 1 unavailable with a reason, 0 violations (0 allowlisted).
 - Quick open: 6 items probed, 0 no-op handlers.
 - Allowlist: 0 entries.
 
@@ -176,7 +176,6 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/CataloguePanel.tsx | button | Save credentials | form submit | 1 | handler |
 | src/CataloguePanel.tsx | button | Test connection | onClick | 1 | handler |
 | src/CataloguePanel.tsx | button | Remove credentials | onClick | 1 | handler |
-| src/CataloguePanel.tsx | a | apply | href | 1 | handler |
 | src/CataloguePanel.tsx | button | (dynamic) | onClick, {...props} | 1 | handler |
 | src/CataloguePanel.tsx | button | (no label) | onClick | 1 | handler |
 | src/CataloguePanel.tsx | button | Load categories | onClick | 1 | handler |
@@ -186,7 +185,6 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/CataloguePanel.tsx | input[type=text] | 0603 | onChange | 1 | handler |
 | src/CataloguePanel.tsx | input[type=checkbox] | (no label) | onChange | 1 | handler |
 | src/CataloguePanel.tsx | button | Search catalogue | form submit | 1 | handler |
-| src/CataloguePanel.tsx | a | datasheet | href | 1 | handler |
 | src/CataloguePanel.tsx | button | Save record | onClick | 1 | handler |
 | src/CataloguePanel.tsx | button | Import | onClick | 1 | handler |
 | src/CataloguePanel.tsx | button | Previous page | onClick | 1 | handler |
@@ -198,6 +196,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/EngineeringMonitor.tsx | button | Export | onClick | 1 | handler |
 | src/EngineeringMonitor.tsx | button | (no label) | onClick | 1 | handler |
 | src/EngineeringMonitor.tsx | input[type=checkbox] | Real-time DRC | onChange | 1 | handler |
+| src/ExternalUrl.tsx | button | Copy | onClick | 1 | handler |
 | src/grid.tsx | select | Grid spacing | onChange | 1 | handler |
 | src/grid.tsx | select | Unit | onChange | 1 | handler |
 | src/grid.tsx | input[type=checkbox] | Show grid | onChange | 1 | handler |
@@ -207,7 +206,6 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/KicadImport.tsx | input[type=text] | Library source URL | onChange | 1 | handler |
 | src/KicadImport.tsx | button | (dynamic) | onClick | 1 | handler |
 | src/LibraryBrowser.tsx | select | (no label) | onChange | 1 | handler |
-| src/LibraryBrowser.tsx | a | open | href | 1 | handler |
 | src/LibraryBrowser.tsx | input[type=text] | id, name, MPN, Distributor #, package | onChange | 1 | handler |
 | src/LibraryBrowser.tsx | button | Search library | form submit | 1 | handler |
 | src/LibraryBrowser.tsx | input[type=checkbox] | (no label) | onChange | 2 | handler |
@@ -217,7 +215,6 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/LibraryBrowser.tsx | button | Remove | onClick | 2 | handler |
 | src/LibraryBrowser.tsx | input[type=text] | comma separated | onChange | 1 | handler |
 | src/LibraryBrowser.tsx | button | Save tags | form submit | 1 | handler |
-| src/LibraryBrowser.tsx | a | source | href | 1 | handler |
 | src/LibraryBrowser.tsx | input[type=text] | /path/to/library | onChange | 1 | handler |
 | src/LibraryBrowser.tsx | button | Import open-source library | form submit | 1 | handler |
 | src/ManufacturingPanel.tsx | select | (dynamic) | onChange | 1 | handler |
@@ -257,11 +254,11 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/partEditor/PartEditor.tsx | button | × | onClick, {...props} | 1 | handler |
 | src/partEditor/PartEditor.tsx | input[type=checkbox] | (dynamic) | onChange, {...props} | 1 | handler |
 | src/partEditor/PartEditor.tsx | button | Add a pad one pitch right of the right-most pad, like the last pad | onClick | 1 | handler |
-| src/PartsPanel.tsx | a | datasheet | href | 1 | handler |
 | src/PartsPanel.tsx | button | Import | onClick | 1 | handler |
 | src/PartsPanel.tsx | input[type=text] | C25804 | onChange | 1 | handler |
 | src/PartsPanel.tsx | button | Search | form submit | 1 | handler |
-| src/PcbView.tsx | button | (dynamic) | onClick | 1 | handler |
+| src/PartsPanel.tsx | button | Retry | onClick | 1 | handler |
+| src/PcbView.tsx | button | (dynamic) | onClick | 2 | handler |
 | src/PcbView.tsx | select | PCB renderer | onChange | 1 | handler |
 | src/PcbView.tsx | button | Place a via here and continue on the next copper layer (L) | onClick | 1 | handler |
 | src/PcbView.tsx | button | Remove the last fixed step (Backspace) | onClick | 1 | handler |
@@ -294,6 +291,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/PcbView.tsx | button | Outline view: draw tracks, pads, vias and zones as outlines | onClick | 1 | handler |
 | src/PcbView.tsx | button | Fill planes with net | onClick | 1 | handler |
 | src/PcbView.tsx | button | Draw board outline | onClick | 1 | handler |
+| src/PerformancePanel.tsx | button | Retry | onClick | 1 | handler |
 | src/PerformancePanel.tsx | input[type=number] | (no label) | onChange, {...props} | 1 | handler |
 | src/PerformancePanel.tsx | select | (no label) | onChange, {...props} | 1 | handler |
 | src/PerformancePanel.tsx | input[type=checkbox] | (no label) | onChange, {...props} | 1 | handler |
@@ -322,7 +320,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/SchematicView.tsx | button | Rotate 90° (R) | onClick | 1 | handler |
 | src/SchematicView.tsx | button | Flip left/right (X) | onClick | 1 | handler |
 | src/SchematicView.tsx | button | Flip top/bottom (Y) | onClick | 1 | handler |
-| src/SchematicView.tsx | button | Duplicate (Ctrl+D) | onClick | 1 | handler |
+| src/SchematicView.tsx | button | Duplicate | onClick | 1 | handler |
 | src/SchematicView.tsx | button | Delete (Del) | onClick | 1 | handler |
 | src/SchematicView.tsx | input[type=text] | Reference | onChange, onBlur, onKeyDown | 1 | handler |
 | src/SchematicView.tsx | input[type=text] | Value | onChange, onBlur, onKeyDown | 1 | handler |
@@ -352,7 +350,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/shell/AnnotateDialog.tsx | select | Annotate scope | onChange | 1 | handler |
 | src/shell/AnnotateDialog.tsx | select | Annotate order | onChange | 1 | handler |
 | src/shell/AnnotateDialog.tsx | input[type=checkbox] | Reset designators | onChange | 1 | handler |
-| src/shell/AnnotateDialog.tsx | button | (no label) | onClick | 1 | handler |
+| src/shell/AnnotateDialog.tsx | button | (dynamic) | onClick | 1 | handler |
 | src/shell/AssetsPanel.tsx | button | (dynamic) | onClick | 3 | handler |
 | src/shell/AssetsPanel.tsx | button | Refresh | onClick | 1 | handler |
 | src/shell/BottomPanel.tsx | button | Remove finished tasks from the list | onClick | 1 | handler |
@@ -416,7 +414,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/shell/LayerManager.tsx | button | (dynamic) | onClick | 1 | handler |
 | src/shell/LayerManager.tsx | input[type=number] | (dynamic) | onChange, onBlur, onKeyDown | 1 | handler |
 | src/shell/LayerManager.tsx | input[type=text] | (dynamic) | onChange, onBlur, onKeyDown | 1 | handler |
-| src/shell/LibraryDock.tsx | button | Arm the schematic Place tool with this part (or drag it onto the sheet) | onDragStart, onDragEnd, onClick | 1 | handler |
+| src/shell/LibraryDock.tsx | button | Place | onDragStart, onDragEnd, onClick | 1 | handler |
 | src/shell/LibraryDock.tsx | button | Arm the schematic Place tool with this part; placing copies it into the project library | onClick | 1 | handler |
 | src/shell/LibraryDock.tsx | button | (dynamic) | onClick | 2 | handler |
 | src/shell/LibraryDock.tsx | button | (dynamic) | onClick, onDragStart, onDragEnd | 1 | handler |
@@ -440,8 +438,8 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/shell/LibraryPanel.tsx | select | Category filter | onChange | 1 | handler |
 | src/shell/LibraryPanel.tsx | select | Source filter | onChange | 1 | handler |
 | src/shell/LibraryPanel.tsx | button | Click to select · Drag onto schematic to place | onClick, onDragStart, onDragEnd | 1 | handler |
-| src/shell/LibraryPanel.tsx | button | Arm the schematic place tool with this part; the footprint is created by Sync to PCB | onClick | 1 | handler |
-| src/shell/LibraryPanel.tsx | button | Copy into the project library so it can be edited | onClick | 1 | handler |
+| src/shell/LibraryPanel.tsx | button | Place on schematic | onClick | 1 | handler |
+| src/shell/LibraryPanel.tsx | button | Add to project | onClick | 1 | handler |
 | src/shell/LibraryPanel.tsx | button | Open the symbol editor: pin table, body graphics, pin-to-pad map (saved with UpsertComponentDefinition) | onClick | 1 | handler |
 | src/shell/LibraryPanel.tsx | button | Open the footprint editor: pads, drill, courtyard (saved with AssignComponentFootprint) | onClick | 1 | handler |
 | src/shell/LibraryPanel.tsx | input[type=text] | (dynamic) | onChange, {...props} | 1 | handler |
@@ -454,7 +452,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/shell/LibraryPanel.tsx | input[type=text] | 3D model licence | onChange, {...props} | 1 | handler |
 | src/shell/LibraryPanel.tsx | input[type=text] | 3D model provenance | onChange, {...props} | 1 | handler |
 | src/shell/LibraryPanel.tsx | input[type=text] | (dynamic) | onChange | 1 | handler |
-| src/shell/LibraryPanel.tsx | button | (no label) | onClick | 1 | handler |
+| src/shell/LibraryPanel.tsx | button | (dynamic) | onClick | 1 | handler |
 | src/shell/LibraryPanel.tsx | button | Remove 3D model | onClick | 1 | handler |
 | src/shell/MenuBar.tsx | button | (no label) | onClick, onPointerEnter, onKeyDown | 1 | handler |
 | src/shell/MenuBar.tsx | button[role=menuitem] | (dynamic) | onClick | 1 | handler |
@@ -528,7 +526,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/SimulationPanel.tsx | select | Analysis | onChange | 1 | handler |
 | src/SimulationPanel.tsx | input[type=text] | Stop time | onChange | 1 | handler |
 | src/SimulationPanel.tsx | input[type=text] | Step time | onChange | 1 | handler |
-| src/SimulationPanel.tsx | button | (no label) | onClick | 1 | handler |
+| src/SimulationPanel.tsx | button | (dynamic) | onClick | 1 | handler |
 | src/SimulationPanel.tsx | button | + Add | onClick | 1 | handler |
 | src/SimulationPanel.tsx | select | (dynamic) | onChange | 3 | handler |
 | src/SimulationPanel.tsx | input[type=text] | 5, 3.3V, PULSE(0 5 0 1n 1n 1 2), SIN(0 1 1k) | onChange | 1 | handler |
