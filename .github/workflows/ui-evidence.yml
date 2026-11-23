@@ -249,13 +249,24 @@ jobs:
           UI_SCENARIO: scenarios/b5-findings.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # E4 (bottom dock): Property List batch edit as one Batch and one undo step, Find Results
+      # from the B3 find bar, Diagnostics (Unknown never shown as OK).
+      - name: Run E4 bottom dock scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/e4
+          UI_SCENARIO: scenarios/e4-bottom-dock.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # Fails the job when a scenario wrote no results file (it crashed or never ran); failing
       # rows already failed their own step. Runs before the upload, which still runs (always()).
       - name: Results to job summary
         if: always()
         run: |
           missing=0
-          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b3g b6 c6 c4 c1 b4 b5; do
+          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b3g b6 c6 c4 c1 b4 b5 e4; do
             f="${{ runner.temp }}/ui-evidence/${d:+$d/}UI_EVIDENCE.md"
             if [ -f "$f" ]; then
               cat "$f" >> "$GITHUB_STEP_SUMMARY"
@@ -302,6 +313,8 @@ jobs:
             ${{ runner.temp }}/ui-evidence/b3/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b4/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/b4/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/e4/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/e4/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b3g/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/b3g/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b5/screenshots/*.png
