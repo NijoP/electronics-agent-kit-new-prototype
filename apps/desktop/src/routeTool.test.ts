@@ -215,17 +215,11 @@ describe("manual routing helpers", () => {
     expect(widthFromMm("-1")).toBeNull();
   });
 
-  it("edits a track as one Batch and deletes tracks", () => {
+  it("edits a track in place with EditTrack (same id) and deletes tracks", () => {
     const t: Track = { id: "trk1", layer: "top", width: 250_000, a: P(0, 0), b: P(5, 0), net: "SIG" };
     expect(trackEdit(t, { width: 250_000 })).toBeNull();
-    expect(trackEdit(t, { width: 400_000 })).toEqual({
-      type: "Batch",
-      commands: [
-        { type: "DeleteTrack", track_id: "trk1" },
-        { type: "AddTrack", layer: "top", a: P(0, 0), b: P(5, 0), width: 400_000, net: "SIG" },
-      ],
-      label: "Edit track SIG",
-    });
+    expect(trackEdit(t, { width: 400_000 })).toEqual({ type: "EditTrack", track_id: "trk1", width: 400_000 });
+    expect(trackEdit(t, { layer: "bottom" })).toEqual({ type: "EditTrack", track_id: "trk1", layer: "bottom" });
     expect(deleteTracks(["trk1"])).toEqual({ type: "DeleteTrack", track_id: "trk1" });
   });
 
@@ -284,8 +278,7 @@ describe("route via span and track layer changes (E2)", () => {
       type: "Batch",
       label: "Edit track SIG",
       commands: [
-        { type: "DeleteTrack", track_id: "trk1" },
-        { type: "AddTrack", layer: "bottom", a: P(0, 0), b: P(5, 0), width: 250_000, net: "SIG" },
+        { type: "EditTrack", track_id: "trk1", layer: "bottom" },
         { type: "AddVia", position: P(5, 0), net: "SIG", drill: null, diameter: null, from: null, to: null },
       ],
     });
@@ -301,7 +294,7 @@ describe("route via span and track layer changes (E2)", () => {
     // The same via reaches In1, so no extra via is needed there.
     expect(layerChangeVias(t, { inner: 1 }, board({ vias: [blind] }))).toEqual({ vias: [] });
     // A width-only edit never needs vias.
-    expect(trackEdit(t, { width: 400_000 }, board({ footprints: [fp("smd", P(5, 0))] }))).toMatchObject({ type: "Batch" });
+    expect(trackEdit(t, { width: 400_000 }, board({ footprints: [fp("smd", P(5, 0))] }))).toEqual({ type: "EditTrack", track_id: "trk1", width: 400_000 });
   });
 });
 
