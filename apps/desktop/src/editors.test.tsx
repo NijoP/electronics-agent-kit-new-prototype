@@ -179,7 +179,7 @@ describe("PCB editor", () => {
     await act(async () => clickAt(svg, pcbVb(), 15, -10));
     const step = ipc.calls.find((c) => c.cmd === "route_step")!;
     expect(step.args).toEqual({
-      request: { net: "N1", layer: "bottom", from: { x: 9_200_000, y: 10_000_000 }, to: { x: 15_000_000, y: 10_000_000 }, mode: "diagonal45", width: null, via_at_start: false, conflict: "walkaround", via: null },
+      request: { net: "N1", layer: "bottom", from: { x: 9_200_000, y: 10_000_000 }, to: { x: 15_000_000, y: 10_000_000 }, mode: "diagonal45", width: null, via_at_start: false, conflict: "walkaround", via: null, pending: { tracks: [], vias: [], shoved: [] } },
     });
     expect(sent).toEqual([]); // fixing a step commits nothing either
     await act(async () => {
