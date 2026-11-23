@@ -15,5 +15,13 @@ serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
 
+# Windows: find the program running inside a shell (process snapshot) and read its command line.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Wdk_System_Threading",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Threading",
+] }
+
 [lints]
 workspace = true
