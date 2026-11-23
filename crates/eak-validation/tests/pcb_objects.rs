@@ -72,7 +72,9 @@ fn new_rules_are_declared_and_keepouts_are_no_longer_not_implemented() {
 
 #[test]
 fn drc_detects_a_track_in_a_keepout() {
-    let mut p = reference();
+    // One reference build for every case: fixture ids are random per build.
+    let base = reference();
+    let mut p = base.clone();
     let (t, m) = long_top_track(&p);
     let mut keep = region("rgn-1", square(m, 1_000_000), vec![CopperLayer::Top]);
     keep.forbid.insert(RegionObject::Tracks);
@@ -91,7 +93,7 @@ fn drc_detects_a_track_in_a_keepout() {
         (vec![CopperLayer::Bottom], RegionObject::Tracks),
         (vec![CopperLayer::Top], RegionObject::Vias),
     ] {
-        let mut q = reference();
+        let mut q = base.clone();
         let mut other = region("rgn-1", square(m, 1_000_000), layers);
         other.forbid.insert(forbid);
         q.pcb.regions.insert(other.id.clone(), other);
@@ -127,8 +129,10 @@ fn drc_detects_a_via_in_a_keepout() {
 
 #[test]
 fn constraint_region_checks_track_width() {
-    let (t, m) = long_top_track(&reference());
-    let mut p = reference();
+    // One reference build for all three cases: fixture ids are random per build.
+    let base = reference();
+    let (t, m) = long_top_track(&base);
+    let mut p = base.clone();
     let mut narrow = region("rgn-w", square(m, 1_000_000), vec![]);
     narrow.min_track_width = Some(t.width + 100_000);
     p.pcb.regions.insert(narrow.id.clone(), narrow);
@@ -140,14 +144,14 @@ fn constraint_region_checks_track_width() {
     assert!(f.message.contains("narrower"));
     assert!(f.required.is_some());
 
-    let mut p = reference();
+    let mut p = base.clone();
     let mut fits = region("rgn-w", square(m, 1_000_000), vec![]);
     fits.min_track_width = Some(t.width);
     fits.max_track_width = Some(t.width);
     p.pcb.regions.insert(fits.id.clone(), fits);
     assert!(!fired(&drc::run(&p), "DRC-022").any(|f| f.objects.contains(&t.id)));
 
-    let mut p = reference();
+    let mut p = base.clone();
     let mut wide = region("rgn-w", square(m, 1_000_000), vec![]);
     wide.max_track_width = Some(t.width - 50_000);
     p.pcb.regions.insert(wide.id.clone(), wide);
