@@ -9,7 +9,7 @@
 // in the allowlist (`uiInventoryAllowlist.ts`). `renderInventory` writes docs/qa/UI_INVENTORY.md.
 import { NO_HANDLER, workspaceActions, type ActionDeps } from "../actions/sets";
 import { keysOf } from "../actions/registry";
-import { DOC_CONTEXTS, type DocContext } from "../actions/types";
+import { DOC_CONTEXTS, type Action, type DocContext } from "../actions/types";
 
 export type ControlState = "enabled" | "state-dependent" | "unavailable" | "handler" | "violation";
 
@@ -49,9 +49,74 @@ export interface AllowEntry {
 /** A disabled reason that says plainly that the capability does not exist yet. */
 export const EXPLICIT_UNAVAILABLE = /^(Not implemented|Unavailable)\b/;
 
-/** Audits every registry action over the probed states (the first probe defines the set). */
-export function auditActions(probes: readonly ActionDeps[]): ActionRow[] {
-  const sets = probes.map((p) => workspaceActions(p));
+/** Functions that only answer a question (an action's enablement, the editor-operation lookup): calling one is not an effect. */
+const QUERIES = new Set(["enabled", "editorOp"]);
+
+export interface Recorder<T> {
+  /** A copy of the dependencies whose effect calls are counted. */
+  deps: T;
+  calls: () => number;
+  reset: () => void;
+}
+
+/**
+ * Wraps every function of `deps` (top level, nested objects such as `grid` and `view3d`, and the
+ * objects a function returns, such as the operation `editorOp` looks up) so each effect call is
+ * counted; the wrapped functions still call the originals. Data (the snapshot, arrays) is kept as is.
+ */
+export function recorder<T extends object>(deps: T): Recorder<T> {
+  let n = 0;
+  const wrap = (v: unknown, key: string, depth: number): unknown => {
+    if (typeof v === "function")
+      return (...args: unknown[]) => {
+        if (!QUERIES.has(key)) n++;
+        return wrap((v as (...a: unknown[]) => unknown)(...args), "", depth + 1);
+      };
+    if (depth < 3 && v !== null && typeof v === "object" && !Array.isArray(v) && Object.values(v).some((x) => typeof x === "function"))
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, wrap(x, k, depth + 1)]));
+    return v;
+  };
+  return {
+    deps: wrap(deps, "", 0) as T,
+    calls: () => n,
+    reset: () => {
+      n = 0;
+    },
+  };
+}
+
+/** A control the probe can run: a registry action (`enabled`) or a palette item (`disabled`). */
+export interface Runnable {
+  id: string;
+  run: () => void;
+  enabled?: () => true | string;
+  disabled?: boolean;
+}
+
+/**
+ * Ids of the items that are enabled in the recorded state but whose `run` makes no effect call:
+ * a handler that does nothing. Items must be built from `rec.deps`.
+ */
+export function noOps(items: readonly Runnable[], rec: { calls: () => number; reset: () => void }): string[] {
+  const live = items.filter((it) => (it.enabled ? it.enabled() === true : !it.disabled));
+  return live
+    .filter((it) => {
+      rec.reset();
+      it.run();
+      return rec.calls() === 0;
+    })
+    .map((it) => it.id);
+}
+
+/**
+ * Audits every registry action over the probed states (the first probe defines the set). Each
+ * action enabled in a probe is also run there against recorded dependencies: one that calls
+ * nothing is a violation (enabled, but does nothing). `build` is the action set (tests inject one).
+ */
+export function auditActions(probes: readonly ActionDeps[], build: (d: ActionDeps) => Action[] = workspaceActions): ActionRow[] {
+  const recs = probes.map((p) => recorder(p));
+  const sets = recs.map((r) => build(r.deps));
+  const noop = new Set(sets.flatMap((s, i) => noOps(s, recs[i])));
   return sets[0].map((a) => {
     const results = sets.map((s) => s.find((x) => x.id === a.id)).filter((x) => x !== undefined).map((x) => x.enabled());
     const reasons = [...new Set(results.filter((r): r is string => r !== true))];
@@ -68,6 +133,9 @@ export function auditActions(probes: readonly ActionDeps[]): ActionRow[] {
     } else if (never) {
       state = "violation";
       violation = "handler is never reachable: disabled in every probed state";
+    } else if (noop.has(a.id)) {
+      state = "violation";
+      violation = "enabled, but running it calls nothing (a no-op handler)";
     }
     return {
       key: `action:${a.id}`,
@@ -172,6 +240,8 @@ export interface Audit {
   actions: ActionRow[];
   controls: ScannedControl[];
   allow: readonly AllowEntry[];
+  /** Quick-open items (Go to part, net or sheet…) probed like the actions: every id, and the ones that ran a no-op. */
+  quickOpen: { ids: string[]; noOps: string[] };
 }
 
 /** Violations not covered by the allowlist (what fails CI). */
@@ -180,12 +250,13 @@ export const unallowed = (a: Audit): string[] => {
   return [
     ...a.actions.filter((r) => r.violation && !ok.has(r.key)).map((r) => `${r.key}: ${r.violation}`),
     ...a.controls.filter((c) => c.violation && !ok.has(c.key)).map((c) => `${c.key} (${c.file}:${c.line}): ${c.violation}`),
+    ...a.quickOpen.noOps.filter((id) => !ok.has(`quick:${id}`)).map((id) => `quick:${id}: enabled, but running it calls nothing (a no-op handler)`),
   ];
 };
 
 /** Allowlist entries that no longer match a violation (the owner should remove them). */
 export const staleAllow = (a: Audit): AllowEntry[] => {
-  const bad = new Set([...a.actions, ...a.controls].filter((r) => r.violation).map((r) => r.key));
+  const bad = new Set([...a.actions, ...a.controls].filter((r) => r.violation).map((r) => r.key).concat(a.quickOpen.noOps.map((id) => `quick:${id}`)));
   return a.allow.filter((e) => !bad.has(e.key));
 };
 
@@ -219,15 +290,18 @@ export function renderInventory(a: Audit): string {
     "Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiInventoryAllowlist.ts`):",
     "- a registry action has a handler that some probed state enables, or is disabled in every state",
     '  with a reason that starts with "Not implemented" or "Unavailable";',
+    "- every action enabled in a probed state, and every quick-open item (Go to part, net or sheet…),",
+    "  is run against recorded dependencies there and must call at least one (no no-op handlers);",
     "- a scanned interactive element (`button`, `input`, `select`, `textarea`, `a`, or an interactive",
     "  `role`) has a handler (`on…`, spread props, `href`, submit, `readOnly`), or is disabled with a",
-    "  `title` that gives the reason. The scan is static: a handler that exists but does nothing is not",
-    "  detected here; that is what the registry probes and the UI tests are for.",
+    "  `title` that gives the reason. The scan is static: a component handler that exists but does",
+    "  nothing is not detected here; that is what the UI tests are for.",
     "",
     "## Summary",
     "",
     `- Action registry: ${count(a.actions)}.`,
     `- Component scan: ${count(a.controls)}.`,
+    `- Quick open: ${a.quickOpen.ids.length} items probed, ${a.quickOpen.noOps.length} no-op handlers${a.quickOpen.noOps.length ? ` (${a.quickOpen.noOps.map((id) => `\`${id}\``).join(", ")})` : ""}.`,
     `- Allowlist: ${a.allow.length} entries${stale.length ? `, ${stale.length} stale (no longer a violation; remove them): ${stale.map((e) => `\`${e.key}\``).join(", ")}` : ""}.`,
     "",
     "## Action registry",

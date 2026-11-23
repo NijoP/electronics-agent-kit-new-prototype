@@ -7,6 +7,7 @@ import { SIDE_VIEWS } from "../shell/ActivityBar";
 import { actionForKey, contextMenuFor, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./registry";
 import { NO_EDITOR, workspaceActions, type ActionDeps } from "./sets";
 import { DOC_CONTEXTS, type DocContext } from "./types";
+import { noOps, recorder } from "../qa/uiInventory";
 
 function deps(over: Partial<ActionDeps> = {}): ActionDeps {
   const snapshot = fixture(7);
@@ -50,6 +51,51 @@ describe("action registry", () => {
           const e = a.enabled();
           if (e !== true) expect(e.trim().length, `${a.id} in ${ctx}`).toBeGreaterThan(0);
         }
+  });
+
+  // G2: `typeof run === "function"` alone let an enabled no-op through. In the rich state (undo and
+  // redo available, a part and its footprint selected, a schematic editor offering every operation,
+  // a drawing 3D viewer) every enabled action is run, and each must call one of its dependencies.
+  it("every action enabled in the rich state calls a dependency when it runs; a no-op is caught", () => {
+    const snap = fixture(7);
+    const fn = () => vi.fn();
+    const view3d = { projection: "perspective" as const, measuring: true, measured: true, labels: true, modelCount: 1, preset: fn(), reset: fn(), zoomBy: fn(), setProjection: fn(), toggleMeasure: fn(), clearMeasure: fn(), toggleLabels: fn(), reloadModels: fn() };
+    const rich = deps({
+      snapshot: { ...snap, can_undo: true, can_redo: true },
+      selected: "sym_r1",
+      selectedSymbol: snap.project.schematic.symbols.sym_r1,
+      fpOfSelected: snap.project.pcb.footprints.fp_r1,
+      editorOp: () => ({ enabled: () => true, run: vi.fn() }),
+      view3d,
+      probeTo: fn(),
+    });
+    const rec = recorder(rich);
+    const all = workspaceActions(rec.deps);
+    const live = all.filter((a) => a.enabled() === true);
+    expect(live.length).toBeGreaterThan(40);
+    expect(noOps(all, rec)).toEqual([]);
+    // the probe itself: an enabled action with an empty handler is reported, a disabled one is not run
+    const dead = { id: "dead", label: "Dead", enabled: () => true as const, run: () => {} };
+    const off = { id: "off", label: "Off", enabled: () => "Unavailable: test", run: () => {} };
+    expect(noOps([...all, dead, off], rec)).toEqual(["dead"]);
+  });
+
+  // G3: the toolbar ran `a.run` directly and skipped runAction's enablement check and confirmation.
+  it("a toolbar click runs through runAction: disabled does nothing, destructive asks first", () => {
+    const run = vi.fn();
+    let ok: true | string = true;
+    const acts = [{ id: "wipe", label: "Wipe", menu: "Edit" as const, toolbar: "edit" as const, icon: "delete" as const, destructive: true, enabled: () => ok, run }];
+    const button = () => toolbarFor(acts, "schematic").flat()[0];
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    button().run!();
+    expect(run).not.toHaveBeenCalled();
+    button().run!();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledTimes(2);
+    ok = "An engine command is running";
+    button().run!();
+    expect(run).toHaveBeenCalledTimes(1);
+    confirm.mockRestore();
   });
 
   it("ids are unique and no action is reachable from the toolbar only", () => {
@@ -131,8 +177,10 @@ describe("action registry", () => {
     for (const [ctx, menu, label, tool] of [["schematic", "Place", "Wire", "wire"], ["schematic", "Place", "Net / power label", "label"], ["pcb", "Route", "Route track", "route"], ["pcb", "Place", "Via", "via"]] as const) {
       const item = menusFor(all, ctx).find((m) => m.label === menu)!.items.find((i) => i.label === label)!;
       const button = toolbarFor(all, ctx).flat().find((b) => b.label === label)!;
-      expect(item.run).toBe(button.run);
       item.run!();
+      expect(d.tool).toHaveBeenLastCalledWith(tool);
+      vi.mocked(d.tool).mockClear();
+      button.run!();
       expect(d.tool).toHaveBeenLastCalledWith(tool);
     }
   });

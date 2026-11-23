@@ -22,6 +22,11 @@ same paths, and by hand (`workflow_dispatch`). It is a **separate workflow** and
 required check (branch protection is unchanged), but it is honest: the job is **red**
 when any row fails, when a step that should take a screenshot has none, when a
 scenario records no rows, or when a scenario writes no results file.
+The results gate and the artifact upload take their scenario list from the workflow's own
+`UI_OUT` lines (upload by glob), so a new scenario step is gated and archived without editing a
+second list; E5 (`e5/`) had been missed by the old hand-kept lists. To check the gate itself, run
+the workflow by hand with `remove_results` set to a scenario directory (for example `e5`): that
+results file is deleted before the gate, and the job must turn red.
 Until 2026-11-23 the job had `continue-on-error: true`, so a run such as
 https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45093860444 showed
 success with 7 failing B2 rows; an older green badge does not prove its scenarios passed. On
