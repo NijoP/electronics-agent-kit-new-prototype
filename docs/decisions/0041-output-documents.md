@@ -47,6 +47,9 @@ unless the release gate passes.
   solder-mask coverage is not in EAK-IR, so IPC-D-356 records carry `S0`; the PDF has no embedded
   fonts and replaces characters outside printable ASCII with `?`. No agent-harness tool exposes
   these exports yet.
+* Symbols are drawn as their body box (`body_half_w`/`body_half_h`) with pin stubs; the schema v3
+  symbol graphics (ADR-0040: lines, polylines, arcs, circles, polygons, text) are not drawn in the
+  PDF/SVG yet, so a symbol with richer graphics prints as a box. Built-in parts are box symbols.
 * Outputs stay DRAFT unless the release gate passes; the release-candidate label still says
   engineering and fabricator review are required.
 
