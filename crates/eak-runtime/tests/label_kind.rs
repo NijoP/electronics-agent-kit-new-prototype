@@ -1,4 +1,4 @@
-//! `SetNetLabelKind` (ADR-0048): a label changes between a net label and a power port in place.
+//! `SetNetLabelKind` (ADR-0049): a label changes between a net label and a power port in place.
 //! It keeps its id, name, position, scope, power style and group; one revision, one undo step.
 
 use eak_core::{LabelKind, NetScope, Point, PowerStyle, Project};

@@ -1,4 +1,4 @@
-# ADR-0048: SetNetLabelKind (change a label's kind in place)
+# ADR-0049: SetNetLabelKind (change a label's kind in place)
 - **Date:** 2026-11-23
 - **Context:** Phase 1 definition-of-done audit, defect S5 (fix F3). The Inspector changed a
   label between a net label and a power port by deleting it and adding a new one in one `Batch`.

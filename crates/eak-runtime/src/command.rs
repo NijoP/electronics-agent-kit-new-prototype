@@ -169,7 +169,7 @@ pub enum Command {
         scope: NetScope,
     },
     /// Change a net label between a net label and a power port in place: same id, name,
-    /// position, scope, power style and group (ADR-0048). A power style is kept but only drawn
+    /// position, scope, power style and group (ADR-0049). A power style is kept but only drawn
     /// while the label is a power port.
     SetNetLabelKind {
         label_id: Id,

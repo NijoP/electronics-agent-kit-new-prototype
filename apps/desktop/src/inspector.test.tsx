@@ -164,7 +164,7 @@ describe("selection mode", () => {
     // ADR-0045: a rename keeps the label and its id (one command, one undo step)
     expect(commit(field(l.fields, "name"), "VCC")).toEqual({ type: "RenameNetLabel", label_id: "lab_1", name: "VCC" });
     expect(commit(field(l.fields, "name"), "GND")).toBeNull();
-    // F3 / ADR-0048: a kind change keeps the label, its id, group and power style (SetNetLabelKind)
+    // F3 / ADR-0049: a kind change keeps the label, its id, group and power style (SetNetLabelKind)
     expect(commit(field(l.fields, "kind"), "net")).toEqual({ type: "SetNetLabelKind", label_id: "lab_1", kind: "net" });
     expect(commit(field(l.fields, "kind"), "power")).toBeNull();
     s.project.schematic.labels.lab_2 = { ...s.project.schematic.labels.lab_1, id: "lab_2", kind: "net" };

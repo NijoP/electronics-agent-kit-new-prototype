@@ -348,7 +348,7 @@ function labelFields(s: Snapshot, ids: Id[]): PropModel {
       ls.filter((l) => l.name !== name).map((l): Command => ({ type: "RenameNetLabel", label_id: l.id, name })),
       `Rename ${plural(ls.length, "label")}`,
     );
-  // A kind change keeps the label in place: `SetNetLabelKind` (ADR-0048) keeps its id, group,
+  // A kind change keeps the label in place: `SetNetLabelKind` (ADR-0049) keeps its id, group,
   // scope and power style; a Batch for several labels, so one undo step.
   const rekind = (kind: "net" | "power"): Commit =>
     batch(

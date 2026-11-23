@@ -1355,7 +1355,7 @@ mod tests {
         // schematic commands of ADR-0040, the 16 PCB commands of ADR-0042 (15 schema-v4 edits plus
         // SyncSchematicToPcbSelected), the 3 sheet commands of ADR-0043, the 2 schema-v5 commands of
         // ADR-0044, the 3 group and rename commands of ADR-0045, the 3 schema-v7 rule commands
-        // of ADR-0046 and SetNetLabelKind of ADR-0048); keep in step with
+        // of ADR-0046 and SetNetLabelKind of ADR-0049); keep in step with
         // REQUIREMENTS_TRACEABILITY INT-04.
         assert_eq!(tools.len(), 89);
         for t in &tools {
