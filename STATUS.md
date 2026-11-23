@@ -1,5 +1,6 @@
 | Manual PCB routing workflow (pad start/finish, width, 45/90, via + layer switch, track edit/delete, active net, next-connection priority, DRC check) | code-reviewed only | 2026-11-15 `fm/eak-pcb-routing`; not compiled, tests written but unrun; not exercised in a real window |
-# EAK status
+
+| ECO preview for Update PCB (Phase 1 slice C2: `src-tauri/src/eco.rs`, `shell/EcoPreviewDialog.tsx`, `shell/ecoPreview.ts`, ADR-0041) | code-reviewed only; CI decides (Rust property test `tests/eco.rs`, vitest `flow.test.tsx` 3/3b/3c and `shell/ecoPreview.test.tsx`, ui-evidence `c2-*` rows of `scenarios/c2-eco.json`) | 2026-11-23 `fm/eak-p1-c2-eco`: the toolbar's Update PCB runs the ERC gate, then opens a review of the engine's read-only `sync_preview` (the delta `SyncSchematicToPcb` would journal, computed on a copy): changes grouped by action or object, a checkbox per change (a pad net follows its footprint), the engine's notes, Export report (`evidence/eco-rNNNNNN.json`, recomputed by the engine). Apply sends the sync as one `Batch` at the previewed revision; a project that moved on is rejected as stale (AG-03). Applying only some changes is NOT available: while a change is unchecked Apply is disabled with the reason (selective apply needs a new command from slice C4). No back-annotation (PCB → schematic). Not built or run locally (laptop build ban) |# EAK status
 
 Current, short record. Per-milestone history with exact test counts: `docs/development/STATUS_LOG.md`.
 Evidence levels and the testing freeze: `docs/development/TEST_EVIDENCE.md`.
