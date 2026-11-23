@@ -908,6 +908,24 @@ export interface ConnectivityReport {
   shorts: [string, string, string, string][];
   /** Unrouted connections: [net, from, to]. */
   ratsnest: [string, Point, Point][];
+  /** Each zone's fill, the raster DRC reads (slice E5); absent from older hosts. */
+  zone_fills?: FillView[];
+}
+
+/** One zone's engine fill (eak-engineering `fill_view`): derived per revision, never stored. */
+export interface FillView {
+  zone_id: Id;
+  layer: CopperLayer;
+  net: string;
+  /** Islands kept (each touches copper of the zone net on its layer). */
+  islands: number;
+  /** Islands removed as dead copper (not drawn). */
+  removed_islands: number;
+  filled_area_mm2: number;
+  /** Raster pitch in nm. */
+  pitch: Nm;
+  /** Filled copper as [x0, y0, x1, y1] board-nm rectangles that tile the filled cells exactly. */
+  rects: [number, number, number, number][];
 }
 
 // AI panel (src-tauri/src/ai.rs): agent-loop proposals awaiting Accept/Reject.

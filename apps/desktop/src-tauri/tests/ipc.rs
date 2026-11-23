@@ -837,6 +837,63 @@ fn model_file_read_is_limited_to_absolute_model_files() {
     assert!(read_model_file(&path(&d.join("missing.step"))).is_err());
 }
 
+/// Slice E5: the zone fills the PCB editor draws come with the connectivity of the same revision
+/// and are the engine's fill (`fill_view`, the DRC raster); an edited stack-up survives a save and
+/// reopen unchanged (stack-up round trip).
+#[test]
+fn zone_fills_follow_the_revision_and_the_stackup_round_trips() {
+    let s = session();
+    let d = tmpdir("planes");
+    create_project(&s, &path(&d), "Planes").unwrap();
+    let mut rev = 0;
+    let mut run = |c: C| {
+        let r = execute_command(&s, rev, c).unwrap();
+        assert!(r.accepted, "{:?}", r.error);
+        rev = r.revision_after;
+    };
+    run(outline());
+    run(C::AddVia {
+        position: Point::mm(15.0, 10.0),
+        net: "GND".into(),
+        drill: None,
+        diameter: None,
+        from: None,
+        to: None,
+    });
+    run(C::AddZone {
+        layer: eak_core::CopperLayer::Bottom,
+        net: "GND".into(),
+        outline: vec![
+            Point::mm(1.0, 1.0),
+            Point::mm(29.0, 1.0),
+            Point::mm(29.0, 19.0),
+            Point::mm(1.0, 19.0),
+        ],
+        clearance: None,
+    });
+    let r = connectivity(&s).unwrap();
+    let p = current_project(&s).unwrap().project;
+    assert_eq!(r.revision, p.revision);
+    assert_eq!(r.zone_fills, eak_engineering::fill_view::fill_views(&p));
+    assert_eq!(r.zone_fills.len(), 1);
+    let f = &r.zone_fills[0];
+    assert_eq!((f.islands, f.removed_islands), (1, 0));
+    assert!(!f.rects.is_empty());
+
+    let mut st = p.pcb.board.stackup.clone();
+    st.layers[0].copper_oz = 2.0;
+    st.layers[0].er = 3.8;
+    st.dielectric = "FR-4 TG170".into();
+    run(C::SetStackup {
+        stackup: st.clone(),
+    });
+    close_project(&s).unwrap();
+    open_project(&s, &path(&d), false).unwrap();
+    assert_eq!(current_project(&s).unwrap().project.pcb.board.stackup, st);
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 #[test]
 fn findings_export_writes_the_engine_report_for_the_current_revision() {
     use eak_manufacturing::findings_export::FindingsFormat;

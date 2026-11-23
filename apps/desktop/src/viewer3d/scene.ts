@@ -133,7 +133,7 @@ export function buildScene(s: Snapshot, colourOf: (l: CopperLayer) => string = l
     return { x, y, diameter: toMm(v.diameter), drill: toMm(v.drill), yTop: hi, yBottom: lo };
   });
 
-  // Zone fills are not computed by the engine, so only their outlines are shown.
+  // Zone fills (engine-computed, drawn in the PCB editor) are not drawn in 3D: outlines only.
   const zones: SceneZone[] = Object.values(p.pcb.zones)
     .filter((z) => byKey.has(layerKey(z.layer)))
     .map((z) => ({ layer: layerKey(z.layer), outline: z.outline.map(pt) }));

@@ -188,6 +188,10 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .no-connect { stroke: var(--err); stroke-width: 0.25; fill: none; }
 .board { fill: var(--c-board); stroke: var(--accent); stroke-width: 0.15; }
 .zone { fill-opacity: 0.25; stroke-width: 0.05; }
+/* E5: once the engine fill is known the outline polygon is only the hit target and edge; the
+   copper drawn is the fill (DRC raster), which never takes the pointer. */
+.zone.has-fill { fill-opacity: 0; stroke-width: 0.08; }
+.zone-fill { fill-opacity: 0.6; pointer-events: none; }
 /* Schema v4 PCB objects (ADR-0042): cut-outs are holes in the board fill; regions are tinted, dashed
    outlines (keep-outs stronger); text and dimensions follow their layer (documentation is muted). */
 .board-cutout { fill: var(--bg-canvas); stroke: none; pointer-events: none; }
@@ -295,6 +299,9 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .layer-row input[type="color"] { width: 24px; height: var(--h-sm); padding: 0; border: 1px solid var(--line-strong); background: transparent; }
 .tag.plain { background: var(--bg-raised); color: var(--fg-dim); margin: 0; }
 .stackup td select { padding: 0 var(--s-half); }
+.stackup td input[type="number"] { width: 5.5em; padding: 0 var(--s-half); }
+.zone-list .zone-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); padding: var(--s-half) var(--s-1); }
+.zone-list .zone-row .grow { min-width: 0; }
 .airwire { stroke: var(--c-airwire); stroke-width: 0.12; stroke-dasharray: 0.5 0.4; opacity: 0.7; pointer-events: none; }
 .finding-hit { filter: drop-shadow(0 0 0.5px var(--err)); }
 .finding-hit .courtyard, .finding-hit line.track { stroke: var(--err) !important; }

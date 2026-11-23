@@ -537,7 +537,7 @@ export function documentModel(s: Snapshot, pcb: boolean, sheetId?: Id | null): P
         { id: "tracks", label: "Tracks", value: count(board.tracks) },
         { id: "vias", label: "Vias", value: count(board.vias) },
         { id: "zones", label: "Zones", value: count(board.zones) },
-        unavailable("layer-materials", "Layer materials (thickness, εr, loss tangent)"),
+        unavailable("layer-materials", "Loss tangent", "Unavailable: the EAK-IR stack-up has no loss tangent; copper weight, gaps, εr and thickness are edited in the Layers panel"),
       ],
     };
   }

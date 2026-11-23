@@ -228,6 +228,17 @@ jobs:
           UI_SCENARIO: scenarios/c1-layers.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # E5 (planes and stack-up): engine zone fill, Stitch zones, stack-up edits and their round trip,
+      # plane-net assignment.
+      - name: Run E5 planes and stack-up scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/e5
+          UI_SCENARIO: scenarios/e5-planes.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # B4 (place tools): wire corner modes and guides, power port, off-page connector, bus, bus
       # entry, sheet text and rectangle, fan-out, Settings > Power ports.
       - name: Run B4 place tools scenario under Xvfb

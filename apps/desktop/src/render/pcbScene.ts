@@ -10,7 +10,7 @@
 //   < board outline < ratsnest < drill holes on top.
 // Layers on the far side of the active copper layer are drawn semi-transparent.
 import { layerKey, viaLayers } from "../layers";
-import type { CopperLayer, Point, Snapshot } from "../types";
+import type { CopperLayer, FillView, Point, Snapshot } from "../types";
 import { mm, toView } from "../viewport";
 import { boxOfPts, grow, inBox, inPoly, polyEdgeDist, rectPoly, segDist, union } from "./geometry";
 import type { Box, DrawOp, Pt, RenderLayer, RenderObject, Scene } from "./types";
@@ -31,6 +31,12 @@ export interface PcbSceneOptions {
   airwires: [string, Point, Point][] | null;
   /** Outline view (slice C1): tracks, pads, vias and zones drawn as outlines, not filled. */
   outlineView?: boolean;
+  /**
+   * Engine zone fills for this revision (slice E5): each zone is drawn as its outline plus the
+   * copper the engine fill leaves (the DRC raster). Absent or null: the zone area is drawn
+   * translucent, as before the fill is known.
+   */
+  fills?: FillView[] | null;
 }
 
 /** Outline-view line width in view mm. */
@@ -101,6 +107,28 @@ export function pcbLayers(order: CopperLayer[], activeLayer: string): RenderLaye
   });
 }
 
+/** A fill rectangle `[x0, y0, x1, y1]` (board nm) as its four view corners. */
+export function rectPts([x0, y0, x1, y1]: [number, number, number, number]): Pt[] {
+  return [toView({ x: x0, y: y0 }), toView({ x: x1, y: y0 }), toView({ x: x1, y: y1 }), toView({ x: x0, y: y1 })];
+}
+
+/** A fill as one SVG path (one subpath per rectangle), in view mm. */
+export function fillPath(f: FillView): string {
+  return f.rects
+    .map((r) => {
+      const [[ax, ay], , [cx, cy]] = rectPts(r);
+      return `M${ax} ${ay}H${cx}V${cy}H${ax}Z`;
+    })
+    .join("");
+}
+
+/** Content signature of a fill (rectangle count plus a running hash of the corners). */
+function fillSig(f: FillView): string {
+  let h = 0;
+  for (const r of f.rects) for (const v of r) h = (h * 31 + v / f.pitch) | 0;
+  return `${f.rects.length}:${h}`;
+}
+
 /** Text that reads left to right: track angle folded into (-90°, 90°]. */
 function readableAngle(a: Pt, b: Pt): number {
   let ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
@@ -117,11 +145,30 @@ export function buildPcbScene(s: Snapshot, o: PcbSceneOptions): Scene {
   const allCopper = o.order.map(layerKey);
 
   // Zones (pours sit under the copper of their layer).
+  const fillOf = o.fills ? new Map(o.fills.map((f) => [f.zone_id, f])) : null;
   for (const z of Object.values(pcb.zones)) {
     if (!shown(z.layer)) continue;
     const pts = z.outline.map(toView);
     const c = o.colourOf(z.layer);
     const lk = layerKey(z.layer);
+    if (fillOf) {
+      // The outline, then the engine's fill. Outline view draws the outline alone.
+      const fill = fillOf.get(z.id);
+      const ops: DrawOp[] = [{ t: "poly", pts, stroke: c, lineWidth: 0.08, alpha: 0.9 }];
+      if (fill && !o.outlineView) for (const r of fill.rects) ops.push({ t: "poly", pts: rectPts(r), fill: c, alpha: 0.6 });
+      objects.push({
+        key: `zone:${z.id}`,
+        ref: { kind: "zone", id: z.id },
+        layerKey: `${lk}:zone`,
+        bbox: boxOfPts(pts),
+        hit: (x, y, tol) => inPoly(pts, x, y) || polyEdgeDist(pts, x, y) <= tol,
+        pathPts: pts,
+        pickLayers: [lk],
+        ops,
+        sig: `${pts.join(";")}|${c}|fill:${fill ? fillSig(fill) : "none"}`,
+      });
+      continue;
+    }
     objects.push({
       key: `zone:${z.id}`,
       ref: { kind: "zone", id: z.id },

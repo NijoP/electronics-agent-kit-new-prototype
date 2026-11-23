@@ -17,6 +17,7 @@
 pub mod calc;
 pub mod clearance;
 pub mod copper;
+pub mod fill_view;
 pub mod interactive;
 pub mod ipc;
 pub mod netlist;

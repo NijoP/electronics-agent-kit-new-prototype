@@ -41,13 +41,13 @@ import {
   widthPresetValue,
   type RouteDraft,
 } from "./routeTool";
-import type { BendMode, Command, ConflictMode, CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
+import type { BendMode, Command, ConflictMode, CopperLayer, FillView, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import { ToolOptionFields } from "./shell/Inspector";
 import { NO_SELECTION, useHasInspector, usePublishEditorContext, type OptionField } from "./shell/inspectorModel";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 import { usePcbRenderer, type PcbRenderer } from "./render/flag";
-import { buildPcbScene } from "./render/pcbScene";
+import { buildPcbScene, fillPath } from "./render/pcbScene";
 import { dimensionDrawing, outlinePath, trackPath } from "./render/pcbObjects";
 import { PcbSceneCanvas } from "./render/PcbSceneCanvas";
 import { ATTR_KIND, PickIndex } from "./render/pick";
@@ -71,6 +71,8 @@ interface Props {
   focus?: Focus | null;
   /** Unrouted connections from the engine's connectivity analysis: [net, from, to]. */
   airwires?: [string, Point, Point][] | null;
+  /** Engine zone fills of this revision (slice E5); null while they are being computed. */
+  zoneFills?: FillView[] | null;
 }
 
 type Tool = "select" | "outline" | "move" | "route" | "via" | "delete" | "zone";
@@ -135,7 +137,7 @@ function segOutline(x1: number, y1: number, x2: number, y2: number, w: number): 
     .join(" ");
 }
 
-export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPreview = [], onStatus, layerView, focus, airwires }: Props) {
+export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPreview = [], onStatus, layerView, focus, airwires, zoneFills = null }: Props) {
   const ownView = useLayerView(null);
   const lv = layerView ?? ownView;
   // Layer locks (C1): nothing on a locked layer can be selected, and no command that would change
@@ -268,9 +270,9 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const scene = useMemo(
     () =>
       useCanvas
-        ? buildPcbScene(snapshot, { order, hidden: lv.hidden, colourOf: lv.colourOf, activeLayer: activeKey, airwires: sceneAirwires, outlineView: lv.outline })
+        ? buildPcbScene(snapshot, { order, hidden: lv.hidden, colourOf: lv.colourOf, activeLayer: activeKey, airwires: sceneAirwires, outlineView: lv.outline, fills: zoneFills })
         : null,
-    [useCanvas, snapshot, hiddenKey, colourKey, activeKey, sceneAirwires, lv.outline],
+    [useCanvas, snapshot, hiddenKey, colourKey, activeKey, sceneAirwires, lv.outline, zoneFills],
   );
   const picker = useMemo(() => (scene ? new PickIndex(scene) : null), [scene]);
   const byKey = useMemo(() => new Map<string, RenderObject>((scene?.objects ?? []).map((o) => [o.key, o])), [scene]);
@@ -820,7 +822,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
           ? [
               ...layerNet,
               { kind: "text", name: "Zone clearance", label: "Clearance (mm)", value: zoneClearance, onChange: setZoneClearance, placeholder: "rule default" },
-              { kind: "unavailable", name: "Zone fill", label: "Fill method, islands, priority", reason: "Unavailable: the EAK-IR has no zone fill fields yet (IR v3, slice B1)" },
+              { kind: "unavailable", name: "Zone fill", label: "Fill method, islands, priority", reason: "Unavailable: the engine fills every zone solid (0.1 mm raster, thermal reliefs, dead islands removed) and the EAK-IR has no fill-method, island or priority fields" },
             ]
           : [];
   usePublishEditorContext(docId, {
@@ -840,7 +842,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   };
 
   return (
-    <section className={`view pcb-view${lv.outline ? " outline-view" : ""}`} aria-label="PCB view" data-flip={lv.flip ? "true" : undefined} data-outline-view={lv.outline ? "true" : undefined}>
+    <section className={`view pcb-view${lv.outline ? " outline-view" : ""}`} aria-label="PCB view" data-flip={lv.flip ? "true" : undefined} data-outline-view={lv.outline ? "true" : undefined} data-zone-fills={zoneFills ? zoneFills.length : undefined}>
       <header className="view-header">
         <span>PCB</span>
         {edit ? (
@@ -1120,17 +1122,25 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
         {!scene &&
           Object.values(pcb.zones)
           .filter((z) => shown(z.layer))
-          .map((z) => (
-            <polygon
-              key={z.id}
-              data-zone-id={z.id}
-              className={`zone ${layerKey(z.layer)}${highlighted.has(z.id) ? " finding-hit" : ""}${netHit(z.net)}${offLayer(z.layer) ? " off-layer" : ""}`}
-              style={{ fill: layerColour(z.layer), stroke: layerColour(z.layer) }}
-              points={poly(z.outline)}
-            >
-              <title>{`zone ${z.net} (${layerName(z.layer)})`}</title>
-            </polygon>
-          ))}
+          .map((z) => {
+            // With the engine fill known, the outline is the hit target and the fill is drawn
+            // from the DRC raster; until then the zone area is drawn translucent.
+            const fill = zoneFills?.find((f) => f.zone_id === z.id);
+            return [
+              <polygon
+                key={z.id}
+                data-zone-id={z.id}
+                className={`zone ${layerKey(z.layer)}${zoneFills ? " has-fill" : ""}${highlighted.has(z.id) ? " finding-hit" : ""}${netHit(z.net)}${offLayer(z.layer) ? " off-layer" : ""}`}
+                style={{ fill: layerColour(z.layer), stroke: layerColour(z.layer) }}
+                points={poly(z.outline)}
+              >
+                <title>{`zone ${z.net} (${layerName(z.layer)})`}</title>
+              </polygon>,
+              fill && !lv.outline && (
+                <path key={`${z.id}-fill`} className="zone-fill" data-zone-fill={z.id} style={{ fill: layerColour(z.layer) }} d={fillPath(fill)} />
+              ),
+            ];
+          })}
         {!scene &&
           Object.values(pcb.tracks)
           .filter((t) => shown(t.layer))
