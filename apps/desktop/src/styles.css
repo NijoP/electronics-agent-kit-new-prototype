@@ -824,4 +824,4 @@ button.danger { color: var(--err); border-color: var(--err); }
 .asset-meta { color: var(--fg-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; min-width: 0; }
 .asset-parts { display: inline-flex; flex-wrap: wrap; gap: var(--s-half); }
 .asset-folder { display: grid; gap: var(--s-quarter); }
-.asset-problems { margin: 0; padding-left: var(--s-2); color: var(--warn, var(--fg-dim)); font-size: var(--fs-sm); }
+.asset-problems { margin: 0; padding-left: var(--s-2); color: var(--warn); font-size: var(--fs-sm); }

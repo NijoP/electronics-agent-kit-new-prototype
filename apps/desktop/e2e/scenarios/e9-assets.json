@@ -1,36 +1,191 @@
 {
   "name": "E9 Assets view: models, datasheets, libraries, outputs per revision",
-  "description": "Phase 1 slice E9 (assets half; no IR change). A fixture project gets a placed resistor whose project-library definition records a datasheet (SetComponentProperties) and a 3D model reference with licence and provenance (UpsertComponentDefinition), and an imported open-source library with its licence and source (SETUP through the IPC the UI uses). In the real window the activity bar's Assets view shows the model reference, the datasheet, the part's provenance and the imported library's licence; outputs say nothing is exported; File > Export schematic and netlist writes a DRAFT package; Refresh lists it under the current revision, expanding shows the manifest's DRAFT status, a file opens in the file viewer, and a refdes link selects the part in the schematic.",
+  "description": "Phase 1 slice E9 (assets half; no IR change). A fixture project gets a placed resistor whose project-library definition records a datasheet (SetComponentProperties) and a 3D model reference with licence and provenance (UpsertComponentDefinition), and an imported open-source library with its licence and source (SETUP through the IPC the UI uses). In the real window the activity bar's Assets view shows the model reference, the datasheet, the part's provenance and the imported library's licence; outputs say nothing is exported; File > Export schematic and netlist writes a DRAFT package; Refresh lists it under the current revision, expanding shows the manifest's DRAFT status, a file opens in the file viewer, and a refdes link (checked before the file viewer opens, whose workspace has its own dock layout) selects the part in the schematic.",
   "steps": [
-    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
-    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "E9 Assets Fixture", "folder": "e9-assets-fixture" },
-    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "E9 Assets Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
-    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]", "shot": false },
+    {
+      "id": "home",
+      "do": "wait",
+      "title": "Project Home visible",
+      "selector": "main.home h1",
+      "timeout": 60000
+    },
+    {
+      "id": "fixture",
+      "do": "fixture-project",
+      "title": "Create fixture project",
+      "name": "E9 Assets Fixture",
+      "folder": "e9-assets-fixture"
+    },
+    {
+      "id": "open",
+      "do": "click",
+      "title": "Open fixture from Recent projects",
+      "selector": "button.home-row",
+      "text": "E9 Assets Fixture",
+      "expect": "nav[aria-label=\"Application menu\"]"
+    },
+    {
+      "id": "sch",
+      "do": "menu",
+      "title": "Open schematic",
+      "menu": "View",
+      "item": "Go to Schematic editor",
+      "expect": "section[aria-label=\"Schematic view\"]",
+      "shot": false
+    },
+    {
+      "id": "e9-lib",
+      "do": "fixture-library",
+      "title": "Assets: an imported open-source library with licence and source (before R_0603 is placed, so the built-in part is read)",
+      "name": "e9-lib",
+      "licence": "MIT",
+      "source": "https://example.org/e9-lib",
+      "from": "R_0603",
+      "part": "E9_R",
+      "partName": "E9 resistor",
+      "shot": false
+    },
     {
       "id": "e9-setup",
       "do": "fixture-commands",
       "title": "Assets: a placed resistor with a recorded datasheet (engine commands)",
       "commands": [
-        { "type": "PlaceSymbol", "sheet_id": null, "component_id": "R_0603", "position": { "x": 100000000, "y": 100000000 }, "rotation": "R0", "refdes": null, "value": null },
-        { "type": "SetComponentProperties", "component_id": "R_0603", "manufacturer": null, "mpn": null, "distributor": null, "datasheet": "https://example.org/e9/r0603.pdf" }
+        {
+          "type": "PlaceSymbol",
+          "sheet_id": null,
+          "component_id": "R_0603",
+          "position": {
+            "x": 100000000,
+            "y": 100000000
+          },
+          "rotation": "R0",
+          "refdes": null,
+          "value": null
+        },
+        {
+          "type": "SetComponentProperties",
+          "component_id": "R_0603",
+          "manufacturer": null,
+          "mpn": null,
+          "distributor": null,
+          "datasheet": "https://example.org/e9/r0603.pdf"
+        }
       ],
       "expect": "section[aria-label=\"Schematic view\"] g[data-symbol-id]",
       "shot": false
     },
-    { "id": "e9-model", "do": "fixture-model", "title": "Assets: a 3D model reference on R_0603 with licence and provenance", "component": "R_0603", "path": "models/R_0603.wrl", "format": "wrl", "licence": "CC-BY-4.0", "provenance": "UI evidence fixture model", "shot": false },
-    { "id": "e9-lib", "do": "fixture-library", "title": "Assets: an imported open-source library with licence and source", "name": "e9-lib", "licence": "MIT", "source": "https://example.org/e9-lib", "from": "R_0603", "part": "E9_R", "partName": "E9 resistor", "shot": false },
-    { "id": "e9-open", "do": "click", "title": "Assets: the activity bar's Assets button opens the Assets view", "selector": "nav[aria-label=\"Activity bar\"] button[aria-label=\"Assets\"]", "expect": "[role=\"region\"][aria-label=\"Assets\"]" },
-    { "id": "e9-model-path", "do": "wait", "title": "Assets: the model's recorded path", "selector": "[aria-label=\"Model list\"] [data-component=\"R_0603\"] .asset-meta", "text": "models/R_0603.wrl", "shot": false },
-    { "id": "e9-model-quality", "do": "wait", "title": "Assets: the model's quality is shown as not declared (never as exact)", "selector": "[aria-label=\"Model list\"] [data-component=\"R_0603\"] .pill", "text": "Quality not declared", "shot": false },
-    { "id": "e9-model-licence", "do": "wait", "title": "Assets: the model's licence", "selector": "[aria-label=\"Model list\"] [data-component=\"R_0603\"] .asset-meta", "text": "Licence: CC-BY-4.0" },
-    { "id": "e9-datasheet", "do": "wait", "title": "Assets: the recorded datasheet", "selector": "[aria-label=\"Datasheet list\"] [data-component=\"R_0603\"] .asset-meta", "text": "https://example.org/e9/r0603.pdf", "shot": false },
-    { "id": "e9-provenance", "do": "wait", "title": "Assets: part provenance from the project library", "selector": "[aria-label=\"Provenance list\"] [data-component=\"R_0603\"] .asset-row", "text": "R_0603", "shot": false },
-    { "id": "e9-library", "do": "wait", "title": "Assets: the imported library with its licence", "selector": "[aria-label=\"Library list\"] [data-library=\"e9-lib\"] .asset-meta", "text": "Licence: MIT" },
-    { "id": "e9-library-source", "do": "wait", "title": "Assets: the imported library's source", "selector": "[aria-label=\"Library list\"] [data-library=\"e9-lib\"] .asset-meta", "text": "Source: https://example.org/e9-lib", "shot": false },
-    { "id": "e9-no-outputs", "do": "wait", "title": "Assets: nothing exported yet", "selector": "section[aria-label=\"Outputs\"] p.empty-state", "text": "Nothing exported yet" },
-    { "id": "e9-export-open", "do": "menu", "title": "Assets: File > Export schematic and netlist", "menu": "File", "item": "Export schematic and netlist", "expect": "[role=\"dialog\"][aria-label=\"Export schematic and netlist\"]", "shot": false },
-    { "id": "e9-export-json", "do": "click", "title": "Assets: add JSON netlist", "selector": "input[aria-label=\"JSON netlist\"]", "expect": "input[aria-label=\"JSON netlist\"]:checked", "shot": false },
-    { "id": "e9-export-away", "do": "move", "title": "Assets: pointer to the dialog heading", "selector": "[role=\"dialog\"][aria-label=\"Export schematic and netlist\"] h2", "shot": false },
+    {
+      "id": "e9-model",
+      "do": "fixture-model",
+      "title": "Assets: a 3D model reference on R_0603 with licence and provenance",
+      "component": "R_0603",
+      "path": "models/R_0603.wrl",
+      "format": "wrl",
+      "licence": "CC-BY-4.0",
+      "provenance": "UI evidence fixture model",
+      "shot": false
+    },
+    {
+      "id": "e9-open",
+      "do": "click",
+      "title": "Assets: the activity bar's Assets button opens the Assets view",
+      "selector": "nav[aria-label=\"Activity bar\"] button[aria-label=\"Assets\"]",
+      "expect": "[role=\"region\"][aria-label=\"Assets\"]"
+    },
+    {
+      "id": "e9-model-path",
+      "do": "wait",
+      "title": "Assets: the model's recorded path",
+      "selector": "[aria-label=\"Model list\"] [data-component=\"R_0603\"] .asset-meta",
+      "text": "models/R_0603.wrl",
+      "shot": false
+    },
+    {
+      "id": "e9-model-quality",
+      "do": "wait",
+      "title": "Assets: the model's quality is shown as not declared (never as exact)",
+      "selector": "[aria-label=\"Model list\"] [data-component=\"R_0603\"] .pill",
+      "text": "Quality not declared",
+      "shot": false
+    },
+    {
+      "id": "e9-model-licence",
+      "do": "wait",
+      "title": "Assets: the model's licence",
+      "selector": "[aria-label=\"Model list\"] [data-component=\"R_0603\"] .asset-meta",
+      "text": "Licence: CC-BY-4.0"
+    },
+    {
+      "id": "e9-datasheet",
+      "do": "wait",
+      "title": "Assets: the recorded datasheet",
+      "selector": "[aria-label=\"Datasheet list\"] [data-component=\"R_0603\"] .asset-meta",
+      "text": "https://example.org/e9/r0603.pdf",
+      "shot": false
+    },
+    {
+      "id": "e9-provenance",
+      "do": "wait",
+      "title": "Assets: part provenance from the project library",
+      "selector": "[aria-label=\"Provenance list\"] [data-component=\"R_0603\"] .asset-row",
+      "text": "R_0603",
+      "shot": false
+    },
+    {
+      "id": "e9-library",
+      "do": "wait",
+      "title": "Assets: the imported library with its licence",
+      "selector": "[aria-label=\"Library list\"] [data-library=\"e9-lib\"] .asset-meta",
+      "text": "Licence: MIT"
+    },
+    {
+      "id": "e9-library-source",
+      "do": "wait",
+      "title": "Assets: the imported library's source",
+      "selector": "[aria-label=\"Library list\"] [data-library=\"e9-lib\"] .asset-meta",
+      "text": "Source: https://example.org/e9-lib",
+      "shot": false
+    },
+    {
+      "id": "e9-part",
+      "do": "click",
+      "title": "Assets: the R1 link selects the part and shows it in the schematic",
+      "selector": "[aria-label=\"Model list\"] [data-component=\"R_0603\"] .asset-parts button",
+      "text": "R1",
+      "expect": "footer.status span.msg",
+      "expectText": "R1: selected"
+    },
+    {
+      "id": "e9-no-outputs",
+      "do": "wait",
+      "title": "Assets: nothing exported yet",
+      "selector": "section[aria-label=\"Outputs\"] p.empty-state",
+      "text": "Nothing exported yet"
+    },
+    {
+      "id": "e9-export-open",
+      "do": "menu",
+      "title": "Assets: File > Export schematic and netlist",
+      "menu": "File",
+      "item": "Export schematic and netlist",
+      "expect": "[role=\"dialog\"][aria-label=\"Export schematic and netlist\"]",
+      "shot": false
+    },
+    {
+      "id": "e9-export-json",
+      "do": "click",
+      "title": "Assets: add JSON netlist",
+      "selector": "input[aria-label=\"JSON netlist\"]",
+      "expect": "input[aria-label=\"JSON netlist\"]:checked",
+      "shot": false
+    },
+    {
+      "id": "e9-export-away",
+      "do": "move",
+      "title": "Assets: pointer to the dialog heading",
+      "selector": "[role=\"dialog\"][aria-label=\"Export schematic and netlist\"] h2",
+      "shot": false
+    },
     {
       "id": "e9-export",
       "do": "click",
@@ -42,11 +197,47 @@
       "timeout": 90000,
       "shot": false
     },
-    { "id": "e9-export-close", "do": "click", "title": "Assets: close the export dialog", "selector": "[role=\"dialog\"][aria-label=\"Export schematic and netlist\"] .modal-head button", "text": "Close", "gone": "[role=\"dialog\"][aria-label=\"Export schematic and netlist\"]", "shot": false },
-    { "id": "e9-refresh", "do": "click", "title": "Assets: Refresh lists the export under the current revision", "selector": "section[aria-label=\"Outputs\"] .ui-section-head button", "text": "Refresh", "expect": "[aria-label=\"Output revisions\"] .asset-row .pill", "expectText": "current" },
-    { "id": "e9-expand", "do": "click", "title": "Assets: expanding the revision shows its documents folder", "selector": "[aria-label=\"Output revisions\"] button[aria-label^=\"Expand Revision\"]", "expect": "[aria-label=\"Output revisions\"] button[aria-label=\"Expand documents/\"]", "shot": false },
-    { "id": "e9-docs", "do": "click", "title": "Assets: the documents folder shows the manifest's DRAFT status and its files", "selector": "[aria-label=\"Output revisions\"] button[aria-label=\"Expand documents/\"]", "expect": "[aria-label=\"Output revisions\"] .pill", "expectText": "DRAFT" },
-    { "id": "e9-file", "do": "click", "title": "Assets: an output file opens in the file viewer", "selector": "[aria-label=\"Output revisions\"] button.mono", "text": "E9_Assets_Fixture-netlist.json", "expect": "section.file-viewer" },
-    { "id": "e9-part", "do": "click", "title": "Assets: the R1 link selects the part and shows it in the schematic", "selector": "[aria-label=\"Model list\"] [data-component=\"R_0603\"] .asset-parts button", "text": "R1", "expect": "footer.status span.msg", "expectText": "R1: selected" }
+    {
+      "id": "e9-export-close",
+      "do": "click",
+      "title": "Assets: close the export dialog",
+      "selector": "[role=\"dialog\"][aria-label=\"Export schematic and netlist\"] .modal-head button",
+      "text": "Close",
+      "gone": "[role=\"dialog\"][aria-label=\"Export schematic and netlist\"]",
+      "shot": false
+    },
+    {
+      "id": "e9-refresh",
+      "do": "click",
+      "title": "Assets: Refresh lists the export under the current revision",
+      "selector": "section[aria-label=\"Outputs\"] .ui-section-head button",
+      "text": "Refresh",
+      "expect": "[aria-label=\"Output revisions\"] .asset-row .pill",
+      "expectText": "current"
+    },
+    {
+      "id": "e9-expand",
+      "do": "click",
+      "title": "Assets: expanding the revision shows its documents folder",
+      "selector": "[aria-label=\"Output revisions\"] button[aria-label^=\"Expand Revision\"]",
+      "expect": "[aria-label=\"Output revisions\"] button[aria-label=\"Expand documents/\"]",
+      "shot": false
+    },
+    {
+      "id": "e9-docs",
+      "do": "click",
+      "title": "Assets: the documents folder shows the manifest's DRAFT status and its files",
+      "selector": "[aria-label=\"Output revisions\"] button[aria-label=\"Expand documents/\"]",
+      "expect": "[aria-label=\"Output revisions\"] .pill",
+      "expectText": "DRAFT"
+    },
+    {
+      "id": "e9-file",
+      "do": "click",
+      "title": "Assets: an output file opens in the file viewer",
+      "selector": "[aria-label=\"Output revisions\"] button.mono",
+      "text": "E9_Assets_Fixture-netlist.json",
+      "expect": "section.file-viewer"
+    }
   ]
 }
