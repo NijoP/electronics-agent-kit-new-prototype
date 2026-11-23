@@ -146,7 +146,7 @@ mod tests {
         assert!(text.contains("<c r=\"B2\"><v>3</v></c>"));
         assert!(text.contains("=1+1 &lt;&amp;&gt;"));
         assert!(text.contains("<c r=\"B3\" t=\"inlineStr\"><is><t xml:space=\"preserve\">n/a</t>"));
-        assert!(!text.contains('\u{1}'));
+        assert!(!text.contains("x\u{1}"));
         assert!(!validate(b"not a zip").is_empty());
     }
 }

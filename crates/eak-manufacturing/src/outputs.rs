@@ -63,7 +63,7 @@ pub fn status_label(status: PackageStatus) -> &'static str {
     match status {
         PackageStatus::Draft => "DRAFT - NOT FOR FABRICATION",
         PackageStatus::InternallyVerifiedReleaseCandidate => {
-            "INTERNAL CHECKS PASSED - engineering and fabricator review still required"
+            "INTERNAL CHECKS PASSED - engineering and fabricator review required"
         }
     }
 }
