@@ -343,6 +343,10 @@ pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, P
                     ));
                 }
                 pins.push(SymbolPin {
+                    length: 0,
+                    orientation: Default::default(),
+                    name_visible: true,
+                    number_visible: true,
                     number,
                     name: if pname == "~" { String::new() } else { pname },
                     electrical_type: ty,
@@ -375,11 +379,7 @@ pub fn import_symbol_lib(src: &str, limits: Limits) -> Result<SymbolLibImport, P
         symbols.push(SymbolImport {
             name: name.clone(),
             item_id,
-            def: SymbolDef {
-                pins,
-                body_half_w: mm_nm(bw),
-                body_half_h: mm_nm(bh),
-            },
+            def: SymbolDef::boxed(pins, mm_nm(bw), mm_nm(bh)),
             footprint: property(sym, "Footprint"),
             datasheet: property(sym, "Datasheet").filter(|d| d != "~"),
             refdes_prefix: refdes,

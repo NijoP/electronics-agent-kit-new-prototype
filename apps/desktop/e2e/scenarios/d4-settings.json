@@ -1,0 +1,31 @@
+{
+  "name": "D4 settings, hotkeys and canvas colours",
+  "description": "Opens an isolated software fixture project, then Settings > Settings… (Phase 1 D4): the searchable settings tree, the hotkey table generated from the A1 action registry, a rebinding refused for a conflict (Ctrl+K belongs to the command palette) with the reason shown, then Save rebound to Ctrl+Alt+S by real key presses. The new key shows in the File menu, the toolbar tooltip and the command palette, and still shows after a webview reload (persisted). Then the Canvas colours page (paper preset) and the PCB grid defaults page are shown, found through the tree search.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "D4 Evidence Fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "D4 Evidence Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "d4-open", "do": "menu", "title": "D4: Settings > Settings… opens the settings dialog with its tree", "menu": "Settings", "item": "Settings", "expect": "[role=\"dialog\"][aria-label=\"Settings\"] [role=\"tree\"]" },
+    { "id": "d4-table", "do": "wait", "title": "D4: the hotkey table lists Save with its EAK default key", "selector": "table[aria-label=\"Hotkeys\"] tr[data-action=\"save\"] kbd", "text": "Ctrl+S" },
+    { "id": "d4-change", "do": "click", "title": "D4: Change keys of Save", "selector": "button[aria-label=\"Change keys of Save (confirm written)\"]", "expectText": "Press keys", "expect": "button[aria-label=\"Change keys of Save (confirm written)\"][aria-pressed=\"true\"]", "shot": false },
+    { "id": "d4-conflict", "do": "key", "title": "D4: Ctrl+K is refused with the reason (already the command palette)", "keys": "ctrl+k", "expect": "[role=\"dialog\"][aria-label=\"Settings\"] p[role=\"alert\"]", "expectText": "Ctrl+K was not bound" },
+    { "id": "d4-change-2", "do": "click", "title": "D4: Change keys of Save again", "selector": "button[aria-label=\"Change keys of Save (confirm written)\"]", "expect": "button[aria-label=\"Change keys of Save (confirm written)\"][aria-pressed=\"true\"]", "shot": false },
+    { "id": "d4-rebind", "do": "key", "title": "D4: Ctrl+Alt+S is accepted", "keys": "ctrl+alt+s", "expect": "table[aria-label=\"Hotkeys\"] tr[data-action=\"save\"] kbd", "expectText": "Ctrl+Alt+S" },
+    { "id": "d4-close", "do": "key", "title": "D4: Escape closes Settings", "keys": "Escape", "gone": "[role=\"dialog\"][aria-label=\"Settings\"]", "shot": false },
+    { "id": "d4-tooltip", "do": "wait", "title": "D4: the toolbar Save tooltip shows Ctrl+Alt+S", "selector": "button.tb-btn[aria-label=\"Save\"][title$=\"(Ctrl+Alt+S)\"]" },
+    { "id": "d4-menu", "do": "click", "title": "D4: File menu shows Save with Ctrl+Alt+S", "selector": "nav[aria-label=\"Application menu\"] button.menu-btn", "text": "File", "expect": "ul[role=\"menu\"][aria-label=\"File\"] kbd", "expectText": "Ctrl+Alt+S" },
+    { "id": "d4-menu-esc", "do": "key", "title": "D4: close File", "keys": "Escape", "shot": false },
+    { "id": "d4-palette", "do": "key", "title": "D4: command palette", "keys": "ctrl+k", "expect": "[role=\"dialog\"][aria-label=\"Command palette\"] input", "shot": false },
+    { "id": "d4-palette-search", "do": "type", "title": "D4: the palette lists Save with Ctrl+Alt+S", "value": "Save", "expect": "ul[role=\"listbox\"] kbd", "expectText": "Ctrl+Alt+S" },
+    { "id": "d4-palette-esc", "do": "key", "title": "D4: close the palette", "keys": "Escape", "shot": false },
+    { "id": "d4-reload", "do": "reload", "title": "D4: reload the webview (same app data)", "expect": "button.home-row", "expectText": "D4 Evidence Fixture", "shot": false },
+    { "id": "d4-reopen", "do": "click", "title": "D4: reopen the fixture", "selector": "button.home-row", "text": "D4 Evidence Fixture", "expect": "nav[aria-label=\"Application menu\"]", "shot": false },
+    { "id": "d4-persisted", "do": "wait", "title": "D4: after the reload the Save tooltip still shows Ctrl+Alt+S (persisted)", "selector": "button.tb-btn[aria-label=\"Save\"][title$=\"(Ctrl+Alt+S)\"]" },
+    { "id": "d4-open-2", "do": "menu", "title": "D4: Settings > Settings… again", "menu": "Settings", "item": "Settings", "expect": "[role=\"dialog\"][aria-label=\"Settings\"]", "shot": false },
+    { "id": "d4-search", "do": "type", "title": "D4: tree search 'paper' finds Canvas colours", "selector": "input[aria-label=\"Search settings\"]", "value": "paper", "expect": "table[aria-label=\"Canvas colours\"]" },
+    { "id": "d4-colours", "do": "wait", "title": "D4: canvas colour table with a colour input per object (Paper preset in the select)", "selector": "table[aria-label=\"Canvas colours\"] input[type=\"color\"][aria-label=\"Wire colour\"]" },
+    { "id": "d4-esc", "do": "key", "title": "D4: Escape closes Settings", "keys": "Escape", "gone": "[role=\"dialog\"][aria-label=\"Settings\"]", "shot": false },
+    { "id": "d4-open-3", "do": "menu", "title": "D4: Settings > Settings… a third time", "menu": "Settings", "item": "Settings", "expect": "[role=\"dialog\"][aria-label=\"Settings\"]", "shot": false },
+    { "id": "d4-grid", "do": "click", "title": "D4: PCB grid defaults page", "selector": "[role=\"tree\"] button", "text": "PCB grid", "expect": "[role=\"dialog\"][aria-label=\"Settings\"] [role=\"group\"][aria-label=\"PCB grid\"]" }
+  ]
+}

@@ -47,12 +47,15 @@ import { clampSize, DEFAULT_LAYOUT, LIMITS, useDockLayouts, type DockId, type La
 import { CanvasStrip } from "./shell/CanvasStrip";
 import { DesignManager } from "./shell/DesignManager";
 import { editorFor, pcbObjects, schematicPlace, type ManagerTab, type NetRow, type Target } from "./shell/designManagerData";
-import { PropertiesPanel, RightDock, shownRightTab, type RightTab } from "./shell/RightDock";
+import { RightDock, shownRightTab, type RightTab } from "./shell/RightDock";
+import { Inspector } from "./shell/Inspector";
 import type { Bounds } from "./viewport";
 import { MenuBar } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
 import { nextRotation } from "./editing";
 import { formatLength, GridControls, useGridConfig } from "./grid";
+import { SettingsDialog } from "./settings/SettingsDialog";
+import { useKeymap } from "./settings/keymap";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
 import type { OpenProject, RecentProject, Check, CheckResult, Command, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot } from "./types";
@@ -137,6 +140,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   }, [initial.project.id, workspace]);
   const [help, setHelp] = useState(false);
   const [about, setAbout] = useState(false);
+  const [prefs, setPrefs] = useState(false);
+  // Menus, tooltips and the palette show the effective keys: re-render when a key is rebound.
+  useKeymap();
   const [conn, setConn] = useState<ConnectivityReport | null>(null);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [activeFinding, setActiveFinding] = useState<string | null>(null);
@@ -690,6 +696,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     quickOpen: () => (setPalette(false), setQuickOpen(true)),
     help: () => setHelp(true),
     about: () => setAbout(true),
+    preferences: () => setPrefs(true),
     sideView,
     notify: setMessage,
     open, closeAll, showWorkspace, switchTo, placePart,
@@ -899,7 +906,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
             {rightTab === "layers" ? (
               <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
             ) : (
-              <PropertiesPanel snapshot={snapshot} selected={selected} pcb={ctx === "pcb"} />
+              <Inspector snapshot={snapshot} docId={wsId === "editor" ? activeId : null} selected={selected} pcb={ctx === "pcb"} edit={edit} />
             )}
           </RightDock>
         ) : (
@@ -932,6 +939,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       )}
       {help && <ShortcutHelp actions={visibleIn(allActions, ctx).filter((a) => keysOf(a).length > 0)} editor={editorKeys(ctx)} onClose={() => setHelp(false)} />}
       {about && <AboutDialog onClose={() => setAbout(false)} />}
+      {prefs && <SettingsDialog actions={allActions} theme={theme} onTheme={onTheme} onModel={() => (setPrefs(false), onSettings())} onClose={() => setPrefs(false)} />}
       {syncDialog && (
         <SyncReportDialog
           report={syncDialog.report}

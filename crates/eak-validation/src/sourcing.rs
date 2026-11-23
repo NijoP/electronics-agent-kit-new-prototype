@@ -468,6 +468,7 @@ mod tests {
                     position: Point::mm(0.0, 0.0),
                     rotation: Rotation::R0,
                     mirror: false,
+                    field_visibility: Default::default(),
                 },
             );
         }

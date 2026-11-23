@@ -84,6 +84,14 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Record a design requirement (free text) on the project.",
             obj(&[("text", string("requirement text"))], &["text"]),
         ),
+        SetProjectProperty { .. } => (
+            D::Project,
+            "Set a free project property (company, drawn by, ...) that title blocks can show; a null or blank value removes it.",
+            obj(
+                &[("key", string("property key")), ("value", nullable(string("value; null removes")))],
+                &["key"],
+            ),
+        ),
         ImportLibraryComponent { .. } => (
             D::Library,
             "Copy a built-in library component into the project library.",
@@ -231,6 +239,8 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                     ("name", string("net name")),
                     ("position", point("label position")),
                     ("kind", label_kind()),
+                    ("scope", net_scope()),
+                    ("power_style", nullable(power_style())),
                 ],
                 &["name", "position"],
             ),
@@ -244,6 +254,8 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                     ("pin", string("pin number")),
                     ("name", string("net name")),
                     ("kind", label_kind()),
+                    ("scope", net_scope()),
+                    ("power_style", nullable(power_style())),
                 ],
                 &["symbol_id", "pin", "name"],
             ),
@@ -273,6 +285,89 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             D::Schematic,
             "Remove a no-connect marker from a pin.",
             obj(&[("no_connect_id", id("no-connect id"))], &["no_connect_id"]),
+        ),
+        SetNetLabelScope { .. } => (
+            D::Schematic,
+            "Set how far a net label reaches: local (its sheet only), global or off_page (every sheet). Power ports always connect on every sheet.",
+            obj(&[("label_id", id("label id")), ("scope", net_scope())], &["label_id", "scope"]),
+        ),
+        SetPowerPortStyle { .. } => (
+            D::Schematic,
+            "Set (or clear with null) the drawing style of a power port label.",
+            obj(
+                &[("label_id", id("power port label id")), ("style", nullable(power_style()))],
+                &["label_id"],
+            ),
+        ),
+        SetFieldVisibility { .. } => (
+            D::Schematic,
+            "Show or hide one text field of a placed symbol (refdes and value are shown by default, the others hidden).",
+            obj(
+                &[("symbol_id", id("symbol id")), ("field", symbol_field()), ("visible", boolean("show the field"))],
+                &["symbol_id", "field", "visible"],
+            ),
+        ),
+        AddBus { .. } => (
+            D::Schematic,
+            "Draw a named bus (D[0..7] or {SDA,SCL}) as a polyline. A bus is not a conductor: members connect through labelled wires on bus entries; a global label with the bus name on the bus exports its members to every sheet.",
+            obj(
+                &[("sheet_id", sheet()), ("name", string("bus name")), ("points", points("2 or more vertices"))],
+                &["name", "points"],
+            ),
+        ),
+        MoveBus { .. } => (
+            D::Schematic,
+            "Replace a bus polyline (move or reshape it); entries left off the new path are reported by ERC-019.",
+            obj(&[("bus_id", id("bus id")), ("points", points("new vertices"))], &["bus_id", "points"]),
+        ),
+        DeleteBus { .. } => (
+            D::Schematic,
+            "Delete a bus and its bus entries.",
+            obj(&[("bus_id", id("bus id"))], &["bus_id"]),
+        ),
+        AddBusEntry { .. } => (
+            D::Schematic,
+            "Add a bus entry: bus_point must lie on the bus; a member wire attaches at wire_point and must carry a member name.",
+            obj(
+                &[("bus_id", id("bus id")), ("bus_point", point("point on the bus")), ("wire_point", point("wire attachment point"))],
+                &["bus_id", "bus_point", "wire_point"],
+            ),
+        ),
+        MoveBusEntry { .. } => (
+            D::Schematic,
+            "Move a bus entry (bus_point must lie on its bus).",
+            obj(
+                &[("entry_id", id("bus entry id")), ("bus_point", point("point on the bus")), ("wire_point", point("wire attachment point"))],
+                &["entry_id", "bus_point", "wire_point"],
+            ),
+        ),
+        DeleteBusEntry { .. } => (
+            D::Schematic,
+            "Delete a bus entry.",
+            obj(&[("entry_id", id("bus entry id"))], &["entry_id"]),
+        ),
+        AddSheetGraphic { .. } => (
+            D::Schematic,
+            "Draw a line, shape or text on a sheet (drawing only; never part of connectivity).",
+            obj(&[("sheet_id", sheet()), ("graphic", graphic())], &["graphic"]),
+        ),
+        MoveSheetGraphic { .. } => (
+            D::Schematic,
+            "Move a sheet drawing by an offset.",
+            obj(&[("graphic_id", id("sheet graphic id")), ("by", point("offset"))], &["graphic_id", "by"]),
+        ),
+        DeleteSheetGraphic { .. } => (
+            D::Schematic,
+            "Delete a sheet drawing.",
+            obj(&[("graphic_id", id("sheet graphic id"))], &["graphic_id"]),
+        ),
+        SetSheetFormat { .. } => (
+            D::Schematic,
+            "Set a sheet border, reference zones and title block (fields bound to project or sheet values, project properties or text); null removes the format.",
+            obj(
+                &[("sheet_id", id("sheet id")), ("format", nullable(drawing_format()))],
+                &["sheet_id"],
+            ),
         ),
         Annotate => (
             D::Schematic,
@@ -476,6 +571,10 @@ pub fn command_samples() -> Vec<Command> {
     vec![
         SetProjectName { name: "n".into() },
         AddRequirement { text: "t".into() },
+        SetProjectProperty {
+            key: "company".into(),
+            value: Some("ACME".into()),
+        },
         ImportLibraryComponent {
             component_id: "c".into(),
         },
@@ -550,12 +649,16 @@ pub fn command_samples() -> Vec<Command> {
             name: "VCC".into(),
             position: p,
             kind: LabelKind::Power,
+            scope: NetScope::OffPage,
+            power_style: Some(PowerStyle::Rail),
         },
         LabelPin {
             symbol_id: "s".into(),
             pin: "1".into(),
             name: "GND".into(),
             kind: LabelKind::Net,
+            scope: NetScope::Local,
+            power_style: None,
         },
         DeleteNetLabel {
             label_id: "l".into(),
@@ -570,6 +673,74 @@ pub fn command_samples() -> Vec<Command> {
         },
         DeleteNoConnect {
             no_connect_id: "nc".into(),
+        },
+        SetNetLabelScope {
+            label_id: "l".into(),
+            scope: NetScope::Local,
+        },
+        SetPowerPortStyle {
+            label_id: "l".into(),
+            style: Some(PowerStyle::Ground),
+        },
+        SetFieldVisibility {
+            symbol_id: "s".into(),
+            field: SymbolField::Mpn,
+            visible: true,
+        },
+        AddBus {
+            sheet_id: None,
+            name: "D[0..7]".into(),
+            points: vec![p, Point::new(10, 0)],
+        },
+        MoveBus {
+            bus_id: "b".into(),
+            points: vec![p, Point::new(0, 10), Point::new(10, 10)],
+        },
+        DeleteBus { bus_id: "b".into() },
+        AddBusEntry {
+            bus_id: "b".into(),
+            bus_point: p,
+            wire_point: Point::new(1, 1),
+        },
+        MoveBusEntry {
+            entry_id: "be".into(),
+            bus_point: Point::new(2, 0),
+            wire_point: Point::new(3, 1),
+        },
+        DeleteBusEntry {
+            entry_id: "be".into(),
+        },
+        AddSheetGraphic {
+            sheet_id: Some("sht".into()),
+            graphic: Graphic::Arc {
+                center: p,
+                radius: 5,
+                start_deg: 0.0,
+                end_deg: 90.0,
+                stroke: Stroke {
+                    width: 1,
+                    style: LineStyle::Dashed,
+                },
+            },
+        },
+        MoveSheetGraphic {
+            graphic_id: "g".into(),
+            by: Point::new(1, 2),
+        },
+        DeleteSheetGraphic {
+            graphic_id: "g".into(),
+        },
+        SetSheetFormat {
+            sheet_id: "sht".into(),
+            format: Some(DrawingFormat {
+                title_block: vec![TitleBlockField {
+                    label: "Company".into(),
+                    value: FieldSource::Property {
+                        key: "company".into(),
+                    },
+                }],
+                ..DrawingFormat::standard()
+            }),
         },
         Annotate,
         SetBoardOutline {
@@ -738,8 +909,9 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 47 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 47);
+        // 61 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect and the 14 schema-v3
+        // schematic commands of ADR-0040); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
+        assert_eq!(tools.len(), 61);
         for t in &tools {
             assert!(t
                 .spec

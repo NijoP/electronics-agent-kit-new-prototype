@@ -382,9 +382,10 @@ try {
   await step("S12", "Copper zone (Zone tool, layer + net, 2 corners, Finish)", "UI", async () => {
     await clickButton('[aria-label="PCB tools"]', "Zone");
     const opts = (s) =>
-      browser.execute((q) => [...document.querySelectorAll(q + " option")].map((o) => o.value).filter(Boolean), s);
-    const netSel = 'section[aria-label="PCB view"] select[aria-label="Net"]';
-    const layerSel = 'section[aria-label="PCB view"] select[aria-label="Layer"]';
+      browser.execute((q) => [...document.querySelectorAll(q.split(",").map((x) => `${x.trim()} option`).join(", "))].map((o) => o.value).filter(Boolean), s);
+    // Tool options live in the right dock's inspector when it is shown (A5), else in the strip.
+    const netSel = 'section[aria-label="Properties"] select[aria-label="Net"], section[aria-label="PCB view"] select[aria-label="Net"]';
+    const layerSel = 'section[aria-label="Properties"] select[aria-label="Layer"], section[aria-label="PCB view"] select[aria-label="Layer"]';
     const nets = await opts(netSel);
     ok(nets.length > 0, "no nets offered for the zone");
     await browser.$(netSel).selectByAttribute("value", nets[0]);

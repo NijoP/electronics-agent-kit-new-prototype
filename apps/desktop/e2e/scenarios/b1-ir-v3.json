@@ -1,0 +1,61 @@
+{
+  "name": "B1 IR schema v3 (regression)",
+  "description": "Slice B1 adds schematic primitives to the IR (schema v3, ADR-0040) without desktop UI. This scenario checks, in the real window, that a project created by the v3 engine still opens and that a placed part (whose definition now carries a rectangle graphic and pin geometry) is drawn on the schematic as before.",
+  "steps": [
+    {
+      "id": "home",
+      "do": "wait",
+      "title": "Project Home visible",
+      "selector": "main.home h1",
+      "timeout": 60000
+    },
+    {
+      "id": "fixture",
+      "do": "fixture-project",
+      "title": "Create fixture project (schema v3)",
+      "name": "B1 IR v3 Fixture",
+      "folder": "b1-ir-v3-fixture"
+    },
+    {
+      "id": "open",
+      "do": "click",
+      "title": "Open fixture from Recent projects",
+      "selector": "button.home-row",
+      "text": "B1 IR v3 Fixture",
+      "expect": "nav[aria-label=\"Application menu\"]"
+    },
+    {
+      "id": "sch",
+      "do": "menu",
+      "title": "Open schematic",
+      "menu": "View",
+      "item": "Go to Schematic editor",
+      "expect": "section[aria-label=\"Schematic view\"]"
+    },
+    {
+      "id": "b1-place-tool",
+      "do": "click",
+      "title": "B1: Place tool",
+      "shot": false,
+      "selector": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button",
+      "text": "Place",
+      "expect": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button[aria-pressed=\"true\"]",
+      "expectText": "Place"
+    },
+    {
+      "id": "b1-place",
+      "do": "click",
+      "title": "B1: place a part on the v3 project (PlaceSymbol accepted)",
+      "selector": "section[aria-label=\"Schematic view\"] svg.canvas",
+      "expect": "footer.status span.msg",
+      "expectText": "PlaceSymbol"
+    },
+    {
+      "id": "b1-symbol-drawn",
+      "do": "count",
+      "title": "B1: the placed symbol is drawn with its body",
+      "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] rect.body",
+      "equals": 1
+    }
+  ]
+}

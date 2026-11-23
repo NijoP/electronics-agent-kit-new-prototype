@@ -124,6 +124,8 @@ fn move_net_label_moves_and_names_the_net_it_touches() {
             name: "SIG".into(),
             position: Point::mm(50.0, 50.0),
             kind: LabelKind::Net,
+            scope: Default::default(),
+            power_style: None,
         },
     )
     .created[0]

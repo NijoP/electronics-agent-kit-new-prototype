@@ -28,6 +28,8 @@ import {
 } from "./routeTool";
 import type { BendMode, Command, CopperLayer, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
+import { ToolOptionFields } from "./shell/Inspector";
+import { NO_SELECTION, useHasInspector, usePublishEditorContext, type OptionField } from "./shell/inspectorModel";
 import { boundsOf, fromView, mm, toView, type Bounds } from "./viewport";
 import { usePcbRenderer, type PcbRenderer } from "./render/flag";
 import { buildPcbScene } from "./render/pcbScene";
@@ -585,6 +587,56 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
     return { items, moving };
     // Keyed on the overlay state; `scene` changes with the snapshot.
   }, [scene, byKey, overlayKey]);
+  // A5: the active tool's options, shown by the right dock's inspector (inline here when no
+  // inspector is shown), and the selection (footprints, the picked track) the inspector edits.
+  const layerOpts = order.map((o) => ({ value: layerKey(o), label: `${layerName(o)}${stack.find((x) => sameLayer(x.layer, o))?.kind === "plane" ? " (plane)" : ""}` }));
+  const layerNet: OptionField[] = [
+    { kind: "select", name: "Layer", label: "Layer", value: layerKey(layer), options: layerOpts, onChange: (v) => changeLayer(order.find((o) => layerKey(o) === v) ?? "top") },
+    { kind: "select", name: "Net", label: "Net", value: net, options: [{ value: "", label: "net…" }, ...nets.map((n) => ({ value: n, label: n }))], onChange: setNet },
+  ];
+  const plainLayers = order.map((o) => ({ value: layerKey(o), label: layerName(o) }));
+  const options: OptionField[] = !edit
+    ? []
+    : tool === "route"
+      ? [
+          ...layerNet,
+          { kind: "text", name: "Track width", label: "Width (mm)", value: widthText, onChange: changeWidth, placeholder: "net class", title: "Track width for this route; empty uses the net-class width" },
+          {
+            kind: "select",
+            name: "Bend mode",
+            label: "Corners",
+            value: mode,
+            options: [
+              { value: "diagonal45", label: "45°" },
+              { value: "orthogonal90", label: "90°" },
+            ],
+            onChange: (v) => v !== mode && toggleMode(),
+            title: "45° or 90° corners (/)",
+          },
+          { kind: "info", name: "Route via", label: "Via", value: "L or Via + switch layer; rule drill and diameter" },
+        ]
+      : tool === "via"
+        ? [
+            ...layerNet,
+            { kind: "select", name: "Via from", label: "From", value: layerKey(viaFrom), options: plainLayers, onChange: (v) => setViaFrom(order.find((o) => layerKey(o) === v) ?? "top") },
+            { kind: "select", name: "Via to", label: "To", value: layerKey(viaTo), options: plainLayers, onChange: (v) => setViaTo(order.find((o) => layerKey(o) === v) ?? "bottom") },
+            { kind: "info", name: "Via kind", label: "Kind", value: `${viaKind(viaFrom, viaTo)} via` },
+          ]
+        : tool === "zone"
+          ? [
+              ...layerNet,
+              { kind: "text", name: "Zone clearance", label: "Clearance (mm)", value: zoneClearance, onChange: setZoneClearance, placeholder: "rule default" },
+              { kind: "unavailable", name: "Zone fill", label: "Fill method, islands, priority", reason: "Unavailable: the EAK-IR has no zone fill fields yet (IR v3, slice B1)" },
+            ]
+          : [];
+  usePublishEditorContext(docId, {
+    editor: "pcb",
+    tool,
+    toolLabel: TOOLS.find(([t]) => t === tool)?.[1] ?? tool,
+    options,
+    selection: { ...NO_SELECTION, footprints: sel, tracks: selTrack ? [selTrack.id] : [] },
+  });
+  const inspector = useHasInspector();
   // A click on a footprint selects its symbol (cross-probe), as the SVG footprint's onClick does.
   const canvasPoint = (x: number, y: number, e: React.PointerEvent) => {
     const id = hitAt(e, "data-footprint-id", x, y);
@@ -637,39 +689,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
       </header>
       {edit && (
         <div className="tool-options">
-          {(tool === "route" || tool === "via" || tool === "zone") && (
-            <>
-              <select
-                aria-label="Layer"
-                value={layerKey(layer)}
-                onChange={(e) => changeLayer(order.find((o) => layerKey(o) === e.target.value) ?? "top")}
-              >
-                {stack.map((s) => (
-                  <option key={layerKey(s.layer)} value={layerKey(s.layer)}>
-                    {layerName(s.layer)}
-                    {s.kind === "plane" ? " (plane)" : ""}
-                  </option>
-                ))}
-              </select>
-              <select aria-label="Net" value={net} onChange={(e) => setNet(e.target.value)}>
-                <option value="">net…</option>
-                {nets.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
+          {!inspector && <ToolOptionFields fields={options} layout="strip" />}
           {tool === "route" && (
             <>
-              <label title="Track width for this route; empty uses the net-class width">
-                Width (mm)
-                <input aria-label="Track width" inputMode="decimal" placeholder="net class" size={6} value={widthText} onChange={(e) => changeWidth(e.target.value)} />
-              </label>
-              <button type="button" aria-label="Bend mode" title="45° or 90° corners (/)" onClick={toggleMode}>
-                {mode === "diagonal45" ? "45°" : "90°"}
-              </button>
               {draft && (
                 <>
                   <span className="route-net" aria-label="Active net">Routing {draft.net} · {layerName(draft.layer)}{draft.viaPending ? " · via next" : ""}</span>
@@ -708,39 +730,8 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
               </button>
             </>
           )}
-          {tool === "via" && (
-            <>
-              <select
-                aria-label="Via from"
-                value={layerKey(viaFrom)}
-                onChange={(e) => setViaFrom(order.find((o) => layerKey(o) === e.target.value) ?? "top")}
-              >
-                {order.map((o) => (
-                  <option key={layerKey(o)} value={layerKey(o)}>
-                    {layerName(o)}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Via to"
-                value={layerKey(viaTo)}
-                onChange={(e) => setViaTo(order.find((o) => layerKey(o) === e.target.value) ?? "bottom")}
-              >
-                {order.map((o) => (
-                  <option key={layerKey(o)} value={layerKey(o)}>
-                    {layerName(o)}
-                  </option>
-                ))}
-              </select>
-              <span className="muted">{viaKind(viaFrom, viaTo)} via</span>
-            </>
-          )}
           {tool === "zone" && (
             <>
-              <label>
-                Clearance (mm)
-                <input aria-label="Zone clearance" inputMode="decimal" placeholder="rule default" size={9} value={zoneClearance} onChange={(e) => setZoneClearance(e.target.value)} />
-              </label>
               <button type="button" onClick={finishZone} disabled={corners.length < 2}>
                 Finish zone ({corners.length} pts)
               </button>
@@ -757,20 +748,24 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
           {tool === "select" && selTrack && (
             <span className="selection-bar" role="group" aria-label="Track selection">
               <span className="muted">{`track ${selTrack.net} · ${layerName(selTrack.layer)}`}</span>
-              <label>
-                Width (mm)
-                <input aria-label="Selected track width" inputMode="decimal" size={6} value={trackWidthText} onChange={(e) => setTrackWidthText(e.target.value)} />
-              </label>
-              <button type="button" disabled={widthFromMm(trackWidthText) === null} onClick={() => applyTrackEdit({ width: widthFromMm(trackWidthText) ?? undefined })}>
-                Apply width
-              </button>
-              <select aria-label="Selected track layer" value={layerKey(selTrack.layer)} onChange={(e) => { const l = order.find((o) => layerKey(o) === e.target.value); if (l) applyTrackEdit({ layer: l }); }}>
-                {order.map((o) => (
-                  <option key={layerKey(o)} value={layerKey(o)}>
-                    {layerName(o)}
-                  </option>
-                ))}
-              </select>
+              {!inspector && (
+                <>
+                  <label>
+                    Width (mm)
+                    <input aria-label="Selected track width" inputMode="decimal" size={6} value={trackWidthText} onChange={(e) => setTrackWidthText(e.target.value)} />
+                  </label>
+                  <button type="button" disabled={widthFromMm(trackWidthText) === null} onClick={() => applyTrackEdit({ width: widthFromMm(trackWidthText) ?? undefined })}>
+                    Apply width
+                  </button>
+                  <select aria-label="Selected track layer" value={layerKey(selTrack.layer)} onChange={(e) => { const l = order.find((o) => layerKey(o) === e.target.value); if (l) applyTrackEdit({ layer: l }); }}>
+                    {order.map((o) => (
+                      <option key={layerKey(o)} value={layerKey(o)}>
+                        {layerName(o)}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
               <button type="button" title="Delete this track (Delete)" onClick={deleteSelectedTrack}>
                 Delete track
               </button>
