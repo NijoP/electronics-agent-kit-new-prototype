@@ -1,6 +1,7 @@
 # Real-window UI evidence: builds the desktop app, runs it under Xvfb (GDK_BACKEND=x11), drives
 # a data-driven scenario with real X input (XTest) and uploads the screenshots as an artifact.
-# Separate workflow and continue-on-error: NOT a required check until it is proven stable.
+# Separate workflow, not a required check; the job fails (red) when any scenario row fails or a
+# results file or screenshot is missing, and still uploads the artifact and job summary.
 # How to add steps: docs/qa/UI_EVIDENCE.md.
 name: ui-evidence
 on:
@@ -18,13 +19,13 @@ permissions:
   contents: read
 concurrency:
   group: ui-evidence-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to main must not cancel the evidence run of the commit before it.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 env:
   CARGO_TERM_COLOR: always
 jobs:
   linux-xvfb:
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -165,20 +166,23 @@ jobs:
           UI_SCENARIO: scenarios/d2-editors.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # Fails the job when a scenario wrote no results file (it crashed or never ran); failing
+      # rows already failed their own step. Runs before the upload, which still runs (always()).
       - name: Results to job summary
         if: always()
         run: |
-          cat "${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no results file" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ runner.temp }}/ui-evidence/e2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no E2 results file" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ runner.temp }}/ui-evidence/e3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no E3 results file" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ runner.temp }}/ui-evidence/d4/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D4 results file" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ runner.temp }}/ui-evidence/b1/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no B1 results file" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ runner.temp }}/ui-evidence/c2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no C2 results file" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ runner.temp }}/ui-evidence/c3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no C3 results file" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ runner.temp }}/ui-evidence/b2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no B2 results file" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ runner.temp }}/ui-evidence/d1/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D1 results file" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ runner.temp }}/ui-evidence/d3/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D3 results file" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ runner.temp }}/ui-evidence/d2/UI_EVIDENCE.md" >> "$GITHUB_STEP_SUMMARY" || echo "no D2 results file" >> "$GITHUB_STEP_SUMMARY"
+          missing=0
+          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2; do
+            f="${{ runner.temp }}/ui-evidence/${d:+$d/}UI_EVIDENCE.md"
+            if [ -f "$f" ]; then
+              cat "$f" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "**MISSING: no ${d:-a1} results file** ($f)" >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::no ${d:-a1} results file: $f"
+              missing=1
+            fi
+          done
+          exit $missing
       - name: Upload screenshots and results
         if: always()
         uses: actions/upload-artifact@v4

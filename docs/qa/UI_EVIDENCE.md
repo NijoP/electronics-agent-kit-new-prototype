@@ -18,8 +18,15 @@ real X input and uploads the screenshots.
 
 ## When it runs, and its status
 On pull requests that touch `apps/desktop/**` (or the workflow), on pushes to `main` with the
-same paths, and by hand (`workflow_dispatch`). It is a **separate workflow with
-`continue-on-error: true`** and is not a required check until it has proven stable.
+same paths, and by hand (`workflow_dispatch`). It is a **separate workflow** and not a
+required check (branch protection is unchanged), but it is honest: the job is **red**
+when any row fails, when a step that should take a screenshot has none, when a
+scenario records no rows, or when a scenario writes no results file.
+Until 2026-11-23 the job had `continue-on-error: true`, so a run such as
+https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45093860444 showed
+success with 7 failing B2 rows; an older green badge does not prove its scenarios passed. On
+`main` a newer push no longer cancels the run in progress, so each landed commit keeps its
+evidence run (a still-queued run can be replaced by a newer one).
 
 ## Results
 Open the run in GitHub Actions:
@@ -28,8 +35,10 @@ Open the run in GitHub Actions:
 - the **`ui-evidence-screenshots`** artifact holds the PNGs, `UI_EVIDENCE.md` and the
   `tauri-driver` log.
 
-A failed step does not stop the run; later steps still run and report. The job fails (without
-blocking the PR) when any row fails.
+A failed step does not stop the run; later steps and scenarios still run and report, and the
+job summary and the artifact are still written. The job then fails. A new scenario adds its
+`UI_OUT` folder name to the loop of the `Results to job summary` step, which fails the job when
+that folder has no `UI_EVIDENCE.md`.
 
 ## Adding steps
 Scenarios are JSON files in `apps/desktop/e2e/scenarios/`; the workflow runs

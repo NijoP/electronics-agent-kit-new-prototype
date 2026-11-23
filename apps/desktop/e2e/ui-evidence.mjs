@@ -254,6 +254,11 @@ async function run(st, fn) {
     evidence = String(e?.message ?? e).split("\n")[0];
   }
   if (!file && st.shot !== false) file = shot(st.id);
+  // Evidence that was expected but not taken is a failure, not a pass without a picture.
+  if (!file && st.shot !== false) {
+    result = "FAIL";
+    evidence = `no screenshot taken${evidence ? `; ${evidence}` : ""}`;
+  }
   const row = { id: st.id, title: st.title ?? st.do, result, evidence, file, ms: Date.now() - t0 };
   results.push(row);
   console.log(`${result.padEnd(4)} ${row.id} ${row.title} — ${evidence}`);
@@ -500,4 +505,5 @@ const md = [
 ].join("\n");
 fs.writeFileSync(path.join(OUT, "UI_EVIDENCE.md"), md);
 console.log(`\n${results.length} rows, ${failed} failed; results in ${OUT}`);
-process.exit(failed === 0 ? 0 : 1);
+// A scenario that recorded no rows proved nothing: that fails too.
+process.exit(failed === 0 && results.length > 0 ? 0 : 1);
