@@ -86,7 +86,11 @@ const rectOf = (selector, text) =>
       const norm = (x) => x.replace(/\s+/g, " ").trim();
       for (const el of document.querySelectorAll(s)) {
         const r = el.getBoundingClientRect();
-        if (r.width === 0 || r.height === 0) continue;
+        // A horizontal or vertical SVG line (a straight wire or track) has a zero-height or
+        // zero-width geometry box (the stroke is not counted) yet is drawn: it is visible when
+        // one side is non-zero. Every other element needs both sides.
+        const line = el instanceof SVGLineElement;
+        if (line ? r.width === 0 && r.height === 0 : r.width === 0 || r.height === 0) continue;
         if (t && !norm(el.textContent ?? "").startsWith(t)) continue;
         return { x: r.x, y: r.y, w: r.width, h: r.height };
       }
@@ -139,7 +143,8 @@ const reveal = (selector, text) =>
       const norm = (x) => x.replace(/\s+/g, " ").trim();
       for (const el of document.querySelectorAll(s)) {
         const r = el.getBoundingClientRect();
-        if (r.width === 0 || r.height === 0) continue;
+        const line = el instanceof SVGLineElement; // as in rectOf: a straight line has no area
+        if (line ? r.width === 0 && r.height === 0 : r.width === 0 || r.height === 0) continue;
         if (t && !norm(el.textContent ?? "").startsWith(t)) continue;
         el.scrollIntoView({ block: "nearest", inline: "nearest" });
         return;
