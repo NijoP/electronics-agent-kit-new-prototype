@@ -2,7 +2,7 @@
 // (`route_step` IPC -> eak_engineering::interactive); this reducer only records the steps the
 // user fixed with a click and turns the finished route into ONE `Batch` command, so a whole
 // route is one revision and one undo step. Nothing here writes the project.
-import type { BendMode, Command, ConflictMode, Constraints, CopperLayer, FootprintGeom, Nm, PadGeom, Point, RouteSegment, RouteStepReport, RouteStepRequest, Track, Via, ViaSize } from "./types";
+import type { BendMode, Command, ConflictMode, Constraints, CopperLayer, FootprintGeom, Nm, PadGeom, Point, RouteSegment, RouteStepReport, RouteStepRequest, ShovedTrack, Track, Via, ViaSize } from "./types";
 import { layerKey, layerName, sameLayer, viaLayers } from "./layers";
 
 /** One fixed piece of the route: segments on one layer, optionally starting with a via. */
@@ -13,6 +13,8 @@ export interface RouteStep {
   via: { position: Point; drill: Nm; diameter: Nm } | null;
   /** Layer the via starts on (the layer before the switch); null when there is no via. */
   viaFrom: CopperLayer | null;
+  /** Committed tracks this step pushed out of the way (push mode), as replacement polylines. */
+  shoved: ShovedTrack[];
 }
 
 export interface RouteDraft {
@@ -78,7 +80,7 @@ export function routeReducer(d: RouteDraft | null, a: RouteAction): RouteDraft |
       if (d.viaPending && !s.via) return d;
       if (!s.segments.length && !s.via) return d;
       const viaFrom = s.via ? (d.previousLayer ?? null) : null;
-      const step: RouteStep = { layer: s.layer, width: s.width, segments: s.segments, via: s.via, viaFrom };
+      const step: RouteStep = { layer: s.layer, width: s.width, segments: s.segments, via: s.via, viaFrom, shoved: s.shoved ?? [] };
       return { ...d, anchor: s.end, steps: [...d.steps, step], viaPending: false, previousLayer: null };
     }
     case "switchLayer": {
@@ -113,9 +115,24 @@ export function routeReducer(d: RouteDraft | null, a: RouteAction): RouteDraft |
   return d;
 }
 
-/** The `route_step` request for the cursor position. */
+/**
+ * The tracks the route has pushed so far: per track, the latest step's polyline (a later step
+ * moves a track again from its committed place, so the latest move replaces the earlier one).
+ */
+export function draftShoved(d: RouteDraft): ShovedTrack[] {
+  const byId = new Map<string, ShovedTrack>();
+  for (const s of d.steps) for (const t of s.shoved) byId.set(t.id, t);
+  return [...byId.values()];
+}
+
+/** The `route_step` request for the cursor position, with the route so far as `pending`. */
 export function stepRequest(d: RouteDraft, cursor: Point): RouteStepRequest {
-  return { net: d.net, layer: d.layer, from: d.anchor, to: cursor, mode: d.mode, width: d.width, via_at_start: d.viaPending, conflict: d.conflict, via: d.via };
+  const pending = {
+    tracks: d.steps.flatMap((s) => s.segments.map((g) => ({ layer: s.layer, width: s.width, a: g.a, b: g.b }))),
+    vias: d.steps.flatMap((s) => (s.via ? [s.via] : [])),
+    shoved: draftShoved(d),
+  };
+  return { net: d.net, layer: d.layer, from: d.anchor, to: cursor, mode: d.mode, width: d.width, via_at_start: d.viaPending, conflict: d.conflict, via: d.via, pending };
 }
 
 /**
@@ -123,11 +140,18 @@ export function stepRequest(d: RouteDraft, cursor: Point): RouteStepRequest {
  * layers is a through via; a via that starts or ends on an inner layer is sent with its span
  * (`from`/`to`), so the engine makes a blind or buried via instead of a through via.
  * `remove` lists committed tracks the route replaces (loop removal); they are deleted first,
- * in the same Batch, so the new route and the removal are one undo step.
+ * in the same Batch, so the new route and the removal are one undo step. Tracks push mode
+ * moved are replaced the same way: deleted, then re-added along their new polyline.
  */
 export function routeBatch(d: RouteDraft, remove: string[] = []): Command | null {
   if (!d.steps.length) return null;
-  const commands: Command[] = remove.map((track_id) => ({ type: "DeleteTrack" as const, track_id }));
+  const shoved = draftShoved(d);
+  // A pushed track is replaced by its polyline: deleted, then re-added segment by segment.
+  const ids = [...new Set([...remove, ...shoved.map((s) => s.id)])];
+  const commands: Command[] = ids.map((track_id) => ({ type: "DeleteTrack" as const, track_id }));
+  for (const s of shoved)
+    for (let k = 0; k + 1 < s.points.length; k++)
+      commands.push({ type: "AddTrack", layer: s.layer, a: s.points[k], b: s.points[k + 1], width: s.width, net: s.net });
   for (const s of d.steps) {
     if (s.via)
       commands.push({ type: "AddVia", position: s.via.position, net: d.net, drill: s.via.drill, diameter: s.via.diameter, ...viaSpan(s.viaFrom, s.layer) });
@@ -159,6 +183,7 @@ export function feedbackText(s: RouteStepReport | null): string {
   const parts = [`width ${mm(s.width)} mm · clearance ${mm(s.clearance)} mm · ${s.mode === "diagonal45" ? "45°" : "90°"}`];
   if (s.via) parts.push("via");
   if (s.walkaround) parts.push("walkaround");
+  if (s.shoved?.length) parts.push(`pushed ${s.shoved.map((t) => t.id).join(", ")}`);
   if (s.min_gap) parts.push(`min gap ${mm(s.min_gap.measured)} mm to ${s.min_gap.object}`);
   if (s.blocking.length) parts.push(`blocked by ${s.blocking.map((b) => b.object).join(", ")}`);
   if (s.message) parts.push(s.message);
