@@ -35,7 +35,7 @@ export function AnnotateDialog({ busy, selected, apply, onClose }: Props) {
   };
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" role="dialog" aria-label="Annotate options" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label="Annotate options" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
         <div className="modal-head">
           <h2>Annotate schematic</h2>
           <button type="button" onClick={onClose}>Close</button>

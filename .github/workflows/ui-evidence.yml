@@ -305,13 +305,24 @@ jobs:
           UI_SCENARIO: scenarios/f2-pcb-ops.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # F8 (keys and modality): no global key behind an aria-modal dialog (Ctrl+Z with Design rules
+      # open does not undo), a shell key refused for rebinding, and a rebinding shown in a dock tooltip.
+      - name: Run F8 keys and modality scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/f8
+          UI_SCENARIO: scenarios/f8-keys.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # Fails the job when a scenario wrote no results file (it crashed or never ran); failing
       # rows already failed their own step. Runs before the upload, which still runs (always()).
       - name: Results to job summary
         if: always()
         run: |
           missing=0
-          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b3g b6 c6 c4 c1 b4 b5 e4 e9a e7 f2; do
+          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b3g b6 c6 c4 c1 b4 b5 e4 e9a e7 f2 f8; do
             f="${{ runner.temp }}/ui-evidence/${d:+$d/}UI_EVIDENCE.md"
             if [ -f "$f" ]; then
               cat "$f" >> "$GITHUB_STEP_SUMMARY"

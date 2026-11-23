@@ -78,7 +78,7 @@ export function BomExportDialog({ revision, busy, onExported, onClose }: Common)
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal rules output-dialog" role="dialog" aria-label="Export BOM" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
+      <div className="modal rules output-dialog" role="dialog" aria-modal="true" aria-label="Export BOM" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
         <div className="modal-head">
           <h2>Export BOM</h2>
           <button type="button" onClick={onClose}>
@@ -288,7 +288,7 @@ export function DocumentExportDialog({ revision, busy, onExported, onClose }: Co
   };
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal output-dialog" role="dialog" aria-label="Export schematic and netlist" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
+      <div className="modal output-dialog" role="dialog" aria-modal="true" aria-label="Export schematic and netlist" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
         <div className="modal-head">
           <h2>Export schematic and netlist</h2>
           <button type="button" onClick={onClose}>

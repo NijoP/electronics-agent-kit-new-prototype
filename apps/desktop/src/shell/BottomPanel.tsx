@@ -4,6 +4,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
 import { EngineeringMonitor, type FindingsFormat } from "../EngineeringMonitor";
+import { tip } from "../design/shortcuts";
+import { useActionKey } from "../settings/keymap";
 import { SimulationPanel } from "../SimulationPanel";
 import type { FindHit } from "../tools/schematic/find";
 import type { Check, CheckResult, Command, EngineEvent, Finding, Id, Snapshot } from "../types";
@@ -177,6 +179,7 @@ function SearchTab({ snapshot, onProbe }: { snapshot: Snapshot; onProbe: (id: Id
 }
 
 export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, onObject, onExport, exportBlocked, realtimeDrc, onRealtimeDrc, activeFinding, tasks = [], onClearTasks, library, execute, busy = false, onFindPick }: Props) {
+  const hideKey = useActionKey("toggle-bottom");
   const bom = bomLines(snapshot);
   const running = tasks.filter((t) => t.status === "running").length;
   return (
@@ -189,7 +192,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
           </button>
         ))}
         <span className="spacer" />
-        <button type="button" className="icon" aria-label="Hide bottom panel" title="Hide panel (Ctrl+J)" onClick={onClose}>×</button>
+        <button type="button" className="icon" aria-label="Hide bottom panel" title={tip("Hide panel", hideKey)} onClick={onClose}>×</button>
       </div>
       <div className="bottom-body">
         {tab === "library" && <div className="bottom-library">{library}</div>}

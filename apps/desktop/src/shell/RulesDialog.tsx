@@ -135,7 +135,7 @@ export function RulesDialog({ snapshot, busy, apply, onClose, reports, onRun }: 
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal rules" role="dialog" aria-label="Design rules" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
+      <div className="modal rules" role="dialog" aria-modal="true" aria-label="Design rules" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
         <div className="modal-head">
           <h2>Design rules</h2>
           <button type="button" onClick={onClose}>Close</button>
