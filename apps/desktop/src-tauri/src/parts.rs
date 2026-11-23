@@ -342,6 +342,19 @@ pub fn manufacturing_preview(s: &Session) -> Result<ManufacturingPreview, String
     })
 }
 
+/// Part standardisation (Phase 1 D1, gap #38): the `SOURCING` check of `eak-validation` over
+/// the parts placed in the schematic and the supplier records stored with the project. Read-only
+/// and offline: nothing is fetched and nothing is written. The report lists what it does not
+/// check (`not_implemented`, `limitations`); no errors never means the parts are orderable.
+pub fn part_standardisation(s: &Session) -> Result<Report, String> {
+    let parts: Vec<sourcing::SupplierPart> = stored_records(s)
+        .iter()
+        .filter_map(SourcingRecord::supplier_part)
+        .collect();
+    let (_, p) = s.shared_project()?;
+    Ok(eak_validation::sourcing::run(&p, &parts))
+}
+
 fn now_s() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -550,6 +563,11 @@ pub mod cmd {
         app: AppHandle,
     ) -> Result<super::ManufacturingPreview, String> {
         blocking(app, Priority::P3, super::manufacturing_preview).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn part_standardisation(app: AppHandle) -> Result<super::Report, String> {
+        blocking(app, Priority::P2, super::part_standardisation).await
     }
 
     #[tauri::command(rename_all = "snake_case")]

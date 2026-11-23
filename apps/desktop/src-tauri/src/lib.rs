@@ -987,23 +987,7 @@ pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
         .dir
         .clone()
         .ok_or("export needs a saved project folder")?;
-    let reports = vec![
-        erc::run(&p),
-        drc::run(&p),
-        eak_validation::mech::run(&p),
-        eak_validation::dfm::run(&p, &eak_validation::dfm::fabricator_standard()),
-    ];
-    let mut evidence = Vec::with_capacity(reports.len());
-    for r in &reports {
-        evidence.push(serde_json::to_string_pretty(r).map_err(|err| err.to_string())?);
-    }
-    s.with_engine_at(&key, |e| {
-        for (r, json) in reports.iter().zip(&evidence) {
-            e.save_evidence(&r.check, json)
-                .ok_or_else(|| format!("{} evidence could not be saved", r.check))?;
-        }
-        Ok(())
-    })?;
+    let reports = release_reports(s, &key, &p)?;
     let out = dir.join("output").join(format!("rev-{}", p.revision));
     let refs: Vec<&Report> = reports.iter().collect();
     let manifest = eak_manufacturing::compile(&p, &refs, &out)?;
@@ -1012,6 +996,92 @@ pub fn export_manufacturing(s: &Session) -> Result<ExportResult, String> {
         manifest,
         reports,
     })
+}
+
+/// The BOM table a configuration produces for the current revision (the BOM dialog's preview;
+/// the same function writes the exported file).
+pub fn bom_table(
+    s: &Session,
+    config: &eak_manufacturing::bom_config::BomConfig,
+) -> Result<eak_manufacturing::bom_config::BomTable, String> {
+    let (_, p) = s.shared_project()?;
+    eak_manufacturing::bom_config::table(&p, &parts::stored_records(s), config)
+}
+
+/// Export a configured BOM (CSV or XLSX, plus its configuration JSON) into
+/// `<project>/output/rev-<N>/bom` with a revision-bound manifest; DRAFT unless the release
+/// gate (ERC, DRC, MECH, DFM on this revision) passes.
+pub fn export_bom(
+    s: &Session,
+    bom: eak_manufacturing::outputs::BomRequest,
+) -> Result<ExportResult, String> {
+    let request = eak_manufacturing::outputs::OutputRequest {
+        bom: Some(bom),
+        ..Default::default()
+    };
+    export_outputs(s, "bom", &request)
+}
+
+/// Export schematic PDF/SVG and IPC-D-356/JSON netlists into
+/// `<project>/output/rev-<N>/documents` with a revision-bound manifest. A BOM in the request
+/// is ignored here (it has its own dialog and folder).
+pub fn export_documents(
+    s: &Session,
+    mut request: eak_manufacturing::outputs::OutputRequest,
+) -> Result<ExportResult, String> {
+    request.bom = None;
+    export_outputs(s, "documents", &request)
+}
+
+fn export_outputs(
+    s: &Session,
+    folder: &str,
+    request: &eak_manufacturing::outputs::OutputRequest,
+) -> Result<ExportResult, String> {
+    if request.is_empty() {
+        return Err("choose at least one output to export".into());
+    }
+    let (key, p) = s.shared_project()?;
+    let dir = key
+        .dir
+        .clone()
+        .ok_or("export needs a saved project folder")?;
+    let reports = release_reports(s, &key, &p)?;
+    let out = dir
+        .join("output")
+        .join(format!("rev-{}", p.revision))
+        .join(folder);
+    let refs: Vec<&Report> = reports.iter().collect();
+    let manifest =
+        eak_manufacturing::outputs::export(&p, &refs, &parts::stored_records(s), &out, request)?;
+    Ok(ExportResult {
+        out_dir: out.display().to_string(),
+        manifest,
+        reports,
+    })
+}
+
+/// ERC, DRC, MECH and DFM on the shared copy of one revision, each saved as evidence (under
+/// the engine lock, only if the project is still at that revision).
+fn release_reports(s: &Session, key: &ProjectKey, p: &Project) -> Result<Vec<Report>, String> {
+    let reports = vec![
+        erc::run(p),
+        drc::run(p),
+        eak_validation::mech::run(p),
+        eak_validation::dfm::run(p, &eak_validation::dfm::fabricator_standard()),
+    ];
+    let mut evidence = Vec::with_capacity(reports.len());
+    for r in &reports {
+        evidence.push(serde_json::to_string_pretty(r).map_err(|err| err.to_string())?);
+    }
+    s.with_engine_at(key, |e| {
+        for (r, json) in reports.iter().zip(&evidence) {
+            e.save_evidence(&r.check, json)
+                .ok_or_else(|| format!("{} evidence could not be saved", r.check))?;
+        }
+        Ok(())
+    })?;
+    Ok(reports)
 }
 
 pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, String> {
@@ -1033,7 +1103,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 79] = [
+pub const IPC_COMMANDS: [&str; 83] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -1066,11 +1136,15 @@ pub const IPC_COMMANDS: [&str; 79] = [
     "assembly_attest",
     "assembly_import_parts_file",
     "manufacturing_preview",
+    "part_standardisation",
     "fabricator_prepare",
     "library_components",
     "domain_classification",
     "intelligence_summary",
     "export_manufacturing",
+    "bom_table",
+    "export_bom",
+    "export_documents",
     "create_project",
     "open_project",
     "project_lock_state",
@@ -1351,6 +1425,34 @@ pub mod cmd {
         blocking(app, Priority::P3, super::export_manufacturing).await
     }
 
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn bom_table(
+        app: AppHandle,
+        config: eak_manufacturing::bom_config::BomConfig,
+    ) -> Result<eak_manufacturing::bom_config::BomTable, String> {
+        // The dialog preview: interactive, never queued behind exports.
+        blocking(app, Priority::P0, move |s| super::bom_table(s, &config)).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn export_bom(
+        app: AppHandle,
+        bom: eak_manufacturing::outputs::BomRequest,
+    ) -> Result<ExportResult, String> {
+        blocking(app, Priority::P3, move |s| super::export_bom(s, bom)).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn export_documents(
+        app: AppHandle,
+        request: eak_manufacturing::outputs::OutputRequest,
+    ) -> Result<ExportResult, String> {
+        blocking(app, Priority::P3, move |s| {
+            super::export_documents(s, request)
+        })
+        .await
+    }
+
     #[tauri::command(async, rename_all = "snake_case")]
     pub fn recent_projects(
         state: State<'_, Session>,
@@ -1486,6 +1588,9 @@ pub fn run() {
             cmd::run_simulation,
             cmd::route_step,
             cmd::export_manufacturing,
+            cmd::bom_table,
+            cmd::export_bom,
+            cmd::export_documents,
             ai::cmd::ai_propose,
             ai::cmd::ai_accept,
             ai::cmd::ai_reject,
@@ -1511,6 +1616,7 @@ pub fn run() {
             parts::cmd::assembly_attest,
             parts::cmd::assembly_import_parts_file,
             parts::cmd::manufacturing_preview,
+            parts::cmd::part_standardisation,
             parts::cmd::fabricator_prepare,
             workspace::cmd::open_projects,
             workspace::cmd::switch_project,

@@ -22,7 +22,7 @@ export function DocTabs({ docs, active, marker, onSelect, onClose, onCloseAll, s
         const why = marker(d);
         return (
           <span key={d.id} className={d.id === active ? "doc-tab on" : "doc-tab"}>
-            <button type="button" role="tab" aria-selected={d.id === active} className="tab-label" onClick={() => onSelect(d.id)} title={`${d.kind === "pcb" ? "PCB board" : d.kind === "file" ? "File" : "Schematic sheet"} ${d.ref}`}>
+            <button type="button" role="tab" aria-selected={d.id === active} className="tab-label" onClick={() => onSelect(d.id)} title={`${d.kind === "pcb" ? "PCB board" : d.kind === "file" ? "File" : d.kind === "symbol" ? "Symbol editor of part" : d.kind === "footprint" ? "Footprint editor of part" : "Schematic sheet"} ${d.ref}`}>
               {d.title}
               {why && (
                 <span className="dirty" role="img" aria-label={`not confirmed: ${why}`} title={why}>

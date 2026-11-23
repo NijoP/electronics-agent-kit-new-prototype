@@ -512,6 +512,55 @@ export interface ExportFile {
   sha256: string;
   kind: string;
 }
+// ---- D3 output documents (crates/eak-manufacturing/src/{bom_config,outputs}.rs) ----
+export type BomField =
+  | "comment"
+  | "designator"
+  | "quantity"
+  | "footprint"
+  | "component_id"
+  | "manufacturer"
+  | "mpn"
+  | "distributor_part"
+  | "smd"
+  | "placed"
+  | "assembled"
+  | "stock"
+  | "unit_price_usd"
+  | "price_as_of"
+  | "issues";
+export type SortDir = "none" | "asc" | "desc";
+export interface BomColumn {
+  field: BomField;
+  header?: string;
+  sort: SortDir;
+}
+export type FilterOp = "equals" | "not_equals" | "contains" | "is_empty" | "not_empty";
+export interface FilterRule {
+  field: BomField;
+  op: FilterOp;
+  value: string;
+}
+export interface BomConfig {
+  version: number;
+  columns: BomColumn[];
+  grouping: "part" | "designator";
+  exclude: FilterRule[];
+}
+export interface BomTable {
+  fields: BomField[];
+  headers: string[];
+  rows: string[][];
+  removed: number;
+  parts: number;
+}
+export type BomFormat = "csv" | "xlsx";
+export interface OutputRequest {
+  schematic_pdf: boolean;
+  schematic_svg: boolean;
+  ipc_d_356: boolean;
+  netlist_json: boolean;
+}
 export interface ExportResult {
   out_dir: string;
   manifest: {
@@ -813,6 +862,25 @@ export interface ComponentDef {
   /** Box-body style and optional real 3D model reference (optional only in test fixtures). */
   model3d?: Model3d;
   provenance: string;
+  /** Supplier offers (ADR-0028): commercial data, not identity. Omitted by the engine when empty. */
+  supplier_offers?: SupplierOffer[];
+}
+/** One quantity break; the price is decimal text exactly as the supplier stated it (eak_core::OfferPrice). */
+export interface OfferPrice {
+  min_quantity: number;
+  unit_price: string;
+  currency: string;
+}
+/** Mirrors `eak_core::SupplierOffer`: stock, price and lifecycle go stale and never prove suitability. */
+export interface SupplierOffer {
+  supplier: string;
+  supplier_part: string;
+  url?: string | null;
+  stock?: number | null;
+  price_breaks?: OfferPrice[];
+  lifecycle?: string | null;
+  fetched_at_unix_s?: number | null;
+  source_sha256?: string | null;
 }
 export type ModelFormat = "step" | "wrl" | "glb";
 /** Offset (mm, footprint coordinates: x right, y down, z up), rotation (deg about model x/y/z, Rz*Ry*Rx), scale (> 0). */
@@ -896,7 +964,15 @@ export interface SimResult {
 /** Interactive routing (eak_engineering::interactive). Points are board nm. */
 export type BendMode = "diagonal45" | "orthogonal90";
 /** What the route step does with other-net copper in the way (eak_engineering::interactive). */
-export type ConflictMode = "walkaround" | "block";
+export type ConflictMode = "walkaround" | "block" | "push";
+/** A committed track moved by push mode: the polyline that replaces track `id` (ends kept). */
+export interface ShovedTrack {
+  id: Id;
+  layer: CopperLayer;
+  width: Nm;
+  net: string;
+  points: Point[];
+}
 export interface ViaSize {
   drill: Nm;
   diameter: Nm;
@@ -912,6 +988,12 @@ export interface RouteStepRequest {
   conflict: ConflictMode;
   /** Via size for `via_at_start`; null uses the net-class via. */
   via: ViaSize | null;
+  /** The route so far, uncommitted: its segments, vias and the tracks earlier steps pushed. */
+  pending: {
+    tracks: { layer: CopperLayer; width: Nm; a: Point; b: Point }[];
+    vias: { position: Point; drill: Nm; diameter: Nm }[];
+    shoved: ShovedTrack[];
+  };
 }
 export interface RouteSegment {
   a: Point;
@@ -938,6 +1020,8 @@ export interface RouteStepReport {
   blocking: ClearanceFeedback[];
   min_gap: ClearanceFeedback | null;
   message: string | null;
+  /** Push mode: tracks moved out of the path (absent from older engines). */
+  shoved?: ShovedTrack[];
 }
 /** Net class (EAK-IR); lengths in nm. */
 export interface NetClass {
@@ -1186,7 +1270,8 @@ export interface LibraryEntry2 {
   unverified_ratings: number;
   has_datasheet: boolean;
   in_project: boolean;
-  supplier: { distributor: string; stock: number | null; as_of_unix_s: number } | null;
+  /** From a stored sourcing record; `price_breaks` is absent from older builds. */
+  supplier: { distributor: string; stock: number | null; as_of_unix_s: number; price_breaks?: OfferPrice[] } | null;
 }
 
 export interface Facet {

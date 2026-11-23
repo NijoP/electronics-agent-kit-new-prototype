@@ -276,6 +276,15 @@ const handlers = {
     await waitRect("button.home-row", s.name, 30000);
     return `SETUP (IPC create_project, isolated software fixture "${s.name}"; not a UI action)`;
   },
+  // SETUP: one typed engine command on the active project through the same IPC the UI's
+  // api.execute uses (for example a fixture board outline). Run it before the project is opened
+  // from Recent projects, so the UI loads the result.
+  async "fixture-command"(s) {
+    const snap = await ipc("current_project");
+    const r = await ipc("execute_command", { expected_revision: snap.project.revision, command: s.command });
+    if (!r.accepted) throw new Error(`${s.command.type} rejected: ${JSON.stringify(r.error)}`);
+    return `SETUP (IPC execute_command ${s.command.type} → revision ${r.revision_after}; not a UI action)`;
+  },
   // SETUP: an open-source library folder (manifest with licence and source, plus one definition
   // copied from a built-in part under a new id), imported through the IPC the Library browser
   // uses. Needs an open project (the built-in part is read through library_search).

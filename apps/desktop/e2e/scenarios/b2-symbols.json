@@ -59,6 +59,7 @@
     { "id": "b2-nmos-count", "do": "count", "title": "B2: five parts placed", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 5, "shot": false },
 
     { "id": "b2-library", "do": "click", "title": "B2: Library tab of the bottom dock", "selector": "section[aria-label=\"Bottom panel\"] [role=\"tab\"]", "text": "Library", "expect": "input[aria-label=\"Search library\"]", "shot": false },
+    { "id": "b2-manage", "do": "click", "title": "B2: the Manage mode of the Library dock (D1) holds the part search and editor", "selector": "[role=\"tablist\"][aria-label=\"Library modes\"] [role=\"tab\"]", "text": "Manage", "expect": "ul[aria-label=\"Library parts\"]", "shot": false },
     { "id": "b2-kicad-search", "do": "type", "title": "B2: the imported KiCad symbol is listed", "selector": "input[aria-label=\"Search library\"]", "value": "EAK_B2", "expect": "ul[aria-label=\"Library parts\"] button", "expectText": "EAK_B2_OPAMP" },
     { "id": "b2-kicad-select", "do": "click", "title": "B2: select it", "selector": "ul[aria-label=\"Library parts\"] button", "text": "EAK_B2_OPAMP", "expect": "section.lib-detail button.primary", "expectText": "Place on schematic", "shot": false },
     { "id": "b2-kicad-arm", "do": "click", "title": "B2: Place on schematic arms the Place tool", "selector": "section.lib-detail button.primary", "text": "Place on schematic", "expect": "footer.status span.msg", "expectText": "Place tool armed with EAK_B2_OPAMP", "shot": false },

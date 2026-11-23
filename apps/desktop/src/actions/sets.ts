@@ -27,7 +27,7 @@ export interface ActionDeps {
   projects: OpenProject[];
   sideViews: { id: SideView; label: string }[];
   edaViews: { id: string; label: string; shortcut?: string }[];
-  dialog: (d: "new" | "open" | "export" | "rules") => void;
+  dialog: (d: "new" | "open" | "export" | "rules" | "bom" | "outputs") => void;
   save: () => void;
   undo: () => void;
   redo: () => void;
@@ -112,6 +112,9 @@ export function commonActions(d: ActionDeps): Action[] {
     // A-SAVE: the engine writes every accepted command before it returns, so there is nothing
     // unsaved; Save asks the engine to confirm that (and reports blocked writes). No Save as.
     { id: "save", label: "Save (confirm written)", short: "Save", title: "Save: every accepted command is already written; this asks the engine to confirm no write is blocked", menu: "File", sep: true, toolbar: "file", icon: "save", whileTyping: true, enabled: idle, run: d.save },
+    // D3 outputs: each runs ERC/DRC/MECH/DFM first and writes a DRAFT-unless-released manifest.
+    { id: "export-bom", label: "Export BOM…", short: "Export BOM", title: "Configurable BOM (columns, sort, grouping, filter rules) as CSV or XLSX; runs ERC/DRC/MECH/DFM", docs: DESIGN, menu: "File", sep: true, enabled: idle, run: () => d.dialog("bom") },
+    { id: "export-docs", label: "Export schematic and netlist…", short: "Export schematic and netlist", title: "Schematic PDF/SVG with title block, IPC-D-356 and JSON netlists; runs ERC/DRC/MECH/DFM", docs: DESIGN, menu: "File", enabled: idle, run: () => d.dialog("outputs") },
     { id: "close", label: "Close project", menu: "File", sep: true, toolbar: "app", icon: "close", enabled: idle, run: d.close },
 
     { id: "undo", label: "Undo", menu: "Edit", toolbar: "file", icon: "undo", enabled: () => (d.snapshot.can_undo ? idle() : "Nothing to undo"), run: d.undo },
@@ -142,7 +145,7 @@ export function commonActions(d: ActionDeps): Action[] {
     ...d.edaViews.map<Action>((w) => ({ id: `ws-${w.id}`, label: `Go to ${w.label}`, keys: w.shortcut ? [w.shortcut] : [], whileTyping: true, menu: "View", enabled: () => true, run: () => d.showWorkspace(w.id) })),
     { id: "reset-layout", label: "Reset panel layout", menu: "View", sep: true, enabled: () => true, run: d.resetLayout },
 
-    ...d.docs.map<Action>((doc) => ({ id: `open-${doc.id}`, label: `Open ${doc.kind === "pcb" ? "PCB" : doc.kind === "file" ? `file ${doc.title}` : `sheet ${doc.title}`}`, menu: "Project", paletteGroup: "Documents", enabled: () => true, run: () => d.open(doc.id) })),
+    ...d.docs.map<Action>((doc) => ({ id: `open-${doc.id}`, label: `Open ${doc.kind === "pcb" ? "PCB" : doc.kind === "file" ? `file ${doc.title}` : doc.kind === "symbol" || doc.kind === "footprint" ? `${doc.kind} editor ${doc.title.replace(/^\w+: /, "")}` : `sheet ${doc.title}`}`, menu: "Project", paletteGroup: "Documents", enabled: () => true, run: () => d.open(doc.id) })),
     { id: "close-all", label: "Close all documents", menu: "Project", paletteGroup: "Documents", enabled: () => (d.openIds.length === 0 ? "No documents are open" : true), run: d.closeAll },
     ...d.projects.filter((p) => !p.active).map<Action>((p, i) => ({ id: `proj-${p.id}`, label: `Switch to project ${p.name}`, menu: "Project", sep: i === 0, enabled: idle, run: () => d.switchTo(p.id) })),
 

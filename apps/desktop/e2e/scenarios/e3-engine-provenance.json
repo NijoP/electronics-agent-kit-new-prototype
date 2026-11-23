@@ -43,6 +43,14 @@
       "expect": "input[aria-label=\"Search library\"]"
     },
     {
+      "id": "e3-manage",
+      "do": "click",
+      "title": "E3: the Manage mode of the Library dock (D1) holds the part editor and the library switches",
+      "selector": "[role=\"tablist\"][aria-label=\"Library modes\"] [role=\"tab\"]",
+      "text": "Manage",
+      "expect": "ul[aria-label=\"Library parts\"]"
+    },
+    {
       "id": "e3-search",
       "do": "type",
       "title": "E3: search finds the imported part, labelled with its library",
