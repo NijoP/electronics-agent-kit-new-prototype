@@ -25,6 +25,7 @@ import { ProjectOverview } from "./shell/ProjectOverview";
 import { LibraryPanel } from "./shell/LibraryPanel";
 import { StatusBar } from "./shell/StatusBar";
 import { ExportDialog } from "./shell/ExportDialog";
+import { BomExportDialog, DocumentExportDialog } from "./shell/OutputDialogs";
 import { RulesDialog } from "./shell/RulesDialog";
 import { NewProjectDialog, OpenProjectDialog } from "./shell/ProjectDialogs";
 import { Toolbar } from "./shell/Toolbar";
@@ -94,7 +95,7 @@ const writeFlag = (key: string, on: boolean) => {
 };
 
 export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged }: Props) {
-  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules">(null);
+  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs">(null);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [snapshot, setSnapshot] = useState(initial);
   const [events, setEvents] = useState<EngineEvent[]>([]);
@@ -440,6 +441,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const syncTo = async (evaluated: number) => {
     if (evaluated !== revision) await refresh();
     else await pullEvents();
+  };
+  // D3 BOM and document exports (their dialogs run the export and show the manifest).
+  const outputExported = (r: ExportResult) => {
+    setMessage(`Exported ${r.manifest.files.length} file(s) to ${r.out_dir} (${r.manifest.status}, revision ${r.manifest.revision})`);
+    void syncTo(r.manifest.revision).catch((e) => setMessage(String(e)));
   };
   const undo = () => submit(() => api.undo(revision));
   const redo = () => submit(() => api.redo(revision));
@@ -921,6 +927,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       {dialog === "new" && <NewProjectDialog onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
       {dialog === "open" && <OpenProjectDialog recent={recent} onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
       {dialog === "rules" && <RulesDialog snapshot={snapshot} busy={busy} apply={edit.execute} onClose={() => setDialog(null)} />}
+      {dialog === "bom" && <BomExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
+      {dialog === "outputs" && <DocumentExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "export" && (
         <ExportDialog
           result={exported}

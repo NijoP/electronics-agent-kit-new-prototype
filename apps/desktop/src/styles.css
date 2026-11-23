@@ -374,6 +374,11 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .view-slot { display: contents; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-1); margin: var(--s-1) 0; }
 .modal.rules { max-height: 88vh; overflow: auto; }
+/* D3 output dialogs: the BOM column picker wraps in columns; tables scroll inside the dialog. */
+.output-dialog { width: min(920px, 100%); }
+.output-dialog fieldset { border: 1px solid var(--line); border-radius: var(--r-1); display: grid; gap: var(--s-half); min-width: 0; }
+.output-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--s-half) var(--s-1); }
+.output-dialog section { overflow-x: auto; min-width: 0; }
 
 /* Side panels that stack several sections scroll inside the panel, never past the window. */
 .side-scroll { flex: 1; min-height: 0; overflow: auto; }

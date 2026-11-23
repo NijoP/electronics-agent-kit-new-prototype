@@ -27,7 +27,7 @@ export interface ActionDeps {
   projects: OpenProject[];
   sideViews: { id: SideView; label: string }[];
   edaViews: { id: string; label: string; shortcut?: string }[];
-  dialog: (d: "new" | "open" | "export" | "rules") => void;
+  dialog: (d: "new" | "open" | "export" | "rules" | "bom" | "outputs") => void;
   save: () => void;
   undo: () => void;
   redo: () => void;
@@ -95,6 +95,9 @@ export function commonActions(d: ActionDeps): Action[] {
     // A-SAVE: the engine writes every accepted command before it returns, so there is nothing
     // unsaved; Save asks the engine to confirm that (and reports blocked writes). No Save as.
     { id: "save", label: "Save (confirm written)", short: "Save", title: "Save: every accepted command is already written; this asks the engine to confirm no write is blocked", menu: "File", sep: true, toolbar: "file", icon: "save", whileTyping: true, enabled: idle, run: d.save },
+    // D3 outputs: each runs ERC/DRC/MECH/DFM first and writes a DRAFT-unless-released manifest.
+    { id: "export-bom", label: "Export BOM…", short: "Export BOM", title: "Configurable BOM (columns, sort, grouping, filter rules) as CSV or XLSX; runs ERC/DRC/MECH/DFM", docs: DESIGN, menu: "File", sep: true, enabled: idle, run: () => d.dialog("bom") },
+    { id: "export-docs", label: "Export schematic and netlist…", short: "Export schematic and netlist", title: "Schematic PDF/SVG with title block, IPC-D-356 and JSON netlists; runs ERC/DRC/MECH/DFM", docs: DESIGN, menu: "File", enabled: idle, run: () => d.dialog("outputs") },
     { id: "close", label: "Close project", menu: "File", sep: true, toolbar: "app", icon: "close", enabled: idle, run: d.close },
 
     { id: "undo", label: "Undo", menu: "Edit", toolbar: "file", icon: "undo", enabled: () => (d.snapshot.can_undo ? idle() : "Nothing to undo"), run: d.undo },
