@@ -1,5 +1,5 @@
 // Main toolbar and per-tab viewport persistence.
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IPC_COMMANDS } from "./api";
@@ -71,6 +71,10 @@ async function open() {
   render(<App />);
   fireEvent.click((await screen.findAllByText("Fixture board"))[0]);
   await screen.findByRole("img", { name: "Schematic canvas" });
+  // The canvas appears before the workspace's startup IPC chain (events_since, then current_project, then
+  // setSnapshot) has settled; a click in that window could race that update (CI flake on zoom and
+  // grid). Drain the pending mocked-IPC promises inside act so every test starts from a settled app.
+  await act(() => new Promise<void>((r) => setTimeout(r, 0)));
 }
 const tb = () => within(screen.getByRole("toolbar", { name: "Main toolbar" }));
 const viewBox = () => screen.getByRole("img", { name: "Schematic canvas" }).getAttribute("viewBox");
