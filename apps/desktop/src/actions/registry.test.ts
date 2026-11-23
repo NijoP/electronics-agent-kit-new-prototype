@@ -72,7 +72,7 @@ describe("action registry", () => {
     expect(pcb).toContain("Route");
     expect(pcb).toContain("Manufacturing");
     expect(pcb).not.toContain("Simulation");
-    expect(labels("schematic", "Place")).toEqual(["Place part", "Wire", "Net / power label", "No connect", "Label pin", "Part: Resistor"]);
+    expect(labels("schematic", "Place")).toEqual(["Place part", "Wire", "Bus", "Bus entry", "Power port GND", "Power port +3V3", "Power port +5V", "Power port AGND", "Power port CHASSIS", "Net / power label", "Net port (this sheet)", "Off-page connector", "No connect", "Label pin", "Line", "Rectangle", "Circle", "Text", "Fan out net labels", "Fan out no-connects", "Part: Resistor"]);
     expect(labels("pcb", "Place")).toEqual(["Via", "Board outline", "Copper zone"]);
     expect(labels("pcb", "Route")).toEqual(["Route track", "Auto-route all nets", "Clear all routing"]);
     expect(labels("schematic", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run ERC", "Annotate schematic"]);
@@ -90,9 +90,9 @@ describe("action registry", () => {
   it("Place menu lists every schematic tool before the library parts, however many parts there are", () => {
     const library = Array.from({ length: 40 }, (_, i) => ({ id: `p${i}`, name: `Part ${i}`, category: "passive", refdes_prefix: "R", default_value: "", pins: [] }));
     const items = labels("schematic", "Place", deps({ library }))!;
-    expect(items.slice(0, 5)).toEqual(["Place part", "Wire", "Net / power label", "No connect", "Label pin"]);
-    expect(items).toHaveLength(45);
-    expect(items.slice(5).every((l) => l.startsWith("Part: "))).toBe(true);
+    expect(items.slice(0, 20)).toEqual(["Place part", "Wire", "Bus", "Bus entry", "Power port GND", "Power port +3V3", "Power port +5V", "Power port AGND", "Power port CHASSIS", "Net / power label", "Net port (this sheet)", "Off-page connector", "No connect", "Label pin", "Line", "Rectangle", "Circle", "Text", "Fan out net labels", "Fan out no-connects"]);
+    expect(items).toHaveLength(60);
+    expect(items.slice(20).every((l) => l.startsWith("Part: "))).toBe(true);
   });
 
   it("menu Place/Route entries arm the same editor tool as the toolbar", () => {
@@ -146,7 +146,11 @@ describe("toolbar icons, families and grid actions (slice A2)", () => {
 
   it("split families group the tools of one kind in one toolbar group", () => {
     const ids = (ctx: DocContext, split: string) => toolbarFor(workspaceActions(deps()), ctx).flat().filter((b) => b.split === split).map((b) => b.id);
-    expect(ids("schematic", "sch-marks")).toEqual(["t-label", "t-noconnect", "t-pinlabel"]);
+    expect(ids("schematic", "sch-marks")).toEqual(["t-noconnect", "t-pinlabel"]);
+    expect(ids("schematic", "sch-labels")).toEqual(["t-label", "t-netport", "t-offpage"]);
+    expect(ids("schematic", "sch-bus")).toEqual(["t-bus", "t-busentry"]);
+    expect(ids("schematic", "sch-power")).toEqual(["t-power-0", "t-power-1", "t-power-2", "t-power-3", "t-power-4"]);
+    expect(ids("schematic", "sch-graphics")).toEqual(["t-line", "t-rect", "t-circle", "t-text"]);
     expect(ids("pcb", "pcb-regions")).toEqual(["t-outline", "t-zone"]);
     expect(ids("pcb", "pcb-checks")).toEqual(["drc", "dfm"]);
     for (const ctx of DOC_CONTEXTS)
@@ -312,5 +316,37 @@ describe("schematic editing set and canvas context menu (slice B3)", () => {
     const withEditor = workspaceActions(deps({ editorOp: e.editorOp, selected: "sym_r1", selectedSymbol: fixture(7).project.schematic.symbols.sym_r1 }));
     runAction(withEditor.find((a) => a.id === "rotate")!);
     expect(e.ran).toEqual(["rotate"]);
+  });
+});
+
+describe("schematic place tools (slice B4)", () => {
+  const item = (d: ActionDeps, label: string) => menusFor(workspaceActions(d), "schematic").find((m) => m.label === "Place")!.items.find((i) => i.label === label)!;
+
+  it("each power-port entry arms the Power port tool with its index; the list follows Settings", () => {
+    const d = deps({ powerPorts: [{ name: "VBAT", style: "rail" }, { name: "PGND", style: "ground" }] });
+    item(d, "Power port PGND").run!();
+    expect(d.tool).toHaveBeenLastCalledWith("power:1");
+    const icons = toolbarFor(workspaceActions(d), "schematic").flat().filter((b) => b.split === "sch-power").map((b) => b.icon);
+    expect(icons).toEqual(["power", "ground"]);
+    // an unusable entry is disabled with its reason; an empty list leaves one disabled entry
+    expect(item(deps({ powerPorts: [{ name: "", style: "rail" }] }), "Power port (unnamed)").disabled).toMatch(/net name/);
+    expect(item(deps({ powerPorts: [] }), "Power port").disabled).toMatch(/Settings › Power ports/);
+  });
+
+  it("net port, off-page, bus, bus entry and the graphics tools arm their editor tools", () => {
+    const d = deps();
+    for (const [label, tool] of [["Net port (this sheet)", "netport"], ["Off-page connector", "offpage"], ["Bus", "bus"], ["Bus entry", "busentry"], ["Line", "line"], ["Rectangle", "rect"], ["Circle", "circle"], ["Text", "text"]] as const) {
+      item(d, label).run!();
+      expect(d.tool).toHaveBeenLastCalledWith(tool);
+    }
+  });
+
+  it("fan out needs a selected part, then sends one Batch for its unconnected pins", () => {
+    expect(item(deps(), "Fan out net labels").disabled).toBe("Select a part first");
+    const d = deps({ selectedSymbol: fixture(7).project.schematic.symbols.sym_d1 });
+    item(d, "Fan out net labels").run!();
+    expect(d.execute).toHaveBeenLastCalledWith(expect.objectContaining({ type: "Batch", label: "Fan out net labels on D1" }));
+    item(d, "Fan out no-connects").run!();
+    expect(d.execute).toHaveBeenLastCalledWith(expect.objectContaining({ type: "Batch", label: "Fan out no-connects on D1" }));
   });
 });

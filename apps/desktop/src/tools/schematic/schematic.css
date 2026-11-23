@@ -10,3 +10,17 @@
 .label.net-hi circle { fill: var(--info); }
 .label.net-hi text { fill: var(--info); font-weight: 600; }
 .pin-end.net-hi { fill: var(--info); stroke: var(--info); }
+/* Slice B4 place tools: buses and bus entries, sheet graphics and text, label scopes, crosshair. */
+.bus { stroke: var(--c-wire); stroke-width: 0.7; fill: none; stroke-linejoin: round; }
+.bus-entry { stroke: var(--c-wire); stroke-width: 0.25; }
+.bus.preview, .bus-entry.preview, .sheet-graphic.preview { opacity: 0.55; stroke-dasharray: 0.6 0.4; pointer-events: none; }
+.bus-entry.preview.off { stroke: var(--err); }
+.canvas .bus-name { text-anchor: start; fill: var(--c-label); font-weight: 600; }
+.sheet-graphic .gfx { fill: none; stroke: var(--c-text); stroke-width: 0.2; pointer-events: stroke; }
+.sheet-graphic .gfx.filled { fill: var(--c-text); fill-opacity: 0.25; pointer-events: all; }
+.canvas .sheet-graphic .gfx-text { text-anchor: start; fill: var(--c-text); pointer-events: all; }
+.sheet-graphic.preview .gfx { stroke: var(--accent); }
+.label .port-shape { fill: none; stroke: var(--c-label); stroke-width: 0.2; }
+.label.selected .port-shape { stroke: var(--accent); }
+.label.local text { font-style: italic; }
+.guides line { stroke: var(--accent); stroke-width: 0.08; stroke-dasharray: 0.5 0.5; opacity: 0.6; pointer-events: none; }

@@ -8,10 +8,14 @@ import type { RightTab } from "../shell/RightDock";
 import type { Check, Command, LibraryEntry, OpenProject, RecentProject, Snapshot, SymbolInstance, FootprintInstance } from "../types";
 import type { IconName } from "../design/icons/icons";
 import type { Action, DocContext, SplitId } from "./types";
+import { powerPortProblem, powerPorts } from "../settings/powerPorts";
+import { fanOutCommand, type PowerPreset } from "../tools/schematic/placeTools";
 
 export interface ActionDeps {
   snapshot: Snapshot;
   busy: boolean;
+  /** Power-port split entries (Settings › Power ports); the stored list when absent. */
+  powerPorts?: readonly PowerPreset[];
   selected: string | null;
   selectedSymbol: SymbolInstance | undefined;
   fpOfSelected: FootprintInstance | undefined;
@@ -207,12 +211,50 @@ export function designActions(d: ActionDeps): Action[] {
 export function schematicActions(d: ActionDeps): Action[] {
   const idle = () => (d.busy ? "An engine command is running" : true);
   const tool = (id: string, label: string, title: string, icon: IconName, more: Partial<Action> = {}): Action => ({ id: `t-${id}`, label, title, docs: SCH, menu: "Place", toolbar: "edit", icon, ...more, enabled: () => true, run: () => d.tool(id) });
+  // Power-port split button: one entry per item of the user's list (Settings › Power ports).
+  const ports = d.powerPorts ?? powerPorts();
+  const power: Action[] = ports.length
+    ? ports.map((p, i) => {
+        const bad = powerPortProblem(p);
+        return {
+          id: `t-power-${i}`,
+          label: `Power port ${p.name.trim() || "(unnamed)"}`,
+          title: `Place power port ${p.name.trim()} (${p.style}; AddNetLabel kind power). Edit the list in Settings › Power ports`,
+          docs: SCH,
+          menu: "Place",
+          sep: i === 0,
+          toolbar: "edit",
+          icon: p.style === "rail" ? "power" : "ground",
+          split: "sch-power",
+          enabled: () => (bad ? `${bad} (Settings › Power ports)` : true),
+          run: () => d.tool(`power:${i}`),
+        } satisfies Action;
+      })
+    : [{ id: "t-power", label: "Power port", docs: SCH, menu: "Place", sep: true, toolbar: "edit", icon: "power", split: "sch-power", enabled: () => "The power-port list is empty: add entries in Settings › Power ports", run: () => {} }];
+  const fanOut = (kind: "labels" | "noconnects"): (() => void) => () => {
+    if (!d.selectedSymbol) return;
+    const c = fanOutCommand(d.snapshot, d.selectedSymbol.id, kind);
+    if (typeof c === "string") d.notify(c);
+    else d.execute(c);
+  };
+  const needPart = () => (d.selectedSymbol ? idle() : "Select a part first");
   return [
     tool("place", "Place part", "Place a part from the library (editor Place tool)", "part"),
-    tool("wire", "Wire", "Draw a wire; ends snap to pins (AddWire)", "wire", { sep: true }),
-    tool("label", "Net / power label", "Net label or power port (AddNetLabel; pick Net or Power in the tool options)", "net-label", { split: "sch-marks" }),
+    tool("wire", "Wire", "Draw a wire; ends snap to pins (AddWire). / changes the corner mode, Space flips the bend, Shift locks the axis", "wire", { sep: true }),
+    tool("bus", "Bus", "Draw a named bus (AddBus): click the vertices, click the last one again or press Enter to finish", "bus", { split: "sch-bus" }),
+    tool("busentry", "Bus entry", "Join a member wire to a bus (AddBusEntry): click on a bus; R turns the entry", "bus-entry", { split: "sch-bus" }),
+    ...power,
+    tool("label", "Net / power label", "Net label or power port (AddNetLabel; pick Net or Power in the tool options). Joins same-name labels on every sheet", "net-label", { split: "sch-labels", sep: true }),
+    tool("netport", "Net port (this sheet)", "Sheet-local net port (AddNetLabel scope local): joins same-name labels on this sheet only", "net-port", { split: "sch-labels" }),
+    tool("offpage", "Off-page connector", "Off-page connector (AddNetLabel scope off-page): joins the same name on every sheet", "off-page", { split: "sch-labels" }),
     tool("noconnect", "No connect", "Mark a pin as intentionally unconnected (SetNoConnect); click a marked pin to remove it (DeleteNoConnect)", "no-connect", { split: "sch-marks" }),
     tool("pinlabel", "Label pin", "Name the net on a pin (LabelPin)", "pin-label", { split: "sch-marks" }),
+    tool("line", "Line", "Draw a line on the sheet (AddSheetGraphic; drawing only, never a connection)", "line", { split: "sch-graphics", sep: true }),
+    tool("rect", "Rectangle", "Draw a rectangle on the sheet: click two corners (AddSheetGraphic)", "rect", { split: "sch-graphics" }),
+    tool("circle", "Circle", "Draw a circle on the sheet: click the centre, then a point on it (AddSheetGraphic)", "circle", { split: "sch-graphics" }),
+    tool("text", "Text", "Put text on the sheet (AddSheetGraphic text; never a net name)", "text", { split: "sch-graphics" }),
+    { id: "fanout-labels", label: "Fan out net labels", title: "Give every unconnected pin of the selected part a wire stub and a net label named after the pin (one Batch)", docs: SCH, menu: "Place", sep: true, enabled: needPart, run: fanOut("labels") },
+    { id: "fanout-noconnects", label: "Fan out no-connects", title: "Mark every unconnected pin of the selected part as intentionally unconnected (one Batch of SetNoConnect)", docs: SCH, menu: "Place", enabled: needPart, run: fanOut("noconnects") },
     // The tools come before the parts: the library can hold dozens of parts, and a tool listed
     // after them would be pushed past the bottom of the window.
     ...d.library.map<Action>((c, i) => ({ id: `part-${c.id}`, label: `Part: ${c.name}`, docs: SCH, menu: "Place", sep: i === 0, palette: false, enabled: () => true, run: () => d.placePart(c) })),

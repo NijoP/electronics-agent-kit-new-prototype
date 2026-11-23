@@ -40,6 +40,7 @@ there until the activity bar is redrawn.
 | `part` | chip body with four leads and a pin-1 dot | EAK-authored for slice A2, 2026-11-23 |
 | `wire` | right-angle wire between two end rings | EAK-authored for slice A2, 2026-11-23 |
 | `bus` | two parallel rails with taps | EAK-authored for slice A2, 2026-11-23 |
+| `bus-entry` | bus rail with a 45° entry leading to a wire | EAK-authored for slice B4, 2026-11-23 |
 | `net-label` | tag with a text stroke | EAK-authored for slice A2, 2026-11-23 |
 | `net-port` | lead into a pointed port | EAK-authored for slice A2, 2026-11-23 |
 | `off-page` | pointed tag with an outgoing arrow | EAK-authored for slice A2, 2026-11-23 |

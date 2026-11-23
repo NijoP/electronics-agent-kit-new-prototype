@@ -22,7 +22,7 @@ export type MenuName = (typeof MENU_ORDER)[number];
 export type CanvasTarget = "symbol" | "wire" | "label" | "sheet";
 
 /** Toolbar split-button families. */
-export type SplitId = "sch-marks" | "pcb-regions" | "pcb-checks";
+export type SplitId = "sch-marks" | "sch-labels" | "sch-power" | "sch-bus" | "sch-graphics" | "pcb-regions" | "pcb-checks";
 
 export interface Action {
   /** Stable id; also the key of the default key map (`design/shortcuts.ts`). */
