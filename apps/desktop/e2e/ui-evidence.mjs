@@ -151,7 +151,7 @@ const reveal = (selector, text) =>
 
 /** Real X pointer click (XTest) at the centre of an element, optionally offset by dx/dy px;
  *  the element is first scrolled into view if needed, as a user would. */
-async function xclick(selector, text, dx = 0, dy = 0) {
+async function xclick(selector, text, dx = 0, dy = 0, button = 1) {
   await waitRect(selector, text);
   await reveal(selector, text);
   await sleep(150);
@@ -161,9 +161,9 @@ async function xclick(selector, text, dx = 0, dy = 0) {
   const o = origin();
   const x = Math.round(o.x + r.x + r.w / 2 + dx);
   const y = Math.round(o.y + r.y + r.h / 2 + dy);
-  sh("xdotool", ["mousemove", "--sync", String(x), String(y), "click", "1"]);
+  sh("xdotool", ["mousemove", "--sync", String(x), String(y), "click", String(button)]);
   await sleep(250);
-  return `XTest click at ${x},${y}`;
+  return `XTest ${button === 3 ? "right-" : ""}click at ${x},${y}`;
 }
 
 /** Screen point at fractions (fx, fy) of an element (0.5, 0.5 is its centre). */
@@ -302,7 +302,7 @@ const handlers = {
     return `${how}; XTest typed "${s.value}"${s.expect ? `; then visible: ${s.expect}` : ""}`;
   },
   async click(s) {
-    const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0);
+    const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0, s.button === "right" ? 3 : 1);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
     if (s.gone) await waitGone(s.gone, s.timeout ?? 20000);
     return `${how}${s.expect ? `; then visible: ${s.expect}` : ""}${s.gone ? `; then gone: ${s.gone}` : ""}`;

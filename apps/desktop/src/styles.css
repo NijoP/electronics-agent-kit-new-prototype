@@ -658,3 +658,16 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .inspector-fields .unavailable dt { opacity: 0.7; }
 .unavail { color: var(--fg-dim); font-family: inherit; font-size: var(--fs-xs); font-style: italic; }
 .tool-options .unavail, .tool-options .opt-info { color: var(--fg-dim); }
+/* Slice B3: find and replace bar, array panel, canvas context menu, selection filter. */
+.find-bar, .array-panel { display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: center; padding: var(--s-half) var(--s-1); font-size: var(--fs-sm); background: var(--bg-panel); border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.find-bar label, .array-panel label { display: flex; gap: var(--s-half); align-items: center; color: var(--fg-dim); }
+.find-bar input:not([type="checkbox"]), .array-panel input, .find-bar button, .array-panel button { height: var(--h-sm); padding-top: 0; padding-bottom: 0; }
+.canvas-ctx { min-width: 220px; }
+.canvas-ctx li.sep { border-top: 1px solid var(--line); margin-top: var(--s-half); padding-top: var(--s-half); }
+.canvas-ctx button { display: flex; justify-content: space-between; gap: var(--s-2); align-items: center; }
+.canvas-ctx kbd { color: var(--fg-faint); font: var(--fs-xs) var(--mono); }
+.canvas-ctx .empty { padding: var(--s-half) var(--s-1); }
+.sel-filter { display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-1); font-size: var(--fs-sm); }
+.sel-filter ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-half); }
+.sel-filter label { display: flex; gap: var(--s-1); align-items: center; }
+.sel-filter button { align-self: flex-start; }

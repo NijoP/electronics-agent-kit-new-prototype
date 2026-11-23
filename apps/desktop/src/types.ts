@@ -257,7 +257,7 @@ export type Command =
   | { type: "DeleteWire"; wire_id: Id }
   | { type: "MoveWire"; wire_id: Id; a: Point; b: Point }
   | { type: "ConnectPins"; a_symbol: Id; a_pin: string; b_symbol: Id; b_pin: string }
-  | { type: "AddNetLabel"; sheet_id: Id | null; name: string; position: Point; kind: "net" | "power" }
+  | { type: "AddNetLabel"; sheet_id: Id | null; name: string; position: Point; kind: "net" | "power"; scope?: NetScope; power_style?: PowerStyle | null }
   | { type: "DeleteNetLabel"; label_id: Id }
   | { type: "LabelPin"; symbol_id: Id; pin: string; name: string; kind: "net" | "power" }
   | { type: "SetNoConnect"; symbol_id: Id; pin: string }

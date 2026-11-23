@@ -75,6 +75,11 @@ export interface ActionDeps {
   /** Toolbar shows text labels beside its icons (accessibility option). */
   toolbarLabels: boolean;
   toggleToolbarLabels: () => void;
+  /**
+   * An editing operation of the active editor (slice B3: clipboard, arrange, find, net highlight),
+   * or null when the active editor has none by that id. Read at call time, so never stale.
+   */
+  editorOp?: (op: string) => { enabled: () => true | string; run: () => void } | null;
 }
 
 const EDITING: readonly DocContext[] = ["schematic", "pcb"];
@@ -82,6 +87,16 @@ const SCH: readonly DocContext[] = ["schematic"];
 const PCB: readonly DocContext[] = ["pcb"];
 const DESIGN: readonly DocContext[] = ["home", "schematic", "pcb"];
 const BOARD: readonly DocContext[] = ["pcb", "3d"];
+/** Why an editor operation is unavailable when no schematic editor has registered it. */
+export const NO_EDITOR = "No schematic editor is active";
+/** Enabled state of an operation the active editor offers, else the given fallback. */
+const viaEditor = (d: ActionDeps, op: string, fallback: () => true | string) => () => d.editorOp?.(op)?.enabled() ?? fallback();
+/** Runs the active editor's operation when it offers one, else the fallback. */
+const runVia = (d: ActionDeps, op: string, fallback: () => void) => {
+  const o = d.editorOp?.(op);
+  if (o) o.run();
+  else fallback();
+};
 /** The handler of an action that has no implementation; such an action must be unavailable with a reason (`qa/uiInventory.ts`). */
 export const NO_HANDLER = () => {};
 
@@ -103,8 +118,8 @@ export function commonActions(d: ActionDeps): Action[] {
     { id: "redo", label: "Redo", menu: "Edit", toolbar: "file", icon: "redo", enabled: () => (d.snapshot.can_redo ? idle() : "Nothing to redo"), run: d.redo },
     { id: "select", label: "Select tool", title: "Select tool (key 1)", docs: EDITING, menu: "Edit", sep: true, toolbar: "edit", icon: "select", enabled: () => true, run: () => d.tool("select") },
     { id: "move", label: "Move tool", title: "Move tool (schematic key 6, PCB key 3)", docs: EDITING, menu: "Edit", toolbar: "edit", icon: "move", enabled: () => true, run: () => d.tool("move") },
-    { id: "rotate", label: "Rotate selection", title: "Rotate selection (key R)", docs: EDITING, menu: "Edit", toolbar: "edit", icon: "rotate", enabled: needSel, run: d.rotateSel },
-    { id: "delete", label: "Delete selection", title: "Delete selection (asks first)", docs: EDITING, menu: "Edit", toolbar: "edit", icon: "delete", enabled: needSel, run: d.deleteSel },
+    { id: "rotate", label: "Rotate selection", title: "Rotate selection (key R)", docs: EDITING, menu: "Edit", toolbar: "edit", icon: "rotate", hint: "R", context: ["symbol"], contextSep: true, enabled: viaEditor(d, "rotate", needSel), run: () => runVia(d, "rotate", d.rotateSel) },
+    { id: "delete", label: "Delete selection", title: "Delete selection (asks first)", docs: EDITING, menu: "Edit", toolbar: "edit", icon: "delete", context: ["symbol", "wire", "label"], enabled: viaEditor(d, "delete", needSel), run: () => runVia(d, "delete", d.deleteSel) },
     { id: "deselect", label: "Clear selection", keys: ["Escape"], menu: "Edit", enabled: () => (d.selected ? true : "Nothing is selected"), run: () => d.select(null) },
 
     { id: "zout", label: "Zoom out", docs: EDITING, menu: "View", toolbar: "view", icon: "zoom-out", enabled: () => true, run: () => d.zoomBy(1.4) },
@@ -206,9 +221,12 @@ export function schematicActions(d: ActionDeps): Action[] {
       menu: "Edit",
       toolbar: "edit",
       icon: "mirror",
-      enabled: () => (d.selectedSymbol ? idle() : "Select a part first"),
-      run: () => d.selectedSymbol && d.execute({ type: "FlipSymbol", symbol_id: d.selectedSymbol.id, axis: "horizontal" }),
+      hint: "X",
+      context: ["symbol"],
+      enabled: viaEditor(d, "flip-h", () => (d.selectedSymbol ? idle() : "Select a part first")),
+      run: () => runVia(d, "flip-h", () => d.selectedSymbol && d.execute({ type: "FlipSymbol", symbol_id: d.selectedSymbol.id, axis: "horizontal" })),
     },
+    ...schematicEditActions(d),
     { id: "erc", label: "Run ERC", docs: SCH, menu: "Design", toolbar: "checks", icon: "erc", enabled: idle, run: () => d.check("erc") },
     { id: "annotate", label: "Annotate schematic", docs: SCH, menu: "Design", enabled: idle, run: () => d.execute({ type: "Annotate" }) },
     { id: "sim", label: "Run simulation…", short: "Simulate", title: "Open the Simulation panel (ngspice)", docs: SCH, menu: "Simulation", toolbar: "checks", icon: "simulate", enabled: () => true, run: () => d.showBottom("sim") },
@@ -266,3 +284,53 @@ export function boardActions(d: ActionDeps): Action[] {
 
 /** Every action of the workspace; the registry picks the ones of the active document. */
 export const workspaceActions = (d: ActionDeps): Action[] => [...commonActions(d), ...designActions(d), ...schematicActions(d), ...pcbActions(d), ...boardActions(d)];
+
+/**
+ * Schematic editing set (slice B3): clipboard, arrange, find and net highlight. Each entry runs the
+ * active schematic editor's own operation on its multi-selection (one engine command, a `Batch`
+ * for several objects, so one revision and one undo step); without a schematic editor it is
+ * disabled and says so. The keys are the editor's own (it owns the canvas focus): shown, never
+ * bound twice.
+ */
+export function schematicEditActions(d: ActionDeps): Action[] {
+  const OBJ = ["symbol", "wire", "label"] as const;
+  const op = (id: string, label: string, more: Partial<Action> = {}): Action => ({
+    id,
+    label,
+    docs: SCH,
+    menu: "Edit",
+    ...more,
+    enabled: () => d.editorOp?.(id)?.enabled() ?? NO_EDITOR,
+    run: () => d.editorOp?.(id)?.run(),
+  });
+  return [
+    op("flip-v", "Mirror selection vertically", { title: "Mirror the selected symbols top to bottom (FlipSymbol)", hint: "Y", context: ["symbol"] }),
+    op("cut", "Cut", { sep: true, hint: "Mod+X", context: OBJ, contextSep: true }),
+    op("copy", "Copy", { hint: "Mod+C", context: OBJ }),
+    op("paste", "Paste", { title: "Paste at the pointer (another sheet keeps nets by label name only)", hint: "Mod+V", context: ["sheet"] }),
+    op("duplicate", "Duplicate", { hint: "Mod+D", context: OBJ }),
+    op("select-all", "Select all", { title: "Select every object the selection filter allows on this sheet", hint: "Mod+A", context: ["sheet"] }),
+    op("find-similar", "Find similar objects", { title: "Select parts of the same library component, labels of the same name, or every wire", context: OBJ, contextSep: true }),
+    op("find", "Find and replace…", { title: "Find designators, values and net labels; replace as one Batch", hint: "Mod+F", context: ["sheet"] }),
+    op("highlight-net", "Highlight net", { sep: true, title: "Highlight the net of the selected wire or net label (engine netlist)", context: ["wire", "label"], contextSep: true }),
+    op("clear-highlight", "Clear net highlight", { context: ["sheet", "wire", "label"] }),
+    op("align-left", "Align left edges", { sep: true, context: ["symbol"], contextSep: true }),
+    op("align-right", "Align right edges", { context: ["symbol"] }),
+    op("align-top", "Align top edges", { context: ["symbol"] }),
+    op("align-bottom", "Align bottom edges", { context: ["symbol"] }),
+    op("align-center-x", "Align centres on a vertical line", { context: ["symbol"] }),
+    op("align-center-y", "Align centres on a horizontal line", { context: ["symbol"] }),
+    op("distribute-x", "Distribute horizontally", { title: "Space three or more parts evenly from left to right", context: ["symbol"] }),
+    op("distribute-y", "Distribute vertically", { title: "Space three or more parts evenly from bottom to top", context: ["symbol"] }),
+    op("array", "Array…", { title: "Paste copies of the selection on a grid of columns and rows (one Batch)", context: OBJ }),
+    {
+      id: "group",
+      label: "Group",
+      docs: SCH,
+      menu: "Edit",
+      context: OBJ,
+      enabled: () => "Unavailable: EAK-IR has no group object yet; grouping needs a new engine Command",
+      run: NO_HANDLER,
+    },
+  ];
+}

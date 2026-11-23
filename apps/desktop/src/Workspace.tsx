@@ -11,7 +11,7 @@ import type { EditCtx } from "./EditContext";
 import { PcbView } from "./PcbView";
 import { SchematicView } from "./SchematicView";
 import { formatShortcut, SHORTCUTS } from "./design/shortcuts";
-import { actionForKey, keysOf, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./actions/registry";
+import { actionForKey, contextMenuFor, keysOf, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./actions/registry";
 import { workspaceActions } from "./actions/sets";
 import { editorKeys } from "./actions/editorKeys";
 import { APP_VERSION } from "./version";
@@ -50,6 +50,8 @@ import { DesignManager } from "./shell/DesignManager";
 import { editorFor, pcbObjects, schematicPlace, type ManagerTab, type NetRow, type Target } from "./shell/designManagerData";
 import { RightDock, shownRightTab, type RightTab } from "./shell/RightDock";
 import { Inspector } from "./shell/Inspector";
+import { editorContext, useEditorContext } from "./shell/inspectorModel";
+import { SelectionFilter } from "./shell/SelectionFilter";
 import type { Bounds } from "./viewport";
 import { MenuBar } from "./shell/MenuBar";
 import { Splitter } from "./shell/Splitter";
@@ -675,7 +677,16 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const gridKind = ctx === "schematic" || ctx === "pcb" ? ctx : null;
   const [gridCfg, setGridCfg] = gridKind === "pcb" ? pcbGrid : schGrid;
   const activeGrid = gridKind ? { kind: gridKind, cfg: gridCfg, set: setGridCfg } : null;
+  // B3: the active editor's own editing operations (clipboard, arrange, find, net highlight), read
+  // from the context it publishes; subscribing re-renders the menus when their state changes.
+  const editorDoc = wsId === "editor" ? activeId : null;
+  useEditorContext(editorDoc);
+  const editorOp = (op: string) => {
+    const o = editorContext(editorDoc)?.ops?.[op];
+    return o ? { enabled: () => editorContext(editorDoc)?.ops?.[op]?.state ?? o.state, run: () => (editorContext(editorDoc)?.ops?.[op] ?? o).run() } : null;
+  };
   const allActions = workspaceActions({
+    editorOp,
     snapshot, busy, selected, selectedSymbol, fpOfSelected, theme, sideOpen, bottomOpen, rightOpen, split, recent, library, docs, openIds, projects,
     sideViews: SIDE_VIEWS,
     edaViews,
@@ -839,7 +850,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
                   <DocIdContext.Provider key={d.id} value={d.id}>
                     <div className={visible ? "view-slot" : "view-slot off"} onPointerDownCapture={() => d.id !== activeId && open(d.id)}>
                       {d.kind === "schematic" ? (
-                        <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} armPart={armPart} sheetId={d.ref} />
+                        <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} armPart={armPart} sheetId={d.ref} contextMenu={(t) => contextMenuFor(allActions, "schematic", t)} />
                       ) : d.kind === "pcb" ? (
                         <PcbView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} onStatus={setStatus} layerView={layerView} focus={focus} airwires={conn && conn.revision === revision ? conn.ratsnest : null} />
                       ) : (
@@ -904,7 +915,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         )}
         {rightOpen ? (
           <RightDock pcb={ctx === "pcb"} tab={rightTab} onTab={(t) => showRight(t)} onClose={() => setRightOpen(false)}>
-            {rightTab === "layers" ? (
+            {rightTab === "filter" ? (
+              <SelectionFilter />
+            ) : rightTab === "layers" ? (
               <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
             ) : (
               <Inspector snapshot={snapshot} docId={wsId === "editor" ? activeId : null} selected={selected} pcb={ctx === "pcb"} edit={edit} />

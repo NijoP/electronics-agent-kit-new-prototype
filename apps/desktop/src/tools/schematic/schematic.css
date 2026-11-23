@@ -5,3 +5,8 @@
 .label.selected text { fill: var(--accent); font-weight: 600; }
 .marquee { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 0.15; stroke-dasharray: 0.6 0.4; pointer-events: none; }
 .symbol[transform], .label[transform] { opacity: 0.75; }
+/* Slice B3: net highlight (the engine netlist's net, drawn on this sheet). */
+[data-wire-id].net-hi .wire { stroke: var(--info); stroke-width: 0.55; }
+.label.net-hi circle { fill: var(--info); }
+.label.net-hi text { fill: var(--info); font-weight: 600; }
+.pin-end.net-hi { fill: var(--info); stroke: var(--info); }
