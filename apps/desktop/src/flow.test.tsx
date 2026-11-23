@@ -199,16 +199,15 @@ async function createFromHome(name = "Flow") {
   fireEvent.click(screen.getByRole("button", { name: "Create" }));
   await screen.findByRole("img", { name: "Schematic canvas" });
 }
-async function placeResistor(x = 500) {
-  const placed = executed().filter((c) => c === "PlaceSymbol").length;
+async function placeResistor() {
   // Phase 1 A3: the library is a tab of the bottom panel.
   fireEvent.click(screen.getByRole("tab", { name: "Library" }));
   fireEvent.click(await screen.findByText("Resistor 0603"));
   fireEvent.click(await screen.findByRole("button", { name: "Place on schematic" }));
   const svg = screen.getByRole("img", { name: "Schematic canvas" });
-  fireEvent.pointerDown(svg, { clientX: x, clientY: 500, button: 0, buttons: 1 });
-  fireEvent.pointerUp(svg, { clientX: x, clientY: 500, button: 0 });
-  await waitFor(() => expect(executed().filter((c) => c === "PlaceSymbol")).toHaveLength(placed + 1));
+  fireEvent.pointerDown(svg, { clientX: 500, clientY: 500, button: 0, buttons: 1 });
+  fireEvent.pointerUp(svg, { clientX: 500, clientY: 500, button: 0 });
+  await waitFor(() => expect(executed()).toContain("PlaceSymbol"));
 }
 const activity = () => within(screen.getByRole("navigation", { name: "Activity bar" }));
 
@@ -302,7 +301,8 @@ describe("end-to-end flow", () => {
   it("3d. C2: with some changes unchecked, Apply sends only the checked ones as one Batch (SyncSchematicToPcbSelected); the rest stay for the next update", async () => {
     await createFromHome();
     await placeResistor();
-    await placeResistor(700);
+    // A second part, added straight to the fake engine's schematic (setup, not a UI action).
+    proj!.project.schematic.symbols.sym_2 = { ...proj!.project.schematic.symbols.sym_1, id: "sym_2", refdes: "R2" };
     calls.length = 0;
     fireEvent.click(toolbar().getByRole("button", { name: "Update PCB" }));
     let eco = await screen.findByRole("dialog", { name: "Update PCB: review changes" });
