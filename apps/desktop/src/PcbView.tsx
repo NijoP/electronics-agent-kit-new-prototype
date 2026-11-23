@@ -14,7 +14,6 @@ import { stepLayer, useLayerView, type LayerView } from "./layerView";
 import { isLockKind, lockProblem, objectLocked, pickableOn } from "./layerLock";
 import { focusBounds, type Focus } from "./pcbFocus";
 import {
-  deleteTracks,
   draftLength,
   draftShoved,
   feedbackText,
@@ -224,6 +223,10 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const [trackWidthText, setTrackWidthText] = useState("");
   // A track on a layer locked after it was picked drops out of the selection.
   const selTrack = trackSel && !objectLocked(snapshot, locks, "track", trackSel) ? pcb.tracks[trackSel] : undefined;
+  // Select tool: one via or zone picked for the inspector (MoveVia / EditZone) or Delete (F2).
+  const [copperSel, setCopperSel] = useState<{ kind: "via" | "zone"; id: Id } | null>(null);
+  const selVia = copperSel?.kind === "via" && !objectLocked(snapshot, locks, "via", copperSel.id) ? pcb.vias[copperSel.id] : undefined;
+  const selZone = copperSel?.kind === "zone" && !objectLocked(snapshot, locks, "zone", copperSel.id) ? pcb.zones[copperSel.id] : undefined;
   // Net highlight: selecting a track lights every track, via and zone of its net.
   const hiNet = selTrack?.net ?? null;
   const netHit = (net: string) => (hiNet !== null && net === hiNet ? " net-hit" : "");
@@ -253,7 +256,8 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const footprint = snapshot.geometry.footprints.find((f) => f.symbol_id === selected);
   const pruned = P.prune(selRaw, snapshot);
   const fpLocked = (id: Id) => objectLocked(snapshot, locks, "footprint", id);
-  const sel = (pruned.length ? pruned : footprint ? [footprint.id] : []).filter((id) => !fpLocked(id));
+  // A picked track, via or zone replaces the cross-probed footprint (Delete must not take it too).
+  const sel = (pruned.length ? pruned : footprint && !trackSel && !copperSel ? [footprint.id] : []).filter((id) => !fpLocked(id));
   const one = sel.length === 1 ? snapshot.geometry.footprints.find((f) => f.id === sel[0]) : undefined;
   const lockedCount = sel.filter((id) => pcb.footprints[id]?.locked).length;
   // Footprint edits (R, F, the selection bar) belong to the Select and Move tools only.
@@ -312,6 +316,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const reset = () => {
     dispatch({ type: "cancel" });
     setTrackSel(null);
+    setCopperSel(null);
     setProposal(null);
     setCorners([]);
     setPicked(null);
@@ -407,16 +412,36 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     setTrackSel(null);
     dispatch({ type: "start", net: n, layer, at, mode, width: widthFromMm(widthText), conflict, via: parseVia(viaChoice) });
   };
-  const deleteSelectedTrack = () => {
-    const cmd = selTrack ? deleteTracks([selTrack.id]) : null;
-    setTrackSel(null);
-    if (cmd && edit) void edit.execute(cmd);
+  // F2: everything the PCB has selected (the picked track, via or zone and the footprints) is
+  // deleted with the PCB's own commands as ONE command (a Batch: one revision, one undo step).
+  // Locked footprints are left out with a note; the schematic symbol is never deleted from here.
+  const deletion = (): { cmd: Command | null; footprints: number; locked: number } => {
+    const free = sel.filter((id) => !pcb.footprints[id]?.locked);
+    const cmds: Command[] = [
+      ...(selTrack ? [{ type: "DeleteTrack" as const, track_id: selTrack.id }] : []),
+      ...(selVia ? [{ type: "DeleteVia" as const, via_id: selVia.id }] : []),
+      ...(selZone ? [{ type: "DeleteZone" as const, zone_id: selZone.id }] : []),
+      ...free.map((footprint_id): Command => ({ type: "DeleteFootprint", footprint_id })),
+    ];
+    const n = cmds.length;
+    return { cmd: n === 0 ? null : n === 1 ? cmds[0] : { type: "Batch", commands: cmds, label: `Delete ${n} PCB objects` }, footprints: free.length, locked: sel.length - free.length };
   };
+  const deleteSelection = () => {
+    const { cmd, footprints, locked } = deletion();
+    if (!edit) return;
+    if (!cmd) return edit.notify(locked ? `${fps(locked)} locked; unlock to delete.` : "Nothing is selected on the PCB.");
+    if (footprints && !window.confirm(`Delete ${fps(footprints)} from the PCB? This is a destructive change.`)) return;
+    if (locked) edit.notify(`${fps(locked)} locked; left in place.`);
+    setTrackSel(null);
+    setCopperSel(null);
+    setSel([]);
+    void edit.execute(cmd);
+  };
+  // EditTrack keeps the track's id, so the edited track stays selected.
   const applyTrackEdit = (change: { width?: number; layer?: CopperLayer }) => {
     const board = { order, tracks: Object.values(pcb.tracks), vias: Object.values(pcb.vias), footprints: snapshot.geometry.footprints };
     const cmd = selTrack ? trackEdit(selTrack, change, board) : null;
     if (cmd && "refuse" in cmd) return edit?.notify(cmd.refuse);
-    setTrackSel(null);
     if (cmd && edit) void edit.execute(cmd);
   };
   // Clearance and connectivity validation is eak-validation's DRC, never the route tool's guess.
@@ -468,7 +493,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     else if (e.key === "Enter" && tool === "route") finishRoute();
     else if (e.key === "Backspace" && tool === "route") dispatch({ type: "back" });
     else if (e.key === "/" && tool === "route") toggleMode();
-    else if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selTrack) deleteSelectedTrack();
+    else if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && deletion().cmd) deleteSelection();
     else if (e.key === "Enter" && tool === "outline") finishOutline();
     else if (e.key === "Enter" && tool === "zone") finishZone();
     else if (k === "r" && footprintTool && sel.length) actions.rotate();
@@ -493,8 +518,13 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     const justPicked = pressed.current;
     pressed.current = null;
     const mode = P.pickMode(e);
-    const trackId = id ? null : hitAt(e, "data-track-id", x, y);
+    // Copper under the pointer when no footprint is: a via (drawn above tracks), a track, a zone.
+    const viaId = id ? null : hitAt(e, "data-via-id", x, y);
+    const trackId = id || viaId ? null : hitAt(e, "data-track-id", x, y);
+    const zoneId = id || viaId || trackId ? null : hitAt(e, "data-zone-id", x, y);
     setTrackSel(trackId);
+    setCopperSel(viaId ? { kind: "via", id: viaId } : zoneId ? { kind: "zone", id: zoneId } : null);
+    if (viaId || zoneId) return setSel([]);
     if (trackId) {
       const t = pcb.tracks[trackId];
       if (t) setTrackWidthText((t.width / 1_000_000).toString());
@@ -691,6 +721,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     [...highlighted].join(","),
     hiNet ?? "",
     trackSel ?? "",
+    copperSel ? `${copperSel.kind}:${copperSel.id}` : "",
     aiPreview.join(","),
     routeNet ?? "",
     movingIds ? [...movingIds].join(",") : "",
@@ -709,6 +740,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     for (const t of Object.values(pcb.tracks)) if (hiNet !== null && t.net === hiNet) add(`track:${t.id}`, "--accent", 3);
     for (const v of Object.values(pcb.vias)) if (hiNet !== null && v.net === hiNet) add(`via:${v.id}`, "--accent", 2);
     if (trackSel) add(`track:${trackSel}`, "--accent", 4);
+    if (copperSel) add(`${copperSel.kind}:${copperSel.id}`, "--accent", 3);
     if (routeNet)
       for (const f of snapshot.geometry.footprints) for (const p of f.pads) if (p.net === routeNet) add(`pad:${f.id}:${p.number}`, "--accent", 1.5);
     for (const f of snapshot.geometry.footprints) if (aiPreview.includes(f.symbol_id)) add(`footprint:${f.id}`, "--c-preview", 1.5, { dash: [4, 3] });
@@ -813,7 +845,8 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
         ]
       : tool === "via"
         ? [
-            ...layerNet,
+            // F2 (S15): no Layer field here: a via spans From..To, the active layer plays no part.
+            layerNet[1],
             { kind: "select", name: "Via from", label: "From", value: layerKey(viaFrom), options: plainLayers, onChange: (v) => setViaFrom(order.find((o) => layerKey(o) === v) ?? "top") },
             { kind: "select", name: "Via to", label: "To", value: layerKey(viaTo), options: plainLayers, onChange: (v) => setViaTo(order.find((o) => layerKey(o) === v) ?? "bottom") },
             { kind: "info", name: "Via kind", label: "Kind", value: `${viaKind(viaFrom, viaTo)} via` },
@@ -830,7 +863,11 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     tool,
     toolLabel: TOOLS.find(([t]) => t === tool)?.[1] ?? tool,
     options,
-    selection: { ...NO_SELECTION, footprints: sel, tracks: selTrack ? [selTrack.id] : [] },
+    selection: { ...NO_SELECTION, footprints: sel, tracks: selTrack ? [selTrack.id] : [], vias: selVia ? [selVia.id] : [], zones: selZone ? [selZone.id] : [] },
+    // F2 (S2): Edit › Delete, the toolbar and the context menu run the PCB's own delete, never DeleteSymbol.
+    ops: edit
+      ? { delete: { state: edit.busy ? "An engine command is running" : deletion().cmd ? true : sel.length ? `${fps(sel.length)} locked; unlock to delete` : "Select a track, via, zone or footprint first", run: deleteSelection } }
+      : undefined,
   });
   const inspector = useHasInspector();
   // A click on a footprint selects its symbol (cross-probe), as the SVG footprint's onClick does.
@@ -963,8 +1000,17 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
                   </select>
                 </>
               )}
-              <button type="button" title="Delete this track (Delete)" onClick={deleteSelectedTrack}>
+              <button type="button" title="Delete this track (Delete)" onClick={deleteSelection}>
                 Delete track
+              </button>
+            </span>
+          )}
+          {tool === "select" && (selVia || selZone) && (
+            <span className="selection-bar" role="group" aria-label={selVia ? "Via selection" : "Zone selection"}>
+              <span className="muted">{selVia ? `via ${selVia.net}` : selZone ? `zone ${selZone.net} · ${layerName(selZone.layer)}` : ""}</span>
+              {!inspector && <span className="muted">· position, net and layer are edited in the Properties panel</span>}
+              <button type="button" title={`Delete this ${selVia ? "via" : "zone"} (Delete)`} onClick={deleteSelection}>
+                {selVia ? "Delete via" : "Delete zone"}
               </button>
             </span>
           )}
