@@ -32,7 +32,7 @@ import {
   type BoardCopper,
   type RouteDraft,
 } from "./routeTool";
-import type { Constraints, FootprintGeom, Point, RouteStepReport, Track, Via } from "./types";
+import type { Constraints, FootprintGeom, Point, RouteStepReport, ShovedTrack, Track, Via } from "./types";
 
 const P = (x: number, y: number): Point => ({ x, y });
 
