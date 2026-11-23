@@ -69,6 +69,8 @@ import { useKeymap } from "./settings/keymap";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
 import { sheetsInOrder } from "./shell/sheets";
+import { requestFindPick, useFindReveal } from "./shell/findResults";
+import type { FindHit } from "./tools/schematic/find";
 import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot, SyncChange } from "./types";
 
 interface Props {
@@ -670,6 +672,25 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     const pins = t.kind === "net" ? netlist?.find((n) => n.name === t.name)?.pins.length : undefined;
     setMessage(t.kind === "net" ? `${name}: ${pins ?? 0} pin(s) in the engine netlist; zoomed in the schematic` : `${name}: selected and zoomed in the schematic`);
   };
+  // Find Results (slice E4): a click on a hit opens its sheet, selects the object there (the
+  // schematic editor of that sheet takes the pick) and zooms to it.
+  const navigateFind = (h: FindHit) => {
+    requestFindPick(h);
+    if (h.kind === "symbol") setSelected(h.id);
+    const place = schematicPlace(snapshot, h.kind === "symbol" ? { kind: "component", symbolId: h.id } : { kind: "object", obj: "label", id: h.id }, null);
+    const docId = `sch:${place?.sheetId ?? h.sheet}`;
+    open(docId);
+    if (place) setPendingZoom({ docId, bounds: place.bounds });
+    setMessage(`Find: ${h.text} selected on sheet ${snapshot.project.schematic.sheets[h.sheet]?.name ?? h.sheet}`);
+  };
+  // "List in Find Results" in the find bar shows the tab in this (visible) workspace.
+  const findReveal = useFindReveal();
+  const seenReveal = useRef(findReveal);
+  useEffect(() => {
+    if (findReveal === seenReveal.current) return;
+    seenReveal.current = findReveal;
+    if (visible) setBottomTab("find");
+  }, [findReveal]);
   useEffect(() => {
     if (!pendingZoom) return;
     const c = canvasControls(pendingZoom.docId);
@@ -977,6 +998,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
               onClearTasks={clearFinished}
               onNavigate={navigateFinding}
               activeFinding={activeFinding}
+              execute={edit.execute}
+              busy={busy}
+              onFindPick={navigateFind}
               onClose={() => setBottomOpen(false)}
               library={
                 <LibraryDock

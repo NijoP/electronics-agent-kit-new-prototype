@@ -815,3 +815,21 @@ button.danger { color: var(--err); border-color: var(--err); }
 .sel-filter ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-half); }
 .sel-filter label { display: flex; gap: var(--s-1); align-items: center; }
 .sel-filter button { align-self: flex-start; }
+/* ---- Bottom dock: Property List, Find Results, Diagnostics (slice E4) ---- */
+.proplist { display: flex; flex-direction: column; gap: var(--s-1); min-height: 0; }
+.proplist-bar { display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: center; }
+.proplist-bar input, .proplist-bar select { min-width: 0; }
+.proplist-scroll { overflow: auto; min-height: 0; }
+.proplist-grid th[scope="row"] { text-transform: none; letter-spacing: 0; font-size: inherit; color: var(--fg); }
+.proplist-grid button.col-pick { background: none; border: none; padding: 0; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
+.proplist-grid button.cell { width: 100%; min-width: 4em; text-align: left; background: none; border-color: transparent; font-variant-numeric: tabular-nums; }
+.proplist-grid button.cell.on { background: var(--accent-soft); border-color: var(--accent); }
+.diagnostics { display: grid; gap: var(--s-1); }
+.diag-bar { display: flex; gap: var(--s-1); align-items: center; justify-content: space-between; }
+.diag-table td.diag-label { white-space: nowrap; width: 1%; }
+.diag-state { display: inline-block; min-width: 5.5em; text-align: center; border-radius: var(--r-1); padding: 0 var(--s-half); font-size: var(--fs-xs); font-weight: 600; }
+.diag-state.ok { background: var(--ok-soft); color: var(--ok); }
+.diag-state.error { background: var(--err-soft); color: var(--err); }
+.diag-state.warning { background: var(--warn-soft); color: var(--warn); }
+.diag-state.unknown { background: var(--bg-raised); color: var(--fg-dim); border: 1px dashed var(--line-strong); }
+.diag-state.info { background: var(--info-soft); color: var(--fg); }

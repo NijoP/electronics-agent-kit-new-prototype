@@ -1,14 +1,18 @@
 // Bottom panel: the component library (Phase 1 A3 moved it here from the side panel), ERC/DRC/DFM
-// findings (diagnostics), a BOM derived from the schematic, simulation, the engine log and this
-// session's tasks.
+// findings, a BOM derived from the schematic, simulation, the engine log, this session's tasks,
+// and (slice E4) the Property List grid, the Find Results of the B3 find bar and Diagnostics.
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
 import { EngineeringMonitor } from "../EngineeringMonitor";
 import { SimulationPanel } from "../SimulationPanel";
-import type { Check, CheckResult, EngineEvent, Finding, Id, Snapshot } from "../types";
+import type { FindHit } from "../tools/schematic/find";
+import type { Check, CheckResult, Command, EngineEvent, Finding, Id, Snapshot } from "../types";
+import { DiagnosticsTab } from "./DiagnosticsTab";
+import { FindResultsTab } from "./FindResultsTab";
+import { PropertyList } from "./PropertyList";
 import type { Task } from "./tasks";
 
-export type BottomTab = "library" | "findings" | "bom" | "sim" | "log" | "tasks" | (string & {});
+export type BottomTab = "library" | "findings" | "proplist" | "find" | "bom" | "sim" | "log" | "tasks" | "diagnostics" | (string & {});
 
 interface Props {
   tab: BottomTab;
@@ -25,6 +29,11 @@ interface Props {
   onClearTasks?: () => void;
   /** Content of the Library tab (the library and distributor search, owned by the workspace). */
   library?: ReactNode;
+  /** Engine command execution for the Property List's batch edits (absent: the grid is read-only). */
+  execute?: (c: Command) => Promise<void>;
+  busy?: boolean;
+  /** Find Results: open the hit's sheet and select it. */
+  onFindPick?: (hit: FindHit) => void;
 }
 
 export interface BomLine {
@@ -108,12 +117,15 @@ function NetlistTab({ revision }: { revision: number }) {
 const TABS: [BottomTab, string][] = [
   ["library", "Library"],
   ["findings", "Findings"],
+  ["proplist", "Property List"],
+  ["find", "Find Results"],
   ["netlist", "Netlist"],
   ["bom", "BOM"],
   ["search", "Search"],
   ["sim", "Simulation"],
   ["log", "Log"],
   ["tasks", "Tasks"],
+  ["diagnostics", "Diagnostics"],
 ];
 
 function TasksList({ tasks, onClear }: { tasks: Task[]; onClear?: () => void }) {
@@ -157,7 +169,7 @@ function SearchTab({ snapshot, onProbe }: { snapshot: Snapshot; onProbe: (id: Id
   );
 }
 
-export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, activeFinding, tasks = [], onClearTasks, library }: Props) {
+export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, activeFinding, tasks = [], onClearTasks, library, execute, busy = false, onFindPick }: Props) {
   const bom = bomLines(snapshot);
   const running = tasks.filter((t) => t.status === "running").length;
   return (
@@ -197,6 +209,9 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
             </>
           ))}
         {tab === "tasks" && <TasksList tasks={tasks} onClear={onClearTasks} />}
+        {tab === "proplist" && <PropertyList snapshot={snapshot} busy={busy} execute={execute} />}
+        {tab === "find" && <FindResultsTab snapshot={snapshot} onPick={onFindPick} />}
+        {tab === "diagnostics" && <DiagnosticsTab snapshot={snapshot} tasks={tasks} />}
         {tab === "netlist" && <NetlistTab revision={snapshot.project.revision} />}
         {tab === "search" && <SearchTab snapshot={snapshot} onProbe={onProbe} />}
         {tab === "sim" && <SimulationPanel revision={snapshot.project.revision} />}
