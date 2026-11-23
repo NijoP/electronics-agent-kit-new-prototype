@@ -292,6 +292,18 @@ const handlers = {
     const r = await ipc("library_import_open_source", { dir });
     return `SETUP (IPC library_import_open_source: "${s.name}", licence ${s.licence}, ${r.accepted.length} part(s); not a UI action)`;
   },
+  // SETUP: writes the scenario's `.kicad_sym` text (`lines`, an original test symbol) and imports
+  // it through `kicad_import_commit`, the IPC the KiCad import dialog commits with (licence and
+  // source recorded). The dialog itself needs a native file chooser.
+  async "fixture-kicad-symbol"(s) {
+    const dir = path.join(OUT, "fixture");
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `${s.file}.kicad_sym`);
+    fs.writeFileSync(file, s.lines.join("\n") + "\n");
+    const r = await ipc("kicad_import_commit", { path: file, licence: s.licence, source: s.source });
+    if (r.components_created !== 1) throw new Error(`expected 1 imported symbol, got ${r.components_created} (rejected: ${r.rejected.join("; ")})`);
+    return `SETUP (IPC kicad_import_commit: ${s.file}.kicad_sym, licence ${s.licence}, ${r.component_ids.join(", ")}; not a UI action)`;
+  },
   // XTest click into a field, then XTest typing.
   // XTest typing of `value`: into `selector` after clicking it, or without one into the focused field.
   async type(s) {

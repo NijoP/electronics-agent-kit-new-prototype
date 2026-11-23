@@ -189,7 +189,13 @@ export interface Project {
       refdes_prefix: string;
       default_value: string;
       distributor?: string | null;
-      symbol: { pins: { number: string; name: string }[] };
+      /** Full v3 symbol in engine snapshots; test fixtures may give only pin numbers and names. */
+      symbol: {
+        pins: (Pick<SymbolPin, "number" | "name"> & Partial<SymbolPin>)[];
+        body_half_w?: Nm;
+        body_half_h?: Nm;
+        graphics?: Graphic[];
+      };
     }
   >;
 }

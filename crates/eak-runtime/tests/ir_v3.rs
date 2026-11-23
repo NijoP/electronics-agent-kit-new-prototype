@@ -80,7 +80,19 @@ fn reference() -> Engine {
 #[test]
 fn v2_project_migrates_to_v3_with_the_same_netlist_and_pad_nets() {
     let e = reference();
-    let original = e.project().clone();
+    let mut original = e.project().clone();
+    // A v2 file only held box symbols: reduce the drawn built-ins (slice B2) to the box v2
+    // could express, so the migrated project can equal the original.
+    for def in original.library.values_mut() {
+        def.symbol.graphics.clear();
+        for pin in &mut def.symbol.pins {
+            pin.length = 0;
+            pin.orientation = Default::default();
+            pin.name_visible = true;
+            pin.number_visible = true;
+        }
+        def.symbol.upgrade_box();
+    }
     assert!(!original.schematic.labels.is_empty() && !original.schematic.wires.is_empty());
     assert!(original
         .schematic
