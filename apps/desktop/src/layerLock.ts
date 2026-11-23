@@ -6,6 +6,7 @@ import { layerKey, layerName, stackLayers, viaLayers } from "./layers";
 import type { Command, CopperLayer, Snapshot } from "./types";
 
 export type LockKind = "footprint" | "track" | "via" | "zone";
+export const isLockKind = (k: string): k is LockKind => k === "footprint" || k === "track" || k === "via" || k === "zone";
 
 const order = (s: Snapshot): CopperLayer[] => stackLayers(s.project.pcb.board.stackup).map((l) => l.layer);
 const viaSpan = (s: Snapshot, from: CopperLayer | null | undefined, to: CopperLayer | null | undefined) =>

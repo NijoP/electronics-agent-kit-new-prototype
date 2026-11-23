@@ -11,7 +11,7 @@ import * as O from "./tools/pcb/outline";
 import { OutlinePanel } from "./tools/pcb/OutlinePanel";
 import { layerCountOptions, layerKey, layerName, planeFill, sameLayer, stackLayers, viaKind, viaLayers } from "./layers";
 import { stepLayer, useLayerView, type LayerView } from "./layerView";
-import { lockProblem, objectLocked, pickableOn } from "./layerLock";
+import { isLockKind, lockProblem, objectLocked, pickableOn } from "./layerLock";
 import { focusBounds, type Focus } from "./pcbFocus";
 import {
   deleteTracks,
@@ -257,7 +257,8 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   // C1: picking is active-layer-exclusive (tracks and zones only on the active layer, vias on any
   // layer they span, footprints everywhere) and nothing on a locked layer is ever returned.
   const hitAt = (e: { target: EventTarget }, attr: string, x: number, y: number): string | null => {
-    const kind = attr in ATTR_KIND ? ATTR_KIND[attr] : null;
+    const pk = attr in ATTR_KIND ? ATTR_KIND[attr] : null;
+    const kind = pk && isLockKind(pk) ? pk : null;
     let id: string | null;
     if (!picker || !kind) id = hit(e, attr);
     else {
