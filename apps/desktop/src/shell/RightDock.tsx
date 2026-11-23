@@ -1,6 +1,6 @@
-// Right dock (Phase 1 A3): Properties (the A5 inspector, shell/Inspector.tsx), Filter and (in the
-// PCB) Layers. The selection filter is slice B3 and is shown disabled with that reason, never as a
-// working control.
+// Right dock (Phase 1 A3): Properties (the A5 inspector, shell/Inspector.tsx), Filter (the schematic
+// selection filter, slice B3) and (in the PCB) Layers. The filter covers the schematic only; in the
+// PCB the tab is disabled with that reason, never shown as a working control.
 import type { ReactNode } from "react";
 
 export type RightTab = "properties" | "filter" | "layers";
@@ -9,7 +9,7 @@ export type RightTab = "properties" | "filter" | "layers";
 export function rightTabs(pcb: boolean): { id: RightTab; label: string; disabled?: string }[] {
   return [
     { id: "properties", label: "Properties" },
-    { id: "filter", label: "Filter", disabled: "Not available yet: the selection filter arrives with slice B3" },
+    { id: "filter", label: "Filter", ...(pcb ? { disabled: "Not available yet in the PCB: the selection filter (slice B3) covers the schematic only" } : {}) },
     ...(pcb ? [{ id: "layers" as const, label: "Layers" }] : []),
   ];
 }

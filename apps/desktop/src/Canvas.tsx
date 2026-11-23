@@ -1,7 +1,7 @@
 // SVG canvas with wheel zoom (about the cursor) and drag pan. When `onPoint` is given a
 // click (pointer released without dragging) reports the view-space point under it, and
 // `onHover` tracks the cursor so editors can draw rubber-band previews.
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { clientToView, fit, pan, visibleViewBox, zoomAt, type Bounds, type Size, type ViewBox } from "./viewport";
 import { loadViewport, reportCanvas, saveViewport, useDocId, useRegisterCanvas } from "./shell/viewState";
 
@@ -33,6 +33,8 @@ interface Props {
    * `children` then hold only the live tool previews. Given the visible view box and pane size.
    */
   scene?: (vb: ViewBox, size: Size) => ReactNode;
+  /** Right-click on the canvas (the editor opens its context menu; slice B3). */
+  onContextMenu?: (e: ReactMouseEvent<SVGSVGElement>) => void;
 }
 
 export interface DragHandler {
@@ -57,7 +59,7 @@ interface PointerSample {
   buttons: number;
 }
 
-export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay, scene }: Props) {
+export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay, scene, onContextMenu }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const docId = useDocId();
   // A restored viewport (this tab's last zoom/pan, kept across tab closes and sessions) wins over fit.
@@ -244,6 +246,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
       onDoubleClick={() => {
         if (!tool) setVb(fit(bounds));
       }}
+      onContextMenu={onContextMenu}
       onDragEnter={(e) => {
         const p = toView(e);
         if (p) onDropTarget?.onDragEnter?.(p[0], p[1], e);
