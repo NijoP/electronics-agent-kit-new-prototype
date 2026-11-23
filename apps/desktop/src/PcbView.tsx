@@ -805,7 +805,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   };
 
   return (
-    <section className={`view${lv.outline ? " outline-view" : ""}`} aria-label="PCB view" data-flip={lv.flip ? "true" : undefined} data-outline-view={lv.outline ? "true" : undefined}>
+    <section className={`view pcb-view${lv.outline ? " outline-view" : ""}`} aria-label="PCB view" data-flip={lv.flip ? "true" : undefined} data-outline-view={lv.outline ? "true" : undefined}>
       <header className="view-header">
         <span>PCB</span>
         {edit ? (

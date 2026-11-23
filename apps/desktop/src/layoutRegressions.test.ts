@@ -62,3 +62,13 @@ describe("visibleViewBox (grid fills the pane)", () => {
     expect(visibleViewBox(vb, { width: 0, height: 0 })).toBe(vb);
   });
 });
+
+// Regression (C1, found by the real-window ui-evidence run): the PCB view has four rows (header,
+// tool options, layer tab strip, canvas) but used the 3-row `.view` grid, so the layer strip took
+// the flexible row and the canvas SVG covered its tabs and buttons.
+describe("PCB view rows", () => {
+  it("the canvas takes the last flexible row, after the layer tab strip", () => {
+    expect(rule(".view.pcb-view")).toContain("grid-template-rows: auto auto auto minmax(0, 1fr)");
+    expect(rule(".view.pcb-view > .canvas, .view.pcb-view > .canvas-stack")).toContain("grid-row: 4");
+  });
+});
