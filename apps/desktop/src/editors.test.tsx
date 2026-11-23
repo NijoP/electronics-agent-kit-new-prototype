@@ -1,6 +1,6 @@
 // Editor interaction tests: pointer clicks on the canvases must become exactly the typed
 // engine commands (with snapped nanometre coordinates); the views never mutate anything.
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditCtx } from "./EditContext";
 import { fixture } from "./fixture.test-data";
@@ -120,6 +120,52 @@ describe("schematic editor", () => {
     expect(sent[1]).toEqual([{ type: "DeleteWire", wire_id: "wir_1" }]);
   });
 
+  it("click-click Move on a wired part drags the attached wire end in one Batch (F3, S4)", () => {
+    const snap = fixture();
+    snap.project.schematic.wires.wir_1 = { id: "wir_1", sheet_id: "sht_1", a: { x: 54_000_000, y: 50_000_000 }, b: { x: 76_000_000, y: 50_000_000 } };
+    const { container } = render(<SchematicView snapshot={snap} selected={null} onSelect={() => {}} edit={edit()} />);
+    tool("Move");
+    const body = container.querySelector('[data-symbol-id="sym_r1"]')!;
+    fireEvent.pointerDown(body, { clientX: 5, clientY: 5, button: 0, buttons: 1 });
+    fireEvent.pointerUp(body, { clientX: 5, clientY: 5, button: 0 });
+    clickAt(container.querySelector("svg.canvas")!, sheetVb(), 63.5, -55.88); // on the 1.27 mm grid
+    // R1 (50,50) -> (63.5,55.88): its pin 2 (54,50) goes to (67.5,55.88) and the wire end follows
+    expect(sent).toEqual([
+      [
+        {
+          type: "Batch",
+          label: "Move 1 object",
+          commands: [
+            { type: "MoveWire", wire_id: "wir_1", a: { x: 67_500_000, y: 55_880_000 }, b: { x: 76_000_000, y: 50_000_000 } },
+            { type: "MoveSymbol", symbol_id: "sym_r1", position: { x: 63_500_000, y: 55_880_000 } },
+          ],
+        },
+      ],
+    ]);
+  });
+
+  it("one delete policy: Del, the selection bar and the Delete tool delete at once, no prompt (F3, S22)", () => {
+    const confirm = vi.spyOn(window, "confirm");
+    const ctx = edit();
+    render(<SchematicView snapshot={fixture()} selected="sym_r1" onSelect={() => {}} edit={ctx} />);
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(sent[0]).toEqual([{ type: "DeleteSymbol", symbol_id: "sym_r1" }]);
+    expect(ctx.notify).toHaveBeenLastCalledWith("Deleted 1 object: Ctrl+Z restores it.");
+    cleanup();
+    render(<SchematicView snapshot={fixture()} selected="sym_d1" onSelect={() => {}} edit={ctx} />);
+    fireEvent.click(within(screen.getByRole("group", { name: "Selection" })).getByRole("button", { name: "Delete" }));
+    expect(sent[1]).toEqual([{ type: "DeleteSymbol", symbol_id: "sym_d1" }]);
+    cleanup();
+    const { container } = render(<SchematicView snapshot={fixture()} selected={null} onSelect={() => {}} edit={ctx} />);
+    tool("Delete");
+    const label = container.querySelector('[data-label-id="lab_1"]')!;
+    fireEvent.pointerDown(label, { clientX: 5, clientY: 5, button: 0, buttons: 1 });
+    fireEvent.pointerUp(label, { clientX: 5, clientY: 5, button: 0 });
+    expect(sent[2]).toEqual([{ type: "DeleteNetLabel", label_id: "lab_1" }]);
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
   it("edits the selected symbol's value and rotates it from the keyboard", () => {
     render(<SchematicView snapshot={fixture()} selected="sym_r1" onSelect={() => {}} edit={edit()} />);
     const v = screen.getByLabelText("Value");
@@ -133,6 +179,8 @@ describe("schematic editor", () => {
   it("is read-only without an edit context", () => {
     render(<SchematicView snapshot={fixture()} selected={null} onSelect={() => {}} />);
     expect(screen.queryByRole("toolbar")).toBeNull();
+    // F3 (S14): no decorative "read-only" hint either (the app always edits; tests render bare)
+    expect(screen.queryByText(/read-only/)).toBeNull();
   });
 });
 

@@ -148,11 +148,11 @@ describe("main toolbar", () => {
     await waitFor(() => expect(executed).toEqual([{ type: "RotateSymbol", symbol_id: "sym_r1", rotation: "R90" }]));
     // Delete's state comes from the editor's published operations, one render after the engine is idle.
     await waitFor(() => expect((tb().getByRole("button", { name: "Delete selection" }) as HTMLButtonElement).disabled).toBe(false));
-    vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
-    fireEvent.click(tb().getByRole("button", { name: "Delete selection" }));
-    expect(executed).toHaveLength(1);
+    // One delete policy (S22): no prompt; the delete is one undo step.
+    const confirm = vi.spyOn(window, "confirm");
     fireEvent.click(tb().getByRole("button", { name: "Delete selection" }));
     await waitFor(() => expect(executed[1]).toEqual({ type: "DeleteSymbol", symbol_id: "sym_r1" }));
+    expect(confirm).not.toHaveBeenCalled();
   });
 });
 

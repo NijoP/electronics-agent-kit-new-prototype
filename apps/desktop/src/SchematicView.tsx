@@ -291,11 +291,16 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
 
   // Selection actions, shared by the keyboard shortcuts and the selection bar buttons. Each is
   // one engine command (a Batch for several objects).
+  // Delete policy (one for every entry point: Edit menu, canvas context menu, Del / Backspace,
+  // the selection bar, the Delete tool and Cut): a delete runs at once, without a prompt. It is
+  // one engine command, so one undo step, and the status line says Ctrl+Z restores it.
   const actions = sheet && {
     rotate: () => submit(S.rotateCommands(snapshot, sheet.id, sel), `Rotate ${objects(sel.symbols.length)}`),
     flip: (axis: FlipAxis) => submit(S.flipCommands(snapshot, sheet.id, sel, axis), `Flip ${objects(sel.symbols.length)}`),
     remove: () => {
+      if (S.isEmpty(sel)) return;
       submit(S.deleteCommands(sel), `Delete ${objects(S.count(sel))}`);
+      edit?.notify(`Deleted ${objects(S.count(sel))}: Ctrl+Z restores it.`);
       setSel(S.EMPTY);
     },
     copy: () => {
@@ -381,7 +386,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
           rotate: { state: needParts(1), run: actions.rotate },
           "flip-h": { state: needParts(1), run: () => actions.flip("horizontal") },
           "flip-v": { state: needParts(1), run: () => actions.flip("vertical") },
-          delete: { state: needSel(), run: () => window.confirm(`Delete ${objects(S.count(sel))}? This is a destructive change.`) && actions.remove() },
+          delete: { state: needSel(), run: actions.remove },
           cut: { state: needSel(), run: actions.cut },
           copy: { state: S.isEmpty(sel) ? "Select something first" : true, run: () => void actions.copy() },
           paste: { state: clipboard() ? idle() : "Nothing to paste: copy or cut first", run: actions.paste },
@@ -853,7 +858,9 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         }
         const id = picked;
         setPicked(null);
-        void edit.execute({ type: "MoveSymbol", symbol_id: id, position: snap.point });
+        // Attached wire ends and pin labels follow (rubber-band), as a drag does: one Batch.
+        const from = snapshot.project.schematic.symbols[id]?.position;
+        if (from) submit(S.moveCommands(snapshot, sheet.id, { ...S.EMPTY, symbols: [id] }, { x: snap.point.x - from.x, y: snap.point.y - from.y }), `Move ${objects(1)}`);
         return;
       }
       case "noconnect": {
@@ -869,13 +876,17 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
         return;
       }
       case "delete": {
-        if (symId) void edit.execute({ type: "DeleteSymbol", symbol_id: symId });
-        else if (labelId) void edit.execute({ type: "DeleteNetLabel", label_id: labelId });
-        else if (wireId) void edit.execute({ type: "DeleteWire", wire_id: wireId });
-        else {
-          const c = drawnAt(e);
-          if (c) void edit.execute(c);
-        }
+        // The delete policy of the selection actions: at once, one undo step, no prompt.
+        const c: Command | null = symId
+          ? { type: "DeleteSymbol", symbol_id: symId }
+          : labelId
+            ? { type: "DeleteNetLabel", label_id: labelId }
+            : wireId
+              ? { type: "DeleteWire", wire_id: wireId }
+              : drawnAt(e);
+        if (!c) return;
+        void edit.execute(c);
+        edit.notify(`Deleted ${objects(1)}: Ctrl+Z restores it.`);
         return;
       }
     }
@@ -907,7 +918,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
             ))}
           </select>
         )}
-        {edit ? (
+        {edit && (
           <div className="tools" role="toolbar" aria-label="Schematic tools">
             {TOOLS.map(([t, label], i) => (
               <button
@@ -922,8 +933,6 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
               </button>
             ))}
           </div>
-        ) : (
-          <span className="muted">read-only · wheel zoom · drag pan · double-click fit</span>
         )}
         <Coords at={hover} unit={grid.unit} />
       </header>

@@ -1,0 +1,34 @@
+{
+  "name": "F3: schematic edit integrity (click-click Move keeps wires attached)",
+  "description": "Phase 1 definition-of-done fix F3 (audit defect S4). A fixture project gets two resistors at different heights through the engine's execute_command IPC (SETUP). In the real window the Connect pins tool wires pin 2 of the first part to pin 1 of the second (one ConnectPins). The Move tool then moves the wired part by click-click: the status bar must name one Batch (rubber-band: the wire end follows the pin, so the engine has nothing to warn about), where a bare MoveSymbol used to leave the wire end behind with a warning. Highlight net on the wire then lights both pins (engine netlist), so the wire is still connected at both ends.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "F3 Edit Fixture", "folder": "f3-edit-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "F3 Edit Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]" },
+    {
+      "id": "f3-setup",
+      "do": "fixture-commands",
+      "title": "F3: two resistors at different heights (engine commands)",
+      "commands": [
+        { "type": "PlaceSymbol", "sheet_id": null, "component_id": "R_0603", "position": { "x": 100000000, "y": 120000000 }, "rotation": "R0", "refdes": null, "value": null },
+        { "type": "PlaceSymbol", "sheet_id": null, "component_id": "R_0603", "position": { "x": 180000000, "y": 60000000 }, "rotation": "R0", "refdes": null, "value": null }
+      ],
+      "expect": "section[aria-label=\"Schematic view\"] g[data-symbol-id] circle.pin-end"
+    },
+    { "id": "f3-two", "do": "count", "title": "F3: two parts on the sheet", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 2, "shot": false },
+    { "id": "f3-connect-tool", "do": "click", "title": "F3: Connect pins tool", "selector": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button", "text": "Connect pins", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"connect\"]", "shot": false },
+    { "id": "f3-pin-a", "do": "click", "title": "F3: click pin 2 of the first part", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] g[data-pin=\"2\"] circle.pin-end", "shot": false },
+    { "id": "f3-pin-b", "do": "click", "title": "F3: click pin 1 of the second part: one ConnectPins draws the wire", "selector": "section[aria-label=\"Schematic view\"] g.symbol ~ g.symbol g[data-pin=\"1\"] circle.pin-end", "expect": "footer.status span.msg", "expectText": "ConnectPins → revision" },
+    { "id": "f3-wired", "do": "wait", "title": "F3: the wire is drawn", "selector": "section[aria-label=\"Schematic view\"] g[data-wire-id] line.wire", "shot": false },
+    { "id": "f3-move-tool", "do": "click", "title": "F3: Move tool", "selector": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button", "text": "Move", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"move\"]", "shot": false },
+    { "id": "f3-move-pick", "do": "click", "title": "F3: click the wired part to pick it up", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] rect.body", "shot": false },
+    { "id": "f3-move-drop", "do": "click", "title": "F3: click the sheet centre to drop it: one Batch (rubber-band), not a bare MoveSymbol", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "expect": "footer.status span.msg", "expectText": "Batch → revision" },
+    { "id": "f3-not-bare", "do": "absent", "title": "F3: no bare MoveSymbol result (it warned that the wire end stayed behind)", "selector": "footer.status span.msg", "text": "MoveSymbol", "shot": false },
+    { "id": "f3-select-tool", "do": "key", "title": "F3: Escape returns to the Select tool", "keys": "Escape", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"select\"]", "shot": false },
+    { "id": "f3-wire-pick", "do": "click", "title": "F3: select the wire", "selector": "section[aria-label=\"Schematic view\"] g[data-wire-id] line.hit", "expect": "section[aria-label=\"Schematic view\"] g[data-wire-id].selected", "shot": false },
+    { "id": "f3-wire-ctx", "do": "click", "button": "right", "title": "F3: right-click the wire; the context menu offers Highlight net", "selector": "section[aria-label=\"Schematic view\"] g[data-wire-id] line.hit", "expect": "ul.canvas-ctx[role=\"menu\"] button[role=\"menuitem\"]:not([disabled])", "expectText": "Highlight net" },
+    { "id": "f3-highlight", "do": "click", "title": "F3: Highlight net (engine netlist)", "selector": "ul.canvas-ctx[role=\"menu\"] button[role=\"menuitem\"]", "text": "Highlight net", "gone": "ul.canvas-ctx[role=\"menu\"]", "shot": false },
+    { "id": "f3-both-pins", "do": "count", "title": "F3: both pins are on the wire's net after the move (the wire end followed the pin)", "selector": "section[aria-label=\"Schematic view\"] circle.pin-end.net-hi", "equals": 2 }
+  ]
+}
