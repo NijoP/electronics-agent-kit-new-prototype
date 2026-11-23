@@ -117,19 +117,19 @@ function NewPart({ busy, taken, execute, onEdit }: { busy: boolean; taken: Set<s
       <summary>New part…</summary>
       <p className="muted">Starts a two-pin box symbol on a two-pad SMD footprint in the project library, then opens the symbol editor. Edit both before placing it.</p>
       <label className="field">
-        <span>Part id</span>
+        <span>New part id</span>
         <input aria-label="New part id" value={f.id} onChange={(e) => setF({ ...f, id: e.target.value })} placeholder="e.g. MY_SENSOR" />
       </label>
       <label className="field">
-        <span>Name</span>
+        <span>New part name</span>
         <input aria-label="New part name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
       </label>
       <label className="field">
-        <span>Reference prefix</span>
+        <span>New part reference prefix</span>
         <input aria-label="New part reference prefix" value={f.prefix} onChange={(e) => setF({ ...f, prefix: e.target.value })} />
       </label>
       <label className="field">
-        <span>Category</span>
+        <span>New part category</span>
         <input aria-label="New part category" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} />
       </label>
       {problem && f.id !== "" && <p className="muted">{problem}</p>}

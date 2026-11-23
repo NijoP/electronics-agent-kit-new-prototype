@@ -266,16 +266,16 @@ function SymbolTables({ draft, set, setPin, setGraphic, rowSel }: { draft: Compo
       <fieldset className="pe-fields">
         <legend>Part</legend>
         <label>
-          Name <TextInput label="Part name" value={draft.name} onCommit={(v) => set((d) => ({ ...d, name: v }))} />
+          Part name <TextInput label="Part name" value={draft.name} onCommit={(v) => set((d) => ({ ...d, name: v }))} />
         </label>
         <label>
-          Reference prefix <TextInput label="Reference prefix" value={draft.refdes_prefix} onCommit={(v) => set((d) => ({ ...d, refdes_prefix: v.trim() }))} />
+          Reference prefix <TextInput label="Part reference prefix" value={draft.refdes_prefix} onCommit={(v) => set((d) => ({ ...d, refdes_prefix: v.trim() }))} />
         </label>
         <label>
-          Default value <TextInput label="Default value" value={draft.default_value} onCommit={(v) => set((d) => ({ ...d, default_value: v }))} />
+          Default value <TextInput label="Part default value" value={draft.default_value} onCommit={(v) => set((d) => ({ ...d, default_value: v }))} />
         </label>
         <label>
-          Category <TextInput label="Category" value={draft.category} onCommit={(v) => set((d) => ({ ...d, category: v }))} />
+          Category <TextInput label="Part category" value={draft.category} onCommit={(v) => set((d) => ({ ...d, category: v }))} />
         </label>
         <label>
           Body half width (mm) <MmInput label="Body half width" nm={s.body_half_w} onCommit={(v) => v !== null && set((d) => ({ ...d, symbol: { ...d.symbol, body_half_w: v } }))} />
@@ -529,7 +529,7 @@ function FootprintTables({ draft, set, setPad, rowSel }: { draft: ComponentDef; 
       <fieldset className="pe-fields">
         <legend>Footprint</legend>
         <label>
-          Name <TextInput label="Footprint name" value={f.name} onCommit={(v) => set((d) => ({ ...d, footprint: { ...d.footprint, name: v.trim() } }))} />
+          Footprint name <TextInput label="Footprint name" value={f.name} onCommit={(v) => set((d) => ({ ...d, footprint: { ...d.footprint, name: v.trim() } }))} />
         </label>
         <label>
           Courtyard half width (mm) <MmInput label="Courtyard half width" nm={f.courtyard_half_w} onCommit={(v) => v !== null && set((d) => ({ ...d, footprint: { ...d.footprint, courtyard_half_w: v } }))} />
