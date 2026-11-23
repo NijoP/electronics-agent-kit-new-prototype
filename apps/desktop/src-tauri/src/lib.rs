@@ -1206,16 +1206,29 @@ fn release_check_of(dir: Option<&Path>, p: &Project) -> ReleaseCheck {
     let (_, blocking, gate_report) = eak_manufacturing::release_gates_with_report(p, &refs);
     let mut gates = vec![];
     for (check, title) in RELEASE_REPORTS {
-        let prefix = format!("{check} ");
+        // "DRC reports 2 error(s)" and the per-rule "DRC: DRC-002 is UNKNOWN: …" lines.
+        let (prefix, rule_prefix) = (format!("{check} "), format!("{check}: "));
         let reasons: Vec<String> = blocking
             .iter()
-            .filter(|b| b.starts_with(&prefix) || (check == "MECH" && b.contains("MECH-0")))
+            .filter(|b| {
+                b.starts_with(&prefix)
+                    || b.starts_with(&rule_prefix)
+                    || (check == "MECH" && b.contains("MECH-0"))
+            })
             .cloned()
             .collect();
         let report = reports.iter().find(|r| r.check == check);
+        // ADR-0048: a report with an UNKNOWN rule is UNKNOWN, never PASS, even with 0 errors.
+        let unknown = |r: &Report| {
+            let u = eak_validation::CheckState::Unknown;
+            r.rule_results
+                .iter()
+                .any(|rr| rr.state == u || rr.default_state == Some(u))
+        };
         let state = match report {
             None => "NOT_RUN",
             Some(r) if r.outcome == eak_validation::Outcome::Errors => "FAIL",
+            Some(r) if unknown(r) => "UNKNOWN",
             Some(_) if reasons.is_empty() => "PASS",
             Some(_) => "UNKNOWN",
         };
