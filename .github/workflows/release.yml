@@ -1,9 +1,16 @@
 name: release
 # Builds the desktop bundles and the `eak` CLI from ONE commit that the `ci` workflow already proved
-# green, checksums them, and publishes a pre-release with a provenance file. Manual dispatch only:
-#   gh workflow run release.yml -R NijoP/electronics-agent-kit-new-prototype [-f sha=<full commit sha>]
+# green, checksums them, and publishes a GitHub Release with a provenance file. Two triggers:
+#   - a version tag push: git tag v0.1.5-rc.1 <sha> && git push origin v0.1.5-rc.1
+#     The tag must be vMAJOR.MINOR.PATCH[-PRERELEASE], MAJOR.MINOR.PATCH must equal the app version in
+#     apps/desktop/src-tauri/tauri.conf.json at that commit, and the release is named after the tag
+#     (a pre-release when the tag has a -suffix).
+#   - manual dispatch: gh workflow run release.yml -R NijoP/electronics-agent-kit-new-prototype [-f sha=<full commit sha>]
+#     publishes a pre-release tagged prebuilt-<date>-<sha7> (the tag the one-line installers pick).
 # Every build is UNSIGNED (no signing secrets exist): Windows SmartScreen / macOS Gatekeeper apply.
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       sha:
@@ -27,6 +34,9 @@ jobs:
     outputs:
       sha: ${{ steps.pick.outputs.sha }}
       ci_run: ${{ steps.pick.outputs.ci_run }}
+      tag: ${{ steps.pick.outputs.tag }}
+      tag_exists: ${{ steps.pick.outputs.tag_exists }}
+      prerelease: ${{ steps.pick.outputs.prerelease }}
     steps:
       - id: pick
         env:
@@ -36,11 +46,31 @@ jobs:
           set -euo pipefail
           sha="${INPUT_SHA:-$GITHUB_SHA}"
           [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "sha must be a full 40-character commit id, got '$sha'" >&2; exit 1; }
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"
+            [ "$sha" = "$GITHUB_SHA" ] || { echo "a tag release builds the tagged commit $GITHUB_SHA; do not pass sha=$sha" >&2; exit 1; }
+            [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-[0-9A-Za-z.-]+)?$ ]] \
+              || { echo "version tags must look like v1.2.3 or v1.2.3-rc.1, got '$tag'" >&2; exit 1; }
+            want="${BASH_REMATCH[1]}"
+            if [ -n "${BASH_REMATCH[2]}" ]; then prerelease=true; else prerelease=false; fi
+            have="$(gh api "repos/$GITHUB_REPOSITORY/contents/apps/desktop/src-tauri/tauri.conf.json?ref=$sha" --jq .content | base64 -d | jq -r .version)"
+            [ "$have" = "$want" ] || { echo "tag $tag says version $want but the app at $sha is version $have: bump the version first" >&2; exit 1; }
+            tag_exists=true
+          else
+            tag="prebuilt-$(date -u +%Y%m%d)-${sha:0:7}"
+            prerelease=true
+            tag_exists=false
+          fi
           run="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&status=success&per_page=1" --jq '.workflow_runs[0].html_url // empty')"
           [ -n "$run" ] || { echo "no successful ci run exists for $sha: refusing to release a commit CI has not proved" >&2; exit 1; }
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "ci_run=$run" >> "$GITHUB_OUTPUT"
-          echo "Releasing $sha (green ci run: $run)" | tee -a "$GITHUB_STEP_SUMMARY"
+          {
+            echo "sha=$sha"
+            echo "ci_run=$run"
+            echo "tag=$tag"
+            echo "tag_exists=$tag_exists"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $sha as $tag (prerelease: $prerelease; green ci run: $run)" | tee -a "$GITHUB_STEP_SUMMARY"
 
   package:
     name: package (${{ matrix.name }})
@@ -157,6 +187,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ needs.verify.outputs.sha }}
           CI_RUN: ${{ needs.verify.outputs.ci_run }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          TAG_EXISTS: ${{ needs.verify.outputs.tag_exists }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
         run: |
           set -euo pipefail
           cd assets
@@ -164,7 +197,7 @@ jobs:
           rm -f SHA256SUMS.*
           # Every listed file must exist and hash to its listed value.
           sha256sum -c SHA256SUMS
-          tag="prebuilt-$(date -u +%Y%m%d)-${SHA:0:7}"
+          tag="$TAG"
           {
             echo '{'
             echo "  \"commit\": \"$SHA\","
@@ -192,8 +225,13 @@ jobs:
           rm -f toolchain-*.txt
           sha256sum provenance.json >> SHA256SUMS
           cat provenance.json
-          # The tag points at exactly the CI-green commit; the release is then made from that tag.
-          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SHA" > /dev/null
-          gh release create "$tag" ./* --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
-            --title "EAK prebuilt $tag (unsigned pre-release)" \
-            --notes "Unsigned prebuilt bundles and the eak CLI built from commit $SHA, which passed CI ($CI_RUN). Verify with SHA256SUMS; build details are in provenance.json. Not a manufacturing-ready claim and not an installer-tested-on-hardware claim."
+          # The tag points at exactly the CI-green commit (a pushed version tag already does; verify
+          # checked it); the release is then made from that tag.
+          if [ "$TAG_EXISTS" != true ]; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SHA" > /dev/null
+          fi
+          if [ "$PRERELEASE" = true ]; then pre=(--prerelease); kind='unsigned pre-release'; else pre=(); kind='unsigned'; fi
+          case "$tag" in prebuilt-*) title="EAK prebuilt $tag ($kind)" ;; *) title="EAK $tag ($kind)" ;; esac
+          gh release create "$tag" ./* --repo "$GITHUB_REPOSITORY" --verify-tag "${pre[@]}" \
+            --title "$title" \
+            --notes "Unsigned prebuilt bundles and the eak CLI built from commit $SHA, which passed CI ($CI_RUN). Verify with SHA256SUMS; build details are in provenance.json. Windows SmartScreen and macOS Gatekeeper will warn because nothing is code-signed or notarized. Not a manufacturing-ready claim and not an installer-tested-on-hardware claim."
