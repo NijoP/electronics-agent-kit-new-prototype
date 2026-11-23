@@ -640,6 +640,7 @@ fn route_step_result_commits_as_one_batch_and_undoes_in_one_step() {
         via_at_start: false,
         conflict: Default::default(),
         via: None,
+        pending: Default::default(),
     };
     assert!(route_step(&s, &req("N", Point::default(), Point::mm(1.0, 0.0))).is_err());
     let d = tmpdir("route-step");

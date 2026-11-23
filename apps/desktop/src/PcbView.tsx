@@ -15,6 +15,7 @@ import { focusBounds, type Focus } from "./pcbFocus";
 import {
   deleteTracks,
   draftLength,
+  draftShoved,
   feedbackText,
   finishOn,
   loopTracks,
@@ -573,6 +574,9 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
   const fixedSegs = (draft?.steps ?? []).flatMap((s) => s.segments.map((g) => ({ ...g, layer: s.layer, width: s.width })));
   const liveSegs = live ? live.segments.map((g) => ({ ...g, layer: live.layer, width: live.width })) : [];
   const routeVias = [...(draft?.steps ?? []).flatMap((s) => (s.via ? [s.via] : [])), ...(live?.via ? [live.via] : [])];
+  const shovedNow = new Map((draft ? draftShoved(draft) : []).map((s) => [s.id, s]));
+  for (const s of live?.shoved ?? []) shovedNow.set(s.id, s);
+  const shovedSegs = [...shovedNow.values()].flatMap((s) => s.points.slice(1).map((b, k) => ({ a: s.points[k], b, layer: s.layer, width: s.width })));
 
   // Canvas renderer: selection, finding and net highlights and the drag preview are an uncached
   // overlay drawn from the pick table's outlines (`selPoly` / `pathPts`), so they never force the
@@ -669,12 +673,12 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             value: conflict,
             options: [
               { value: "walkaround", label: "Walk around" },
+              { value: "push", label: "Push (shove tracks)" },
               { value: "block", label: "Block (stop before)" },
             ],
-            onChange: (v) => changeConflict(v === "block" ? "block" : "walkaround"),
-            title: "Walk around other-net copper, or stop before it",
+            onChange: (v) => changeConflict(v === "block" || v === "push" ? v : "walkaround"),
+            title: "Walk around other-net copper, push other-net tracks aside (pads and vias never move), or stop before it",
           },
-          { kind: "unavailable", name: "Push mode", label: "Push", reason: "Unavailable: push-and-shove of other tracks is not implemented yet" },
           {
             kind: "select",
             name: "Remove loops",
@@ -990,7 +994,7 @@ export function PcbView({ snapshot, selected, onSelect, edit, aiPreview = [], on
             </g>
           );
         })}
-        {[...fixedSegs.map((g) => ({ ...g, cls: "fixed" })), ...liveSegs.map((g) => ({ ...g, cls: "proposal" }))].map((g, i) => {
+        {[...fixedSegs.map((g) => ({ ...g, cls: "fixed" })), ...liveSegs.map((g) => ({ ...g, cls: "proposal" })), ...shovedSegs.map((g) => ({ ...g, cls: "shoved" }))].map((g, i) => {
           const [x1, y1] = toView(g.a);
           const [x2, y2] = toView(g.b);
           return (
