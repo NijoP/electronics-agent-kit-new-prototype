@@ -192,8 +192,17 @@ pub fn release_gates_with_report(
                 }
                 // ADR-0046 (AD-8): a disabled rule is not a pass, and a rule whose severity
                 // override hides a failure at its default severity does not release either.
+                // ADR-0048: a rule the report could not evaluate (UNKNOWN, e.g. DRC-002 on a net
+                // with no declared voltage) is not a pass either, whatever the error count says.
                 for rr in &r.rule_results {
-                    if rr.state == eak_validation::CheckState::Disabled {
+                    let unknown = eak_validation::CheckState::Unknown;
+                    if rr.state == unknown || rr.default_state == Some(unknown) {
+                        let why = match rr.reason.is_empty() {
+                            true => "not evaluated",
+                            false => rr.reason.as_str(),
+                        };
+                        blocking.push(format!("{need}: {} is UNKNOWN: {why}", rr.rule_id));
+                    } else if rr.state == eak_validation::CheckState::Disabled {
                         blocking.push(format!(
                             "{need}: {} is disabled in the project's rule configuration",
                             rr.rule_id
