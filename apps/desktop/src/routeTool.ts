@@ -2,8 +2,8 @@
 // (`route_step` IPC -> eak_engineering::interactive); this reducer only records the steps the
 // user fixed with a click and turns the finished route into ONE `Batch` command, so a whole
 // route is one revision and one undo step. Nothing here writes the project.
-import type { BendMode, Command, Constraints, CopperLayer, FootprintGeom, Nm, PadGeom, Point, RouteSegment, RouteStepReport, RouteStepRequest, Track, Via } from "./types";
-import { layerName, sameLayer, viaLayers } from "./layers";
+import type { BendMode, Command, ConflictMode, Constraints, CopperLayer, FootprintGeom, Nm, PadGeom, Point, RouteSegment, RouteStepReport, RouteStepRequest, Track, Via, ViaSize } from "./types";
+import { layerKey, layerName, sameLayer, viaLayers } from "./layers";
 
 /** One fixed piece of the route: segments on one layer, optionally starting with a via. */
 export interface RouteStep {
@@ -19,6 +19,9 @@ export interface RouteDraft {
   net: string;
   layer: CopperLayer;
   mode: BendMode;
+  /** Where the route started (its first point, on `startLayer`). */
+  origin: Point;
+  startLayer: CopperLayer;
   /** Where the next step starts (end of the last fixed step). */
   anchor: Point;
   steps: RouteStep[];
@@ -28,11 +31,17 @@ export interface RouteDraft {
   previousLayer: CopperLayer | null;
   /** Track width override in nm; null uses the net-class width. */
   width: Nm | null;
+  /** What the engine does with other-net copper in the way. */
+  conflict: ConflictMode;
+  /** Via size for layer switches; null uses the net-class via. */
+  via: ViaSize | null;
 }
 
 export type RouteAction =
-  | { type: "start"; net: string; layer: CopperLayer; at: Point; mode: BendMode; width?: Nm | null }
+  | { type: "start"; net: string; layer: CopperLayer; at: Point; mode: BendMode; width?: Nm | null; conflict?: ConflictMode; via?: ViaSize | null }
   | { type: "setWidth"; width: Nm | null }
+  | { type: "setConflict"; conflict: ConflictMode }
+  | { type: "setVia"; via: ViaSize | null }
   /** Fix the engine's proposal for the current cursor (the result of `route_step`). */
   | { type: "fix"; step: RouteStepReport }
   | { type: "switchLayer"; layer: CopperLayer }
@@ -45,7 +54,20 @@ const samePt = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
 
 export function routeReducer(d: RouteDraft | null, a: RouteAction): RouteDraft | null {
   if (a.type === "start")
-    return { net: a.net, layer: a.layer, mode: a.mode, anchor: a.at, steps: [], viaPending: false, previousLayer: null, width: a.width ?? null };
+    return {
+      net: a.net,
+      layer: a.layer,
+      mode: a.mode,
+      origin: a.at,
+      startLayer: a.layer,
+      anchor: a.at,
+      steps: [],
+      viaPending: false,
+      previousLayer: null,
+      width: a.width ?? null,
+      conflict: a.conflict ?? "walkaround",
+      via: a.via ?? null,
+    };
   if (a.type === "cancel" || !d) return null;
   switch (a.type) {
     case "fix": {
@@ -68,6 +90,10 @@ export function routeReducer(d: RouteDraft | null, a: RouteAction): RouteDraft |
     }
     case "setWidth":
       return { ...d, width: a.width !== null && a.width > 0 ? a.width : null };
+    case "setConflict":
+      return { ...d, conflict: a.conflict };
+    case "setVia":
+      return { ...d, via: a.via && a.via.drill > 0 && a.via.diameter > a.via.drill ? a.via : null };
     case "toggleMode":
       return { ...d, mode: d.mode === "diagonal45" ? "orthogonal90" : "diagonal45" };
     case "back": {
@@ -89,16 +115,19 @@ export function routeReducer(d: RouteDraft | null, a: RouteAction): RouteDraft |
 
 /** The `route_step` request for the cursor position. */
 export function stepRequest(d: RouteDraft, cursor: Point): RouteStepRequest {
-  return { net: d.net, layer: d.layer, from: d.anchor, to: cursor, mode: d.mode, width: d.width, via_at_start: d.viaPending };
+  return { net: d.net, layer: d.layer, from: d.anchor, to: cursor, mode: d.mode, width: d.width, via_at_start: d.viaPending, conflict: d.conflict, via: d.via };
 }
 
 /**
  * The finished route as one Batch (null when nothing was fixed). A via between the two outer
  * layers is a through via; a via that starts or ends on an inner layer is sent with its span
  * (`from`/`to`), so the engine makes a blind or buried via instead of a through via.
+ * `remove` lists committed tracks the route replaces (loop removal); they are deleted first,
+ * in the same Batch, so the new route and the removal are one undo step.
  */
-export function routeBatch(d: RouteDraft): Command | null {
-  const commands: Command[] = [];
+export function routeBatch(d: RouteDraft, remove: string[] = []): Command | null {
+  if (!d.steps.length) return null;
+  const commands: Command[] = remove.map((track_id) => ({ type: "DeleteTrack" as const, track_id }));
   for (const s of d.steps) {
     if (s.via)
       commands.push({ type: "AddVia", position: s.via.position, net: d.net, drill: s.via.drill, diameter: s.via.diameter, ...viaSpan(s.viaFrom, s.layer) });
@@ -312,4 +341,150 @@ export function nextConnections(
   const score = (n: string) => netPriority(n, terminals.get(n) ?? 2, constraints?.net_currents_a?.[n]);
   const len = ([, a, b]: [string, Point, Point]) => Math.hypot(b.x - a.x, b.y - a.y);
   return [...airwires].sort((x, y) => score(y[0]) - score(x[0]) || len(x) - len(y));
+}
+
+// ---- Routing options (slice C3) ------------------------------------------------------------
+// Width and via presets, live net length and loop removal. The presets only choose the values
+// sent to the engine; `route_step` still checks every segment and via against the rules.
+
+export const MIL = 25_400;
+/** Common track widths: 5, 8, 10, 12, 20 and 50 mil. */
+export const COMMON_WIDTHS: Nm[] = [5, 8, 10, 12, 20, 50].map((m) => m * MIL);
+/** Common via drill/diameter pairs: 8/16, 10/20, 12/24 mil and 0.3/0.6 mm. */
+export const COMMON_VIAS: ViaSize[] = [
+  { drill: 8 * MIL, diameter: 16 * MIL },
+  { drill: 10 * MIL, diameter: 20 * MIL },
+  { drill: 12 * MIL, diameter: 24 * MIL },
+  { drill: 300_000, diameter: 600_000 },
+];
+
+export interface Preset {
+  value: string;
+  label: string;
+}
+
+/** Millimetres for a label (3 decimals). */
+export const mmLabel = (nm: Nm) => (nm / 1_000_000).toFixed(3);
+/** Millimetres for the width text field: exact, so `widthFromMm` gives the same nm back. */
+export const mmText = (nm: Nm) => String(nm / 1_000_000);
+
+/** The net class that applies to `net` (the default class when no class lists it). */
+export function classOf(c: Constraints | undefined, net: string) {
+  return c?.net_classes?.find((k) => k.nets.includes(net)) ?? c?.default_class;
+}
+
+/**
+ * Track-width choices for `net`: "" follows the net's class, then the other net classes'
+ * widths, then the common widths (value = nm). A typed width that is none of them is shown as
+ * "custom".
+ */
+export function widthPresets(c: Constraints | undefined, net: string, width: Nm | null): Preset[] {
+  const own = classOf(c, net);
+  const out: Preset[] = [{ value: "", label: own ? `Net class ${own.name} (${mmLabel(own.track_width)} mm)` : "Net class" }];
+  const add = (nm: Nm, label: string) => {
+    if (!out.some((p) => p.value === String(nm))) out.push({ value: String(nm), label });
+  };
+  for (const k of [c?.default_class, ...(c?.net_classes ?? [])]) if (k && k !== own) add(k.track_width, `${k.name} class: ${mmLabel(k.track_width)} mm`);
+  for (const w of COMMON_WIDTHS) add(w, `${w / MIL} mil (${mmLabel(w)} mm)`);
+  if (width !== null && !out.some((p) => p.value === String(width))) out.push({ value: "custom", label: `Custom (${mmLabel(width)} mm)` });
+  return out;
+}
+
+/** The width select's value for the current width override (one of `presets`). */
+export const widthPresetValue = (presets: Preset[], width: Nm | null) =>
+  width === null ? "" : presets.some((p) => p.value === String(width)) ? String(width) : "custom";
+
+const viaValue = (v: ViaSize) => `${v.drill}/${v.diameter}`;
+const viaText = (v: ViaSize) => `${mmLabel(v.drill)} / ${mmLabel(v.diameter)} mm`;
+
+/** Via choices for `net`: "" follows the net's class, then other classes, then the common pairs. */
+export function viaPresets(c: Constraints | undefined, net: string): Preset[] {
+  const own = classOf(c, net);
+  const out: Preset[] = [{ value: "", label: own ? `Net class ${own.name} (${viaText({ drill: own.via_drill, diameter: own.via_diameter })})` : "Net class" }];
+  const add = (v: ViaSize, label: string) => {
+    if (!out.some((p) => p.value === viaValue(v))) out.push({ value: viaValue(v), label });
+  };
+  for (const k of [c?.default_class, ...(c?.net_classes ?? [])])
+    if (k && k !== own) add({ drill: k.via_drill, diameter: k.via_diameter }, `${k.name} class: ${viaText({ drill: k.via_drill, diameter: k.via_diameter })}`);
+  for (const v of COMMON_VIAS) add(v, viaText(v));
+  return out;
+}
+
+/** The via select's value -> via size (null = net class, or not a valid drill/diameter pair). */
+export function parseVia(value: string): ViaSize | null {
+  const m = /^(\d+)\/(\d+)$/.exec(value);
+  if (!m) return null;
+  const v = { drill: Number(m[1]), diameter: Number(m[2]) };
+  return v.drill > 0 && v.diameter > v.drill ? v : null;
+}
+export const viaPresetValue = (v: ViaSize | null) => (v ? viaValue(v) : "");
+
+const segLen = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
+
+/** Total length (nm) of the committed tracks of `net`. */
+export const netTrackLength = (tracks: Track[], net: string) => tracks.filter((t) => t.net === net).reduce((s, t) => s + segLen(t.a, t.b), 0);
+
+/** Length (nm) of the route being drawn: its fixed steps plus the engine's live proposal. */
+export function draftLength(d: RouteDraft | null, live: RouteStepReport | null): number {
+  if (!d) return 0;
+  const fixed = d.steps.reduce((s, st) => s + st.segments.reduce((t, g) => t + segLen(g.a, g.b), 0), 0);
+  return fixed + (live ? live.segments.reduce((t, g) => t + segLen(g.a, g.b), 0) : 0);
+}
+
+/** Live net-length readout: committed copper plus the route being drawn. */
+export const netLengthText = (committed: number, route: number) =>
+  `${mmLabel(committed + route)} mm (${mmLabel(committed)} committed + ${mmLabel(route)} this route)`;
+
+/**
+ * Loop removal: the committed tracks of the route's net that the finished route replaces.
+ * They are an unbranched chain of tracks on one layer from the route's start to its end, so
+ * once the new route joins the same two points the chain is a redundant loop. The chain may
+ * not pass a pad or a via, may not have a branch (a third track at a joint, or a track ending
+ * on one of its segments), and must be on a layer both ends reach (the route's start and end
+ * layers, or any layer at a through-hole pad). Anything else removes nothing: the rule never
+ * disconnects copper.
+ */
+export function loopTracks(d: RouteDraft, tracks: Track[], vias: Via[], footprints: FootprintGeom[]): string[] {
+  if (!d.steps.length) return [];
+  const own = tracks.filter((t) => t.net === d.net && !samePt(t.a, t.b));
+  const endLayer = d.steps[d.steps.length - 1].layer;
+  const pads = footprints.flatMap((f) => f.pads);
+  const tht = (p: Point) => pads.some((pad) => pad.kind === "tht" && padCovers(pad, p));
+  const stop = (p: Point) => vias.some((v) => samePt(v.position, p)) || pads.some((pad) => padCovers(pad, p));
+  const key = (l: CopperLayer, p: Point) => `${layerKey(l)}:${p.x},${p.y}`;
+  const at = new Map<string, Track[]>();
+  for (const t of own) for (const p of [t.a, t.b]) at.set(key(t.layer, p), [...(at.get(key(t.layer, p)) ?? []), t]);
+  const onInterior = (p: Point, t: Track) => {
+    if (samePt(p, t.a) || samePt(p, t.b)) return false;
+    const len = segLen(t.a, t.b);
+    return Math.abs(segLen(t.a, p) + segLen(p, t.b) - len) < 1;
+  };
+  const layers = [...new Map(own.map((t): [string, CopperLayer] => [layerKey(t.layer), t.layer])).values()];
+  for (const l of layers) {
+    if (!(sameLayer(l, d.startLayer) || tht(d.origin)) || !(sameLayer(l, endLayer) || tht(d.anchor))) continue;
+    const s = key(l, d.origin);
+    const e = key(l, d.anchor);
+    if (s === e) continue;
+    for (const first of at.get(s) ?? []) {
+      let chain: Track[] | null = [first];
+      let prev = first;
+      let node = samePt(first.a, d.origin) ? first.b : first.a;
+      while (chain && key(l, node) !== e) {
+        const inc = at.get(key(l, node)) ?? [];
+        if (inc.length !== 2 || stop(node) || chain.length > own.length) chain = null;
+        else {
+          const next = inc[0] === prev ? inc[1] : inc[0];
+          chain.push(next);
+          node = samePt(next.a, node) ? next.b : next.a;
+          prev = next;
+        }
+      }
+      if (!chain) continue;
+      const found = chain;
+      const inChain = new Set(found.map((t) => t.id));
+      const branched = own.some((o) => !inChain.has(o.id) && sameLayer(o.layer, l) && found.some((t) => onInterior(o.a, t) || onInterior(o.b, t)));
+      if (!branched) return found.map((t) => t.id);
+    }
+  }
+  return [];
 }
