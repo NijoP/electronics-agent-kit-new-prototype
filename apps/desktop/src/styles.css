@@ -745,6 +745,26 @@ button.danger { color: var(--err); border-color: var(--err); }
 .unavail { color: var(--fg-dim); font-family: inherit; font-size: var(--fs-xs); font-style: italic; }
 .tool-options .unavail, .tool-options .opt-info { color: var(--fg-dim); }
 
+/* C1 layer UX: panel groups, lock and active marker; canvas layer tab strip; outline view. */
+.layer-group { font-size: var(--fs-sm); color: var(--fg-dim); padding: var(--s-half) var(--s-1) 0; text-transform: uppercase; letter-spacing: 0.04em; }
+.layer-marker { width: 1em; text-align: center; color: var(--accent); }
+.layer-row.locked .grow { opacity: 0.6; }
+.layer-tabs { display: inline-flex; gap: 2px; align-items: center; }
+.layer-tab { display: inline-flex; align-items: center; gap: var(--s-half); }
+.layer-tab.on { background: var(--accent-soft); box-shadow: inset 0 -2px 0 var(--accent); }
+.layer-tab.off { opacity: 0.55; }
+.layer-tab .swatch { width: 10px; height: 10px; border-radius: 2px; border: 1px solid var(--line-strong); }
+.layer-tab .tab-flag { font-size: 0.8em; }
+.off-layer { pointer-events: none; }
+.outline-view .zone { fill: none !important; stroke-width: 0.05; }
+.outline-view .pad rect, .outline-view .via circle { fill: none; stroke: var(--c-pad); stroke-width: 0.05; }
+.outline-view .via circle { stroke: var(--c-via); }
+.outline-view .drill { display: none; }
+.track-outline { fill: none; stroke-width: 0.05; }
+/* The PCB view has a fourth row (the layer tab strip): the canvas always takes the last, flexible
+   row, so the strip is never laid under the canvas (it was: the strip took the 1fr row). */
+.view.pcb-view { grid-template-rows: auto auto auto minmax(0, 1fr); }
+.view.pcb-view > .canvas, .view.pcb-view > .canvas-stack { grid-row: 4; }
 /* ---- Symbol and footprint editors (D2) ---- */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .part-editor { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); background: var(--bg-app); }

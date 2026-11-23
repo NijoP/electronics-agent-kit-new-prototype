@@ -37,6 +37,8 @@ const PCB: EditorKey[] = [
   { keys: "Backspace", label: "Undo the last route segment (Route tool)" },
   { keys: "/", label: "Change the route corner mode (Route tool)" },
   { keys: "L", label: "Next copper layer (Route tool)" },
+  { keys: "+ / -", label: "Next / previous copper layer (any tool; while routing, a via)" },
+  { keys: "Alt+T / Alt+B", label: "Top / bottom copper layer" },
   { keys: "Mod+A", label: "Select every footprint" },
 ];
 

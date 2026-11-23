@@ -207,6 +207,16 @@ jobs:
           UI_SCENARIO: scenarios/c4-pcb-objects.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # C1 (layer UX): layer tab strip, layer keys, lock, flip / outline views, persistence.
+      - name: Run C1 layer UX scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/c1
+          UI_SCENARIO: scenarios/c1-layers.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # B4 (place tools): wire corner modes and guides, power port, off-page connector, bus, bus
       # entry, sheet text and rectangle, fan-out, Settings > Power ports.
       - name: Run B4 place tools scenario under Xvfb
@@ -224,7 +234,7 @@ jobs:
         if: always()
         run: |
           missing=0
-          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b6 c6 c4 b4; do
+          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b6 c6 c4 c1 b4; do
             f="${{ runner.temp }}/ui-evidence/${d:+$d/}UI_EVIDENCE.md"
             if [ -f "$f" ]; then
               cat "$f" >> "$GITHUB_STEP_SUMMARY"
@@ -277,4 +287,6 @@ jobs:
             ${{ runner.temp }}/ui-evidence/c6/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/c4/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/c4/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/c1/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/c1/UI_EVIDENCE.md
           if-no-files-found: warn

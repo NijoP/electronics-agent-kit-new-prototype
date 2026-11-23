@@ -12,6 +12,9 @@ export const layerName = (l: CopperLayer): string =>
 
 export const sameLayer = (a: CopperLayer, b: CopperLayer): boolean => layerKey(a) === layerKey(b);
 
+/** Status-bar name of the active copper layer: Top, Inner 1, …, Bottom. */
+export const statusLayerName = (l: CopperLayer): string => (l === "top" ? "Top" : l === "bottom" ? "Bottom" : `Inner ${l.inner}`);
+
 const INNER_COLOURS = ["#c9a227", "#3fa66b", "#8a5cc6", "#d9743c", "#2e9fb5", "#b34a7a"];
 
 /** Display colour per layer (outer layers keep the familiar red/blue). */

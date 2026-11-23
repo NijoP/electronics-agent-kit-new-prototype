@@ -203,12 +203,22 @@ describe("picking parity: delete tool and track selection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     clickOn(svg, [15, 15]);
     clickOn(svg, [15, 10]);
+    clickOn(svg, [5, 15]); // the zone is on B.Cu, the active layer is F.Cu: a miss
+    fireEvent.click(screen.getByRole("tab", { name: "B.Cu" }));
     clickOn(svg, [5, 15]);
     expect(sent).toEqual([
       { type: "DeleteVia", via_id: "via_1" },
       { type: "DeleteTrack", track_id: "trk_1" },
       { type: "DeleteZone", zone_id: "zon_1" },
     ]);
+  });
+
+  it("picking is active-layer-exclusive: with B.Cu active, the F.Cu track over the B.Cu zone is not picked", () => {
+    const { svg } = setup(fixture());
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("tab", { name: "B.Cu" }));
+    clickOn(svg, [15, 10]);
+    expect(sent).toEqual([{ type: "DeleteZone", zone_id: "zon_1" }]);
   });
 
   it("Select picks a track for editing", () => {
