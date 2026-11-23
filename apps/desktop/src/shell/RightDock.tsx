@@ -2,6 +2,8 @@
 // selection filter, slice B3) and (in the PCB) Layers. The filter covers the schematic only; in the
 // PCB the tab is disabled with that reason, never shown as a working control.
 import type { ReactNode } from "react";
+import { tip } from "../design/shortcuts";
+import { useActionKey } from "../settings/keymap";
 
 export type RightTab = "properties" | "filter" | "layers";
 
@@ -30,6 +32,7 @@ interface DockProps {
 
 /** The dock frame: tab strip, hide button and the active tab's content. */
 export function RightDock({ pcb, tab, onTab, onClose, children }: DockProps) {
+  const hideKey = useActionKey("toggle-right");
   return (
     <aside className="right-dock" aria-label="Right panel">
       <div className="tabs" role="tablist" aria-label="Right panel tabs">
@@ -39,7 +42,7 @@ export function RightDock({ pcb, tab, onTab, onClose, children }: DockProps) {
           </button>
         ))}
         <span className="spacer" />
-        <button type="button" className="icon" aria-label="Hide right panel" title="Hide panel (Ctrl+Shift+B)" onClick={onClose}>
+        <button type="button" className="icon" aria-label="Hide right panel" title={tip("Hide panel", hideKey)} onClick={onClose}>
           ×
         </button>
       </div>

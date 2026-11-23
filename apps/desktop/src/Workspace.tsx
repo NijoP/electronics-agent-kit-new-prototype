@@ -1,7 +1,7 @@
 // Project workspace: toolbar, schematic + PCB views with cross-probing, Engineering
 // Monitor, activity log, status bar and command palette. State shown here is always the
 // latest engine snapshot; edits are engine calls carrying the rendered revision.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, describeError } from "./api";
 import { useRealtimeDrc } from "./realtimeDrc";
 import { DomainPanel } from "./DomainPanel";
@@ -10,7 +10,7 @@ import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
 import { PcbView } from "./PcbView";
 import { SchematicView } from "./SchematicView";
-import { formatShortcut, SHORTCUTS } from "./design/shortcuts";
+import { formatShortcut } from "./design/shortcuts";
 import { actionForKey, contextMenuFor, keysOf, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./actions/registry";
 import { workspaceActions } from "./actions/sets";
 import { usePowerPorts } from "./settings/powerPorts";
@@ -32,7 +32,7 @@ import { RulesDialog } from "./shell/RulesDialog";
 import { AnnotateDialog } from "./shell/AnnotateDialog";
 import { NewProjectDialog, OpenProjectDialog } from "./shell/ProjectDialogs";
 import { Toolbar } from "./shell/Toolbar";
-import { canvasControls, DocIdContext, setActiveEditor, setEditorTool } from "./shell/viewState";
+import { canvasControls, DocIdContext, modalOpen, setActiveEditor, setEditorTool } from "./shell/viewState";
 import { LayerManager } from "./shell/LayerManager";
 import { useLayerView } from "./layerView";
 import { lockProblem } from "./layerLock";
@@ -69,7 +69,7 @@ import { Splitter } from "./shell/Splitter";
 import { nextRotation } from "./editing";
 import { formatLength, GridControls, useGridConfig } from "./grid";
 import { SettingsDialog } from "./settings/SettingsDialog";
-import { useKeymap } from "./settings/keymap";
+import { effectiveKeys, useKeymap } from "./settings/keymap";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
 import { sheetsInOrder } from "./shell/sheets";
@@ -154,6 +154,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const [prefs, setPrefs] = useState(false);
   // Menus, tooltips and the palette show the effective keys: re-render when a key is rebound.
   useKeymap();
+  const quickKey = effectiveKeys({ id: "quick-open" })[0];
   const [conn, setConn] = useState<ConnectivityReport | null>(null);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [activeFinding, setActiveFinding] = useState<string | null>(null);
@@ -782,9 +783,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const keys = useRef<{ actions: Action[]; ctx: DocContext }>({ actions: [], ctx: "home" });
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
-  useEffect(() => {
+  // Layout effect: the listener is attached in the same commit as the workspace DOM, so a shortcut
+  // pressed right after the editor appears is never lost (CI flake in shell.test quick open).
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!visibleRef.current) return;
+      if (!visibleRef.current || modalOpen()) return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
       const a = actionForKey(keys.current.actions, keys.current.ctx, e, typing);
       if (!a) return;
@@ -1036,7 +1039,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
               {noParts && (activeKind === "schematic" || activeKind === "pcb") && (
                 <div className="canvas-empty" aria-label="Empty design">
                   <strong>An empty design</strong>
-                  <span>Open the Library tab of the bottom panel to place a part, or press {formatShortcut(SHORTCUTS.quickOpen)} to go anywhere.</span>
+                  <span>Open the Library tab of the bottom panel to place a part, or use Quick open{quickKey ? ` (${formatShortcut(quickKey)})` : ""} to go anywhere.</span>
                 </div>
               )}
             </div>
