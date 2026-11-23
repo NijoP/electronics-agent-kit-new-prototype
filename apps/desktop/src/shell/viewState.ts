@@ -1,7 +1,7 @@
 // Per-document canvas state shared between the workspace and the canvases without touching the
 // editors: which document a canvas belongs to (context), its last viewport (kept across tab
 // closes and sessions), and imperative zoom / tool controls the toolbar drives.
-import { createContext, useContext, useEffect, useLayoutEffect, useSyncExternalStore } from "react";
+import { createContext, useContext, useLayoutEffect, useSyncExternalStore } from "react";
 import type { Bounds, ViewBox } from "../viewport";
 
 export const DocIdContext = createContext<string | null>(null);
