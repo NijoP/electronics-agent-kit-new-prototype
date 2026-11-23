@@ -34,7 +34,7 @@ export function SyncReportDialog({ report, error, revision, onOpenPcb, onClose }
   useEscape(onClose);
   return (
     <div className="palette-backdrop" onClick={onClose}>
-      <div className="palette sync-report" role="dialog" aria-label="Update PCB report" onClick={(e) => e.stopPropagation()}>
+      <div className="palette sync-report" role="dialog" aria-modal="true" aria-label="Update PCB report" onClick={(e) => e.stopPropagation()}>
         <h3>Update PCB{revision != null && report && !report.inSync ? ` → revision ${revision}` : ""}</h3>
         {error && <p role="alert" className="explorer-error">{error}</p>}
         {report?.inSync && <p>The PCB already matches the schematic. Nothing was added, removed or modified.</p>}

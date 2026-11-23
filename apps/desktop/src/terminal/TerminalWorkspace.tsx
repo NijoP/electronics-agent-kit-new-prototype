@@ -10,6 +10,7 @@ import { describeStatus, term, type Overview, type SessionInfo, type Space, type
 import { disposeTerminal, XTermView } from "./XTermView";
 import { StatusDot } from "../design/ui";
 import { AGENT_DOT, agentEntries, rollup, STATE_WORD, tabTitle } from "./agents";
+import { boundToOtherProject, spaceForProject } from "./projectSpace";
 
 export interface ProjectContext { dir: string; name: string; id: string; revision?: number | null }
 
@@ -141,10 +142,14 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
     const i = tabs.findIndex((x) => x.id === t.id) + by;
     if (i >= 0 && i < tabs.length) act(() => term.moveTab(t.id, i));
   };
+  // A session inherits EAK_PROJECT_DIR / EAK_PROJECT_ID from its space: an agent started in a
+  // space bound to another project edits that project, and nothing appears in the open editors.
+  const otherProject = boundToOtherProject(space, project);
   const projectSpace = useCallback(async () => {
     if (!project) return;
     const ovNow = await term.overview();
-    const have = ovNow.spaces.find((s) => s.root === project.dir);
+    // By project id, else by folder (separators, trailing slash, Windows drive case ignored).
+    const have = spaceForProject(ovNow.spaces, project);
     const sp = have ?? (await term.spaceCreate(project.name, project.dir));
     setActiveSpace(sp.id);
     if (!ovNow.sessions.some((s) => s.space === sp.id)) await term.create({ space: sp.id });
@@ -407,6 +412,15 @@ export function TerminalWorkspace({ project, visible, newSpaceNonce }: Props) {
           {project && project.revision != null && (
             <div className="term-msg" data-testid="agent-task" title={taskTitle(agentTask)}>
               {project.name}: {taskSummary(agentTask, project.revision)}
+            </div>
+          )}
+          {otherProject && project && space && (
+            <div className="term-msg term-other-project" role="alert">
+              Space “{space.name}” belongs to another project, not “{project.name}” (open in the editors). Agents here
+              edit that project, so their changes will not appear in the schematic or PCB.
+              <button type="button" onClick={() => void projectSpace().catch((e) => setMessage(String(e)))}>
+                Go to {project.name}’s space
+              </button>
             </div>
           )}
           {message && (

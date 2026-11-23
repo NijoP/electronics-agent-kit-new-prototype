@@ -44,7 +44,9 @@ if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { Die "unsupported architecture $($
 # ---------------------------------------------------------------- bundle choice
 if ($Bundles -eq 'auto') { $Bundles = 'none' }
 if ($Bundles -notmatch '^[A-Za-z0-9,_-]+$') { Die "invalid bundle value '$Bundles'" }
-$bundleArgs = if ($Bundles -eq 'none') { @('--no-bundle') } else { @('--bundles', $Bundles) }
+# @(...) keeps these arrays: PowerShell unrolls a one-element array returned from `if`, and
+# splatting the resulting string passes it character by character ("- - n o - b u n d l e").
+$bundleArgs = @(if ($Bundles -eq 'none') { '--no-bundle' } else { '--bundles', $Bundles })
 
 # ---------------------------------------------------------------- prerequisites
 Say 'Checking build prerequisites (windows-x86_64)'
@@ -115,7 +117,7 @@ try {
     & npm ci --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { Die 'npm ci failed' @('Check the network and that package-lock.json matches package.json.') }
   }
-  $cargoArgs = if ($env:EAK_UNLOCKED -eq '1') { @('--') } else { @('--', '--locked') }
+  $cargoArgs = @(if ($env:EAK_UNLOCKED -eq '1') { '--' } else { '--', '--locked' })
   Say "Building the desktop app: npm run tauri -- build $($bundleArgs -join ' ') (frontend build runs once via beforeBuildCommand)"
   Write-Host '    the first build compiles the whole Rust dependency tree and can take a long time'
   & npm run tauri -- build --ci @bundleArgs @cargoArgs
@@ -126,7 +128,7 @@ try {
   }
 } finally { Pop-Location }
 
-$cliArgs = if ($env:EAK_UNLOCKED -eq '1') { @() } else { @('--locked') }
+$cliArgs = @(if ($env:EAK_UNLOCKED -ne '1') { '--locked' })   # @(...): see $bundleArgs
 Say "Building the EAK CLI and MCP harness: cargo build --release $($cliArgs -join ' ') -p eak-harness --bin eak --bin eak-mcp"
 Push-Location $root
 try {

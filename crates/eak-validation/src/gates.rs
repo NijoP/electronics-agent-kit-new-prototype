@@ -310,6 +310,15 @@ pub fn evaluate(p: &Project, fab: Option<&FabProfile>) -> GateReport {
     if !has_copper {
         unknown_unless_failed(&mut g, "no copper on the board: nothing to evaluate");
     }
+    // ADR-0048: DRC-002 UNKNOWN (a net with no declared voltage, or a configured clearance-matrix
+    // cell no rule checks) means part of the clearance check did not run: never PASS.
+    if let Some(rr) = drc
+        .rule_results
+        .iter()
+        .find(|r| r.rule_id == "DRC-002" && r.state == crate::state::CheckState::Unknown)
+    {
+        unknown_unless_failed(&mut g, format!("DRC-002 is UNKNOWN: {}", rr.reason));
+    }
     // Net-class clearance applies to every net; the voltage part only to declared nets.
     g.reasons.extend(drc::undeclared_nets_not_evaluated(p));
     gates.push(g);
@@ -533,5 +542,58 @@ mod tests {
         if !fab.verified {
             assert_ne!(state(&r, "fabricator_capability"), GateState::Pass);
         }
+    }
+
+    /// 20 × 20 mm board with one THT pad of J1 on the signal net SIG (no schematic, so SIG is
+    /// not a power net and the electrical_constraints gate does not see it).
+    fn signal_pad_board() -> Project {
+        use eak_core::{FootprintInstance, Point, Rotation, Side};
+        let mut p = Project::new("sig");
+        let mut def = eak_core::builtin::get("CONN_1x02_P2.54").unwrap();
+        def.footprint.pads.truncate(1);
+        def.footprint.pads[0].position = Point::default();
+        p.library.insert(def.id.clone(), def.clone());
+        p.pcb.board.outline = vec![
+            Point::mm(0.0, 0.0),
+            Point::mm(20.0, 0.0),
+            Point::mm(20.0, 20.0),
+            Point::mm(0.0, 20.0),
+        ];
+        p.pcb.footprints.insert(
+            "fp".into(),
+            FootprintInstance {
+                id: "fp".into(),
+                symbol_id: "sym".into(),
+                component_id: def.id.clone(),
+                refdes: "J1".into(),
+                position: Point::mm(10.0, 10.0),
+                rotation: Rotation::R0,
+                side: Side::Top,
+                pad_nets: [("1".to_string(), "SIG".to_string())].into(),
+                locked: false,
+            },
+        );
+        p
+    }
+
+    /// F1 / S1 regression (ADR-0048): DRC-002 degraded to UNKNOWN by a signal net with no
+    /// declared voltage makes the clearances gate UNKNOWN, never PASS.
+    #[test]
+    fn undeclared_voltage_on_a_signal_net_leaves_clearances_unknown() {
+        let mut p = signal_pad_board();
+        let r = evaluate(&p, None);
+        assert_eq!(state(&r, "clearances"), GateState::Unknown);
+        let g = r.gates.iter().find(|g| g.id == "clearances").unwrap();
+        assert!(
+            g.reasons
+                .iter()
+                .any(|x| x.starts_with("DRC-002 is UNKNOWN") && x.contains("SIG")),
+            "{:?}",
+            g.reasons
+        );
+        assert!(!r.required_passed);
+        p.constraints.net_voltages_v.insert("SIG".into(), 3.3);
+        let r = evaluate(&p, None);
+        assert_ne!(state(&r, "clearances"), GateState::Unknown);
     }
 }

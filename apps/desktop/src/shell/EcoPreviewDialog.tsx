@@ -37,7 +37,7 @@ export function EcoPreviewDialog({ preview, busy, onApply, onExport, onClose }: 
   };
   return (
     <div className="palette-backdrop" onClick={onClose}>
-      <div className="palette eco-preview" role="dialog" aria-label="Update PCB: review changes" onClick={(e) => e.stopPropagation()}>
+      <div className="palette eco-preview" role="dialog" aria-modal="true" aria-label="Update PCB: review changes" onClick={(e) => e.stopPropagation()}>
         <h3>Update PCB: review changes (revision {preview.revision})</h3>
         <p className="muted">Nothing on the PCB changes until you apply. {rows.length} change(s) from the schematic.</p>
         <div className="eco-bar">

@@ -1,6 +1,6 @@
 {
   "name": "E7 release check",
-  "description": "Slice E7: Manufacturing > Release check… opens a read-only view of the release gate of the current revision. On a fresh fixture project nothing has run, so ERC, DRC, MECH and DFM are NOT_RUN, fabricator capability is DISABLED (the DFM report covers it), the board outline gate FAILs and the status is DRAFT with the blocking reasons listed. Run release checks saves the four reports: they leave NOT_RUN, and the status stays DRAFT while a required gate fails. After an engine command (a board outline, SETUP) the saved reports speak for the old revision, so reopening the view shows ERC NOT_RUN again and DRAFT: a NOT_RUN gate never releases. The wording lint is in src/shell/releaseCheck.test.tsx.",
+  "description": "Slice E7: Manufacturing > Release check… opens a read-only view of the release gate of the current revision. On a fresh fixture project nothing has run, so ERC, DRC, MECH and DFM are NOT_RUN, fabricator capability is DISABLED (the DFM report covers it), the board outline gate FAILs and the status is DRAFT with the blocking reasons listed. Run release checks saves the four reports: they leave NOT_RUN, and the status stays DRAFT while a required gate fails. After an engine command (a board outline, SETUP) the saved reports speak for the old revision, so reopening the view shows ERC NOT_RUN again and DRAFT: a NOT_RUN gate never releases. F1 (ADR-0048): a via on the signal net SIG, which has no declared voltage, leaves DRC-002 UNKNOWN; after Run release checks the DRC row and the clearances gate are UNKNOWN (never PASS), \"DRC: DRC-002 is UNKNOWN\" is a blocking reason and the status stays DRAFT. The wording lint is in src/shell/releaseCheck.test.tsx.",
   "steps": [
     {
       "id": "home",
@@ -151,6 +151,71 @@
       "id": "e7-close2",
       "do": "click",
       "title": "E7: close the view",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] .modal-head button",
+      "text": "Close",
+      "gone": "[role=\"dialog\"][aria-label=\"Release check\"]"
+    },
+    {
+      "id": "f1-via",
+      "do": "fixture-commands",
+      "title": "F1: a via on the signal net SIG, which has no declared voltage (engine command, SETUP)",
+      "commands": [
+        { "type": "AddVia", "position": { "x": 10000000, "y": 15000000 }, "net": "SIG" }
+      ]
+    },
+    {
+      "id": "f1-open",
+      "do": "menu",
+      "title": "F1: reopen Release check on the revision with SIG copper",
+      "menu": "Manufacturing",
+      "item": "Release check",
+      "expect": "[role=\"dialog\"][aria-label=\"Release check\"] section[aria-label=\"Release status\"] strong",
+      "expectText": "DRAFT",
+      "timeout": 60000
+    },
+    {
+      "id": "f1-run",
+      "do": "click",
+      "title": "F1: Run release checks saves the reports of this revision",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] button.primary",
+      "text": "Run release checks",
+      "shot": false
+    },
+    {
+      "id": "f1-drc-unknown",
+      "do": "wait",
+      "title": "F1: DRC-002 could not be evaluated for SIG, so the DRC row is UNKNOWN, never PASS",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] tr[data-gate=\"drc\"] td.gate-state",
+      "text": "UNKNOWN",
+      "timeout": 90000
+    },
+    {
+      "id": "f1-clearances-unknown",
+      "do": "wait",
+      "title": "F1: the clearances gate is UNKNOWN (DRC-002 degraded)",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] tr[data-gate=\"clearances\"] td.gate-state",
+      "text": "UNKNOWN",
+      "shot": false
+    },
+    {
+      "id": "f1-blocking",
+      "do": "wait",
+      "title": "F1: the UNKNOWN rule is a blocking reason naming DRC-002",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] ul[aria-label=\"Blocking reasons\"] li",
+      "text": "DRC: DRC-002 is UNKNOWN"
+    },
+    {
+      "id": "f1-draft",
+      "do": "wait",
+      "title": "F1: an UNKNOWN rule keeps the revision DRAFT",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] section[aria-label=\"Release status\"] strong",
+      "text": "DRAFT",
+      "shot": false
+    },
+    {
+      "id": "f1-close",
+      "do": "click",
+      "title": "F1: close the view",
       "selector": "[role=\"dialog\"][aria-label=\"Release check\"] .modal-head button",
       "text": "Close",
       "gone": "[role=\"dialog\"][aria-label=\"Release check\"]"

@@ -13,6 +13,9 @@ use eak_runtime::index::Index;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+/// A configured (non-reserved) distributor host, so the live path reaches the fake provider.
+const HOST: &str = "https://api.distributor.example";
+
 fn tmp(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("eak-lib-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -312,7 +315,7 @@ fn a_supplier_listing_is_saved_without_an_engineering_definition_and_says_it_nee
     let snap = create_project(&s, &d.display().to_string(), "Save test").unwrap();
     let p = Resilient::new(Fake).with_sleep(|_| {});
 
-    let saved = parts_save_record(&s, &p, "c99999").unwrap();
+    let saved = parts_save_record(&s, &p, HOST, "c99999").unwrap();
     // No definition exists and no template can carry a microcontroller: nothing is invented.
     assert_eq!(saved.link.standing, Standing::NeedsAuthoring);
     assert!(saved.link.import_template.is_none());
@@ -325,7 +328,7 @@ fn a_supplier_listing_is_saved_without_an_engineering_definition_and_says_it_nee
     assert_eq!(again.project.revision, snap.project.revision);
     assert!(!again.project.library.contains_key("DISTRIBUTOR_C99999"));
 
-    let e = parts_save_record(&s, &p, "C1").unwrap_err();
+    let e = parts_save_record(&s, &p, HOST, "C1").unwrap_err();
     assert!(e.contains("no such part"));
 }
 
@@ -441,4 +444,51 @@ fn library_search_and_place_list_honour_the_enabled_flag_and_show_every_scope() 
         all.iter().map(|p| &p.id).collect::<Vec<_>>()
     );
     assert!(library_components_in(&st).is_empty());
+}
+
+/// S10 regression: "Add to project" sends `ImportLibraryComponent`, which the engine only
+/// resolves for built-in parts, so it always failed for a personal or imported part. It is now
+/// rewritten into the copy (`UpsertComponentDefinition`) alone, one revision and undo step.
+#[test]
+fn add_to_project_of_a_personal_part_copies_it_instead_of_failing() {
+    use eak_desktop::libstore::resolve_scoped_parts;
+    use eak_runtime::{Actor, Command as C, CommandRequest, Engine};
+    let st = store("add-scoped");
+    let mut mine = resistor();
+    mine.id = "MY_ADD_R".into();
+    st.personal_save(mine).unwrap();
+    let mut e = Engine::in_memory(eak_core::Project::new("Add"));
+    let import = C::ImportLibraryComponent {
+        component_id: "MY_ADD_R".into(),
+    };
+    let (cmd, notes) = resolve_scoped_parts(&st, &e.project().library, import).unwrap();
+    let C::Batch { commands, label } = &cmd else {
+        panic!("expected a Batch, got {cmd:?}")
+    };
+    assert_eq!(commands.len(), 1, "{commands:?}");
+    let C::UpsertComponentDefinition { definition } = &commands[0] else {
+        panic!("expected the copy, got {commands:?}")
+    };
+    assert_eq!(definition.id, "MY_ADD_R");
+    assert_eq!(label.as_deref(), Some("Add MY_ADD_R"));
+    assert!(notes[0].contains("personal"), "{notes:?}");
+    let rev = e.project().revision;
+    let r = e.execute(CommandRequest {
+        expected_revision: rev,
+        actor: Actor::human(),
+        command: cmd,
+        approval: None,
+    });
+    assert!(r.accepted, "{:?}", r.error);
+    assert_eq!(r.revision_after, rev + 1);
+    assert!(e.project().library.contains_key("MY_ADD_R"));
+
+    // A built-in part still goes to the engine's own import unchanged.
+    let builtin_import = C::ImportLibraryComponent {
+        component_id: "R_0603".into(),
+    };
+    let again = builtin_import.clone();
+    let (cmd, notes) = resolve_scoped_parts(&st, &e.project().library, again).unwrap();
+    assert_eq!(cmd, builtin_import);
+    assert!(notes.is_empty());
 }

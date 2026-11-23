@@ -85,11 +85,15 @@ export function useRegisterTools(docId: string | null, set: (tool: string) => bo
 // Which editor owns the keyboard. Both editors listen on `window`, so in split view every
 // keypress would act in both; each editor ignores keys unless it is the active one. Clicking an
 // editor (or its tab) makes it active. No active editor recorded = no restriction (single view).
+// While an `aria-modal` dialog is open no editor owns the keyboard: the keys stay with the dialog.
 let activeEditor: string | null = null;
 export const setActiveEditor = (id: string | null) => {
   activeEditor = id;
 };
-export const isActiveEditor = (id: string | null) => id === null || activeEditor === null || activeEditor === id;
+export const isActiveEditor = (id: string | null) => !modalOpen() && (id === null || activeEditor === null || activeEditor === id);
+
+/** True while an `aria-modal` dialog is open: global shortcuts and editor keys then do nothing behind it. */
+export const modalOpen = (): boolean => typeof document !== "undefined" && document.querySelector('[aria-modal="true"]') !== null;
 
 // Canvas readout of each document (A3 canvas strip): the pointer position, the anchor of the last
 // primary press (for dX / dY) and the scale, all in view millimetres (Y down) as the canvas reports

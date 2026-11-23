@@ -45,7 +45,7 @@ function useNetlist(revision: number): { rows: NetRow[] | null; error: string | 
 const EMPTY: Record<ManagerTab, string> = {
   pages: "No sheets or board in this project.",
   nets: "No nets yet: connect pins or add net labels in the schematic.",
-  components: "No components yet: place a part from the Library tab of the bottom panel, or press Ctrl+P.",
+  components: "No components yet: place a part from the Library tab of the bottom panel, or use Quick open.",
   objects: "No wires, labels, tracks, vias or zones yet.",
 };
 

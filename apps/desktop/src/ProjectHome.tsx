@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, pickFolder } from "./api";
 import { formatShortcut, HOME_SHORTCUTS, matches, tip } from "./design/shortcuts";
 import { EmptyState, Pill } from "./design/ui";
+import { modalOpen } from "./shell/viewState";
 import type { LockState, ProjectStatus, RecentProject, Snapshot } from "./types";
 
 interface Props {
@@ -256,6 +257,7 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
       const t = e.target;
       const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
       if (e.key === "Escape") setMenu(false);
+      if (modalOpen()) return;
       if (matches(e, HOME_SHORTCUTS.openProject)) {
         e.preventDefault();
         if (!busy) void openFolder();

@@ -1,0 +1,34 @@
+{
+  "name": "F8 keys and modality",
+  "description": "Phase 1 DoD fix F8 (audit S8, S9, S24 tooltips). A fixture project gets one resistor through the engine's execute_command IPC (SETUP). In the real window: with Design rules open (an aria-modal dialog) Ctrl+Z does not undo behind it and Ctrl+J does not hide the bottom panel; once the dialog is closed Ctrl+Z undoes. In Settings, Ctrl+Shift+T (the app shell's new terminal space key) is refused for an action with the reason; Bottom panel is then rebound to Ctrl+Alt+J by real key presses and the bottom panel's Hide tooltip, built from the key map, follows.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "F8 Keys Fixture", "folder": "f8-keys-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "F8 Keys Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]" },
+    {
+      "id": "setup",
+      "do": "fixture-commands",
+      "title": "One 1k resistor (engine command)",
+      "commands": [{ "type": "PlaceSymbol", "sheet_id": null, "component_id": "R_0603", "position": { "x": 100000000, "y": 120000000 }, "rotation": "R0", "refdes": null, "value": "1k" }],
+      "expect": "section[aria-label=\"Schematic view\"] g[data-symbol-id]"
+    },
+    { "id": "f8-one", "do": "count", "title": "One part on the sheet", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 1, "shot": false },
+    { "id": "f8-tip-default", "do": "wait", "title": "F8: the bottom panel's Hide tooltip shows the default key Ctrl+J", "selector": "section[aria-label=\"Bottom panel\"] button[aria-label=\"Hide bottom panel\"][title=\"Hide panel (Ctrl+J)\"]", "shot": false },
+    { "id": "f8-rules", "do": "menu", "title": "F8: Design > Design rules opens a modal dialog", "menu": "Design", "item": "Design rules and net classes", "expect": "[role=\"dialog\"][aria-modal=\"true\"][aria-label=\"Design rules\"]" },
+    { "id": "f8-rules-undo", "do": "key", "title": "F8: Ctrl+Z with Design rules open", "keys": "ctrl+z", "shot": false },
+    { "id": "f8-rules-kept", "do": "count", "title": "F8: the part is still there (no undo behind the dialog)", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 1 },
+    { "id": "f8-rules-toggle", "do": "key", "title": "F8: Ctrl+J with Design rules open", "keys": "ctrl+j", "shot": false },
+    { "id": "f8-rules-bottom", "do": "wait", "title": "F8: the bottom panel is still shown (no global key behind the dialog)", "selector": "section[aria-label=\"Bottom panel\"] button[aria-label=\"Hide bottom panel\"]", "shot": false },
+    { "id": "f8-rules-close", "do": "click", "title": "F8: close Design rules", "selector": "[role=\"dialog\"][aria-label=\"Design rules\"] button", "text": "Close", "gone": "[role=\"dialog\"][aria-label=\"Design rules\"]", "shot": false },
+    { "id": "f8-undo", "do": "key", "title": "F8: Ctrl+Z without a dialog undoes the placement", "keys": "ctrl+z", "shot": false },
+    { "id": "f8-undone", "do": "count", "title": "F8: the part is gone after the undo", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 0 },
+    { "id": "f8-settings", "do": "menu", "title": "F8: Settings > Settings…", "menu": "Settings", "item": "Settings", "expect": "[role=\"dialog\"][aria-label=\"Settings\"] table[aria-label=\"Hotkeys\"]", "shot": false },
+    { "id": "f8-change", "do": "click", "title": "F8: Change keys of Bottom panel", "selector": "button[aria-label=\"Change keys of Bottom panel\"]", "expect": "button[aria-label=\"Change keys of Bottom panel\"][aria-pressed=\"true\"]", "shot": false },
+    { "id": "f8-shell-key", "do": "key", "title": "F8: Ctrl+Shift+T (new terminal space) is refused with the reason", "keys": "ctrl+shift+t", "expect": "[role=\"dialog\"][aria-label=\"Settings\"] p[role=\"alert\"]", "expectText": "Ctrl+Shift+T was not bound" },
+    { "id": "f8-change-2", "do": "click", "title": "F8: Change keys of Bottom panel again", "selector": "button[aria-label=\"Change keys of Bottom panel\"]", "expect": "button[aria-label=\"Change keys of Bottom panel\"][aria-pressed=\"true\"]", "shot": false },
+    { "id": "f8-rebind", "do": "key", "title": "F8: Ctrl+Alt+J is accepted for Bottom panel", "keys": "ctrl+alt+j", "expect": "table[aria-label=\"Hotkeys\"] tr[data-action=\"toggle-bottom\"] kbd", "expectText": "Ctrl+Alt+J" },
+    { "id": "f8-close", "do": "key", "title": "F8: Escape closes Settings", "keys": "Escape", "gone": "[role=\"dialog\"][aria-label=\"Settings\"]", "shot": false },
+    { "id": "f8-tip-rebound", "do": "wait", "title": "F8: the Hide tooltip now shows Ctrl+Alt+J", "selector": "section[aria-label=\"Bottom panel\"] button[aria-label=\"Hide bottom panel\"][title=\"Hide panel (Ctrl+Alt+J)\"]" }
+  ]
+}

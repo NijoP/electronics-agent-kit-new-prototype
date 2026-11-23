@@ -52,6 +52,18 @@ describe("SimulationPanel", () => {
     expect((screen.getByRole("button", { name: "Run simulation" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  // S17: the disabled Run and "+ Add" buttons say why.
+  it("gives every disabled button a reason (no ngspice, no nets)", async () => {
+    mockIPC((cmd) => (cmd === "simulation_status" ? { ...status(false), nets: [] } : undefined));
+    render(<SimulationPanel revision={3} />);
+    await screen.findByRole("alert");
+    const run = screen.getByRole("button", { name: "Run simulation" }) as HTMLButtonElement;
+    expect(run.title).toMatch(/ngspice is not installed/);
+    const add = screen.getByRole("button", { name: "+ Add" }) as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+    expect(add.title).toMatch(/no net/);
+  });
+
   it("runs a transient analysis and shows node voltages and a plot", async () => {
     let request: unknown;
     mockIPC((cmd, payload) => {

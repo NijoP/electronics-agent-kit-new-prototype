@@ -14,6 +14,7 @@ import { applyTheme, loadTheme, type Theme } from "./design/theme";
 import { ModelSettings } from "./ModelSettings";
 import { ProjectHome, saveSession } from "./ProjectHome";
 import { listWorkspaces, useRegistryVersion, type WorkspaceContext } from "./shell/registry";
+import { modalOpen } from "./shell/viewState";
 import "./shell/workspaces";
 import type { OpenProject, Snapshot } from "./types";
 import { Workspace } from "./Workspace";
@@ -72,7 +73,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (creator && matches(e, SHORTCUTS.newTerminalSpace)) {
+      if (creator && !modalOpen() && matches(e, SHORTCUTS.newTerminalSpace)) {
         e.preventDefault();
         creator.onNew?.();
         show(creator.id);
