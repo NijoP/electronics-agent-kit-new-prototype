@@ -31,6 +31,8 @@ const SECTIONS: &[&[&str]] = &[
     &["name"],
     &["requirements"],
     &["pcb", "board"],
+    // Schema v5 (ADR-0044): the route tool's saved options; one undo step per change.
+    &["pcb", "routing"],
     &["constraints"],
     &["manufacturing"],
     &["properties"],
