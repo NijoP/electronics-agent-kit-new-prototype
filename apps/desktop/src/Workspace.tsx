@@ -1,7 +1,7 @@
 // Project workspace: toolbar, schematic + PCB views with cross-probing, Engineering
 // Monitor, activity log, status bar and command palette. State shown here is always the
 // latest engine snapshot; edits are engine calls carrying the rendered revision.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, describeError } from "./api";
 import { useRealtimeDrc } from "./realtimeDrc";
 import { DomainPanel } from "./DomainPanel";
@@ -777,7 +777,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const keys = useRef<{ actions: Action[]; ctx: DocContext }>({ actions: [], ctx: "home" });
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
-  useEffect(() => {
+  // Layout effect: the listener is attached in the same commit as the workspace DOM, so a shortcut
+  // pressed right after the editor appears is never lost (CI flake in shell.test quick open).
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!visibleRef.current || modalOpen()) return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
