@@ -1,4 +1,4 @@
-# ADR-0046: Zone fill is derived and drawn from the DRC raster; stack-up edited through SetStackup
+# ADR-0047: Zone fill is derived and drawn from the DRC raster; stack-up edited through SetStackup
 - **Date:** 2026-11-23
 - **Context:** Phase 1 slice E5 (planes and stack-up completion). The PCB editor drew each zone as
   its translucent outline polygon, so the user never saw the copper the board would actually get:
