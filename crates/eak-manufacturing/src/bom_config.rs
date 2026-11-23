@@ -484,6 +484,7 @@ pub(crate) mod tests {
                     position: Point::mm(20.0 + 15.0 * i as f64, 40.0),
                     rotation: Rotation::R0,
                     mirror: false,
+                    field_visibility: Default::default(),
                 },
             );
         }
