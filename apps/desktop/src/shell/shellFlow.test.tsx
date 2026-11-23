@@ -8,7 +8,7 @@ import { IPC_COMMANDS } from "../api";
 import { App } from "../App";
 import { fixture } from "../fixture.test-data";
 import { remapFileDocs } from "./documents";
-import { registerWorkspace } from "./registry";
+import { registerWorkspace, type WorkspaceContext } from "./registry";
 
 let calls: { cmd: string; args: Record<string, unknown> }[];
 let files: Record<string, unknown[]>;
@@ -114,15 +114,46 @@ describe("registered workspaces", () => {
       off();
     }
   });
-  it("an EDA view (3D) appears in the activity bar and fills the editor area on its own", async () => {
-    const off = registerWorkspace({ id: "viewer3d", placement: "eda", label: "3D", icon: <i />, render: () => <div>board viewer</div> });
+  // Slice C6: 3D is a document. It opens as a tab beside the editors, gets the 3D menu set, and
+  // is told the selection and how to cross-probe; closing the tab unmounts it.
+  it("an EDA view (3D) opens as its own document tab with the 3D menu set", async () => {
+    const seen: WorkspaceContext[] = [];
+    const off = registerWorkspace({
+      id: "viewer3d",
+      placement: "eda",
+      label: "3D",
+      icon: <i />,
+      render: (ctx) => {
+        seen.push(ctx);
+        return <div>board viewer</div>;
+      },
+    });
     try {
       await open();
       fireEvent.click(bar().getByRole("button", { name: "3D" }));
       await screen.findByText("board viewer");
-      expect(slot("Schematic canvas").closest(".editor-area")!.hasAttribute("hidden")).toBe(true);
+      const tabs = within(screen.getByRole("tablist", { name: "Documents" }));
+      expect(tabs.getByRole("tab", { name: "3D" }).getAttribute("aria-selected")).toBe("true");
+      // the editors stay mounted behind it, hidden like any other inactive document
+      expect(slot("Schematic canvas").classList.contains("off")).toBe(true);
+      expect(screen.getByText("board viewer").closest(".view-slot")!.classList.contains("off")).toBe(false);
+      // the 3D document has its own View entries; the editors' Place menu is gone
+      const menuBar = within(screen.getByRole("navigation", { name: "Application menu" }));
+      expect(menuBar.queryByRole("button", { name: "Place" })).toBeNull();
+      fireEvent.click(menuBar.getByRole("button", { name: "View" }));
+      expect(screen.getByRole("menuitem", { name: /Top view/ })).toBeTruthy();
+      fireEvent.click(menuBar.getByRole("button", { name: "View" }));
+      // the view gets the selection, cross-probing and the engine path
+      const ctx = seen[seen.length - 1];
+      expect(typeof ctx.select).toBe("function");
+      expect(typeof ctx.probeTo).toBe("function");
+      expect(typeof ctx.execute).toBe("function");
       fireEvent.click(bar().getByRole("button", { name: "Schematic" }));
-      await waitFor(() => expect(slot("Schematic canvas").closest(".editor-area")!.hasAttribute("hidden")).toBe(false));
+      await waitFor(() => expect(slot("Schematic canvas").classList.contains("off")).toBe(false));
+      expect(tabs.getByRole("tab", { name: "3D" }).getAttribute("aria-selected")).toBe("false");
+      // closing the tab unmounts the view (its GL context is released)
+      fireEvent.click(tabs.getByRole("button", { name: "Close 3D" }));
+      await waitFor(() => expect(screen.queryByText("board viewer")).toBeNull());
     } finally {
       off();
     }

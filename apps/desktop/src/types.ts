@@ -25,6 +25,13 @@ export interface Stackup {
   board_thickness: Nm;
   dielectric: string;
 }
+/** Mirrors `eak_core::ManufacturingConfig`. */
+export interface ManufacturingConfig {
+  fabricator_profile: string;
+  surface_finish: string;
+  solder_mask_color: string;
+  mask_expansion: Nm;
+}
 
 // ---- Schema v3 schematic primitives (ADR-0040). Optional: the UI does not draw them yet.
 export type LineStyle = "solid" | "dashed" | "dotted" | "dash_dot";
@@ -79,6 +86,8 @@ export interface Sheet {
   height: Nm;
   /** Border, zones and title block; absent = none. */
   format?: DrawingFormat;
+  /** Place in the sheet order (ADR-0043); absent = 0. List sheets with `sheetsInOrder`. */
+  order?: number;
 }
 export interface SymbolInstance {
   id: Id;
@@ -221,6 +230,8 @@ export interface Project {
   };
   /** Free project properties for title blocks; absent when empty. */
   properties?: Record<string, string>;
+  /** Fabrication settings (`SetManufacturing`); absent only in fixtures that predate them. */
+  manufacturing?: ManufacturingConfig;
   pcb: {
     board: { outline: Point[]; stackup?: Stackup; outline_arcs?: OutlineArc[] };
     footprints: Record<Id, FootprintInstance>;
@@ -336,6 +347,7 @@ export type Command =
   | { type: "SetNetVoltage"; net: string; volts: number | null }
   | { type: "SetLayerCount"; count: number; board_thickness?: Nm | null }
   | { type: "SetStackup"; stackup: Stackup }
+  | { type: "SetManufacturing"; config: ManufacturingConfig }
   | { type: "DeleteVia"; via_id: Id }
   | { type: "Annotate" }
   | { type: "SyncSchematicToPcb" }
@@ -359,6 +371,13 @@ export type Command =
   | { type: "AutoRoute"; nets: string[] | null }
   | { type: "ClearRouting"; net: string | null }
   | { type: "StitchZones"; net: string | null }
+  | { type: "AddSheet"; name: string }
+  | { type: "RenameSheet"; sheet_id: Id; name: string }
+  | { type: "DeleteSheet"; sheet_id: Id }
+  | { type: "ReorderSheets"; sheet_ids: Id[] }
+  | { type: "DeleteSheetGraphic"; graphic_id: Id }
+  | { type: "DeleteBus"; bus_id: Id }
+  | { type: "DeleteBusEntry"; entry_id: Id }
   | { type: "Batch"; commands: Command[]; label?: string | null };
 
 export interface CommandError {

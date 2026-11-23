@@ -49,7 +49,7 @@
     (`eak_engineering::silk::raw_legend`), so DRC-015/DRC-020 check them and the legend Gerber
     prints them; documentation-layer objects are drawings only and are not fabricated.
   - Integrity checks the new objects (ids, simple polygons, sweeps, sizes).
-- **Decision (`Command`, `eak-runtime`):** 16 new variants, 77 commands in total.
+- **Decision (`Command`, `eak-runtime`):** 16 new variants, 77 commands in total (80 once merged with the 3 sheet commands of ADR-0043).
   - `MoveTrack { track_id, by }` moves a segment and stretches the ends of same-net tracks on the
     same layer that met its old ends (drag segment). `EditTrack { track_id, width, layer, a, b,
     arc_deg }` changes any of these; `arc_deg: 0` makes the track straight.

@@ -160,6 +160,9 @@ pub struct Event<'a> {
 
 const SCHEMATIC_COMMANDS: &[&str] = &[
     "AddSheet",
+    "RenameSheet",
+    "DeleteSheet",
+    "ReorderSheets",
     "PlaceSymbol",
     "MoveSymbol",
     "RotateSymbol",

@@ -55,6 +55,22 @@ pub enum Command {
     AddSheet {
         name: String,
     },
+    /// Rename a sheet (ADR-0043). Names are unique; nets named only by local labels on the
+    /// sheet (`<sheet>/<label>`) follow the new name everywhere the PCB and the constraints
+    /// refer to them, so connectivity and the board stay as they were.
+    RenameSheet {
+        sheet_id: Id,
+        name: String,
+    },
+    /// Delete an empty sheet (ADR-0043). Refused while anything is on it and for the last
+    /// sheet; to delete a sheet with its contents, submit a `Batch` that deletes them first.
+    DeleteSheet {
+        sheet_id: Id,
+    },
+    /// Put the sheets in this order (ADR-0043): every sheet id exactly once.
+    ReorderSheets {
+        sheet_ids: Vec<Id>,
+    },
     PlaceSymbol {
         sheet_id: Option<Id>,
         component_id: String,
@@ -509,6 +525,7 @@ impl Command {
             | ImportLibraryComponent { .. }
             | SetComponentProperties { .. }
             | AddSheet { .. }
+            | ReorderSheets { .. }
             | PlaceSymbol { .. }
             | MoveSymbol { .. }
             | RotateSymbol { .. }
@@ -531,7 +548,8 @@ impl Command {
             | DeletePcbText { .. }
             | AddDimension { .. }
             | DeleteDimension { .. } => ReversibleLocal,
-            SetNetLabelScope { .. }
+            RenameSheet { .. }
+            | SetNetLabelScope { .. }
             | AddBus { .. }
             | MoveBus { .. }
             | DeleteBus { .. }
@@ -578,7 +596,7 @@ impl Command {
             | SetNetCurrent { .. }
             | SetNetVoltage { .. }
             | SetManufacturing { .. } => EngineeringImpacting,
-            DeleteSymbol { .. } | ClearRouting { .. } => Destructive,
+            DeleteSymbol { .. } | DeleteSheet { .. } | ClearRouting { .. } => Destructive,
             // A batch carries the risk of its riskiest step, so approval covers every step.
             Batch { commands, .. } => commands
                 .iter()
@@ -885,6 +903,93 @@ fn sheet_or_first(p: &Project, s: &Option<Id>) -> Result<Id, CommandError> {
     }
 }
 
+/// What is on a sheet, as "N symbol(s)" phrases (empty = nothing).
+fn sheet_contents(p: &Project, sheet: &str) -> Vec<String> {
+    let s = &p.schematic;
+    let counts = [
+        (
+            s.symbols.values().filter(|x| x.sheet_id == sheet).count(),
+            "symbol",
+        ),
+        (
+            s.wires.values().filter(|x| x.sheet_id == sheet).count(),
+            "wire",
+        ),
+        (
+            s.labels.values().filter(|x| x.sheet_id == sheet).count(),
+            "net label",
+        ),
+        (
+            s.buses.values().filter(|x| x.sheet_id == sheet).count(),
+            "bus",
+        ),
+        (
+            s.bus_entries
+                .values()
+                .filter(|x| x.sheet_id == sheet)
+                .count(),
+            "bus entry",
+        ),
+        (
+            s.graphics.values().filter(|x| x.sheet_id == sheet).count(),
+            "drawing",
+        ),
+    ];
+    counts
+        .iter()
+        .filter(|(n, _)| *n > 0)
+        .map(|(n, what)| format!("{n} {what}(s)"))
+        .collect()
+}
+
+/// Old net name -> new net name for every net whose name differs between two netlists of the
+/// same connectivity. A net is matched by one of its pins, or else one of its labels.
+fn renamed_nets(before: &netlist::Netlist, after: &netlist::Netlist) -> BTreeMap<String, String> {
+    let by_label: BTreeMap<&Id, &String> = after
+        .nets
+        .values()
+        .flat_map(|n| n.label_ids.iter().map(move |l| (l, &n.name)))
+        .collect();
+    let mut out = BTreeMap::new();
+    for net in before.nets.values() {
+        let new = match net.pins.first() {
+            Some(pr) => after.pin_net.get(&(pr.symbol_id.clone(), pr.pin.clone())),
+            None => net.label_ids.first().and_then(|l| by_label.get(l).copied()),
+        };
+        if let Some(new) = new.filter(|n| **n != net.name) {
+            out.insert(net.name.clone(), new.clone());
+        }
+    }
+    out
+}
+
+/// Rewrite every PCB and constraint reference to a net by `map` (all names at once).
+fn rename_nets(p: &mut Project, map: &BTreeMap<String, String>) {
+    let re = |n: &mut String| {
+        if let Some(new) = map.get(n.as_str()) {
+            *n = new.clone();
+        }
+    };
+    for f in p.pcb.footprints.values_mut() {
+        f.pad_nets.values_mut().for_each(re);
+    }
+    p.pcb.tracks.values_mut().for_each(|t| re(&mut t.net));
+    p.pcb.vias.values_mut().for_each(|v| re(&mut v.net));
+    p.pcb.zones.values_mut().for_each(|z| re(&mut z.net));
+    let c = &mut p.constraints;
+    c.default_class.nets.iter_mut().for_each(re);
+    for class in &mut c.net_classes {
+        class.nets.iter_mut().for_each(re);
+    }
+    for values in [&mut c.net_currents_a, &mut c.net_voltages_v] {
+        let old = std::mem::take(values);
+        *values = old
+            .into_iter()
+            .map(|(k, v)| (map.get(&k).cloned().unwrap_or(k), v))
+            .collect();
+    }
+}
+
 fn symbol<'a>(p: &'a Project, id: &str) -> Result<&'a SymbolInstance, CommandError> {
     p.schematic
         .symbols
@@ -1095,6 +1200,14 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
         }
         AddSheet { name } => {
             let id = new_id("sht");
+            let order = p
+                .schematic
+                .sheets
+                .values()
+                .map(|s| s.order)
+                .max()
+                .unwrap_or(0)
+                + 1;
             p.schematic.sheets.insert(
                 id.clone(),
                 Sheet {
@@ -1103,9 +1216,93 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     width: 297_000_000,
                     height: 210_000_000,
                     format: None,
+                    order,
                 },
             );
             created.push(id);
+        }
+        RenameSheet { sheet_id, name } => {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(CommandError::Invalid("sheet name is empty".into()));
+            }
+            let old = p
+                .schematic
+                .sheets
+                .get(sheet_id)
+                .ok_or_else(|| CommandError::NotFound(format!("sheet {sheet_id}")))?
+                .name
+                .clone();
+            if old == name {
+                return Err(CommandError::Invalid(format!(
+                    "sheet is already named {name}"
+                )));
+            }
+            if let Some(other) = p
+                .schematic
+                .sheets
+                .values()
+                .find(|s| &s.id != sheet_id && s.name.trim() == name)
+            {
+                return Err(CommandError::Invalid(format!(
+                    "sheet {} is already named {name}",
+                    other.id
+                )));
+            }
+            let before = netlist::build(p);
+            if let Some(s) = p.schematic.sheets.get_mut(sheet_id) {
+                s.name = name.to_string();
+            }
+            let renamed = renamed_nets(&before, &netlist::build(p));
+            if !renamed.is_empty() {
+                rename_nets(p, &renamed);
+                let list: Vec<String> = renamed.iter().map(|(a, b)| format!("{a} → {b}")).collect();
+                warnings.push(format!(
+                    "renamed {} net(s) named by this sheet's local labels: {}",
+                    renamed.len(),
+                    list.join(", ")
+                ));
+            }
+        }
+        DeleteSheet { sheet_id } => {
+            if !p.schematic.sheets.contains_key(sheet_id) {
+                return Err(CommandError::NotFound(format!("sheet {sheet_id}")));
+            }
+            if p.schematic.sheets.len() == 1 {
+                return Err(CommandError::Precondition(
+                    "a project keeps at least one sheet".into(),
+                ));
+            }
+            let contents = sheet_contents(p, sheet_id);
+            if !contents.is_empty() {
+                return Err(CommandError::Precondition(format!(
+                    "sheet is not empty ({}); delete its contents first, in the same batch to keep one undo step",
+                    contents.join(", ")
+                )));
+            }
+            p.schematic.sheets.remove(sheet_id);
+        }
+        ReorderSheets { sheet_ids } => {
+            let mut given: Vec<&Id> = sheet_ids.iter().collect();
+            given.sort();
+            given.dedup();
+            let have: Vec<&Id> = p.schematic.sheets.keys().collect();
+            if given.len() != sheet_ids.len() || given != have {
+                return Err(CommandError::Invalid(
+                    "the new order must name every sheet exactly once".into(),
+                ));
+            }
+            let now: Vec<Id> = p.sheets_in_order().iter().map(|s| s.id.clone()).collect();
+            if now == *sheet_ids {
+                return Err(CommandError::Invalid(
+                    "sheets are already in this order".into(),
+                ));
+            }
+            for (i, id) in sheet_ids.iter().enumerate() {
+                if let Some(s) = p.schematic.sheets.get_mut(id) {
+                    s.order = i as u32 + 1;
+                }
+            }
         }
         PlaceSymbol {
             sheet_id,

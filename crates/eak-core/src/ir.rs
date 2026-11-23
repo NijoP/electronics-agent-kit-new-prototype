@@ -77,6 +77,14 @@ pub struct Sheet {
     /// Border, zones and title block (schema v3). `None` = no drawing format (every v2 sheet).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<DrawingFormat>,
+    /// Place in the sheet order (ADR-0043): sheets list by `(order, id)`. Absent (0) in every
+    /// file written before sheets could be reordered, so those keep their id order.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub order: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// Where a title-block field takes its text from.
@@ -940,6 +948,7 @@ impl Project {
                 width: 297_000_000,
                 height: 210_000_000,
                 format: None,
+                order: 0,
             },
         );
         Project {
@@ -962,11 +971,17 @@ impl Project {
 
     /// 1-based position of a sheet in the project's sheet order, if it exists.
     pub fn sheet_number(&self, sheet_id: &str) -> Option<usize> {
-        self.schematic
-            .sheets
-            .keys()
-            .position(|k| k == sheet_id)
+        self.sheets_in_order()
+            .iter()
+            .position(|s| s.id == sheet_id)
             .map(|i| i + 1)
+    }
+
+    /// The sheets in the project's sheet order: by `order`, then id (ADR-0043).
+    pub fn sheets_in_order(&self) -> Vec<&Sheet> {
+        let mut v: Vec<&Sheet> = self.schematic.sheets.values().collect();
+        v.sort_by(|a, b| a.order.cmp(&b.order).then_with(|| a.id.cmp(&b.id)));
+        v
     }
 
     /// Text a title-block field shows on `sheet`.
@@ -986,7 +1001,7 @@ impl Project {
     }
 
     pub fn first_sheet_id(&self) -> Option<&Id> {
-        self.schematic.sheets.keys().next()
+        self.sheets_in_order().into_iter().next().map(|s| &s.id)
     }
 
     /// Absolute position of a symbol pin.
@@ -1224,5 +1239,38 @@ mod schematic_v3_tests {
         assert!(b.touches(Point::new(5_000, 0), ON_SEGMENT_TOL_NM));
         assert!(b.touches(Point::new(10_000, 4_000), ON_SEGMENT_TOL_NM));
         assert!(!b.touches(Point::new(5_000, 5_000), ON_SEGMENT_TOL_NM));
+    }
+
+    #[test]
+    fn sheets_list_by_order_then_id_and_order_0_is_not_written() {
+        let mut p = Project::new("o");
+        let first = p.first_sheet_id().unwrap().clone();
+        let mk = |id: &str, order: u32| Sheet {
+            id: id.into(),
+            name: id.into(),
+            width: 1,
+            height: 1,
+            format: None,
+            order,
+        };
+        p.schematic.sheets.insert("a".into(), mk("a", 0));
+        p.schematic.sheets.insert("z".into(), mk("z", 0));
+        // Every sheet at order 0 (any file from before reordering): id order.
+        let ids = |p: &Project| {
+            p.sheets_in_order()
+                .iter()
+                .map(|s| s.id.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(ids(&p), vec!["a".to_string(), first.clone(), "z".into()]);
+        assert!(!crate::to_json(&p).contains("\"order\""));
+        p.schematic.sheets.get_mut("z").unwrap().order = 1;
+        p.schematic.sheets.get_mut(&first).unwrap().order = 2;
+        p.schematic.sheets.get_mut("a").unwrap().order = 3;
+        assert_eq!(ids(&p), vec!["z".to_string(), first.clone(), "a".into()]);
+        assert_eq!(p.first_sheet_id(), Some(&"z".to_string()));
+        assert_eq!(p.sheet_number("a"), Some(3));
+        let q = crate::from_json(&crate::to_json(&p)).unwrap();
+        assert_eq!(p, q);
     }
 }

@@ -7,6 +7,8 @@ import type { BottomTab } from "../shell/BottomPanel";
 import type { RightTab } from "../shell/RightDock";
 import type { Check, Command, LibraryEntry, OpenProject, RecentProject, Snapshot, SymbolInstance, FootprintInstance } from "../types";
 import type { IconName } from "../design/icons/icons";
+import type { View3dControls } from "../viewer3d/controls";
+import { PRESETS } from "../viewer3d/view";
 import type { Action, DocContext, SplitId } from "./types";
 
 export interface ActionDeps {
@@ -75,6 +77,10 @@ export interface ActionDeps {
   /** Toolbar shows text labels beside its icons (accessibility option). */
   toolbarLabels: boolean;
   toggleToolbarLabels: () => void;
+  /** The open 3D document's published controls (slice C6); absent or null while none is drawing. */
+  view3d?: View3dControls | null;
+  /** Cross-probe the selected part into the PCB or the schematic editor (3D document). */
+  probeTo?: (kind: "pcb" | "schematic") => void;
   /**
    * An editing operation of the active editor (slice B3: clipboard, arrange, find, net highlight),
    * or null when the active editor has none by that id. Read at call time, so never stale.
@@ -87,6 +93,7 @@ const SCH: readonly DocContext[] = ["schematic"];
 const PCB: readonly DocContext[] = ["pcb"];
 const DESIGN: readonly DocContext[] = ["home", "schematic", "pcb"];
 const BOARD: readonly DocContext[] = ["pcb", "3d"];
+const V3D: readonly DocContext[] = ["3d"];
 /** Why an editor operation is unavailable when no schematic editor has registered it. */
 export const NO_EDITOR = "No schematic editor is active";
 /** Enabled state of an operation the active editor offers, else the given fallback. */
@@ -145,7 +152,8 @@ export function commonActions(d: ActionDeps): Action[] {
     ...d.edaViews.map<Action>((w) => ({ id: `ws-${w.id}`, label: `Go to ${w.label}`, keys: w.shortcut ? [w.shortcut] : [], whileTyping: true, menu: "View", enabled: () => true, run: () => d.showWorkspace(w.id) })),
     { id: "reset-layout", label: "Reset panel layout", menu: "View", sep: true, enabled: () => true, run: d.resetLayout },
 
-    ...d.docs.map<Action>((doc) => ({ id: `open-${doc.id}`, label: `Open ${doc.kind === "pcb" ? "PCB" : doc.kind === "file" ? `file ${doc.title}` : doc.kind === "symbol" || doc.kind === "footprint" ? `${doc.kind} editor ${doc.title.replace(/^\w+: /, "")}` : `sheet ${doc.title}`}`, menu: "Project", paletteGroup: "Documents", enabled: () => true, run: () => d.open(doc.id) })),
+    // A registered view (3D) is opened by its own "Go to" action, not listed again here.
+    ...d.docs.filter((doc) => doc.kind !== "view").map<Action>((doc) => ({ id: `open-${doc.id}`, label: `Open ${doc.kind === "pcb" ? "PCB" : doc.kind === "file" ? `file ${doc.title}` : doc.kind === "symbol" || doc.kind === "footprint" ? `${doc.kind} editor ${doc.title.replace(/^\w+: /, "")}` : `sheet ${doc.title}`}`, menu: "Project", paletteGroup: "Documents", enabled: () => true, run: () => d.open(doc.id) })),
     { id: "close-all", label: "Close all documents", menu: "Project", paletteGroup: "Documents", enabled: () => (d.openIds.length === 0 ? "No documents are open" : true), run: d.closeAll },
     ...d.projects.filter((p) => !p.active).map<Action>((p, i) => ({ id: `proj-${p.id}`, label: `Switch to project ${p.name}`, menu: "Project", sep: i === 0, enabled: idle, run: () => d.switchTo(p.id) })),
 
@@ -285,8 +293,33 @@ export function boardActions(d: ActionDeps): Action[] {
   ];
 }
 
+/**
+ * The 3D document (slices C6, E6): camera presets, projection, zoom and reset, the measure tool,
+ * placeholder labels, model reload and cross-probing into the editors. Every action drives the
+ * mounted viewer's published controls (`viewer3d/controls.ts`), the same functions as its toolbar.
+ */
+export function view3dActions(d: ActionDeps): Action[] {
+  const v = d.view3d ?? null;
+  const has = (): true | string => (v ? true : "The 3D view is not drawing (no WebGL in this window)");
+  const probe = (kind: "pcb" | "schematic") => (): true | string =>
+    !v ? has() : !d.selectedSymbol ? "Select a part first (click it in the 3D view)" : kind === "pcb" && !d.fpOfSelected ? "The selected part has no PCB footprint (run Update PCB first)" : d.probeTo ? true : "Cross-probing is not available here";
+  return [
+    ...PRESETS.map<Action>((p, i) => ({ id: `v3d-${p.id}`, label: p.id === "iso" ? "Isometric view (fit)" : `${p.label} view`, title: p.title, docs: V3D, menu: "View", sep: i === 0, enabled: has, run: () => v?.preset(p.id) })),
+    { id: "v3d-reset", label: "Reset view", title: "Isometric, perspective and fit to the board; clears any measurement", docs: V3D, menu: "View", toolbar: "view", icon: "fit", enabled: has, run: () => v?.reset() },
+    { id: "v3d-zout", label: "Zoom out", docs: V3D, menu: "View", toolbar: "view", icon: "zoom-out", enabled: has, run: () => v?.zoomBy(1.25) },
+    { id: "v3d-zin", label: "Zoom in", docs: V3D, menu: "View", toolbar: "view", icon: "zoom-in", enabled: has, run: () => v?.zoomBy(1 / 1.25) },
+    { id: "v3d-ortho", label: "Orthographic projection", title: "Switch between perspective and orthographic projection", docs: V3D, menu: "View", sep: true, checked: v?.projection === "orthographic", enabled: has, run: () => { if (v) v.setProjection(v.projection === "orthographic" ? "perspective" : "orthographic"); } },
+    { id: "v3d-labels", label: "Placeholder labels", title: "Label every part that is drawn without a loaded 3D model", docs: V3D, menu: "View", checked: v?.labels, enabled: has, run: () => v?.toggleLabels() },
+    { id: "v3d-probe-pcb", label: "Show selection in PCB", docs: V3D, menu: "View", sep: true, enabled: probe("pcb"), run: () => d.probeTo?.("pcb") },
+    { id: "v3d-probe-sch", label: "Show selection in schematic", docs: V3D, menu: "View", enabled: probe("schematic"), run: () => d.probeTo?.("schematic") },
+    { id: "v3d-measure", label: "Measure distance", title: "Click two points on the board or a part; the distance is shown in mm", docs: V3D, menu: "Tools", sep: true, toolbar: "edit", icon: "dimension", checked: v?.measuring, enabled: has, run: () => v?.toggleMeasure() },
+    { id: "v3d-measure-clear", label: "Clear measurement", docs: V3D, menu: "Tools", enabled: () => (!v ? has() : v.measured ? true : "No measurement on screen"), run: () => v?.clearMeasure() },
+    { id: "v3d-reload", label: "Reload 3D models", title: "Re-read every attached model file (after you replaced one on disk)", docs: V3D, menu: "Tools", enabled: () => (!v ? has() : v.modelCount > 0 ? true : "No part references a 3D model file"), run: () => v?.reloadModels() },
+  ];
+}
+
 /** Every action of the workspace; the registry picks the ones of the active document. */
-export const workspaceActions = (d: ActionDeps): Action[] => [...commonActions(d), ...designActions(d), ...schematicActions(d), ...pcbActions(d), ...boardActions(d)];
+export const workspaceActions = (d: ActionDeps): Action[] => [...commonActions(d), ...designActions(d), ...schematicActions(d), ...pcbActions(d), ...boardActions(d), ...view3dActions(d)];
 
 /**
  * Schematic editing set (slice B3): clipboard, arrange, find and net highlight. Each entry runs the

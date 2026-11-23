@@ -133,6 +133,27 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Add a schematic sheet.",
             obj(&[("name", string("sheet name"))], &["name"]),
         ),
+        RenameSheet { .. } => (
+            D::Schematic,
+            "Rename a sheet (names are unique). Nets named only by the sheet's local labels (<sheet>/<label>) are renamed on the PCB and in the constraints too.",
+            obj(
+                &[("sheet_id", id("sheet id")), ("name", string("new sheet name"))],
+                &["sheet_id", "name"],
+            ),
+        ),
+        DeleteSheet { .. } => (
+            D::Schematic,
+            "Delete an empty sheet. Refused while anything is on it (delete its contents first, in the same Batch) and for the last sheet.",
+            obj(&[("sheet_id", id("sheet id"))], &["sheet_id"]),
+        ),
+        ReorderSheets { .. } => (
+            D::Schematic,
+            "Put the sheets in a new order; lists every sheet id exactly once.",
+            obj(
+                &[("sheet_ids", array(id("sheet id"), "every sheet id, in the new order"))],
+                &["sheet_ids"],
+            ),
+        ),
         PlaceSymbol { .. } => (
             D::Schematic,
             "Place a component symbol on a sheet (imports a built-in component if needed).",
@@ -747,6 +768,16 @@ pub fn command_samples() -> Vec<Command> {
             definition: Box::new(def),
         },
         AddSheet { name: "s".into() },
+        RenameSheet {
+            sheet_id: "sht".into(),
+            name: "Power".into(),
+        },
+        DeleteSheet {
+            sheet_id: "sht".into(),
+        },
+        ReorderSheets {
+            sheet_ids: vec!["sht".into()],
+        },
         PlaceSymbol {
             sheet_id: None,
             component_id: "c".into(),
@@ -1149,11 +1180,11 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 77 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
-        // schematic commands of ADR-0040 and the 16 PCB commands of ADR-0042: 15 schema-v4 edits
-        // plus SyncSchematicToPcbSelected); keep in
-        // step with REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 77);
+        // 80 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
+        // schematic commands of ADR-0040, the 16 PCB commands of ADR-0042 (15 schema-v4 edits plus
+        // SyncSchematicToPcbSelected) and the 3 sheet commands of ADR-0043); keep in step with
+        // REQUIREMENTS_TRACEABILITY INT-04.
+        assert_eq!(tools.len(), 80);
         for t in &tools {
             assert!(t
                 .spec
