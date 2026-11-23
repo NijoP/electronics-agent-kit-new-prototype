@@ -330,6 +330,13 @@
       "shot": false
     },
     {
+      "id": "a5-menu-rest",
+      "do": "key",
+      "title": "A5: Esc returns the menu bar to rest before the next menu",
+      "keys": "Escape",
+      "shot": false
+    },
+    {
       "id": "pcb",
       "do": "menu",
       "title": "Open PCB",
