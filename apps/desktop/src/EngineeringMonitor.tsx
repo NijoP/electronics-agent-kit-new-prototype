@@ -161,7 +161,7 @@ function ReportSection({
                   <span className="muted">
                     {" "}
                     · severity overridden to {x.severity_override} by the project's rules
-                    {x.default_state ? ` ( at its default severity)` : ""}
+                    {x.default_state ? ` (${x.default_state} at its default severity)` : ""}
                   </span>
                 )}
               </li>
