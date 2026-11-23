@@ -21,6 +21,11 @@
 //!   exactly the v4 meaning.
 //! * v5 → v6 (ADR-0045): object groups. The new collection `schematic.groups` is added empty;
 //!   a v5 project had no groups, so nothing else changes.
+//! * v6 → v7 (ADR-0046): rule configuration. `constraints.rules` (per-rule enable and severity),
+//!   `constraints.clearance_matrix` and `constraints.net_pair_rules` are new and absent means
+//!   empty: every rule enabled at its default severity and no extra clearances, exactly the v6
+//!   meaning. Only the version number changes; a v7 file is refused by v6 builds, which would
+//!   otherwise drop a disabled rule's configuration and run it as enabled.
 
 use crate::ir::{Stackup, FR4_ER, SCHEMA_VERSION};
 use crate::library::SymbolDef;
@@ -52,6 +57,9 @@ pub fn migrate(mut raw: Value) -> Result<Value, CoreError> {
     }
     if found <= 5 {
         raw = v5_to_v6(raw);
+    }
+    if found <= 6 {
+        raw["schema_version"] = Value::from(7);
     }
     Ok(raw)
 }
@@ -631,6 +639,71 @@ mod tests {
         p.schematic.labels.remove("lbl_1");
         assert_eq!(p.schematic.prune_groups(), vec!["Group 1".to_string()]);
         assert!(p.schematic.groups.is_empty());
+    }
+
+    /// v6 → v7 (ADR-0046): a v6 file loads with no rule configuration, a project without one
+    /// saves without the new keys, and a configured one round-trips through save and open.
+    #[test]
+    fn v7_rule_configuration_migrates_and_round_trips() {
+        use crate::{ClearanceCell, NetPairRule, ObjectClass, RuleConfig, RuleSeverity};
+        let plain = Project::new("v5-board");
+        let json = to_json(&plain);
+        for k in ["\"rules\"", "clearance_matrix", "net_pair_rules"] {
+            assert!(!json.contains(k), "empty {k} must not be written");
+        }
+        let mut v: Value = serde_json::from_str(&json).unwrap();
+        v["schema_version"] = Value::from(6);
+        let p = from_json(&v.to_string()).expect("v6 project loads");
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
+        assert_eq!(p, plain);
+
+        let mut q = Project::new("configured");
+        let c = &mut q.constraints;
+        c.rules.insert(
+            "ERC-001".into(),
+            RuleConfig {
+                enabled: false,
+                severity: None,
+            },
+        );
+        c.rules.insert(
+            "DRC-002".into(),
+            RuleConfig {
+                enabled: true,
+                severity: Some(RuleSeverity::Warning),
+            },
+        );
+        c.clearance_matrix.push(ClearanceCell {
+            a: ObjectClass::Track,
+            b: ObjectClass::Via,
+            clearance: 250_000,
+        });
+        c.net_pair_rules.push(NetPairRule {
+            net_a: "GND".into(),
+            net_b: "VIN".into(),
+            clearance: 500_000,
+        });
+        let a = to_json(&q);
+        let back = from_json(&a).expect("configured project loads");
+        assert_eq!(back, q);
+        assert_eq!(a, to_json(&back));
+        assert_eq!(
+            back.constraints
+                .matrix_cell(ObjectClass::Via, ObjectClass::Track),
+            Some(250_000)
+        );
+        assert_eq!(
+            back.constraints.net_pair_clearance("VIN", "GND"),
+            Some(500_000)
+        );
+
+        let mut bad = q.clone();
+        bad.constraints.net_pair_rules[0].net_b = "GND".into();
+        bad.constraints.clearance_matrix[0].clearance = 0;
+        let Err(CoreError::Integrity(problems)) = from_json(&to_json(&bad)) else {
+            panic!("integrity must refuse the rule data");
+        };
+        assert_eq!(problems.len(), 2, "{problems:?}");
     }
 
     #[test]

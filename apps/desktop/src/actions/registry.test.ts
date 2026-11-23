@@ -75,7 +75,7 @@ describe("action registry", () => {
     expect(labels("schematic", "Place")).toEqual(["Place part", "Wire", "Bus", "Bus entry", "Power port GND", "Power port +3V3", "Power port +5V", "Power port AGND", "Power port CHASSIS", "Net / power label", "Net port (this sheet)", "Off-page connector", "No connect", "Label pin", "Line", "Rectangle", "Circle", "Text", "Fan out net labels", "Fan out no-connects", "Part: Resistor"]);
     expect(labels("pcb", "Place")).toEqual(["Via", "Board outline", "Copper zone"]);
     expect(labels("pcb", "Route")).toEqual(["Route track", "Auto-route all nets", "Clear all routing"]);
-    expect(labels("schematic", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run ERC", "Annotate schematic"]);
+    expect(labels("schematic", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run ERC", "Annotate schematic", "Annotate options…"]);
     expect(labels("pcb", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run DRC", "Run DFM (Fabricator standard)", "Auto-place footprints", "Refill zones"]);
     // the 3D view has no editing tools at all, only the board outputs and shared chrome
     expect(labels("3d", "Place")).toBeNull();

@@ -3,6 +3,7 @@
 // latest engine snapshot; edits are engine calls carrying the rendered revision.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, describeError } from "./api";
+import { useRealtimeDrc } from "./realtimeDrc";
 import { DomainPanel } from "./DomainPanel";
 import { ManufacturingPanel as FabricatorPrepPanel } from "./ManufacturingPanel";
 import { CommandPalette, type PaletteAction } from "./CommandPalette";
@@ -27,6 +28,7 @@ import { StatusBar } from "./shell/StatusBar";
 import { ExportDialog } from "./shell/ExportDialog";
 import { BomExportDialog, DocumentExportDialog } from "./shell/OutputDialogs";
 import { RulesDialog } from "./shell/RulesDialog";
+import { AnnotateDialog } from "./shell/AnnotateDialog";
 import { NewProjectDialog, OpenProjectDialog } from "./shell/ProjectDialogs";
 import { Toolbar } from "./shell/Toolbar";
 import { canvasControls, DocIdContext, setActiveEditor, setEditorTool } from "./shell/viewState";
@@ -70,6 +72,8 @@ import { useKeymap } from "./settings/keymap";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
 import { sheetsInOrder } from "./shell/sheets";
+import { requestFindPick, useFindReveal } from "./shell/findResults";
+import type { FindHit } from "./tools/schematic/find";
 import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot, SyncChange } from "./types";
 
 interface Props {
@@ -92,6 +96,8 @@ const MAX_EVENTS = 200;
 
 // "Toolbar labels" (View menu): text beside the toolbar icons, remembered across sessions.
 const TB_LABELS_KEY = "eak.toolbar.labels";
+// Real-time DRC (slice C5): re-run DRC on each new revision, debounced; remembered across sessions.
+const RT_DRC_KEY = "eak.drc.realtime";
 const readFlag = (key: string): boolean => {
   try {
     return localStorage.getItem(key) === "1";
@@ -108,7 +114,7 @@ const writeFlag = (key: string, on: boolean) => {
 };
 
 export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged }: Props) {
-  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs">(null);
+  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate">(null);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [snapshot, setSnapshot] = useState(initial);
   const [events, setEvents] = useState<EngineEvent[]>([]);
@@ -159,6 +165,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const [armPart, setArmPart] = useState<{ id: string; n: number } | null>(null);
   const [status, setStatus] = useState<{ layer: CopperLayer; gridMm: number }>({ layer: "top", gridMm: 0.5 });
   const revision = snapshot.project.revision;
+  const [realtimeDrc, setRealtimeDrcState] = useState(() => readFlag(RT_DRC_KEY));
+  const setRealtimeDrc = (on: boolean) => {
+    writeFlag(RT_DRC_KEY, on);
+    setRealtimeDrcState(on);
+  };
   const agentTasks = useAgentTasks(snapshot.project.id, revision);
   // An external commit may delete what is selected; otherwise selection (and camera) survive it.
   useEffect(() => {
@@ -541,6 +552,16 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       setMessage(`${result.report.check} ran on revision ${result.report.revision}`);
       await syncTo(result.report.revision);
     });
+  // Real-time DRC (C5): after each commit, once edits pause (see realtimeDrc.ts). A result older
+  // than the DRC already shown is dropped.
+  useRealtimeDrc(
+    realtimeDrc,
+    revision,
+    results.drc?.report.revision,
+    () => api.runCheck("drc"),
+    (drc) => setResults((old) => (old.drc && old.drc.report.revision > drc.report.revision ? old : { ...old, drc })),
+    setMessage,
+  );
   // Switch to or close one of the projects open in this window. Closing the active one activates
   // the previous one (or returns to Project Home when none is left).
   const switchTo = (id: string) =>
@@ -643,6 +664,34 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     // The findings stay in view in the workspace the finding opened.
     setBottomTab("findings", kind);
   };
+  // One object a finding names (B5 object references): DRC/DFM objects are highlighted and
+  // zoomed to on the PCB like the finding itself; ERC objects are selected (symbols) and zoomed
+  // to in the schematic sheet they are on.
+  const navigateObject = (f: Finding, checkName: Check, id: Id) => {
+    if (checkName !== "erc") return navigateFinding({ ...f, objects: [id], location: null }, checkName);
+    const sch = snapshot.project.schematic;
+    const t: Target = sch.symbols[id] ? { kind: "component", symbolId: id } : { kind: "object", obj: sch.labels[id] ? "label" : "wire", id };
+    if (t.kind === "component") setSelected(id);
+    setActiveFinding(findingKey(f));
+    setFocus(null);
+    const place = schematicPlace(snapshot, t, null);
+    if (!place) {
+      setMessage(`${id} has no position to zoom to in the schematic`);
+      return;
+    }
+    const docId = `sch:${place.sheetId}`;
+    open(docId);
+    setPendingZoom({ docId, bounds: place.bounds });
+    setBottomTab("findings", "schematic");
+  };
+  // B5 export: the engine re-runs the check on this revision and writes that report; the panel
+  // then shows exactly the report that was written.
+  const exportFindings = (c: Check, format: "csv" | "json") =>
+    guarded(async () => {
+      const out = await track(`Export ${c.toUpperCase()} findings (${format.toUpperCase()})`, () => api.exportFindings(c, format), (r) => r.path);
+      setResults((old) => ({ ...old, [c]: out.result }));
+      setMessage(`${out.path.split(/[\\/]/).pop()} written: ${out.result.report.check} report for revision ${out.result.report.revision} (${out.path})`);
+    });
   // Design manager entry: open the page, or select the object and zoom to it in the editor it
   // belongs to (components and nets follow the active editor; nothing on the board falls back to
   // the schematic).
@@ -671,6 +720,25 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     const pins = t.kind === "net" ? netlist?.find((n) => n.name === t.name)?.pins.length : undefined;
     setMessage(t.kind === "net" ? `${name}: ${pins ?? 0} pin(s) in the engine netlist; zoomed in the schematic` : `${name}: selected and zoomed in the schematic`);
   };
+  // Find Results (slice E4): a click on a hit opens its sheet, selects the object there (the
+  // schematic editor of that sheet takes the pick) and zooms to it.
+  const navigateFind = (h: FindHit) => {
+    requestFindPick(h);
+    if (h.kind === "symbol") setSelected(h.id);
+    const place = schematicPlace(snapshot, h.kind === "symbol" ? { kind: "component", symbolId: h.id } : { kind: "object", obj: "label", id: h.id }, null);
+    const docId = `sch:${place?.sheetId ?? h.sheet}`;
+    open(docId);
+    if (place) setPendingZoom({ docId, bounds: place.bounds });
+    setMessage(`Find: ${h.text} selected on sheet ${snapshot.project.schematic.sheets[h.sheet]?.name ?? h.sheet}`);
+  };
+  // "List in Find Results" in the find bar shows the tab in this (visible) workspace.
+  const findReveal = useFindReveal();
+  const seenReveal = useRef(findReveal);
+  useEffect(() => {
+    if (findReveal === seenReveal.current) return;
+    seenReveal.current = findReveal;
+    if (visible) setBottomTab("find");
+  }, [findReveal]);
   useEffect(() => {
     if (!pendingZoom) return;
     const c = canvasControls(pendingZoom.docId);
@@ -982,7 +1050,15 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
               tasks={tasks}
               onClearTasks={clearFinished}
               onNavigate={navigateFinding}
+              onObject={navigateObject}
+              onExport={exportFindings}
+              exportBlocked={!snapshot.dir ? "Save the project to a folder first: exports are written into its output folder" : busy ? "Wait for the running operation to finish" : null}
+              realtimeDrc={realtimeDrc}
+              onRealtimeDrc={setRealtimeDrc}
               activeFinding={activeFinding}
+              execute={edit.execute}
+              busy={busy}
+              onFindPick={navigateFind}
               onClose={() => setBottomOpen(false)}
               library={
                 <LibraryDock
@@ -1032,7 +1108,19 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       />
       {dialog === "new" && <NewProjectDialog onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
       {dialog === "open" && <OpenProjectDialog recent={recent} onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
-      {dialog === "rules" && <RulesDialog snapshot={snapshot} busy={busy} apply={edit.execute} onClose={() => setDialog(null)} />}
+      {dialog === "rules" && (
+        <RulesDialog
+          snapshot={snapshot}
+          busy={busy}
+          apply={edit.execute}
+          reports={{ erc: results.erc?.report, drc: results.drc?.report }}
+          onRun={(k) => void check(k)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === "annotate" && (
+        <AnnotateDialog busy={busy} selected={selectedSymbol ? selected ?? undefined : undefined} apply={edit.execute} onClose={() => setDialog(null)} />
+      )}
       {dialog === "bom" && <BomExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "outputs" && <DocumentExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "export" && (

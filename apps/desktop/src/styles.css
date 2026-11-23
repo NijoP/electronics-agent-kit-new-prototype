@@ -802,6 +802,17 @@ button.danger { color: var(--err); border-color: var(--err); }
 .new-part { border: 1px solid var(--line); border-radius: var(--r-1); padding: var(--s-half) var(--s-1); }
 .new-part > summary { cursor: pointer; font-weight: var(--fw-medium); }
 
+/* Findings panel (Phase 1 B5): severity filter chips, export, object references */
+.findings-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-1); margin: var(--s-half) 0; }
+.findings-bar .chips { display: flex; flex-wrap: wrap; }
+.findings-bar .chip { border: 1px solid var(--line-strong); }
+.findings-bar .chip[aria-pressed="false"] { opacity: 0.5; text-decoration: line-through; }
+.findings-bar .chip.error[aria-pressed="true"] { border-color: var(--err); color: var(--err); }
+.findings-bar .chip.warning[aria-pressed="true"] { border-color: var(--warn); color: var(--warn); }
+.obj-refs { display: inline-flex; flex-wrap: wrap; gap: 2px; }
+.obj-ref { font-size: var(--fs-xs); font-family: var(--mono); padding: 0 var(--s-half); color: var(--accent); border-color: transparent; background: transparent; }
+.obj-ref:hover:not(:disabled) { background: var(--bg-hover); }
+.rt-drc { display: flex; align-items: center; gap: var(--s-half); font-size: var(--fs-sm); margin: var(--s-1) 0; }
 /* Slice B3: find and replace bar, array panel, canvas context menu, selection filter. */
 .find-bar, .array-panel { display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: center; padding: var(--s-half) var(--s-1); font-size: var(--fs-sm); background: var(--bg-panel); border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .find-bar label, .array-panel label { display: flex; gap: var(--s-half); align-items: center; color: var(--fg-dim); }
@@ -815,6 +826,34 @@ button.danger { color: var(--err); border-color: var(--err); }
 .sel-filter ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-half); }
 .sel-filter label { display: flex; gap: var(--s-1); align-items: center; }
 .sel-filter button { align-self: flex-start; }
+/* Design rules dialog (Phase 1 C5): rule tree, clearance matrix, rule tables */
+.rule-tree { font-size: var(--fs-sm); margin-bottom: var(--s-1); }
+.rule-tree ul ul { padding-left: var(--s-2); }
+.modal.rules table.matrix, .modal.rules table.rule-table { border-collapse: collapse; font-size: var(--fs-sm); margin: var(--s-half) 0 var(--s-1); }
+.modal.rules table.matrix th, .modal.rules table.rule-table th { text-align: left; font-weight: 500; color: var(--fg-dim); padding: 2px var(--s-half); }
+.modal.rules table.matrix td { padding: 1px; }
+.modal.rules table.matrix input { width: 5.5em; }
+.modal.rules table.matrix td.unchecked input { border-style: dashed; }
+.modal.rules table.rule-table td { padding: 2px var(--s-half); border-top: 1px solid var(--line); }
+.rule-disabled code { text-decoration: line-through; }
+/* ---- Bottom dock: Property List, Find Results, Diagnostics (slice E4) ---- */
+.proplist { display: flex; flex-direction: column; gap: var(--s-1); min-height: 0; }
+.proplist-bar { display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: center; }
+.proplist-bar input, .proplist-bar select { min-width: 0; }
+.proplist-scroll { overflow: auto; min-height: 0; }
+.proplist-grid th[scope="row"] { text-transform: none; letter-spacing: 0; font-size: inherit; color: var(--fg); }
+.proplist-grid button.col-pick { background: none; border: none; padding: 0; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
+.proplist-grid button.cell { width: 100%; min-width: 4em; text-align: left; background: none; border-color: transparent; font-variant-numeric: tabular-nums; }
+.proplist-grid button.cell.on { background: var(--accent-soft); border-color: var(--accent); }
+.diagnostics { display: grid; gap: var(--s-1); }
+.diag-bar { display: flex; gap: var(--s-1); align-items: center; justify-content: space-between; }
+.diag-table td.diag-label { white-space: nowrap; width: 1%; }
+.diag-state { display: inline-block; min-width: 5.5em; text-align: center; border-radius: var(--r-1); padding: 0 var(--s-half); font-size: var(--fs-xs); font-weight: 600; }
+.diag-state.ok { background: var(--ok-soft); color: var(--ok); }
+.diag-state.error { background: var(--err-soft); color: var(--err); }
+.diag-state.warning { background: var(--warn-soft); color: var(--warn); }
+.diag-state.unknown { background: var(--bg-raised); color: var(--fg-dim); border: 1px dashed var(--line-strong); }
+.diag-state.info { background: var(--info-soft); color: var(--fg); }
 /* Assets view (slice E9): models, datasheets, libraries and outputs per revision. */
 .assets { display: grid; gap: var(--s-1h); padding: var(--s-1) var(--s-2); min-width: 0; }
 .assets .ui-section + .ui-section { border-top: 1px solid var(--line); padding-top: var(--s-1h); }

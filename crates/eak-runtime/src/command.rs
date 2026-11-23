@@ -266,8 +266,22 @@ pub enum Command {
     DeleteNoConnect {
         no_connect_id: Id,
     },
-    /// Assign reference designators to symbols ending in '?'.
-    Annotate,
+    /// Assign reference designators (options: Phase 1 B5, ADR-0046). `scope`: `unannotated`
+    /// (the default: designators ending in '?' or empty), `all`, or `selection` (`symbols`).
+    /// Numbering follows the sheet order, then `order`: `across` (the default: by Y, then X) or
+    /// `down` (by X, then Y). `reset` returns the designators in scope to `<prefix>?` instead.
+    /// A designator outside the scope is never changed or reused. `{"type":"Annotate"}` keeps
+    /// its old meaning.
+    Annotate {
+        #[serde(default)]
+        order: AnnotateOrder,
+        #[serde(default)]
+        scope: AnnotateScope,
+        #[serde(default)]
+        symbols: Vec<Id>,
+        #[serde(default)]
+        reset: bool,
+    },
     // ---- PCB
     SetBoardOutline {
         points: Vec<Point>,
@@ -508,6 +522,29 @@ pub enum Command {
         net: String,
         volts: Option<f64>,
     },
+    /// Enable or disable one rule and/or override its report severity (ADR-0046, AD-8);
+    /// `config: None` clears it back to the default. A rule id no check declares is refused,
+    /// so a typo cannot silently configure nothing. A disabled rule is reported as `DISABLED`.
+    SetRuleConfig {
+        rule_id: String,
+        #[serde(default)]
+        config: Option<RuleConfig>,
+    },
+    /// Set (`Some`) or clear (`None`) one clearance-matrix cell (Phase 1 C5, ADR-0046). The
+    /// pair is unordered.
+    SetClearanceCell {
+        a: ObjectClass,
+        b: ObjectClass,
+        #[serde(default)]
+        clearance: Option<Nm>,
+    },
+    /// Set or clear the minimum copper clearance between two nets (Phase 1 C5, ADR-0046).
+    SetNetPairClearance {
+        net_a: String,
+        net_b: String,
+        #[serde(default)]
+        clearance: Option<Nm>,
+    },
     SetManufacturing {
         config: ManufacturingConfig,
     },
@@ -530,6 +567,29 @@ pub enum Command {
 /// Most commands a single `Batch` may carry.
 pub const MAX_BATCH: usize = 1000;
 
+/// Numbering order of `Annotate` within each sheet (sheets in their order).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnnotateOrder {
+    /// By Y, then X (rows).
+    #[default]
+    Across,
+    /// By X, then Y (columns).
+    Down,
+}
+
+/// Which symbols `Annotate` numbers (or resets).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnnotateScope {
+    /// Symbols whose designator ends in '?' or is empty.
+    #[default]
+    Unannotated,
+    All,
+    /// The symbols listed in `symbols`.
+    Selection,
+}
+
 /// Risk class driving the approval policy (Spec §6.1; Execution Instructions §11).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -541,6 +601,16 @@ pub enum OperationClass {
 }
 
 impl Command {
+    /// `Annotate` with its default options: number the unannotated symbols across each sheet.
+    pub fn annotate() -> Command {
+        Command::Annotate {
+            order: AnnotateOrder::default(),
+            scope: AnnotateScope::default(),
+            symbols: vec![],
+            reset: false,
+        }
+    }
+
     pub fn name(&self) -> String {
         serde_json::to_value(self)
             .ok()
@@ -565,7 +635,7 @@ impl Command {
             | AddNetLabel { .. }
             | MoveFootprint { .. }
             | SetFootprintLocked { .. }
-            | Annotate
+            | Annotate { .. }
             | SetSymbolValue { .. }
             | SetRefdes { .. }
             | SetProjectProperty { .. }
@@ -632,6 +702,9 @@ impl Command {
             | UpsertNetClass { .. }
             | SetNetCurrent { .. }
             | SetNetVoltage { .. }
+            | SetRuleConfig { .. }
+            | SetClearanceCell { .. }
+            | SetNetPairClearance { .. }
             | SetManufacturing { .. } => EngineeringImpacting,
             DeleteSymbol { .. } | DeleteSheet { .. } | ClearRouting { .. } => Destructive,
             // A batch carries the risk of its riskiest step, so approval covers every step.
@@ -1025,6 +1098,31 @@ fn rename_nets(p: &mut Project, map: &BTreeMap<String, String>) {
             .map(|(k, v)| (map.get(&k).cloned().unwrap_or(k), v))
             .collect();
     }
+    // Net pair rules follow the rename; a pair the rename merges into one net no longer names
+    // two nets and is dropped, and two pairs that become the same keep the larger clearance.
+    let mut pairs: BTreeMap<(String, String), Nm> = BTreeMap::new();
+    for mut r in std::mem::take(&mut c.net_pair_rules) {
+        re(&mut r.net_a);
+        re(&mut r.net_b);
+        if r.net_a == r.net_b {
+            continue;
+        }
+        let key = if r.net_a < r.net_b {
+            (r.net_a, r.net_b)
+        } else {
+            (r.net_b, r.net_a)
+        };
+        let v = pairs.entry(key).or_insert(r.clearance);
+        *v = (*v).max(r.clearance);
+    }
+    c.net_pair_rules = pairs
+        .into_iter()
+        .map(|((net_a, net_b), clearance)| NetPairRule {
+            net_a,
+            net_b,
+            clearance,
+        })
+        .collect();
 }
 
 fn symbol<'a>(p: &'a Project, id: &str) -> Result<&'a SymbolInstance, CommandError> {
@@ -2059,25 +2157,84 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             }
             s.format = format.clone();
         }
-        Annotate => {
-            let ids: Vec<Id> = p
-                .schematic
-                .symbols
-                .values()
-                .filter(|s| s.refdes.ends_with('?') || s.refdes.is_empty())
-                .map(|s| s.id.clone())
-                .collect();
-            if ids.is_empty() {
+        Annotate {
+            order,
+            scope,
+            symbols,
+            reset,
+        } => {
+            let pending = |s: &SymbolInstance| s.refdes.ends_with('?') || s.refdes.is_empty();
+            let mut ids: Vec<Id> = match scope {
+                AnnotateScope::Unannotated => p
+                    .schematic
+                    .symbols
+                    .values()
+                    .filter(|s| pending(s))
+                    .map(|s| s.id.clone())
+                    .collect(),
+                AnnotateScope::All => p.schematic.symbols.keys().cloned().collect(),
+                AnnotateScope::Selection => {
+                    if symbols.is_empty() {
+                        return Err(CommandError::Invalid(
+                            "annotate: the selection scope needs the symbols to annotate".into(),
+                        ));
+                    }
+                    for id in symbols {
+                        symbol(p, id)?;
+                    }
+                    let mut v = symbols.clone();
+                    v.sort();
+                    v.dedup();
+                    v
+                }
+            };
+            let placeholder = |p: &Project, id: &Id| {
+                let prefix = &p.library[&p.schematic.symbols[id].component_id].refdes_prefix;
+                format!("{prefix}?")
+            };
+            if *reset {
+                ids.retain(|id| p.schematic.symbols[id].refdes != placeholder(p, id));
+                if ids.is_empty() {
+                    return Err(CommandError::NothingTo(
+                        "annotate: every designator in scope is already reset".into(),
+                    ));
+                }
+                for id in ids {
+                    let r = placeholder(p, &id);
+                    p.schematic.symbols.get_mut(&id).expect("exists").refdes = r;
+                }
+            } else if ids.is_empty() {
                 return Err(CommandError::NothingTo(
                     "annotate: every symbol already has a reference designator".into(),
                 ));
-            }
-            for id in ids {
-                let prefix = p.library[&p.schematic.symbols[&id].component_id]
-                    .refdes_prefix
-                    .clone();
-                let r = next_refdes(p, &prefix);
-                p.schematic.symbols.get_mut(&id).expect("exists").refdes = r;
+            } else {
+                // Sheet order, then the chosen reading order; the id settles ties.
+                let rank = |p: &Project, id: &Id| {
+                    let s = &p.schematic.symbols[id];
+                    let sheet = p
+                        .schematic
+                        .sheets
+                        .get(&s.sheet_id)
+                        .map_or(u32::MAX, |sh| sh.order);
+                    let (a, b) = match order {
+                        AnnotateOrder::Across => (s.position.y, s.position.x),
+                        AnnotateOrder::Down => (s.position.x, s.position.y),
+                    };
+                    (sheet, s.sheet_id.clone(), a, b, id.clone())
+                };
+                ids.sort_by_key(|id| rank(p, id));
+                // Free the designators in scope first, so they renumber from the lowest free number.
+                for id in &ids {
+                    let r = placeholder(p, id);
+                    p.schematic.symbols.get_mut(id).expect("exists").refdes = r;
+                }
+                for id in ids {
+                    let prefix = p.library[&p.schematic.symbols[&id].component_id]
+                        .refdes_prefix
+                        .clone();
+                    let r = next_refdes(p, &prefix);
+                    p.schematic.symbols.get_mut(&id).expect("exists").refdes = r;
+                }
             }
         }
         SetBoardOutline { points } => {
@@ -3171,6 +3328,71 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 p.constraints.net_voltages_v.remove(net);
             }
         },
+        SetRuleConfig { rule_id, config } => {
+            if !known_rule_id(rule_id) {
+                return Err(CommandError::Invalid(format!(
+                    "no check declares rule {rule_id:?}"
+                )));
+            }
+            match config {
+                // Enabled at the default severity is no configuration at all.
+                Some(RuleConfig {
+                    enabled: true,
+                    severity: None,
+                })
+                | None => {
+                    p.constraints.rules.remove(rule_id);
+                }
+                Some(c) => {
+                    p.constraints.rules.insert(rule_id.clone(), *c);
+                }
+            }
+        }
+        SetClearanceCell { a, b, clearance } => {
+            let (a, b) = if a <= b { (*a, *b) } else { (*b, *a) };
+            let m = &mut p.constraints.clearance_matrix;
+            m.retain(|c| !(c.a == a && c.b == b));
+            if let Some(v) = clearance {
+                if *v <= 0 {
+                    return Err(CommandError::Invalid("a clearance must be positive".into()));
+                }
+                m.push(ClearanceCell {
+                    a,
+                    b,
+                    clearance: *v,
+                });
+                m.sort_by_key(|c| (c.a, c.b));
+            }
+        }
+        SetNetPairClearance {
+            net_a,
+            net_b,
+            clearance,
+        } => {
+            let (x, y) = if net_a <= net_b {
+                (net_a, net_b)
+            } else {
+                (net_b, net_a)
+            };
+            if x.is_empty() || x == y {
+                return Err(CommandError::Invalid(
+                    "a net pair rule needs two different nets".into(),
+                ));
+            }
+            let r = &mut p.constraints.net_pair_rules;
+            r.retain(|n| !(&n.net_a == x && &n.net_b == y));
+            if let Some(v) = clearance {
+                if *v <= 0 {
+                    return Err(CommandError::Invalid("a clearance must be positive".into()));
+                }
+                r.push(NetPairRule {
+                    net_a: x.clone(),
+                    net_b: y.clone(),
+                    clearance: *v,
+                });
+                r.sort_by(|m, n| (&m.net_a, &m.net_b).cmp(&(&n.net_a, &n.net_b)));
+            }
+        }
         SetManufacturing { config } => {
             if config.mask_expansion < 0 {
                 return Err(CommandError::Invalid("mask expansion must be ≥ 0".into()));

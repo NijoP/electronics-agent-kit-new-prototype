@@ -1,7 +1,9 @@
 // Find and replace bar of the schematic editor (slice B3): designators, values and net labels
 // across every sheet. "Select matches" selects the hits on this sheet; "Replace all" sends one
-// Batch (one revision, one undo step) and the engine accepts or refuses it as a whole.
-import { useState } from "react";
+// Batch (one revision, one undo step) and the engine accepts or refuses it as a whole. The search
+// is published to the bottom dock's Find Results tab (slice E4), which lists every sheet's hits.
+import { useEffect, useState } from "react";
+import { publishFindSearch, revealFindResults } from "../../shell/findResults";
 import type { Command, Id, Snapshot } from "../../types";
 import { DEFAULT_FIND, FIND_FIELDS, findHits, replaceCommands, type FindHit, type FindOptions } from "./find";
 
@@ -23,6 +25,7 @@ export function FindBar({ snapshot, sheetId, busy, onSelect, onReplace, onClose 
   const replace = replaceCommands(snapshot, hits, query, replacement, o);
   const changed = replace.filter((c) => c.type !== "DeleteNetLabel").length;
   const noneWhy = !query ? "Type what to find first" : "Nothing matches";
+  useEffect(() => publishFindSearch(query, o), [query, o]);
   return (
     <div
       className="find-bar"
@@ -70,6 +73,17 @@ export function FindBar({ snapshot, sheetId, busy, onSelect, onReplace, onClose 
         onClick={() => onReplace(replace, `Replace "${query}" with "${replacement}" in ${changed} object(s)`)}
       >
         Replace all
+      </button>
+      <button
+        type="button"
+        disabled={!query}
+        title={query ? "List every sheet's matches in the bottom dock's Find Results tab" : "Type what to find first"}
+        onClick={() => {
+          publishFindSearch(query, o);
+          revealFindResults();
+        }}
+      >
+        List in Find Results
       </button>
       <button type="button" aria-label="Close find and replace" title="Close (Esc)" onClick={onClose}>
         ×
