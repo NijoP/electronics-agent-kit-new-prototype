@@ -1,6 +1,6 @@
 {
   "name": "B5 findings panel",
-  "description": "Phase 1 slice B5 (findings panel): on an isolated software fixture with one unconnected resistor, Design > Run ERC fills the Findings tab; the severity filter chips show the report's counts and hide and show their severity; a finding's object reference selects that object and zooms to it in the schematic; Export CSV and Export JSON re-run ERC on the current revision and write the engine's report into the project's output folder, and the status line names the file written.",
+  "description": "Phase 1 slice B5 (findings panel): on an isolated software fixture with one unconnected resistor, Design > Run ERC fills the Findings tab; the severity filter chips show the report's counts and hide and show their severity; a finding's object reference selects that object and zooms to it in the schematic; Export CSV and Export JSON re-run ERC on the current revision and write the engine's report into the project's output folder, and the status line names the file written. Real-time DRC (slice C5), switched on in the Findings tab, runs DRC on the current revision without a Run DRC click.",
   "steps": [
     { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
     { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "B5 Findings Fixture", "folder": "b5-findings-fixture" },
@@ -13,6 +13,7 @@
     { "id": "b5-show-errors", "do": "click", "title": "B5: the Errors chip shows them again", "selector": "section[aria-label=\"ERC report\"] button.chip.error", "gone": "section[aria-label=\"ERC report\"] p.hint" },
     { "id": "b5-object", "do": "click", "title": "B5: a finding's object reference selects the resistor and zooms to it (the finding is marked current)", "selector": "section[aria-label=\"ERC report\"] button.obj-ref", "expect": "section[aria-label=\"ERC report\"] li.finding button[aria-current=\"true\"]" },
     { "id": "b5-export-csv", "do": "click", "title": "B5: Export CSV re-runs ERC and writes output/rev-N/findings/erc-findings.csv", "selector": "section[aria-label=\"ERC report\"] [role=\"group\"][aria-label=\"Export ERC\"] button", "text": "Export CSV", "expect": "footer.status span.msg", "expectText": "erc-findings.csv" },
-    { "id": "b5-export-json", "do": "click", "title": "B5: Export JSON writes the whole report (rules, not implemented, limitations)", "selector": "section[aria-label=\"ERC report\"] [role=\"group\"][aria-label=\"Export ERC\"] button", "text": "Export JSON", "expect": "footer.status span.msg", "expectText": "erc-findings.json" }
+    { "id": "b5-export-json", "do": "click", "title": "B5: Export JSON writes the whole report (rules, not implemented, limitations)", "selector": "section[aria-label=\"ERC report\"] [role=\"group\"][aria-label=\"Export ERC\"] button", "text": "Export JSON", "expect": "footer.status span.msg", "expectText": "erc-findings.json" },
+    { "id": "c5-realtime-drc", "do": "click", "title": "C5: Real-time DRC on: the engine runs DRC on the current revision once editing pauses", "selector": "label.rt-drc input[aria-label=\"Real-time DRC\"]", "expect": "section[aria-label=\"DRC report\"] [role=\"group\"][aria-label=\"DRC severity filter\"] button" }
   ]
 }

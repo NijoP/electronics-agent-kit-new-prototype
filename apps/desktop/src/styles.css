@@ -760,3 +760,4 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .obj-refs { display: inline-flex; flex-wrap: wrap; gap: 2px; }
 .obj-ref { font-size: var(--fs-xs); font-family: var(--mono); padding: 0 var(--s-half); color: var(--accent); border-color: transparent; background: transparent; }
 .obj-ref:hover:not(:disabled) { background: var(--bg-hover); }
+.rt-drc { display: flex; align-items: center; gap: var(--s-half); font-size: var(--fs-sm); margin: var(--s-1) 0; }

@@ -3,6 +3,7 @@
 // latest engine snapshot; edits are engine calls carrying the rendered revision.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, describeError } from "./api";
+import { useRealtimeDrc } from "./realtimeDrc";
 import { DomainPanel } from "./DomainPanel";
 import { ManufacturingPanel as FabricatorPrepPanel } from "./ManufacturingPanel";
 import { CommandPalette, type PaletteAction } from "./CommandPalette";
@@ -84,6 +85,8 @@ const MAX_EVENTS = 200;
 
 // "Toolbar labels" (View menu): text beside the toolbar icons, remembered across sessions.
 const TB_LABELS_KEY = "eak.toolbar.labels";
+// Real-time DRC (slice C5): re-run DRC on each new revision, debounced; remembered across sessions.
+const RT_DRC_KEY = "eak.drc.realtime";
 const readFlag = (key: string): boolean => {
   try {
     return localStorage.getItem(key) === "1";
@@ -165,6 +168,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const [armPart, setArmPart] = useState<{ id: string; n: number } | null>(null);
   const [status, setStatus] = useState<{ layer: CopperLayer; gridMm: number }>({ layer: "top", gridMm: 0.5 });
   const revision = snapshot.project.revision;
+  const [realtimeDrc, setRealtimeDrcState] = useState(() => readFlag(RT_DRC_KEY));
+  const setRealtimeDrc = (on: boolean) => {
+    writeFlag(RT_DRC_KEY, on);
+    setRealtimeDrcState(on);
+  };
   const agentTasks = useAgentTasks(snapshot.project.id, revision);
   // An external commit may delete what is selected; otherwise selection (and camera) survive it.
   useEffect(() => {
@@ -517,6 +525,16 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       setMessage(`${result.report.check} ran on revision ${result.report.revision}`);
       await syncTo(result.report.revision);
     });
+  // Real-time DRC (C5): after each commit, once edits pause (see realtimeDrc.ts). A result older
+  // than the DRC already shown is dropped.
+  useRealtimeDrc(
+    realtimeDrc,
+    revision,
+    results.drc?.report.revision,
+    () => api.runCheck("drc"),
+    (drc) => setResults((old) => (old.drc && old.drc.report.revision > drc.report.revision ? old : { ...old, drc })),
+    setMessage,
+  );
   // Switch to or close one of the projects open in this window. Closing the active one activates
   // the previous one (or returns to Project Home when none is left).
   const switchTo = (id: string) =>
@@ -965,6 +983,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
               onObject={navigateObject}
               onExport={exportFindings}
               exportBlocked={!snapshot.dir ? "Save the project to a folder first: exports are written into its output folder" : busy ? "Wait for the running operation to finish" : null}
+              realtimeDrc={realtimeDrc}
+              onRealtimeDrc={setRealtimeDrc}
               activeFinding={activeFinding}
               onClose={() => setBottomOpen(false)}
               library={

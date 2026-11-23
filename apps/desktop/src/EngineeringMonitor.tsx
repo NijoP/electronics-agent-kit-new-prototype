@@ -21,6 +21,9 @@ interface Props {
   onExport?: (check: Check, format: FindingsFormat) => void;
   /** Why exporting is unavailable right now (no project folder, an operation running); null when it is available. */
   exportBlocked?: string | null;
+  /** Real-time DRC (C5): DRC re-runs on each new revision once edits pause. Absent: no toggle shown. */
+  realtimeDrc?: boolean;
+  onRealtimeDrc?: (on: boolean) => void;
 }
 
 export const SEVERITIES: Severity[] = ["error", "warning", "info"];
@@ -253,12 +256,17 @@ function ReportSection({
   );
 }
 
-export function EngineeringMonitor({ snapshot, results, onProbe, onNavigate, onObject, activeFinding, onExport, exportBlocked }: Props) {
+export function EngineeringMonitor({ snapshot, results, onProbe, onNavigate, onObject, activeFinding, onExport, exportBlocked, realtimeDrc, onRealtimeDrc }: Props) {
   const common = { snapshot, onProbe, onNavigate, onObject, activeFinding, onExport, exportBlocked };
   return (
     <div className="monitor" aria-label="Engineering Monitor">
       <h2>Engineering Monitor</h2>
       <ReportSection title="ERC" result={results.erc} {...common} />
+      {onRealtimeDrc && (
+        <label className="rt-drc" title="After each change, once editing pauses, the engine runs DRC on that revision. Results still say which revision they are for.">
+          <input type="checkbox" aria-label="Real-time DRC" checked={!!realtimeDrc} onChange={(e) => onRealtimeDrc(e.target.checked)} /> Real-time DRC: re-run after each change
+        </label>
+      )}
       <ReportSection title="DRC" result={results.drc} {...common} />
       <ReportSection title="DFM" result={results.dfm} {...common} />
     </div>

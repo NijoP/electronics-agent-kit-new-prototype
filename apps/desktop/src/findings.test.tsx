@@ -114,3 +114,16 @@ describe("Findings export", () => {
     expect(within(section("DRC")).queryByRole("button", { name: /Export/ })).toBeNull();
   });
 });
+
+describe("Real-time DRC toggle", () => {
+  it("is a checkbox that reports its new state, shown only when the workspace offers it", () => {
+    const onRealtimeDrc = vi.fn();
+    const { rerender } = render(<EngineeringMonitor snapshot={fixture(7)} results={{}} onProbe={() => {}} realtimeDrc={false} onRealtimeDrc={onRealtimeDrc} />);
+    const box = screen.getByRole("checkbox", { name: "Real-time DRC" }) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    expect(onRealtimeDrc).toHaveBeenCalledWith(true);
+    rerender(<EngineeringMonitor snapshot={fixture(7)} results={{}} onProbe={() => {}} />);
+    expect(screen.queryByRole("checkbox", { name: "Real-time DRC" })).toBeNull();
+  });
+});
