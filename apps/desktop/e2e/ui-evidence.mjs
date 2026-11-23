@@ -161,7 +161,11 @@ async function xclick(selector, text, dx = 0, dy = 0, button = 1) {
   const o = origin();
   const x = Math.round(o.x + r.x + r.w / 2 + dx);
   const y = Math.round(o.y + r.y + r.h / 2 + dy);
-  sh("xdotool", ["mousemove", "--sync", String(x), String(y), "click", String(button)]);
+  // Move first, then click: a native tooltip still shown from the previous control (a `title`)
+  // can swallow a click that arrives with the same motion, so the click would be lost.
+  sh("xdotool", ["mousemove", "--sync", String(x), String(y)]);
+  await sleep(200);
+  sh("xdotool", ["click", String(button)]);
   await sleep(250);
   return `XTest ${button === 3 ? "right-" : ""}click at ${x},${y}`;
 }
