@@ -481,6 +481,29 @@ pub enum Command {
         net: String,
         volts: Option<f64>,
     },
+    /// Enable or disable one rule and/or override its report severity (ADR-0044, AD-8);
+    /// `config: None` clears it back to the default. A rule id no check declares is refused,
+    /// so a typo cannot silently configure nothing. A disabled rule is reported as `DISABLED`.
+    SetRuleConfig {
+        rule_id: String,
+        #[serde(default)]
+        config: Option<RuleConfig>,
+    },
+    /// Set (`Some`) or clear (`None`) one clearance-matrix cell (Phase 1 C5, ADR-0044). The
+    /// pair is unordered.
+    SetClearanceCell {
+        a: ObjectClass,
+        b: ObjectClass,
+        #[serde(default)]
+        clearance: Option<Nm>,
+    },
+    /// Set or clear the minimum copper clearance between two nets (Phase 1 C5, ADR-0044).
+    SetNetPairClearance {
+        net_a: String,
+        net_b: String,
+        #[serde(default)]
+        clearance: Option<Nm>,
+    },
     SetManufacturing {
         config: ManufacturingConfig,
     },
@@ -595,6 +618,9 @@ impl Command {
             | UpsertNetClass { .. }
             | SetNetCurrent { .. }
             | SetNetVoltage { .. }
+            | SetRuleConfig { .. }
+            | SetClearanceCell { .. }
+            | SetNetPairClearance { .. }
             | SetManufacturing { .. } => EngineeringImpacting,
             DeleteSymbol { .. } | DeleteSheet { .. } | ClearRouting { .. } => Destructive,
             // A batch carries the risk of its riskiest step, so approval covers every step.
@@ -988,6 +1014,31 @@ fn rename_nets(p: &mut Project, map: &BTreeMap<String, String>) {
             .map(|(k, v)| (map.get(&k).cloned().unwrap_or(k), v))
             .collect();
     }
+    // Net pair rules follow the rename; a pair the rename merges into one net no longer names
+    // two nets and is dropped, and two pairs that become the same keep the larger clearance.
+    let mut pairs: BTreeMap<(String, String), Nm> = BTreeMap::new();
+    for mut r in std::mem::take(&mut c.net_pair_rules) {
+        re(&mut r.net_a);
+        re(&mut r.net_b);
+        if r.net_a == r.net_b {
+            continue;
+        }
+        let key = if r.net_a < r.net_b {
+            (r.net_a, r.net_b)
+        } else {
+            (r.net_b, r.net_a)
+        };
+        let v = pairs.entry(key).or_insert(r.clearance);
+        *v = (*v).max(r.clearance);
+    }
+    c.net_pair_rules = pairs
+        .into_iter()
+        .map(|((net_a, net_b), clearance)| NetPairRule {
+            net_a,
+            net_b,
+            clearance,
+        })
+        .collect();
 }
 
 fn symbol<'a>(p: &'a Project, id: &str) -> Result<&'a SymbolInstance, CommandError> {
@@ -3024,6 +3075,71 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 p.constraints.net_voltages_v.remove(net);
             }
         },
+        SetRuleConfig { rule_id, config } => {
+            if !known_rule_id(rule_id) {
+                return Err(CommandError::Invalid(format!(
+                    "no check declares rule {rule_id:?}"
+                )));
+            }
+            match config {
+                // Enabled at the default severity is no configuration at all.
+                Some(RuleConfig {
+                    enabled: true,
+                    severity: None,
+                })
+                | None => {
+                    p.constraints.rules.remove(rule_id);
+                }
+                Some(c) => {
+                    p.constraints.rules.insert(rule_id.clone(), *c);
+                }
+            }
+        }
+        SetClearanceCell { a, b, clearance } => {
+            let (a, b) = if a <= b { (*a, *b) } else { (*b, *a) };
+            let m = &mut p.constraints.clearance_matrix;
+            m.retain(|c| !(c.a == a && c.b == b));
+            if let Some(v) = clearance {
+                if *v <= 0 {
+                    return Err(CommandError::Invalid("a clearance must be positive".into()));
+                }
+                m.push(ClearanceCell {
+                    a,
+                    b,
+                    clearance: *v,
+                });
+                m.sort_by_key(|c| (c.a, c.b));
+            }
+        }
+        SetNetPairClearance {
+            net_a,
+            net_b,
+            clearance,
+        } => {
+            let (x, y) = if net_a <= net_b {
+                (net_a, net_b)
+            } else {
+                (net_b, net_a)
+            };
+            if x.is_empty() || x == y {
+                return Err(CommandError::Invalid(
+                    "a net pair rule needs two different nets".into(),
+                ));
+            }
+            let r = &mut p.constraints.net_pair_rules;
+            r.retain(|n| !(&n.net_a == x && &n.net_b == y));
+            if let Some(v) = clearance {
+                if *v <= 0 {
+                    return Err(CommandError::Invalid("a clearance must be positive".into()));
+                }
+                r.push(NetPairRule {
+                    net_a: x.clone(),
+                    net_b: y.clone(),
+                    clearance: *v,
+                });
+                r.sort_by(|m, n| (&m.net_a, &m.net_b).cmp(&(&n.net_a, &n.net_b)));
+            }
+        }
         SetManufacturing { config } => {
             if config.mask_expansion < 0 {
                 return Err(CommandError::Invalid("mask expansion must be ≥ 0".into()));

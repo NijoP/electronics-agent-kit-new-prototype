@@ -49,6 +49,14 @@ fn sheet() -> Value {
 fn id(desc: &str) -> Value {
     string(desc)
 }
+fn object_class() -> Value {
+    enumeration(
+        &[
+            "track", "smd_pad", "th_pad", "via", "zone", "hole", "outline", "silk",
+        ],
+        "clearance-matrix object class",
+    )
+}
 
 /// One `Batch` step: `type` names any non-batch command tool and the remaining properties
 /// are that tool's arguments (decoded and checked by serde, like a direct tool call).
@@ -714,6 +722,56 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                 &["net"],
             ),
         ),
+        SetRuleConfig { .. } => (
+            D::Constraints,
+            "Enable or disable one verification rule (ERC-001, DRC-002, ...) or override its report severity; config null clears it back to the default. A disabled rule is reported as DISABLED, never as passing, and the gates that use it are NOT_RUN.",
+            obj(
+                &[
+                    ("rule_id", string("rule id, e.g. ERC-001")),
+                    (
+                        "config",
+                        nullable(obj(
+                            &[
+                                ("enabled", boolean("false disables the rule")),
+                                (
+                                    "severity",
+                                    nullable(enumeration(
+                                        &["error", "warning", "info"],
+                                        "report severity of the rule's findings; null keeps the default",
+                                    )),
+                                ),
+                            ],
+                            &[],
+                        )),
+                    ),
+                ],
+                &["rule_id"],
+            ),
+        ),
+        SetClearanceCell { .. } => (
+            D::Constraints,
+            "Set (or clear with null) the minimum clearance between two object classes in the DRC clearance matrix.",
+            obj(
+                &[
+                    ("a", object_class()),
+                    ("b", object_class()),
+                    ("clearance", nullable(nm("minimum clearance"))),
+                ],
+                &["a", "b"],
+            ),
+        ),
+        SetNetPairClearance { .. } => (
+            D::Constraints,
+            "Set (or clear with null) the minimum copper clearance between two named nets.",
+            obj(
+                &[
+                    ("net_a", string("net name")),
+                    ("net_b", string("another net name")),
+                    ("clearance", nullable(nm("minimum clearance"))),
+                ],
+                &["net_a", "net_b"],
+            ),
+        ),
         SetManufacturing { .. } => (
             D::Manufacturing,
             "Set the manufacturing configuration.",
@@ -1094,6 +1152,23 @@ pub fn command_samples() -> Vec<Command> {
         SetNetVoltage {
             net: "N".into(),
             volts: None,
+        },
+        SetRuleConfig {
+            rule_id: "ERC-001".into(),
+            config: Some(RuleConfig {
+                enabled: true,
+                severity: Some(RuleSeverity::Warning),
+            }),
+        },
+        SetClearanceCell {
+            a: ObjectClass::Track,
+            b: ObjectClass::SmdPad,
+            clearance: Some(200_000),
+        },
+        SetNetPairClearance {
+            net_a: "GND".into(),
+            net_b: "VIN".into(),
+            clearance: None,
         },
         SetManufacturing {
             config: ManufacturingConfig::default(),

@@ -51,7 +51,11 @@ pub fn classify_command(command_type: &str) -> Option<Change> {
         | "ReorderSheets" => Some(Change::Schematic),
         "AddRequirement" => Some(Change::Requirements),
         "SetNetCurrent" | "SetNetVoltage" | "SetManufacturing" => Some(Change::Constraints),
-        "SetDesignRules" | "UpsertNetClass" => Some(Change::Rules),
+        "SetDesignRules"
+        | "UpsertNetClass"
+        | "SetRuleConfig"
+        | "SetClearanceCell"
+        | "SetNetPairClearance" => Some(Change::Rules),
         "SetBoardOutline" | "SetStackup" | "SetLayerCount" | "SetOutlineArc" | "AddBoardCutout"
         | "DeleteBoardCutout" => Some(Change::BoardOutline),
         // Keep-out and constraint regions are design rules for placement and routing (ADR-0042).
