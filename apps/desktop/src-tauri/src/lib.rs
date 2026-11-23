@@ -652,9 +652,9 @@ pub fn events_since(s: &Session, seq: u64) -> Result<Vec<Event>, String> {
 
 pub fn acknowledge_recovery(s: &Session) -> Result<Snapshot, String> {
     s.with_engine(|e| {
-        e.acknowledge_recovery();
-        snapshot(e)
-    })
+        e.acknowledge_recovery()?;
+        Ok(snapshot(e))
+    })?
 }
 
 /// Run ERC, DRC or DFM on the current revision and record the report as evidence.
