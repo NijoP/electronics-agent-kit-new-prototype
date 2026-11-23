@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 pub type Id = String;
 
@@ -682,6 +682,26 @@ pub struct Board {
     /// Closed outline polygon (counter-clockwise preferred). Empty = no outline yet.
     pub outline: Vec<Point>,
     pub stackup: Stackup,
+    /// Arc edges of the outline (schema v4, ADR-0041); every other edge is straight. Omitted
+    /// when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outline_arcs: Vec<crate::pcb_objects::OutlineArc>,
+}
+
+impl Board {
+    /// The outline with its arc edges flattened (chord error ≤ 10 µm): the board shape that DRC,
+    /// the zone fill and the edge checks use. Equal to `outline` when no edge is an arc.
+    pub fn outline_path(&self) -> Vec<Point> {
+        crate::pcb_objects::flatten_outline(&self.outline, &self.outline_arcs)
+    }
+
+    /// Sweep of outline edge `edge`, if it is an arc.
+    pub fn edge_sweep(&self, edge: usize) -> Option<f64> {
+        self.outline_arcs
+            .iter()
+            .find(|a| a.edge == edge)
+            .map(|a| a.sweep_deg)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -709,6 +729,34 @@ pub struct Track {
     pub a: Point,
     pub b: Point,
     pub net: String,
+    /// Arc track (schema v4, ADR-0041): the track runs from `a` to `b` along a circular arc of
+    /// this sweep in degrees, positive counter-clockwise. `None` = straight; omitted when straight.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc_deg: Option<f64>,
+}
+
+impl Track {
+    /// Centre line: `[a, b]` for a straight track, the flattened arc (chord error ≤ 10 µm) for
+    /// an arc track.
+    pub fn path(&self) -> Vec<Point> {
+        match self.arc_deg {
+            Some(s) => crate::pcb_objects::arc_points(
+                self.a,
+                self.b,
+                s,
+                crate::pcb_objects::ARC_FLATTEN_ERR_NM,
+            ),
+            None => vec![self.a, self.b],
+        }
+    }
+
+    /// Centre-line length in nanometres (the true arc length for an arc track).
+    pub fn length(&self) -> f64 {
+        match self.arc_deg {
+            Some(s) => crate::pcb_objects::arc_length(self.a, self.b, s),
+            None => self.a.dist(self.b),
+        }
+    }
 }
 
 fn via_top() -> CopperLayer {
@@ -777,6 +825,18 @@ pub struct Pcb {
     pub tracks: BTreeMap<Id, Track>,
     pub vias: BTreeMap<Id, Via>,
     pub zones: BTreeMap<Id, Zone>,
+    /// Keep-out and constraint regions (schema v4, ADR-0041).
+    #[serde(default)]
+    pub regions: BTreeMap<Id, crate::pcb_objects::Region>,
+    /// Text on silk or documentation layers (schema v4).
+    #[serde(default)]
+    pub texts: BTreeMap<Id, crate::pcb_objects::PcbText>,
+    /// Linear dimensions on silk or documentation layers (schema v4).
+    #[serde(default)]
+    pub dimensions: BTreeMap<Id, crate::pcb_objects::PcbDimension>,
+    /// Holes milled through the board (schema v4).
+    #[serde(default)]
+    pub cutouts: BTreeMap<Id, crate::pcb_objects::Cutout>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

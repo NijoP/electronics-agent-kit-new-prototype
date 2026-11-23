@@ -11,6 +11,9 @@
 //!   `schematic.graphics`, `schematic.buses` and `schematic.bus_entries` are added empty. Labels
 //!   load as global, sheets without a drawing format and instances with default field
 //!   visibility, which is exactly the v2 meaning.
+//! * v3 → v4 (ADR-0041): PCB objects. The new collections `pcb.regions`, `pcb.texts`,
+//!   `pcb.dimensions` and `pcb.cutouts` are added empty. Tracks without `arc_deg` are straight and
+//!   a board without `outline_arcs` has straight edges, which is exactly the v3 meaning.
 
 use crate::ir::{Stackup, FR4_ER, SCHEMA_VERSION};
 use crate::library::SymbolDef;
@@ -33,6 +36,9 @@ pub fn migrate(mut raw: Value) -> Result<Value, CoreError> {
     }
     if found <= 2 {
         raw = v2_to_v3(raw)?;
+    }
+    if found <= 3 {
+        raw = v3_to_v4(raw);
     }
     Ok(raw)
 }
@@ -84,6 +90,17 @@ fn v2_to_v3(mut raw: Value) -> Result<Value, CoreError> {
     }
     raw["schema_version"] = Value::from(3);
     Ok(raw)
+}
+
+fn v3_to_v4(mut raw: Value) -> Value {
+    if let Some(pcb) = raw.get_mut("pcb").and_then(Value::as_object_mut) {
+        for key in ["regions", "texts", "dimensions", "cutouts"] {
+            pcb.entry(key)
+                .or_insert_with(|| Value::Object(Default::default()));
+        }
+    }
+    raw["schema_version"] = Value::from(4);
+    raw
 }
 
 #[cfg(test)]
@@ -203,7 +220,7 @@ mod tests {
     fn v2_box_symbols_migrate_to_their_rectangle_with_pins_unmoved() {
         let (current, v2) = v2_fixture();
         let p = from_json(&v2).unwrap();
-        assert_eq!(p.schema_version, 3);
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
         for (id, def) in &p.library {
             let s = &def.symbol;
             assert_eq!(
@@ -232,6 +249,141 @@ mod tests {
             from_json(&v.to_string()),
             Err(CoreError::Parse(_))
         ));
+    }
+
+    /// A v4 project holding one of every schema-v4 PCB object (arc track, arc outline edge,
+    /// region, text, dimension, cut-out).
+    fn v4_project() -> Project {
+        use crate::{
+            Cutout, DimensionUnit, DrawLayer, OutlineArc, PcbDimension, PcbText, Point, Region,
+            RegionObject, Rotation, Track,
+        };
+        let mut p = Project::new("v4-board");
+        let mm = Point::mm;
+        p.pcb.board.outline = vec![mm(0.0, 0.0), mm(40.0, 0.0), mm(40.0, 30.0), mm(0.0, 30.0)];
+        p.pcb.board.outline_arcs = vec![OutlineArc {
+            edge: 1,
+            sweep_deg: 60.0,
+        }];
+        p.pcb.tracks.insert(
+            "trk_arc".into(),
+            Track {
+                id: "trk_arc".into(),
+                layer: CopperLayer::Top,
+                width: 250_000,
+                a: mm(5.0, 5.0),
+                b: mm(15.0, 5.0),
+                net: "N1".into(),
+                arc_deg: Some(90.0),
+            },
+        );
+        p.pcb.regions.insert(
+            "rgn_1".into(),
+            Region {
+                id: "rgn_1".into(),
+                name: "antenna".into(),
+                outline: vec![mm(20.0, 20.0), mm(30.0, 20.0), mm(30.0, 28.0)],
+                layers: vec![CopperLayer::Top],
+                forbid: [RegionObject::Tracks, RegionObject::Zones].into(),
+                min_track_width: None,
+                max_track_width: None,
+            },
+        );
+        p.pcb.texts.insert(
+            "txt_1".into(),
+            PcbText {
+                id: "txt_1".into(),
+                layer: DrawLayer::TopSilk,
+                position: mm(20.0, 3.0),
+                text: "REV A".into(),
+                size: 1_000_000,
+                stroke_width: 0,
+                rotation: Rotation::R0,
+            },
+        );
+        p.pcb.dimensions.insert(
+            "dim_1".into(),
+            PcbDimension {
+                id: "dim_1".into(),
+                layer: DrawLayer::Documentation,
+                a: mm(0.0, 0.0),
+                b: mm(40.0, 0.0),
+                offset: -3_000_000,
+                unit: DimensionUnit::Mm,
+                precision: 1,
+                text_size: 0,
+            },
+        );
+        p.pcb.cutouts.insert(
+            "cut_1".into(),
+            Cutout {
+                id: "cut_1".into(),
+                outline: vec![mm(8.0, 15.0), mm(12.0, 15.0), mm(12.0, 19.0), mm(8.0, 19.0)],
+            },
+        );
+        p
+    }
+
+    #[test]
+    fn v4_objects_round_trip_byte_stable() {
+        let p = v4_project();
+        assert!(
+            crate::integrity::check(&p).is_empty(),
+            "{:?}",
+            crate::integrity::check(&p)
+        );
+        let a = to_json(&p);
+        let q = from_json(&a).unwrap();
+        assert_eq!(p, q);
+        assert_eq!(a, to_json(&q));
+        let v: Value = serde_json::from_str(&a).unwrap();
+        assert_eq!(v["pcb"]["tracks"]["trk_arc"]["arc_deg"], 90.0);
+        assert_eq!(v["pcb"]["board"]["outline_arcs"][0]["edge"], 1);
+        assert_eq!(
+            v["pcb"]["regions"]["rgn_1"]["forbid"],
+            serde_json::json!(["tracks", "zones"])
+        );
+        // A straight track and a board without arc edges keep their v3 form.
+        let plain = to_json(&Project::new("plain"));
+        assert!(!plain.contains("arc_deg") && !plain.contains("outline_arcs"));
+    }
+
+    #[test]
+    fn v3_project_migrates_to_v4_with_identical_meaning() {
+        let mut current = v4_project();
+        // Remove what v3 cannot express; what remains is a v3 design.
+        current.pcb.board.outline_arcs.clear();
+        for t in current.pcb.tracks.values_mut() {
+            t.arc_deg = None;
+        }
+        current.pcb.regions.clear();
+        current.pcb.texts.clear();
+        current.pcb.dimensions.clear();
+        current.pcb.cutouts.clear();
+        let mut v: Value = serde_json::from_str(&to_json(&current)).unwrap();
+        v["schema_version"] = Value::from(3);
+        for k in ["regions", "texts", "dimensions", "cutouts"] {
+            v["pcb"].as_object_mut().unwrap().remove(k);
+        }
+        let v3 = v.to_string();
+        assert!(!v3.contains("\"cutouts\"") && !v3.contains("\"regions\""));
+        let p = from_json(&v3).expect("v3 project loads");
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
+        assert_eq!(p, current);
+        let a = to_json(&p);
+        assert_eq!(a, to_json(&from_json(&a).unwrap()));
+    }
+
+    #[test]
+    fn invalid_v4_objects_fail_integrity() {
+        let mut p = v4_project();
+        p.pcb.tracks.get_mut("trk_arc").unwrap().arc_deg = Some(360.0);
+        p.pcb.regions.get_mut("rgn_1").unwrap().forbid.clear();
+        p.pcb.board.outline_arcs[0].edge = 9;
+        let Err(CoreError::Integrity(problems)) = from_json(&to_json(&p)) else {
+            panic!("integrity must refuse the project");
+        };
+        assert_eq!(problems.len(), 3, "{problems:?}");
     }
 
     #[test]

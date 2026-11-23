@@ -915,6 +915,7 @@ mod tests {
                 a: Point::mm(11.6, 8.5),
                 b: Point::mm(11.6, 11.5),
                 net: "SIG".into(),
+                arc_deg: None,
             },
         );
         let f = fill(&p);

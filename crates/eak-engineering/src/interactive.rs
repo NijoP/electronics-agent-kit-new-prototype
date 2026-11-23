@@ -550,6 +550,7 @@ mod tests {
                 a,
                 b,
                 net: net.into(),
+                arc_deg: None,
             },
         );
     }

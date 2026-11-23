@@ -1588,6 +1588,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     a: *a,
                     b: *b,
                     net: net.clone(),
+                    arc_deg: None,
                 },
             );
             created.push(id);
@@ -1793,6 +1794,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                         a: t.a,
                         b: t.b,
                         net: t.net,
+                        arc_deg: None,
                     },
                 );
                 created.push(id);
@@ -1878,6 +1880,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                         a: t.a,
                         b: t.b,
                         net: t.net,
+                        arc_deg: None,
                     },
                 );
                 created.push(id);

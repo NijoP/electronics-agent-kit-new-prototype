@@ -9,6 +9,7 @@
 //! * `libmeta`  – library identity, scope, maturity, catalogue and committed-definition references (ADR-0035).
 //! * `sexpr`    – bounded S-expression reader for library interchange files (import groundwork).
 //! * `ir`       – project, schematic, PCB, constraints, manufacturing config.
+//! * `pcb_objects` – PCB arcs, keep-out and constraint regions, cut-outs, text, dimensions (schema v4, ADR-0041).
 //! * `integrity`– structural validation of a whole project (dangling references etc.).
 //! * `migrate`  – schema version handling; unknown/newer schemas fail safely.
 //! * `builtin`  – the built-in, provenance-tagged starter component library.
@@ -25,6 +26,7 @@ pub mod kicad_import;
 pub mod libmeta;
 pub mod library;
 pub mod migrate;
+pub mod pcb_objects;
 pub mod pinmap;
 pub mod sexpr;
 pub mod units;
@@ -33,6 +35,7 @@ pub use geom::{Nm, Point, Rect, Rotation};
 pub use graphic::{Graphic, LineStyle, Stroke};
 pub use ir::*;
 pub use library::*;
+pub use pcb_objects::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
