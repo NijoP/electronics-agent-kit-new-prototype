@@ -7,9 +7,9 @@
 //! Coding-agent CLI identification by executable name, including common aliases and
 //! platform launcher suffixes (`.exe`, `.cmd`, `.bat`, `.ps1`, `.js`).
 
-// Foreground command lines are read from `/proc` only on Linux (proc_info::agent), so elsewhere
+// Foreground command lines are read only on Linux and Windows (proc_info::agent), so elsewhere
 // this table is exercised by its tests alone; it stays compiled everywhere for one behaviour.
-#![cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#![cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
 
 /// The canonical agent label for a program name or path, if it is a known agent CLI.
 pub fn canonical(name: &str) -> Option<&'static str> {

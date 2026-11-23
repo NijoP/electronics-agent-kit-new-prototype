@@ -503,6 +503,7 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .term-search { position: absolute; top: var(--s-half); right: var(--s-1h); z-index: var(--z-raised); display: flex; gap: var(--s-quarter); padding: var(--s-half); background: var(--bg-raised); border: 1px solid var(--line-strong); border-radius: var(--r-2); box-shadow: var(--shadow-sm); }
 .term-status { display: flex; align-items: center; gap: var(--s-1); height: var(--h-sm); padding: 0 var(--s-1); font-size: var(--fs-sm); color: var(--fg-dim); border-top: 1px solid var(--line); background: var(--bg-panel); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .term-msg { padding: var(--s-half) var(--s-1); font-size: var(--fs-sm); display: flex; gap: var(--s-1); align-items: center; }
+.term-other-project { color: var(--warn); background: var(--warn-soft); border-bottom: 1px solid var(--warn); }
 .pad { padding: var(--s-1h); }
 .term-body { flex: 1; min-height: 0; min-width: 0; display: grid; grid-template-columns: 248px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
 .term-side { overflow: auto; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--bg-panel); font-size: var(--fs-md); }

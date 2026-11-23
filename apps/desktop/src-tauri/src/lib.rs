@@ -379,10 +379,23 @@ pub fn snapshot(e: &Engine) -> Snapshot {
     }
 }
 
+/// Normalise a folder path typed or pasted by the user: trim whitespace and strip one pair
+/// of matching surrounding quotes. Windows Explorer's "Copy as path" yields `"C:\dir name"`,
+/// and a literal `"` is never valid in a Windows path, so the quotes are never meaningful.
+pub(crate) fn clean_path_input(path: &str) -> &str {
+    let path = path.trim();
+    for q in ['"', '\''] {
+        if let Some(inner) = path.strip_prefix(q).and_then(|rest| rest.strip_suffix(q)) {
+            return inner.trim();
+        }
+    }
+    path
+}
+
 /// Project folders must be given as absolute paths so nothing is written relative to
 /// whatever directory the app happened to start in.
 fn project_dir(path: &str) -> Result<PathBuf, String> {
-    let path = path.trim();
+    let path = clean_path_input(path);
     if path.is_empty() {
         return Err("enter a project folder path".into());
     }
@@ -639,9 +652,9 @@ pub fn events_since(s: &Session, seq: u64) -> Result<Vec<Event>, String> {
 
 pub fn acknowledge_recovery(s: &Session) -> Result<Snapshot, String> {
     s.with_engine(|e| {
-        e.acknowledge_recovery();
-        snapshot(e)
-    })
+        e.acknowledge_recovery()?;
+        Ok(snapshot(e))
+    })?
 }
 
 /// Run ERC, DRC or DFM on the current revision and record the report as evidence.

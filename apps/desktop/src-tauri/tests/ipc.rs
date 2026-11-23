@@ -155,6 +155,28 @@ fn invalid_requests_fail_safely() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// Regression: Windows Explorer "Copy as path" wraps the folder in double quotes
+/// (`"C:\test of eak"`); the quotes and surrounding blanks must not make it "not absolute".
+#[test]
+fn quoted_project_paths_are_accepted() {
+    let d = tmpdir("quoted path");
+    let s = session();
+    let snap = create_project(&s, &format!("  \"{}\" ", path(&d)), "Quoted").unwrap();
+    assert_eq!(snap.dir.as_deref(), Some(path(&d).as_str()));
+    close_project(&s).unwrap();
+
+    let again = open_project(&s, &format!("'{}'", path(&d)), false).unwrap();
+    assert_eq!(again.project.id, snap.project.id);
+    close_project(&s).unwrap();
+
+    // Stripping quotes never turns a relative or empty path into a valid one.
+    assert!(create_project(&s, "\"relative/dir\"", "x")
+        .unwrap_err()
+        .contains("absolute"));
+    assert!(open_project(&s, "\"\"", false).is_err());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 #[test]
 fn locked_project_needs_explicit_take_over() {
     let d = tmpdir("lock");

@@ -489,14 +489,15 @@ pub struct PrepareResult {
 pub fn fabricator_prepare(s: &Session, out_dir: &str) -> Result<PrepareResult, String> {
     let records = stored_records(s);
     s.with_engine(|e| {
-        let target = if out_dir.trim().is_empty() {
+        let out_dir = crate::clean_path_input(out_dir);
+        let target = if out_dir.is_empty() {
             let d = e
                 .dir()
                 .ok_or("preparing a bundle needs a saved project folder")?;
             d.join("output")
                 .join(format!("fabricator-rev-{}", e.project().revision))
         } else {
-            PathBuf::from(out_dir.trim())
+            PathBuf::from(out_dir)
         };
         check_out_dir(&target)?;
         let reports = vec![
