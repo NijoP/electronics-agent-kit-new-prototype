@@ -16,7 +16,7 @@ import { LibraryBrowser } from "../LibraryBrowser";
 import { PartsPanel } from "../PartsPanel";
 import type { Command, ComponentDef, LibraryBrowse, LibraryEntry, LibraryEntry2, Report } from "../types";
 import type { PartDocKind } from "./documents";
-import { FootprintPreview, LibraryPanel, SymbolPreview, entryOf } from "./LibraryPanel";
+import { BUSY, FootprintPreview, LibraryPanel, SymbolPreview, entryOf } from "./LibraryPanel";
 import {
   COMMON_PARTS,
   KINDS,
@@ -130,7 +130,7 @@ function Preview({ kind, entry, fpRow, onPlace, onFavourite, busy }: PreviewProp
                 onDragStart={(ev) => startDrag(ev, e.def)}
                 onDragEnd={endDrag}
                 onClick={() => placeEntry(e, onPlace)}
-                title="Arm the schematic Place tool with this part (or drag it onto the sheet)"
+                title={busy ? BUSY : "Arm the schematic Place tool with this part (or drag it onto the sheet)"}
               >
                 Place {e.def.name} <span className="muted">({e.scope_label})</span>
               </button>
@@ -561,7 +561,7 @@ function CommonParts({ revision, busy, onPlace }: PlaceProps & { revision: numbe
               type="button"
               disabled={busy}
               aria-label={`Place ${v.entry.def.name}`}
-              title={`Place ${v.entry.def.name} (${v.entry.id}); drag onto the schematic or click to arm the Place tool`}
+              title={busy ? BUSY : `Place ${v.entry.def.name} (${v.entry.id}); drag onto the schematic or click to arm the Place tool`}
               draggable={true}
               onDragStart={(ev) => startDrag(ev, v.entry.def)}
               onDragEnd={endDrag}
@@ -667,7 +667,8 @@ export function PartStandardisation({ revision }: { revision: number }) {
 interface Props extends PlaceProps {
   revision: number;
   busy: boolean;
-  execute: (c: Command | Command[]) => Promise<void>;
+  /** Submit typed commands; resolves to `false` when they were not accepted (S18). */
+  execute: (c: Command | Command[]) => Promise<boolean | void>;
   /** Called after a distributor import so the workspace re-reads the engine snapshot. */
   onImported: (message: string) => Promise<void>;
   /** Opens the symbol or footprint editor of a project-library part (slice D2). */

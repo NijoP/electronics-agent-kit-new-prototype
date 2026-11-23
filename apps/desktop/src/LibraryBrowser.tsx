@@ -5,9 +5,10 @@
 // every list comes from the backend. A supplier snapshot is never shown as suitability evidence.
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { ExternalUrl } from "./ExternalUrl";
 import { setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
 import { KicadImport } from "./KicadImport";
-import { FootprintPreview, SymbolPreview } from "./shell/LibraryPanel";
+import { BUSY, FootprintPreview, SymbolPreview } from "./shell/LibraryPanel";
 import type { Facet, LibraryBrowse, LibraryBrowseQuery, LibraryEntry2 } from "./types";
 
 const keyOf = (e: LibraryEntry2) => `${e.scope_label}/${e.id}`;
@@ -75,9 +76,7 @@ function Detail({ e }: { e: LibraryEntry2 }) {
         <li>
           Datasheet:{" "}
           {e.def.datasheet ? (
-            <a href={e.def.datasheet} target="_blank" rel="noreferrer">
-              open
-            </a>
+            <ExternalUrl url={e.def.datasheet} label="datasheet" />
           ) : (
             "none recorded"
           )}
@@ -162,7 +161,7 @@ export function LibraryBrowser() {
           Search library
           <input value={text} onChange={(e) => setText(e.target.value)} placeholder="id, name, MPN, Distributor #, package" />
         </label>
-        <button type="submit" disabled={busy}>
+        <button type="submit" disabled={busy} title={busy ? BUSY : "Search the enabled libraries"}>
           Search library
         </button>
         {f && (
@@ -258,12 +257,12 @@ export function LibraryBrowser() {
                 <td>{e.supplier ? `${e.supplier.distributor} · stock ${e.supplier.stock ?? "?"}` : "—"}</td>
                 <td>
                   {e.scope.kind !== "personal" && (
-                    <button type="button" disabled={busy} onClick={() => void act(() => api.libraryPersonalSave(e.id), `Saved ${e.id} to the personal library`)}>
+                    <button type="button" disabled={busy} title={busy ? BUSY : "Copy this part into your personal library"} onClick={() => void act(() => api.libraryPersonalSave(e.id), `Saved ${e.id} to the personal library`)}>
                       Save to personal
                     </button>
                   )}
                   {e.scope.kind === "personal" && (
-                    <button type="button" disabled={busy} onClick={() => void act(() => api.libraryPersonalRemove(e.id), `Removed ${e.id} from the personal library`)}>
+                    <button type="button" disabled={busy} title={busy ? BUSY : "Remove this part from your personal library"} onClick={() => void act(() => api.libraryPersonalRemove(e.id), `Removed ${e.id} from the personal library`)}>
                       Remove
                     </button>
                   )}
@@ -292,7 +291,7 @@ export function LibraryBrowser() {
               Tags for {sel.id}
               <input value={tagText} onChange={(e) => setTagText(e.target.value)} placeholder="comma separated" />
             </label>
-            <button type="submit" disabled={busy}>
+            <button type="submit" disabled={busy} title={busy ? BUSY : "Save the tags of this part"}>
               Save tags
             </button>
           </form>
@@ -306,10 +305,8 @@ export function LibraryBrowser() {
             {data.imported.map((l) => (
               <li key={l.manifest.name}>
                 {l.manifest.name} — {l.components} part(s), licence {l.manifest.licence},{" "}
-                <a href={l.manifest.source_url} target="_blank" rel="noreferrer">
-                  source
-                </a>{" "}
-                <button type="button" disabled={busy} onClick={() => void act(() => api.libraryImportedRemove(l.manifest.name), `Removed ${l.manifest.name}`)}>
+                <ExternalUrl url={l.manifest.source_url} label="source" />{" "}
+                <button type="button" disabled={busy} title={busy ? BUSY : "Remove this imported library"} onClick={() => void act(() => api.libraryImportedRemove(l.manifest.name), `Removed ${l.manifest.name}`)}>
                   Remove {l.manifest.name}
                 </button>
               </li>
@@ -332,7 +329,7 @@ export function LibraryBrowser() {
             Library folder (absolute path)
             <input value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="/path/to/library" />
           </label>
-          <button type="submit" disabled={busy || folder.trim() === ""}>
+          <button type="submit" disabled={busy || folder.trim() === ""} title={busy ? BUSY : folder.trim() === "" ? "Enter the library folder first" : "Import the library in this folder"}>
             Import open-source library
           </button>
         </form>

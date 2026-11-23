@@ -136,11 +136,39 @@ pub fn live_provider() -> &'static DistributorResilient {
     P.get_or_init(|| Resilient::new(crate::catalogue::lookup_api()))
 }
 
-/// Search the built-in library and the project's stored records offline, then ask Distributor.
-/// A failure of the live search is reported in `live`, never replaced by invented rows.
+/// True when `base` names a reserved `.invalid` host (RFC 6761), which never resolves: this
+/// build has no distributor configured, so no request may be sent to it (finding S20).
+pub fn reserved_host(base: &str) -> bool {
+    let rest = base.split_once("://").map_or(base, |(_, r)| r);
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = host.rsplit_once('@').map_or(host, |(_, h)| h);
+    let host = host.split(':').next().unwrap_or("").trim_end_matches('.');
+    let host = host.to_ascii_lowercase();
+    host.is_empty() || host == "invalid" || host.ends_with(".invalid")
+}
+
+fn not_configured(base: &str) -> String {
+    format!(
+        "Distributor is not configured in this build ({base} is a reserved name that never \
+         resolves); no request was sent"
+    )
+}
+
+/// Refuse a live lookup when the distributor `host` is reserved (see [`reserved_host`]).
+pub fn require_configured(host: &str) -> Result<(), String> {
+    if reserved_host(host) {
+        return Err(not_configured(host));
+    }
+    Ok(())
+}
+
+/// Search the built-in library and the project's stored records offline, then ask Distributor
+/// at `host`, unless `host` is reserved: then the live part is `not_configured` and nothing is
+/// sent. A failure of the live search is reported in `live`, never replaced by invented rows.
 pub fn parts_search<P: SupplierProvider>(
     s: &Session,
     provider: &Resilient<P>,
+    host: &str,
     query: &str,
 ) -> Result<PartsSearch, String> {
     let q = query.trim();
@@ -151,7 +179,26 @@ pub fn parts_search<P: SupplierProvider>(
         .into_iter()
         .cloned()
         .collect();
-    let live = match provider.search(q) {
+    let live = if reserved_host(host) {
+        LiveSearch {
+            status: "not_configured",
+            message: not_configured(host),
+            served: None,
+            records: vec![],
+        }
+    } else {
+        live_search(provider, q)
+    };
+    Ok(PartsSearch {
+        query: q.to_string(),
+        library: library_hits(q),
+        stored,
+        live,
+    })
+}
+
+fn live_search<P: SupplierProvider>(provider: &Resilient<P>, q: &str) -> LiveSearch {
+    match provider.search(q) {
         Ok(Answer {
             served: served @ Served::StaleCache { age_s, because },
             records,
@@ -187,13 +234,7 @@ pub fn parts_search<P: SupplierProvider>(
             served: None,
             records: vec![],
         },
-    };
-    Ok(PartsSearch {
-        query: q.to_string(),
-        library: library_hits(q),
-        stored,
-        live,
-    })
+    }
 }
 
 /// A supplier listing kept with the project without any engineering definition.
@@ -212,8 +253,10 @@ pub struct SavedRecord {
 pub fn parts_save_record<P: SupplierProvider>(
     s: &Session,
     provider: &Resilient<P>,
+    host: &str,
     distributor_part: &str,
 ) -> Result<SavedRecord, String> {
+    require_configured(host)?;
     let answer = provider.lookup(distributor_part).map_err(|e| e.message)?;
     let record = answer
         .records
@@ -255,9 +298,11 @@ pub struct ImportResult {
 pub fn parts_import<P: SupplierProvider>(
     s: &Session,
     provider: &Resilient<P>,
+    host: &str,
     expected_revision: u64,
     distributor_part: &str,
 ) -> Result<ImportResult, String> {
+    require_configured(host)?;
     let answer = provider.lookup(distributor_part).map_err(|e| e.message)?;
     let stale = match answer.served {
         Served::StaleCache { age_s, .. } => Some(age_s),
@@ -526,12 +571,13 @@ pub fn fabricator_prepare(s: &Session, out_dir: &str) -> Result<PrepareResult, S
 pub mod cmd {
     use crate::cmd::blocking;
     use crate::resources::Priority;
+    use eak_manufacturing::distributor_api::PRODUCTION_BASE;
     use tauri::AppHandle;
 
     #[tauri::command(rename_all = "snake_case")]
     pub async fn parts_search(app: AppHandle, query: String) -> Result<super::PartsSearch, String> {
         blocking(app, Priority::P4, move |s| {
-            super::parts_search(s, super::live_provider(), &query)
+            super::parts_search(s, super::live_provider(), PRODUCTION_BASE, &query)
         })
         .await
     }
@@ -543,7 +589,13 @@ pub mod cmd {
         distributor: String,
     ) -> Result<super::ImportResult, String> {
         blocking(app, Priority::P1, move |s| {
-            super::parts_import(s, super::live_provider(), expected_revision, &distributor)
+            super::parts_import(
+                s,
+                super::live_provider(),
+                PRODUCTION_BASE,
+                expected_revision,
+                &distributor,
+            )
         })
         .await
     }
@@ -554,7 +606,7 @@ pub mod cmd {
         distributor: String,
     ) -> Result<super::SavedRecord, String> {
         blocking(app, Priority::P1, move |s| {
-            super::parts_save_record(s, super::live_provider(), &distributor)
+            super::parts_save_record(s, super::live_provider(), PRODUCTION_BASE, &distributor)
         })
         .await
     }

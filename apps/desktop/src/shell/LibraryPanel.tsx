@@ -92,7 +92,8 @@ interface Props {
   revision: number;
   busy: boolean;
   /** Submit typed commands to the engine. */
-  execute: (c: Command | Command[]) => Promise<void>;
+  /** Submit typed commands; resolves to `false` when they were not accepted (S18). */
+  execute: (c: Command | Command[]) => Promise<boolean | void>;
   /** Arm the Place tool with this part (the full entry, so a personal or imported part that is
    *  not in the built-in list is placed as itself, never replaced by another part). */
   onPlace: (p: LibraryEntry) => void;
@@ -103,12 +104,15 @@ interface Props {
 /** "New part…": creates a two-pin starting definition in the project library and opens its symbol editor (D2). */
 function NewPart({ busy, taken, execute, onEdit }: { busy: boolean; taken: Set<string>; execute: Props["execute"]; onEdit: NonNullable<Props["onEdit"]> }) {
   const [f, setF] = useState({ id: "", name: "", prefix: "U", category: "custom" });
+  const [refused, setRefused] = useState(false);
   const problem = newPartIdProblem(f.id, taken) ?? (!f.name.trim() ? "Enter a part name." : !f.prefix.trim() ? "Enter a reference prefix (U, R, J…)." : null);
   const create = async () => {
     if (problem) return;
     const id = f.id.trim();
-    await execute({ type: "UpsertComponentDefinition", definition: newPartDefinition(id, f.name.trim(), f.prefix.trim(), f.category.trim() || "custom") });
-    // Opens only if the engine accepted it: a part document exists only for a project-library part.
+    const ok = await execute({ type: "UpsertComponentDefinition", definition: newPartDefinition(id, f.name.trim(), f.prefix.trim(), f.category.trim() || "custom") });
+    // Opens only if the engine accepted it: a part document exists only for a project-library part (S18).
+    setRefused(ok === false);
+    if (ok === false) return;
     onEdit("symbol", id);
     setF({ id: "", name: "", prefix: f.prefix, category: f.category });
   };
@@ -133,13 +137,20 @@ function NewPart({ busy, taken, execute, onEdit }: { busy: boolean; taken: Set<s
         <input aria-label="New part category" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} />
       </label>
       {problem && f.id !== "" && <p className="muted">{problem}</p>}
-      <button type="button" className="primary" disabled={busy || !!problem} title={problem ?? "Create the part (UpsertComponentDefinition) and open its symbol editor"} onClick={() => void create()}>
+      {refused && (
+        <p role="alert" className="error">
+          Part not created: the engine refused it or another command was running. The status bar says why.
+        </p>
+      )}
+      <button type="button" className="primary" disabled={busy || !!problem} title={busy ? BUSY : problem ?? "Create the part (UpsertComponentDefinition) and open its symbol editor"} onClick={() => void create()}>
         Create part
       </button>
     </details>
   );
 }
 
+/** Why a library action is unavailable while another command runs (S17). */
+export const BUSY = "Another command is running; wait for it to finish";
 const emptyToNull = (s: string) => (s.trim() === "" ? null : s.trim());
 const LABELS = { manufacturer: "Manufacturer", mpn: "MPN", distributor: "Distributor id", datasheet: "Datasheet URL" } as const;
 
@@ -347,11 +358,11 @@ export function LibraryPanel({ revision, busy, execute, onPlace, onEdit }: Props
             <dd>{sel.def.ratings.length === 0 ? "none" : `${sel.def.ratings.length - sel.unverified_ratings} verified, ${sel.unverified_ratings} unverified`}</dd>
           </dl>
           <div className="row">
-            <button type="button" className="primary" disabled={busy} onClick={() => onPlace(entryOf(sel.def))} title="Arm the schematic place tool with this part; the footprint is created by Sync to PCB">
+            <button type="button" className="primary" disabled={busy} onClick={() => onPlace(entryOf(sel.def))} title={busy ? BUSY : "Arm the schematic place tool with this part; the footprint is created by Sync to PCB"}>
               Place on schematic
             </button>
             {!sel.in_project && (
-              <button type="button" disabled={busy} onClick={() => void execute({ type: "ImportLibraryComponent", component_id: sel.id })} title="Copy into the project library so it can be edited">
+              <button type="button" disabled={busy} onClick={() => void execute({ type: "ImportLibraryComponent", component_id: sel.id })} title={busy ? BUSY : "Copy into the project library so it can be edited"}>
                 Add to project
               </button>
             )}
@@ -375,7 +386,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace, onEdit }: Props
                   <input aria-label={LABELS[k]} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
                 </label>
               ))}
-              <button type="button" disabled={busy || !dirty} onClick={() => void saveProps()}>
+              <button type="button" disabled={busy || !dirty} title={busy ? BUSY : !dirty ? "Nothing to save: no property was changed" : "Save the part properties (SetComponentProperties)"} onClick={() => void saveProps()}>
                 Save properties
               </button>
               <h3>Footprint assignment</h3>
@@ -391,7 +402,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace, onEdit }: Props
                       </option>
                     ))}
                   </select>
-                  <button type="button" disabled={busy || !fpChoice} onClick={assign}>
+                  <button type="button" disabled={busy || !fpChoice} title={busy ? BUSY : !fpChoice ? "Choose a footprint first" : "Assign the chosen footprint (AssignComponentFootprint)"} onClick={assign}>
                     Assign
                   </button>
                 </div>
@@ -430,8 +441,8 @@ export function LibraryPanel({ revision, busy, execute, onPlace, onEdit }: Props
               ))}
               {"problem" in modelCheck && <p className="muted">{modelCheck.problem}</p>}
               <div className="row">
-                <button type="button" disabled={busy || !("ref" in modelCheck)} onClick={attachModel}>{sel.def.model3d?.model_ref ? "Update 3D model" : "Attach 3D model"}</button>
-                {sel.def.model3d?.model_ref && <button type="button" disabled={busy} onClick={removeModel}>Remove 3D model</button>}
+                <button type="button" disabled={busy || !("ref" in modelCheck)} title={busy ? BUSY : "problem" in modelCheck ? modelCheck.problem : "Attach the 3D model to the part (UpsertComponentDefinition)"} onClick={attachModel}>{sel.def.model3d?.model_ref ? "Update 3D model" : "Attach 3D model"}</button>
+                {sel.def.model3d?.model_ref && <button type="button" disabled={busy} title={busy ? BUSY : "Remove the 3D model reference from the part"} onClick={removeModel}>Remove 3D model</button>}
               </div>
             </>
           ) : (

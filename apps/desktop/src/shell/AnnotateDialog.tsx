@@ -13,7 +13,8 @@ interface Props {
   busy: boolean;
   /** The selected schematic symbol, if any: the selection scope numbers only it. */
   selected?: Id;
-  apply: (c: Command) => Promise<void>;
+  /** Run the command; resolves to `false` when it was refused or could not run (busy). */
+  apply: (c: Command) => Promise<boolean | void>;
   onClose: () => void;
 }
 
@@ -27,7 +28,8 @@ export function AnnotateDialog({ busy, selected, apply, onClose }: Props) {
     if (!cmd) return setError("Select a schematic symbol first, or choose another scope.");
     setError(null);
     try {
-      await apply(cmd);
+      // Stay open on a refusal so the reason can be read and the options changed (S18).
+      if ((await apply(cmd)) === false) return setError("Not applied: the engine refused it or another command was running. The status bar says why.");
       onClose();
     } catch (e) {
       setError(String(e));
@@ -52,7 +54,7 @@ export function AnnotateDialog({ busy, selected, apply, onClose }: Props) {
         </label>
         <label>
           Order{" "}
-          <select aria-label="Annotate order" value={order} onChange={(e) => setOrder(e.target.value as AnnotateOrder)} disabled={reset}>
+          <select aria-label="Annotate order" value={order} onChange={(e) => setOrder(e.target.value as AnnotateOrder)} disabled={reset} title={reset ? "Reset gives every designator in scope its prefix and ?, so there is no numbering order" : undefined}>
             <option value="across">Across (by row, then column)</option>
             <option value="down">Down (by column, then row)</option>
           </select>
@@ -61,7 +63,7 @@ export function AnnotateDialog({ busy, selected, apply, onClose }: Props) {
           <input type="checkbox" aria-label="Reset designators" checked={reset} onChange={(e) => setReset(e.target.checked)} /> Reset the designators in scope to their prefix and ?
         </label>
         <div className="modal-actions">
-          <button type="button" className="primary" disabled={busy} onClick={() => void go()}>
+          <button type="button" className="primary" disabled={busy} title={busy ? "Another command is running; wait for it to finish" : "Send the Annotate command"} onClick={() => void go()}>
             {reset ? "Reset designators" : "Annotate"}
           </button>
         </div>

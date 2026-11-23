@@ -118,9 +118,9 @@ export function SimulationPanel({ revision }: { revision: number }) {
             <label>Step <input aria-label="Step time" value={step} onChange={(e) => setStep(e.target.value)} size={6} /></label>
           </>
         )}
-        <button type="button" className="primary" onClick={run} disabled={busy || missing}>{busy ? "Running…" : "Run simulation"}</button>
+        <button type="button" className="primary" onClick={run} disabled={busy || missing} title={busy ? "A simulation is running" : missing ? "ngspice is not installed, so no simulation can run" : "Run the analysis with ngspice"}>{busy ? "Running…" : "Run simulation"}</button>
       </div>
-      <h3>Sources <button type="button" onClick={addSource} disabled={nets.length === 0}>+ Add</button></h3>
+      <h3>Sources <button type="button" onClick={addSource} disabled={nets.length === 0} title={nets.length === 0 ? "The schematic has no net to put a source on yet: wire a part first" : "Add a voltage or current source on a net"}>+ Add</button></h3>
       {sources.length === 0 && <p className="muted">Add a voltage/current source on a net (e.g. 5 V on VIN), or use a V/I part in the schematic.</p>}
       {sources.map((s, i) => (
         <div key={i} className="sim-source">
