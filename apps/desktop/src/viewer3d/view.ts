@@ -28,6 +28,8 @@ export interface Pose {
  * Camera pose that frames `bounds` (PCB mm: [minX, minY, maxX, maxY]) from a preset. World axes:
  * PCB x -> X, PCB y -> Z, up -> Y. A tiny offset keeps the up vector defined straight down/up.
  */
+const ISO = Math.hypot(0.55, 0.7, 0.7);
+
 export function presetPose(p: View3dPreset, bounds: readonly [number, number, number, number], fovDeg: number): Pose {
   const [x0, y0, x1, y1] = bounds;
   const cx = (x0 + x1) / 2;
@@ -42,7 +44,8 @@ export function presetPose(p: View3dPreset, bounds: readonly [number, number, nu
     back: [cx, e, cz - d],
     left: [cx - d, e, cz],
     right: [cx + d, e, cz],
-    iso: [cx + d * 0.55, d * 0.7, cz + d * 0.7],
+    // Unit direction (0.55, 0.7, 0.7) so iso frames the board at the same distance as the sides.
+    iso: [cx + (d * 0.55) / ISO, (d * 0.7) / ISO, cz + (d * 0.7) / ISO],
   };
   const position = pos[p];
   return { position, target: [cx, 0, cz], distance: Math.hypot(position[0] - cx, position[1], position[2] - cz) };

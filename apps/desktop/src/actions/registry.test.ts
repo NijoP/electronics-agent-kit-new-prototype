@@ -230,7 +230,7 @@ describe("slice E1: no dead or decorative entries", () => {
   it("an idle workspace with a selection has no disabled entry that is not explained by its state", () => {
     const d = deps({ selected: "sym_r1", selectedSymbol: fixture(7).project.schematic.symbols.sym_r1 });
     const all = workspaceActions(d);
-    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|finest|coarsest|No documents|Nothing is selected/;
+    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|finest|coarsest|No documents|Nothing is selected|The 3D view is not drawing/;
     for (const ctx of DOC_CONTEXTS)
       for (const a of visibleIn(all, ctx)) {
         const e = a.enabled();
