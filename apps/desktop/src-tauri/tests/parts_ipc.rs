@@ -311,16 +311,26 @@ fn search_sends_no_request_to_a_reserved_invalid_host() {
         assert!(reserved_host(host), "{host}");
         let r = parts_search(&s, &p, host, "resistor").unwrap();
         assert_eq!(r.live.status, "not_configured");
-        assert!(r.live.message.contains("no request was sent"), "{}", r.live.message);
+        assert!(
+            r.live.message.contains("no request was sent"),
+            "{}",
+            r.live.message
+        );
         assert!(r.live.records.is_empty());
         assert!(!r.library.is_empty(), "offline library hits still returned");
         assert!(parts_import(&s, &p, host, 0, "C25804").is_err());
         assert!(parts_save_record(&s, &p, host, "C25804").is_err());
         assert!(require_configured(host).is_err());
     }
-    assert_eq!(asked.load(Ordering::SeqCst), 0, "a request reached the provider");
+    assert_eq!(
+        asked.load(Ordering::SeqCst),
+        0,
+        "a request reached the provider"
+    );
     // The build's own placeholder host is reserved, so the shipped commands never call it.
-    assert!(reserved_host(eak_manufacturing::distributor_api::PRODUCTION_BASE));
+    assert!(reserved_host(
+        eak_manufacturing::distributor_api::PRODUCTION_BASE
+    ));
     assert!(!reserved_host(HOST));
     assert!(require_configured(HOST).is_ok());
 }
