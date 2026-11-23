@@ -201,10 +201,6 @@ impl Engine {
                 .map_err(|err| format!("cannot read {}: {err}", block_file.display()))?;
             e.blocked = Some(reason);
         }
-|(_, s)| *s == EntryState::UnknownOutcome)
-        {
-            e.blocked = Some("an interrupted operation has an unknown outcome; inspect the project and acknowledge recovery before editing".into());
-        }
         e.recovery = recovery;
         e.rebuild_history();
         e.emit(
