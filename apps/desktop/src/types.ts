@@ -205,6 +205,13 @@ export interface Cutout {
   id: Id;
   outline: Point[];
 }
+/** Symbols, wires and net labels of one sheet that select and move together (ADR-0045). */
+export interface SchematicGroup {
+  id: Id;
+  sheet_id: Id;
+  name: string;
+  members: Id[];
+}
 /** One change of the schematic-to-PCB update, named by its symbol (SyncSchematicToPcbSelected). */
 export type SyncChange =
   | { kind: "add_footprint" | "remove_footprint" | "refdes" | "part"; symbol_id: Id }
@@ -227,6 +234,8 @@ export interface Project {
     graphics?: Record<Id, SheetGraphic>;
     buses?: Record<Id, Bus>;
     bus_entries?: Record<Id, BusEntry>;
+    /** Object groups (IR v6, ADR-0045); absent only in fixtures that predate them. */
+    groups?: Record<Id, SchematicGroup>;
   };
   /** Free project properties for title blocks; absent when empty. */
   properties?: Record<string, string>;
@@ -339,6 +348,9 @@ export type Command =
   | { type: "SetNoConnect"; symbol_id: Id; pin: string }
   | { type: "DeleteNoConnect"; no_connect_id: Id }
   | { type: "MoveNetLabel"; label_id: Id; position: Point }
+  | { type: "RenameNetLabel"; label_id: Id; name: string }
+  | { type: "Group"; members: Id[]; name?: string | null }
+  | { type: "Ungroup"; group_id: Id }
   | { type: "SetBoardOutline"; points: Point[] }
   | { type: "MoveFootprint"; footprint_id: Id; position: Point; rotation: Rotation | null; side: Side | null }
   | { type: "SetFootprintLocked"; footprint_id: Id; locked: boolean }

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 6;
 
 pub type Id = String;
 
@@ -66,6 +66,10 @@ pub struct Schematic {
     /// Bus entries joining a member wire to a bus (schema v3).
     #[serde(default)]
     pub bus_entries: BTreeMap<Id, BusEntry>,
+    /// Object groups (schema v6, ADR-0045): sets of symbols, wires and net labels on one sheet
+    /// that select and move together. Never part of connectivity.
+    #[serde(default)]
+    pub groups: BTreeMap<Id, SchematicGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -198,6 +202,57 @@ impl Bus {
         self.points
             .windows(2)
             .any(|w| crate::geom::point_segment_distance(p, w[0], w[1]) <= tol)
+    }
+}
+
+/// A named set of schematic objects on one sheet that select and move together (schema v6,
+/// ADR-0045). Members are symbol, wire and net-label ids; an object belongs to at most one
+/// group. Grouping is an editing aid only: it never changes connectivity or any check.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SchematicGroup {
+    pub id: Id,
+    pub sheet_id: Id,
+    pub name: String,
+    /// Member ids, sorted, at least [`MIN_GROUP_MEMBERS`].
+    pub members: Vec<Id>,
+}
+
+/// Fewest members a group has; a group that would drop below this is dissolved.
+pub const MIN_GROUP_MEMBERS: usize = 2;
+
+impl Schematic {
+    /// Sheet of a groupable object (symbol, wire or net label), if `id` names one.
+    pub fn groupable_sheet(&self, id: &str) -> Option<&Id> {
+        self.symbols
+            .get(id)
+            .map(|s| &s.sheet_id)
+            .or_else(|| self.wires.get(id).map(|w| &w.sheet_id))
+            .or_else(|| self.labels.get(id).map(|l| &l.sheet_id))
+    }
+
+    /// The group `id` belongs to, if any.
+    pub fn group_of(&self, id: &str) -> Option<&SchematicGroup> {
+        self.groups
+            .values()
+            .find(|g| g.members.iter().any(|m| m == id))
+    }
+
+    /// Drop group members that no longer exist (deleted objects, deleted sheets) and dissolve
+    /// groups left with fewer than [`MIN_GROUP_MEMBERS`]. Returns the dissolved groups' names.
+    pub fn prune_groups(&mut self) -> Vec<String> {
+        let mut dissolved = vec![];
+        let ids: Vec<Id> = self.groups.keys().cloned().collect();
+        for gid in ids {
+            let mut g = self.groups.remove(&gid).expect("key listed above");
+            g.members
+                .retain(|m| self.groupable_sheet(m).is_some_and(|s| *s == g.sheet_id));
+            if g.members.len() < MIN_GROUP_MEMBERS {
+                dissolved.push(g.name);
+            } else {
+                self.groups.insert(gid, g);
+            }
+        }
+        dissolved
     }
 }
 

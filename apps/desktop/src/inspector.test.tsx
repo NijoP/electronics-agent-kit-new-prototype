@@ -149,13 +149,16 @@ describe("selection mode", () => {
   it("labels, tracks, wires and mixed kinds", () => {
     const s = fixture();
     const l = selectionModel(s, { ...NO_SELECTION, labels: ["lab_1"] })!;
-    // no rename command exists: delete and place again, in one Batch (one undo step)
-    expect(commit(field(l.fields, "name"), "VCC")).toEqual({
+    // ADR-0045: a rename keeps the label and its id (one command, one undo step)
+    expect(commit(field(l.fields, "name"), "VCC")).toEqual({ type: "RenameNetLabel", label_id: "lab_1", name: "VCC" });
+    expect(commit(field(l.fields, "name"), "GND")).toBeNull();
+    // the kind has no command of its own: placed again with the other kind, in one Batch
+    expect(commit(field(l.fields, "kind"), "net")).toEqual({
       type: "Batch",
-      label: "Rename 1 label",
+      label: "Change 1 label kind",
       commands: [
         { type: "DeleteNetLabel", label_id: "lab_1" },
-        { type: "AddNetLabel", sheet_id: "sht_1", name: "VCC", position: { x: 85_000_000, y: 50_000_000 }, kind: "power" },
+        { type: "AddNetLabel", sheet_id: "sht_1", name: "GND", position: { x: 85_000_000, y: 50_000_000 }, kind: "net" },
       ],
     });
     const t = selectionModel(s, { ...NO_SELECTION, tracks: ["trk_1"] })!;
@@ -166,6 +169,26 @@ describe("selection mode", () => {
     expect(field(w.fields, "style").unavailable).toMatch(/^Unavailable/);
     expect(selectionModel(s, { ...NO_SELECTION, wires: ["wir_1"], labels: ["lab_1"] })!.title).toBe("2 objects");
     expect(selectionModel(s, NO_SELECTION)).toBeNull();
+  });
+
+  it("the Group row groups two or more objects and ungroups a group, one command each (ADR-0045)", () => {
+    const s = fixture();
+    const pair = { ...NO_SELECTION, symbols: ["sym_r1"], labels: ["lab_1"] };
+    const g = field(selectionModel(s, pair)!.fields, "group");
+    expect(g.value).toBe("none");
+    expect(commit(g, "new")).toEqual({ type: "Group", members: ["sym_r1", "lab_1"], name: null });
+    expect(commit(g, "none")).toBeNull();
+    // one object cannot be grouped: the row says so and offers no control
+    const one = field(selectionModel(s, { ...NO_SELECTION, symbols: ["sym_r1"] })!.fields, "group");
+    expect(one.edit).toBeUndefined();
+    expect(one.value).toMatch(/select two or more/);
+    // a grouped selection shows its group; "none" ungroups it
+    s.project.schematic.groups = { grp_1: { id: "grp_1", sheet_id: "sht_1", name: "Group 1", members: ["lab_1", "sym_r1"] } };
+    const grouped = field(selectionModel(s, pair)!.fields, "group");
+    expect(grouped.value).toBe("grp_1");
+    expect(commit(grouped, "none")).toEqual({ type: "Ungroup", group_id: "grp_1" });
+    // PCB objects cannot be grouped: no row
+    expect(selectionModel(s, { ...NO_SELECTION, footprints: ["fp_r1"] })!.fields.find((f) => f.id === "group")).toBeUndefined();
   });
 });
 

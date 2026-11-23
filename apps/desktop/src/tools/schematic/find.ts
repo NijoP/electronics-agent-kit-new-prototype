@@ -56,9 +56,8 @@ export function replaced(text: string, query: string, replacement: string, o: Fi
 
 /**
  * Commands that replace the query in every hit: `SetRefdes`, `SetSymbolValue`, and for a net
- * label (EAK-IR has no rename command) `DeleteNetLabel` + `AddNetLabel` at the same point with
- * the same kind, scope and style. Hits whose text would not change, or a designator that would
- * become empty, are skipped.
+ * label `RenameNetLabel` (ADR-0045: the label keeps its id, position, kind, scope and style).
+ * Hits whose text would not change, or a designator that would become empty, are skipped.
  */
 export function replaceCommands(snap: Snapshot, hits: readonly FindHit[], query: string, replacement: string, o: FindOptions): Command[] {
   const { labels } = snap.project.schematic;
@@ -71,17 +70,8 @@ export function replaceCommands(snap: Snapshot, hits: readonly FindHit[], query:
     } else if (h.field === "value") out.push({ type: "SetSymbolValue", symbol_id: h.id, value: to });
     else {
       const l = labels[h.id];
-      if (!l || !to.trim()) continue;
-      out.push({ type: "DeleteNetLabel", label_id: l.id });
-      out.push({
-        type: "AddNetLabel",
-        sheet_id: l.sheet_id,
-        name: to.trim(),
-        position: l.position,
-        kind: l.kind,
-        ...(l.scope ? { scope: l.scope } : {}),
-        ...(l.power_style ? { power_style: l.power_style } : {}),
-      });
+      if (!l || !to.trim() || to.trim() === l.name) continue;
+      out.push({ type: "RenameNetLabel", label_id: l.id, name: to.trim() });
     }
   }
   return out;

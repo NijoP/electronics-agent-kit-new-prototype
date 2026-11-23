@@ -401,14 +401,7 @@ export function schematicEditActions(d: ActionDeps): Action[] {
     op("distribute-x", "Distribute horizontally", { title: "Space three or more parts evenly from left to right", context: ["symbol"] }),
     op("distribute-y", "Distribute vertically", { title: "Space three or more parts evenly from bottom to top", context: ["symbol"] }),
     op("array", "Array…", { title: "Paste copies of the selection on a grid of columns and rows (one Batch)", context: OBJ }),
-    {
-      id: "group",
-      label: "Group",
-      docs: SCH,
-      menu: "Edit",
-      context: OBJ,
-      enabled: () => "Unavailable: EAK-IR has no group object yet; grouping needs a new engine Command",
-      run: NO_HANDLER,
-    },
+    op("group", "Group", { sep: true, title: "Group the selected objects so they select and move together (Group, one undo step)", hint: "Mod+G", context: OBJ, contextSep: true }),
+    op("ungroup", "Ungroup", { title: "Dissolve the groups of the selection; the objects stay where they are (Ungroup)", hint: "Mod+Shift+G", context: OBJ }),
   ];
 }

@@ -234,8 +234,8 @@ describe("slice E1: no dead or decorative entries", () => {
   it("an idle workspace with a selection has no disabled entry that is not explained by its state", () => {
     const d = deps({ selected: "sym_r1", selectedSymbol: fixture(7).project.schematic.symbols.sym_r1 });
     const all = workspaceActions(d);
-    // B3: without a schematic editor its editing set says so; Group is plainly unavailable (no IR object).
-    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|finest|coarsest|No documents|Nothing is selected|No schematic editor is active|^Unavailable: EAK-IR has no group|The 3D view is not drawing/;
+    // B3: without a schematic editor its editing set (Group and Ungroup included) says so.
+    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|finest|coarsest|No documents|Nothing is selected|No schematic editor is active|The 3D view is not drawing/;
     for (const ctx of DOC_CONTEXTS)
       for (const a of visibleIn(all, ctx)) {
         const e = a.enabled();
@@ -306,7 +306,7 @@ describe("schematic editing set and canvas context menu (slice B3)", () => {
       for (const i of items) expect(inMenus.has(i.label), `${i.label} (${t})`).toBe(true);
     }
     const labelsOf = (t: (typeof TARGETS)[number]) => contextMenuFor(all, "schematic", t).map((i) => i.label);
-    expect(labelsOf("symbol")).toEqual(expect.arrayContaining(["Cut", "Copy", "Duplicate", "Delete selection", "Rotate selection", "Mirror selection", "Mirror selection vertically", "Align left edges", "Distribute horizontally", "Array…", "Find similar objects", "Group"]));
+    expect(labelsOf("symbol")).toEqual(expect.arrayContaining(["Cut", "Copy", "Duplicate", "Delete selection", "Rotate selection", "Mirror selection", "Mirror selection vertically", "Align left edges", "Distribute horizontally", "Array…", "Find similar objects", "Group", "Ungroup"]));
     expect(labelsOf("wire")).toEqual(expect.arrayContaining(["Highlight net", "Clear net highlight", "Cut", "Copy"]));
     expect(labelsOf("wire")).not.toContain("Rotate selection");
     expect(labelsOf("sheet")).toEqual(["Paste", "Select all", "Find and replace…", "Clear net highlight"]);
@@ -326,8 +326,10 @@ describe("schematic editing set and canvas context menu (slice B3)", () => {
     expect(item("sheet", "paste").disabled).toBe("Nothing to paste: copy or cut first");
     item("sheet", "paste").run(); // disabled: runs nothing
     expect(e.ran).toHaveLength(3);
-    // Group has no IR object yet: shown, explicitly unavailable, never runs
-    expect(item("symbol", "group").disabled).toMatch(/^Unavailable: EAK-IR has no group object/);
+    // Group and Ungroup (ADR-0045) are editor operations like the rest: they run the editor's own op
+    item("symbol", "group").run();
+    item("wire", "ungroup").run();
+    expect(e.ran).toEqual(["copy", "align-left", "highlight-net", "group", "ungroup"]);
     // the menu bar shows the editor-owned keys of the same entries, and the key handler never runs them twice
     const edit = menusFor(all, "schematic").find((m) => m.label === "Edit")!.items;
     expect(edit.find((i) => i.label === "Copy")?.shortcut).toBe("Mod+C");

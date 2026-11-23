@@ -19,6 +19,8 @@
 //!   tool options `pcb.routing`, added with their defaults (45-degree corners, walkaround,
 //!   net-class width and via, loop removal on). A v4 pad has no expansion of its own, which is
 //!   exactly the v4 meaning.
+//! * v5 → v6 (ADR-0045): object groups. The new collection `schematic.groups` is added empty;
+//!   a v5 project had no groups, so nothing else changes.
 
 use crate::ir::{Stackup, FR4_ER, SCHEMA_VERSION};
 use crate::library::SymbolDef;
@@ -47,6 +49,9 @@ pub fn migrate(mut raw: Value) -> Result<Value, CoreError> {
     }
     if found <= 4 {
         raw = v4_to_v5(raw);
+    }
+    if found <= 5 {
+        raw = v5_to_v6(raw);
     }
     Ok(raw)
 }
@@ -119,6 +124,15 @@ fn v4_to_v5(mut raw: Value) -> Value {
         });
     }
     raw["schema_version"] = Value::from(5);
+    raw
+}
+
+fn v5_to_v6(mut raw: Value) -> Value {
+    if let Some(sch) = raw.get_mut("schematic").and_then(Value::as_object_mut) {
+        sch.entry("groups")
+            .or_insert_with(|| Value::Object(Default::default()));
+    }
+    raw["schema_version"] = Value::from(6);
     raw
 }
 
@@ -506,6 +520,117 @@ mod tests {
             panic!("integrity must refuse the project");
         };
         assert_eq!(problems.len(), 3, "{problems:?}");
+    }
+
+    /// A project with one group of a wire and a net label (schema v6, ADR-0045).
+    fn v6_project() -> Project {
+        use crate::{LabelKind, NetLabel, NetScope, Point, SchematicGroup, Wire};
+        let mut p = Project::new("v6-groups");
+        let sheet = p.first_sheet_id().unwrap().clone();
+        p.schematic.wires.insert(
+            "wir_1".into(),
+            Wire {
+                id: "wir_1".into(),
+                sheet_id: sheet.clone(),
+                a: Point::new(0, 0),
+                b: Point::new(2_540_000, 0),
+            },
+        );
+        p.schematic.labels.insert(
+            "lbl_1".into(),
+            NetLabel {
+                id: "lbl_1".into(),
+                sheet_id: sheet.clone(),
+                name: "SDA".into(),
+                position: Point::new(0, 0),
+                kind: LabelKind::Net,
+                scope: NetScope::Global,
+                power_style: None,
+            },
+        );
+        p.schematic.groups.insert(
+            "grp_1".into(),
+            SchematicGroup {
+                id: "grp_1".into(),
+                sheet_id: sheet,
+                name: "Group 1".into(),
+                members: vec!["lbl_1".into(), "wir_1".into()],
+            },
+        );
+        p
+    }
+
+    #[test]
+    fn v6_groups_round_trip_byte_stable() {
+        let p = v6_project();
+        assert!(
+            crate::integrity::check(&p).is_empty(),
+            "{:?}",
+            crate::integrity::check(&p)
+        );
+        let a = to_json(&p);
+        let q = from_json(&a).unwrap();
+        assert_eq!(p, q);
+        assert_eq!(a, to_json(&q));
+        let v: Value = serde_json::from_str(&a).unwrap();
+        assert_eq!(
+            v["schematic"]["groups"]["grp_1"]["members"],
+            serde_json::json!(["lbl_1", "wir_1"])
+        );
+    }
+
+    #[test]
+    fn v5_project_migrates_to_v6_with_identical_meaning() {
+        let mut current = v6_project();
+        current.schematic.groups.clear();
+        let mut v: Value = serde_json::from_str(&to_json(&current)).unwrap();
+        v["schema_version"] = Value::from(5);
+        v["schematic"].as_object_mut().unwrap().remove("groups");
+        let v5 = v.to_string();
+        assert!(!v5.contains("\"groups\""));
+        let p = from_json(&v5).expect("v5 project loads");
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
+        assert_eq!(p, current);
+        assert!(p.schematic.groups.is_empty());
+        let a = to_json(&p);
+        assert!(a.contains("\"groups\""), "v6 always writes the collection");
+        assert_eq!(a, to_json(&from_json(&a).unwrap()));
+    }
+
+    #[test]
+    fn invalid_groups_fail_integrity() {
+        use crate::SchematicGroup;
+        let mut p = v6_project();
+        let sheet = p.first_sheet_id().unwrap().clone();
+        // A member that does not exist, and a one-member group.
+        p.schematic
+            .groups
+            .get_mut("grp_1")
+            .unwrap()
+            .members
+            .push("sym_gone".into());
+        p.schematic.groups.insert(
+            "grp_2".into(),
+            SchematicGroup {
+                id: "grp_2".into(),
+                sheet_id: sheet,
+                name: "Lonely".into(),
+                members: vec!["wir_1".into()],
+            },
+        );
+        let Err(CoreError::Integrity(problems)) = from_json(&to_json(&p)) else {
+            panic!("integrity must refuse the project");
+        };
+        // missing member; grp_2 too small; wir_1 in two groups.
+        assert_eq!(problems.len(), 3, "{problems:?}");
+    }
+
+    #[test]
+    fn prune_groups_drops_deleted_members_and_dissolves_small_groups() {
+        let mut p = v6_project();
+        p.schematic.labels.remove("lbl_1");
+        assert_eq!(p.schematic.prune_groups(), vec!["Group 1".to_string()]);
+        assert!(p.schematic.groups.is_empty());
     }
 
     #[test]
