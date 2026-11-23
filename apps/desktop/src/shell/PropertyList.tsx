@@ -5,7 +5,7 @@
 // step), the same edit the Inspector makes for that selection.
 import { useState, type MouseEvent } from "react";
 import type { Command, Id, Snapshot } from "../types";
-import { commitCells, commonValue, kindCount, LIST_KINDS, listModel, rowRange, type ListKind } from "./propertyList";
+import { commitCells, commonValue, kindCount, LIST_KINDS, listModel, rowRange, type ListKind } from "./propertyListModel";
 
 interface Props {
   snapshot: Snapshot;
