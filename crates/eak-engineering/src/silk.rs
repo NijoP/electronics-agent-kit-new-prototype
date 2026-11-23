@@ -10,7 +10,9 @@
 
 use crate::copper::{pad_shape, Core, Shape};
 use eak_core::geom::point_segment_distance;
-use eak_core::{CopperLayer, Id, Nm, PadKind, Point, Project, Rect, Side};
+use eak_core::{
+    CopperLayer, Id, Nm, PadKind, Point, Project, Rect, Rotation, Side, DEFAULT_DRAW_STROKE_NM,
+};
 
 /// Legend stroke width: 0.16 mm, above the 0.153 mm Fabricator minimum (DFM-010).
 pub const LINE_WIDTH: Nm = 160_000;
@@ -117,6 +119,61 @@ pub fn raw_legend(p: &Project, side: Side) -> Vec<Stroke> {
                 a,
                 b,
                 width: LINE_WIDTH,
+            });
+        }
+    }
+    out.extend(drawing_strokes(p, side));
+    out
+}
+
+/// Strokes of `text` with cap height `height`, its baseline centred on `at` and turned by `rot`
+/// about `at`; `mirror` flips it first (bottom side, read from below).
+pub fn placed_text(
+    text: &str,
+    at: Point,
+    height: Nm,
+    rot: Rotation,
+    mirror: bool,
+) -> Vec<(Point, Point)> {
+    let turn = |q: Point| at.plus(rot.apply(q.minus(at)));
+    text_strokes(text, at, height, mirror)
+        .into_iter()
+        .map(|(a, b)| (turn(a), turn(b)))
+        .collect()
+}
+
+/// Legend strokes of the PCB text and dimensions on the silk of `side` (schema v4, ADR-0041).
+/// Documentation-layer objects are not fabricated and have none.
+pub fn drawing_strokes(p: &Project, side: Side) -> Vec<Stroke> {
+    let mirror = side == Side::Bottom;
+    let mut out = Vec::new();
+    for t in p
+        .pcb
+        .texts
+        .values()
+        .filter(|t| t.layer.silk_side() == Some(side))
+    {
+        for (a, b) in placed_text(&t.text, t.position, t.size, t.rotation, mirror) {
+            out.push(Stroke {
+                a,
+                b,
+                width: t.line_width(),
+            });
+        }
+    }
+    for d in p
+        .pcb
+        .dimensions
+        .values()
+        .filter(|d| d.layer.silk_side() == Some(side))
+    {
+        let g = d.drawing();
+        let label = placed_text(&g.label, g.label_at, g.text_size, g.label_rotation, mirror);
+        for (a, b) in g.lines.into_iter().chain(label) {
+            out.push(Stroke {
+                a,
+                b,
+                width: DEFAULT_DRAW_STROKE_NM,
             });
         }
     }
@@ -255,6 +312,11 @@ const P_BOWL: &[(i8, i8)] = &[(0, 0), (0, 6), (3, 6), (4, 5), (4, 4), (3, 3), (0
 
 /// Stroke glyph for `ch` (case-insensitive). Unsupported characters draw a hollow box so a
 /// missing glyph is visible on the board instead of silently vanishing.
+/// Whether the stroke font draws `ch` (anything else is drawn as a hollow box).
+pub fn has_glyph(ch: char) -> bool {
+    glyph(ch) != BOX
+}
+
 pub fn glyph(ch: char) -> Glyph {
     match ch.to_ascii_uppercase() {
         'A' => &[&[(0, 0), (0, 4), (2, 6), (4, 4), (4, 0)], &[(0, 3), (4, 3)]],
@@ -566,5 +628,60 @@ mod tests {
         let parts = clip(&end_in, &[o], MASK_CLEARANCE);
         assert_eq!(parts.len(), 1);
         assert_eq!(parts[0].a, end_in.a);
+    }
+
+    #[test]
+    fn pcb_text_and_dimensions_join_the_legend_of_their_side_only() {
+        use eak_core::{DimensionUnit, DrawLayer, PcbDimension, PcbText};
+        let mut p = Project::new("legend");
+        let text = |id: &str, layer| PcbText {
+            id: id.into(),
+            layer,
+            position: Point::mm(10.0, 10.0),
+            text: "AB".into(),
+            size: TEXT_HEIGHT,
+            stroke_width: 0,
+            rotation: Rotation::R0,
+        };
+        for (id, layer) in [
+            ("top", DrawLayer::TopSilk),
+            ("bot", DrawLayer::BottomSilk),
+            ("doc", DrawLayer::Documentation),
+        ] {
+            p.pcb.texts.insert(id.into(), text(id, layer));
+        }
+        p.pcb.dimensions.insert(
+            "dim".into(),
+            PcbDimension {
+                id: "dim".into(),
+                layer: DrawLayer::TopSilk,
+                a: Point::mm(0.0, 0.0),
+                b: Point::mm(20.0, 0.0),
+                offset: 2_000_000,
+                unit: DimensionUnit::Mm,
+                precision: 1,
+                text_size: 0,
+            },
+        );
+        let ab = text_strokes("AB", Point::mm(10.0, 10.0), TEXT_HEIGHT, false).len();
+        let label = text_strokes("20.0 mm", Point::default(), TEXT_HEIGHT, false).len();
+        let top = drawing_strokes(&p, Side::Top);
+        assert_eq!(top.len(), ab + 7 + label);
+        assert!(top.iter().all(|s| s.width == DEFAULT_DRAW_STROKE_NM));
+        let bottom = drawing_strokes(&p, Side::Bottom);
+        assert_eq!(bottom.len(), ab);
+        // Bottom text is mirrored about its anchor: the first stroke lands right of it.
+        assert!(bottom[0].a.x > Point::mm(10.0, 10.0).x);
+        assert_eq!(raw_legend(&p, Side::Top).len(), top.len());
+        // A quarter turn stands the text up about its anchor.
+        let up = placed_text(
+            "AB",
+            Point::mm(10.0, 10.0),
+            TEXT_HEIGHT,
+            Rotation::R90,
+            false,
+        );
+        assert!(up.iter().all(|(a, _)| a.x <= Point::mm(10.0, 10.0).x));
+        assert!(has_glyph('A') && has_glyph(' ') && !has_glyph('§'));
     }
 }

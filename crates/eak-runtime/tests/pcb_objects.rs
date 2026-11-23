@@ -689,13 +689,15 @@ fn outline_arcs_are_set_cleared_and_survive_a_vertex_drag() {
         ),
         CommandError::Invalid(_)
     ));
-    // A bulge that crosses the opposite edge is refused.
+    // An inward 270° bulge on the left edge (centre 15,15 mm, radius 21.2 mm) crosses the
+    // bottom and top edges and is refused. (A -300° one would loop round the whole board
+    // without crossing anything, which is a valid simple outline.)
     assert!(matches!(
         refused(
             &mut e,
             C::SetOutlineArc {
                 edge: 3,
-                sweep_deg: Some(-300.0),
+                sweep_deg: Some(-270.0),
             }
         ),
         CommandError::Invalid(_)
