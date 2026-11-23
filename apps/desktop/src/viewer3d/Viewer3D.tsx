@@ -815,7 +815,7 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
                 Board {scene.thickness.toFixed(2)} mm, {scene.layers.length} copper layer{scene.layers.length === 1 ? "" : "s"}. Copper colours follow the PCB layer manager.
               </div>
               {scene.outline.length < 3 && <div>No board outline set: the board slab is not drawn.</div>}
-              <div>Parts without a loaded model are placeholders, drawn with amber edges and a label: boxes from the footprint courtyard and library body height. Courtyard outlines stand in for silkscreen; zone fills are not computed (outline only).</div>
+              <div>Parts without a loaded model are placeholders, drawn with amber edges and a label: boxes from the footprint courtyard and library body height. Courtyard outlines stand in for silkscreen; zone fills are not drawn in 3D (outline only; the PCB editor draws the engine fill).</div>
               {scene.missing.length > 0 && <div>No body height in the library, outline only: {scene.missing.join(", ")}.</div>}
             </div>
           )}

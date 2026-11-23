@@ -1001,7 +1001,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
                       {d.kind === "schematic" ? (
                         <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} armPart={armPart} sheetId={d.ref} contextMenu={(t) => contextMenuFor(allActions, "schematic", t)} />
                       ) : d.kind === "pcb" ? (
-                        <PcbView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} onStatus={setStatus} layerView={layerView} focus={focus} airwires={conn && conn.revision === revision ? conn.ratsnest : null} />
+                        <PcbView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} onStatus={setStatus} layerView={layerView} focus={focus} airwires={conn && conn.revision === revision ? conn.ratsnest : null} zoneFills={conn && conn.revision === revision ? (conn.zone_fills ?? null) : null} />
                       ) : d.kind === "view" ? (
                         // A registered view document (3D): mounted from its first opening until its tab is closed.
                         (edaViews.find((w) => w.id === d.ref)?.render(wsCtx(visible)) ?? null)
@@ -1081,7 +1081,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
             {rightTab === "filter" ? (
               <SelectionFilter />
             ) : rightTab === "layers" ? (
-              <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} />
+              <LayerManager snapshot={snapshot} view={layerView} unrouted={conn && conn.revision === revision ? conn.ratsnest.length : null} edit={edit.execute} busy={busy} fills={conn && conn.revision === revision ? (conn.zone_fills ?? null) : null} />
             ) : (
               <Inspector snapshot={snapshot} docId={activeKind === "view" ? null : activeId} selected={selected} pcb={ctx === "pcb"} edit={edit} />
             )}

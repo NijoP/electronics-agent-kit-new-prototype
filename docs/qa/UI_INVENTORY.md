@@ -97,6 +97,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | `dfm` | Run DFM (Fabricator standard) | pcb | Design | checks |  | state-dependent |
 | `autoplace` | Auto-place footprints | pcb | Design |  |  | state-dependent |
 | `t-refill` | Refill zones | pcb | Design | edit |  | state-dependent |
+| `stitch-zones` | Stitch zones | pcb | Design |  |  | state-dependent |
 | `export` | Export manufacturing files… | pcb, 3d | Manufacturing | mfg |  | state-dependent |
 | `release-check` | Release check… | pcb, 3d | Manufacturing |  |  | enabled |
 | `show-mfg-panel` | Show manufacturing panel | pcb, 3d | Manufacturing |  |  | enabled |

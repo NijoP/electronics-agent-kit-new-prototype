@@ -49,8 +49,10 @@ function deps(over: Partial<ActionDeps> = {}): ActionDeps {
 /** Workspace states the registry is probed in: idle, everything selectable selected, busy, no grid. */
 function probes(): ActionDeps[] {
   const snap = fixture(7);
+  // E5: a GND pour on both copper layers, so StitchZones has something to stitch.
+  const zones = { ...snap.project.pcb.zones, zon_top: { ...snap.project.pcb.zones.zon_1, id: "zon_top", layer: "top" as const } };
   const rich = deps({
-    snapshot: { ...snap, can_undo: true, can_redo: true },
+    snapshot: { ...snap, can_undo: true, can_redo: true, project: { ...snap.project, pcb: { ...snap.project.pcb, zones } } },
     selected: "sym_r1",
     selectedSymbol: snap.project.schematic.symbols.sym_r1,
     fpOfSelected: snap.project.pcb.footprints.fp_r1,

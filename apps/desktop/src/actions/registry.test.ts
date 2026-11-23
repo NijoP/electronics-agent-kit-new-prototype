@@ -76,7 +76,7 @@ describe("action registry", () => {
     expect(labels("pcb", "Place")).toEqual(["Via", "Board outline", "Copper zone"]);
     expect(labels("pcb", "Route")).toEqual(["Route track", "Auto-route all nets", "Clear all routing"]);
     expect(labels("schematic", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run ERC", "Annotate schematic", "Annotate options…"]);
-    expect(labels("pcb", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run DRC", "Run DFM (Fabricator standard)", "Auto-place footprints", "Refill zones"]);
+    expect(labels("pcb", "Design")).toEqual(["Update PCB from schematic", "Design rules and net classes…", "Run DRC", "Run DFM (Fabricator standard)", "Auto-place footprints", "Refill zones", "Stitch zones"]);
     // the 3D view has no editing tools at all, only the board outputs and shared chrome
     expect(labels("3d", "Place")).toBeNull();
     expect(labels("3d", "Manufacturing")).toContain("Export manufacturing files…");
@@ -236,7 +236,7 @@ describe("slice E1: no dead or decorative entries", () => {
     const d = deps({ selected: "sym_r1", selectedSymbol: fixture(7).project.schematic.symbols.sym_r1 });
     const all = workspaceActions(d);
     // B3: without a schematic editor its editing set (Group and Ungroup included) says so.
-    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|finest|coarsest|No documents|Nothing is selected|No schematic editor is active|The 3D view is not drawing/;
+    const stateReasons = /Nothing to (undo|redo)|footprint|No copper zones|Stitching needs|finest|coarsest|No documents|Nothing is selected|No schematic editor is active|The 3D view is not drawing/;
     for (const ctx of DOC_CONTEXTS)
       for (const a of visibleIn(all, ctx)) {
         const e = a.enabled();

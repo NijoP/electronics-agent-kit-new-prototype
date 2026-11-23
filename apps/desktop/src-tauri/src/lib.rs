@@ -711,6 +711,9 @@ pub struct ConnectivityReport {
     pub revision: u64,
     #[serde(flatten)]
     pub connectivity: eak_engineering::copper::Connectivity,
+    /// Each zone's fill (slice E5): the raster DRC and the connectivity above read, as
+    /// rectangles the PCB editor draws. Derived, never stored.
+    pub zone_fills: Vec<eak_engineering::fill_view::FillView>,
 }
 
 pub fn connectivity(s: &Session) -> Result<ConnectivityReport, String> {
@@ -718,6 +721,7 @@ pub fn connectivity(s: &Session) -> Result<ConnectivityReport, String> {
     Ok(ConnectivityReport {
         revision: p.revision,
         connectivity: eak_engineering::copper::analyse(&p),
+        zone_fills: eak_engineering::fill_view::fill_views(&p),
     })
 }
 
