@@ -162,6 +162,16 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
 /// mechanical-fit unknowns and the fail-closed engineering gates. Returns the per-report gate
 /// results and every blocking reason; the package is DRAFT unless the reasons are empty.
 pub fn release_gates(p: &Project, reports: &[&Report]) -> (Vec<GateResult>, Vec<String>) {
+    let (gates, blocking, _) = release_gates_with_report(p, reports);
+    (gates, blocking)
+}
+
+/// [`release_gates`] plus the engineering gate report it evaluated (`fab` = none), so a
+/// read-only release view shows the very gates the export decided on without running them twice.
+pub fn release_gates_with_report(
+    p: &Project,
+    reports: &[&Report],
+) -> (Vec<GateResult>, Vec<String>, eak_validation::GateReport) {
     let input = project_hash(p);
     let mut blocking = vec![];
     let mut gates = vec![];
@@ -227,7 +237,7 @@ pub fn release_gates(p: &Project, reports: &[&Report]) -> (Vec<GateResult>, Vec<
             ));
         }
     }
-    (gates, blocking)
+    (gates, blocking, gate_report)
 }
 
 /// Package status from the blocking reasons: DRAFT unless there are none.

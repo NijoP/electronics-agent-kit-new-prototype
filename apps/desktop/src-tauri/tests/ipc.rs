@@ -836,3 +836,73 @@ fn model_file_read_is_limited_to_absolute_model_files() {
     assert!(read_model_file("r.step").is_err());
     assert!(read_model_file(&path(&d.join("missing.step"))).is_err());
 }
+
+/// E7: the release check only reads. A check without a report saved for exactly this revision
+/// is NOT_RUN and blocks the release; fabricator capability is shown but not counted (the DFM
+/// report covers it); running the checks saves the four reports; a new revision makes them
+/// NOT_RUN again; the status stays DRAFT while any required gate is not PASS.
+#[test]
+fn release_check_reads_saved_reports_and_never_releases_with_a_not_run_gate() {
+    use eak_manufacturing::PackageStatus;
+    let s = session();
+    assert!(release_check(&s).is_err(), "no project open");
+    assert!(run_release_checks(&s).is_err(), "no project open");
+    let d = tmpdir("release");
+    create_project(&s, &path(&d), "Release").unwrap();
+    let state = |c: &ReleaseCheck, id: &str| -> String {
+        let g = c.gates.iter().find(|g| g.id == id);
+        g.unwrap_or_else(|| panic!("gate {id}")).state.clone()
+    };
+    let saved = |check: &str, rev: u64| {
+        d.join("evidence")
+            .join(format!("{check}-r{rev:06}.json"))
+            .exists()
+    };
+    const CHECKS: [&str; 4] = ["erc", "drc", "mech", "dfm"];
+
+    let before = release_check(&s).unwrap();
+    assert_eq!(before.revision, 0);
+    for id in CHECKS {
+        assert_eq!(state(&before, id), "NOT_RUN", "{id}");
+        assert!(!saved(id, 0), "reading must not save {id} evidence");
+    }
+    let blocking = &before.blocking;
+    assert!(blocking.iter().any(|b| b == "ERC report not supplied"));
+    assert_eq!(before.status, PackageStatus::Draft);
+    assert_eq!(state(&before, "board_outline"), "FAIL");
+    let fab = before
+        .gates
+        .iter()
+        .find(|g| g.id == "fabricator_capability")
+        .unwrap();
+    assert_eq!(fab.state, "DISABLED");
+    assert!(!fab.required);
+    // Every engineering gate of gates.rs is listed after the four reports.
+    let p = current_project(&s).unwrap().project;
+    let gates = eak_validation::gates::evaluate(&p, None);
+    assert_eq!(before.gates.len(), CHECKS.len() + gates.gates.len());
+
+    let after = run_release_checks(&s).unwrap();
+    for id in CHECKS {
+        assert_ne!(state(&after, id), "NOT_RUN", "{id}");
+        assert!(saved(id, 0), "{id} evidence saved");
+    }
+    assert_eq!(after.status, PackageStatus::Draft, "no outline: still DRAFT");
+    let reread = release_check(&s).unwrap();
+    for id in CHECKS {
+        assert_eq!(state(&reread, id), state(&after, id), "{id}");
+    }
+    let text = serde_json::to_string(&after).unwrap().to_lowercase();
+    assert!(!text.contains("manufacturing-ready"));
+
+    let r = execute_command(&s, 0, outline()).unwrap();
+    assert!(r.accepted, "{:?}", r.error);
+    let next = release_check(&s).unwrap();
+    assert_eq!(next.revision, 1);
+    for id in CHECKS {
+        assert_eq!(state(&next, id), "NOT_RUN", "{id}: revision 0 evidence");
+    }
+    assert_eq!(next.status, PackageStatus::Draft);
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}

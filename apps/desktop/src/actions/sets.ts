@@ -33,7 +33,7 @@ export interface ActionDeps {
   projects: OpenProject[];
   sideViews: { id: SideView; label: string }[];
   edaViews: { id: string; label: string; shortcut?: string }[];
-  dialog: (d: "new" | "open" | "export" | "rules" | "bom" | "outputs") => void;
+  dialog: (d: "new" | "open" | "export" | "rules" | "bom" | "outputs" | "release") => void;
   save: () => void;
   undo: () => void;
   redo: () => void;
@@ -331,6 +331,8 @@ export function boardActions(d: ActionDeps): Action[] {
   const idle = () => (d.busy ? "An engine command is running" : true);
   return [
     { id: "export", label: "Export manufacturing files…", short: "Export manufacturing files", title: "Gerber, Excellon, BOM, CPL, fab-pack ZIP; runs ERC/DRC/MECH/DFM", docs: BOARD, menu: "Manufacturing", toolbar: "mfg", icon: "export", enabled: idle, run: () => d.dialog("export") },
+    // E7: read-only view of the release gate (saved ERC/DRC/MECH/DFM reports and gates.rs); opening it runs nothing.
+    { id: "release-check", label: "Release check…", short: "Release check", title: "Every release gate of this revision (PASS, FAIL, UNKNOWN, NOT_RUN or disabled); outputs stay DRAFT unless all required gates pass", docs: BOARD, menu: "Manufacturing", enabled: () => true, run: () => d.dialog("release") },
     { id: "show-mfg-panel", label: "Show manufacturing panel", docs: BOARD, menu: "Manufacturing", enabled: () => true, run: () => d.showSide("manufacturing") },
   ];
 }

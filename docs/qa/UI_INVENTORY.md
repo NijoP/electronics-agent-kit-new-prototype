@@ -97,8 +97,8 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | `autoplace` | Auto-place footprints | pcb | Design |  |  | state-dependent |
 | `t-refill` | Refill zones | pcb | Design | edit |  | state-dependent |
 | `export` | Export manufacturing files… | pcb, 3d | Manufacturing | mfg |  | state-dependent |
+| `release-check` | Release check… | pcb, 3d | Manufacturing |  |  | enabled |
 | `show-mfg-panel` | Show manufacturing panel | pcb, 3d | Manufacturing |  |  | enabled |
-| `release` | Release check… | pcb, 3d | Manufacturing |  |  | unavailable (Not implemented: exports are always DRAFT) |
 
 ## Component scan
 

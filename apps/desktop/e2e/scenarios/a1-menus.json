@@ -23,7 +23,7 @@
     { "id": "e1-no-saveas", "do": "absent", "title": "E1: no Save as / Junction placeholders on the toolbar", "selector": "[role=\"toolbar\"] button[aria-label=\"Save as\"], [role=\"toolbar\"] button[aria-label=\"Junction\"]" },
     { "id": "e1-saved", "do": "wait", "title": "E1: Saved badge bound to the engine state (saved, no blocked writes)", "selector": ".tb-title .saved[data-state=\"saved\"]", "text": "Saved" },
     { "id": "e1-mfg-open", "do": "click", "title": "E1: open Manufacturing (PCB)", "selector": "nav[aria-label=\"Application menu\"] button.menu-btn", "text": "Manufacturing", "expect": "ul[role=\"menu\"][aria-label=\"Manufacturing\"]", "shot": false },
-    { "id": "e1-no-release", "do": "absent", "title": "E1: no dead Release check entry", "selector": "ul[role=\"menu\"][aria-label=\"Manufacturing\"] [role=\"menuitem\"]", "text": "Release check" },
+    { "id": "e7-release-entry", "do": "wait", "title": "E7: Release check is a real, enabled entry (the read-only gate view; E1 had removed the dead one)", "selector": "ul[role=\"menu\"][aria-label=\"Manufacturing\"] [role=\"menuitem\"]:not([aria-disabled])", "text": "Release check" },
     { "id": "e1-arrow-down", "do": "key", "title": "E1: ArrowDown moves into the open menu", "keys": "Down", "shot": false },
     { "id": "e1-arrow-right", "do": "key", "title": "E1: ArrowRight moves to the next menu", "keys": "Right", "shot": false },
     { "id": "e1-arrow-menu", "do": "absent", "title": "E1: menu bar arrow keys left the Manufacturing menu for the next one", "selector": "ul[role=\"menu\"][aria-label=\"Manufacturing\"]" },

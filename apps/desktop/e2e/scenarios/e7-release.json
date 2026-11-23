@@ -1,0 +1,159 @@
+{
+  "name": "E7 release check",
+  "description": "Slice E7: Manufacturing > Release check… opens a read-only view of the release gate of the current revision. On a fresh fixture project nothing has run, so ERC, DRC, MECH and DFM are NOT_RUN, fabricator capability is DISABLED (the DFM report covers it), the board outline gate FAILs and the status is DRAFT with the blocking reasons listed. Run release checks saves the four reports: they leave NOT_RUN, and the status stays DRAFT while a required gate fails. After an engine command (a board outline, SETUP) the saved reports speak for the old revision, so reopening the view shows ERC NOT_RUN again and DRAFT: a NOT_RUN gate never releases. The wording lint is in src/shell/releaseCheck.test.tsx.",
+  "steps": [
+    {
+      "id": "home",
+      "do": "wait",
+      "title": "Project Home visible",
+      "selector": "main.home h1",
+      "timeout": 60000
+    },
+    {
+      "id": "fixture",
+      "do": "fixture-project",
+      "title": "Create fixture project",
+      "name": "E7 Release Fixture",
+      "folder": "e7-release-fixture"
+    },
+    {
+      "id": "open",
+      "do": "click",
+      "title": "Open fixture from Recent projects",
+      "selector": "button.home-row",
+      "text": "E7 Release Fixture",
+      "expect": "nav[aria-label=\"Application menu\"]"
+    },
+    {
+      "id": "pcb",
+      "do": "menu",
+      "title": "Open PCB",
+      "menu": "View",
+      "item": "Go to PCB editor",
+      "expect": "section[aria-label=\"PCB view\"]"
+    },
+    {
+      "id": "e7-open",
+      "do": "menu",
+      "title": "E7: Manufacturing > Release check… opens the gate view; DRAFT",
+      "menu": "Manufacturing",
+      "item": "Release check",
+      "expect": "[role=\"dialog\"][aria-label=\"Release check\"] section[aria-label=\"Release status\"] strong",
+      "expectText": "DRAFT",
+      "timeout": 60000
+    },
+    {
+      "id": "e7-erc-not-run",
+      "do": "wait",
+      "title": "E7: opening ran nothing: ERC is NOT_RUN",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] tr[data-gate=\"erc\"] td.gate-state",
+      "text": "NOT_RUN"
+    },
+    {
+      "id": "e7-mech-not-run",
+      "do": "wait",
+      "title": "E7: MECH is NOT_RUN",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] tr[data-gate=\"mech\"] td.gate-state",
+      "text": "NOT_RUN",
+      "shot": false
+    },
+    {
+      "id": "e7-fab-disabled",
+      "do": "wait",
+      "title": "E7: fabricator capability is DISABLED (not counted; the DFM report covers it)",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] tr[data-gate=\"fabricator_capability\"] td.gate-state",
+      "text": "DISABLED",
+      "shot": false
+    },
+    {
+      "id": "e7-outline-fail",
+      "do": "wait",
+      "title": "E7: the board outline gate FAILs (no outline yet)",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] tr[data-gate=\"board_outline\"] td.gate-state",
+      "text": "FAIL",
+      "shot": false
+    },
+    {
+      "id": "e7-blocking",
+      "do": "wait",
+      "title": "E7: the NOT_RUN reports are blocking reasons",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] ul[aria-label=\"Blocking reasons\"] li",
+      "text": "ERC report not supplied"
+    },
+    {
+      "id": "e7-run",
+      "do": "click",
+      "title": "E7: Run release checks saves ERC, DRC, MECH and DFM for this revision",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] button.primary",
+      "text": "Run release checks",
+      "shot": false
+    },
+    {
+      "id": "e7-erc-ran",
+      "do": "absent",
+      "title": "E7: ERC is no longer NOT_RUN",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] tr[data-gate=\"erc\"] td.gate-state",
+      "text": "NOT_RUN",
+      "timeout": 90000
+    },
+    {
+      "id": "e7-mech-ran",
+      "do": "absent",
+      "title": "E7: MECH is no longer NOT_RUN",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] tr[data-gate=\"mech\"] td.gate-state",
+      "text": "NOT_RUN",
+      "timeout": 30000,
+      "shot": false
+    },
+    {
+      "id": "e7-still-draft",
+      "do": "wait",
+      "title": "E7: still DRAFT while the outline gate fails",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] section[aria-label=\"Release status\"] strong",
+      "text": "DRAFT"
+    },
+    {
+      "id": "e7-close",
+      "do": "click",
+      "title": "E7: close the view",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] .modal-head button",
+      "text": "Close",
+      "gone": "[role=\"dialog\"][aria-label=\"Release check\"]",
+      "shot": false
+    },
+    {
+      "id": "e7-edit",
+      "do": "fixture-commands",
+      "title": "E7: a board outline (engine command, SETUP) makes a new revision",
+      "commands": [
+        { "type": "SetBoardOutline", "points": [{ "x": 0, "y": 0 }, { "x": 40000000, "y": 0 }, { "x": 40000000, "y": 30000000 }, { "x": 0, "y": 30000000 }] }
+      ],
+      "expect": "section[aria-label=\"PCB view\"] polygon.board"
+    },
+    {
+      "id": "e7-reopen",
+      "do": "menu",
+      "title": "E7: reopened on the new revision, the saved reports no longer count",
+      "menu": "Manufacturing",
+      "item": "Release check",
+      "expect": "[role=\"dialog\"][aria-label=\"Release check\"] tr[data-gate=\"erc\"] td.gate-state",
+      "expectText": "NOT_RUN",
+      "timeout": 60000
+    },
+    {
+      "id": "e7-reopen-draft",
+      "do": "wait",
+      "title": "E7: a NOT_RUN gate keeps the revision DRAFT",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] section[aria-label=\"Release status\"] strong",
+      "text": "DRAFT"
+    },
+    {
+      "id": "e7-close2",
+      "do": "click",
+      "title": "E7: close the view",
+      "selector": "[role=\"dialog\"][aria-label=\"Release check\"] .modal-head button",
+      "text": "Close",
+      "gone": "[role=\"dialog\"][aria-label=\"Release check\"]"
+    }
+  ]
+}

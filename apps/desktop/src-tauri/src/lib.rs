@@ -1084,6 +1084,167 @@ fn release_reports(s: &Session, key: &ProjectKey, p: &Project) -> Result<Vec<Rep
     Ok(reports)
 }
 
+/// One row of the release check (slice E7): a revision-bound check report or an engineering gate.
+#[derive(Debug, Clone, Serialize)]
+pub struct ReleaseGate {
+    pub id: String,
+    pub title: String,
+    /// `PASS`, `FAIL`, `UNKNOWN`, `NOT_RUN`, or `DISABLED` (shown but not counted by the release).
+    pub state: String,
+    /// A required row blocks the release unless it is `PASS`; an advisory row is reported only.
+    pub required: bool,
+    pub reasons: Vec<String>,
+    /// What the state rests on (the saved report, or the gate's own evidence).
+    pub evidence: Vec<String>,
+}
+
+/// Read-only release check of the current revision (slice E7): the ERC, DRC, MECH and DFM reports
+/// saved for exactly this revision and the fail-closed engineering gates (`eak_validation::gates`),
+/// with the blocking reasons and the status an export would get from those same reports.
+#[derive(Debug, Clone, Serialize)]
+pub struct ReleaseCheck {
+    pub revision: u64,
+    pub input_sha256: String,
+    pub gates: Vec<ReleaseGate>,
+    /// `eak_manufacturing::release_gates` for this revision: the export's own blocking reasons.
+    pub blocking: Vec<String>,
+    /// DRAFT unless every required row is `PASS` and nothing blocks.
+    pub status: eak_manufacturing::PackageStatus,
+    pub not_verified: Vec<String>,
+}
+
+const RELEASE_REPORTS: [(&str, &str); 4] = [
+    ("ERC", "Electrical rules check (ERC) on this revision"),
+    ("DRC", "Design rules check (DRC) on this revision"),
+    ("MECH", "Mechanical fit check (MECH) on this revision"),
+    ("DFM", "Design for manufacture (DFM, Fabricator standard) on this revision"),
+];
+
+/// The saved `check` report for exactly this project, revision and input; `None` when it was
+/// never run, is unreadable, or speaks for another revision or input.
+fn current_evidence(dir: Option<&Path>, check: &str, p: &Project) -> Option<Report> {
+    let file = format!("{}-r{:06}.json", check.to_lowercase(), p.revision);
+    let path = dir?.join("evidence").join(file);
+    let text = std::fs::read_to_string(path).ok()?;
+    let r: Report = serde_json::from_str(&text).ok()?;
+    let bound = r.check == check
+        && r.project_id == p.id
+        && r.revision == p.revision
+        && r.input_sha256 == eak_validation::report::project_hash(p);
+    bound.then_some(r)
+}
+
+const FAB_GATE_SKIPPED: &str = "not counted by the release: the DFM report above checks the \
+     Fabricator standard profile on this revision";
+
+fn gate_state(s: eak_validation::GateState) -> &'static str {
+    use eak_validation::GateState as G;
+    match s {
+        G::Pass => "PASS",
+        G::Fail => "FAIL",
+        G::Unknown => "UNKNOWN",
+        G::NotRun => "NOT_RUN",
+    }
+}
+
+fn release_check_of(dir: Option<&Path>, p: &Project) -> ReleaseCheck {
+    let reports: Vec<Report> = RELEASE_REPORTS
+        .iter()
+        .filter_map(|(c, _)| current_evidence(dir, c, p))
+        .collect();
+    let refs: Vec<&Report> = reports.iter().collect();
+    let (_, blocking, gate_report) = eak_manufacturing::release_gates_with_report(p, &refs);
+    let mut gates = vec![];
+    for (check, title) in RELEASE_REPORTS {
+        let prefix = format!("{check} ");
+        let reasons: Vec<String> = blocking
+            .iter()
+            .filter(|b| b.starts_with(&prefix) || (check == "MECH" && b.contains("MECH-0")))
+            .cloned()
+            .collect();
+        let report = reports.iter().find(|r| r.check == check);
+        let state = match report {
+            None => "NOT_RUN",
+            Some(r) if r.outcome == eak_validation::Outcome::Errors => "FAIL",
+            Some(_) if reasons.is_empty() => "PASS",
+            Some(_) => "UNKNOWN",
+        };
+        let evidence = match (report, dir) {
+            (Some(r), _) => format!(
+                "{} report: {} error(s), {} warning(s); revision {}",
+                r.check, r.errors, r.warnings, r.revision
+            ),
+            (None, Some(_)) => format!("no {check} report saved for revision {}", p.revision),
+            (None, None) => "the project has no folder, so no report can be saved".into(),
+        };
+        gates.push(ReleaseGate {
+            id: check.to_lowercase(),
+            title: title.into(),
+            state: state.into(),
+            required: true,
+            reasons,
+            evidence: vec![evidence],
+        });
+    }
+    for g in gate_report.gates {
+        // The release covers fabricator capability with the revision-bound DFM report above
+        // (eak_manufacturing::release_gates skips this gate), so it is shown but not counted.
+        let disabled = g.id == "fabricator_capability";
+        let (state, reasons) = match disabled {
+            true => ("DISABLED", vec![FAB_GATE_SKIPPED.to_string()]),
+            false => (gate_state(g.state), g.reasons),
+        };
+        let evidence: Vec<String> = g
+            .evidence
+            .iter()
+            .map(|e| format!("{}: {}", e.source, e.detail))
+            .collect();
+        gates.push(ReleaseGate {
+            id: g.id,
+            title: g.title,
+            state: state.into(),
+            required: g.required && !disabled,
+            reasons,
+            evidence,
+        });
+    }
+    // Fail closed: a required row that is not PASS keeps the release DRAFT whatever `blocking` says.
+    let open = gates.iter().any(|g| g.required && g.state != "PASS");
+    let status = if open {
+        eak_manufacturing::PackageStatus::Draft
+    } else {
+        eak_manufacturing::status_of(&blocking)
+    };
+    ReleaseCheck {
+        revision: p.revision,
+        input_sha256: eak_validation::report::project_hash(p),
+        gates,
+        blocking,
+        status,
+        not_verified: eak_manufacturing::not_verified(),
+    }
+}
+
+/// The release check of the current revision. Read-only: it reads the saved reports and
+/// evaluates the gates, and runs no check whose report it would need (those rows are `NOT_RUN`).
+pub fn release_check(s: &Session) -> Result<ReleaseCheck, String> {
+    let (key, p) = s.shared_project()?;
+    Ok(release_check_of(key.dir.as_deref(), &p))
+}
+
+/// Run ERC, DRC, MECH and DFM on the current revision and save each as evidence (what every
+/// export does first), then return the release check over the saved reports. No design change.
+pub fn run_release_checks(s: &Session) -> Result<ReleaseCheck, String> {
+    let (key, p) = s.shared_project()?;
+    if key.dir.is_none() {
+        return Err(
+            "the release checks save their reports as evidence: the project needs a folder".into(),
+        );
+    }
+    release_reports(s, &key, &p)?;
+    Ok(release_check_of(key.dir.as_deref(), &p))
+}
+
 pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, String> {
     let index = s
         .index
@@ -1103,7 +1264,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 83] = [
+pub const IPC_COMMANDS: [&str; 85] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -1145,6 +1306,8 @@ pub const IPC_COMMANDS: [&str; 83] = [
     "bom_table",
     "export_bom",
     "export_documents",
+    "release_check",
+    "run_release_checks",
     "create_project",
     "open_project",
     "project_lock_state",
@@ -1453,6 +1616,16 @@ pub mod cmd {
         .await
     }
 
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn release_check(app: AppHandle) -> Result<ReleaseCheck, String> {
+        blocking(app, Priority::P2, super::release_check).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn run_release_checks(app: AppHandle) -> Result<ReleaseCheck, String> {
+        blocking(app, Priority::P2, super::run_release_checks).await
+    }
+
     #[tauri::command(async, rename_all = "snake_case")]
     pub fn recent_projects(
         state: State<'_, Session>,
@@ -1591,6 +1764,8 @@ pub fn run() {
             cmd::bom_table,
             cmd::export_bom,
             cmd::export_documents,
+            cmd::release_check,
+            cmd::run_release_checks,
             ai::cmd::ai_propose,
             ai::cmd::ai_accept,
             ai::cmd::ai_reject,

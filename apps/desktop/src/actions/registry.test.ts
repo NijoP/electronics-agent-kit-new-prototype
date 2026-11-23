@@ -228,7 +228,8 @@ describe("slice E1: no dead or decorative entries", () => {
         for (const b of toolbarFor(all, ctx).flat()) expect(b.disabled ?? "", b.id).not.toMatch(/not implemented|placeholder/i);
       }
     }
-    expect(labels("pcb", "Manufacturing")).toEqual(["Export manufacturing files…", "Show manufacturing panel"]);
+    // E7 brings Release check back as a real, read-only gate view (id release-check, never disabled)
+    expect(labels("pcb", "Manufacturing")).toEqual(["Export manufacturing files…", "Release check…", "Show manufacturing panel"]);
   });
 
   it("an idle workspace with a selection has no disabled entry that is not explained by its state", () => {
@@ -380,5 +381,20 @@ describe("schematic place tools (slice B4)", () => {
     expect(d.execute).toHaveBeenLastCalledWith(expect.objectContaining({ type: "Batch", label: "Fan out net labels on D1" }));
     item(d, "Fan out no-connects").run!();
     expect(d.execute).toHaveBeenLastCalledWith(expect.objectContaining({ type: "Batch", label: "Fan out no-connects on D1" }));
+  });
+});
+
+describe("slice E7: release check", () => {
+  it("Manufacturing > Release check… opens the read-only gate view in the PCB and 3D documents, even while busy", () => {
+    for (const busy of [false, true]) {
+      const d = deps({ busy });
+      const a = workspaceActions(d).find((x) => x.id === "release-check")!;
+      expect(a.docs).toEqual(["pcb", "3d"]);
+      expect(a.enabled()).toBe(true);
+      runAction(a);
+      expect(d.dialog).toHaveBeenCalledWith("release");
+    }
+    expect(labels("3d", "Manufacturing")).toContain("Release check…");
+    expect(labels("schematic", "Manufacturing")).toBeNull();
   });
 });

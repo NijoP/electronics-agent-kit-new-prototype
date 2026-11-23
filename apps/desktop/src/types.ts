@@ -681,6 +681,27 @@ export interface ExportResult {
   reports: Report[];
 }
 
+/** One row of the release check (`ReleaseGate` in src-tauri/src/lib.rs, slice E7). */
+export interface ReleaseGate {
+  id: string;
+  title: string;
+  /** DISABLED: shown, but not counted by the release. */
+  state: "PASS" | "FAIL" | "UNKNOWN" | "NOT_RUN" | "DISABLED";
+  /** Required rows keep every output DRAFT unless PASS; advisory rows are reported only. */
+  required: boolean;
+  reasons: string[];
+  evidence: string[];
+}
+/** Read-only release check of one revision (`ReleaseCheck` in src-tauri/src/lib.rs). */
+export interface ReleaseCheck {
+  revision: number;
+  input_sha256: string;
+  gates: ReleaseGate[];
+  blocking: string[];
+  status: "DRAFT" | "INTERNALLY_VERIFIED_RELEASE_CANDIDATE";
+  not_verified: string[];
+}
+
 // ---- parts search, BOM and Fabricator preparation (src-tauri/src/parts.rs) ----
 
 export interface SourcingRecord {
