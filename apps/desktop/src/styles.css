@@ -709,7 +709,7 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .tool-options .unavail, .tool-options .opt-info { color: var(--fg-dim); }
 
 /* C1 layer UX: panel groups, lock and active marker; canvas layer tab strip; outline view. */
-.layer-group { font-size: var(--fs-sm); color: var(--text-muted, inherit); opacity: 0.75; padding: var(--s-half) var(--s-1) 0; text-transform: uppercase; letter-spacing: 0.04em; }
+.layer-group { font-size: var(--fs-sm); color: var(--fg-dim); padding: var(--s-half) var(--s-1) 0; text-transform: uppercase; letter-spacing: 0.04em; }
 .layer-marker { width: 1em; text-align: center; color: var(--accent); }
 .layer-row.locked .grow { opacity: 0.6; }
 .layer-tabs { display: inline-flex; gap: 2px; align-items: center; }
