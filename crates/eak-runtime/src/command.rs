@@ -248,8 +248,22 @@ pub enum Command {
     DeleteNoConnect {
         no_connect_id: Id,
     },
-    /// Assign reference designators to symbols ending in '?'.
-    Annotate,
+    /// Assign reference designators (options: Phase 1 B5, ADR-0045). `scope`: `unannotated`
+    /// (the default: designators ending in '?' or empty), `all`, or `selection` (`symbols`).
+    /// Numbering follows the sheet order, then `order`: `across` (the default: by Y, then X) or
+    /// `down` (by X, then Y). `reset` returns the designators in scope to `<prefix>?` instead.
+    /// A designator outside the scope is never changed or reused. `{"type":"Annotate"}` keeps
+    /// its old meaning.
+    Annotate {
+        #[serde(default)]
+        order: AnnotateOrder,
+        #[serde(default)]
+        scope: AnnotateScope,
+        #[serde(default)]
+        symbols: Vec<Id>,
+        #[serde(default)]
+        reset: bool,
+    },
     // ---- PCB
     SetBoardOutline {
         points: Vec<Point>,
@@ -535,6 +549,29 @@ pub enum Command {
 /// Most commands a single `Batch` may carry.
 pub const MAX_BATCH: usize = 1000;
 
+/// Numbering order of `Annotate` within each sheet (sheets in their order).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnnotateOrder {
+    /// By Y, then X (rows).
+    #[default]
+    Across,
+    /// By X, then Y (columns).
+    Down,
+}
+
+/// Which symbols `Annotate` numbers (or resets).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnnotateScope {
+    /// Symbols whose designator ends in '?' or is empty.
+    #[default]
+    Unannotated,
+    All,
+    /// The symbols listed in `symbols`.
+    Selection,
+}
+
 /// Risk class driving the approval policy (Spec §6.1; Execution Instructions §11).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -546,6 +583,16 @@ pub enum OperationClass {
 }
 
 impl Command {
+    /// `Annotate` with its default options: number the unannotated symbols across each sheet.
+    pub fn annotate() -> Command {
+        Command::Annotate {
+            order: AnnotateOrder::default(),
+            scope: AnnotateScope::default(),
+            symbols: vec![],
+            reset: false,
+        }
+    }
+
     pub fn name(&self) -> String {
         serde_json::to_value(self)
             .ok()
@@ -570,7 +617,7 @@ impl Command {
             | AddNetLabel { .. }
             | MoveFootprint { .. }
             | SetFootprintLocked { .. }
-            | Annotate
+            | Annotate { .. }
             | SetSymbolValue { .. }
             | SetRefdes { .. }
             | SetProjectProperty { .. }
@@ -1979,25 +2026,84 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             }
             s.format = format.clone();
         }
-        Annotate => {
-            let ids: Vec<Id> = p
-                .schematic
-                .symbols
-                .values()
-                .filter(|s| s.refdes.ends_with('?') || s.refdes.is_empty())
-                .map(|s| s.id.clone())
-                .collect();
-            if ids.is_empty() {
+        Annotate {
+            order,
+            scope,
+            symbols,
+            reset,
+        } => {
+            let pending = |s: &SymbolInstance| s.refdes.ends_with('?') || s.refdes.is_empty();
+            let mut ids: Vec<Id> = match scope {
+                AnnotateScope::Unannotated => p
+                    .schematic
+                    .symbols
+                    .values()
+                    .filter(|s| pending(s))
+                    .map(|s| s.id.clone())
+                    .collect(),
+                AnnotateScope::All => p.schematic.symbols.keys().cloned().collect(),
+                AnnotateScope::Selection => {
+                    if symbols.is_empty() {
+                        return Err(CommandError::Invalid(
+                            "annotate: the selection scope needs the symbols to annotate".into(),
+                        ));
+                    }
+                    for id in symbols {
+                        symbol(p, id)?;
+                    }
+                    let mut v = symbols.clone();
+                    v.sort();
+                    v.dedup();
+                    v
+                }
+            };
+            let placeholder = |p: &Project, id: &Id| {
+                let prefix = &p.library[&p.schematic.symbols[id].component_id].refdes_prefix;
+                format!("{prefix}?")
+            };
+            if *reset {
+                ids.retain(|id| p.schematic.symbols[id].refdes != placeholder(p, id));
+                if ids.is_empty() {
+                    return Err(CommandError::NothingTo(
+                        "annotate: every designator in scope is already reset".into(),
+                    ));
+                }
+                for id in ids {
+                    let r = placeholder(p, &id);
+                    p.schematic.symbols.get_mut(&id).expect("exists").refdes = r;
+                }
+            } else if ids.is_empty() {
                 return Err(CommandError::NothingTo(
                     "annotate: every symbol already has a reference designator".into(),
                 ));
-            }
-            for id in ids {
-                let prefix = p.library[&p.schematic.symbols[&id].component_id]
-                    .refdes_prefix
-                    .clone();
-                let r = next_refdes(p, &prefix);
-                p.schematic.symbols.get_mut(&id).expect("exists").refdes = r;
+            } else {
+                // Sheet order, then the chosen reading order; the id settles ties.
+                let rank = |p: &Project, id: &Id| {
+                    let s = &p.schematic.symbols[id];
+                    let sheet = p
+                        .schematic
+                        .sheets
+                        .get(&s.sheet_id)
+                        .map_or(u32::MAX, |sh| sh.order);
+                    let (a, b) = match order {
+                        AnnotateOrder::Across => (s.position.y, s.position.x),
+                        AnnotateOrder::Down => (s.position.x, s.position.y),
+                    };
+                    (sheet, s.sheet_id.clone(), a, b, id.clone())
+                };
+                ids.sort_by_key(|id| rank(p, id));
+                // Free the designators in scope first, so they renumber from the lowest free number.
+                for id in &ids {
+                    let r = placeholder(p, id);
+                    p.schematic.symbols.get_mut(id).expect("exists").refdes = r;
+                }
+                for id in ids {
+                    let prefix = p.library[&p.schematic.symbols[&id].component_id]
+                        .refdes_prefix
+                        .clone();
+                    let r = next_refdes(p, &prefix);
+                    p.schematic.symbols.get_mut(&id).expect("exists").refdes = r;
+                }
             }
         }
         SetBoardOutline { points } => {

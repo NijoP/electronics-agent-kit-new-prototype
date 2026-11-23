@@ -2,7 +2,7 @@
 - **Date:** 2026-11-23
 - **Status:** Accepted. Part A (severity ladder mapping, pin-conflict matrix) and the findings
   export, Part B (per-rule enable and severity override, schema v6) and Part C (clearance matrix
-  and net-pair rules, schema v6) are in effect. Schema v5 is ADR-0044 (pad expansion, routing
+  and net-pair rules, schema v6) are in effect, with Part D (Annotate options, a `Command` change). Schema v5 is ADR-0044 (pad expansion, routing
   options); this record originally took number 0043 and then 0044, both claimed by slices that
   landed first.
 - **Context:** Phase 1 slice B5 (plan gaps #19-#21) and C5 (#20, #33, #34). The plan's
@@ -93,5 +93,18 @@
   interactive router's `clearance::required`; matrix cells are DRC-only (a stated limitation).
 - **Region rules** (C4's constraint regions) keep their track-width limits (DRC-022); region
   clearance rules stay in `not_implemented`.
+## Part D: Annotate options (Phase 1 B5, in effect)
+
+- `Command::Annotate` gains `order` (`across`: by Y then X, the default; `down`: by X then Y),
+  `scope` (`unannotated`, the default; `all`; `selection` with `symbols`) and `reset`. Every field
+  has a serde default, so `{"type":"Annotate"}` keeps its old meaning and old scripts, agent
+  calls and journals still decode. No IR change.
+- Numbering follows the sheet order (ADR-0043), then the chosen order; the symbol id settles ties.
+  The designators in scope are freed first and renumbered from the lowest free number; a
+  designator outside the scope is never changed or reused. `reset` returns the designators in
+  scope to `<prefix>?`. A scope with nothing to do is refused (`NothingTo`), not a silent no-op.
+- The desktop keeps "Annotate schematic" as one click (the default options) and adds
+  "Annotate options…" (scope, order, reset); the selection scope uses the selected symbol.
+
 - **Source:** Phase 1 plan §6.4 AD-8, slices B5 and C5; EasyEDA behaviour study §2.5, §3.3;
   Execution Instructions §9.1 (engineering honesty).

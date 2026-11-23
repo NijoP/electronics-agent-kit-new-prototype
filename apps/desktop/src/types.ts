@@ -359,7 +359,7 @@ export type Command =
   | { type: "SetManufacturing"; config: ManufacturingConfig }
   | { type: "SetRoutingOptions"; options: RoutingOptions }
   | { type: "DeleteVia"; via_id: Id }
-  | { type: "Annotate" }
+  | { type: "Annotate"; order?: AnnotateOrder; scope?: AnnotateScope; symbols?: Id[]; reset?: boolean }
   | { type: "SyncSchematicToPcb" }
   | { type: "SyncSchematicToPcbSelected"; changes: SyncChange[] }
   | { type: "MoveTrack"; track_id: Id; by: Point }
@@ -1487,3 +1487,8 @@ export interface LibraryCatalogView {
   libraries: LibraryCatalogRow[];
   problems: string[];
 }
+
+/** Annotate numbering order within a sheet (ADR-0045): across = by Y then X, down = by X then Y. */
+export type AnnotateOrder = "across" | "down";
+/** Which symbols Annotate numbers or resets (ADR-0045). */
+export type AnnotateScope = "unannotated" | "all" | "selection";

@@ -1,8 +1,9 @@
 // Design rules / net class dialog: each Apply is one typed engine command; bad input sends nothing.
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ercResult, fixture } from "./fixture.test-data";
 import { matrixCellRule, ruleCommands } from "./shell/ruleTables";
+import { AnnotateDialog, annotateCommand } from "./shell/AnnotateDialog";
 import { netNames } from "./shell/panels";
 import { netDeclaration, RulesDialog } from "./shell/RulesDialog";
 import type { Command, Report, Snapshot } from "./types";
@@ -191,5 +192,44 @@ describe("rule tables", () => {
     open({}, onRun);
     fireEvent.click(within(screen.getByRole("region", { name: "DRC rules" })).getByRole("button", { name: "Run DRC" }));
     expect(onRun).toHaveBeenCalledWith("drc");
+  });
+});
+
+// Annotate options (Phase 1 B5, ADR-0045): order, scope and reset as one typed Annotate command.
+describe("Annotate options dialog", () => {
+  const open = (selected?: string) => {
+    const got: Command[] = [];
+    const onClose = vi.fn();
+    render(<AnnotateDialog busy={false} selected={selected} apply={async (c) => void got.push(c)} onClose={onClose} />);
+    return { got, onClose };
+  };
+
+  it("sends the default Annotate (unannotated, across) and closes", async () => {
+    const { got, onClose } = open();
+    fireEvent.click(screen.getByRole("button", { name: "Annotate" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(got).toEqual([{ type: "Annotate", order: "across", scope: "unannotated", symbols: [], reset: false }]);
+  });
+
+  it("all symbols, down", async () => {
+    const { got } = open();
+    fireEvent.change(screen.getByLabelText("Annotate scope"), { target: { value: "all" } });
+    fireEvent.change(screen.getByLabelText("Annotate order"), { target: { value: "down" } });
+    fireEvent.click(screen.getByRole("button", { name: "Annotate" }));
+    await waitFor(() => expect(got).toEqual([{ type: "Annotate", order: "down", scope: "all", symbols: [], reset: false }]));
+  });
+
+  it("resets only the selected symbol", async () => {
+    const { got } = open("sym_1");
+    fireEvent.change(screen.getByLabelText("Annotate scope"), { target: { value: "selection" } });
+    fireEvent.click(screen.getByLabelText("Reset designators"));
+    fireEvent.click(screen.getByRole("button", { name: "Reset designators" }));
+    await waitFor(() => expect(got).toEqual([{ type: "Annotate", order: "across", scope: "selection", symbols: ["sym_1"], reset: true }]));
+  });
+
+  it("the selection scope without a selected symbol sends nothing", () => {
+    expect(annotateCommand("across", "selection", false)).toBeNull();
+    open();
+    expect((screen.getByRole("option", { name: "Selected symbol" }) as HTMLOptionElement).disabled).toBe(true);
   });
 });

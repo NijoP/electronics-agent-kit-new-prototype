@@ -11,7 +11,7 @@
 use super::schema::*;
 use crate::message::ToolSpec;
 use eak_core::*;
-use eak_runtime::{Command, OperationClass};
+use eak_runtime::{AnnotateOrder, AnnotateScope, Command, OperationClass};
 use serde_json::{json, Value};
 
 /// Part of the design a command touches; drives which verification should run afterwards.
@@ -411,10 +411,21 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                 &["sheet_id"],
             ),
         ),
-        Annotate => (
+        Annotate { .. } => (
             D::Schematic,
-            "Assign reference designators to symbols whose designator ends in '?'.",
-            obj(&[], &[]),
+            "Assign reference designators. scope: unannotated (default: designators ending in '?'), all, or selection (the symbols listed). Numbering follows the sheet order, then order: across (default: by Y, then X) or down (by X, then Y). reset returns the designators in scope to '<prefix>?' instead. Designators outside the scope never change.",
+            obj(
+                &[
+                    ("order", enumeration(&["across", "down"], "numbering order within a sheet")),
+                    (
+                        "scope",
+                        enumeration(&["unannotated", "all", "selection"], "which symbols to number"),
+                    ),
+                    ("symbols", array(id("symbol id"), "symbols of the selection scope")),
+                    ("reset", boolean("reset the designators in scope to '<prefix>?'")),
+                ],
+                &[],
+            ),
         ),
         SetBoardOutline { .. } => (
             D::Pcb,
@@ -1008,7 +1019,12 @@ pub fn command_samples() -> Vec<Command> {
                 ..DrawingFormat::standard()
             }),
         },
-        Annotate,
+        Annotate {
+            order: AnnotateOrder::Down,
+            scope: AnnotateScope::Selection,
+            symbols: vec!["s".into()],
+            reset: false,
+        },
         SetBoardOutline {
             points: vec![p, Point::new(1, 0), Point::new(1, 1)],
         },
@@ -1215,7 +1231,7 @@ pub fn command_samples() -> Vec<Command> {
                     symbol_id: "s".into(),
                     position: p,
                 },
-                Annotate,
+                Command::annotate(),
             ],
             label: Some("Move".into()),
         },
@@ -1337,7 +1353,7 @@ mod tests {
         assert!(decode("NoSuchCommand", &json!({})).is_err());
         // A model cannot smuggle in a different variant through "type".
         let c = decode("Annotate", &json!({"type": "ClearRouting"})).unwrap();
-        assert_eq!(c, Command::Annotate);
+        assert_eq!(c, Command::annotate());
     }
 
     #[test]
@@ -1358,7 +1374,7 @@ mod tests {
                         symbol_id: "s".into(),
                         position: Point::new(1, 2)
                     },
-                    Command::Annotate
+                    Command::annotate()
                 ],
                 label: None
             }

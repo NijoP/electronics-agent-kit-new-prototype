@@ -190,7 +190,7 @@ fn batch_class_is_its_riskiest_step_and_gates_agent_approval() {
 
 #[test]
 fn batch_round_trips_through_json_with_the_type_tag() {
-    let c = batch(vec![mv("s", 1.0, 2.0), C::Annotate]);
+    let c = batch(vec![mv("s", 1.0, 2.0), C::annotate()]);
     let v = serde_json::to_value(&c).unwrap();
     assert_eq!(v["type"], "Batch");
     assert_eq!(v["commands"][1]["type"], "Annotate");
@@ -202,7 +202,7 @@ fn batch_round_trips_through_json_with_the_type_tag() {
     assert_eq!(
         bare,
         C::Batch {
-            commands: vec![C::Annotate],
+            commands: vec![C::annotate()],
             label: None
         }
     );

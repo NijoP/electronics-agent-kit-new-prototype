@@ -28,6 +28,7 @@ import { StatusBar } from "./shell/StatusBar";
 import { ExportDialog } from "./shell/ExportDialog";
 import { BomExportDialog, DocumentExportDialog } from "./shell/OutputDialogs";
 import { RulesDialog } from "./shell/RulesDialog";
+import { AnnotateDialog } from "./shell/AnnotateDialog";
 import { NewProjectDialog, OpenProjectDialog } from "./shell/ProjectDialogs";
 import { Toolbar } from "./shell/Toolbar";
 import { canvasControls, DocIdContext, setActiveEditor, setEditorTool } from "./shell/viewState";
@@ -110,7 +111,7 @@ const writeFlag = (key: string, on: boolean) => {
 };
 
 export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged }: Props) {
-  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs">(null);
+  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate">(null);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [snapshot, setSnapshot] = useState(initial);
   const [events, setEvents] = useState<EngineEvent[]>([]);
@@ -1083,6 +1084,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           onRun={(k) => void check(k)}
           onClose={() => setDialog(null)}
         />
+      )}
+      {dialog === "annotate" && (
+        <AnnotateDialog busy={busy} selected={selectedSymbol ? selected ?? undefined : undefined} apply={edit.execute} onClose={() => setDialog(null)} />
       )}
       {dialog === "bom" && <BomExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "outputs" && <DocumentExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
