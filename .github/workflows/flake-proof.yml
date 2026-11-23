@@ -1,0 +1,29 @@
+# TEMPORARY (fm/eak-ci-flake-toolbar-zoom): repeat toolbar.test to prove the zoom flake is gone. Removed before main.
+name: flake-proof
+on:
+  push:
+    branches: [fm/eak-ci-flake-toolbar-zoom]
+jobs:
+  repeat:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        shard: [1, 2]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: toolbar.test x30
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          npm ci
+          fails=0
+          for i in $(seq 1 30); do npx vitest run src/toolbar.test.tsx > out.txt 2>&1 || { fails=$((fails+1)); grep -E 'FAIL|×' out.txt | head -5; }; done
+          echo "failures: $fails / 30"
+          test "$fails" -eq 0
