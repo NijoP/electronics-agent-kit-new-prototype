@@ -212,6 +212,41 @@ describe("tool options mode", () => {
     expect(sent).toEqual([]);
   });
 
+  // ADR-0044 (schema v5): the routing options are saved with the board and come back with it.
+  it("a changed routing option is saved with SetRoutingOptions after a pause, once", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<PcbView snapshot={fixture()} selected={null} onSelect={() => {}} edit={edit()} />);
+      tool("Route");
+      fireEvent.change(screen.getByLabelText("Obstacle mode"), { target: { value: "push" } });
+      fireEvent.change(screen.getByLabelText("Bend mode"), { target: { value: "orthogonal90" } });
+      expect(sent).toEqual([]);
+      await vi.advanceTimersByTimeAsync(700);
+      expect(sent).toEqual([{ type: "SetRoutingOptions", options: { bend: "orthogonal90", conflict: "push", width: null, via: null, remove_loops: true } }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the route tool starts from the board's saved options and follows them when they change", () => {
+    const s = fixture();
+    s.project.pcb.routing = { bend: "orthogonal90", conflict: "block", width: 400_000, via: { drill: 300_000, diameter: 650_000 }, remove_loops: false };
+    const { rerender } = render(<PcbView snapshot={s} selected={null} onSelect={() => {}} edit={edit()} />);
+    tool("Route");
+    expect((screen.getByLabelText("Bend mode") as HTMLSelectElement).value).toBe("orthogonal90");
+    expect((screen.getByLabelText("Obstacle mode") as HTMLSelectElement).value).toBe("block");
+    expect((screen.getByLabelText("Track width") as HTMLInputElement).value).toBe("0.4");
+    expect((screen.getByLabelText("Via preset") as HTMLSelectElement).value).toBe("300000/650000");
+    expect((screen.getByLabelText("Remove loops") as HTMLSelectElement).value).toBe("off");
+    // An undo (or another window) changes the saved options: the inspector shows them.
+    const t = fixture();
+    t.project.pcb.routing = { bend: "diagonal45", conflict: "push", width: null, via: null, remove_loops: true };
+    rerender(<PcbView snapshot={t} selected={null} onSelect={() => {}} edit={edit()} />);
+    expect((screen.getByLabelText("Obstacle mode") as HTMLSelectElement).value).toBe("push");
+    expect((screen.getByLabelText("Track width") as HTMLInputElement).value).toBe("");
+    expect(sent).toEqual([]);
+  });
+
   it("without an inspector the options stay in the editor's strip", () => {
     render(<PcbView snapshot={fixture()} selected={null} onSelect={() => {}} edit={edit()} />);
     tool("Route");

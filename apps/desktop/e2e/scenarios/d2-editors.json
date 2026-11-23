@@ -1,6 +1,6 @@
 {
   "name": "D2 symbol and footprint editors",
-  "description": "Opens an isolated software fixture project whose board outline (40 x 30 mm) is set by SETUP through the execute IPC. Then, with real X input (Phase 1 D2): Library tab › New part… creates a part (UpsertComponentDefinition) and opens its symbol editor document drawn by the A4 Canvas2D renderer; the footprint editor adds a pad and widens the courtyard, saved with AssignComponentFootprint; the symbol editor adds a pin (mapped to the new pad), renames it in the pin table and saves with UpsertComponentDefinition. The part is then placed on the schematic, the PCB is updated from the schematic, auto-placed, DRC reports no errors in implemented checks, and the manufacturing export writes files (labelled DRAFT by the engine unless every gate passes). Per-pad mask/paste expansion is shown as not available (no IR field).",
+  "description": "Opens an isolated software fixture project whose board outline (40 x 30 mm) is set by SETUP through the execute IPC. Then, with real X input (Phase 1 D2): Library tab › New part… creates a part (UpsertComponentDefinition) and opens its symbol editor document drawn by the A4 Canvas2D renderer; the footprint editor adds a pad and widens the courtyard, saved with AssignComponentFootprint; the symbol editor adds a pin (mapped to the new pad), renames it in the pin table and saves with UpsertComponentDefinition. The part is then placed on the schematic, the PCB is updated from the schematic, auto-placed, DRC reports no errors in implemented checks, and the manufacturing export writes files (labelled DRAFT by the engine unless every gate passes). The pad table has per-pad mask and paste expansion fields (schema v5, ADR-0044); once the part is placed, a mask expansion edit saves with SetPadExpansion, which the engine accepts while AssignComponentFootprint would be refused.",
   "steps": [
     { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
     { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "D2 Editors Fixture", "folder": "d2-editors-fixture" },
@@ -34,7 +34,8 @@
     { "id": "d2-select", "do": "click", "title": "D2: select it", "selector": "ul[aria-label=\"Library parts\"] button", "text": "D2 sensor", "expect": "section.lib-detail button", "expectText": "Edit footprint", "shot": false },
     { "id": "d2-edit-fp", "do": "click", "title": "D2: Edit footprint opens the footprint editor document", "selector": "section.lib-detail button", "text": "Edit footprint", "expect": "section[aria-label=\"Footprint editor D2_SENSOR\"] table[aria-label=\"Pads\"]" },
     { "id": "d2-fp-canvas", "do": "wait", "title": "D2: pads and courtyard drawn by the Canvas2D renderer", "selector": "section[aria-label=\"Footprint editor D2_SENSOR\"] canvas[data-draw=\"drawn\"]", "shot": false },
-    { "id": "d2-mask", "do": "wait", "title": "D2: per-pad mask/paste expansion shown as not available (no IR field), not as a control", "selector": "section[aria-label=\"Footprint editor D2_SENSOR\"] p[data-unavailable=\"mask-paste\"]", "shot": false },
+    { "id": "d2-mask", "do": "wait", "title": "D2 + ADR-0044: per-pad mask and paste expansion fields in the pad table (schema v5)", "selector": "section[aria-label=\"Footprint editor D2_SENSOR\"] input[aria-label=\"Pad 1 paste expansion\"]" },
+    { "id": "d2-mask-unavailable-gone", "do": "absent", "title": "ADR-0044: the old 'not available' note for mask/paste is gone", "selector": "section[aria-label=\"Footprint editor D2_SENSOR\"] p[data-unavailable=\"mask-paste\"]", "shot": false },
     { "id": "d2-add-pad", "do": "click", "title": "D2: Add pad", "selector": "section[aria-label=\"Footprint editor D2_SENSOR\"] button", "text": "Add pad", "expect": "section[aria-label=\"Footprint editor D2_SENSOR\"] tr[data-pad=\"3\"]" },
     { "id": "d2-court-click", "do": "click", "title": "D2: courtyard half width field", "selector": "input[aria-label=\"Courtyard half width\"]", "shot": false },
     { "id": "d2-court-all", "do": "key", "title": "D2: select the field text", "keys": "ctrl+a", "shot": false },
@@ -74,6 +75,22 @@
     { "id": "d2-sync-close", "do": "key", "title": "D2: close the report", "keys": "Escape", "gone": "[role=\"dialog\"][aria-label=\"Update PCB report\"]", "shot": false },
     { "id": "d2-pcb", "do": "menu", "title": "D2: open the PCB", "menu": "View", "item": "Go to PCB editor", "expect": "section[aria-label=\"PCB view\"]", "shot": false },
     { "id": "d2-autoplace", "do": "menu", "title": "D2: Design › Auto-place footprints puts it on the fixture board", "menu": "Design", "item": "Auto-place footprints", "expect": "footer.status span.msg", "expectText": "AutoPlace" },
+    { "id": "v5-fp-tab", "do": "click", "title": "ADR-0044: back to the footprint editor of the placed part", "selector": "[role=\"tablist\"][aria-label=\"Documents\"] button[role=\"tab\"]", "text": "Footprint: D2_SENSOR", "expect": "section[aria-label=\"Footprint editor D2_SENSOR\"] input[aria-label=\"Pad 1 mask expansion\"]", "shot": false },
+    { "id": "v5-mask-click", "do": "click", "title": "ADR-0044: pad 1 mask expansion field", "selector": "input[aria-label=\"Pad 1 mask expansion\"]", "shot": false },
+    { "id": "v5-mask-all", "do": "key", "title": "ADR-0044: select the field text", "keys": "ctrl+a", "shot": false },
+    { "id": "v5-mask-type", "do": "type", "title": "ADR-0044: pad 1 mask expansion 0.08 mm", "value": "0.08", "shot": false },
+    { "id": "v5-mask-enter", "do": "key", "title": "ADR-0044: Enter commits it (draft dirty)", "keys": "Return", "expect": "section[aria-label=\"Footprint editor D2_SENSOR\"][data-dirty=\"true\"]" },
+    {
+      "id": "v5-mask-save",
+      "do": "click",
+      "title": "ADR-0044: Save while the part is placed on the PCB sends SetPadExpansion (AssignComponentFootprint would be refused)",
+      "selector": "section[aria-label=\"Footprint editor D2_SENSOR\"] .pe-head button.primary",
+      "text": "Save",
+      "expect": "footer.status span.msg",
+      "expectText": "SetPadExpansion"
+    },
+    { "id": "v5-mask-clean", "do": "wait", "title": "ADR-0044: the editor matches the project library after the save", "selector": "section[aria-label=\"Footprint editor D2_SENSOR\"][data-dirty=\"false\"]", "shot": false },
+    { "id": "v5-pcb-again", "do": "menu", "title": "ADR-0044: back to the PCB", "menu": "View", "item": "Go to PCB editor", "expect": "section[aria-label=\"PCB view\"]", "shot": false },
     { "id": "d2-drc", "do": "menu", "title": "D2: Design › Run DRC: no errors in implemented checks", "menu": "Design", "item": "Run DRC", "expect": "section[aria-label=\"DRC report\"] p", "expectText": "No errors in implemented checks", "timeout": 60000 },
     { "id": "d2-export-open", "do": "menu", "title": "D2: Manufacturing › Export manufacturing files…", "menu": "Manufacturing", "item": "Export manufacturing files", "expect": "[role=\"dialog\"][aria-label=\"Export manufacturing files\"]", "shot": false },
     { "id": "d2-export", "do": "click", "title": "D2: Export writes the files (status as the engine words it)", "selector": "[role=\"dialog\"][aria-label=\"Export manufacturing files\"] button.primary", "text": "Export", "expect": "ul[aria-label=\"Exported files\"] li", "timeout": 120000 }

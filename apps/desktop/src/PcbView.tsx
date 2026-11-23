@@ -29,10 +29,13 @@ import {
   ripUpAndReroute,
   routeBatch,
   routeReducer,
+  routingFields,
+  routingKey,
+  saveRouting,
   startProblem,
   stepRequest,
   trackEdit,
-  viaPresets,
+  viaChoicesWith,
   widthFromMm,
   widthPresets,
   widthPresetValue,
@@ -183,13 +186,37 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const [draft, dispatch] = useReducer(routeReducer, null);
   const [proposal, setProposal] = useState<RouteStepReport | null>(null);
   const stepSeq = useRef(0);
-  const [mode, setMode] = useState<BendMode>("diagonal45");
+  // C3 routing options, saved with the board (schema v5, ADR-0044): they start from the board's
+  // saved options and every change is saved back with `SetRoutingOptions`.
+  const savedRouting = pcb.routing;
+  const initial = routingFields(savedRouting);
+  const [mode, setMode] = useState<BendMode>(initial.mode);
   // Track width for new routes (mm text; empty = net-class width).
-  const [widthText, setWidthText] = useState("");
-  // C3 routing options: via preset ("" = net class), obstacle handling and loop removal.
-  const [viaChoice, setViaChoice] = useState("");
-  const [conflict, setConflict] = useState<ConflictMode>("walkaround");
-  const [removeLoops, setRemoveLoops] = useState(true);
+  const [widthText, setWidthText] = useState(initial.widthText);
+  // Via preset ("" = net class), obstacle handling and loop removal.
+  const [viaChoice, setViaChoice] = useState(initial.viaChoice);
+  const [conflict, setConflict] = useState<ConflictMode>(initial.conflict);
+  const [removeLoops, setRemoveLoops] = useState(initial.removeLoops);
+  const fields = { mode, widthText, viaChoice, conflict, removeLoops };
+  const savedKey = routingKey(savedRouting);
+  // The board's options changed (opened, undo, another window): show them.
+  useEffect(() => {
+    if (!saveRouting(savedRouting, fields)) return;
+    const s = routingFields(savedRouting);
+    setMode(s.mode);
+    setWidthText(s.widthText);
+    setViaChoice(s.viaChoice);
+    setConflict(s.conflict);
+    setRemoveLoops(s.removeLoops);
+  }, [savedKey]);
+  // A changed option is saved after a short pause, so typing a width sends one command.
+  const pendingSave = edit ? saveRouting(savedRouting, fields) : null;
+  const pendingKey = pendingSave && pendingSave.type === "SetRoutingOptions" ? routingKey(pendingSave.options) : "";
+  useEffect(() => {
+    if (!edit || !pendingSave) return;
+    const t = setTimeout(() => void edit.execute(pendingSave), 600);
+    return () => clearTimeout(t);
+  }, [pendingKey, savedKey]);
   // Select tool: one committed track picked for editing (width, layer, delete).
   const [trackSel, setTrackSel] = useState<Id | null>(null);
   const [trackWidthText, setTrackWidthText] = useState("");
@@ -725,7 +752,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
             name: "Via preset",
             label: "Via size",
             value: viaChoice,
-            options: viaPresets(snapshot.project.constraints, lengthNet),
+            options: viaChoicesWith(snapshot.project.constraints, lengthNet, viaChoice),
             onChange: changeVia,
             title: "Drill / diameter of the via placed when the route changes layer",
           },

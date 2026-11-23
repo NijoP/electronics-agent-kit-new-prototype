@@ -242,6 +242,8 @@ export interface Project {
     texts?: Record<Id, PcbText>;
     dimensions?: Record<Id, PcbDimension>;
     cutouts?: Record<Id, Cutout>;
+    /** Saved route tool options (schema v5, `SetRoutingOptions`); absent in older fixtures. */
+    routing?: RoutingOptions;
   };
   /** Definitions in the project's own library (built-ins copied in, and imported parts). */
   library?: Record<
@@ -316,6 +318,7 @@ export type Command =
   | { type: "UpsertComponentDefinition"; definition: ComponentDef }
   | { type: "SetComponentProperties"; component_id: string; manufacturer: string | null; mpn: string | null; distributor: string | null; datasheet: string | null }
   | { type: "AssignComponentFootprint"; component_id: string; footprint: FootprintDef; pin_map: Record<string, string[]> }
+  | { type: "SetPadExpansion"; component_id: string; pad: string; mask_expansion: Nm | null; paste_expansion: Nm | null }
   | { type: "PlaceSymbol"; sheet_id: Id | null; component_id: string; position: Point; rotation: Rotation; refdes: string | null; value: string | null }
   | { type: "MoveSymbol"; symbol_id: Id; position: Point }
   | { type: "RotateSymbol"; symbol_id: Id; rotation: Rotation }
@@ -351,6 +354,7 @@ export type Command =
   | { type: "SetLayerCount"; count: number; board_thickness?: Nm | null }
   | { type: "SetStackup"; stackup: Stackup }
   | { type: "SetManufacturing"; config: ManufacturingConfig }
+  | { type: "SetRoutingOptions"; options: RoutingOptions }
   | { type: "DeleteVia"; via_id: Id }
   | { type: "Annotate" }
   | { type: "SyncSchematicToPcb" }
@@ -920,6 +924,10 @@ export interface PadDef {
   size_x: number;
   size_y: number;
   drill: number | null;
+  /** Own solder-mask expansion per side (schema v5); absent or null = the board default. */
+  mask_expansion?: number | null;
+  /** Own paste expansion per side, SMD pads only (schema v5); absent or null = none. */
+  paste_expansion?: number | null;
 }
 export interface FootprintDef {
   name: string;
@@ -1067,6 +1075,16 @@ export interface ShovedTrack {
 export interface ViaSize {
   drill: Nm;
   diameter: Nm;
+}
+/** The route tool's options as saved with the board (eak_core::RoutingOptions, ADR-0044). */
+export interface RoutingOptions {
+  bend: BendMode;
+  conflict: ConflictMode;
+  /** Track width for new routes; null = net class. */
+  width: Nm | null;
+  /** Via for layer switches; null = net class. */
+  via: ViaSize | null;
+  remove_loops: boolean;
 }
 export interface RouteStepRequest {
   net: string;

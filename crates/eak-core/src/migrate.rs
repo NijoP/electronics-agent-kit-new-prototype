@@ -14,6 +14,11 @@
 //! * v3 → v4 (ADR-0042): PCB objects. The new collections `pcb.regions`, `pcb.texts`,
 //!   `pcb.dimensions` and `pcb.cutouts` are added empty. Tracks without `arc_deg` are straight and
 //!   a board without `outline_arcs` has straight edges, which is exactly the v3 meaning.
+//! * v4 → v5 (ADR-0044): per-pad solder-mask and paste expansion (`PadDef::mask_expansion`,
+//!   `PadDef::paste_expansion`, absent = board default and no paste change) and the saved route
+//!   tool options `pcb.routing`, added with their defaults (45-degree corners, walkaround,
+//!   net-class width and via, loop removal on). A v4 pad has no expansion of its own, which is
+//!   exactly the v4 meaning.
 
 use crate::ir::{Stackup, FR4_ER, SCHEMA_VERSION};
 use crate::library::SymbolDef;
@@ -39,6 +44,9 @@ pub fn migrate(mut raw: Value) -> Result<Value, CoreError> {
     }
     if found <= 3 {
         raw = v3_to_v4(raw);
+    }
+    if found <= 4 {
+        raw = v4_to_v5(raw);
     }
     Ok(raw)
 }
@@ -100,6 +108,17 @@ fn v3_to_v4(mut raw: Value) -> Value {
         }
     }
     raw["schema_version"] = Value::from(4);
+    raw
+}
+
+fn v4_to_v5(mut raw: Value) -> Value {
+    if let Some(pcb) = raw.get_mut("pcb").and_then(Value::as_object_mut) {
+        pcb.entry("routing").or_insert_with(|| {
+            serde_json::to_value(crate::ir::RoutingOptions::default())
+                .expect("routing options are always serialisable")
+        });
+    }
+    raw["schema_version"] = Value::from(5);
     raw
 }
 
@@ -382,6 +401,99 @@ mod tests {
         assert_eq!(p, current);
         let a = to_json(&p);
         assert_eq!(a, to_json(&from_json(&a).unwrap()));
+    }
+
+    /// A v5 project: one library part with per-pad mask and paste expansion, and saved route
+    /// tool options that are not the defaults.
+    fn v5_project() -> Project {
+        use crate::{BendMode, ConflictMode, ViaSize};
+        let mut p = v4_project();
+        let mut def = crate::builtin::get("CONN_1x02_P2.54").expect("built-in connector");
+        def.symbol.upgrade_box();
+        def.footprint.pads[0].mask_expansion = Some(-20_000);
+        let mut smd = crate::builtin::components()
+            .into_iter()
+            .find(|c| {
+                c.footprint
+                    .pads
+                    .iter()
+                    .any(|p| p.kind == crate::PadKind::Smd)
+            })
+            .expect("a built-in SMD part");
+        smd.symbol.upgrade_box();
+        let pad = smd
+            .footprint
+            .pads
+            .iter_mut()
+            .find(|p| p.kind == crate::PadKind::Smd)
+            .unwrap();
+        pad.mask_expansion = Some(75_000);
+        pad.paste_expansion = Some(-50_000);
+        p.library.insert(def.id.clone(), def);
+        p.library.insert(smd.id.clone(), smd);
+        p.pcb.routing = crate::RoutingOptions {
+            bend: BendMode::Orthogonal90,
+            conflict: ConflictMode::Push,
+            width: Some(400_000),
+            via: Some(ViaSize {
+                drill: 300_000,
+                diameter: 600_000,
+            }),
+            remove_loops: false,
+        };
+        p
+    }
+
+    #[test]
+    fn v5_pad_expansion_and_routing_options_round_trip_byte_stable() {
+        let p = v5_project();
+        let a = to_json(&p);
+        let q = from_json(&a).expect("v5 project loads");
+        assert_eq!(q, p);
+        assert_eq!(a, to_json(&q));
+        assert!(a.contains("\"paste_expansion\": -50000"), "{a}");
+        assert!(a.contains("\"conflict\": \"push\""));
+    }
+
+    #[test]
+    fn v4_project_migrates_to_v5_with_identical_meaning() {
+        let mut current = v5_project();
+        // Remove what v4 cannot express; what remains is a v4 design.
+        for def in current.library.values_mut() {
+            for pad in &mut def.footprint.pads {
+                pad.mask_expansion = None;
+                pad.paste_expansion = None;
+            }
+        }
+        current.pcb.routing = crate::RoutingOptions::default();
+        let mut v: Value = serde_json::from_str(&to_json(&current)).unwrap();
+        v["schema_version"] = Value::from(4);
+        v["pcb"].as_object_mut().unwrap().remove("routing");
+        let v4 = v.to_string();
+        assert!(!v4.contains("\"routing\"") && !v4.contains("paste_expansion"));
+        let p = from_json(&v4).expect("v4 project loads");
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
+        assert_eq!(p, current);
+        assert!(p.pcb.routing.remove_loops);
+        let a = to_json(&p);
+        assert_eq!(a, to_json(&from_json(&a).unwrap()));
+    }
+
+    #[test]
+    fn invalid_v5_expansion_and_routing_options_fail_integrity() {
+        let mut p = v5_project();
+        let conn = p.library.get_mut("CONN_1x02_P2.54").unwrap();
+        // A through-hole pad has no paste; an expansion that closes the opening is refused.
+        conn.footprint.pads[0].paste_expansion = Some(10_000);
+        conn.footprint.pads[1].mask_expansion = Some(-5_000_000);
+        p.pcb.routing.width = Some(0);
+        let Err(CoreError::Integrity(problems)) = from_json(&to_json(&p)) else {
+            panic!("integrity must refuse the project");
+        };
+        assert_eq!(problems.len(), 3, "{problems:?}");
+        assert!(problems.iter().any(|m| m.contains("SMD pads only")));
+        assert!(problems.iter().any(|m| m.contains("1 mm limit")));
+        assert!(problems.iter().any(|m| m.starts_with("routing options")));
     }
 
     #[test]

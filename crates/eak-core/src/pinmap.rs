@@ -162,6 +162,8 @@ mod tests {
             size_x: 1_000_000,
             size_y: 1_000_000,
             drill: None,
+            mask_expansion: None,
+            paste_expansion: None,
         }
     }
 

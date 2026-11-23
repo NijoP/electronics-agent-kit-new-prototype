@@ -164,6 +164,59 @@ pub struct PadDef {
     /// Finished hole diameter for THT pads.
     #[serde(default)]
     pub drill: Option<Nm>,
+    /// Solder-mask expansion of this pad on each side (negative shrinks the opening). `None`
+    /// uses the board-wide `ManufacturingConfig::mask_expansion` (schema v5, ADR-0044).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mask_expansion: Option<Nm>,
+    /// Paste (stencil) expansion of this SMD pad on each side (negative shrinks the aperture).
+    /// `None` means 0: the aperture is the pad (schema v5, ADR-0044). THT pads get no paste.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paste_expansion: Option<Nm>,
+}
+
+/// Largest per-pad mask or paste expansion, either way (1 mm): a larger value is a typing slip.
+pub const MAX_PAD_EXPANSION: Nm = 1_000_000;
+
+impl PadDef {
+    /// Mask expansion of this pad given the board-wide default.
+    pub fn mask_expansion_or(&self, board: Nm) -> Nm {
+        self.mask_expansion.unwrap_or(board)
+    }
+
+    /// Paste expansion of this pad (0 when not set).
+    pub fn paste_or_zero(&self) -> Nm {
+        self.paste_expansion.unwrap_or(0)
+    }
+
+    /// Problems with the pad's own mask and paste expansion (empty when valid).
+    pub fn expansion_problems(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let small = self.size_x.min(self.size_y);
+        for (what, e) in [
+            ("mask", self.mask_expansion),
+            ("paste", self.paste_expansion),
+        ] {
+            let Some(e) = e else { continue };
+            if e.abs() > MAX_PAD_EXPANSION {
+                out.push(format!(
+                    "pad {} {what} expansion {e} nm is beyond the 1 mm limit",
+                    self.number
+                ));
+            } else if small + 2 * e <= 0 {
+                out.push(format!(
+                    "pad {} {what} expansion {e} nm closes the opening",
+                    self.number
+                ));
+            }
+        }
+        if self.kind == PadKind::Tht && self.paste_expansion.is_some() {
+            out.push(format!(
+                "pad {} is through-hole; paste expansion applies to SMD pads only",
+                self.number
+            ));
+        }
+        out
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -528,6 +581,9 @@ impl ComponentDef {
                     out.push(format!("{}: SMD pad {} has a drill", self.id, pad.number))
                 }
                 _ => {}
+            }
+            for problem in pad.expansion_problems() {
+                out.push(format!("{}: {problem}", self.id));
             }
         }
         if let Some(m) = &self.model3d.model_ref {

@@ -202,10 +202,56 @@ describe("footprint editor", () => {
     expect(c.pin_map).toEqual({ "1": ["1"], "2": ["2"] });
   });
 
-  it("states that mask/paste expansion is not available instead of showing a control", () => {
-    editor("footprint");
-    expect(screen.getByText(/Solder-mask and paste expansion per pad: not available yet/)).toBeTruthy();
-    expect(screen.queryByLabelText(/mask/i)).toBeNull();
+  // ADR-0044 (schema v5): per-pad solder-mask and paste expansion.
+  it("edits a pad's mask and paste expansion and saves only those with SetPadExpansion, even while placed", () => {
+    const { execute } = editor("footprint", part(), 2);
+    const mask = screen.getByLabelText("Pad 1 mask expansion") as HTMLInputElement;
+    expect(mask.value).toBe("");
+    fireEvent.change(mask, { target: { value: "0.1" } });
+    fireEvent.blur(mask);
+    const paste = screen.getByLabelText("Pad 1 paste expansion");
+    fireEvent.change(paste, { target: { value: "-0.05" } });
+    fireEvent.blur(paste);
+    // Placed on the PCB, yet the save is allowed: only openings change.
+    expect(save().disabled).toBe(false);
+    expect(save().getAttribute("title")).toMatch(/SetPadExpansion/);
+    fireEvent.click(save());
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][0]).toEqual({ type: "SetPadExpansion", component_id: "D2_PART", pad: "1", mask_expansion: 100_000, paste_expansion: -50_000 });
+  });
+
+  it("clears an expansion back to the board default and gives a through-hole pad no paste field", () => {
+    const d = part();
+    const withMask = { ...d, footprint: { ...d.footprint, pads: d.footprint.pads.map((p) => (p.number === "2" ? { ...p, mask_expansion: 80_000 } : p)) } };
+    const { execute } = editor("footprint", withMask);
+    const mask = screen.getByLabelText("Pad 2 mask expansion") as HTMLInputElement;
+    expect(mask.value).toBe("0.08");
+    fireEvent.change(mask, { target: { value: "" } });
+    fireEvent.blur(mask);
+    fireEvent.click(save());
+    expect(execute.mock.calls[0][0]).toEqual({ type: "SetPadExpansion", component_id: "D2_PART", pad: "2", mask_expansion: null, paste_expansion: null });
+    fireEvent.change(screen.getByLabelText("Pad 2 kind"), { target: { value: "tht" } });
+    expect(screen.queryByLabelText("Pad 2 paste expansion")).toBeNull();
+  });
+
+  it("a footprint change with an expansion still saves with AssignComponentFootprint, carrying the expansion", () => {
+    const { execute } = editor("footprint");
+    fireEvent.click(screen.getByRole("button", { name: "Add pad" }));
+    const mask = screen.getByLabelText("Pad 3 mask expansion");
+    fireEvent.change(mask, { target: { value: "-0.02" } });
+    fireEvent.blur(mask);
+    fireEvent.click(save());
+    const c = execute.mock.calls[0][0] as Extract<Command, { type: "AssignComponentFootprint" }>;
+    expect(c.type).toBe("AssignComponentFootprint");
+    expect(c.footprint.pads[2]).toMatchObject({ number: "3", mask_expansion: -20_000, paste_expansion: null });
+  });
+
+  it("checks the engine's expansion limits before a save", () => {
+    const d = part();
+    const set = (patch: object) => ({ ...d, footprint: { ...d.footprint, pads: d.footprint.pads.map((p) => (p.number === "1" ? { ...p, ...patch } : p)) } });
+    expect(draftProblems(set({ mask_expansion: 2_000_000 }))).toContain("Pad 1: the mask expansion is beyond the 1 mm limit.");
+    expect(draftProblems(set({ paste_expansion: -900_000 }))).toContain("Pad 1: the paste expansion closes the opening.");
+    expect(draftProblems(set({ mask_expansion: -100_000, paste_expansion: 50_000 }))).toEqual([]);
   });
 
   it("refuses to save a footprint change while the part is placed on the PCB, with the reason", () => {

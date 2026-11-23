@@ -53,6 +53,8 @@ pub fn default_footprint_for_pins(name: &str, pins: &[SymbolPin]) -> FootprintDe
             size_x: 1_000_000,
             size_y: 1_200_000,
             drill: None,
+            mask_expansion: None,
+            paste_expansion: None,
         });
         if count == 2 {
             pads.push(PadDef {
@@ -63,6 +65,8 @@ pub fn default_footprint_for_pins(name: &str, pins: &[SymbolPin]) -> FootprintDe
                 size_x: 1_000_000,
                 size_y: 1_200_000,
                 drill: None,
+                mask_expansion: None,
+                paste_expansion: None,
             });
         }
     } else {
@@ -84,6 +88,8 @@ pub fn default_footprint_for_pins(name: &str, pins: &[SymbolPin]) -> FootprintDe
                 size_x: 1_500_000,
                 size_y: 1_200_000,
                 drill: None,
+                mask_expansion: None,
+                paste_expansion: None,
             });
         }
     }

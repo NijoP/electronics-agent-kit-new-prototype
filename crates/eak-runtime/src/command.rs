@@ -51,6 +51,15 @@ pub enum Command {
         footprint: FootprintDef,
         pin_map: BTreeMap<String, Vec<String>>,
     },
+    /// Set (or clear with null, back to the board default) one pad's solder-mask and paste
+    /// expansion in a project library footprint (schema v5, ADR-0044). Allowed while the part is
+    /// placed: mask openings and stencil apertures change, copper and connectivity do not.
+    SetPadExpansion {
+        component_id: String,
+        pad: String,
+        mask_expansion: Option<Nm>,
+        paste_expansion: Option<Nm>,
+    },
     // ---- schematic
     AddSheet {
         name: String,
@@ -484,6 +493,11 @@ pub enum Command {
     SetManufacturing {
         config: ManufacturingConfig,
     },
+    /// Save the route tool's options (corners, obstacle mode, width, via, loop removal) with
+    /// the board, so they survive closing the project (schema v5, ADR-0044).
+    SetRoutingOptions {
+        options: RoutingOptions,
+    },
     // ---- compound
     /// Apply several commands in order as one transaction: all succeed or nothing changes,
     /// and the result is one revision and one undo step (ADR-0013). Batches do not nest.
@@ -547,7 +561,8 @@ impl Command {
             | MovePcbText { .. }
             | DeletePcbText { .. }
             | AddDimension { .. }
-            | DeleteDimension { .. } => ReversibleLocal,
+            | DeleteDimension { .. }
+            | SetRoutingOptions { .. } => ReversibleLocal,
             RenameSheet { .. }
             | SetNetLabelScope { .. }
             | AddBus { .. }
@@ -567,6 +582,7 @@ impl Command {
             | MoveNetLabel { .. }
             | UpsertComponentDefinition { .. }
             | AssignComponentFootprint { .. }
+            | SetPadExpansion { .. }
             | SetBoardOutline { .. }
             | SetStackup { .. }
             | SetLayerCount { .. }
@@ -3029,6 +3045,36 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 return Err(CommandError::Invalid("mask expansion must be ≥ 0".into()));
             }
             p.manufacturing = config.clone();
+        }
+        SetRoutingOptions { options } => {
+            if let Some(m) = options.problem() {
+                return Err(CommandError::Invalid(m));
+            }
+            p.pcb.routing = options.clone();
+        }
+        SetPadExpansion {
+            component_id,
+            pad,
+            mask_expansion,
+            paste_expansion,
+        } => {
+            let def = p.library.get_mut(component_id).ok_or_else(|| {
+                CommandError::NotFound(format!("component {component_id} in the project library"))
+            })?;
+            let target = def
+                .footprint
+                .pads
+                .iter_mut()
+                .find(|x| x.number == *pad)
+                .ok_or_else(|| CommandError::NotFound(format!("pad {pad} of {component_id}")))?;
+            let mut next = target.clone();
+            next.mask_expansion = *mask_expansion;
+            next.paste_expansion = *paste_expansion;
+            let problems = next.expansion_problems();
+            if !problems.is_empty() {
+                return Err(CommandError::Invalid(problems.join("; ")));
+            }
+            *target = next;
         }
         Batch { commands, label } => {
             if commands.is_empty() {

@@ -292,6 +292,45 @@ pub fn manufacturing() -> Value {
     )
 }
 
+/// Schema of the saved route tool options (`RoutingOptions`, schema v5).
+pub fn routing_options() -> Value {
+    let via = obj(
+        &[
+            ("drill", nm("via drill")),
+            ("diameter", nm("via diameter (> drill)")),
+        ],
+        &["drill", "diameter"],
+    );
+    obj(
+        &[
+            (
+                "bend",
+                enumeration(
+                    &["diagonal45", "orthogonal90"],
+                    "45-degree or 90-degree corners",
+                ),
+            ),
+            (
+                "conflict",
+                enumeration(
+                    &["walkaround", "block", "push"],
+                    "walk around other-net copper, stop before it, or push other-net tracks aside",
+                ),
+            ),
+            (
+                "width",
+                nullable(nm("track width for new routes; null = net class")),
+            ),
+            ("via", nullable(via)),
+            (
+                "remove_loops",
+                boolean("delete the redundant chain a finished route makes into a loop"),
+            ),
+        ],
+        &[],
+    )
+}
+
 /// Schema of a `FootprintDef`.
 pub fn footprint_def() -> Value {
     let pad = obj(
@@ -306,6 +345,16 @@ pub fn footprint_def() -> Value {
             ("size_x", nm("pad width")),
             ("size_y", nm("pad height")),
             ("drill", nullable(nm("finished hole diameter for THT pads"))),
+            (
+                "mask_expansion",
+                nullable(nm(
+                    "solder-mask expansion per side; omit for the board default",
+                )),
+            ),
+            (
+                "paste_expansion",
+                nullable(nm("SMD paste expansion per side; omit for none")),
+            ),
         ],
         &["number", "kind", "shape", "position", "size_x", "size_y"],
     );

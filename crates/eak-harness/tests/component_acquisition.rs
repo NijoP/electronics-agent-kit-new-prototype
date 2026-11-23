@@ -65,6 +65,8 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
             size_x: 1_500_000,
             size_y: 600_000,
             drill: None,
+            mask_expansion: None,
+            paste_expansion: None,
         },
         PadDef {
             number: "2".into(),
@@ -74,6 +76,8 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
             size_x: 1_500_000,
             size_y: 600_000,
             drill: None,
+            mask_expansion: None,
+            paste_expansion: None,
         },
         PadDef {
             number: "3".into(),
@@ -83,6 +87,8 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
             size_x: 1_500_000,
             size_y: 600_000,
             drill: None,
+            mask_expansion: None,
+            paste_expansion: None,
         },
         PadDef {
             number: "4".into(),
@@ -92,6 +98,8 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
             size_x: 1_500_000,
             size_y: 600_000,
             drill: None,
+            mask_expansion: None,
+            paste_expansion: None,
         },
     ];
 

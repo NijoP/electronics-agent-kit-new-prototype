@@ -2,7 +2,7 @@
 // (`route_step` IPC -> eak_engineering::interactive); this reducer only records the steps the
 // user fixed with a click and turns the finished route into ONE `Batch` command, so a whole
 // route is one revision and one undo step. Nothing here writes the project.
-import type { BendMode, Command, ConflictMode, Constraints, CopperLayer, FootprintGeom, Nm, PadGeom, Point, RouteSegment, RouteStepReport, RouteStepRequest, ShovedTrack, Track, Via, ViaSize } from "./types";
+import type { BendMode, Command, ConflictMode, Constraints, CopperLayer, FootprintGeom, Nm, PadGeom, Point, RouteSegment, RouteStepReport, RouteStepRequest, RoutingOptions, ShovedTrack, Track, Via, ViaSize } from "./types";
 import { layerKey, layerName, sameLayer, viaLayers } from "./layers";
 
 /** One fixed piece of the route: segments on one layer, optionally starting with a via. */
@@ -512,4 +512,50 @@ export function loopTracks(d: RouteDraft, tracks: Track[], vias: Via[], footprin
     }
   }
   return [];
+}
+
+// ---- Saved route tool options (schema v5, ADR-0044) ------------------------------------------
+// The inspector's routing options are saved with the board through `SetRoutingOptions`, so they
+// come back when the project is reopened. The inspector keeps them as its own field values
+// (width as mm text, via as a preset value); these helpers convert both ways.
+
+/** What a board without saved options uses (the engine's `RoutingOptions::default`). */
+export const DEFAULT_ROUTING: RoutingOptions = { bend: "diagonal45", conflict: "walkaround", width: null, via: null, remove_loops: true };
+
+/** The inspector's field values for the route options. */
+export interface RoutingFields {
+  mode: BendMode;
+  widthText: string;
+  viaChoice: string;
+  conflict: ConflictMode;
+  removeLoops: boolean;
+}
+
+/** Field values showing saved options. */
+export const routingFields = (o: RoutingOptions | undefined): RoutingFields => {
+  const s = o ?? DEFAULT_ROUTING;
+  return { mode: s.bend, widthText: s.width ? mmText(s.width) : "", viaChoice: viaPresetValue(s.via), conflict: s.conflict, removeLoops: s.remove_loops };
+};
+
+/** The options the fields hold (an unparsable width or via means the net class). */
+export const routingFrom = (f: RoutingFields): RoutingOptions => ({ bend: f.mode, conflict: f.conflict, width: widthFromMm(f.widthText), via: parseVia(f.viaChoice), remove_loops: f.removeLoops });
+
+/** A stable key: equal keys mean equal options. */
+export const routingKey = (o: RoutingOptions | undefined): string => {
+  const s = o ?? DEFAULT_ROUTING;
+  return [s.bend, s.conflict, s.width ?? "", viaPresetValue(s.via), s.remove_loops].join("|");
+};
+
+/** The command that saves the fields' options, or null when the board already has them. */
+export function saveRouting(saved: RoutingOptions | undefined, f: RoutingFields): Command | null {
+  const next = routingFrom(f);
+  return routingKey(next) === routingKey(saved) ? null : { type: "SetRoutingOptions", options: next };
+}
+
+/** The via presets plus the board's saved via when it is none of them, so the select shows it. */
+export function viaChoicesWith(c: Constraints | undefined, net: string, choice: string): Preset[] {
+  const out = viaPresets(c, net);
+  const v = parseVia(choice);
+  if (v && !out.some((o) => o.value === choice)) out.push({ value: choice, label: `${mmLabel(v.drill)} / ${mmLabel(v.diameter)} mm (saved)` });
+  return out;
 }
