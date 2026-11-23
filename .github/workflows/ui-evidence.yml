@@ -166,6 +166,16 @@ jobs:
           UI_SCENARIO: scenarios/d2-editors.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # B3 (schematic editing set): multi-select, align, duplicate, context menu, find, filter.
+      - name: Run B3 editing scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/b3
+          UI_SCENARIO: scenarios/b3-editing.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # C1 (layer UX): layer tab strip, layer keys, lock, flip / outline views, persistence.
       - name: Run C1 layer UX scenario under Xvfb
         if: always()
@@ -182,7 +192,7 @@ jobs:
         if: always()
         run: |
           missing=0
-          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 c1; do
+          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 c1; do
             f="${{ runner.temp }}/ui-evidence/${d:+$d/}UI_EVIDENCE.md"
             if [ -f "$f" ]; then
               cat "$f" >> "$GITHUB_STEP_SUMMARY"
@@ -225,6 +235,8 @@ jobs:
             ${{ runner.temp }}/ui-evidence/d3/tauri-driver.log
             ${{ runner.temp }}/ui-evidence/d2/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/d2/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/b3/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/b3/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/c1/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/c1/UI_EVIDENCE.md
           if-no-files-found: warn

@@ -163,6 +163,7 @@ export const EDITOR_RESERVED: Readonly<Record<string, readonly DocContext[]>> = 
   "Mod+X": ["schematic"],
   "Mod+V": ["schematic"],
   "Mod+D": ["schematic"],
+  "Mod+F": ["schematic"],
   "Mod+A": EDITING,
 };
 

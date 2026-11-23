@@ -1,7 +1,7 @@
 // SVG canvas with wheel zoom (about the cursor) and drag pan. When `onPoint` is given a
 // click (pointer released without dragging) reports the view-space point under it, and
 // `onHover` tracks the cursor so editors can draw rubber-band previews.
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { clientToView, fit, pan, visibleViewBox, zoomAt, type Bounds, type Size, type ViewBox } from "./viewport";
 import { loadViewport, reportCanvas, saveViewport, useDocId, useRegisterCanvas } from "./shell/viewState";
 
@@ -38,6 +38,8 @@ interface Props {
    * screen; pointer positions are mapped back, so tools keep working in design coordinates.
    */
   mirror?: boolean;
+  /** Right-click on the canvas (the editor opens its context menu; slice B3). */
+  onContextMenu?: (e: ReactMouseEvent<SVGSVGElement>) => void;
 }
 
 export interface DragHandler {
@@ -62,7 +64,7 @@ interface PointerSample {
   buttons: number;
 }
 
-export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay, scene, mirror = false }: Props) {
+export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay, scene, onContextMenu, mirror = false }: Props) {
   const mirrorRef = useRef(mirror);
   mirrorRef.current = mirror;
   /** Pane x of a client x: measured from the right edge while the view is mirrored. */
@@ -256,6 +258,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
       onDoubleClick={() => {
         if (!tool) setVb(fit(bounds));
       }}
+      onContextMenu={onContextMenu}
       onDragEnter={(e) => {
         const p = toView(e);
         if (p) onDropTarget?.onDragEnter?.(p[0], p[1], e);
