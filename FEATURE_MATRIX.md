@@ -1,4 +1,5 @@
-# EAK feature matrix (EDA desktop directive)
+| Footprints from schematic sync | integ | `SyncSchematicToPcb` in the editor flow test |
+| ECO preview before Update PCB (slice C2, ADR-0041) | partial (CI: `tests/eco.rs` property test, vitest, ui-evidence `c2-*`) | read-only `sync_preview` change list reviewed in a dialog (group by action/object, per-change checkboxes, export report); apply = one `Batch` at the previewed revision, stale revision rejected. Applying only some changes is not available (Apply disabled with the reason while a change is unchecked; needs a selective-sync command, slice C4). No back-annotation |# EAK feature matrix (EDA desktop directive)
 
 Status of every feature area in the owner's 2026-11-14 directive ("Transform EAK into a professional,
 fully interactive EDA desktop application"), kept up to date as work lands. The design behind each row

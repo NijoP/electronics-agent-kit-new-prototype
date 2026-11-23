@@ -37,6 +37,8 @@ import { DocTabs } from "./shell/DocTabs";
 import { FileExplorer } from "./shell/FileExplorer";
 import { FileViewer } from "./shell/FileViewer";
 import { ProjectTabs } from "./shell/ProjectTabs";
+import { EcoPreviewDialog } from "./shell/EcoPreviewDialog";
+import type { SyncPreview } from "./shell/ecoPreview";
 import { SyncReportDialog } from "./shell/SyncReportDialog";
 import { buildSyncReport, summarizeSyncReport, type SyncReport } from "./shell/syncReport";
 import { useTasks } from "./shell/tasks";
@@ -128,6 +130,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   });
   const [visitedViews, setVisitedViews] = useState<ReadonlySet<string>>(new Set());
   const [syncDialog, setSyncDialog] = useState<null | { report: SyncReport | null; error: string | null; revision: number }>(null);
+  // ECO review of a pending Update PCB (slice C2): the engine's read-only preview at one revision.
+  const [ecoDialog, setEcoDialog] = useState<SyncPreview | null>(null);
   const { tasks, track, clearFinished } = useTasks();
   useRegistryVersion();
   const edaViews = listWorkspaces("eda").map((w, i) => ({ ...w, shortcut: w.shortcut ?? (i < 7 ? `Mod+${3 + i}` : undefined) }));
@@ -375,21 +379,44 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       await refresh();
     });
   const edit: EditCtx = { execute: executeAll, busy, library, notify: setMessage };
-  // "Update PCB from schematic": the typed SyncSchematicToPcb command, then a report built from the
-  // engine's own journalled change list for that operation (added / removed / modified components
-  // and connections), so the report cannot disagree with what was applied.
+  // "Update PCB from schematic" (slice C2, ADR-0041): first the engine's read-only preview of what
+  // SyncSchematicToPcb would change, reviewed in the ECO dialog. Nothing changes until Apply.
   const syncPcb = () =>
     guarded(async () => {
-      const pid = snapshot.project.id;
       await track(
-        "Update PCB",
+        "Update PCB preview",
         async () => {
           // Gate (ADR-0036): the PCB is synchronised only from a schematic ERC has run on.
           if (results.erc?.report.revision !== revision) {
             const erc = await api.runCheck("erc");
             setResults((old) => ({ ...old, erc }));
           }
-          const r = await api.execute(revision, { type: "SyncSchematicToPcb" });
+          const preview = await api.syncPreview(revision);
+          if (preview.changes.length === 0 && preview.warnings.length === 0) {
+            const report = buildSyncReport([], snapshot.project.pcb);
+            setSyncDialog({ report, error: null, revision });
+            setMessage(summarizeSyncReport(report));
+            return summarizeSyncReport(report);
+          }
+          setEcoDialog(preview);
+          return `${preview.changes.length} change(s) to review at revision ${preview.revision}`;
+        },
+        (d) => d,
+      );
+    });
+  // Apply the reviewed preview: the sync as one Batch at the previewed revision (a project that
+  // moved on since the preview rejects it as stale, spec AG-03), then a report built from the
+  // engine's own journalled change list for that operation, so it cannot disagree with what was
+  // applied.
+  const applyEco = (preview: SyncPreview) =>
+    guarded(async () => {
+      setEcoDialog(null);
+      const pid = snapshot.project.id;
+      const revision = preview.revision;
+      await track(
+        "Update PCB",
+        async () => {
+          const r = await api.execute(revision, { type: "Batch", commands: [{ type: "SyncSchematicToPcb" }], label: "Update PCB from schematic" });
           if (!r.accepted) {
             if (r.error?.code === "NothingTo") {
               const report = buildSyncReport([], snapshot.project.pcb);
@@ -941,6 +968,15 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       {help && <ShortcutHelp actions={visibleIn(allActions, ctx).filter((a) => keysOf(a).length > 0)} editor={editorKeys(ctx)} onClose={() => setHelp(false)} />}
       {about && <AboutDialog onClose={() => setAbout(false)} />}
       {prefs && <SettingsDialog actions={allActions} theme={theme} onTheme={onTheme} onModel={() => (setPrefs(false), onSettings())} onClose={() => setPrefs(false)} />}
+      {ecoDialog && (
+        <EcoPreviewDialog
+          preview={ecoDialog}
+          busy={busy}
+          onApply={() => applyEco(ecoDialog)}
+          onExport={(excluded) => api.syncPreviewExport(ecoDialog.revision, excluded)}
+          onClose={() => setEcoDialog(null)}
+        />
+      )}
       {syncDialog && (
         <SyncReportDialog
           report={syncDialog.report}
