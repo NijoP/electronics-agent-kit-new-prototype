@@ -4,6 +4,7 @@
 // state stay authoritative in Rust. Documents that no longer exist are dropped on restore.
 import type { Id, Snapshot } from "../types";
 import { baseName, fileDocId, isFileDoc, relOfFileDoc } from "./files";
+import { sheetsInOrder } from "./sheets";
 
 /** "view": a registered EDA view (the 3D board viewer) open as a document tab (slice C6). */
 export type DocKind = "schematic" | "pcb" | "file" | "symbol" | "footprint" | "view";
@@ -40,7 +41,7 @@ export function partDocs(ids: string[], s: Snapshot): Doc[] {
 }
 
 export function availableDocs(s: Snapshot): Doc[] {
-  const sheets: Doc[] = Object.values(s.project.schematic.sheets).map((sh) => ({ id: `sch:${sh.id}`, kind: "schematic", title: sh.name, ref: sh.id }));
+  const sheets: Doc[] = sheetsInOrder(s.project.schematic).map((sh) => ({ id: `sch:${sh.id}`, kind: "schematic", title: sh.name, ref: sh.id }));
   return [...sheets, { id: `pcb:${s.project.id}`, kind: "pcb", title: "PCB", ref: s.project.id }];
 }
 

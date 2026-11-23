@@ -29,6 +29,8 @@ export interface ManagerItem {
   label: string;
   detail: string;
   target: Target;
+  /** Schematic pages: the sheet this entry is (the Pages tab's sheet actions act on it). */
+  sheetId?: Id;
 }
 
 export interface NetRow {
@@ -48,6 +50,7 @@ export function pagesOf(s: Snapshot): ManagerItem[] {
         ? `board · ${Object.keys(s.project.pcb.footprints).length} footprint(s)`
         : `sheet · ${Object.values(s.project.schematic.symbols).filter((y) => y.sheet_id === d.ref).length} symbol(s)`,
     target: { kind: "page", docId: d.id },
+    sheetId: d.kind === "schematic" ? d.ref : undefined,
   }));
 }
 

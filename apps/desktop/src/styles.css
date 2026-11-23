@@ -670,6 +670,17 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .dm-list { padding: 0 var(--s-1) var(--s-2); }
 .dm-list button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dm-group { font-size: var(--fs-xs); letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-dim); padding: var(--s-1) var(--s-1) 0; }
+/* Phase 1 B6: Pages-tab sheet actions (Add sheet; per sheet Rename, move up/down, Delete). */
+.dm-actions { display: flex; gap: var(--s-1); padding: 0 var(--s-2) var(--s-1); flex: none; }
+.dm-row { display: flex; align-items: center; min-width: 0; }
+.dm-row > button { flex: 1; min-width: 0; }
+.dm-sheet-actions { display: flex; gap: 2px; flex: none; }
+.dm-list .dm-sheet-actions button { width: auto; padding: 0 var(--s-half); font-size: var(--fs-xs); color: var(--fg-dim); }
+.dm-rename { display: flex; flex-wrap: wrap; gap: var(--s-half); align-items: center; padding: var(--s-half) var(--s-1); }
+.dm-rename input { flex: 1; min-width: 6em; }
+.dm-list .dm-rename button { width: auto; }
+.dm-rename .error { flex-basis: 100%; margin: 0; font-size: var(--fs-xs); }
+button.danger { color: var(--err); border-color: var(--err); }
 .props { margin: 0 var(--s-2); display: grid; gap: var(--s-half); font-size: var(--fs-sm); }
 .props > div { display: grid; grid-template-columns: minmax(0, 9em) minmax(0, 1fr); gap: var(--s-1); }
 .props dt { color: var(--fg-dim); }

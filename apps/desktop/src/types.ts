@@ -86,6 +86,8 @@ export interface Sheet {
   height: Nm;
   /** Border, zones and title block; absent = none. */
   format?: DrawingFormat;
+  /** Place in the sheet order (ADR-0043); absent = 0. List sheets with `sheetsInOrder`. */
+  order?: number;
 }
 export interface SymbolInstance {
   id: Id;
@@ -300,6 +302,13 @@ export type Command =
   | { type: "AutoRoute"; nets: string[] | null }
   | { type: "ClearRouting"; net: string | null }
   | { type: "StitchZones"; net: string | null }
+  | { type: "AddSheet"; name: string }
+  | { type: "RenameSheet"; sheet_id: Id; name: string }
+  | { type: "DeleteSheet"; sheet_id: Id }
+  | { type: "ReorderSheets"; sheet_ids: Id[] }
+  | { type: "DeleteSheetGraphic"; graphic_id: Id }
+  | { type: "DeleteBus"; bus_id: Id }
+  | { type: "DeleteBusEntry"; entry_id: Id }
   | { type: "Batch"; commands: Command[]; label?: string | null };
 
 export interface CommandError {

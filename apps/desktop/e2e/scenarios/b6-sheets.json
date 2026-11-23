@@ -1,0 +1,30 @@
+{
+  "name": "B6 sheet management",
+  "description": "Opens an isolated software fixture project (SETUP). In the design manager's Pages tab: Add sheet adds Sheet 2 (AddSheet); Rename edits it inline to Power (RenameSheet); Move up puts Power first (ReorderSheets); a resistor is placed on Power with real X input; Delete on the non-empty sheet asks first and lists its contents, Cancel keeps it, then Delete sheet and contents removes it in one Batch; Ctrl+Z restores the sheet and its part in one undo step. Refusals (blank or duplicate names, last sheet, malformed orders), the netlist across sheets and PCB net renames are covered by crates/eak-runtime/tests/sheets.rs; the controls' states by src/shell/sheets.test.tsx.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "B6 Sheets Fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "B6 Sheets Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "b6-pages", "do": "wait", "title": "B6: the Pages tab shows Add sheet, and Sheet 1 with Rename, ↑, ↓ and Delete", "selector": "[role=\"toolbar\"][aria-label=\"Sheet actions\"] button", "text": "Add sheet" },
+    { "id": "b6-add", "do": "click", "title": "B6: Add sheet adds Sheet 2 at the end (AddSheet)", "selector": "[role=\"toolbar\"][aria-label=\"Sheet actions\"] button", "text": "Add sheet", "expect": "button[aria-label=\"Rename sheet Sheet 2\"]" },
+    { "id": "b6-last", "do": "wait", "title": "B6: Sheet 2 is the last page; it cannot move down", "selector": "button[aria-label=\"Move sheet Sheet 2 down\"][disabled]", "shot": false },
+    { "id": "b6-rename", "do": "click", "title": "B6: Rename opens the inline name editor", "selector": "button[aria-label=\"Rename sheet Sheet 2\"]", "expect": "form[aria-label=\"Rename sheet\"] input[aria-label=\"Sheet name\"]" },
+    { "id": "b6-rename-type", "do": "type", "title": "B6: XTest types the new name over the selected old one", "value": "Power", "shot": false },
+    { "id": "b6-rename-enter", "do": "key", "title": "B6: Enter submits RenameSheet; the page is now Power", "keys": "Return", "expect": "button[aria-label=\"Rename sheet Power\"]", "gone": "form[aria-label=\"Rename sheet\"]" },
+    { "id": "b6-up", "do": "click", "title": "B6: Move up puts Power first (ReorderSheets)", "selector": "button[aria-label=\"Move sheet Power up\"]", "expect": ".dm-list li:first-child button", "expectText": "Power" },
+    { "id": "b6-first", "do": "wait", "title": "B6: Power is now first and cannot move further up", "selector": "button[aria-label=\"Move sheet Power up\"][disabled]", "shot": false },
+    { "id": "b6-open-power", "do": "click", "title": "B6: open the Power sheet from the Pages tab", "selector": ".dm-row > button", "text": "Power", "expect": "svg[aria-label=\"Schematic canvas\"]" },
+    { "id": "b6-quick-open", "do": "key", "title": "B6: Quick open (Ctrl+P) to arm the Place tool with a part", "keys": "ctrl+p", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b6-quick-type", "do": "type", "title": "B6: type the part name", "value": "Resistor 0603", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"] [role=\"option\"][aria-selected=\"true\"]", "expectText": "Resistor 0603", "shot": false },
+    { "id": "b6-quick-arm", "do": "key", "title": "B6: Enter arms the schematic Place tool", "keys": "Return", "gone": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "b6-place", "do": "click", "title": "B6: XTest click on the Power sheet places the resistor", "selector": "svg[aria-label=\"Schematic canvas\"]", "expect": ".dm-row > button", "expectText": "Power sheet · 1 symbol(s)" },
+    { "id": "b6-delete-ask", "do": "click", "title": "B6: Delete on the non-empty Power sheet asks first and lists what is on it", "selector": "button[aria-label=\"Delete sheet Power\"]", "expect": "[role=\"dialog\"][aria-label=\"Delete sheet\"] p", "expectText": "Power is not empty: 1 symbol(s)" },
+    { "id": "b6-delete-cancel", "do": "click", "title": "B6: Cancel keeps the sheet", "selector": "[role=\"dialog\"][aria-label=\"Delete sheet\"] button", "text": "Cancel", "gone": "[role=\"dialog\"][aria-label=\"Delete sheet\"]", "shot": false },
+    { "id": "b6-still-there", "do": "wait", "title": "B6: Power is still listed after Cancel", "selector": "button[aria-label=\"Delete sheet Power\"]", "shot": false },
+    { "id": "b6-delete-again", "do": "click", "title": "B6: Delete again", "selector": "button[aria-label=\"Delete sheet Power\"]", "expect": "[role=\"dialog\"][aria-label=\"Delete sheet\"]", "shot": false },
+    { "id": "b6-delete", "do": "click", "title": "B6: Delete sheet and contents removes the sheet and its part in one Batch", "selector": "[role=\"dialog\"][aria-label=\"Delete sheet\"] button", "text": "Delete sheet and contents", "gone": "[role=\"dialog\"][aria-label=\"Delete sheet\"]" },
+    { "id": "b6-deleted", "do": "absent", "title": "B6: the Power page is gone; Sheet 1 is the only sheet", "selector": "button[aria-label=\"Rename sheet Power\"]", "timeout": 10000 },
+    { "id": "b6-only", "do": "wait", "title": "B6: the only sheet cannot be deleted", "selector": "button[aria-label=\"Delete sheet Sheet 1\"][disabled]", "shot": false },
+    { "id": "b6-undo", "do": "key", "title": "B6: Ctrl+Z restores the sheet and its part in one undo step", "keys": "ctrl+z", "expect": ".dm-row > button", "expectText": "Power sheet · 1 symbol(s)" }
+  ]
+}
