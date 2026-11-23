@@ -12,6 +12,7 @@ import { LAYER_COUNTS, layerKey, layerName, stackLayers } from "../layers";
 import { trackEdit, widthFromMm } from "../routeTool";
 import type { Command, CopperLayer, Id, Point, Rotation, Side, Snapshot } from "../types";
 import { mm } from "../viewport";
+import { moveSymbolsTo } from "../tools/schematic/selection";
 import { sheetsInOrder } from "./sheets";
 
 // ---- Tool option schema --------------------------------------------------------------------
@@ -196,8 +197,9 @@ function symbolFields(s: Snapshot, ids: Id[]): PropModel {
       commit: (v) => {
         const n = parseMm(v);
         if (typeof n === "string") return n;
-        const cmds: Command[] = syms.filter((y) => y.position[k] !== n).map((y): Command => ({ type: "MoveSymbol", symbol_id: y.id, position: withAxis(y.position, k, n) }));
-        return batch(cmds, `Set ${k.toUpperCase()} of ${plural(cmds.length, "symbol")}`);
+        // Attached wire ends and pin labels follow (rubber-band, as a drag does): one Batch.
+        const targets = syms.filter((y) => y.position[k] !== n).map((y) => ({ id: y.id, position: withAxis(y.position, k, n) }));
+        return batch(moveSymbolsTo(s, targets), `Set ${k.toUpperCase()} of ${plural(targets.length, "symbol")}`);
       },
     },
   });
@@ -346,17 +348,13 @@ function labelFields(s: Snapshot, ids: Id[]): PropModel {
       ls.filter((l) => l.name !== name).map((l): Command => ({ type: "RenameNetLabel", label_id: l.id, name })),
       `Rename ${plural(ls.length, "label")}`,
     );
-  // The engine has no command to change a label's kind: the label is placed again with the other
-  // kind (same name, position and scope) in one Batch, so it is still one revision and one undo step.
-  const rekind = (kind: "net" | "power"): Commit => {
-    const cmds: Command[] = ls
-      .filter((l) => l.kind !== kind)
-      .flatMap((l): Command[] => [
-        { type: "DeleteNetLabel", label_id: l.id },
-        { type: "AddNetLabel", sheet_id: l.sheet_id, name: l.name, position: l.position, kind, ...(l.scope ? { scope: l.scope } : {}) },
-      ]);
-    return cmds.length ? { type: "Batch", commands: cmds, label: `Change ${plural(ls.length, "label")} kind` } : null;
-  };
+  // A kind change keeps the label in place: `SetNetLabelKind` (ADR-0048) keeps its id, group,
+  // scope and power style; a Batch for several labels, so one undo step.
+  const rekind = (kind: "net" | "power"): Commit =>
+    batch(
+      ls.filter((l) => l.kind !== kind).map((l): Command => ({ type: "SetNetLabelKind", label_id: l.id, kind })),
+      `Change ${plural(ls.length, "label")} kind`,
+    );
   const axis = (k: "x" | "y"): PropField => ({
     id: k,
     label: `${k.toUpperCase()} (mm)`,

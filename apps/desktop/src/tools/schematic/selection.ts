@@ -125,6 +125,34 @@ export function moveCommands(snap: Snapshot, sheet: Id, sel: Selection, delta: P
   return out;
 }
 
+/**
+ * Move symbols to new origins, each by its own delta (Inspector X/Y on several parts), dragging
+ * attached wire ends and pin labels like `moveCommands`; for one symbol it is `moveCommands`
+ * with the delta to its target. Wire edits come first, the moves last.
+ */
+export function moveSymbolsTo(snap: Snapshot, targets: { id: Id; position: Point }[]): Command[] {
+  const { symbols } = snap.project.schematic;
+  const moves = targets.flatMap((t) => {
+    const s = symbols[t.id];
+    return s && !same(s.position, t.position) ? [{ id: t.id, sheet: s.sheet_id, delta: { x: t.position.x - s.position.x, y: t.position.y - s.position.y } }] : [];
+  });
+  const out: Command[] = [];
+  for (const sheet of [...new Set(moves.map((m) => m.sheet))]) {
+    const moved = new Map<string, Point>();
+    for (const m of moves.filter((m) => m.sheet === sheet)) {
+      const g = sheetSymbols(snap, sheet).find((g) => g.id === m.id);
+      for (const p of g?.pins ?? []) moved.set(key(p.position), add(p.position, m.delta));
+    }
+    out.push(...rubberBand(sheetWires(snap, sheet), moved, new Set(), null));
+    for (const l of sheetLabels(snap, sheet)) {
+      const to = moved.get(key(l.position));
+      if (to && !same(to, l.position)) out.push({ type: "MoveNetLabel", label_id: l.id, position: to });
+    }
+  }
+  for (const m of moves) out.push({ type: "MoveSymbol", symbol_id: m.id, position: add(symbols[m.id].position, m.delta) });
+  return out;
+}
+
 const ORDER: Rotation[] = ["R0", "R90", "R180", "R270"];
 /** A quarter turn counter-clockwise about `about` (EAK-IR's R90). */
 const quarter = (p: Point, about: Point): Point => ({ x: about.x - (p.y - about.y), y: about.y + (p.x - about.x) });

@@ -90,6 +90,29 @@ describe("Property List tab", () => {
     expect(batchOf(sent[0])).toHaveLength(2);
   });
 
+  it("mixed cells with an empty field: Apply is disabled with the reason until a value is given (F3, S3)", () => {
+    const sent: Command[] = [];
+    const snap = fixture();
+    snap.project.schematic.symbols.sym_d1.rotation = "R90";
+    render(<BottomPanel tab="proplist" onTab={() => {}} snapshot={snap} results={{}} events={[]} onProbe={() => {}} onClose={() => {}} execute={async (c) => void sent.push(c)} />);
+    const list = within(screen.getByRole("region", { name: "Property list" }));
+    const apply = () => list.getByRole("button", { name: "Apply" }) as HTMLButtonElement;
+    // Value: 330 and Green, so the field starts empty; Apply would blank both
+    fireEvent.click(list.getByRole("button", { name: "Pick every Value cell" }));
+    expect(apply().disabled).toBe(true);
+    expect(apply().title).toMatch(/different values/);
+    fireEvent.keyDown(list.getByRole("textbox", { name: "New value" }), { key: "Enter" });
+    expect(sent).toHaveLength(0);
+    fireEvent.change(list.getByRole("textbox", { name: "New value" }), { target: { value: "1k" } });
+    expect(apply().disabled).toBe(false);
+    // Rotation: R0 and R90 show "(mixed)"; the engine would refuse "", so Apply waits for a choice
+    fireEvent.click(list.getByRole("button", { name: "Pick every Rotation cell" }));
+    expect(apply().disabled).toBe(true);
+    fireEvent.change(list.getByRole("combobox", { name: "New value" }), { target: { value: "R180" } });
+    expect(apply().disabled).toBe(false);
+    expect(sent).toHaveLength(0);
+  });
+
   it("Ctrl+click adds and removes cells of one column; a click in another column starts over", () => {
     render(<BottomPanel tab="proplist" onTab={() => {}} snapshot={fixture()} results={{}} events={[]} onProbe={() => {}} onClose={() => {}} execute={async () => {}} />);
     const list = within(screen.getByRole("region", { name: "Property list" }));

@@ -120,6 +120,18 @@ describe("selection mode", () => {
       ],
     });
     expect(commit(field(m.fields, "x"), "abc")).toMatch(/not a number/);
+    // F3 (S4): X/Y on a wired part drags the attached wire end and pin label (rubber-band Batch)
+    const w = fixture();
+    w.project.schematic.wires.wir_1 = { ...w.project.schematic.wires.wir_1, a: { x: 54_000_000, y: 50_000_000 }, b: { x: 76_000_000, y: 50_000_000 } };
+    const one = selectionModel(w, { ...NO_SELECTION, symbols: ["sym_r1"] })!;
+    expect(commit(field(one.fields, "x"), "60")).toEqual({
+      type: "Batch",
+      label: "Set X of 1 symbol",
+      commands: [
+        { type: "MoveWire", wire_id: "wir_1", a: { x: 64_000_000, y: 50_000_000 }, b: { x: 76_000_000, y: 50_000_000 } },
+        { type: "MoveSymbol", symbol_id: "sym_r1", position: { x: 60_000_000, y: 50_000_000 } },
+      ],
+    });
     // an unchanged value sends nothing
     expect(commit(field(m.fields, "rotation"), "R0")).toBeNull();
   });
@@ -152,15 +164,14 @@ describe("selection mode", () => {
     // ADR-0045: a rename keeps the label and its id (one command, one undo step)
     expect(commit(field(l.fields, "name"), "VCC")).toEqual({ type: "RenameNetLabel", label_id: "lab_1", name: "VCC" });
     expect(commit(field(l.fields, "name"), "GND")).toBeNull();
-    // the kind has no command of its own: placed again with the other kind, in one Batch
-    expect(commit(field(l.fields, "kind"), "net")).toEqual({
-      type: "Batch",
-      label: "Change 1 label kind",
-      commands: [
-        { type: "DeleteNetLabel", label_id: "lab_1" },
-        { type: "AddNetLabel", sheet_id: "sht_1", name: "GND", position: { x: 85_000_000, y: 50_000_000 }, kind: "net" },
-      ],
-    });
+    // F3 / ADR-0048: a kind change keeps the label, its id, group and power style (SetNetLabelKind)
+    expect(commit(field(l.fields, "kind"), "net")).toEqual({ type: "SetNetLabelKind", label_id: "lab_1", kind: "net" });
+    expect(commit(field(l.fields, "kind"), "power")).toBeNull();
+    s.project.schematic.labels.lab_2 = { ...s.project.schematic.labels.lab_1, id: "lab_2", kind: "net" };
+    const two = selectionModel(s, { ...NO_SELECTION, labels: ["lab_1", "lab_2"] })!;
+    expect(commit(field(two.fields, "kind"), "power")).toEqual({ type: "SetNetLabelKind", label_id: "lab_2", kind: "power" });
+    expect(JSON.stringify(commit(field(two.fields, "kind"), "net"))).not.toMatch(/DeleteNetLabel|AddNetLabel/);
+    delete s.project.schematic.labels.lab_2;
     const t = selectionModel(s, { ...NO_SELECTION, tracks: ["trk_1"] })!;
     expect(field(t.fields, "width").value).toBe("0.250");
     expect(commit(field(t.fields, "width"), "0.4")).toEqual({ type: "EditTrack", track_id: "trk_1", width: 400_000 });

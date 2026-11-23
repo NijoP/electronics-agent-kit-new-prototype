@@ -184,6 +184,7 @@ const SCHEMATIC_COMMANDS: &[&str] = &[
     "SetNoConnect",
     "DeleteNoConnect",
     "SetNetLabelScope",
+    "SetNetLabelKind",
     "SetPowerPortStyle",
     "SetFieldVisibility",
     "AddBus",

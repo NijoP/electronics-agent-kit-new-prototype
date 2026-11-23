@@ -187,6 +187,17 @@ jobs:
           UI_SCENARIO: scenarios/b3-groups.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # F3 (schematic edit integrity, audit S4): a part wired by Connect pins is moved by
+      # click-click; the move is one rubber-band Batch and Highlight net still lights both pins.
+      - name: Run F3 edit integrity scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/f3
+          UI_SCENARIO: scenarios/f3-edit-integrity.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # B6 (sheet management): Pages-tab Add, Rename, Move up and Delete (asks first when the
       # sheet is not empty; one Batch), then one undo restores the sheet and its part.
       - name: Run B6 sheets scenario under Xvfb
@@ -322,7 +333,7 @@ jobs:
         if: always()
         run: |
           missing=0
-          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b3g b6 c6 c4 c1 b4 b5 e4 e9a e7 f2 f8; do
+          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b3g f3 b6 c6 c4 c1 b4 b5 e4 e9a e7 f2 f8; do
             f="${{ runner.temp }}/ui-evidence/${d:+$d/}UI_EVIDENCE.md"
             if [ -f "$f" ]; then
               cat "$f" >> "$GITHUB_STEP_SUMMARY"
@@ -379,6 +390,8 @@ jobs:
             ${{ runner.temp }}/ui-evidence/f2/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b3g/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/b3g/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/f3/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/f3/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b5/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/b5/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b6/screenshots/*.png

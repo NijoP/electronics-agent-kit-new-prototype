@@ -134,7 +134,7 @@ export function commonActions(d: ActionDeps): Action[] {
     { id: "select", label: "Select tool", title: "Select tool (key 1)", docs: EDITING, menu: "Edit", sep: true, toolbar: "edit", icon: "select", enabled: () => true, run: () => d.tool("select") },
     { id: "move", label: "Move tool", title: "Move tool (schematic key 6, PCB key 3)", docs: EDITING, menu: "Edit", toolbar: "edit", icon: "move", enabled: () => true, run: () => d.tool("move") },
     { id: "rotate", label: "Rotate selection", title: "Rotate selection (key R)", docs: EDITING, menu: "Edit", toolbar: "edit", icon: "rotate", hint: "R", context: ["symbol"], contextSep: true, enabled: viaEditor(d, "rotate", needSel), run: () => runVia(d, "rotate", d.rotateSel) },
-    { id: "delete", label: "Delete selection", title: "Delete selection (asks first)", docs: EDITING, menu: "Edit", toolbar: "edit", icon: "delete", context: ["symbol", "wire", "label"], enabled: viaEditor(d, "delete", needSel), run: () => runVia(d, "delete", d.deleteSel) },
+    { id: "delete", label: "Delete selection", title: "Delete selection (one undo step: Ctrl+Z restores it)", docs: EDITING, menu: "Edit", toolbar: "edit", icon: "delete", context: ["symbol", "wire", "label"], enabled: viaEditor(d, "delete", needSel), run: () => runVia(d, "delete", d.deleteSel) },
     { id: "deselect", label: "Clear selection", keys: ["Escape"], menu: "Edit", enabled: () => (d.selected ? true : "Nothing is selected"), run: () => d.select(null) },
 
     { id: "zout", label: "Zoom out", docs: EDITING, menu: "View", toolbar: "view", icon: "zoom-out", enabled: () => true, run: () => d.zoomBy(1.4) },

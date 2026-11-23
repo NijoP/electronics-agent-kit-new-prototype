@@ -349,6 +349,7 @@ export type Command =
   | { type: "DeleteNoConnect"; no_connect_id: Id }
   | { type: "MoveNetLabel"; label_id: Id; position: Point }
   | { type: "RenameNetLabel"; label_id: Id; name: string }
+  | { type: "SetNetLabelKind"; label_id: Id; kind: "net" | "power" }
   | { type: "Group"; members: Id[]; name?: string | null }
   | { type: "Ungroup"; group_id: Id }
   | { type: "SetBoardOutline"; points: Point[] }

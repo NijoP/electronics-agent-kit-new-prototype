@@ -168,6 +168,13 @@ pub enum Command {
         label_id: Id,
         scope: NetScope,
     },
+    /// Change a net label between a net label and a power port in place: same id, name,
+    /// position, scope, power style and group (ADR-0048). A power style is kept but only drawn
+    /// while the label is a power port.
+    SetNetLabelKind {
+        label_id: Id,
+        kind: LabelKind,
+    },
     /// Set or clear (null) the drawing style of a power port.
     SetPowerPortStyle {
         label_id: Id,
@@ -655,6 +662,7 @@ impl Command {
             | Ungroup { .. } => ReversibleLocal,
             RenameSheet { .. }
             | SetNetLabelScope { .. }
+            | SetNetLabelKind { .. }
             | AddBus { .. }
             | MoveBus { .. }
             | DeleteBus { .. }
@@ -1937,6 +1945,26 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             if l.kind == LabelKind::Power && *scope == NetScope::Local {
                 warnings.push(format!(
                     "{} is a power port; power ports connect on every sheet whatever their scope",
+                    l.name
+                ));
+            }
+        }
+        SetNetLabelKind { label_id, kind } => {
+            let l = p
+                .schematic
+                .labels
+                .get_mut(label_id)
+                .ok_or_else(|| CommandError::NotFound(format!("label {label_id}")))?;
+            if l.kind == *kind {
+                return Err(CommandError::NothingTo(format!(
+                    "kind: label {} is already {kind:?}",
+                    l.name
+                )));
+            }
+            l.kind = *kind;
+            if l.scope == NetScope::Local {
+                warnings.push(format!(
+                    "{} is a local label: as a power port it connects on every sheet, as a net label only on its own; run ERC",
                     l.name
                 ));
             }

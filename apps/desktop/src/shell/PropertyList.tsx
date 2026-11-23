@@ -41,7 +41,7 @@ export function PropertyList({ snapshot, busy, execute }: Props) {
     choose(live.includes(rowId) ? live.filter((x) => x !== rowId) : [...live, rowId], colId);
   };
   const apply = async () => {
-    if (!column || !execute) return;
+    if (!column || !execute || blankMixed) return;
     const c = commitCells(snapshot, kind, column.id, live, value);
     if (c === null) return setNote({ text: "No change: every picked cell already holds this value.", error: false });
     if (typeof c === "string") return setNote({ text: c, error: true });
@@ -50,7 +50,19 @@ export function PropertyList({ snapshot, busy, execute }: Props) {
   };
 
   const n = live.length;
-  const why = !execute ? "This project is read-only here" : busy ? "An engine command is running" : n === 0 ? "Pick cells in an editable column first" : `Set ${n} cell${n === 1 ? "" : "s"} as one command (one undo step)`;
+  // Mixed cells with an empty field: Apply would blank every picked cell (and a choice column such
+  // as Rotation has no empty value), so it waits for a value.
+  const mixed = column !== null && n > 1 && new Set(model.rows.filter((r) => live.includes(r.id)).map((r) => r.cells[column.id] ?? "")).size > 1;
+  const blankMixed = mixed && value === "";
+  const why = !execute
+    ? "This project is read-only here"
+    : busy
+      ? "An engine command is running"
+      : n === 0
+        ? "Pick cells in an editable column first"
+        : blankMixed
+          ? "The picked cells hold different values: enter or choose the new value first"
+          : `Set ${n} cell${n === 1 ? "" : "s"} as one command (one undo step)`;
   return (
     <section className="proplist" aria-label="Property list">
       <div className="proplist-bar" role="group" aria-label="Batch edit">
@@ -101,7 +113,7 @@ export function PropertyList({ snapshot, busy, execute }: Props) {
             }}
           />
         )}
-        <button type="button" disabled={busy || n === 0 || !execute} title={why} onClick={() => void apply()}>
+        <button type="button" disabled={busy || n === 0 || !execute || blankMixed} title={why} onClick={() => void apply()}>
           Apply
         </button>
         {note && (
