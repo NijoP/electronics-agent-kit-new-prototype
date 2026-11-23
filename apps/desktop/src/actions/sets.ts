@@ -34,7 +34,7 @@ export interface ActionDeps {
   projects: OpenProject[];
   sideViews: { id: SideView; label: string }[];
   edaViews: { id: string; label: string; shortcut?: string }[];
-  dialog: (d: "new" | "open" | "export" | "rules" | "bom" | "outputs") => void;
+  dialog: (d: "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate") => void;
   save: () => void;
   undo: () => void;
   redo: () => void;
@@ -283,6 +283,7 @@ export function schematicActions(d: ActionDeps): Action[] {
     ...schematicEditActions(d),
     { id: "erc", label: "Run ERC", docs: SCH, menu: "Design", toolbar: "checks", icon: "erc", enabled: idle, run: () => d.check("erc") },
     { id: "annotate", label: "Annotate schematic", docs: SCH, menu: "Design", enabled: idle, run: () => d.execute({ type: "Annotate" }) },
+    { id: "annotate-options", label: "Annotate options…", docs: SCH, menu: "Design", enabled: idle, run: () => d.dialog("annotate") },
     { id: "sim", label: "Run simulation…", short: "Simulate", title: "Open the Simulation panel (ngspice)", docs: SCH, menu: "Simulation", toolbar: "checks", icon: "simulate", enabled: () => true, run: () => d.showBottom("sim") },
   ];
 }

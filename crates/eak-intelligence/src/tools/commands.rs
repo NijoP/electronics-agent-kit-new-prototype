@@ -11,7 +11,7 @@
 use super::schema::*;
 use crate::message::ToolSpec;
 use eak_core::*;
-use eak_runtime::{Command, OperationClass};
+use eak_runtime::{AnnotateOrder, AnnotateScope, Command, OperationClass};
 use serde_json::{json, Value};
 
 /// Part of the design a command touches; drives which verification should run afterwards.
@@ -48,6 +48,14 @@ fn sheet() -> Value {
 }
 fn id(desc: &str) -> Value {
     string(desc)
+}
+fn object_class() -> Value {
+    enumeration(
+        &[
+            "track", "smd_pad", "th_pad", "via", "zone", "hole", "outline", "silk",
+        ],
+        "clearance-matrix object class",
+    )
 }
 
 /// One `Batch` step: `type` names any non-batch command tool and the remaining properties
@@ -427,10 +435,21 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                 &["sheet_id"],
             ),
         ),
-        Annotate => (
+        Annotate { .. } => (
             D::Schematic,
-            "Assign reference designators to symbols whose designator ends in '?'.",
-            obj(&[], &[]),
+            "Assign reference designators. scope: unannotated (default: designators ending in '?'), all, or selection (the symbols listed). Numbering follows the sheet order, then order: across (default: by Y, then X) or down (by X, then Y). reset returns the designators in scope to '<prefix>?' instead. Designators outside the scope never change.",
+            obj(
+                &[
+                    ("order", enumeration(&["across", "down"], "numbering order within a sheet")),
+                    (
+                        "scope",
+                        enumeration(&["unannotated", "all", "selection"], "which symbols to number"),
+                    ),
+                    ("symbols", array(id("symbol id"), "symbols of the selection scope")),
+                    ("reset", boolean("reset the designators in scope to '<prefix>?'")),
+                ],
+                &[],
+            ),
         ),
         SetBoardOutline { .. } => (
             D::Pcb,
@@ -751,6 +770,56 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                 &["net"],
             ),
         ),
+        SetRuleConfig { .. } => (
+            D::Constraints,
+            "Enable or disable one verification rule (ERC-001, DRC-002, ...) or override its report severity; config null clears it back to the default. A disabled rule is reported as DISABLED, never as passing, and the gates that use it are NOT_RUN.",
+            obj(
+                &[
+                    ("rule_id", string("rule id, e.g. ERC-001")),
+                    (
+                        "config",
+                        nullable(obj(
+                            &[
+                                ("enabled", boolean("false disables the rule")),
+                                (
+                                    "severity",
+                                    nullable(enumeration(
+                                        &["error", "warning", "info"],
+                                        "report severity of the rule's findings; null keeps the default",
+                                    )),
+                                ),
+                            ],
+                            &[],
+                        )),
+                    ),
+                ],
+                &["rule_id"],
+            ),
+        ),
+        SetClearanceCell { .. } => (
+            D::Constraints,
+            "Set (or clear with null) the minimum clearance between two object classes in the DRC clearance matrix.",
+            obj(
+                &[
+                    ("a", object_class()),
+                    ("b", object_class()),
+                    ("clearance", nullable(nm("minimum clearance"))),
+                ],
+                &["a", "b"],
+            ),
+        ),
+        SetNetPairClearance { .. } => (
+            D::Constraints,
+            "Set (or clear with null) the minimum copper clearance between two named nets.",
+            obj(
+                &[
+                    ("net_a", string("net name")),
+                    ("net_b", string("another net name")),
+                    ("clearance", nullable(nm("minimum clearance"))),
+                ],
+                &["net_a", "net_b"],
+            ),
+        ),
         SetManufacturing { .. } => (
             D::Manufacturing,
             "Set the manufacturing configuration.",
@@ -985,7 +1054,12 @@ pub fn command_samples() -> Vec<Command> {
                 ..DrawingFormat::standard()
             }),
         },
-        Annotate,
+        Annotate {
+            order: AnnotateOrder::Down,
+            scope: AnnotateScope::Selection,
+            symbols: vec!["s".into()],
+            reset: false,
+        },
         SetBoardOutline {
             points: vec![p, Point::new(1, 0), Point::new(1, 1)],
         },
@@ -1154,6 +1228,23 @@ pub fn command_samples() -> Vec<Command> {
             net: "N".into(),
             volts: None,
         },
+        SetRuleConfig {
+            rule_id: "ERC-001".into(),
+            config: Some(RuleConfig {
+                enabled: true,
+                severity: Some(RuleSeverity::Warning),
+            }),
+        },
+        SetClearanceCell {
+            a: ObjectClass::Track,
+            b: ObjectClass::SmdPad,
+            clearance: Some(200_000),
+        },
+        SetNetPairClearance {
+            net_a: "GND".into(),
+            net_b: "VIN".into(),
+            clearance: None,
+        },
         SetManufacturing {
             config: ManufacturingConfig::default(),
         },
@@ -1175,7 +1266,7 @@ pub fn command_samples() -> Vec<Command> {
                     symbol_id: "s".into(),
                     position: p,
                 },
-                Annotate,
+                Command::annotate(),
             ],
             label: Some("Move".into()),
         },
@@ -1251,12 +1342,12 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 85 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
+        // 88 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
         // schematic commands of ADR-0040, the 16 PCB commands of ADR-0042 (15 schema-v4 edits plus
         // SyncSchematicToPcbSelected), the 3 sheet commands of ADR-0043, the 2 schema-v5 commands of
-        // ADR-0044 and the 3 group and rename commands of ADR-0045); keep in step with
-        // REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 85);
+        // ADR-0044, the 3 group and rename commands of ADR-0045 and the 3 schema-v7 rule commands
+        // of ADR-0046); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
+        assert_eq!(tools.len(), 88);
         for t in &tools {
             assert!(t
                 .spec
@@ -1298,7 +1389,7 @@ mod tests {
         assert!(decode("NoSuchCommand", &json!({})).is_err());
         // A model cannot smuggle in a different variant through "type".
         let c = decode("Annotate", &json!({"type": "ClearRouting"})).unwrap();
-        assert_eq!(c, Command::Annotate);
+        assert_eq!(c, Command::annotate());
     }
 
     #[test]
@@ -1319,7 +1410,7 @@ mod tests {
                         symbol_id: "s".into(),
                         position: Point::new(1, 2)
                     },
-                    Command::Annotate
+                    Command::annotate()
                 ],
                 label: None
             }

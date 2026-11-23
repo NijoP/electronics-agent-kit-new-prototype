@@ -724,7 +724,13 @@ fn step_touches(step: &Value, idx: &Index) -> Result<Touches, String> {
         "SetBoardOutline" | "SetStackup" | "SetLayerCount" => {
             hit.insert("@board".into());
         }
-        "SetDesignRules" | "UpsertNetClass" | "SetNetCurrent" | "SetNetVoltage" => {
+        "SetDesignRules"
+        | "UpsertNetClass"
+        | "SetNetCurrent"
+        | "SetNetVoltage"
+        | "SetRuleConfig"
+        | "SetClearanceCell"
+        | "SetNetPairClearance" => {
             hit.insert("@constraints".into());
         }
         "SetManufacturing" => {

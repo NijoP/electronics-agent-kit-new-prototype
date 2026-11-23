@@ -84,6 +84,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | `t-mirror` | Mirror selection | schematic | Edit | edit |  | state-dependent |
 | `erc` | Run ERC | schematic | Design | checks |  | state-dependent |
 | `annotate` | Annotate schematic | schematic | Design |  |  | state-dependent |
+| `annotate-options` | Annotate options… | schematic | Design |  |  | state-dependent |
 | `sim` | Run simulation… | schematic | Simulation | checks |  | enabled |
 | `t-via` | Via | pcb | Place | edit |  | enabled |
 | `t-outline` | Board outline | pcb | Place | edit |  | enabled |

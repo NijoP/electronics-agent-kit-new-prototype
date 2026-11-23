@@ -125,6 +125,9 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Revision-bound reports with not-implemented lists | integ | `ipc.rs::checks_are_revision_bound_and_saved_as_evidence` |
 | Findings with measured vs required values and a suggested fix | integ | ADR-0009, `actionable_findings.rs` (15 tests) |
 | Click a finding -> select the component | unit | vitest cross-probe from findings (PR #12) |
+| Findings panel: severity filter chips with counts, object references, CSV/JSON export (slice B5) | integ | `eak-manufacturing` `findings_export` tests; `src-tauri/tests/ipc.rs` `findings_export_writes_the_engine_report_for_the_current_revision`; vitest `findings.test.tsx`; CI ui-evidence `b5-findings.json` |
+| Real-time DRC toggle (slice C5) | unit | vitest `realtimeDrc.test.tsx` (debounce, disabled, already current, edit restarts, refused run), `findings.test.tsx`; CI ui-evidence `c5-realtime-drc` |
+| Rule enable / severity override, clearance matrix, net-to-net clearance (slices B5, C5; ADR-0046) | integ | `eak-runtime/tests/annotate.rs` (Annotate order, scope, reset), `eak-validation/tests/rule_config.rs` (disabled = DISABLED never PASS, override stated and verdict kept, save/open round trip, unknown ids refused, gates NOT_RUN, rule ids in step with the checks), `tests/clearance_matrix.rs` (each of the 20 enforced cells, net pairs, unenforced cell reported), `eak-core` `migrate.rs` v6 test; vitest `rules.test.tsx`, `findings.test.tsx`; CI ui-evidence `c5-rules-*`, `b5-rule-*` |
 | Click a finding -> navigate, zoom, highlight, safe correction | - | |
 | DFM report | - | |
 | Fail-closed engineering gates (`run_gates`, release blocking) | code-reviewed only | `eak-validation/src/gates.rs`, ADR-0021; tests written, never run |

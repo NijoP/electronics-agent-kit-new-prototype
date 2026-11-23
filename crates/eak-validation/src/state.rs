@@ -17,6 +17,9 @@ pub enum CheckState {
     Unknown,
     NotApplicable,
     RequiresHumanApproval,
+    /// Switched off in the project's rule configuration (ADR-0046, AD-8): not evaluated, never
+    /// a pass. A report with a disabled rule is at best `DISABLED` overall.
+    Disabled,
 }
 
 impl CheckState {
@@ -26,13 +29,15 @@ impl CheckState {
             CheckState::NotApplicable => 0,
             CheckState::Pass => 1,
             CheckState::Warning => 2,
-            CheckState::RequiresHumanApproval => 3,
-            CheckState::Unknown => 4,
-            CheckState::Fail => 5,
+            CheckState::Disabled => 3,
+            CheckState::RequiresHumanApproval => 4,
+            CheckState::Unknown => 5,
+            CheckState::Fail => 6,
         }
     }
 
-    /// The worse of two states; `Fail` > `Unknown` > `RequiresHumanApproval` > `Warning` > `Pass`.
+    /// The worse of two states; `Fail` > `Unknown` > `RequiresHumanApproval` > `Disabled` >
+    /// `Warning` > `Pass`.
     pub fn worst(self, other: CheckState) -> CheckState {
         if other.rank() > self.rank() {
             other
@@ -55,6 +60,14 @@ pub struct RuleResult {
     /// Why the rule is not `Pass` (missing input, nothing to check, approval needed).
     #[serde(default)]
     pub reason: String,
+    /// The severity the project's rule configuration gives this rule's findings, when it
+    /// overrides the default (ADR-0046). The findings carry it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub severity_override: Option<crate::report::Severity>,
+    /// The state the rule has at its default severities, when an override changed it. Gates
+    /// and the release gate use this one, so an override can never turn a failure into a pass.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_state: Option<CheckState>,
 }
 
 /// Whether a stored result may speak for the project as it is now.

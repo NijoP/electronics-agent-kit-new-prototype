@@ -12,6 +12,7 @@ import { ArrayPanel } from "./tools/schematic/ArrayPanel";
 import { clipboard, setClipboard } from "./tools/schematic/clipboard";
 import { useSelectFilter } from "./tools/schematic/filter";
 import { FindBar } from "./tools/schematic/FindBar";
+import { takeFindPick, useFindPickSeq } from "./shell/findResults";
 import { netAt, netMembers, sheetGroups, type NetHighlight } from "./tools/schematic/nets";
 import { Canvas, type DragHandler, type DropHandler } from "./Canvas";
 import { getDraggedComponent, setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
@@ -158,6 +159,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   const [externalDrag, setExternalDrag] = useState<{ componentId: string; name: string; at: Point } | null>(null);
   const [hi, setHi] = useState<NetHighlight | null>(null);
   const [finding, setFinding] = useState(false);
+  const findPick = useFindPickSeq();
   const [arraying, setArraying] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; target: CanvasTarget; label: string } | null>(null);
   const filter = useSelectFilter();
@@ -201,6 +203,14 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   // The last press began on an object (Place tool: a click there never places).
   const downOnObject = useRef(false);
   const sheet = sheets.find((s) => s.id === sheetId) ?? sheets[0];
+  // Find Results (slice E4): a hit picked in the bottom dock on this sheet becomes the selection.
+  useEffect(() => {
+    if (!sheet) return;
+    const h = takeFindPick(sheet.id);
+    if (!h) return;
+    setTool("select");
+    setSel({ ...S.EMPTY, symbols: h.kind === "symbol" ? [h.id] : [], labels: h.kind === "label" ? [h.id] : [] });
+  }, [findPick, sheet?.id]);
   // The canvas selection, or the symbol selected elsewhere (explorer, findings).
   const pruned = S.prune(selRaw, snapshot);
   const sel = S.isEmpty(pruned) && selected && schematic.symbols[selected] ? { ...S.EMPTY, symbols: [selected] } : pruned;
