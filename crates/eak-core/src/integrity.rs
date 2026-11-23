@@ -172,6 +172,9 @@ pub fn check(p: &Project) -> Vec<String> {
         e.push("board outline is not a simple polygon".into());
     }
     e.extend(validate_outline_arcs(o, &p.pcb.board.outline_arcs));
+    if let Some(m) = p.pcb.routing.problem() {
+        e.push(format!("routing options: {m}"));
+    }
     for (k, r) in &p.pcb.regions {
         if &r.id != k {
             e.push(format!("region key {k} != id {}", r.id));

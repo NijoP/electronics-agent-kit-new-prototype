@@ -35,6 +35,8 @@ fn smd(number: &str, x: f64, y: f64, w: f64, h: f64) -> PadDef {
         size_x: mm(w),
         size_y: mm(h),
         drill: None,
+        mask_expansion: None,
+        paste_expansion: None,
     }
 }
 
@@ -51,6 +53,8 @@ fn tht(number: &str, x: f64, y: f64, d: f64, drill: f64, square: bool) -> PadDef
         size_x: mm(d),
         size_y: mm(d),
         drill: Some(mm(drill)),
+        mask_expansion: None,
+        paste_expansion: None,
     }
 }
 

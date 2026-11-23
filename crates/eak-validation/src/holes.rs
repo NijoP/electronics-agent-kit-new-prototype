@@ -4,10 +4,34 @@
 
 use crate::report::{finding, Finding, Severity::*};
 use eak_core::geom::{point_in_polygon, to_mm};
-use eak_core::{CopperLayer, Id, Nm, PadKind, Point, Project, Side};
+use eak_core::{CopperLayer, Id, Nm, ObjectClass, PadKind, Point, Project, Side};
 use eak_engineering::copper::{self, distance, Core, ItemKind, Shape};
 use eak_engineering::silk;
 use std::collections::BTreeSet;
+
+/// Clearance-matrix class of a copper item (Phase 1 C5): pads are SMD or TH by their footprint
+/// pad; a pad whose footprint or pad definition is missing counts as SMD.
+pub fn object_class(p: &Project, it: &copper::CopperItem) -> ObjectClass {
+    match it.kind {
+        ItemKind::Track => ObjectClass::Track,
+        ItemKind::Via => ObjectClass::Via,
+        ItemKind::Zone => ObjectClass::Zone,
+        ItemKind::Pad => {
+            let th = p
+                .pcb
+                .footprints
+                .get(&it.object_id)
+                .and_then(|fp| p.library.get(&fp.component_id))
+                .and_then(|def| def.footprint.pads.iter().find(|pd| pd.number == it.sub))
+                .is_some_and(|pd| pd.kind == PadKind::Tht);
+            if th {
+                ObjectClass::ThPad
+            } else {
+                ObjectClass::SmdPad
+            }
+        }
+    }
+}
 
 /// One drilled hole: a via barrel or a plated through-hole pad.
 #[derive(Debug, Clone)]
@@ -79,9 +103,15 @@ fn mm(v: f64) -> String {
 }
 
 /// DRC-018: copper of another net (or unconnected copper) closer than `min` to the edge of a
-/// drilled hole, on the layers the hole's own copper spans.
+/// drilled hole, on the layers the hole's own copper spans. The clearance-matrix cell between
+/// holes and the copper item's class raises `min` for that item (Phase 1 C5, ADR-0045).
 pub fn copper_to_hole(p: &Project, min: Nm) -> Vec<Finding> {
     let items = copper::items(p);
+    let cells = &p.constraints;
+    let reach_min = ObjectClass::ALL
+        .iter()
+        .filter_map(|k| cells.matrix_cell(ObjectClass::Hole, *k))
+        .fold(min, Nm::max);
     let mut f = Vec::new();
     for h in holes(p) {
         let layers: BTreeSet<CopperLayer> = items
@@ -90,7 +120,7 @@ pub fn copper_to_hole(p: &Project, min: Nm) -> Vec<Finding> {
             .map(|it| it.layer)
             .collect();
         let hs = h.shape();
-        let reach = hs.bbox().inflate(min);
+        let reach = hs.bbox().inflate(reach_min);
         let mut seen = BTreeSet::new();
         for it in &items {
             if h.is_owner(it) || !layers.contains(&it.layer) {
@@ -102,6 +132,9 @@ pub fn copper_to_hole(p: &Project, min: Nm) -> Vec<Finding> {
             if !reach.intersects(&it.shape.bbox()) {
                 continue;
             }
+            let min = cells
+                .matrix_cell(ObjectClass::Hole, object_class(p, it))
+                .map_or(min, |m| m.max(min));
             let d = distance(&hs, &it.shape);
             if d < min as f64 - 1.0 && seen.insert(it.label()) {
                 f.push(

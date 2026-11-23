@@ -13,6 +13,7 @@ import { SchematicView } from "./SchematicView";
 import { formatShortcut, SHORTCUTS } from "./design/shortcuts";
 import { actionForKey, contextMenuFor, keysOf, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./actions/registry";
 import { workspaceActions } from "./actions/sets";
+import { usePowerPorts } from "./settings/powerPorts";
 import { editorKeys } from "./actions/editorKeys";
 import { APP_VERSION } from "./version";
 import { useEscape } from "./shell/useEscape";
@@ -682,7 +683,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     guarded(async () => {
       const out = await track(`Export ${c.toUpperCase()} findings (${format.toUpperCase()})`, () => api.exportFindings(c, format), (r) => r.path);
       setResults((old) => ({ ...old, [c]: out.result }));
-      setMessage(`${out.result.report.check} report for revision ${out.result.report.revision} written to ${out.path}`);
+      setMessage(`${out.path.split(/[\\/]/).pop()} written: ${out.result.report.check} report for revision ${out.result.report.revision} (${out.path})`);
     });
   // Design manager entry: open the page, or select the object and zoom to it in the editor it
   // belongs to (components and nets follow the active editor; nothing on the board falls back to
@@ -803,9 +804,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     const o = editorContext(editorDoc)?.ops?.[op];
     return o ? { enabled: () => editorContext(editorDoc)?.ops?.[op]?.state ?? o.state, run: () => (editorContext(editorDoc)?.ops?.[op] ?? o).run() } : null;
   };
+  // The Power port split button follows Settings › Power ports.
+  const powerPortList = usePowerPorts();
   const allActions = workspaceActions({
     editorOp,
-    snapshot, busy, selected, selectedSymbol, fpOfSelected, theme, sideOpen, bottomOpen, rightOpen, split, recent, library, docs, openIds, projects,
+    snapshot, busy, powerPorts: powerPortList, selected, selectedSymbol, fpOfSelected, theme, sideOpen, bottomOpen, rightOpen, split, recent, library, docs, openIds, projects,
     sideViews: SIDE_VIEWS,
     edaViews,
     dialog: setDialog,
@@ -1071,7 +1074,16 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       />
       {dialog === "new" && <NewProjectDialog onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
       {dialog === "open" && <OpenProjectDialog recent={recent} onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
-      {dialog === "rules" && <RulesDialog snapshot={snapshot} busy={busy} apply={edit.execute} onClose={() => setDialog(null)} />}
+      {dialog === "rules" && (
+        <RulesDialog
+          snapshot={snapshot}
+          busy={busy}
+          apply={edit.execute}
+          reports={{ erc: results.erc?.report, drc: results.drc?.report }}
+          onRun={(k) => void check(k)}
+          onClose={() => setDialog(null)}
+        />
+      )}
       {dialog === "bom" && <BomExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "outputs" && <DocumentExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "export" && (

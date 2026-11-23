@@ -200,7 +200,7 @@ fn fabricator_gate(p: &Project, fab: Option<&FabProfile>) -> Gate {
     g
 }
 
-/// A gate any of whose rules the project disables is `NOT_RUN`, never `PASS` (ADR-0044, AD-8);
+/// A gate any of whose rules the project disables is `NOT_RUN`, never `PASS` (ADR-0045, AD-8);
 /// a gate with an overridden rule says that it used the default severity.
 fn apply_rule_config(p: &Project, gates: &mut [Gate]) {
     let cfg = &p.constraints.rules;
@@ -246,7 +246,7 @@ fn apply_rule_config(p: &Project, gates: &mut [Gate]) {
 /// the board is meant for; without one the capability gate is `UNKNOWN`.
 pub fn evaluate(p: &Project, fab: Option<&FabProfile>) -> GateReport {
     use Severity::{Error, Warning};
-    // Gates run every rule at its default severity (ADR-0044): a severity override in the
+    // Gates run every rule at its default severity (ADR-0045): a severity override in the
     // project changes how findings are shown, never whether a gate passes.
     let at_defaults = {
         let mut d = p.clone();

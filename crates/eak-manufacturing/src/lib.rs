@@ -180,7 +180,7 @@ pub fn release_gates(p: &Project, reports: &[&Report]) -> (Vec<GateResult>, Vec<
                 if r.outcome == Outcome::Errors {
                     blocking.push(format!("{need} reports {} error(s)", r.errors));
                 }
-                // ADR-0044 (AD-8): a disabled rule is not a pass, and a rule whose severity
+                // ADR-0045 (AD-8): a disabled rule is not a pass, and a rule whose severity
                 // override hides a failure at its default severity does not release either.
                 for rr in &r.rule_results {
                     if rr.state == eak_validation::CheckState::Disabled {

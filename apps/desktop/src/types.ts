@@ -242,6 +242,8 @@ export interface Project {
     texts?: Record<Id, PcbText>;
     dimensions?: Record<Id, PcbDimension>;
     cutouts?: Record<Id, Cutout>;
+    /** Saved route tool options (schema v5, `SetRoutingOptions`); absent in older fixtures. */
+    routing?: RoutingOptions;
   };
   /** Definitions in the project's own library (built-ins copied in, and imported parts). */
   library?: Record<
@@ -316,6 +318,7 @@ export type Command =
   | { type: "UpsertComponentDefinition"; definition: ComponentDef }
   | { type: "SetComponentProperties"; component_id: string; manufacturer: string | null; mpn: string | null; distributor: string | null; datasheet: string | null }
   | { type: "AssignComponentFootprint"; component_id: string; footprint: FootprintDef; pin_map: Record<string, string[]> }
+  | { type: "SetPadExpansion"; component_id: string; pad: string; mask_expansion: Nm | null; paste_expansion: Nm | null }
   | { type: "PlaceSymbol"; sheet_id: Id | null; component_id: string; position: Point; rotation: Rotation; refdes: string | null; value: string | null }
   | { type: "MoveSymbol"; symbol_id: Id; position: Point }
   | { type: "RotateSymbol"; symbol_id: Id; rotation: Rotation }
@@ -328,8 +331,11 @@ export type Command =
   | { type: "MoveWire"; wire_id: Id; a: Point; b: Point }
   | { type: "ConnectPins"; a_symbol: Id; a_pin: string; b_symbol: Id; b_pin: string }
   | { type: "AddNetLabel"; sheet_id: Id | null; name: string; position: Point; kind: "net" | "power"; scope?: NetScope; power_style?: PowerStyle | null }
+  | { type: "AddBus"; sheet_id: Id | null; name: string; points: Point[] }
+  | { type: "AddBusEntry"; bus_id: Id; bus_point: Point; wire_point: Point }
+  | { type: "AddSheetGraphic"; sheet_id: Id | null; graphic: Graphic }
   | { type: "DeleteNetLabel"; label_id: Id }
-  | { type: "LabelPin"; symbol_id: Id; pin: string; name: string; kind: "net" | "power" }
+  | { type: "LabelPin"; symbol_id: Id; pin: string; name: string; kind: "net" | "power"; scope?: NetScope; power_style?: PowerStyle | null }
   | { type: "SetNoConnect"; symbol_id: Id; pin: string }
   | { type: "DeleteNoConnect"; no_connect_id: Id }
   | { type: "MoveNetLabel"; label_id: Id; position: Point }
@@ -345,9 +351,13 @@ export type Command =
   | { type: "UpsertNetClass"; class: NetClass }
   | { type: "SetNetCurrent"; net: string; amps: number | null }
   | { type: "SetNetVoltage"; net: string; volts: number | null }
+  | { type: "SetRuleConfig"; rule_id: string; config: RuleConfig | null }
+  | { type: "SetClearanceCell"; a: ObjectClass; b: ObjectClass; clearance: Nm | null }
+  | { type: "SetNetPairClearance"; net_a: string; net_b: string; clearance: Nm | null }
   | { type: "SetLayerCount"; count: number; board_thickness?: Nm | null }
   | { type: "SetStackup"; stackup: Stackup }
   | { type: "SetManufacturing"; config: ManufacturingConfig }
+  | { type: "SetRoutingOptions"; options: RoutingOptions }
   | { type: "DeleteVia"; via_id: Id }
   | { type: "Annotate" }
   | { type: "SyncSchematicToPcb" }
@@ -428,19 +438,31 @@ export interface Finding {
   required?: Limit | null;
   suggested_fix?: string | null;
 }
-export type CheckState = "PASS" | "FAIL" | "WARNING" | "UNKNOWN" | "NOT_APPLICABLE" | "REQUIRES_HUMAN_APPROVAL";
+export type CheckState = "PASS" | "FAIL" | "WARNING" | "UNKNOWN" | "NOT_APPLICABLE" | "REQUIRES_HUMAN_APPROVAL" | "DISABLED";
 export interface RuleResult {
   rule_id: string;
   state: CheckState;
   reason: string;
+  /** Severity the project's rule configuration gives the rule's findings (ADR-0045). */
+  severity_override?: Severity;
+  /** The rule's state at its default severity, when the override changed it. */
+  default_state?: CheckState;
 }
 
+export interface RuleInfo {
+  id: string;
+  description: string;
+  parameters: string;
+  source: string;
+}
 export interface Report {
   check: string;
   project_id: Id;
   revision: number;
   input_sha256: string;
   tool: string;
+  /** The rules the check declares (absent in older test fixtures). */
+  rules?: RuleInfo[];
   findings: Finding[];
   outcome: "NO_ERRORS_IN_IMPLEMENTED_CHECKS" | "ERRORS";
   errors: number;
@@ -922,6 +944,10 @@ export interface PadDef {
   size_x: number;
   size_y: number;
   drill: number | null;
+  /** Own solder-mask expansion per side (schema v5); absent or null = the board default. */
+  mask_expansion?: number | null;
+  /** Own paste expansion per side, SMD pads only (schema v5); absent or null = none. */
+  paste_expansion?: number | null;
 }
 export interface FootprintDef {
   name: string;
@@ -1070,6 +1096,16 @@ export interface ViaSize {
   drill: Nm;
   diameter: Nm;
 }
+/** The route tool's options as saved with the board (eak_core::RoutingOptions, ADR-0044). */
+export interface RoutingOptions {
+  bend: BendMode;
+  conflict: ConflictMode;
+  /** Track width for new routes; null = net class. */
+  width: Nm | null;
+  /** Via for layer switches; null = net class. */
+  via: ViaSize | null;
+  remove_loops: boolean;
+}
 export interface RouteStepRequest {
   net: string;
   layer: CopperLayer;
@@ -1138,6 +1174,29 @@ export interface Constraints {
   net_voltages_v?: Record<string, number>;
   temp_rise_c: number;
   max_component_height?: Nm | null;
+  /** Per-rule enable and severity override (schema v6, ADR-0045). */
+  rules?: Record<string, RuleConfig>;
+  /** Clearance matrix cells (schema v6, Phase 1 C5). */
+  clearance_matrix?: ClearanceCell[];
+  /** Net-to-net clearances (schema v6, Phase 1 C5). */
+  net_pair_rules?: NetPairRule[];
+}
+
+export type RuleSeverity = "error" | "warning" | "info";
+export interface RuleConfig {
+  enabled: boolean;
+  severity?: RuleSeverity | null;
+}
+export type ObjectClass = "track" | "smd_pad" | "th_pad" | "via" | "zone" | "hole" | "outline" | "silk";
+export interface ClearanceCell {
+  a: ObjectClass;
+  b: ObjectClass;
+  clearance: Nm;
+}
+export interface NetPairRule {
+  net_a: string;
+  net_b: string;
+  clearance: Nm;
 }
 
 /** A project open in this window (the engine keeps several; one is active). */

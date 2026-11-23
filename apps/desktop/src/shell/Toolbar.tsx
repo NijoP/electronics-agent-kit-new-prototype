@@ -37,6 +37,10 @@ export const GROUPS: Record<ToolbarGroupId, { label: string; minWidth: number }>
 /** Name of each split-button family (its group label and dropdown title). */
 export const SPLITS: Record<SplitId, string> = {
   "sch-marks": "Net marks",
+  "sch-labels": "Net labels and ports",
+  "sch-power": "Power ports",
+  "sch-bus": "Bus tools",
+  "sch-graphics": "Graphics and text",
   "pcb-regions": "Board regions",
   "pcb-checks": "PCB checks",
 };

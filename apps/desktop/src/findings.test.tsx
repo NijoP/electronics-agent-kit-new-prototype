@@ -127,3 +127,24 @@ describe("Real-time DRC toggle", () => {
     expect(screen.queryByRole("checkbox", { name: "Real-time DRC" })).toBeNull();
   });
 });
+
+// ADR-0045 (AD-8): reports state disabled rules and severity overrides explicitly.
+describe("Findings panel rule configuration", () => {
+  it("lists a DISABLED rule and an overridden rule, even when the override made it pass", () => {
+    const r = ercResult(7);
+    r.report.overall = "FAIL";
+    r.report.rule_results = [
+      { rule_id: "ERC-006", state: "DISABLED", reason: "disabled in the project's rule configuration: not evaluated, not a pass (ADR-0045)" },
+      { rule_id: "ERC-001", state: "PASS", reason: "", severity_override: "info", default_state: "FAIL" },
+      { rule_id: "ERC-009", state: "PASS", reason: "" },
+    ];
+    render(<EngineeringMonitor snapshot={fixture(7)} results={{ erc: r }} onProbe={() => {}} />);
+    const list = within(section("ERC")).getByRole("list", { name: "ERC rules not passing" });
+    expect(list.textContent).toContain("ERC-006 DISABLED");
+    expect(list.textContent).toContain("not a pass");
+    expect(list.textContent).toContain("ERC-001 PASS");
+    expect(list.textContent).toContain("severity overridden to info");
+    expect(list.textContent).toContain("FAIL at its default severity");
+    expect(list.textContent).not.toContain("ERC-009");
+  });
+});

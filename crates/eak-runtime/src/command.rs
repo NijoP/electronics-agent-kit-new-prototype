@@ -51,6 +51,15 @@ pub enum Command {
         footprint: FootprintDef,
         pin_map: BTreeMap<String, Vec<String>>,
     },
+    /// Set (or clear with null, back to the board default) one pad's solder-mask and paste
+    /// expansion in a project library footprint (schema v5, ADR-0044). Allowed while the part is
+    /// placed: mask openings and stencil apertures change, copper and connectivity do not.
+    SetPadExpansion {
+        component_id: String,
+        pad: String,
+        mask_expansion: Option<Nm>,
+        paste_expansion: Option<Nm>,
+    },
     // ---- schematic
     AddSheet {
         name: String,
@@ -481,7 +490,7 @@ pub enum Command {
         net: String,
         volts: Option<f64>,
     },
-    /// Enable or disable one rule and/or override its report severity (ADR-0044, AD-8);
+    /// Enable or disable one rule and/or override its report severity (ADR-0045, AD-8);
     /// `config: None` clears it back to the default. A rule id no check declares is refused,
     /// so a typo cannot silently configure nothing. A disabled rule is reported as `DISABLED`.
     SetRuleConfig {
@@ -489,7 +498,7 @@ pub enum Command {
         #[serde(default)]
         config: Option<RuleConfig>,
     },
-    /// Set (`Some`) or clear (`None`) one clearance-matrix cell (Phase 1 C5, ADR-0044). The
+    /// Set (`Some`) or clear (`None`) one clearance-matrix cell (Phase 1 C5, ADR-0045). The
     /// pair is unordered.
     SetClearanceCell {
         a: ObjectClass,
@@ -497,7 +506,7 @@ pub enum Command {
         #[serde(default)]
         clearance: Option<Nm>,
     },
-    /// Set or clear the minimum copper clearance between two nets (Phase 1 C5, ADR-0044).
+    /// Set or clear the minimum copper clearance between two nets (Phase 1 C5, ADR-0045).
     SetNetPairClearance {
         net_a: String,
         net_b: String,
@@ -506,6 +515,11 @@ pub enum Command {
     },
     SetManufacturing {
         config: ManufacturingConfig,
+    },
+    /// Save the route tool's options (corners, obstacle mode, width, via, loop removal) with
+    /// the board, so they survive closing the project (schema v5, ADR-0044).
+    SetRoutingOptions {
+        options: RoutingOptions,
     },
     // ---- compound
     /// Apply several commands in order as one transaction: all succeed or nothing changes,
@@ -570,7 +584,8 @@ impl Command {
             | MovePcbText { .. }
             | DeletePcbText { .. }
             | AddDimension { .. }
-            | DeleteDimension { .. } => ReversibleLocal,
+            | DeleteDimension { .. }
+            | SetRoutingOptions { .. } => ReversibleLocal,
             RenameSheet { .. }
             | SetNetLabelScope { .. }
             | AddBus { .. }
@@ -590,6 +605,7 @@ impl Command {
             | MoveNetLabel { .. }
             | UpsertComponentDefinition { .. }
             | AssignComponentFootprint { .. }
+            | SetPadExpansion { .. }
             | SetBoardOutline { .. }
             | SetStackup { .. }
             | SetLayerCount { .. }
@@ -3145,6 +3161,36 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 return Err(CommandError::Invalid("mask expansion must be ≥ 0".into()));
             }
             p.manufacturing = config.clone();
+        }
+        SetRoutingOptions { options } => {
+            if let Some(m) = options.problem() {
+                return Err(CommandError::Invalid(m));
+            }
+            p.pcb.routing = options.clone();
+        }
+        SetPadExpansion {
+            component_id,
+            pad,
+            mask_expansion,
+            paste_expansion,
+        } => {
+            let def = p.library.get_mut(component_id).ok_or_else(|| {
+                CommandError::NotFound(format!("component {component_id} in the project library"))
+            })?;
+            let target = def
+                .footprint
+                .pads
+                .iter_mut()
+                .find(|x| x.number == *pad)
+                .ok_or_else(|| CommandError::NotFound(format!("pad {pad} of {component_id}")))?;
+            let mut next = target.clone();
+            next.mask_expansion = *mask_expansion;
+            next.paste_expansion = *paste_expansion;
+            let problems = next.expansion_problems();
+            if !problems.is_empty() {
+                return Err(CommandError::Invalid(problems.join("; ")));
+            }
+            *target = next;
         }
         Batch { commands, label } => {
             if commands.is_empty() {

@@ -1,16 +1,23 @@
-// Design rules / net class dialog. Every field maps to one typed engine command
-// (SetDesignRules, UpsertNetClass, SetNetCurrent, SetNetVoltage); the engine validates and may
-// reject, and DRC/ERC then use the stored values. Lengths are entered in mm.
+// Design rules dialog (rebuilt in Phase 1 C5): a named-rule tree over board rules, net classes,
+// net declarations, net-to-net clearances, the clearance matrix and the ERC / DRC rule tables.
+// Every field maps to one typed engine command (SetDesignRules, UpsertNetClass, SetNetCurrent,
+// SetNetVoltage, SetNetPairClearance, SetClearanceCell, SetRuleConfig); the engine validates and
+// may reject, and DRC/ERC then use the stored values. Lengths are entered in mm.
 import { useState } from "react";
 import { netNames } from "./panels";
 import { mmToNm } from "../editing";
-import type { Command, Constraints, NetClass, Snapshot } from "../types";
+import { ClearanceMatrix, NetPairs, RuleTable } from "./ruleTables";
+import type { Command, Constraints, NetClass, Report, Snapshot } from "../types";
 
 interface Props {
   snapshot: Snapshot;
   busy: boolean;
   apply: (c: Command | Command[]) => Promise<void>;
   onClose: () => void;
+  /** The last ERC / DRC reports: their rule lists fill the rule tables. */
+  reports?: { erc?: Report; drc?: Report };
+  /** Run a check so its rule table can list the rules. */
+  onRun?: (check: "erc" | "drc") => void;
 }
 
 const toMm = (nm: number | null | undefined) => (nm === null || nm === undefined ? "" : String(+(nm / 1e6).toFixed(4)));
@@ -39,7 +46,26 @@ export function netDeclaration(c: Constraints | undefined, net: string, amps: st
   return { command: commands.length === 1 ? commands[0] : { type: "Batch", commands, label: `Declare net ${net}` } };
 }
 
-export function RulesDialog({ snapshot, busy, apply, onClose }: Props) {
+/** The named-rule tree: each group jumps to its section. */
+const RULE_TREE = [
+  { id: "rules-board", label: "Board rules" },
+  { id: "rules-classes", label: "Net classes" },
+  { id: "rules-nets", label: "Net current and voltage" },
+  { id: "rules-net-pairs", label: "Net-to-net clearance" },
+  { id: "rules-matrix", label: "Clearance matrix" },
+  { id: "rules-erc", label: "ERC rules" },
+  { id: "rules-drc", label: "DRC rules" },
+];
+
+/** "2 disabled, 1 overridden" for the rules of one family, or "" when none is configured. */
+export function configured(c: Constraints | undefined, prefix: string): string {
+  const rs = Object.entries(c?.rules ?? {}).filter(([id]) => id.startsWith(prefix));
+  const off = rs.filter(([, r]) => !r.enabled).length;
+  const over = rs.filter(([, r]) => r.enabled && r.severity).length;
+  return [off && `${off} disabled`, over && `${over} overridden`].filter(Boolean).join(", ");
+}
+
+export function RulesDialog({ snapshot, busy, apply, onClose, reports, onRun }: Props) {
   const c = snapshot.project.constraints;
   const [rules, setRules] = useState({
     min_track_width: toMm(c?.min_track_width),
@@ -73,6 +99,7 @@ export function RulesDialog({ snapshot, busy, apply, onClose }: Props) {
     setError(null);
     void apply(cmds);
   };
+  const one = (cmd: Command) => run([cmd]);
 
   const applyRules = () => {
     const f = Object.fromEntries(Object.entries(rules).map(([k, v]) => [k, k === "temp_rise_c" ? num(v) : mm(v)]));
@@ -115,7 +142,40 @@ export function RulesDialog({ snapshot, busy, apply, onClose }: Props) {
         </div>
         <p className="muted hint">Each Apply sends one typed command to the engine, which validates it. DRC and ERC use these values; re-run them after changing rules.</p>
         {error && <p role="alert" className="error">{error}</p>}
-        <section aria-label="Board rules">
+        <nav aria-label="Rule tree" className="rule-tree">
+          <ul className="tree">
+            {RULE_TREE.map((g) => (
+              <li key={g.id}>
+                <button type="button" onClick={() => document.getElementById(g.id)?.scrollIntoView({ block: "start" })}>
+                  {g.label}
+                </button>
+                {g.id === "rules-classes" && classes.length > 0 && (
+                  <ul>
+                    {classes.map((n) => (
+                      <li key={n.name}>{n.name}</li>
+                    ))}
+                  </ul>
+                )}
+                {g.id === "rules-net-pairs" && (c?.net_pair_rules ?? []).length > 0 && (
+                  <ul>
+                    {(c?.net_pair_rules ?? []).map((r) => (
+                      <li key={`${r.net_a}|${r.net_b}`}>
+                        {r.net_a} / {r.net_b}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {(g.id === "rules-erc" || g.id === "rules-drc") && (
+                  <span className="muted">
+                    {" "}
+                    {configured(c, g.id === "rules-erc" ? "ERC-" : "DRC-")}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <section aria-label="Board rules" id="rules-board">
           <h3>Board rules</h3>
           <div className="grid2">
             {field("min_track_width", "Min track width (mm)")}
@@ -130,7 +190,7 @@ export function RulesDialog({ snapshot, busy, apply, onClose }: Props) {
           </div>
           <button type="button" className="primary" disabled={busy} onClick={applyRules}>Apply board rules</button>
         </section>
-        <section aria-label="Net classes">
+        <section aria-label="Net classes" id="rules-classes">
           <h3>Net classes</h3>
           {classes.length > 0 && (
             <ul className="tree">
@@ -152,7 +212,7 @@ export function RulesDialog({ snapshot, busy, apply, onClose }: Props) {
           </div>
           <button type="button" className="primary" disabled={busy} onClick={applyClass}>Save net class</button>
         </section>
-        <section aria-label="Net declarations">
+        <section aria-label="Net declarations" id="rules-nets">
           <h3>Net current and voltage</h3>
           {nets.length === 0 ? (
             <p className="empty-state">No nets yet: connect pins or add net labels first.</p>
@@ -178,6 +238,10 @@ export function RulesDialog({ snapshot, busy, apply, onClose }: Props) {
             </>
           )}
         </section>
+        <NetPairs constraints={c} busy={busy} run={one} setError={setError} nets={nets} />
+        <ClearanceMatrix constraints={c} busy={busy} run={one} setError={setError} />
+        <RuleTable constraints={c} busy={busy} run={one} setError={setError} check="ERC" report={reports?.erc} onRun={onRun && (() => onRun("erc"))} />
+        <RuleTable constraints={c} busy={busy} run={one} setError={setError} check="DRC" report={reports?.drc} onRun={onRun && (() => onRun("drc"))} />
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
 // Design rules / net class dialog: each Apply is one typed engine command; bad input sends nothing.
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
-import { fixture } from "./fixture.test-data";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ercResult, fixture } from "./fixture.test-data";
+import { matrixCellRule, ruleCommands } from "./shell/ruleTables";
 import { netNames } from "./shell/panels";
 import { netDeclaration, RulesDialog } from "./shell/RulesDialog";
-import type { Command, Snapshot } from "./types";
+import type { Command, Report, Snapshot } from "./types";
 
 function withRules(): Snapshot {
   const s = fixture();
@@ -97,5 +98,98 @@ describe("design rules dialog", () => {
       },
     });
     expect(netDeclaration(undefined, "VIN", "x", "")).toHaveProperty("error");
+  });
+});
+
+// Phase 1 B5/C5 (ADR-0045): rule tree, clearance matrix, net-to-net clearance and the ERC / DRC
+// rule tables. Each Apply is one typed command (a Batch when several rows change).
+describe("rule tables", () => {
+  const erc: Report = {
+    ...ercResult(7).report,
+    rules: [
+      { id: "ERC-001", description: "Unconnected pin", parameters: "", source: "EAK" },
+      { id: "ERC-009", description: "Net note", parameters: "", source: "EAK" },
+    ],
+    rule_results: [
+      { rule_id: "ERC-001", state: "FAIL", reason: "" },
+      { rule_id: "ERC-009", state: "WARNING", reason: "" },
+    ],
+  };
+  const open = (reports?: { erc?: Report; drc?: Report }, onRun?: (c: "erc" | "drc") => void) => {
+    sent = [];
+    render(<RulesDialog snapshot={withRules()} busy={false} apply={async (c) => void sent.push(c)} onClose={() => {}} reports={reports} onRun={onRun} />);
+  };
+
+  it("lists the rule tree groups", () => {
+    open();
+    const tree = within(screen.getByRole("navigation", { name: "Rule tree" }));
+    for (const g of ["Board rules", "Net classes", "Net-to-net clearance", "Clearance matrix", "ERC rules", "DRC rules"]) expect(tree.getByRole("button", { name: g })).toBeTruthy();
+  });
+
+  it("applies changed clearance-matrix cells as SetClearanceCell (mm to nm, unordered pair)", () => {
+    open();
+    type("Track to Via clearance (mm)", "0.25");
+    fireEvent.click(screen.getByRole("button", { name: "Apply clearance matrix" }));
+    expect(sent).toEqual([[{ type: "SetClearanceCell", a: "track", b: "via", clearance: 250_000 }]]);
+  });
+
+  it("refuses a non-positive matrix value without sending anything", () => {
+    open();
+    type("Track to Track clearance (mm)", "-1");
+    fireEvent.click(screen.getByRole("button", { name: "Apply clearance matrix" }));
+    expect(sent).toHaveLength(0);
+    expect(screen.getByRole("alert").textContent).toContain("positive");
+  });
+
+  it("matrix cells no DRC rule checks are marked; checked ones name their rule", () => {
+    expect(matrixCellRule("via", "track")).toBe("DRC-002");
+    expect(matrixCellRule("hole", "th_pad")).toBe("DRC-018");
+    expect(matrixCellRule("silk", "outline")).toBe("DRC-020");
+    expect(matrixCellRule("zone", "track")).toBeNull();
+    open();
+    expect(screen.getByLabelText("Track to Zone clearance (mm)").getAttribute("title")).toContain("UNKNOWN");
+  });
+
+  it("applies a net-to-net clearance", () => {
+    open();
+    const nets = netNames(withRules());
+    fireEvent.change(screen.getByLabelText("First net"), { target: { value: nets[0] } });
+    fireEvent.change(screen.getByLabelText("Second net"), { target: { value: nets[1] } });
+    type("Net pair clearance (mm)", "0.5");
+    fireEvent.click(screen.getByRole("button", { name: "Apply net pair rule" }));
+    expect(sent).toEqual([[{ type: "SetNetPairClearance", net_a: nets[0], net_b: nets[1], clearance: 500_000 }]]);
+  });
+
+  it("the ERC rule table disables a rule and overrides another as one Batch", () => {
+    open({ erc });
+    const table = within(screen.getByRole("table", { name: "ERC rule table" }));
+    fireEvent.click(table.getByLabelText("Enable ERC-001"));
+    expect((table.getByLabelText("Severity of ERC-001") as HTMLSelectElement).disabled).toBe(true);
+    fireEvent.change(table.getByLabelText("Severity of ERC-009"), { target: { value: "info" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply ERC rule configuration" }));
+    expect(sent).toEqual([
+      [
+        {
+          type: "Batch",
+          label: "ERC rule configuration",
+          commands: [
+            { type: "SetRuleConfig", rule_id: "ERC-001", config: { enabled: false, severity: null } },
+            { type: "SetRuleConfig", rule_id: "ERC-009", config: { enabled: true, severity: "info" } },
+          ],
+        },
+      ],
+    ]);
+  });
+
+  it("restoring a rule to enabled at its default severity clears its configuration", () => {
+    expect(ruleCommands({ "ERC-001": { enabled: false } }, { "ERC-001": { enabled: true, severity: "" } })).toEqual([{ type: "SetRuleConfig", rule_id: "ERC-001", config: null }]);
+    expect(ruleCommands({ "ERC-001": { enabled: false } }, { "ERC-001": { enabled: false, severity: "" } })).toEqual([]);
+  });
+
+  it("without a report the DRC rule table offers to run DRC", () => {
+    const onRun = vi.fn();
+    open({}, onRun);
+    fireEvent.click(within(screen.getByRole("region", { name: "DRC rules" })).getByRole("button", { name: "Run DRC" }));
+    expect(onRun).toHaveBeenCalledWith("drc");
   });
 });

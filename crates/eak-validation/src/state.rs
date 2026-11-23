@@ -17,7 +17,7 @@ pub enum CheckState {
     Unknown,
     NotApplicable,
     RequiresHumanApproval,
-    /// Switched off in the project's rule configuration (ADR-0044, AD-8): not evaluated, never
+    /// Switched off in the project's rule configuration (ADR-0045, AD-8): not evaluated, never
     /// a pass. A report with a disabled rule is at best `DISABLED` overall.
     Disabled,
 }
@@ -61,7 +61,7 @@ pub struct RuleResult {
     #[serde(default)]
     pub reason: String,
     /// The severity the project's rule configuration gives this rule's findings, when it
-    /// overrides the default (ADR-0044). The findings carry it.
+    /// overrides the default (ADR-0045). The findings carry it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub severity_override: Option<crate::report::Severity>,
     /// The state the rule has at its default severities, when an override changed it. Gates

@@ -826,3 +826,13 @@ button.danger { color: var(--err); border-color: var(--err); }
 .sel-filter ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-half); }
 .sel-filter label { display: flex; gap: var(--s-1); align-items: center; }
 .sel-filter button { align-self: flex-start; }
+/* Design rules dialog (Phase 1 C5): rule tree, clearance matrix, rule tables */
+.rule-tree { font-size: var(--fs-sm); margin-bottom: var(--s-1); }
+.rule-tree ul ul { padding-left: var(--s-2); }
+.modal.rules table.matrix, .modal.rules table.rule-table { border-collapse: collapse; font-size: var(--fs-sm); margin: var(--s-half) 0 var(--s-1); }
+.modal.rules table.matrix th, .modal.rules table.rule-table th { text-align: left; font-weight: 500; color: var(--fg-dim); padding: 2px var(--s-half); }
+.modal.rules table.matrix td { padding: 1px; }
+.modal.rules table.matrix input { width: 5.5em; }
+.modal.rules table.matrix td.unchecked input { border-style: dashed; }
+.modal.rules table.rule-table td { padding: 2px var(--s-half); border-top: 1px solid var(--line); }
+.rule-disabled code { text-decoration: line-through; }

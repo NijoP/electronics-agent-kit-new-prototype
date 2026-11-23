@@ -1,6 +1,6 @@
 {
   "name": "C3 routing options",
-  "description": "Slice C3 (routing experience): with the Route tool active, the right dock's inspector shows the routing options: width presets from the net classes, the via preset, 45/90 corners with arc corners marked unavailable, the obstacle mode (walk around, push or block), loop removal, the ratsnest toggle and the live net-length readout.",
+  "description": "Slice C3 (routing experience) and ADR-0044 (saved routing options): the fixture board carries saved routing options (SetRoutingOptions as SETUP) and the Route tool opens with them selected. with the Route tool active, the right dock's inspector shows the routing options: width presets from the net classes, the via preset, 45/90 corners with arc corners marked unavailable, the obstacle mode (walk around, push or block), loop removal, the ratsnest toggle and the live net-length readout.",
   "steps": [
     {
       "id": "home",
@@ -15,6 +15,13 @@
       "title": "Create fixture project",
       "name": "C3 Routing Fixture",
       "folder": "c3-routing-fixture"
+    },
+    {
+      "id": "v5-saved-options",
+      "do": "fixture-command",
+      "title": "Fixture: routing options saved with the board (SetRoutingOptions, schema v5, ADR-0044)",
+      "shot": false,
+      "command": { "type": "SetRoutingOptions", "options": { "bend": "orthogonal90", "conflict": "push", "width": 400000, "via": null, "remove_loops": false } }
     },
     {
       "id": "open",
@@ -68,6 +75,29 @@
       "do": "count",
       "title": "C3: push (shove tracks) is offered as an obstacle mode",
       "selector": "section[aria-label=\"Properties\"] select[aria-label=\"Obstacle mode\"] option[value=\"push\"]",
+      "equals": 1,
+      "shot": false
+    },
+    {
+      "id": "v5-saved-obstacle",
+      "do": "count",
+      "title": "ADR-0044: the Route tool opens with the board's saved obstacle mode (push) selected",
+      "selector": "section[aria-label=\"Properties\"] select[aria-label=\"Obstacle mode\"] option[value=\"push\"]:checked",
+      "equals": 1
+    },
+    {
+      "id": "v5-saved-corners",
+      "do": "count",
+      "title": "ADR-0044: saved 90-degree corners are selected",
+      "selector": "section[aria-label=\"Properties\"] select[aria-label=\"Bend mode\"] option[value=\"orthogonal90\"]:checked",
+      "equals": 1,
+      "shot": false
+    },
+    {
+      "id": "v5-saved-loops",
+      "do": "count",
+      "title": "ADR-0044: saved loop removal (off) is selected",
+      "selector": "section[aria-label=\"Properties\"] select[aria-label=\"Remove loops\"] option[value=\"off\"]:checked",
       "equals": 1,
       "shot": false
     },

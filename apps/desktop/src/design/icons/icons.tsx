@@ -36,6 +36,7 @@ export const ICONS = {
   part: <><rect x="6" y="4" width="8" height="12" rx="1" /><path d="M6 7.5H3M6 12.5H3M14 7.5h3M14 12.5h3" />{dot(8.5, 6.5, 0.8)}</>,
   wire: <><path d="M4.2 15H8V5h7.8" /><circle cx="3" cy="15" r="1.2" /><circle cx="17" cy="5" r="1.2" /></>,
   bus: <><path d="M2.5 8h15M2.5 12h15" /><path d="M6 5.5v9M14 5.5v9" /></>,
+  "bus-entry": <><path d="M2.5 5.5h15" /><path d="M7 5.5l4 4v8" /></>,
   "net-label": <><path d="M2.5 7h9.5l4 3-4 3H2.5z" /><path d="M5.5 10h3.5" /></>,
   "net-port": <><path d="M2.5 10h4" /><path d="M6.5 6.5h7l4 3.5-4 3.5h-7z" /></>,
   "off-page": <><path d="M2.5 6.5h8l3 3.5-3 3.5h-8z" /><path d="M13.5 10h4M15.5 8l2 2-2 2" /></>,

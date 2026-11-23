@@ -136,6 +136,19 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                 &["component_id", "footprint", "pin_map"],
             ),
         ),
+        SetPadExpansion { .. } => (
+            D::Library,
+            "Set one pad's solder-mask and paste (stencil) expansion in a project library footprint, per side in nm (negative shrinks the opening). Null clears it: the mask then uses the board-wide manufacturing mask expansion and the paste aperture equals the pad. Paste applies to SMD pads only; at most 1 mm either way. Allowed while the part is placed on the PCB.",
+            obj(
+                &[
+                    ("component_id", id("project library component id")),
+                    ("pad", string("pad number")),
+                    ("mask_expansion", nullable(nm("solder-mask expansion per side; null = board default"))),
+                    ("paste_expansion", nullable(nm("paste expansion per side; null = none (aperture = pad)"))),
+                ],
+                &["component_id", "pad"],
+            ),
+        ),
         AddSheet { .. } => (
             D::Schematic,
             "Add a schematic sheet.",
@@ -777,6 +790,11 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Set the manufacturing configuration.",
             obj(&[("config", manufacturing())], &["config"]),
         ),
+        SetRoutingOptions { .. } => (
+            D::Pcb,
+            "Save the interactive route tool's options with the board: corners, obstacle mode, track width and via for new routes (null = net class) and loop removal. Changes no copper.",
+            obj(&[("options", routing_options())], &["options"]),
+        ),
         Batch { .. } => (
             D::Mixed,
             "Apply several EAK commands in order as ONE atomic edit: all succeed or nothing changes; one revision and one undo step. Each step is {\"type\": <command tool name>, ...that tool's arguments}. Batches do not nest; at most 1000 steps; the batch needs approval for its riskiest step.",
@@ -821,6 +839,12 @@ pub fn command_samples() -> Vec<Command> {
             component_id: "c".into(),
             footprint: def.footprint.clone(),
             pin_map: def.pin_map.clone(),
+        },
+        SetPadExpansion {
+            component_id: "c".into(),
+            pad: "1".into(),
+            mask_expansion: Some(-20_000),
+            paste_expansion: None,
         },
         UpsertComponentDefinition {
             definition: Box::new(def),
@@ -1173,6 +1197,18 @@ pub fn command_samples() -> Vec<Command> {
         SetManufacturing {
             config: ManufacturingConfig::default(),
         },
+        SetRoutingOptions {
+            options: RoutingOptions {
+                bend: BendMode::Orthogonal90,
+                conflict: ConflictMode::Push,
+                width: Some(300_000),
+                via: Some(ViaSize {
+                    drill: 300_000,
+                    diameter: 600_000,
+                }),
+                remove_loops: false,
+            },
+        },
         Batch {
             commands: vec![
                 MoveSymbol {
@@ -1255,11 +1291,11 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 80 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
+        // 85 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
         // schematic commands of ADR-0040, the 16 PCB commands of ADR-0042 (15 schema-v4 edits plus
-        // SyncSchematicToPcbSelected) and the 3 sheet commands of ADR-0043); keep in step with
-        // REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 80);
+        // SyncSchematicToPcbSelected), the 3 sheet commands of ADR-0043 and the 2 schema-v5
+        // commands of ADR-0044 and the 3 schema-v6 rule commands of ADR-0045); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
+        assert_eq!(tools.len(), 85);
         for t in &tools {
             assert!(t
                 .spec

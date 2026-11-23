@@ -10,7 +10,7 @@
 // (`Graphic`, pin length/orientation/visibility).
 import { boxOfPts, inPoly, segDist } from "../render/geometry";
 import type { Box, DrawOp, Pt, RenderLayer, RenderObject, Scene } from "../render/types";
-import type { ComponentDef, FootprintDef, Graphic, PadDef, Point, SymbolDef, SymbolPin } from "../types";
+import type { Command, ComponentDef, FootprintDef, Graphic, PadDef, Point, SymbolDef, SymbolPin } from "../types";
 
 export const NM_PER_MM = 1_000_000;
 export const toMm = (nm: number) => nm / NM_PER_MM;
@@ -64,7 +64,17 @@ export function normGraphic(g: Graphic): Graphic {
   }
 }
 export const normSymbol = (s: SymbolDef): SymbolDef => ({ pins: s.pins.map(normPin), body_half_w: s.body_half_w, body_half_h: s.body_half_h, graphics: (s.graphics ?? []).map(normGraphic) });
-export const normPad = (p: PadDef): PadDef => ({ number: p.number, kind: p.kind, shape: p.shape, position: { ...p.position }, size_x: p.size_x, size_y: p.size_y, drill: p.kind === "tht" ? (p.drill ?? null) : null });
+export const normPad = (p: PadDef): PadDef => ({
+  number: p.number,
+  kind: p.kind,
+  shape: p.shape,
+  position: { ...p.position },
+  size_x: p.size_x,
+  size_y: p.size_y,
+  drill: p.kind === "tht" ? (p.drill ?? null) : null,
+  mask_expansion: p.mask_expansion ?? null,
+  paste_expansion: p.kind === "smd" ? (p.paste_expansion ?? null) : null,
+});
 export const normFootprint = (f: FootprintDef): FootprintDef => ({ name: f.name, pads: f.pads.map(normPad), courtyard_half_w: f.courtyard_half_w, courtyard_half_h: f.courtyard_half_h, body_height: f.body_height ?? null });
 const normMap = (m: Record<string, string[]>) =>
   Object.fromEntries(
@@ -84,6 +94,32 @@ export function editedSlice(kind: PartEditorKind, d: ComponentDef): unknown {
     : { footprint: n.footprint, pin_map: n.pin_map };
 }
 export const sameSlice = (kind: PartEditorKind, a: ComponentDef, b: ComponentDef) => JSON.stringify(editedSlice(kind, a)) === JSON.stringify(editedSlice(kind, b));
+
+/** Largest per-pad mask or paste expansion either way, as the engine checks it (1 mm). */
+export const MAX_PAD_EXPANSION = 1_000_000;
+
+/** The definition with every pad's own mask and paste expansion cleared. */
+const withoutExpansion = (d: ComponentDef): ComponentDef => {
+  const n = normDef(d);
+  return { ...n, footprint: { ...n.footprint, pads: n.footprint.pads.map((p) => ({ ...p, mask_expansion: null, paste_expansion: null })) } };
+};
+
+/**
+ * The pads whose mask or paste expansion the footprint draft changes, when that is all it changes;
+ * null when the draft changes anything else (or nothing). Such a draft saves as per-pad
+ * `SetPadExpansion` commands, which the engine takes while the part is placed on the PCB (openings
+ * change, copper does not), instead of `AssignComponentFootprint`, which it refuses then.
+ */
+export function expansionOnlyChanges(engine: ComponentDef, draft: ComponentDef): PadDef[] | null {
+  if (!sameSlice("footprint", withoutExpansion(engine), withoutExpansion(draft))) return null;
+  const before = normDef(engine).footprint.pads;
+  const changed = normDef(draft).footprint.pads.filter((p, i) => p.mask_expansion !== before[i].mask_expansion || p.paste_expansion !== before[i].paste_expansion);
+  return changed.length ? changed : null;
+}
+
+/** One `SetPadExpansion` per changed pad (null clears back to the board default / no paste change). */
+export const expansionCommands = (componentId: string, pads: PadDef[]): Command[] =>
+  pads.map((p) => ({ type: "SetPadExpansion", component_id: componentId, pad: p.number, mask_expansion: p.mask_expansion ?? null, paste_expansion: p.paste_expansion ?? null }));
 /**
  * The engine's definition with the draft's own slice kept: the fields the other editor owns (the
  * footprint for the symbol editor, the symbol for the footprint editor) follow the engine, so the
@@ -334,6 +370,15 @@ export function draftProblems(d: ComponentDef): string[] {
     if (p.size_x <= 0 || p.size_y <= 0) out.push(`Pad ${p.number} needs a positive size.`);
     if (p.kind === "tht" && !p.drill) out.push(`Through-hole pad ${p.number} needs a drill.`);
     if (p.kind === "tht" && p.drill && p.drill >= Math.min(p.size_x, p.size_y)) out.push(`Pad ${p.number}: the drill leaves no annular ring.`);
+    for (const [what, e] of [
+      ["mask", p.mask_expansion],
+      ["paste", p.paste_expansion],
+    ] as const) {
+      if (e === null || e === undefined) continue;
+      if (Math.abs(e) > MAX_PAD_EXPANSION) out.push(`Pad ${p.number}: the ${what} expansion is beyond the 1 mm limit.`);
+      else if (Math.min(p.size_x, p.size_y) + 2 * e <= 0) out.push(`Pad ${p.number}: the ${what} expansion closes the opening.`);
+    }
+    if (p.kind === "tht" && p.paste_expansion != null) out.push(`Pad ${p.number}: paste expansion applies to SMD pads only.`);
   }
   if (d.footprint.courtyard_half_w <= 0 || d.footprint.courtyard_half_h <= 0) out.push("The courtyard needs a positive size.");
   if (!d.name.trim()) out.push("The part needs a name.");

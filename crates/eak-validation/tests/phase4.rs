@@ -87,7 +87,7 @@ fn erc_pin_conflict_matrix() {
     assert!(erc::pin_conflict(PinType::Passive, PinType::PowerOut).is_none());
 }
 
-/// Phase 1 B5 (ADR-0044): every EasyEDA Pro matrix cell that maps onto EAK pin types, with its
+/// Phase 1 B5 (ADR-0045): every EasyEDA Pro matrix cell that maps onto EAK pin types, with its
 /// EasyEDA severity; every other pairing is compatible ("ignore") or reported by another rule.
 #[test]
 fn erc_pin_conflict_matrix_follows_easyeda() {

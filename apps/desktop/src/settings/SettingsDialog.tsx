@@ -8,9 +8,11 @@ import type { Action, DocContext } from "../actions/types";
 import { formatShortcut } from "../design/shortcuts";
 import { GRID_KINDS, GridControls, updateGrid, type GridKind } from "../grid";
 import { CANVAS_OBJECTS, COLOUR_PRESETS, overrideOf, resetColour, resetColours, setColour, setColourPreset, useColours, type ColourPreset } from "./canvasColours";
+import { POWER_STYLES, powerPortProblem, resetPowerPorts, setPowerPorts, usePowerPorts } from "./powerPorts";
+import type { PowerStyle } from "../types";
 import { bind, clearAction, effectiveKeys, normalize, PRESETS, presetKeys, resetAction, resetAll, setPreset, specOf, useKeymap, type PresetId } from "./keymap";
 
-type Page = "keys" | "colours" | "theme" | "grid-schematic" | "grid-pcb" | "model";
+type Page = "keys" | "colours" | "theme" | "grid-schematic" | "grid-pcb" | "power" | "model";
 interface Node {
   id: Page;
   group: string;
@@ -24,6 +26,7 @@ const TREE: readonly Node[] = [
   { id: "colours", group: "Appearance", label: "Canvas colours", words: "colour color paper print wire sheet board pad via" },
   { id: "grid-schematic", group: "Editors", label: "Schematic grid", words: "grid snap unit mm mil inch spacing default" },
   { id: "grid-pcb", group: "Editors", label: "PCB grid", words: "grid snap unit mm mil inch spacing default" },
+  { id: "power", group: "Editors", label: "Power ports", words: "power port gnd ground rail vcc agnd analog chassis net flag schematic" },
   { id: "model", group: "Assistant", label: "Model provider", words: "ai model provider api" },
 ];
 
@@ -106,6 +109,7 @@ export function SettingsDialog({ actions, theme, onTheme, onModel, onClose }: Se
             )}
             {shown === "colours" && <Colours />}
             {(shown === "grid-schematic" || shown === "grid-pcb") && <GridPage kind={shown === "grid-pcb" ? "pcb" : "schematic"} />}
+            {shown === "power" && <PowerPortsPage />}
             {shown === "model" && (
               <>
                 <h3>Model provider</h3>
@@ -320,6 +324,59 @@ function GridPage({ kind }: { kind: GridKind }) {
       <GridControls kind={kind} />
       <div>
         <button type="button" onClick={() => updateGrid(kind, GRID_KINDS[kind].defaults)}>Restore EAK defaults</button>
+      </div>
+    </>
+  );
+}
+
+/** Settings › Power ports: the entries of the schematic Power port split button (slice B4). */
+function PowerPortsPage() {
+  const list = usePowerPorts();
+  const edit = (i: number, patch: Partial<{ name: string; style: PowerStyle }>) => setPowerPorts(list.map((p, k) => (k === i ? { ...p, ...patch } : p)));
+  return (
+    <>
+      <h3>Power ports</h3>
+      <p className="muted hint">
+        Each entry is one item of the schematic toolbar&apos;s Power port button and of the Place menu. Placing it adds a power port
+        (AddNetLabel, kind power) with this net name, drawn with the chosen symbol. Analog ground uses the ground symbol: the EAK-IR has
+        ground, supply rail and chassis styles.
+      </p>
+      <table className="settings-table" aria-label="Power ports">
+        <thead>
+          <tr>
+            <th>Net name</th>
+            <th>Symbol</th>
+            <th>Remove</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((p, i) => {
+            const bad = powerPortProblem(p);
+            return (
+              <tr key={i}>
+                <td>
+                  <input aria-label={`Power port ${i + 1} net name`} value={p.name} aria-invalid={bad ? true : undefined} title={bad ?? undefined} onChange={(e) => edit(i, { name: e.target.value })} />
+                </td>
+                <td>
+                  <select aria-label={`Power port ${i + 1} symbol`} value={p.style} onChange={(e) => edit(i, { style: e.target.value as PowerStyle })}>
+                    {POWER_STYLES.map((s) => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <button type="button" aria-label={`Remove power port ${i + 1}`} onClick={() => setPowerPorts(list.filter((_, k) => k !== i))}>
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="settings-row">
+        <button type="button" onClick={() => setPowerPorts([...list, { name: "VCC", style: "rail" }])}>Add power port</button>
+        <button type="button" onClick={resetPowerPorts}>Restore EAK defaults</button>
       </div>
     </>
   );

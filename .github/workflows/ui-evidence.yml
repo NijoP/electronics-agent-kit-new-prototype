@@ -217,6 +217,17 @@ jobs:
           UI_SCENARIO: scenarios/c1-layers.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # B4 (place tools): wire corner modes and guides, power port, off-page connector, bus, bus
+      # entry, sheet text and rectangle, fan-out, Settings > Power ports.
+      - name: Run B4 place tools scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/b4
+          UI_SCENARIO: scenarios/b4-place.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # B5 (findings panel): severity chips, object references and CSV/JSON export of the ERC report.
       - name: Run B5 findings scenario under Xvfb
         if: always()
@@ -233,7 +244,7 @@ jobs:
         if: always()
         run: |
           missing=0
-          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b6 c6 c4 c1 b5; do
+          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b6 c6 c4 c1 b4 b5; do
             f="${{ runner.temp }}/ui-evidence/${d:+$d/}UI_EVIDENCE.md"
             if [ -f "$f" ]; then
               cat "$f" >> "$GITHUB_STEP_SUMMARY"
@@ -278,6 +289,10 @@ jobs:
             ${{ runner.temp }}/ui-evidence/d2/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b3/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/b3/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/b4/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/b4/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/b5/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/b5/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/b6/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/b6/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/c6/screenshots/*.png
@@ -286,6 +301,4 @@ jobs:
             ${{ runner.temp }}/ui-evidence/c4/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/c1/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/c1/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/b5/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/b5/UI_EVIDENCE.md
           if-no-files-found: warn

@@ -8,7 +8,7 @@ use eak_core::geom::{
     point_in_polygon, point_segment_distance, polygon_self_intersects, segment_segment_distance,
     to_mm,
 };
-use eak_core::{CopperLayer, Nm, PadKind, Point, Project, Rect, RegionObject, Side};
+use eak_core::{Nm, ObjectClass, PadKind, Point, Project, Rect, RegionObject, Side};
 use eak_engineering::copper::{self, distance, Core, ItemKind};
 use eak_engineering::ipc::{self, ClearanceCondition};
 use eak_engineering::{netlist, silk};
@@ -259,10 +259,18 @@ pub fn run(p: &Project) -> Report {
     // Copper items and pairwise clearance (DRC-002) — sweep on x for efficiency.
     let items = copper::items(p);
     let boxes: Vec<Rect> = items.iter().map(|i| i.shape.bbox()).collect();
+    let classes: Vec<ObjectClass> = items.iter().map(|i| holes::object_class(p, i)).collect();
     let max_req = {
         let mut m = c.min_clearance.max(c.default_class.clearance);
         for nc in &c.net_classes {
             m = m.max(nc.clearance);
+        }
+        // Clearance-matrix cells and net-pair rules (Phase 1 C5, ADR-0045).
+        for cell in &c.clearance_matrix {
+            m = m.max(cell.clearance);
+        }
+        for r in &c.net_pair_rules {
+            m = m.max(r.clearance);
         }
         let vmax = c
             .net_voltages_v
@@ -293,21 +301,31 @@ pub fn run(p: &Project) -> Report {
                 .max(c.class_for(&a.net).clearance)
                 .max(c.class_for(&b.net).clearance) as f64;
             let mut basis = "net class".to_string();
-            if let (Some(va), Some(vb)) =
-                (c.net_voltages_v.get(&a.net), c.net_voltages_v.get(&b.net))
+            // The same rule the interactive router keeps (ADR-0044).
+            if let Some((v_req, cond, dv)) =
+                eak_engineering::clearance::voltage_clearance(c, &a.net, &b.net, a.layer)
             {
-                let cond = if a.layer == CopperLayer::Top || a.layer == CopperLayer::Bottom {
-                    ClearanceCondition::B2
-                } else {
-                    ClearanceCondition::B1
-                };
-                let v_req = ipc::clearance_mm((va - vb).abs(), cond) * 1e6;
                 if v_req > req {
                     req = v_req;
+                    basis = format!("IPC-2221B {cond:?} for {dv:.0} V (unverified table)");
+                }
+            }
+            // Phase 1 C5 (ADR-0045): the clearance-matrix cell of the two object classes and
+            // the net-pair rule of the two nets raise the requirement; the largest rule wins.
+            if let Some(m) = c.matrix_cell(classes[i], classes[j]) {
+                if m as f64 > req {
+                    req = m as f64;
                     basis = format!(
-                        "IPC-2221B {cond:?} for {:.0} V (unverified table)",
-                        (va - vb).abs()
+                        "clearance matrix {} / {}",
+                        classes[i].label(),
+                        classes[j].label()
                     );
+                }
+            }
+            if let Some(m) = c.net_pair_clearance(&a.net, &b.net) {
+                if m as f64 > req {
+                    req = m as f64;
+                    basis = format!("net pair rule {} / {}", a.net, b.net);
                 }
             }
             let d = distance(&a.shape, &b.shape);
@@ -370,7 +388,12 @@ pub fn run(p: &Project) -> Report {
     if has_outline {
         let edge = c.board_edge_clearance as f64;
         let mut seen = BTreeSet::new();
-        for it in &items {
+        for (it, class) in items.iter().zip(&classes) {
+            // The clearance-matrix cell between this item's class and the outline raises the
+            // edge clearance for it (Phase 1 C5, ADR-0045).
+            let edge = c
+                .matrix_cell(*class, ObjectClass::Outline)
+                .map_or(edge, |m| edge.max(m as f64));
             let pts: Vec<_> = match &it.shape.core {
                 Core::Segment(a, b) => vec![*a, *b],
                 Core::Polygon(poly) => poly.clone(),
@@ -891,17 +914,20 @@ pub fn run(p: &Project) -> Report {
 
     // DRC-018 / DRC-019 / DRC-020: holes and silkscreen-to-edge.
     f.extend(holes::copper_to_hole(p, c.min_clearance));
-    f.extend(holes::hole_to_hole(
-        p,
-        HOLE_TO_HOLE_MIN,
-        "DRC-019",
-        "EAK default",
-    ));
-    f.extend(holes::silk_to_edge(p, SILK_TO_EDGE_MIN));
+    // The hole/hole and silk/outline matrix cells raise these minimums (Phase 1 C5, ADR-0045).
+    let (hole_min, hole_basis) = match c.matrix_cell(ObjectClass::Hole, ObjectClass::Hole) {
+        Some(m) if m > HOLE_TO_HOLE_MIN => (m, "clearance matrix hole / hole"),
+        _ => (HOLE_TO_HOLE_MIN, "EAK default"),
+    };
+    f.extend(holes::hole_to_hole(p, hole_min, "DRC-019", hole_basis));
+    let silk_min = c
+        .matrix_cell(ObjectClass::Silk, ObjectClass::Outline)
+        .map_or(SILK_TO_EDGE_MIN, |m| m.max(SILK_TO_EDGE_MIN));
+    f.extend(holes::silk_to_edge(p, silk_min));
 
     let rules = vec![
         rule("DRC-001", "Minimum / net-class track width", format!("min {}", mm(c.min_track_width as f64)), "Project constraints"),
-        rule("DRC-002", "Copper clearance", format!("min {}, net classes, declared net voltages", mm(c.min_clearance as f64)), "Project constraints; IPC-2221B Table 6-1 B2 for declared voltages (table unverified against standard text)"),
+        rule("DRC-002", "Copper clearance", format!("min {}, net classes, declared net voltages, clearance-matrix cells, net-pair rules", mm(c.min_clearance as f64)), "Project constraints; IPC-2221B Table 6-1 B2 for declared voltages (table unverified against standard text)"),
         rule("DRC-003", "Shorts between nets", "", "EAK"),
         rule("DRC-004", "Unrouted connections", "physical copper connectivity incl. zone fill islands (0.1 mm raster)", "EAK"),
         rule("DRC-005", "Board edge clearance", format!("{} from the outline (arc edges flattened, chord error ≤ 10 µm) and from every board cut-out", mm(c.board_edge_clearance as f64)), "Project constraints"),
@@ -933,6 +959,10 @@ pub fn run(p: &Project) -> Report {
         "Silkscreen overlap/legibility, solder-mask sliver and paste checks".into(),
         "Acid traps and copper slivers".into(),
         "Region clearance rules, keep-outs on silkscreen or mask layers, and priority between overlapping regions".into(),
+        format!(
+            "Clearance-matrix cells not enforced by this build: {}",
+            unenforced_cells().join(", ")
+        ),
     ];
     let mut limitations: Vec<String> = vec![
         "Zone fill connectivity is evaluated on a 0.1 mm raster; necks narrower than the raster may be misjudged".into(),
@@ -941,6 +971,7 @@ pub fn run(p: &Project) -> Report {
         "Pad shapes: rectangle, circle, oval (no rounded-rectangle or custom polygons)".into(),
         "Arc tracks and arc board edges are checked as chords with at most 10 µm error; the autorouter and auto-placer do not avoid keep-out regions (DRC-021 reports what they put there)".into(),
         "Text and dimensions on the documentation layer are not fabricated and not checked; silk text is not checked against other silk or the courtyards".into(),
+        "Clearance-matrix cells are checked by DRC only: the interactive router keeps net classes, declared voltages and net-pair rules but not the matrix, and the autorouter keeps neither the matrix nor net-pair rules (ADR-0045)".into(),
     ];
     limitations.extend(undeclared_nets_not_evaluated(p));
     let (no_current, no_voltage) = undeclared_nets(p);
@@ -960,7 +991,59 @@ pub fn run(p: &Project) -> Report {
         );
         report = report.degrade("DRC-002", CheckState::Unknown, &why);
     }
+    // A configured clearance-matrix cell no rule enforces is reported, never assumed met.
+    let unchecked: Vec<String> = c
+        .clearance_matrix
+        .iter()
+        .filter(|cell| matrix_cell_rule(cell.a, cell.b).is_none())
+        .map(|cell| {
+            format!(
+                "{} / {} ({})",
+                cell.a.label(),
+                cell.b.label(),
+                mm(cell.clearance as f64)
+            )
+        })
+        .collect();
+    if !unchecked.is_empty() {
+        let why = format!(
+            "configured clearance-matrix cells this build does not check: {}",
+            unchecked.join(", ")
+        );
+        report = report.degrade("DRC-002", CheckState::Unknown, &why);
+    }
     report
+}
+
+/// The rule that enforces a clearance-matrix cell, `None` when no rule does (Phase 1 C5,
+/// ADR-0045). Copper pairs are DRC-002 (between different nets), copper to holes DRC-018, holes
+/// to holes DRC-019, copper to the outline DRC-005 and silkscreen to the outline DRC-020.
+pub fn matrix_cell_rule(a: ObjectClass, b: ObjectClass) -> Option<&'static str> {
+    use ObjectClass::*;
+    let (a, b) = if a <= b { (a, b) } else { (b, a) };
+    let copper = |k: ObjectClass| matches!(k, Track | SmdPad | ThPad | Via);
+    match (a, b) {
+        (x, y) if copper(x) && copper(y) => Some("DRC-002"),
+        (x, Hole) if copper(x) => Some("DRC-018"),
+        (Hole, Hole) => Some("DRC-019"),
+        (x, Outline) if copper(x) => Some("DRC-005"),
+        (Outline, Silk) => Some("DRC-020"),
+        _ => None,
+    }
+}
+
+/// Every unordered class pair no rule enforces, as `a / b` labels.
+pub fn unenforced_cells() -> Vec<String> {
+    let all = ObjectClass::ALL;
+    let mut out = vec![];
+    for (i, a) in all.iter().enumerate() {
+        for b in &all[i..] {
+            if matrix_cell_rule(*a, *b).is_none() {
+                out.push(format!("{} / {}", a.label(), b.label()));
+            }
+        }
+    }
+    out
 }
 
 /// Copper nets with no declared current, and with no declared voltage.
@@ -1204,7 +1287,7 @@ pub fn silk_over_openings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eak_core::{FootprintInstance, Point, Rotation, Zone};
+    use eak_core::{CopperLayer, FootprintInstance, Point, Rotation, Zone};
     use eak_engineering::copper::pad_shape;
 
     /// 20 × 20 mm board, one single-pad THT footprint "J1" on GND at (10, 10) and a bottom

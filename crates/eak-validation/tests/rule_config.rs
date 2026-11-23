@@ -1,4 +1,4 @@
-//! ADR-0044 (AD-8, Phase 1 B5/C5): per-rule enable and severity override in the IR
+//! ADR-0045 (AD-8, Phase 1 B5/C5): per-rule enable and severity override in the IR
 //! constraints. A disabled rule is reported as `DISABLED`, never as passing; an override
 //! changes the findings' severity and is stated in the report, never the verdict of the gates.
 

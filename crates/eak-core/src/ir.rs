@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 6;
 
 pub type Id = String;
 
@@ -845,6 +845,91 @@ pub struct Pcb {
     /// Holes milled through the board (schema v4).
     #[serde(default)]
     pub cutouts: BTreeMap<Id, crate::pcb_objects::Cutout>,
+    /// Interactive-router options saved with the board (schema v5, ADR-0044).
+    #[serde(default)]
+    pub routing: RoutingOptions,
+}
+
+/// Corner style of an interactively routed path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BendMode {
+    /// Horizontal, vertical and 45-degree segments.
+    #[default]
+    Diagonal45,
+    /// Horizontal and vertical segments only.
+    Orthogonal90,
+}
+
+/// How the interactive router treats other-net copper in the way of the direct path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictMode {
+    /// Go around obstacles (local A* walkaround), else stop before them.
+    #[default]
+    Walkaround,
+    /// Stop before the first obstacle (no walkaround).
+    Block,
+    /// Push (shove) other-net tracks out of the direct path, keeping their ends and every
+    /// clearance; when that is not possible, walk around as in `Walkaround`.
+    Push,
+}
+
+/// A via size chosen for a layer switch (a preset or the net class).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViaSize {
+    pub drill: Nm,
+    pub diameter: Nm,
+}
+
+/// The route tool's options as the user last set them (schema v5, ADR-0044). They change
+/// only through `SetRoutingOptions`; the router itself takes them per request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutingOptions {
+    #[serde(default)]
+    pub bend: BendMode,
+    #[serde(default)]
+    pub conflict: ConflictMode,
+    /// Track width for new routes; `None` uses the net-class width.
+    #[serde(default)]
+    pub width: Option<Nm>,
+    /// Via for layer switches; `None` uses the net-class via.
+    #[serde(default)]
+    pub via: Option<ViaSize>,
+    /// Delete the redundant track chain a finished route makes into a loop.
+    #[serde(default = "yes")]
+    pub remove_loops: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+impl Default for RoutingOptions {
+    fn default() -> Self {
+        RoutingOptions {
+            bend: BendMode::default(),
+            conflict: ConflictMode::default(),
+            width: None,
+            via: None,
+            remove_loops: true,
+        }
+    }
+}
+
+impl RoutingOptions {
+    /// Why these options cannot be saved, if they are invalid.
+    pub fn problem(&self) -> Option<String> {
+        if self.width.is_some_and(|w| w <= 0) {
+            return Some("route width must be positive".into());
+        }
+        if let Some(v) = self.via {
+            if v.drill <= 0 || v.diameter <= v.drill {
+                return Some("the via diameter must be larger than its positive drill".into());
+            }
+        }
+        None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -879,15 +964,15 @@ pub struct Constraints {
     /// Maximum component height above board (enclosure constraint), if any.
     #[serde(default)]
     pub max_component_height: Option<Nm>,
-    /// Per-rule enable flag and severity override, by rule id (schema v5, ADR-0044 / AD-8).
+    /// Per-rule enable flag and severity override, by rule id (schema v6, ADR-0045 / AD-8).
     /// A rule without an entry runs with its default severity.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub rules: BTreeMap<String, RuleConfig>,
-    /// Object-class x object-class minimum clearances (schema v5, Phase 1 C5). One entry per
+    /// Object-class x object-class minimum clearances (schema v6, Phase 1 C5). One entry per
     /// unordered pair; DRC applies the larger of a cell and the other clearance rules.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clearance_matrix: Vec<ClearanceCell>,
-    /// Minimum clearance between two named nets (schema v5, Phase 1 C5).
+    /// Minimum clearance between two named nets (schema v6, Phase 1 C5).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub net_pair_rules: Vec<NetPairRule>,
 }

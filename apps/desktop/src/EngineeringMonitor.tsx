@@ -3,7 +3,7 @@
 // Phase 1 B5: severity filter chips with counts, export of the engine's report (CSV/JSON) and
 // clickable object references on every finding.
 import { useState } from "react";
-import type { Check, CheckResult, Finding, Id, Severity, Snapshot } from "./types";
+import type { Check, CheckResult, Finding, Id, RuleResult, Severity, Snapshot } from "./types";
 
 export type FindingsFormat = "csv" | "json";
 
@@ -41,6 +41,9 @@ export function severityCounts(findings: Finding[]): Record<Severity, number> {
  * still in the current revision. Ids the snapshot does not hold (a net name, an object deleted
  * since the report ran) are shown as they are and cannot be navigated to.
  */
+/** A rule result the panel lists: not passing, or configured (disabled or overridden; ADR-0045). */
+export const notPlain = (x: RuleResult) => (x.state !== "PASS" && x.state !== "NOT_APPLICABLE") || !!x.severity_override;
+
 export function objectRef(s: Snapshot, id: Id): { label: string; present: boolean } {
   const { schematic: sch, pcb } = s.project;
   const sym = sch.symbols[id];
@@ -146,14 +149,21 @@ function ReportSection({
       <p>
         State: <span className={`tag ${r.overall === "PASS" ? "" : "warn"}`}>{stale ? "UNKNOWN (stale)" : (r.overall ?? "UNKNOWN")}</span>
       </p>
-      {(r.rule_results ?? []).some((x) => x.state !== "PASS" && x.state !== "NOT_APPLICABLE") && (
+      {(r.rule_results ?? []).some(notPlain) && (
         <ul aria-label={`${title} rules not passing`}>
           {(r.rule_results ?? [])
-            .filter((x) => x.state !== "PASS" && x.state !== "NOT_APPLICABLE")
+            .filter(notPlain)
             .map((x) => (
-              <li key={x.rule_id}>
+              <li key={x.rule_id} className={x.state === "DISABLED" ? "rule-disabled" : undefined}>
                 <code>{x.rule_id}</code> {x.state}
                 {x.reason && <span className="muted"> · {x.reason}</span>}
+                {x.severity_override && (
+                  <span className="muted">
+                    {" "}
+                    · severity overridden to {x.severity_override} by the project's rules
+                    {x.default_state ? ` ( at its default severity)` : ""}
+                  </span>
+                )}
               </li>
             ))}
         </ul>
