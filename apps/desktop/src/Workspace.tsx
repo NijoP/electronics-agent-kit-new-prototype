@@ -609,6 +609,34 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     // The findings stay in view in the workspace the finding opened.
     setBottomTab("findings", kind);
   };
+  // One object a finding names (B5 object references): DRC/DFM objects are highlighted and
+  // zoomed to on the PCB like the finding itself; ERC objects are selected (symbols) and zoomed
+  // to in the schematic sheet they are on.
+  const navigateObject = (f: Finding, checkName: Check, id: Id) => {
+    if (checkName !== "erc") return navigateFinding({ ...f, objects: [id], location: null }, checkName);
+    const sch = snapshot.project.schematic;
+    const t: Target = sch.symbols[id] ? { kind: "component", symbolId: id } : { kind: "object", obj: sch.labels[id] ? "label" : "wire", id };
+    if (t.kind === "component") setSelected(id);
+    setActiveFinding(findingKey(f));
+    setFocus(null);
+    const place = schematicPlace(snapshot, t, null);
+    if (!place) {
+      setMessage(`${id} has no position to zoom to in the schematic`);
+      return;
+    }
+    const docId = `sch:${place.sheetId}`;
+    open(docId);
+    setPendingZoom({ docId, bounds: place.bounds });
+    setBottomTab("findings", "schematic");
+  };
+  // B5 export: the engine re-runs the check on this revision and writes that report; the panel
+  // then shows exactly the report that was written.
+  const exportFindings = (c: Check, format: "csv" | "json") =>
+    guarded(async () => {
+      const out = await track(`Export ${c.toUpperCase()} findings (${format.toUpperCase()})`, () => api.exportFindings(c, format), (r) => r.path);
+      setResults((old) => ({ ...old, [c]: out.result }));
+      setMessage(`${out.result.report.check} report for revision ${out.result.report.revision} written to ${out.path}`);
+    });
   // Design manager entry: open the page, or select the object and zoom to it in the editor it
   // belongs to (components and nets follow the active editor; nothing on the board falls back to
   // the schematic).
@@ -934,6 +962,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
               tasks={tasks}
               onClearTasks={clearFinished}
               onNavigate={navigateFinding}
+              onObject={navigateObject}
+              onExport={exportFindings}
+              exportBlocked={!snapshot.dir ? "Save the project to a folder first: exports are written into its output folder" : busy ? "Wait for the running operation to finish" : null}
               activeFinding={activeFinding}
               onClose={() => setBottomOpen(false)}
               library={

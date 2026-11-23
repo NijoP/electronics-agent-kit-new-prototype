@@ -835,3 +835,48 @@ fn model_file_read_is_limited_to_absolute_model_files() {
     assert!(read_model_file("r.step").is_err());
     assert!(read_model_file(&path(&d.join("missing.step"))).is_err());
 }
+
+#[test]
+fn findings_export_writes_the_engine_report_for_the_current_revision() {
+    use eak_manufacturing::findings_export::FindingsFormat;
+    let d = tmpdir("findings-export");
+    let s = session();
+    create_project(&s, &path(&d), "Findings export").unwrap();
+    let r = execute_command(
+        &s,
+        0,
+        C::PlaceSymbol {
+            sheet_id: None,
+            component_id: "R_0603".into(),
+            position: Point::mm(50.0, 50.0),
+            rotation: Rotation::R0,
+            refdes: None,
+            value: None,
+        },
+    )
+    .unwrap();
+    assert!(r.accepted, "{:?}", r.error);
+    let rev = current_project(&s).unwrap().project.revision;
+
+    let csv = export_findings(&s, Check::Erc, FindingsFormat::Csv).unwrap();
+    assert_eq!(csv.result.report.revision, rev);
+    let csv_path = PathBuf::from(&csv.path);
+    assert!(csv_path.starts_with(d.join("output").join(format!("rev-{rev}")).join("findings")));
+    let text = std::fs::read_to_string(&csv_path).unwrap();
+    assert_eq!(text.lines().count(), csv.result.report.findings.len() + 1);
+    assert!(
+        text.contains("\"ERC-001\""),
+        "unconnected pins are exported"
+    );
+    // The export is a check run: its evidence is recorded too.
+    assert!(PathBuf::from(csv.result.evidence_path.unwrap()).exists());
+
+    let json = export_findings(&s, Check::Drc, FindingsFormat::Json).unwrap();
+    let back: eak_validation::Report =
+        serde_json::from_str(&std::fs::read_to_string(&json.path).unwrap()).unwrap();
+    assert_eq!(back.check, "DRC");
+    assert_eq!(back.revision, rev);
+    assert!(!back.not_implemented.is_empty());
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}

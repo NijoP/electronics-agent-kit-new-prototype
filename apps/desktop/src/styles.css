@@ -749,3 +749,14 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .pe-note { font-size: var(--fs-sm); color: var(--fg-dim); margin: 0; }
 .new-part { border: 1px solid var(--line); border-radius: var(--r-1); padding: var(--s-half) var(--s-1); }
 .new-part > summary { cursor: pointer; font-weight: var(--fw-medium); }
+
+/* Findings panel (Phase 1 B5): severity filter chips, export, object references */
+.findings-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-1); margin: var(--s-half) 0; }
+.findings-bar .chips { display: flex; flex-wrap: wrap; }
+.findings-bar .chip { border: 1px solid var(--line-strong); }
+.findings-bar .chip[aria-pressed="false"] { opacity: 0.5; text-decoration: line-through; }
+.findings-bar .chip.error[aria-pressed="true"] { border-color: var(--err); color: var(--err); }
+.findings-bar .chip.warning[aria-pressed="true"] { border-color: var(--warn); color: var(--warn); }
+.obj-refs { display: inline-flex; flex-wrap: wrap; gap: 2px; }
+.obj-ref { font-size: var(--fs-xs); font-family: var(--mono); padding: 0 var(--s-half); color: var(--accent); border-color: transparent; background: transparent; }
+.obj-ref:hover:not(:disabled) { background: var(--bg-hover); }

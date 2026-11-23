@@ -368,6 +368,11 @@ export interface CheckResult {
   report: Report;
   evidence_path: string | null;
 }
+/** B5 `export_findings`: the file written and the check run it wrote. */
+export interface FindingsExport {
+  path: string;
+  result: CheckResult;
+}
 
 /** Read-only status read from the project folder (src-tauri `recent_projects`); absent when unreadable. */
 export interface ProjectStatus {

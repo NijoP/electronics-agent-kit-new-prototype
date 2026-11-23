@@ -1,0 +1,18 @@
+{
+  "name": "B5 findings panel",
+  "description": "Phase 1 slice B5 (findings panel): on an isolated software fixture with one unconnected resistor, Design > Run ERC fills the Findings tab; the severity filter chips show the report's counts and hide and show their severity; a finding's object reference selects that object and zooms to it in the schematic; Export CSV and Export JSON re-run ERC on the current revision and write the engine's report into the project's output folder, and the status line names the file written.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "B5 Findings Fixture", "folder": "b5-findings-fixture" },
+    { "id": "fixture-part", "do": "fixture-command", "title": "Fixture: one resistor, unconnected", "command": { "type": "PlaceSymbol", "sheet_id": null, "component_id": "R_0603", "position": { "x": 50000000, "y": 50000000 }, "rotation": "R0", "refdes": null, "value": null } },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "B5 Findings Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]", "shot": false },
+    { "id": "b5-erc", "do": "menu", "title": "B5: Design > Run ERC fills the Findings tab with the engine's report", "menu": "Design", "item": "Run ERC", "expect": "section[aria-label=\"ERC report\"] [role=\"group\"][aria-label=\"ERC severity filter\"] button" },
+    { "id": "b5-chips", "do": "wait", "title": "B5: severity chips show the report's error count", "selector": "section[aria-label=\"ERC report\"] [role=\"group\"][aria-label=\"ERC severity filter\"] button.chip.error[aria-pressed=\"true\"]", "text": "Errors" },
+    { "id": "b5-hide-errors", "do": "click", "title": "B5: the Errors chip hides the error findings and says how many are hidden", "selector": "section[aria-label=\"ERC report\"] button.chip.error", "expect": "section[aria-label=\"ERC report\"] p.hint", "expectText": "hidden by the severity filter" },
+    { "id": "b5-show-errors", "do": "click", "title": "B5: the Errors chip shows them again", "selector": "section[aria-label=\"ERC report\"] button.chip.error", "gone": "section[aria-label=\"ERC report\"] p.hint" },
+    { "id": "b5-object", "do": "click", "title": "B5: a finding's object reference selects the resistor and zooms to it (the finding is marked current)", "selector": "section[aria-label=\"ERC report\"] button.obj-ref", "expect": "section[aria-label=\"ERC report\"] li.finding button[aria-current=\"true\"]" },
+    { "id": "b5-export-csv", "do": "click", "title": "B5: Export CSV re-runs ERC and writes output/rev-N/findings/erc-findings.csv", "selector": "section[aria-label=\"ERC report\"] [role=\"group\"][aria-label=\"Export ERC\"] button", "text": "Export CSV", "expect": "footer.status span.msg", "expectText": "erc-findings.csv" },
+    { "id": "b5-export-json", "do": "click", "title": "B5: Export JSON writes the whole report (rules, not implemented, limitations)", "selector": "section[aria-label=\"ERC report\"] [role=\"group\"][aria-label=\"Export ERC\"] button", "text": "Export JSON", "expect": "footer.status span.msg", "expectText": "erc-findings.json" }
+  ]
+}

@@ -3,7 +3,7 @@
 // session's tasks.
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
-import { EngineeringMonitor } from "../EngineeringMonitor";
+import { EngineeringMonitor, type FindingsFormat } from "../EngineeringMonitor";
 import { SimulationPanel } from "../SimulationPanel";
 import type { Check, CheckResult, EngineEvent, Finding, Id, Snapshot } from "../types";
 import type { Task } from "./tasks";
@@ -20,6 +20,11 @@ interface Props {
   onClose: () => void;
   height?: number;
   onNavigate?: (f: Finding, check: Check) => void;
+  /** Click one object a finding names (B5 object references). */
+  onObject?: (f: Finding, check: Check, id: Id) => void;
+  /** Export a check's report (B5); `exportBlocked` says why it is unavailable. */
+  onExport?: (check: Check, format: FindingsFormat) => void;
+  exportBlocked?: string | null;
   activeFinding?: string | null;
   tasks?: Task[];
   onClearTasks?: () => void;
@@ -157,7 +162,7 @@ function SearchTab({ snapshot, onProbe }: { snapshot: Snapshot; onProbe: (id: Id
   );
 }
 
-export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, activeFinding, tasks = [], onClearTasks, library }: Props) {
+export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, onObject, onExport, exportBlocked, activeFinding, tasks = [], onClearTasks, library }: Props) {
   const bom = bomLines(snapshot);
   const running = tasks.filter((t) => t.status === "running").length;
   return (
@@ -174,7 +179,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
       </div>
       <div className="bottom-body">
         {tab === "library" && <div className="bottom-library">{library}</div>}
-        {tab === "findings" && <EngineeringMonitor snapshot={snapshot} results={results} onProbe={onProbe} onNavigate={onNavigate} activeFinding={activeFinding} />}
+        {tab === "findings" && <EngineeringMonitor snapshot={snapshot} results={results} onProbe={onProbe} onNavigate={onNavigate} onObject={onObject} activeFinding={activeFinding} onExport={onExport} exportBlocked={exportBlocked} />}
         {tab === "bom" &&
           (bom.length === 0 ? (
             <p className="empty-state">The BOM is empty: place parts in the schematic first.</p>

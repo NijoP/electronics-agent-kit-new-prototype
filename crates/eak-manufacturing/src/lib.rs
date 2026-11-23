@@ -15,6 +15,7 @@ pub mod distributor_api;
 pub mod drill;
 pub mod fabpack;
 pub mod fabricator;
+pub mod findings_export;
 pub mod gerber;
 pub mod library_link;
 pub mod matching;
