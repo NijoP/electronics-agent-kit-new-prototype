@@ -2,7 +2,7 @@
 // (ADR-0028: offer data, never identity), offline scopes and the common-parts palette.
 import { describe, expect, it } from "vitest";
 import type { ComponentDef, LibraryEntry2 } from "../types";
-import { COMMON_PARTS, OFFLINE_SCOPES, categoryTree, footprintRows, inCategory, pageOf, priceText, resolvePalette, scopeUnavailable, supplierCols } from "./libraryDock";
+import { COMMON_PARTS, OFFLINE_SCOPES, categoryTree, footprintRows, inCategory, pageOf, priceText, resolvePalette, scopeUnavailable, supplierCols } from "./libraryDockModel";
 
 const def = (id: string, category: string, footprint = `FP_${id}`): ComponentDef => ({
   id,

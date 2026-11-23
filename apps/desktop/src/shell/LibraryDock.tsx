@@ -30,7 +30,7 @@ import {
   type FootprintRow,
   type LibKind,
   type LibScope,
-} from "./libraryDock";
+} from "./libraryDockModel";
 
 type Mode = "browse" | "common" | "standard" | "manage";
 const MODES: [Mode, string][] = [

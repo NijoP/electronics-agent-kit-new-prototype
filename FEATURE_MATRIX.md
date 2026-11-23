@@ -89,7 +89,7 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 |---|---|---|
 | Built-in library (7 generic parts) | integ | `ipc.rs::library_lists_builtin_parts_with_pins` |
 | Library browser, search, filters, previews | impl (slice D1, code-reviewed only, CI pending) | Library dock in the bottom dock: kinds Part / Symbol / Footprint / 3D, scopes built-in / project / personal / imported / distributor, category tree, paged grid with supplier, stock and price (ADR-0028), symbol / footprint / generated 3D-body preview, Place and drag-to-place, offline mode (built-in and project only); `shell/libraryDockView.test.tsx`, ui-evidence `d1-library.json` |
-| Common parts palette (generic R/C/L/D/Q with package variants) | impl (slice D1, code-reviewed only) | `shell/libraryDock.ts` `COMMON_PARTS`, only ids the built-in library lists; `shell/libraryDock.test.ts` |
+| Common parts palette (generic R/C/L/D/Q with package variants) | impl (slice D1, code-reviewed only) | `shell/libraryDockModel.ts` `COMMON_PARTS`, only ids the built-in library lists; `shell/libraryDockModel.test.ts` |
 | Part standardisation view (SOURCING check over placed parts and stored records) | impl (slice D1, code-reviewed only) | IPC `part_standardisation` (`parts.rs`); `parts_ipc.rs::part_standardisation_runs_the_sourcing_check_without_writing`; lists `not_implemented` and `limitations`; never says parts are orderable |
 | Per-field evidence and verified state | partial | `Rating { source, verified }` and a `provenance` string only |
 | Symbol and footprint editors | - | |
