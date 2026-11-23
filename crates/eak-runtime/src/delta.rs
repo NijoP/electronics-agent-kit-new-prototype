@@ -14,6 +14,9 @@ const COLLECTIONS: &[&[&str]] = &[
     &["schematic", "wires"],
     &["schematic", "labels"],
     &["schematic", "no_connects"],
+    &["schematic", "graphics"],
+    &["schematic", "buses"],
+    &["schematic", "bus_entries"],
     &["pcb", "footprints"],
     &["pcb", "tracks"],
     &["pcb", "vias"],
@@ -26,6 +29,7 @@ const SECTIONS: &[&[&str]] = &[
     &["pcb", "board"],
     &["constraints"],
     &["manufacturing"],
+    &["properties"],
 ];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -65,6 +65,58 @@ pub fn check(p: &Project) -> Vec<String> {
             e.push(format!("no-connect {k} references missing symbol"));
         }
     }
+    for (k, s) in &p.schematic.sheets {
+        if let Some(f) = &s.format {
+            for problem in f.validate() {
+                e.push(format!("sheet {k} drawing format: {problem}"));
+            }
+        }
+    }
+    for (k, g) in &p.schematic.graphics {
+        if &g.id != k {
+            e.push(format!("sheet graphic key {k} != id {}", g.id));
+        }
+        if !p.schematic.sheets.contains_key(&g.sheet_id) {
+            e.push(format!("sheet graphic {k} on missing sheet"));
+        }
+        for problem in g.graphic.validate() {
+            e.push(format!("sheet graphic {k}: {problem}"));
+        }
+    }
+    for (k, b) in &p.schematic.buses {
+        if &b.id != k {
+            e.push(format!("bus key {k} != id {}", b.id));
+        }
+        if !p.schematic.sheets.contains_key(&b.sheet_id) {
+            e.push(format!("bus {k} on missing sheet"));
+        }
+        if b.name.trim().is_empty() {
+            e.push(format!("bus {k} has an empty name"));
+        }
+        if b.points.len() < 2 || b.points.windows(2).any(|w| w[0] == w[1]) {
+            e.push(format!(
+                "bus {k} needs at least 2 points and no zero-length segment"
+            ));
+        }
+    }
+    for (k, be) in &p.schematic.bus_entries {
+        if &be.id != k {
+            e.push(format!("bus entry key {k} != id {}", be.id));
+        }
+        match p.schematic.buses.get(&be.bus_id) {
+            None => e.push(format!(
+                "bus entry {k} references missing bus {}",
+                be.bus_id
+            )),
+            Some(b) if b.sheet_id != be.sheet_id => {
+                e.push(format!("bus entry {k} is not on its bus's sheet"))
+            }
+            Some(_) => {}
+        }
+        if be.bus_point == be.wire_point {
+            e.push(format!("bus entry {k} has zero length"));
+        }
+    }
     for (k, f) in &p.pcb.footprints {
         if &f.id != k {
             e.push(format!("footprint key {k} != id {}", f.id));

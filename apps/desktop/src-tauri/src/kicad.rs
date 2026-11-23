@@ -322,6 +322,10 @@ pub fn import_commit_into(
                     .iter()
                     .enumerate()
                     .map(|(i, pad)| SymbolPin {
+                        length: 0,
+                        orientation: Default::default(),
+                        name_visible: true,
+                        number_visible: true,
                         number: pad.number.clone(),
                         name: pad.number.clone(),
                         electrical_type: PinType::Passive,
@@ -330,6 +334,7 @@ pub fn import_commit_into(
                     .collect();
                 let pin_map = suggest_by_number(
                     &SymbolDef {
+                        graphics: Vec::new(),
                         pins: symbol_pins.clone(),
                         body_half_w: 3_000_000,
                         body_half_h: (symbol_pins.len() as i64 * 2_540_000 / 2).max(2_000_000),
@@ -347,11 +352,7 @@ pub fn import_commit_into(
                     distributor: None,
                     supplier_offers: vec![],
                     datasheet: None,
-                    symbol: SymbolDef {
-                        pins: symbol_pins,
-                        body_half_w: 3_000_000,
-                        body_half_h: 3_000_000,
-                    },
+                    symbol: SymbolDef::boxed(symbol_pins, 3_000_000, 3_000_000),
                     footprint: fp_imp.def,
                     pin_map,
                     ratings: vec![],
@@ -422,12 +423,20 @@ mod tests {
     fn default_footprint_generation_validates() {
         let pins = vec![
             SymbolPin {
+                length: 0,
+                orientation: Default::default(),
+                name_visible: true,
+                number_visible: true,
                 number: "1".into(),
                 name: "IN".into(),
                 electrical_type: PinType::Passive,
                 position: Point::new(-5_000_000, 0),
             },
             SymbolPin {
+                length: 0,
+                orientation: Default::default(),
+                name_visible: true,
+                number_visible: true,
                 number: "2".into(),
                 name: "OUT".into(),
                 electrical_type: PinType::Passive,

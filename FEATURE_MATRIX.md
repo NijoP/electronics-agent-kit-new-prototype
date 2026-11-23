@@ -51,8 +51,8 @@ Baseline: `origin/main` at `afd9351`. Rows for the workspace shell, menus, tabs,
 | Delete | integ (engine) | `tests/engine.rs` (`DeleteSymbol`) |
 | Edit ref/value | unit | `editors.test.tsx` (`SetSymbolValue`) |
 | Mirror | - | no IR field |
-| Bus, bus entry, net port, junction object | - | no IR types |
-| Text and graphics | - | no IR types |
+| Bus, bus entry, net port (scope local / global / off-page), power-port style | engine (slice B1, code-reviewed only, CI pending); no UI | IR schema v3 (ADR-0040): `Bus`, `BusEntry`, `NetLabel.scope`, `NetLabel.power_style`; commands `AddBus`/`MoveBus`/`DeleteBus`, `AddBusEntry`/`MoveBusEntry`/`DeleteBusEntry`, `SetNetLabelScope`, `SetPowerPortStyle`; netlist honours scope and bus members, ERC-017..021. Tests: `eak-runtime/tests/ir_v3.rs`, `eak-validation/tests/bus_ports.rs`, netlist unit tests. Not drawn in the desktop (slices B2-B6). Junction objects: none (junction dots are derived) |
+| Text and graphics (sheet and symbol), drawing format and title block, field visibility | engine (slice B1, code-reviewed only, CI pending); no UI | `Graphic` (line, polyline, arc, circle, rectangle, polygon, text) in `SymbolDef.graphics` and `Schematic.graphics`; `Sheet.format` (border, zones, title-block fields bound to project properties); `SymbolInstance.field_visibility`; commands `AddSheetGraphic`/`MoveSheetGraphic`/`DeleteSheetGraphic`, `SetSheetFormat`, `SetProjectProperty`, `SetFieldVisibility`. Renderers still draw symbol boxes from the extents |
 | Copy/paste, multi-select | - | |
 | Drag-to-move with rubber-band wires | - | |
 | Multiple sheets | partial | IR and `AddSheet` exist; sheet selector in the view; no add-sheet control |

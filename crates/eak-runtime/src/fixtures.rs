@@ -48,6 +48,8 @@ impl Builder<'_> {
             } else {
                 LabelKind::Net
             },
+            scope: Default::default(),
+            power_style: None,
         })
         .map(|_| ())
     }

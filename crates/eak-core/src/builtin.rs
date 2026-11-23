@@ -14,6 +14,10 @@ const GENERIC: &str =
 
 fn pin(number: &str, name: &str, t: PinType, x: f64, y: f64) -> SymbolPin {
     SymbolPin {
+        length: 0,
+        orientation: Default::default(),
+        name_visible: true,
+        number_visible: true,
         number: number.into(),
         name: name.into(),
         electrical_type: t,
@@ -98,6 +102,7 @@ fn two_pin(
         datasheet: None,
         pin_map: one_to_one(&pins),
         symbol: SymbolDef {
+            graphics: Vec::new(),
             pins,
             body_half_w: mm(2.54),
             body_half_h: mm(1.0),
@@ -238,6 +243,7 @@ fn header_1xn(n: usize) -> ComponentDef {
         datasheet: None,
         pin_map: one_to_one(&pins),
         symbol: SymbolDef {
+            graphics: Vec::new(),
             pins,
             body_half_w: mm(2.54),
             body_half_h: mm(1.27 * n as f64),
@@ -297,7 +303,7 @@ fn sot23_transistor(
         supplier_offers: vec![],
         datasheet: None,
         pin_map: one_to_one(&pins),
-        symbol: SymbolDef {
+        symbol: SymbolDef { graphics: Vec::new(),
             pins,
             body_half_w: mm(2.54),
             body_half_h: mm(3.81),
@@ -350,6 +356,7 @@ pub fn components() -> Vec<ComponentDef> {
         datasheet: None,
         pin_map: one_to_one(&hdr2_pins),
         symbol: SymbolDef {
+            graphics: Vec::new(),
             pins: hdr2_pins,
             body_half_w: mm(2.54),
             body_half_h: mm(2.54),
@@ -398,7 +405,7 @@ pub fn components() -> Vec<ComponentDef> {
         supplier_offers: vec![],
         datasheet: None,
         pin_map: ldo_map,
-        symbol: SymbolDef { pins: ldo_pins, body_half_w: mm(5.08), body_half_h: mm(5.08) },
+        symbol: SymbolDef { graphics: Vec::new(), pins: ldo_pins, body_half_w: mm(5.08), body_half_h: mm(5.08) },
         footprint: FootprintDef {
             name: "SOT-223-3_TabPin2".into(),
             pads: vec![
@@ -458,7 +465,7 @@ pub fn components() -> Vec<ComponentDef> {
         supplier_offers: vec![],
         datasheet: None,
         pin_map: one_to_one(&mcu_pins),
-        symbol: SymbolDef { pins: mcu_pins, body_half_w: mm(7.62), body_half_h: mm(6.35) },
+        symbol: SymbolDef { graphics: Vec::new(), pins: mcu_pins, body_half_w: mm(7.62), body_half_h: mm(6.35) },
         footprint: FootprintDef {
             name: "SOIC-8_3.9x4.9mm_P1.27mm".into(),
             pads: soic_pads,
@@ -589,6 +596,7 @@ pub fn components() -> Vec<ComponentDef> {
         datasheet: None,
         pin_map: one_to_one(&ldo5_pins),
         symbol: SymbolDef {
+            graphics: Vec::new(),
             pins: ldo5_pins,
             body_half_w: mm(5.08),
             body_half_h: mm(5.08),
@@ -645,6 +653,7 @@ pub fn components() -> Vec<ComponentDef> {
         datasheet: None,
         pin_map: one_to_one(&xtal_pins),
         symbol: SymbolDef {
+            graphics: Vec::new(),
             pins: xtal_pins,
             body_half_w: mm(2.54),
             body_half_h: mm(1.27),
@@ -692,6 +701,7 @@ pub fn components() -> Vec<ComponentDef> {
         datasheet: None,
         pin_map: xtal4_map,
         symbol: SymbolDef {
+            graphics: Vec::new(),
             pins: xtal4_pins,
             body_half_w: mm(2.54),
             body_half_h: mm(2.54),
@@ -739,7 +749,7 @@ pub fn components() -> Vec<ComponentDef> {
         supplier_offers: vec![],
         datasheet: None,
         pin_map: sw_map,
-        symbol: SymbolDef {
+        symbol: SymbolDef { graphics: Vec::new(),
             pins: sw_pins,
             body_half_w: mm(2.54),
             body_half_h: mm(1.27),
@@ -775,6 +785,11 @@ pub fn components() -> Vec<ComponentDef> {
 
     // shortcut: no USB-C receptacle; its shell and locating pegs need slotted / non-plated
     // holes that FootprintDef cannot express. Add one when the footprint model gains them.
+
+    // Schema v3 (ADR-0040): every box body is also drawn as its rectangle graphic.
+    for c in &mut v {
+        c.symbol.upgrade_box();
+    }
     v
 }
 
@@ -937,6 +952,7 @@ fn board_parts() -> Vec<ComponentDef> {
             datasheet: Some(ESP32_C3_MINI_1_DS.into()),
             pin_map,
             symbol: SymbolDef {
+                graphics: Vec::new(),
                 pins,
                 body_half_w: mm(10.16),
                 body_half_h: mm(22.86),
@@ -997,6 +1013,7 @@ fn board_parts() -> Vec<ComponentDef> {
             datasheet: Some(LMR33630_DS.into()),
             pin_map: one_to_one(&pins),
             symbol: SymbolDef {
+                graphics: Vec::new(),
                 pins,
                 body_half_w: mm(7.62),
                 body_half_h: mm(6.35),
@@ -1046,6 +1063,7 @@ fn board_parts() -> Vec<ComponentDef> {
             datasheet: Some(SHT4X_DS.into()),
             pin_map: one_to_one(&pins),
             symbol: SymbolDef {
+                graphics: Vec::new(),
                 pins,
                 body_half_w: mm(5.08),
                 body_half_h: mm(3.81),
@@ -1102,6 +1120,7 @@ fn board_parts() -> Vec<ComponentDef> {
             datasheet: Some(AO4406A_DS.into()),
             pin_map,
             symbol: SymbolDef {
+                graphics: Vec::new(),
                 pins,
                 body_half_w: mm(2.54),
                 body_half_h: mm(3.81),
@@ -1280,6 +1299,7 @@ fn board_parts() -> Vec<ComponentDef> {
             datasheet: Some(MKDS_1715721_DS.into()),
             pin_map: one_to_one(&pins),
             symbol: SymbolDef {
+                graphics: Vec::new(),
                 pins,
                 body_half_w: mm(2.54),
                 body_half_h: mm(2.54),
@@ -1407,7 +1427,10 @@ mod tests {
             serde_json::from_str(include_str!("../tests/fixtures/builtin_m1_parts.json"))
                 .expect("fixture parses");
         assert_eq!(golden.len(), 8);
-        for g in golden {
+        // The fixture is schema v2; the only change since is the v3 box upgrade (ADR-0040).
+        for mut g in golden {
+            assert!(g.symbol.graphics.is_empty(), "{} fixture is v2", g.id);
+            g.symbol.upgrade_box();
             assert_eq!(get(&g.id).as_ref(), Some(&g), "{} changed", g.id);
         }
     }

@@ -15,24 +15,40 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
     // 1. Build a candidate component definition (e.g. TPS5430 buck regulator)
     let pins = vec![
         SymbolPin {
+            length: 0,
+            orientation: Default::default(),
+            name_visible: true,
+            number_visible: true,
             number: "1".into(),
             name: "BOOT".into(),
             electrical_type: PinType::PowerIn,
             position: Point::new(-5_000_000, 2_540_000),
         },
         SymbolPin {
+            length: 0,
+            orientation: Default::default(),
+            name_visible: true,
+            number_visible: true,
             number: "2".into(),
             name: "VIN".into(),
             electrical_type: PinType::PowerIn,
             position: Point::new(-5_000_000, 0),
         },
         SymbolPin {
+            length: 0,
+            orientation: Default::default(),
+            name_visible: true,
+            number_visible: true,
             number: "3".into(),
             name: "PH".into(),
             electrical_type: PinType::Output,
             position: Point::new(5_000_000, 2_540_000),
         },
         SymbolPin {
+            length: 0,
+            orientation: Default::default(),
+            name_visible: true,
+            number_visible: true,
             number: "4".into(),
             name: "GND".into(),
             electrical_type: PinType::PowerIn,
@@ -97,6 +113,7 @@ fn validate_component_definition_and_stage_to_schematic_and_pcb() {
         supplier_offers: vec![],
         datasheet: Some("https://www.ti.com/lit/ds/symlink/tps5430.pdf".into()),
         symbol: SymbolDef {
+            graphics: Vec::new(),
             pins,
             body_half_w: 5_000_000,
             body_half_h: 3_810_000,

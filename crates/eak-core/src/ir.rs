@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 pub type Id = String;
 
@@ -36,6 +36,10 @@ pub struct Project {
     pub constraints: Constraints,
     #[serde(default)]
     pub manufacturing: ManufacturingConfig,
+    /// Free project properties (company, drawn by, ...) that title blocks can show (schema v3).
+    /// Omitted from the file when empty.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub properties: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -53,6 +57,15 @@ pub struct Schematic {
     /// Explicit no-connect markers on pins: (symbol id, pin number).
     #[serde(default)]
     pub no_connects: BTreeMap<Id, NoConnect>,
+    /// Sheet drawings and text (schema v3). Never part of connectivity.
+    #[serde(default)]
+    pub graphics: BTreeMap<Id, SheetGraphic>,
+    /// Buses (schema v3). A bus is not a conductor; members connect by name (ADR-0040).
+    #[serde(default)]
+    pub buses: BTreeMap<Id, Bus>,
+    /// Bus entries joining a member wire to a bus (schema v3).
+    #[serde(default)]
+    pub bus_entries: BTreeMap<Id, BusEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -61,6 +74,173 @@ pub struct Sheet {
     pub name: String,
     pub width: Nm,
     pub height: Nm,
+    /// Border, zones and title block (schema v3). `None` = no drawing format (every v2 sheet).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<DrawingFormat>,
+}
+
+/// Where a title-block field takes its text from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "source", rename_all = "snake_case")]
+pub enum FieldSource {
+    ProjectName,
+    /// The project's committed revision number.
+    ProjectRevision,
+    SheetName,
+    /// 1-based position of the sheet in the project's sheet order.
+    SheetNumber,
+    SheetCount,
+    /// A value of [`Project::properties`]; empty when the property is not set.
+    Property {
+        key: String,
+    },
+    /// Fixed text.
+    Text {
+        text: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TitleBlockField {
+    pub label: String,
+    pub value: FieldSource,
+}
+
+/// A sheet's drawing format: border, reference zones and title block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DrawingFormat {
+    pub border: bool,
+    /// Reference zones along the border: columns are numbered 1.., rows lettered A.. (0 = none).
+    pub zone_columns: u8,
+    pub zone_rows: u8,
+    pub title_block: Vec<TitleBlockField>,
+}
+
+/// Most reference-zone columns or rows a border may have.
+pub const MAX_ZONES: u8 = 26;
+
+impl DrawingFormat {
+    /// Border with 6 x 4 zones and a title block of project name, sheet name, sheet n of m and
+    /// revision.
+    pub fn standard() -> DrawingFormat {
+        let f = |label: &str, value| TitleBlockField {
+            label: label.into(),
+            value,
+        };
+        DrawingFormat {
+            border: true,
+            zone_columns: 6,
+            zone_rows: 4,
+            title_block: vec![
+                f("Title", FieldSource::ProjectName),
+                f("Sheet", FieldSource::SheetName),
+                f("Sheet no.", FieldSource::SheetNumber),
+                f("Sheets", FieldSource::SheetCount),
+                f("Revision", FieldSource::ProjectRevision),
+            ],
+        }
+    }
+
+    /// Problems that make this format unusable; empty when it is valid.
+    pub fn validate(&self) -> Vec<String> {
+        let mut e = Vec::new();
+        if self.zone_columns > MAX_ZONES || self.zone_rows > MAX_ZONES {
+            e.push(format!("at most {MAX_ZONES} zone columns and rows"));
+        }
+        if !self.border && (self.zone_columns > 0 || self.zone_rows > 0) {
+            e.push("reference zones need a border".into());
+        }
+        for f in &self.title_block {
+            if f.label.trim().is_empty() {
+                e.push("title-block field label is empty".into());
+            }
+            if let FieldSource::Property { key } = &f.value {
+                if key.trim().is_empty() {
+                    e.push(format!(
+                        "title-block field {} binds an empty property key",
+                        f.label
+                    ));
+                }
+            }
+        }
+        e
+    }
+}
+
+/// A drawing or text placed on a sheet.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SheetGraphic {
+    pub id: Id,
+    pub sheet_id: Id,
+    pub graphic: crate::graphic::Graphic,
+}
+
+/// A bus: a named polyline that groups member nets (`D[0..7]`, `{SDA,SCL}`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Bus {
+    pub id: Id,
+    pub sheet_id: Id,
+    pub name: String,
+    pub points: Vec<Point>,
+}
+
+impl Bus {
+    /// Whether `p` lies on the bus polyline (within `tol` nm).
+    pub fn touches(&self, p: Point, tol: f64) -> bool {
+        self.points
+            .windows(2)
+            .any(|w| crate::geom::point_segment_distance(p, w[0], w[1]) <= tol)
+    }
+}
+
+/// Tolerance for "point lies on a wire or bus" (schematic coordinates are grid-aligned).
+pub const ON_SEGMENT_TOL_NM: f64 = 1_000.0;
+
+/// Joins one member wire to a bus: `bus_point` lies on the bus, a wire attaches at `wire_point`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BusEntry {
+    pub id: Id,
+    pub sheet_id: Id,
+    pub bus_id: Id,
+    pub bus_point: Point,
+    pub wire_point: Point,
+}
+
+/// Most members a bus name may expand to.
+pub const MAX_BUS_MEMBERS: usize = 1024;
+
+/// Member net names of a bus name: `D[0..7]` (or `D[7..0]`) gives `D0`..`D7`; `{SDA,SCL}` or
+/// `{SDA SCL}` lists them. `None` when the name is neither form, a range is larger than
+/// [`MAX_BUS_MEMBERS`], or a member is empty or repeated.
+pub fn bus_members(name: &str) -> Option<Vec<String>> {
+    let name = name.trim();
+    let members: Vec<String> =
+        if let Some(inner) = name.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
+            inner
+                .split(|c: char| c == ',' || c.is_whitespace())
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        } else {
+            let (prefix, rest) = name.split_once('[')?;
+            let range = rest.strip_suffix(']')?;
+            let (a, b) = range.split_once("..")?;
+            let (a, b): (u32, u32) = (a.trim().parse().ok()?, b.trim().parse().ok()?);
+            let (lo, hi) = (a.min(b), a.max(b));
+            if prefix.trim().is_empty() || (hi - lo) as usize >= MAX_BUS_MEMBERS {
+                return None;
+            }
+            (lo..=hi).map(|i| format!("{}{i}", prefix.trim())).collect()
+        };
+    let unique: std::collections::BTreeSet<&String> = members.iter().collect();
+    if members.is_empty()
+        || members.len() > MAX_BUS_MEMBERS
+        || unique.len() != members.len()
+        || members.iter().any(|m| m.contains(['[', ']', '{', '}']))
+    {
+        return None;
+    }
+    Some(members)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -77,9 +257,41 @@ pub struct SymbolInstance {
     /// unmirrored projects keep their exact on-disk form.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mirror: bool,
+    /// Per-field visibility that differs from [`SymbolField::visible_by_default`] (schema v3).
+    /// Omitted from the file when empty.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub field_visibility: BTreeMap<SymbolField, bool>,
+}
+
+/// A text field a placed symbol can show next to its body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SymbolField {
+    Refdes,
+    Value,
+    /// The component's display name.
+    Name,
+    Footprint,
+    Manufacturer,
+    Mpn,
+}
+
+impl SymbolField {
+    /// Reference designator and value are shown unless hidden; the others are hidden unless shown.
+    pub fn visible_by_default(self) -> bool {
+        matches!(self, SymbolField::Refdes | SymbolField::Value)
+    }
 }
 
 impl SymbolInstance {
+    /// Whether `field` is shown on the sheet.
+    pub fn field_visible(&self, field: SymbolField) -> bool {
+        self.field_visibility
+            .get(&field)
+            .copied()
+            .unwrap_or_else(|| field.visible_by_default())
+    }
+
     /// Sheet position of a point given in the symbol's local (library) coordinates.
     pub fn place(&self, local: Point) -> Point {
         let l = if self.mirror {
@@ -119,6 +331,36 @@ pub enum LabelKind {
     Power,
 }
 
+/// How far a net label (net port) reaches (ADR-0040).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NetScope {
+    /// Joins same-name labels on its own sheet only.
+    Local,
+    /// Joins same-name global, off-page and power labels on every sheet (the v2 behaviour).
+    #[default]
+    Global,
+    /// Off-page connector: connects like a global label and is drawn as a page connector.
+    OffPage,
+}
+
+impl NetScope {
+    pub fn is_global(&self) -> bool {
+        *self == NetScope::Global
+    }
+}
+
+/// Symbol drawn for a power port.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PowerStyle {
+    Ground,
+    /// Supply rail (bar or arrow).
+    Rail,
+    Chassis,
+}
+
+/// A net label, which is also the net port of schema v3 (scope and power style; ADR-0040).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NetLabel {
     pub id: Id,
@@ -127,6 +369,23 @@ pub struct NetLabel {
     pub position: Point,
     #[serde(default)]
     pub kind: LabelKind,
+    /// Omitted from the file when global (the v2 behaviour).
+    #[serde(default, skip_serializing_if = "NetScope::is_global")]
+    pub scope: NetScope,
+    /// Drawing style of a power port; `None` lets the renderer choose. Omitted when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_style: Option<PowerStyle>,
+}
+
+/// Net ports are net labels: one collection names nets (ADR-0040).
+pub type NetPort = NetLabel;
+
+impl NetLabel {
+    /// Whether this label joins same-name labels on other sheets: global and off-page labels,
+    /// and every power port (power flags are global).
+    pub fn connects_globally(&self) -> bool {
+        self.kind == LabelKind::Power || self.scope != NetScope::Local
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -620,6 +879,7 @@ impl Project {
                 name: "Sheet 1".into(),
                 width: 297_000_000,
                 height: 210_000_000,
+                format: None,
             },
         );
         Project {
@@ -636,6 +896,32 @@ impl Project {
             pcb: Pcb::default(),
             constraints: Constraints::default(),
             manufacturing: ManufacturingConfig::default(),
+            properties: BTreeMap::new(),
+        }
+    }
+
+    /// 1-based position of a sheet in the project's sheet order, if it exists.
+    pub fn sheet_number(&self, sheet_id: &str) -> Option<usize> {
+        self.schematic
+            .sheets
+            .keys()
+            .position(|k| k == sheet_id)
+            .map(|i| i + 1)
+    }
+
+    /// Text a title-block field shows on `sheet`.
+    pub fn title_block_value(&self, sheet: &Sheet, source: &FieldSource) -> String {
+        match source {
+            FieldSource::ProjectName => self.name.clone(),
+            FieldSource::ProjectRevision => self.revision.to_string(),
+            FieldSource::SheetName => sheet.name.clone(),
+            FieldSource::SheetNumber => self
+                .sheet_number(&sheet.id)
+                .map(|n| n.to_string())
+                .unwrap_or_default(),
+            FieldSource::SheetCount => self.schematic.sheets.len().to_string(),
+            FieldSource::Property { key } => self.properties.get(key).cloned().unwrap_or_default(),
+            FieldSource::Text { text } => text.clone(),
         }
     }
 
@@ -751,5 +1037,132 @@ mod multilayer_tests {
             mk(CopperLayer::Inner(1), CopperLayer::Inner(2)).kind(),
             ViaKind::Buried
         );
+    }
+}
+
+#[cfg(test)]
+mod schematic_v3_tests {
+    use super::*;
+
+    #[test]
+    fn bus_names_expand_to_members() {
+        let s = |v: &[&str]| Some(v.iter().map(|x| x.to_string()).collect::<Vec<_>>());
+        assert_eq!(bus_members("D[0..3]"), s(&["D0", "D1", "D2", "D3"]));
+        assert_eq!(bus_members("A[2..0]"), s(&["A0", "A1", "A2"]));
+        assert_eq!(bus_members("{SDA,SCL}"), s(&["SDA", "SCL"]));
+        assert_eq!(bus_members("{ SDA SCL INT }"), s(&["SDA", "SCL", "INT"]));
+        for bad in [
+            "D",
+            "D[0..]",
+            "[0..3]",
+            "D[a..b]",
+            "{}",
+            "{A,A}",
+            "D[0..5000]",
+            "{A,B[1]}",
+        ] {
+            assert_eq!(bus_members(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn v2_label_and_instance_json_load_with_v2_meaning_and_stay_compact() {
+        let l: NetLabel = serde_json::from_str(
+            r#"{"id":"l","sheet_id":"s","name":"VCC","position":{"x":0,"y":0},"kind":"power"}"#,
+        )
+        .unwrap();
+        assert_eq!((l.scope, l.power_style), (NetScope::Global, None));
+        assert!(l.connects_globally());
+        let v = serde_json::to_value(&l).unwrap();
+        assert!(v.get("scope").is_none() && v.get("power_style").is_none());
+        let local = NetLabel {
+            scope: NetScope::Local,
+            ..l.clone()
+        };
+        assert!(local.connects_globally(), "power ports are always global");
+        let local_net = NetLabel {
+            kind: LabelKind::Net,
+            ..local
+        };
+        assert!(!local_net.connects_globally());
+        assert_eq!(serde_json::to_value(&local_net).unwrap()["scope"], "local");
+    }
+
+    #[test]
+    fn field_visibility_defaults_and_overrides() {
+        let mut s = SymbolInstance {
+            id: "s".into(),
+            sheet_id: "sh".into(),
+            component_id: "c".into(),
+            refdes: "R1".into(),
+            value: "1k".into(),
+            position: Point::default(),
+            rotation: Rotation::R0,
+            mirror: false,
+            field_visibility: BTreeMap::new(),
+        };
+        assert!(s.field_visible(SymbolField::Refdes) && s.field_visible(SymbolField::Value));
+        assert!(!s.field_visible(SymbolField::Mpn));
+        assert!(serde_json::to_value(&s)
+            .unwrap()
+            .get("field_visibility")
+            .is_none());
+        s.field_visibility.insert(SymbolField::Value, false);
+        s.field_visibility.insert(SymbolField::Mpn, true);
+        assert!(!s.field_visible(SymbolField::Value) && s.field_visible(SymbolField::Mpn));
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(
+            v["field_visibility"],
+            serde_json::json!({"value": false, "mpn": true})
+        );
+        assert_eq!(serde_json::from_value::<SymbolInstance>(v).unwrap(), s);
+    }
+
+    #[test]
+    fn title_block_fields_resolve_against_the_project() {
+        let mut p = Project::new("Board");
+        p.revision = 7;
+        p.properties.insert("company".into(), "ACME".into());
+        let sheet = p.schematic.sheets.values().next().unwrap().clone();
+        let v = |s: FieldSource| p.title_block_value(&sheet, &s);
+        assert_eq!(v(FieldSource::ProjectName), "Board");
+        assert_eq!(v(FieldSource::ProjectRevision), "7");
+        assert_eq!(v(FieldSource::SheetName), "Sheet 1");
+        assert_eq!(v(FieldSource::SheetNumber), "1");
+        assert_eq!(v(FieldSource::SheetCount), "1");
+        assert_eq!(
+            v(FieldSource::Property {
+                key: "company".into()
+            }),
+            "ACME"
+        );
+        assert_eq!(v(FieldSource::Property { key: "nope".into() }), "");
+        assert_eq!(v(FieldSource::Text { text: "t".into() }), "t");
+        assert!(DrawingFormat::standard().validate().is_empty());
+        let mut bad = DrawingFormat::standard();
+        bad.border = false;
+        bad.zone_columns = 30;
+        bad.title_block.push(TitleBlockField {
+            label: "Co".into(),
+            value: FieldSource::Property { key: " ".into() },
+        });
+        assert_eq!(bad.validate().len(), 3, "{:?}", bad.validate());
+    }
+
+    #[test]
+    fn a_bus_touches_points_on_its_segments() {
+        let b = Bus {
+            id: "b".into(),
+            sheet_id: "s".into(),
+            name: "D[0..1]".into(),
+            points: vec![
+                Point::new(0, 0),
+                Point::new(10_000, 0),
+                Point::new(10_000, 10_000),
+            ],
+        };
+        assert!(b.touches(Point::new(5_000, 0), ON_SEGMENT_TOL_NM));
+        assert!(b.touches(Point::new(10_000, 4_000), ON_SEGMENT_TOL_NM));
+        assert!(!b.touches(Point::new(5_000, 5_000), ON_SEGMENT_TOL_NM));
     }
 }

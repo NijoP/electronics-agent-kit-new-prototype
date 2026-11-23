@@ -165,6 +165,8 @@ fn undo_redo_round_trips_every_command_kind() {
             pin: "1".into(),
             name: "VCC".into(),
             kind: LabelKind::Power,
+            scope: Default::default(),
+            power_style: None,
         },
         C::SetBoardOutline {
             points: vec![
