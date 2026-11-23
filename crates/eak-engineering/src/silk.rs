@@ -53,9 +53,10 @@ pub struct Opening {
     pub shape: Shape,
 }
 
-/// Soldermask openings on `layer`, matching the soldermask Gerber exactly.
+/// Soldermask openings on `layer`, matching the soldermask Gerber exactly (each pad's own mask
+/// expansion, else the board-wide one; ADR-0044).
 pub fn mask_openings(p: &Project, layer: CopperLayer) -> Vec<Opening> {
-    let e = p.manufacturing.mask_expansion;
+    let board = p.manufacturing.mask_expansion;
     let mut out = Vec::new();
     for fp in p.pcb.footprints.values() {
         let Some(def) = p.library.get(&fp.component_id) else {
@@ -65,6 +66,7 @@ pub fn mask_openings(p: &Project, layer: CopperLayer) -> Vec<Opening> {
             if pad.kind != PadKind::Tht && fp.side.copper() != layer {
                 continue;
             }
+            let e = pad.mask_expansion_or(board);
             out.push(Opening {
                 footprint_id: fp.id.clone(),
                 refdes: fp.refdes.clone(),

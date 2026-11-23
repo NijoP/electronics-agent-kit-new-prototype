@@ -29,10 +29,16 @@ import {
   trackEdit,
   viaSpan,
   widthFromMm,
+  DEFAULT_ROUTING,
+  routingFields,
+  routingFrom,
+  routingKey,
+  saveRouting,
+  viaChoicesWith,
   type BoardCopper,
   type RouteDraft,
 } from "./routeTool";
-import type { Constraints, FootprintGeom, Point, RouteStepReport, ShovedTrack, Track, Via } from "./types";
+import type { Constraints, FootprintGeom, Point, RouteStepReport, RoutingOptions, ShovedTrack, Track, Via } from "./types";
 
 const P = (x: number, y: number): Point => ({ x, y });
 
@@ -442,5 +448,37 @@ describe("push mode (C3)", () => {
   it("shows which tracks the step pushed", () => {
     expect(feedbackText(report({ shoved: [bump("gnd", 600)] }))).toContain("pushed gnd");
     expect(feedbackText(report({}))).not.toContain("pushed");
+  });
+});
+
+// ADR-0044 (schema v5): route tool options saved with the board.
+describe("saved routing options", () => {
+  it("fields round-trip the saved options and an unchanged board needs no command", () => {
+    const saved: RoutingOptions = { bend: "orthogonal90", conflict: "push", width: 400_000, via: { drill: 300_000, diameter: 650_000 }, remove_loops: false };
+    const f = routingFields(saved);
+    expect(f).toEqual({ mode: "orthogonal90", widthText: "0.4", viaChoice: "300000/650000", conflict: "push", removeLoops: false });
+    expect(routingFrom(f)).toEqual(saved);
+    expect(saveRouting(saved, f)).toBeNull();
+    // A board from before schema v5 has none: the defaults.
+    expect(routingFields(undefined)).toEqual({ mode: "diagonal45", widthText: "", viaChoice: "", conflict: "walkaround", removeLoops: true });
+    expect(saveRouting(undefined, routingFields(undefined))).toBeNull();
+    expect(routingKey(undefined)).toBe(routingKey(DEFAULT_ROUTING));
+  });
+
+  it("a change is one SetRoutingOptions; a bad width means the net class", () => {
+    const f = { ...routingFields(undefined), conflict: "block" as const, widthText: "0.30" };
+    expect(saveRouting(undefined, f)).toEqual({ type: "SetRoutingOptions", options: { ...DEFAULT_ROUTING, conflict: "block", width: 300_000 } });
+    expect(routingFrom({ ...f, widthText: "-1" }).width).toBeNull();
+    // Typing the same width differently is no change.
+    expect(saveRouting({ ...DEFAULT_ROUTING, conflict: "block", width: 300_000 }, f)).toBeNull();
+  });
+
+  it("the via select also offers the saved via when it is no preset", () => {
+    const c = undefined;
+    const odd = "310000/655000";
+    expect(viaPresets(c, "GND").some((p) => p.value === odd)).toBe(false);
+    const choices = viaChoicesWith(c, "GND", odd);
+    expect(choices.find((p) => p.value === odd)?.label).toMatch(/saved/);
+    expect(viaChoicesWith(c, "GND", "")).toEqual(viaPresets(c, "GND"));
   });
 });

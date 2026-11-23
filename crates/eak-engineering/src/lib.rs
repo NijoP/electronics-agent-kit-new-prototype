@@ -15,6 +15,7 @@
 //! * `scene3d` – board/component geometry for the 3D workspace and mechanical checks.
 
 pub mod calc;
+pub mod clearance;
 pub mod copper;
 pub mod interactive;
 pub mod ipc;

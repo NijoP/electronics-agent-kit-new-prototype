@@ -1,12 +1,13 @@
 // Symbol and footprint editor documents (Phase 1 slice D2).
 //
 // One component of the project library is edited as a draft: the pin table, the body graphics
-// (B1 primitives) and the pin-to-pad map in the symbol editor; the pad table (shape, size, drill)
-// and the courtyard in the footprint editor. The canvas draws the draft with the A4 Canvas2D
+// (B1 primitives) and the pin-to-pad map in the symbol editor; the pad table (shape, size, drill,
+// solder-mask and paste expansion) and the courtyard in the footprint editor. The canvas draws the draft with the A4 Canvas2D
 // renderer; a click selects a pin, pad or graphic, a drag moves a pin or pad on the editor grid.
 // Nothing is written until Save, which sends one typed command: `UpsertComponentDefinition` for
-// the symbol, `AssignComponentFootprint` for the footprint. The engine validates it again and
-// may refuse it (for example a footprint change while the part is placed on the PCB).
+// the symbol, `AssignComponentFootprint` for the footprint (or per-pad `SetPadExpansion` when only
+// mask/paste expansions changed, which the engine takes while the part is placed). The engine
+// validates it again and may refuse it (for example a footprint change while the part is placed).
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { PickIndex } from "../render/pick";
 import { PcbSceneCanvas } from "../render/PcbSceneCanvas";
@@ -19,6 +20,8 @@ import {
   deletePad,
   deletePin,
   draftProblems,
+  expansionCommands,
+  expansionOnlyChanges,
   fmtMm,
   fmtPoints,
   footprintScene,
@@ -125,18 +128,25 @@ export function PartEditor({ kind, def, disabled, placedOnPcb, execute, onDirty 
   useEffect(() => () => onDirty(false), []);
 
   const problems = draftProblems(draft);
+  // Only pad mask/paste expansions changed: per-pad SetPadExpansion, allowed while placed.
+  const expansionOnly = kind === "footprint" ? expansionOnlyChanges(def, draft) : null;
   const footprintRefused =
-    kind === "footprint" && placedOnPcb > 0 ? `${def.id} is placed on the PCB (${placedOnPcb} footprint(s)); the engine changes a footprint only while it is not placed, so delete those footprints first` : null;
+    kind === "footprint" && placedOnPcb > 0 && !expansionOnly ? `${def.id} is placed on the PCB (${placedOnPcb} footprint(s)); the engine changes a footprint only while it is not placed, so delete those footprints first` : null;
   const saveWhy = disabled ?? (!dirty ? "No changes to save" : (footprintRefused ?? (problems.length ? `Fix first: ${problems[0]}` : null)));
   const save = () => {
     if (saveWhy) return;
+    if (expansionOnly) {
+      const cmds = expansionCommands(def.id, expansionOnly);
+      void execute(cmds.length === 1 ? cmds[0] : cmds);
+      return;
+    }
     void execute(
       kind === "symbol"
         ? {
             type: "UpsertComponentDefinition",
             definition: { ...def, name: draft.name, category: draft.category, refdes_prefix: draft.refdes_prefix, default_value: draft.default_value, symbol: draft.symbol, pin_map: draft.pin_map },
           }
-        : { type: "AssignComponentFootprint", component_id: def.id, footprint: draft.footprint, pin_map: draft.pin_map },
+        : { type: "AssignComponentFootprint", component_id: def.id, footprint: normDef(draft).footprint, pin_map: draft.pin_map },
     );
   };
   const revert = () => {
@@ -216,7 +226,7 @@ export function PartEditor({ kind, def, disabled, placedOnPcb, execute, onDirty 
         <button type="button" disabled={!dirty} title={dirty ? "Discard the draft and reload the part from the project library" : "Nothing to revert"} onClick={revert}>
           Revert
         </button>
-        <button type="button" className="primary" disabled={!!saveWhy} title={saveWhy ?? (kind === "symbol" ? "Save with UpsertComponentDefinition" : "Save with AssignComponentFootprint")} onClick={save}>
+        <button type="button" className="primary" disabled={!!saveWhy} title={saveWhy ?? (kind === "symbol" ? "Save with UpsertComponentDefinition" : expansionOnly ? "Save the pad mask/paste expansions with SetPadExpansion (allowed while the part is placed)" : "Save with AssignComponentFootprint")} onClick={save}>
           Save
         </button>
       </header>
@@ -559,6 +569,8 @@ function FootprintTables({ draft, set, setPad, rowSel }: { draft: ComponentDef; 
               <th>Size X</th>
               <th>Size Y</th>
               <th>Drill</th>
+              <th title="Solder-mask expansion per side in mm (negative shrinks the opening); empty = the board-wide manufacturing value">Mask</th>
+              <th title="Paste (stencil) expansion per side in mm, SMD pads only; empty = the aperture equals the pad">Paste</th>
               <th>Pins</th>
               <th>
                 <span className="sr-only">Delete</span>
@@ -577,7 +589,7 @@ function FootprintTables({ draft, set, setPad, rowSel }: { draft: ComponentDef; 
                     value={p.kind}
                     onChange={(e) => {
                       const k = e.target.value as PadDef["kind"];
-                      setPad(p.number, { kind: k, drill: k === "tht" ? (p.drill ?? Math.round(Math.min(p.size_x, p.size_y) / 2)) : null });
+                      setPad(p.number, { kind: k, drill: k === "tht" ? (p.drill ?? Math.round(Math.min(p.size_x, p.size_y) / 2)) : null, ...(k === "tht" ? { paste_expansion: null } : {}) });
                     }}
                   >
                     <option value="smd">SMD</option>
@@ -605,6 +617,16 @@ function FootprintTables({ draft, set, setPad, rowSel }: { draft: ComponentDef; 
                 </td>
                 <td>{p.kind === "tht" ? <MmInput label={`Pad ${p.number} drill`} nm={p.drill} onCommit={(v) => v !== null && setPad(p.number, { drill: v })} /> : <span className="muted">none (SMD)</span>}</td>
                 <td>
+                  <MmInput label={`Pad ${p.number} mask expansion`} nm={p.mask_expansion ?? null} allowEmpty onCommit={(v) => setPad(p.number, { mask_expansion: v })} />
+                </td>
+                <td>
+                  {p.kind === "smd" ? (
+                    <MmInput label={`Pad ${p.number} paste expansion`} nm={p.paste_expansion ?? null} allowEmpty onCommit={(v) => setPad(p.number, { paste_expansion: v })} />
+                  ) : (
+                    <span className="muted">none (THT)</span>
+                  )}
+                </td>
+                <td>
                   <TextInput className="pe-short" label={`Pad ${p.number} pins`} value={pinsOfPad(draft, p.number).join(", ")} onCommit={(v) => set((d) => setPadPins(d, p.number, parseList(v)))} />
                 </td>
                 <td>
@@ -617,9 +639,9 @@ function FootprintTables({ draft, set, setPad, rowSel }: { draft: ComponentDef; 
           </tbody>
         </table>
       </div>
-      <p className="pe-note" data-unavailable="mask-paste">
-        Solder-mask and paste expansion per pad: not available yet. The project format (EAK-IR) has no per-pad mask or paste field, so the board-wide manufacturing defaults apply; adding one is a schema change (ADR and
-        migration) owned by the IR lane.
+      <p className="pe-note" data-expansion="mask-paste">
+        Mask and Paste are each pad's own solder-mask and stencil expansion per side (negative shrinks the opening). An empty Mask uses the board-wide manufacturing value; an empty Paste leaves the aperture equal to the pad.
+        Changing only these saves with SetPadExpansion, which works while the part is placed on the PCB.
       </p>
     </>
   );

@@ -50,7 +50,10 @@ pub fn classify_command(command_type: &str) -> Option<Change> {
         "PlaceSymbol" | "DeleteSymbol" | "SetRefdes" | "Annotate" | "AddSheet" | "DeleteSheet"
         | "ReorderSheets" => Some(Change::Schematic),
         "AddRequirement" => Some(Change::Requirements),
-        "SetNetCurrent" | "SetNetVoltage" | "SetManufacturing" => Some(Change::Constraints),
+        // A pad's own mask or paste expansion changes the fabrication outputs, like SetManufacturing.
+        "SetNetCurrent" | "SetNetVoltage" | "SetManufacturing" | "SetPadExpansion" => {
+            Some(Change::Constraints)
+        }
         "SetDesignRules" | "UpsertNetClass" => Some(Change::Rules),
         "SetBoardOutline" | "SetStackup" | "SetLayerCount" | "SetOutlineArc" | "AddBoardCutout"
         | "DeleteBoardCutout" => Some(Change::BoardOutline),
@@ -337,6 +340,12 @@ mod tests {
         assert_eq!(classify_command("MoveSymbol"), None);
         assert_eq!(classify_command("SetComponentProperties"), None);
         assert_eq!(classify_command("AutoRoute"), None);
+        assert_eq!(
+            classify_command("SetPadExpansion"),
+            Some(Change::Constraints)
+        );
+        // Saved route tool options change no design data.
+        assert_eq!(classify_command("SetRoutingOptions"), None);
         assert_eq!(classify_command("AddRegion"), Some(Change::Rules));
         assert_eq!(
             classify_command("AddBoardCutout"),

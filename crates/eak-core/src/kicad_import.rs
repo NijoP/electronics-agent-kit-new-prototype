@@ -803,6 +803,8 @@ pub fn import_footprint(src: &str, limits: Limits) -> Result<FootprintFileImport
             size_x: mm_nm(w),
             size_y: mm_nm(h),
             drill: drill.map(mm_nm),
+            mask_expansion: None,
+            paste_expansion: None,
         });
     }
     if pads.is_empty() {

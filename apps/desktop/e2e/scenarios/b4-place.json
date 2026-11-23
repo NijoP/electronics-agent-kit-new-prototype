@@ -1,0 +1,56 @@
+{
+  "name": "B4 place tools",
+  "description": "Slice B4 in the real window: the wire tool's corner mode (/ switches to 45°; the L-wire is one Batch of two legs) with crosshair guides, a power port from the Settings list (GND, ground symbol), an off-page connector, a named bus finished with Enter, a bus entry on it, sheet text and a rectangle (AddSheetGraphic), and Fan out no-connects on a selected part (one Batch). Settings › Power ports lists the editable entries.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "B4 Place Fixture", "folder": "b4-place-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "B4 Place Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]" },
+
+    { "id": "b4-wire-tool", "do": "click", "title": "B4: Wire tool", "shot": false, "selector": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button", "text": "Wire", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"wire\"]" },
+    { "id": "b4-wire-45", "do": "key", "title": "B4: / switches the wire corners to 45°", "keys": "slash", "expect": "section[aria-label=\"Schematic view\"][data-wire-mode=\"45\"]", "shot": false },
+    { "id": "b4-wire-start", "do": "click", "title": "B4: wire start point", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -220, "dy": -160, "shot": false },
+    { "id": "b4-wire-end", "do": "click", "title": "B4: end point: a 45° leg and a straight leg sent as ONE Batch", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -80, "dy": -60, "expect": "footer.status span.msg", "expectText": "Batch" },
+    { "id": "b4-wire-count", "do": "count", "title": "B4: the wire is two segments", "selector": "section[aria-label=\"Schematic view\"] line.wire:not(.preview)", "equals": 2, "shot": false },
+    { "id": "b4-guides-move", "do": "move", "title": "B4: pointer over the sheet while drawing", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "at": [0.3, 0.3], "shot": false },
+    { "id": "b4-guides", "do": "count", "title": "B4: crosshair guides follow the pointer while the wire tool draws", "selector": "section[aria-label=\"Schematic view\"] g[data-guide=\"crosshair\"]", "equals": 1 },
+    { "id": "b4-wire-esc", "do": "key", "title": "B4: Esc ends the wire", "keys": "Escape", "shot": false },
+
+    { "id": "b4-power-menu", "do": "menu", "title": "B4: Place › Power port GND (from the Settings list)", "menu": "Place", "item": "Power port GND", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"power\"]", "shot": false },
+    { "id": "b4-power", "do": "click", "title": "B4: place the GND power port (AddNetLabel kind power, ground style)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 120, "dy": -120, "expect": "footer.status span.msg", "expectText": "AddNetLabel" },
+    { "id": "b4-power-drawn", "do": "count", "title": "B4: the power port is drawn with the ground symbol", "selector": "section[aria-label=\"Schematic view\"] g[data-power-style=\"ground\"]", "equals": 1, "shot": false },
+
+    { "id": "b4-offpage-menu", "do": "menu", "title": "B4: Place › Off-page connector", "menu": "Place", "item": "Off-page connector", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"offpage\"]", "shot": false },
+    { "id": "b4-offpage", "do": "click", "title": "B4: drop an off-page connector (AddNetLabel scope off_page)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 140, "dy": 60, "expect": "footer.status span.msg", "expectText": "AddNetLabel" },
+    { "id": "b4-offpage-drawn", "do": "count", "title": "B4: the off-page connector is drawn as one", "selector": "section[aria-label=\"Schematic view\"] g[data-scope=\"off_page\"] path.port-shape", "equals": 1, "shot": false },
+
+    { "id": "b4-bus-menu", "do": "menu", "title": "B4: Place › Bus", "menu": "Place", "item": "Bus", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"bus\"]", "shot": false },
+    { "id": "b4-bus-a", "do": "click", "title": "B4: bus start", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -220, "dy": 100, "shot": false },
+    { "id": "b4-bus-b", "do": "click", "title": "B4: bus vertex", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -40, "dy": 100, "shot": false },
+    { "id": "b4-bus-enter", "do": "key", "title": "B4: Enter finishes the bus (one AddBus named D[0..7])", "keys": "Return", "expect": "footer.status span.msg", "expectText": "AddBus" },
+    { "id": "b4-bus-drawn", "do": "count", "title": "B4: the bus is drawn", "selector": "section[aria-label=\"Schematic view\"] g[data-bus-id] polyline.bus", "equals": 1, "shot": false },
+
+    { "id": "b4-entry-menu", "do": "menu", "title": "B4: Place › Bus entry", "menu": "Place", "item": "Bus entry", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"busentry\"]", "shot": false },
+    { "id": "b4-entry", "do": "click", "title": "B4: click on the bus: AddBusEntry", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -130, "dy": 100, "expect": "footer.status span.msg", "expectText": "AddBusEntry" },
+    { "id": "b4-entry-drawn", "do": "count", "title": "B4: the bus entry is drawn", "selector": "section[aria-label=\"Schematic view\"] g[data-bus-entry-id]", "equals": 1, "shot": false },
+
+    { "id": "b4-text-menu", "do": "menu", "title": "B4: Place › Text", "menu": "Place", "item": "Text", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"text\"]", "shot": false },
+    { "id": "b4-text", "do": "click", "title": "B4: put text on the sheet (AddSheetGraphic)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": -200, "dy": 20, "expect": "footer.status span.msg", "expectText": "AddSheetGraphic" },
+    { "id": "b4-text-drawn", "do": "count", "title": "B4: the text is drawn", "selector": "section[aria-label=\"Schematic view\"] g[data-graphic-kind=\"text\"]", "equals": 1, "shot": false },
+    { "id": "b4-rect-menu", "do": "menu", "title": "B4: Place › Rectangle", "menu": "Place", "item": "Rectangle", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"rect\"]", "shot": false },
+    { "id": "b4-rect-a", "do": "click", "title": "B4: rectangle first corner", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 150, "dy": -50, "shot": false },
+    { "id": "b4-rect-b", "do": "click", "title": "B4: rectangle second corner (AddSheetGraphic)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "dx": 210, "dy": 10, "expect": "footer.status span.msg", "expectText": "AddSheetGraphic" },
+    { "id": "b4-rect-drawn", "do": "count", "title": "B4: the rectangle is drawn", "selector": "section[aria-label=\"Schematic view\"] g[data-graphic-kind=\"rectangle\"]", "equals": 1 },
+
+    { "id": "b4-place-tool", "do": "click", "title": "B4: Place tool", "shot": false, "selector": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button", "text": "Place", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"place\"]" },
+    { "id": "b4-place", "do": "click", "title": "B4: place a part (PlaceSymbol)", "selector": "section[aria-label=\"Schematic view\"] svg.canvas", "expect": "footer.status span.msg", "expectText": "PlaceSymbol", "shot": false },
+    { "id": "b4-select-tool", "do": "click", "title": "B4: Select tool", "shot": false, "selector": "section[aria-label=\"Schematic view\"] [role=\"toolbar\"][aria-label=\"Schematic tools\"] button", "text": "Select", "expect": "section[aria-label=\"Schematic view\"][data-tool=\"select\"]" },
+    { "id": "b4-select-part", "do": "click", "title": "B4: select the placed part", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id] rect.sym-hit", "expect": "section[aria-label=\"Schematic view\"] g[data-symbol-id].selected", "shot": false },
+    { "id": "b4-fanout", "do": "menu", "title": "B4: Place › Fan out no-connects: one Batch of SetNoConnect", "menu": "Place", "item": "Fan out no-connects", "expect": "footer.status span.msg", "expectText": "Batch" },
+    { "id": "b4-fanout-drawn", "do": "wait", "title": "B4: the part's pins carry no-connect markers", "selector": "section[aria-label=\"Schematic view\"] path.no-connect" },
+
+    { "id": "b4-settings", "do": "menu", "title": "B4: Settings › Settings…", "menu": "Settings", "item": "Settings", "expect": "[role=\"dialog\"][aria-label=\"Settings\"]", "shot": false },
+    { "id": "b4-power-page", "do": "click", "title": "B4: Settings › Power ports lists the editable power-port entries", "selector": "[role=\"tree\"] button", "text": "Power ports", "expect": "table[aria-label=\"Power ports\"] input[aria-label=\"Power port 1 net name\"]" },
+    { "id": "b4-settings-esc", "do": "key", "title": "B4: Escape closes Settings", "keys": "Escape", "gone": "[role=\"dialog\"][aria-label=\"Settings\"]", "shot": false }
+  ]
+}

@@ -23,6 +23,11 @@ const SCHEMATIC: EditorKey[] = [
   { keys: "Mod+F", label: "Find and replace designators, values and net labels" },
   { keys: "Right-click", label: "Actions for the clicked part, wire, label or sheet" },
   { keys: "Esc", label: "Clear the selection and the net highlight" },
+  { keys: "/", label: "Wire and bus corner mode: orthogonal, 45°, any angle" },
+  { keys: "Space", label: "Flip the bend of the wire or bus leg being drawn" },
+  { keys: "Shift", label: "Hold: keep the next wire or bus point on one axis" },
+  { keys: "Enter", label: "Finish the bus (Bus tool)" },
+  { keys: "R", label: "Turn the bus entry (Bus entry tool)" },
 ];
 
 const PCB: EditorKey[] = [

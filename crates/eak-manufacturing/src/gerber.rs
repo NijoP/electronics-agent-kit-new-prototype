@@ -1,6 +1,6 @@
 //! RS-274X (Gerber X2 attributes) writer and a structural re-reader for validation.
 
-use eak_core::{arc_center, CopperLayer, Nm, PadKind, PadShape, Point, Project, Side};
+use eak_core::{arc_center, CopperLayer, Nm, PadDef, PadKind, PadShape, Point, Project, Side};
 use eak_engineering::{copper, silk};
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -144,8 +144,8 @@ fn pad_ap(shape: PadShape, w: Nm, h: Nm) -> Ap {
     }
 }
 
-/// Visit every pad on the given copper side: (position, aperture shape, w, h, kind).
-fn for_pads(p: &Project, layer: CopperLayer, mut f: impl FnMut(Point, PadShape, Nm, Nm, PadKind)) {
+/// Visit every pad on the given copper side: (position, aperture shape, w, h, the pad).
+fn for_pads(p: &Project, layer: CopperLayer, mut f: impl FnMut(Point, PadShape, Nm, Nm, &PadDef)) {
     for fp in p.pcb.footprints.values() {
         let Some(def) = p.library.get(&fp.component_id) else {
             continue;
@@ -156,7 +156,7 @@ fn for_pads(p: &Project, layer: CopperLayer, mut f: impl FnMut(Point, PadShape, 
                 continue;
             }
             let (w, h) = fp.rotation.apply_size(pad.size_x, pad.size_y);
-            f(p.pad_position(fp, pad), pad.shape, w, h, pad.kind);
+            f(p.pad_position(fp, pad), pad.shape, w, h, pad);
         }
     }
 }
@@ -217,8 +217,10 @@ pub fn copper_layer(p: &Project, layer: CopperLayer) -> String {
 
 pub fn soldermask(p: &Project, layer: CopperLayer) -> String {
     let mut w = Writer::new();
-    let e = p.manufacturing.mask_expansion;
-    for_pads(p, layer, |at, shape, pw, ph, _| {
+    // Each pad's own mask expansion, else the board-wide one (schema v5, ADR-0044).
+    let board = p.manufacturing.mask_expansion;
+    for_pads(p, layer, |at, shape, pw, ph, pad| {
+        let e = pad.mask_expansion_or(board);
         w.flash(pad_ap(shape, pw + 2 * e, ph + 2 * e), at)
     });
     let f = if layer == CopperLayer::Top {
@@ -231,9 +233,11 @@ pub fn soldermask(p: &Project, layer: CopperLayer) -> String {
 
 pub fn paste(p: &Project, layer: CopperLayer) -> String {
     let mut w = Writer::new();
-    for_pads(p, layer, |at, shape, pw, ph, kind| {
-        if kind == PadKind::Smd {
-            w.flash(pad_ap(shape, pw, ph), at)
+    // SMD pads only, grown or shrunk by the pad's own paste expansion (ADR-0044).
+    for_pads(p, layer, |at, shape, pw, ph, pad| {
+        let e = pad.paste_or_zero();
+        if pad.kind == PadKind::Smd && pw.min(ph) + 2 * e > 0 {
+            w.flash(pad_ap(shape, pw + 2 * e, ph + 2 * e), at)
         }
     });
     let f = if layer == CopperLayer::Top {
@@ -606,5 +610,63 @@ mod tests {
         assert!(check.operations > before + 10);
         // Bottom legend does not carry top text.
         assert_eq!(validate(&silkscreen(&p, Side::Bottom)).operations, 0);
+    }
+
+    /// ADR-0044 (unrun: no local builds): a pad's own mask expansion replaces the board-wide
+    /// one in the soldermask, and its paste expansion sizes the stencil aperture.
+    #[test]
+    fn per_pad_mask_and_paste_expansion_size_the_openings() {
+        use eak_core::FootprintInstance;
+        let mut p = board();
+        let mut def = eak_core::builtin::components()
+            .into_iter()
+            .find(|c| {
+                !c.footprint.pads.is_empty()
+                    && c.footprint
+                        .pads
+                        .iter()
+                        .all(|x| x.kind == PadKind::Smd && x.shape == PadShape::Rect)
+            })
+            .expect("a built-in part with rectangular SMD pads");
+        let (sx, sy) = (def.footprint.pads[0].size_x, def.footprint.pads[0].size_y);
+        let ap = |w: Nm, h: Nm| format!("R,{:.6}X{:.6}*%", w as f64 / 1e6, h as f64 / 1e6);
+        let board_e = p.manufacturing.mask_expansion;
+        let e = board_e + 100_000;
+        def.footprint.pads[0].mask_expansion = Some(e);
+        def.footprint.pads[0].paste_expansion = Some(-50_000);
+        let id = def.id.clone();
+        p.library.insert(id.clone(), def);
+        p.pcb.footprints.insert(
+            "fp".into(),
+            FootprintInstance {
+                id: "fp".into(),
+                symbol_id: "sym".into(),
+                component_id: id.clone(),
+                refdes: "U1".into(),
+                position: Point::mm(20.0, 15.0),
+                rotation: Rotation::R0,
+                side: Side::Top,
+                pad_nets: Default::default(),
+                locked: false,
+            },
+        );
+        let mask = soldermask(&p, CopperLayer::Top);
+        assert!(mask.contains(&ap(sx + 2 * e, sy + 2 * e)), "{mask}");
+        let stencil = paste(&p, CopperLayer::Top);
+        assert!(
+            stencil.contains(&ap(sx - 100_000, sy - 100_000)),
+            "{stencil}"
+        );
+        assert!(validate(&mask).ok && validate(&stencil).ok);
+        // Cleared: the board default and an aperture equal to the pad.
+        let pad = &mut p.library.get_mut(&id).unwrap().footprint.pads[0];
+        pad.mask_expansion = None;
+        pad.paste_expansion = None;
+        let mask = soldermask(&p, CopperLayer::Top);
+        assert!(
+            mask.contains(&ap(sx + 2 * board_e, sy + 2 * board_e)),
+            "{mask}"
+        );
+        assert!(paste(&p, CopperLayer::Top).contains(&ap(sx, sy)));
     }
 }

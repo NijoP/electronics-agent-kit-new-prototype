@@ -8,7 +8,7 @@ use eak_core::geom::{
     point_in_polygon, point_segment_distance, polygon_self_intersects, segment_segment_distance,
     to_mm,
 };
-use eak_core::{CopperLayer, Nm, PadKind, Point, Project, Rect, RegionObject, Side};
+use eak_core::{Nm, PadKind, Point, Project, Rect, RegionObject, Side};
 use eak_engineering::copper::{self, distance, Core, ItemKind};
 use eak_engineering::ipc::{self, ClearanceCondition};
 use eak_engineering::{netlist, silk};
@@ -293,21 +293,13 @@ pub fn run(p: &Project) -> Report {
                 .max(c.class_for(&a.net).clearance)
                 .max(c.class_for(&b.net).clearance) as f64;
             let mut basis = "net class".to_string();
-            if let (Some(va), Some(vb)) =
-                (c.net_voltages_v.get(&a.net), c.net_voltages_v.get(&b.net))
+            // The same rule the interactive router keeps (ADR-0044).
+            if let Some((v_req, cond, dv)) =
+                eak_engineering::clearance::voltage_clearance(c, &a.net, &b.net, a.layer)
             {
-                let cond = if a.layer == CopperLayer::Top || a.layer == CopperLayer::Bottom {
-                    ClearanceCondition::B2
-                } else {
-                    ClearanceCondition::B1
-                };
-                let v_req = ipc::clearance_mm((va - vb).abs(), cond) * 1e6;
                 if v_req > req {
                     req = v_req;
-                    basis = format!(
-                        "IPC-2221B {cond:?} for {:.0} V (unverified table)",
-                        (va - vb).abs()
-                    );
+                    basis = format!("IPC-2221B {cond:?} for {dv:.0} V (unverified table)");
                 }
             }
             let d = distance(&a.shape, &b.shape);
@@ -1204,7 +1196,7 @@ pub fn silk_over_openings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eak_core::{FootprintInstance, Point, Rotation, Zone};
+    use eak_core::{CopperLayer, FootprintInstance, Point, Rotation, Zone};
     use eak_engineering::copper::pad_shape;
 
     /// 20 × 20 mm board, one single-pad THT footprint "J1" on GND at (10, 10) and a bottom
