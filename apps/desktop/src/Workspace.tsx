@@ -730,7 +730,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const activeGrid = gridKind ? { kind: gridKind, cfg: gridCfg, set: setGridCfg } : null;
   // B3: the active editor's own editing operations (clipboard, arrange, find, net highlight), read
   // from the context it publishes; subscribing re-renders the menus when their state changes.
-  const editorDoc = wsId === "editor" ? activeId : null;
+  const editorDoc = visible && activeKind !== "view" ? activeId : null;
   useEditorContext(editorDoc);
   const editorOp = (op: string) => {
     const o = editorContext(editorDoc)?.ops?.[op];
