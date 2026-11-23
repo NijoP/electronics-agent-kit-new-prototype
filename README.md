@@ -174,34 +174,63 @@ Checks to run before a pull request: `cargo fmt --all -- --check`, `cargo clippy
 
 ## Status and limitations
 
-EAK is an early prototype. Phase 1, the **EDA workspace** (schematic and PCB editors, design rules,
-checks, outputs and 3D view inside the IDE shell), is done: built and tested by CI on Linux, Windows and
-macOS, but not used for a real board yet. **Not done yet:** WEFT agent orchestration (approval pauses,
-specialist agents with an independent evaluator) and complete terminal-to-EDA sync; the pieces that exist
-are listed below as Beta. Builds are unsigned, and nothing EAK produces is manufacturing-ready.
+EAK is an early prototype. **Phase 1, the EDA workspace inside the IDE shell, has landed on `main`.** It
+covers the schematic and PCB editors, routing, design rules with ERC/DRC, library and part editors,
+outputs, 3D, layers and panels. CI builds and tests it on Linux, Windows and macOS, and 22 scenarios drive
+the app in a real window ([docs/qa/UI_EVIDENCE.md](docs/qa/UI_EVIDENCE.md)). It has **not** been used to
+make a real board, and EAK is not yet ready for professional hardware work.
+
+The Phase 1 definition-of-done audit (2026-11-23) found gaps. Fixes are landing one at a time:
+
+- **Not yet driven in a real window:** drawing a board outline, via or zone by hand, interactive track
+  routing and auto-routing. jsdom and Rust tests cover them; no ui-evidence step clicks them through yet.
+  The New project dialog has also only been tested in jsdom.
+- **No drawing tool yet** for keep-out regions, PCB text, dimensions, board cut-outs and arc board edges.
+  The engine and DRC support them and the PCB view draws them, but you cannot create or select them in the
+  UI.
+- **Known wrong-edit defects being fixed.** Some click-click moves and Inspector X/Y edits disconnect
+  attached wires. Outline vertex edits straighten arc edges. Some track edits replace the track
+  (new id). Property List Apply on mixed values can blank them. The EasyEDA key preset has shortcut
+  clashes. Some shortcuts fire behind open dialogs.
+- **Already fixed since the audit:** the Release check no longer shows a report with UNKNOWN rules as PASS,
+  and UNKNOWN results block release (ADR-0048). PCB Edit › Delete now deletes the PCB's own objects
+  instead of the schematic symbol.
+- **Engine limits:** the auto-router uses only the two outer layers and through vias, and ignores keep-outs,
+  the clearance matrix and net-pair rules. The 3D view draws arc tracks straight and ignores arc edges and
+  cut-outs. Schematic PDF fonts are not embedded.
+- **Not done yet:** WEFT agent orchestration (approval pauses, specialist agents with an independent
+  evaluator), complete terminal-to-EDA sync, netlist import, signed installers.
+
+Builds are unsigned, and nothing EAK produces is manufacturing-ready. Current record:
+[STATUS.md](STATUS.md), [FEATURE_MATRIX.md](FEATURE_MATRIX.md).
 
 ## What works today
 
-| Area | Status |
-|---|---|
-| Schematic editing (drag-and-drop placement, click-to-place with 'R' rotation, wire, labels, no-connect, mirror, undo/redo) | Beta: reviewed and CI-tested, not used on real hardware |
-| PCB editing (outline, footprints, tracks, vias, zones, net highlight, layer manager) | Beta |
-| Terminal workspace (spaces, tabs, split panes, agent status) | Beta |
-| Terminal-to-EDA live sync, agent task phases, ERC gate | Beta |
-| ERC / DRC / DFM with fail-closed reporting | Beta: not all checks exist; gaps are listed in every report |
-| Auto-place and auto-route | Beta: EAK's own router; quality not benchmarked |
-| Simulation (ngspice) | Beta: needs ngspice installed |
-| Manufacturing export (Gerber, drill, BOM, placement) | Beta: always labelled DRAFT |
-| Native, vendor-neutral component library and agent acquisition validation | Beta |
-| Import from KiCad (symbols .kicad_sym and footprints .kicad_mod, transactional library commit) | Beta |
-| Automatic junction dots, Refill zones (recompute connectivity and re-run DRC), PCB net highlighting | Beta |
-| Agent orchestration: typed task graph, task journal, scoped context, smart re-runs | Beta |
-| Agent orchestration: approval pauses, specialist agents with an independent evaluator, app views | Planned |
-| 3D viewer | Beta |
-| Netlist import, interactive push-and-shove routing | Planned |
-| Licence: [O'Saasy](LICENSE): free to use, modify and self-host; no competing hosted service of EAK itself | In effect |
+"Beta" means built and tested by CI (unit, integration and, where listed, real-window UI evidence), but not
+used on real hardware.
 
-Nothing EAK produces is manufacturing-ready. CI (Linux, Windows, macOS arm64 and x64) compiles and tests the tree; no area has been verified on real hardware. Details: [STATUS.md](STATUS.md).
+| Area | What it does | Status |
+|---|---|---|
+| IDE shell | Project Home, multiple projects, file explorer, document tabs, action registry with document-aware menus and toolbar, command palette and Quick open, three docks (design manager, inspector, library) with a canvas strip, bottom dock (Property List, Find Results, Diagnostics), settings with hotkey presets and canvas colours | Beta |
+| Schematic capture | Symbols drawn from library graphics (schema v3); place tools (parts, power ports, labels, no-connect, bus, bus entry, off-page); select, drag, rubber-band, copy/paste, find, selection filter; groups; net-label rename; multiple sheets (rename, reorder, delete); annotate | Beta, real-window tested |
+| ERC | Unconnected pins, drivers, pin-conflict matrix, undriven inputs, power nets, capacitor voltage rating, bus rules, off-page connectors; per-rule enable and severity; findings panel with object links and CSV/JSON export | Beta, real-window tested |
+| Schematic → PCB | Update PCB with an ECO preview (apply part of it, undo) | Beta, real-window tested |
+| PCB editing | Board outline with arcs, footprints, tracks and arc tracks, vias, zones, planes, keep-outs, cut-outs, PCB text and dimensions in the model; layer manager, layer tabs, lock and visibility; Canvas2D renderer; inspector edits; auto-place | Beta (see the drawing-tool gaps above) |
+| Routing | Interactive route tool: width and via presets, obstacle modes (walk around, block, push-and-shove), 45/90°, via drop with layer switch, ratsnest, net length; auto-route and rip-up/re-route | Beta, not yet driven in a real window |
+| Design rules and DRC | Rule configuration (schema v7), clearance matrix and net-pair rules, real-time DRC, pad mask/paste expansion, thermal reliefs, zone fill, stitching and dead-copper removal; unknown rule results are reported as UNKNOWN, never PASS | Beta: not all checks exist; every report lists `not_implemented` and `limitations` |
+| Stack-up and planes | 2-16 layers, via spans, editable stack-up, plane fills shown on the canvas | Beta, real-window tested |
+| Library and part editors | Native vendor-neutral library with scopes, library dock, symbol and footprint editors, part properties and footprint assignment, 3D model references, KiCad symbol/footprint import | Beta |
+| Outputs | Gerber, drill, BOM (configurable CSV/XLSX), placement, IPC-D-356 and JSON netlists, schematic PDF/SVG, fabricator prep, assets view, release check with fail-closed gates | Beta: always labelled DRAFT |
+| 3D | 3D view as a document: presets, orthographic view, measure, cross-probe with the editors | Beta, real-window tested |
+| Simulation | ngspice netlist simulation | Beta: needs ngspice installed |
+| Terminal workspace | Spaces bound to projects, tabs, split panes, agent detection and status (Linux and Windows) | Beta |
+| Engineering harness | `eak` CLI and `eak-mcp` server with typed tools over the same commands, engineering gates (PASS/FAIL/UNKNOWN/NOT_RUN), agent task graph and journal, ERC gate before PCB sync | Beta |
+| Model providers (optional) | Provider catalog, streaming, staged connection test, keys in the OS keyring | Beta |
+| Licence | [O'Saasy](LICENSE): free to use, modify and self-host; no competing hosted service of EAK itself | In effect |
+
+CI covers Linux, Windows and macOS (arm64 and x64). No area has been verified on real hardware. CI
+regenerates the per-control inventory ([docs/qa/UI_INVENTORY.md](docs/qa/UI_INVENTORY.md)) on every run; the committed
+copy can lag behind it.
 
 ## Architecture
 

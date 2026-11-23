@@ -1,0 +1,96 @@
+{
+  "name": "F2 PCB editor ops",
+  "description": "Phase 1 F2 (audit S2, S7, S15, M2): the PCB editor deletes its own objects. A fixture board (SETUP through execute_command: an outline and one wide SIG track across its middle) is opened in the PCB editor; a real XTest click on the track in the Select tool selects it (Track selection bar); Edit > Delete selection then deletes it with DeleteTrack (never DeleteSymbol) and the selection bar goes away; the Via tool shows no Layer field.",
+  "steps": [
+    {
+      "id": "home",
+      "do": "wait",
+      "title": "Project Home visible",
+      "selector": "main.home h1",
+      "timeout": 60000
+    },
+    {
+      "id": "fixture",
+      "do": "fixture-project",
+      "title": "Create fixture project",
+      "name": "F2 PCB Ops Fixture",
+      "folder": "f2-pcb-ops-fixture"
+    },
+    {
+      "id": "f2-setup",
+      "do": "fixture-commands",
+      "title": "F2: a 40 x 30 mm board with one 2 mm SIG track across its middle (engine commands, SETUP)",
+      "shot": false,
+      "commands": [
+        { "type": "SetBoardOutline", "points": [{ "x": 0, "y": 0 }, { "x": 40000000, "y": 0 }, { "x": 40000000, "y": 30000000 }, { "x": 0, "y": 30000000 }] },
+        { "type": "AddTrack", "layer": "top", "a": { "x": 4000000, "y": 15000000 }, "b": { "x": 36000000, "y": 15000000 }, "width": 2000000, "net": "SIG" }
+      ]
+    },
+    {
+      "id": "open",
+      "do": "click",
+      "title": "Open fixture from Recent projects",
+      "selector": "button.home-row",
+      "text": "F2 PCB Ops Fixture",
+      "expect": "nav[aria-label=\"Application menu\"]"
+    },
+    {
+      "id": "pcb",
+      "do": "menu",
+      "title": "Open PCB",
+      "menu": "View",
+      "item": "Go to PCB editor",
+      "expect": "section[aria-label=\"PCB view\"]"
+    },
+    {
+      "id": "f2-select-tool",
+      "do": "click",
+      "title": "F2: Select tool",
+      "shot": false,
+      "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button",
+      "text": "Select",
+      "expect": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button[aria-pressed=\"true\"]",
+      "expectText": "Select"
+    },
+    {
+      "id": "f2-pick-track",
+      "do": "click",
+      "title": "F2: a real click on the track (board centre) selects it",
+      "selector": "section[aria-label=\"PCB view\"] svg[aria-label=\"PCB canvas\"]",
+      "expect": "section[aria-label=\"PCB view\"] [role=\"group\"][aria-label=\"Track selection\"]",
+      "expectText": "track SIG"
+    },
+    {
+      "id": "f2-menu-delete",
+      "do": "menu",
+      "title": "F2: Edit > Delete selection deletes the track with DeleteTrack (S2: never DeleteSymbol)",
+      "menu": "Edit",
+      "item": "Delete selection",
+      "expect": "footer.status span.msg",
+      "expectText": "DeleteTrack → revision"
+    },
+    {
+      "id": "f2-track-gone",
+      "do": "absent",
+      "title": "F2: the deleted track is no longer selected",
+      "selector": "section[aria-label=\"PCB view\"] [role=\"group\"][aria-label=\"Track selection\"]"
+    },
+    {
+      "id": "f2-via-tool",
+      "do": "click",
+      "title": "F2 (S15): Via tool",
+      "shot": false,
+      "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button",
+      "text": "Via",
+      "expect": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button[aria-pressed=\"true\"]",
+      "expectText": "Via"
+    },
+    {
+      "id": "f2-via-no-layer",
+      "do": "count",
+      "title": "F2 (S15): the Via tool has no Layer field (a via spans From..To)",
+      "selector": "select[aria-label=\"Layer\"]",
+      "equals": 0
+    }
+  ]
+}
