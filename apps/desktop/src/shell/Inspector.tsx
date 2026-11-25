@@ -190,7 +190,6 @@ export function Inspector({ snapshot, docId, pcb, selected, edit }: Props) {
           <Fields fields={model.fields} edit={edit} />
         </>
       )}
-      {!edit && <p className="muted hint">Read-only: no project is open for editing.</p>}
     </section>
   );
 }

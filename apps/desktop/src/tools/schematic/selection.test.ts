@@ -9,6 +9,7 @@ import {
   deleteCommands,
   marquee,
   moveCommands,
+  moveSymbolsTo,
   pasteCommands,
   pick,
   prune,
@@ -114,6 +115,21 @@ describe("move", () => {
     const cmds = moveCommands(snap, "sht_1", sel, pt(10, 0));
     expect(cmds.map((c) => c.type).sort()).toEqual(["MoveNetLabel", "MoveSymbol", "MoveSymbol", "MoveWire"]);
     expect(cmds).toContainEqual({ type: "MoveWire", wire_id: "wir_1", a: pt(64, 50), b: pt(86, 50) });
+  });
+
+  it("moves symbols to new origins, each by its own delta, dragging shared wires once (Inspector X/Y, F3)", () => {
+    const snap = wired();
+    // R1 50 -> 60 (+10), D1 80 -> 60 (-20): the wire between their pins 2 moves both ends in one MoveWire.
+    expect(moveSymbolsTo(snap, [{ id: "sym_r1", position: pt(60, 50) }, { id: "sym_d1", position: pt(60, 50) }])).toEqual([
+      { type: "MoveWire", wire_id: "wir_1", a: pt(64, 50), b: pt(56, 50) },
+      { type: "MoveNetLabel", label_id: "lab_1", position: pt(64, 50) },
+      { type: "MoveSymbol", symbol_id: "sym_r1", position: pt(60, 50) },
+      { type: "MoveSymbol", symbol_id: "sym_d1", position: pt(60, 50) },
+    ]);
+    // one symbol is exactly moveCommands with the delta to its target
+    expect(moveSymbolsTo(snap, [{ id: "sym_r1", position: pt(60, 50) }])).toEqual(moveCommands(snap, "sht_1", { ...EMPTY, symbols: ["sym_r1"] }, pt(10, 0)));
+    // an unchanged position or an unknown id is no command
+    expect(moveSymbolsTo(snap, [{ id: "sym_r1", position: pt(50, 50) }, { id: "sym_x", position: pt(1, 1) }])).toEqual([]);
   });
 });
 
