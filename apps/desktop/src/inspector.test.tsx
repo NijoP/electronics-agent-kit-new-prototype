@@ -146,6 +146,26 @@ describe("selection mode", () => {
     expect(commit(field(m.fields, "locked"), "no")).toEqual({ type: "SetFootprintLocked", footprint_id: "fp_r1", locked: false });
   });
 
+  it("S16 regression: a footprint shows its part's 3D model and MPN from the library, not a stale 'no IR field' reason", () => {
+    const s = fixture();
+    const part = { name: "", category: "", refdes_prefix: "", default_value: "", symbol: { pins: [] } };
+    s.project.library = {
+      R_0603: {
+        ...part, id: "R_0603", manufacturer: "Yageo", mpn: "RC0603FR-07330RL",
+        model3d: { kind: "box", color: "#202020", external_ref: null, model_ref: { source: { kind: "file", path: "/lib/R_0603.step" }, format: "step", quality: "LIBRARY_VERIFIED", transform: { offset_mm: [0, 0, 0], rotation_deg: [0, 0, 0], scale: [1, 1, 1] }, licence: null, provenance: "user 3D library" } },
+      },
+      LED_0603: { ...part, id: "LED_0603", model3d: { kind: "box", color: "#202020", external_ref: null, model_ref: null } },
+    };
+    const r1 = selectionModel(s, { ...NO_SELECTION, footprints: ["fp_r1"] })!;
+    expect(field(r1.fields, "model3d")).toMatchObject({ value: "/lib/R_0603.step (STEP, LIBRARY_VERIFIED)" });
+    expect(field(r1.fields, "model3d").unavailable).toBeUndefined();
+    expect(field(r1.fields, "model3d").edit).toBeUndefined();
+    expect(field(r1.fields, "mpn")).toMatchObject({ value: "Yageo RC0603FR-07330RL" });
+    expect(field(selectionModel(s, { ...NO_SELECTION, footprints: ["fp_d1"] })!.fields, "model3d").value).toBe("none: box body placeholder");
+    expect(field(selectionModel(s, { ...NO_SELECTION, footprints: ["fp_r1", "fp_d1"] })!.fields, "model3d").mixed).toBe(true);
+    expect(field(selectionModel(s, { ...NO_SELECTION, symbols: ["sym_d1"] })!.fields, "mpn").value).toBe("not set");
+  });
+
   it("labels, tracks, wires and mixed kinds", () => {
     const s = fixture();
     const l = selectionModel(s, { ...NO_SELECTION, labels: ["lab_1"] })!;

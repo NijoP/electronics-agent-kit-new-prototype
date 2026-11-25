@@ -27,6 +27,7 @@ fn board(layers: u8) -> Engine {
             default_clearance: None,
             temp_rise_c: None,
             max_component_height: Some(25_000_000),
+            clear_max_component_height: false,
         },
         approval: None,
     });

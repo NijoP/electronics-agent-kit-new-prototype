@@ -144,13 +144,13 @@ export function OutlinePanel({ edit, outline, arcs, corners, setCorners }: Props
           <button type="button" onClick={addVertex}>
             Add vertex
           </button>
-          <button type="button" onClick={() => setCorners((c) => c.slice(0, -1))} disabled={!corners.length}>
+          <button type="button" onClick={() => setCorners((c) => c.slice(0, -1))} disabled={!corners.length} title={corners.length ? "Remove the last vertex" : "No vertex to remove yet"}>
             Undo vertex
           </button>
           <span className="muted">{corners.length} vertices · click the board too · the last joins the first</span>
         </>
       )}
-      <button type="button" onClick={apply} disabled={issues.length > 0}>
+      <button type="button" onClick={apply} disabled={issues.length > 0} title={issues.length ? `Not a valid closed outline: ${issues[0]}` : "Set this shape as the board outline (SetBoardOutline)"}>
         Apply outline
       </button>
       <span className={issues.length ? "warn" : "muted"} role="status" aria-label="Outline closure">

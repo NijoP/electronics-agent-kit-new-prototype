@@ -35,8 +35,10 @@ describe("Property List model", () => {
     expect(m.rows.map((r) => r.label)).toEqual(["D1", "R1"]);
     const ids = m.columns.map((c) => c.id);
     expect(ids).toEqual(expect.arrayContaining(["refdes", "value", "component", "x", "y", "rotation"]));
-    // unavailable fields (MPN, supplier, ...) and the Group row are not columns
-    for (const id of ["mpn", "supplier", "bom", "group"]) expect(ids).not.toContain(id);
+    // unavailable fields (supplier, BOM, ...) and the Group row are not columns
+    for (const id of ["supplier", "bom", "group"]) expect(ids).not.toContain(id);
+    // F10 (S16): the IR holds the part's manufacturer / MPN, so it is a read-only column
+    expect(m.columns.find((c) => c.id === "mpn")?.editable).toBe(false);
     expect(m.columns.find((c) => c.id === "value")?.editable).toBe(true);
     expect(m.columns.find((c) => c.id === "component")?.editable).toBe(false);
     expect(m.columns.find((c) => c.id === "rotation")?.choices?.map((c) => c.value)).toEqual(["R0", "R90", "R180", "R270"]);

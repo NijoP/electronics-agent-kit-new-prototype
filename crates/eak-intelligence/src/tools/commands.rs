@@ -745,6 +745,7 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                     ("default_clearance", nullable(nm("default class clearance"))),
                     ("temp_rise_c", nullable(number("allowed conductor temperature rise, °C"))),
                     ("max_component_height", nullable(nm("maximum component height"))),
+                    ("clear_max_component_height", boolean("remove the height limit")),
                 ],
                 &[],
             ),
@@ -1216,6 +1217,7 @@ pub fn command_samples() -> Vec<Command> {
             default_clearance: Some(1),
             temp_rise_c: Some(10.0),
             max_component_height: None,
+            clear_max_component_height: false,
         },
         UpsertNetClass {
             class: Constraints::default().default_class,

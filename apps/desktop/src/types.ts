@@ -264,6 +264,10 @@ export interface Project {
       refdes_prefix: string;
       default_value: string;
       distributor?: string | null;
+      manufacturer?: string | null;
+      mpn?: string | null;
+      /** Box-body style and optional real 3D model (engine snapshots carry it; fixtures may not). */
+      model3d?: Model3d;
       /** Full v3 symbol in engine snapshots; test fixtures may give only pin numbers and names. */
       symbol: {
         pins: (Pick<SymbolPin, "number" | "name"> & Partial<SymbolPin>)[];
@@ -359,7 +363,7 @@ export type Command =
   | { type: "AddVia"; position: Point; net: string; drill: Nm | null; diameter: Nm | null; from?: CopperLayer | null; to?: CopperLayer | null }
   | { type: "AddZone"; layer: CopperLayer; net: string; outline: Point[]; clearance: Nm | null }
   | { type: "DeleteZone"; zone_id: Id }
-  | { type: "SetDesignRules"; min_track_width: Nm | null; min_clearance: Nm | null; min_drill: Nm | null; min_annular_ring: Nm | null; board_edge_clearance: Nm | null; default_track_width: Nm | null; default_clearance: Nm | null; temp_rise_c: number | null; max_component_height: Nm | null }
+  | { type: "SetDesignRules"; min_track_width: Nm | null; min_clearance: Nm | null; min_drill: Nm | null; min_annular_ring: Nm | null; board_edge_clearance: Nm | null; default_track_width: Nm | null; default_clearance: Nm | null; temp_rise_c: number | null; max_component_height: Nm | null; /** ADR-0050: remove the height limit (a null height means "unchanged"). */ clear_max_component_height?: boolean }
   | { type: "UpsertNetClass"; class: NetClass }
   | { type: "SetNetCurrent"; net: string; amps: number | null }
   | { type: "SetNetVoltage"; net: string; volts: number | null }

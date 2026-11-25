@@ -184,6 +184,21 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 const withAxis = (p: Point, k: "x" | "y", n: number): Point => (k === "x" ? { x: n, y: p.y } : { x: p.x, y: n });
 const present = <T>(x: T | undefined): x is T => x !== undefined;
 
+/** The project library definition of a placed part (absent in fixtures without a library). */
+const defOf = (s: Snapshot, componentId: string) => s.project.library?.[componentId];
+/** "Maker MPN" from the part's library definition, or "not set". */
+const mpnText = (s: Snapshot, componentId: string) => {
+  const d = defOf(s, componentId);
+  return [d?.manufacturer, d?.mpn].filter(Boolean).join(" ") || "not set";
+};
+/** The part's 3D model as the library definition holds it (`model3d.model_ref`, read-only here). */
+export function modelText(s: Snapshot, componentId: string): string {
+  const m = defOf(s, componentId)?.model3d;
+  const r = m?.model_ref;
+  if (r) return `${r.source.path} (${r.format.toUpperCase()}, ${r.quality ?? "unclassified"})`;
+  return m ? `none: ${m.kind} body placeholder` : "none";
+}
+
 function symbolFields(s: Snapshot, ids: Id[]): PropModel {
   const syms = ids.map((id) => s.project.schematic.symbols[id]).filter(present);
   const one = syms.length === 1 ? syms[0] : null;
@@ -238,7 +253,7 @@ function symbolFields(s: Snapshot, ids: Id[]): PropModel {
       },
       { id: "mirror", label: "Mirrored", ...common(syms.map((y) => (y.mirror ? "yes" : "no"))) },
       { id: "footprint", label: "Footprint", ...common(syms.map((y) => (Object.values(s.project.pcb.footprints).some((f) => f.symbol_id === y.id) ? "on the PCB" : "not on the PCB yet"))) },
-      unavailable("mpn", "Manufacturer / MPN"),
+      { id: "mpn", label: "Manufacturer / MPN", ...common(syms.map((y) => mpnText(s, y.component_id))) },
       unavailable("supplier", "Supplier part"),
       unavailable("bom", "In BOM / in PCB"),
       unavailable("unit", "Sub-part (unit)"),
@@ -315,9 +330,10 @@ function footprintFields(s: Snapshot, ids: Id[]): PropModel {
           },
         },
       },
-      unavailable("model3d", "3D model"),
+      // Read-only: the model belongs to the part's library definition (Library › Attach 3D model).
+      { id: "model3d", label: "3D model", ...common(fps.map((f) => modelText(s, f.component_id))) },
       unavailable("bom", "In BOM"),
-      unavailable("mpn", "Manufacturer / MPN"),
+      { id: "mpn", label: "Manufacturer / MPN", ...common(fps.map((f) => mpnText(s, f.component_id))) },
     ],
   };
 }

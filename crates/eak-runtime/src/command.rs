@@ -500,6 +500,9 @@ pub enum Command {
         net: Option<String>,
     },
     // ---- constraints / manufacturing
+    /// Change board rules: a `None` field is left unchanged. `max_component_height` is optional
+    /// in the IR, so `clear_max_component_height` removes the limit (ADR-0050); giving both is
+    /// refused.
     SetDesignRules {
         min_track_width: Option<Nm>,
         min_clearance: Option<Nm>,
@@ -510,6 +513,8 @@ pub enum Command {
         default_clearance: Option<Nm>,
         temp_rise_c: Option<f64>,
         max_component_height: Option<Nm>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        clear_max_component_height: bool,
     },
     UpsertNetClass {
         class: NetClass,
@@ -3234,7 +3239,13 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             default_clearance,
             temp_rise_c,
             max_component_height,
+            clear_max_component_height,
         } => {
+            if *clear_max_component_height && max_component_height.is_some() {
+                return Err(CommandError::Invalid(
+                    "give a max component height or clear it, not both".into(),
+                ));
+            }
             let c = &mut p.constraints;
             for v in [
                 min_track_width,
@@ -3286,6 +3297,9 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             }
             if max_component_height.is_some() {
                 c.max_component_height = *max_component_height;
+            }
+            if *clear_max_component_height {
+                c.max_component_height = None;
             }
         }
         UpsertNetClass { class } => {

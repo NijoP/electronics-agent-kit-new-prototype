@@ -247,12 +247,54 @@ describe("PCB editor", () => {
     tool("Move");
     const svg = container.querySelector("svg.canvas")!;
     const fp = container.querySelector('[data-footprint-id="fp_r1"] .courtyard')!;
-    fireEvent.pointerDown(fp, { clientX: 500, clientY: 500, button: 0, buttons: 1 });
-    fireEvent.pointerUp(fp, { clientX: 500, clientY: 500, button: 0 });
+    // Picked at its origin (10, 10): the move is the grid-snapped pointer delta.
+    clickAt(fp, pcbVb(), 10, -10);
     clickAt(svg, pcbVb(), 6.1, -5.2);
     expect(sent[0]).toEqual([{ type: "MoveFootprint", footprint_id: "fp_r1", position: { x: 6_000_000, y: 5_000_000 }, rotation: null, side: null }]);
     fireEvent.keyDown(window, { key: "f" });
     expect(sent[1]).toEqual([{ type: "MoveFootprint", footprint_id: "fp_r1", position: { x: 10_000_000, y: 10_000_000 }, rotation: null, side: "bottom" }]);
+  });
+
+  it("F10 regression: click-then-click Move moves by the grid delta and never snaps the origin onto another part's pad", () => {
+    const { container } = render(<PcbView snapshot={fixture()} selected={null} onSelect={() => {}} edit={edit()} />);
+    tool("Move");
+    const svg = container.querySelector("svg.canvas")!;
+    // Pick R1 off its origin, then click 0.3 mm from D1's pad at (20, 10): the old path put R1's
+    // origin on that pad (20, 10). The pointer moved (+10.7, -0.1) mm, which is (+10.5, 0) on the
+    // 0.5 mm PCB grid, so R1 goes from (10, 10) to (20.5, 10).
+    clickAt(container.querySelector('[data-footprint-id="fp_r1"] .courtyard')!, pcbVb(), 9.6, -10.3);
+    clickAt(svg, pcbVb(), 20.3, -10.2);
+    expect(sent).toEqual([[{ type: "MoveFootprint", footprint_id: "fp_r1", position: { x: 20_500_000, y: 10_000_000 }, rotation: null, side: null }]]);
+  });
+
+  it("F10 regression: a locked footprint is not click-moved and the user is told why", () => {
+    const s = fixture();
+    s.project.pcb.footprints.fp_r1.locked = true;
+    const ctx = edit();
+    const { container } = render(<PcbView snapshot={s} selected={null} onSelect={() => {}} edit={ctx} />);
+    tool("Move");
+    clickAt(container.querySelector('[data-footprint-id="fp_r1"] .courtyard')!, pcbVb(), 10, -10);
+    clickAt(container.querySelector("svg.canvas")!, pcbVb(), 14, -10);
+    expect(sent).toEqual([]);
+    expect(ctx.notify).toHaveBeenCalledWith("1 footprint locked; unlock to move.");
+  });
+
+  it("S17 regression: every disabled PCB editor button says why it is disabled", () => {
+    const { container } = render(<PcbView snapshot={fixture()} selected={null} onSelect={() => {}} edit={edit()} />);
+    const disabled = () => [...container.querySelectorAll<HTMLButtonElement>("button:disabled")];
+    let seen = 0;
+    for (const t of ["Route", "Zone", "Keep-out", "Cut-out", "Board outline", "Select"]) {
+      tool(t);
+      // Select: select both footprints so the selection bar (Distribute, Lock, Unlock) shows.
+      if (t === "Select") fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+      for (const d of disabled()) {
+        seen++;
+        expect(d.title, `${t}: "${d.textContent}"`).not.toBe("");
+      }
+    }
+    expect(seen).toBeGreaterThan(5);
+    expect(screen.getByRole("button", { name: "Distribute H" }).title).toBe("Select 3 or more footprints to distribute");
+    expect(screen.getByRole("button", { name: /Finish route/ }).title).toBe("No route started: click a pad or track end first");
   });
 
   it("slice E1 regression: R and F act on the selection only under the Select and Move tools", () => {

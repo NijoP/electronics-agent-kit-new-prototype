@@ -31,10 +31,29 @@ describe("design rules dialog", () => {
     setup();
     expect((screen.getByLabelText("Min clearance (mm)") as HTMLInputElement).value).toBe("0.15");
     type("Min clearance (mm)", "0.2");
-    type("Max component height (mm, optional)", "12");
+    type("Max component height (mm, empty = no limit)", "12");
     fireEvent.click(screen.getByRole("button", { name: "Apply board rules" }));
     expect(sent).toHaveLength(1);
     expect((sent[0] as Command[])[0]).toMatchObject({ type: "SetDesignRules", min_clearance: 200_000, min_track_width: 150_000, default_track_width: 250_000, temp_rise_c: 10, max_component_height: 12_000_000 });
+  });
+  it("S19 regression: emptying a stored max component height sends an explicit clear (ADR-0050)", () => {
+    const s = withRules();
+    s.project.constraints!.max_component_height = 12_000_000;
+    sent = [];
+    render(<RulesDialog snapshot={s} busy={false} apply={async (c) => void sent.push(c)} onClose={() => {}} />);
+    const label = "Max component height (mm, empty = no limit)";
+    expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe("12");
+    type(label, "");
+    fireEvent.click(screen.getByRole("button", { name: "Apply board rules" }));
+    expect((sent[0] as Command[])[0]).toMatchObject({ type: "SetDesignRules", max_component_height: null, clear_max_component_height: true });
+  });
+  it("an empty max component height with no stored limit is not a clear", () => {
+    setup();
+    type("Min clearance (mm)", "0.2");
+    fireEvent.click(screen.getByRole("button", { name: "Apply board rules" }));
+    const c = (sent[0] as Command[])[0] as Record<string, unknown>;
+    expect(c.max_component_height).toBeNull();
+    expect(c.clear_max_component_height).toBeUndefined();
   });
   it("rejects non-numeric input without sending anything", () => {
     setup();
