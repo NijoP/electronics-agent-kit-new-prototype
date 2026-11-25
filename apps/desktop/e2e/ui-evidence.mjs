@@ -373,13 +373,12 @@ const handlers = {
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
     return `${how}; XTest typed "${value}"${s.expect ? `; then visible: ${s.expect}` : ""}`;
   },
-  // XTest in the native folder chooser (tauri-plugin-dialog → GTK file chooser, a separate X
-  // window the webview cannot see): focus the window named `window`, Ctrl+L, type `path`
-  // (`{UI_OUT}` expanded; the folder is created first), Return. If the chooser only changed into
-  // the folder, a further Return selects it. Fails if the window never appears or stays open.
-  async "folder-chooser"(s) {
-    const dir = expand(s.path);
-    fs.mkdirSync(dir, { recursive: true });
+  // A native window the webview cannot see (tauri-plugin-dialog's GTK file chooser): waits until
+  // a window named `window` is shown, focuses it and sends `keys` (XTest; default Escape, which
+  // cancels it). Fails if the window never appears or is still open afterwards. Picking a folder
+  // in the chooser is not deterministic under Xvfb (it opens on Recent with Open disabled, and
+  // Return on a typed path does not select it), so scenarios type the path into the app instead.
+  async "native-dialog"(s) {
     const find = () => {
       try {
         return sh("xdotool", ["search", "--onlyvisible", "--name", s.window]).split("\n")[0] || null;
@@ -399,22 +398,14 @@ const handlers = {
     const id = await until(true, s.timeout ?? 15000);
     if (!id) throw new Error(`no native window named "${s.window}" after ${s.timeout ?? 15000} ms`);
     await sleep(700);
+    const file = shot(s.id);
+    const keys = s.keys ?? "Escape";
     sh("xdotool", ["windowfocus", "--sync", id]);
     await sleep(200);
-    xkey("ctrl+l");
-    await sleep(400);
-    sh("xdotool", ["type", "--delay", "30", "--", dir]);
-    await sleep(600);
-    xkey("Return");
-    let returns = 1;
-    while (!(await until(false, 3000))) {
-      if (returns >= 3) throw new Error(`the native window "${s.window}" is still open after ${returns} Return presses`);
-      sh("xdotool", ["windowfocus", "--sync", id]);
-      xkey("Return");
-      returns++;
-    }
+    xkey(keys);
+    if (!(await until(false, 5000))) throw new Error(`the native window "${s.window}" is still open after XTest ${keys}`);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
-    return `XTest in the native folder chooser "${s.window}": Ctrl+L, typed ${dir}, Return ×${returns}${s.expect ? `; then visible: ${s.expect}` : ""}`;
+    return { evidence: `native window "${s.window}" shown (screenshot), XTest ${keys} closed it${s.expect ? `; then visible: ${s.expect}` : ""}`, file };
   },
   // A native JavaScript dialog (window.confirm, e.g. a destructive menu entry asking first) is
   // held by WebKit's automation session and drawn as no X window, so XTest cannot reach it: this
