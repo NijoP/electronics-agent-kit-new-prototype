@@ -291,12 +291,16 @@ export function schematicActions(d: ActionDeps): Action[] {
 /** PCB editor: Place, Route, Design (DRC, DFM, placement, zones). */
 export function pcbActions(d: ActionDeps): Action[] {
   const idle = () => (d.busy ? "An engine command is running" : true);
-  const tool = (id: string, label: string, title: string, menu: "Place" | "Route", icon: IconName, split?: SplitId): Action => ({ id: `t-${id}`, label, title, docs: PCB, menu, toolbar: "edit", icon, split, enabled: () => true, run: () => d.tool(id) });
+  const tool = (id: string, label: string, title: string, menu: "Place" | "Route", icon: IconName, split?: SplitId, more: Partial<Action> = {}): Action => ({ id: `t-${id}`, label, title, docs: PCB, menu, toolbar: "edit", icon, split, ...more, enabled: () => true, run: () => d.tool(id) });
   const fp = d.fpOfSelected;
   return [
     tool("via", "Via", "Place a via (AddVia)", "Place", "via"),
     tool("outline", "Board outline", "Draw the board outline (SetBoardOutline)", "Place", "outline", "pcb-regions"),
     tool("zone", "Copper zone", "Draw a copper zone (AddZone). The engine has no separate refill command", "Place", "zone", "pcb-regions"),
+    tool("region", "Keep-out region", "Draw a keep-out or track-width constraint region (AddRegion); DRC-021 / DRC-022 check it", "Place", "keepout", "pcb-regions"),
+    tool("cutout", "Board cut-out", "Draw a hole milled through the board, inside the outline (AddBoardCutout)", "Place", "outline", undefined, { toolbar: undefined }),
+    tool("text", "PCB text", "Place text on a silkscreen or documentation layer; click a text to move it (AddPcbText, MovePcbText)", "Place", "text", undefined, { id: "t-pcb-text", sep: true }),
+    tool("dimension", "Dimension", "Measure between two clicked points (AddDimension)", "Place", "dimension"),
     {
       id: "t-flip",
       label: "Flip footprint",

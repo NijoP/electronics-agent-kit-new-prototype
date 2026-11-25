@@ -15,6 +15,11 @@ on:
       - "apps/desktop/**"
       - ".github/workflows/ui-evidence.yml"
   workflow_dispatch:
+    inputs:
+      remove_results:
+        description: "Gate self-test: delete this scenario's results file (e.g. e5) before the results gate; the job must then fail"
+        required: false
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -340,11 +345,22 @@ jobs:
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # Fails the job when a scenario wrote no results file (it crashed or never ran); failing
       # rows already failed their own step. Runs before the upload, which still runs (always()).
+      # The scenario list is every UI_OUT of this file, so a new scenario step is gated (and
+      # uploaded, by the globs below) without editing a second list.
+      - name: Results gate self-test (workflow_dispatch remove_results)
+        if: always() && inputs.remove_results != ''
+        env:
+          REMOVE: ${{ inputs.remove_results }}
+        run: |
+          case "$REMOVE" in *[!a-z0-9]*) echo "::error::remove_results must be a scenario directory such as e5"; exit 1 ;; esac
+          rm -v "${{ runner.temp }}/ui-evidence/$REMOVE/UI_EVIDENCE.md"
       - name: Results to job summary
         if: always()
         run: |
           missing=0
-          for d in "" e2 e3 d4 b1 c2 c3 b2 d1 d3 d2 b3 b3g f3 b6 c6 c4 c1 b4 b5 e4 e9a e7 f2 f8; do
+          dirs=$(sed -nE 's#^ +UI_OUT: \$\{\{ runner\.temp \}\}/ui-evidence/?([a-z0-9]*) *$#\1#p' .github/workflows/ui-evidence.yml)
+          [ -n "$dirs" ] || { echo "::error::no UI_OUT found in ui-evidence.yml"; exit 1; }
+          while IFS= read -r d; do
             f="${{ runner.temp }}/ui-evidence/${d:+$d/}UI_EVIDENCE.md"
             if [ -f "$f" ]; then
               cat "$f" >> "$GITHUB_STEP_SUMMARY"
@@ -353,66 +369,16 @@ jobs:
               echo "::error::no ${d:-a1} results file: $f"
               missing=1
             fi
-          done
+          done <<< "$dirs"
           exit $missing
+      # Globs: every scenario directory (and the A1 root) is archived, e5 and any later one included.
       - name: Upload screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ui-evidence-screenshots
           path: |
-            ${{ runner.temp }}/ui-evidence/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/tauri-driver.log
-            ${{ runner.temp }}/ui-evidence/e2/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/e2/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/e3/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/e3/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/e3/tauri-driver.log
-            ${{ runner.temp }}/ui-evidence/d4/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/d4/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/b1/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/b1/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/c2/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/c2/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/c3/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/c3/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/b2/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/b2/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/d1/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/d1/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/d1/tauri-driver.log
-            ${{ runner.temp }}/ui-evidence/d3/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/d3/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/d3/tauri-driver.log
-            ${{ runner.temp }}/ui-evidence/d2/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/d2/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/b3/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/b3/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/b4/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/b4/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/e4/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/e4/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/e9a/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/e9a/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/e7/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/e7/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/f2/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/f2/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/b3g/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/b3g/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/f3/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/f3/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/b5/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/b5/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/b6/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/b6/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/c6/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/c6/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/f9/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/f9/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/c4/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/c4/UI_EVIDENCE.md
-            ${{ runner.temp }}/ui-evidence/c1/screenshots/*.png
-            ${{ runner.temp }}/ui-evidence/c1/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/**/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/**/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/**/tauri-driver.log
           if-no-files-found: warn

@@ -22,6 +22,11 @@ same paths, and by hand (`workflow_dispatch`). It is a **separate workflow** and
 required check (branch protection is unchanged), but it is honest: the job is **red**
 when any row fails, when a step that should take a screenshot has none, when a
 scenario records no rows, or when a scenario writes no results file.
+The results gate and the artifact upload take their scenario list from the workflow's own
+`UI_OUT` lines (upload by glob), so a new scenario step is gated and archived without editing a
+second list; E5 (`e5/`) had been missed by the old hand-kept lists. To check the gate itself, run
+the workflow by hand with `remove_results` set to a scenario directory (for example `e5`): that
+results file is deleted before the gate, and the job must turn red.
 Until 2026-11-23 the job had `continue-on-error: true`, so a run such as
 https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45093860444 showed
 success with 7 failing B2 rows; an older green badge does not prove its scenarios passed. On
@@ -67,7 +72,7 @@ Every step except `each-menu` takes one screenshot after it runs (set `"shot": f
 | `fixture-project` | `name`, `folder`? | SETUP: creates the fixture project, reloads to Project Home, waits for it in Recent projects |
 | `fixture-library` | `name`, `licence`, `source`, `from`, `part`, `partName` | SETUP (needs an open project): writes an open-source library folder (manifest with licence and source, one definition copied from built-in `from` as `part`) and imports it through `library_import_open_source` |
 | `fixture-model` | `component`, `path`, `format`, `licence`?, `quality`?, `provenance` | SETUP (needs the part in the project library): records a 3D model reference on it with `UpsertComponentDefinition`, as the Library dock's Attach 3D model does (the reference only; no file is written) |
-| `fixture-commands` | `commands` (typed engine commands, JSON as `execute_command` takes them), `expect`?, `expectText`? | SETUP (needs an open project): runs each command through the `execute_command` IPC at the current revision; every one must be accepted. For objects that have no drawing tool yet (schema v4, slice C4) |
+| `fixture-commands` | `commands` (typed engine commands, JSON as `execute_command` takes them), `expect`?, `expectText`? | SETUP (needs an open project): runs each command through the `execute_command` IPC at the current revision; every one must be accepted. For fixture state that is not the subject of the scenario (since F5 the C4 objects themselves are drawn with XTest) |
 | `fixture-command` | `command` | SETUP: one typed engine command on the active project through `execute_command` (for example a fixture board outline); run it before the project is opened from Recent projects |
 | `fixture-kicad-symbol` | `file`, `lines`, `licence`, `source` | SETUP: writes `lines` as `<file>.kicad_sym` (an original test symbol) and imports it through `kicad_import_commit`, the IPC the KiCad import dialog commits with; fails unless exactly one symbol is imported |
 | `click` | `selector`, `text`?, `dx`?, `dy`? (px from the centre), `button`? (`"right"` for a right-click), `expect`?, `expectText`?, `gone`?, `timeout`? | scrolls the element into view if needed (as a user would), XTest click on it (offset by `dx`/`dy`), then waits for `expect` (and for `gone` to disappear) |

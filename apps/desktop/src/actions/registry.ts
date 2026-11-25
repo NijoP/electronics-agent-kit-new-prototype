@@ -32,12 +32,13 @@ export function menusFor(actions: readonly Action[], ctx: DocContext): Menu[] {
   })).filter((m) => m.items.length > 0);
 }
 
+/** Toolbar buttons; a click runs the action through `runAction` (enabled only, destructive ones confirmed), like the keys and the context menu. */
 export function toolbarFor(actions: readonly Action[], ctx: DocContext): ToolbarGroup[] {
   const shown = visibleIn(actions, ctx);
   return TOOLBAR_ORDER.map((g) =>
     shown
       .filter((a) => a.toolbar === g)
-      .map((a) => ({ id: a.id, group: g, label: a.short ?? a.label, title: a.title, icon: a.icon, split: a.split, pressed: a.checked, run: a.run, shortcut: keysOf(a)[0], disabled: reason(a) })),
+      .map((a) => ({ id: a.id, group: g, label: a.short ?? a.label, title: a.title, icon: a.icon, split: a.split, pressed: a.checked, run: () => void runAction(a), shortcut: keysOf(a)[0], disabled: reason(a) })),
   ).filter((g) => g.length > 0);
 }
 
