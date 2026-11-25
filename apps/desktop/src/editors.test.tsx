@@ -287,6 +287,7 @@ describe("PCB editor", () => {
       tool(t);
       // Select: select both footprints so the selection bar (Distribute, Lock, Unlock) shows.
       if (t === "Select") fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+      if (t === "Route") expect(screen.getByRole("button", { name: /Finish route/ }).title).toBe("No route started: click a pad or track end first");
       for (const d of disabled()) {
         seen++;
         expect(d.title, `${t}: "${d.textContent}"`).not.toBe("");
@@ -294,7 +295,6 @@ describe("PCB editor", () => {
     }
     expect(seen).toBeGreaterThan(5);
     expect(screen.getByRole("button", { name: "Distribute H" }).title).toBe("Select 3 or more footprints to distribute");
-    expect(screen.getByRole("button", { name: /Finish route/ }).title).toBe("No route started: click a pad or track end first");
   });
 
   it("slice E1 regression: R and F act on the selection only under the Select and Move tools", () => {
