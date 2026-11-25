@@ -236,7 +236,7 @@ describe("Find Results (wired to the B3 find bar)", () => {
   });
 
   it("the schematic editor of the hit's sheet takes the pick and selects the net label", () => {
-    requestFindPick({ kind: "label", id: "lab_1", sheet: "sht_1", field: "label", text: "GND" });
+    requestFindPick({ kind: "label", id: "lab_1", sheet: "sht_1" });
     const { container } = render(
       <DocIdContext.Provider value="doc">
         <SchematicView snapshot={fixture()} selected={null} onSelect={() => {}} />

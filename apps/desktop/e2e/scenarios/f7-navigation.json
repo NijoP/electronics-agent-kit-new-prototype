@@ -1,0 +1,25 @@
+{
+  "name": "F7 navigation and cross-probe",
+  "description": "Definition-of-done slice F7 (audit S11, S12, S13, the S24 sheet-picker drift) on an isolated fixture project. In the Pages tab, Add sheet adds Sheet 2 and a resistor is placed on it with real X input; back on Sheet 1, Design > Run ERC reports the resistor's unconnected pins, and a click on a finding opens the Sheet 2 document tab (sch:<id>, not the first schematic) with the resistor selected (S12). Back on Sheet 1, Quick open of the resistor's designator opens Sheet 2 and selects it there (S11). Quick open of a net, Design manager wire and label selection (S13), no-connect / bus / bus-entry references (positions, or disabled with a reason) and the header sheet picker opening sch:<id> (S24) are covered by vitest (src/navigation.f7.test.tsx): the sheet picker is a native <select>, whose popup this harness cannot drive with XTest.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "F7 Navigation Fixture", "folder": "f7-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "F7 Navigation Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "f7-add-sheet", "do": "click", "title": "Pages tab: Add sheet adds Sheet 2", "selector": "[role=\"toolbar\"][aria-label=\"Sheet actions\"] button", "text": "Add sheet", "expect": "button[aria-label=\"Rename sheet Sheet 2\"]", "shot": false },
+    { "id": "f7-open-sheet2", "do": "click", "title": "Open Sheet 2 from the Pages tab", "selector": ".dm-row > button", "text": "Sheet 2", "expect": "[role=\"tablist\"][aria-label=\"Documents\"] [role=\"tab\"][aria-selected=\"true\"]", "expectText": "Sheet 2", "shot": false },
+    { "id": "f7-quick-open", "do": "key", "title": "Quick open (Ctrl+P) to arm the Place tool with a part", "keys": "ctrl+p", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "f7-quick-type", "do": "type", "title": "Type the part name", "value": "Resistor 0603", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"] [role=\"option\"][aria-selected=\"true\"]", "expectText": "Resistor 0603", "shot": false },
+    { "id": "f7-quick-arm", "do": "key", "title": "Enter arms the schematic Place tool", "keys": "Return", "gone": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "f7-place", "do": "click", "title": "XTest click on Sheet 2 places the resistor there", "selector": "svg[aria-label=\"Schematic canvas\"]", "expect": ".dm-row > button", "expectText": "Sheet 2 sheet · 1 symbol(s)" },
+    { "id": "f7-select-tool", "do": "key", "title": "Escape back to the Select tool", "keys": "Escape", "shot": false },
+    { "id": "f7-back-sheet1", "do": "click", "title": "Back to Sheet 1 from the Pages tab", "selector": ".dm-row > button", "text": "Sheet 1", "expect": "[role=\"tablist\"][aria-label=\"Documents\"] [role=\"tab\"][aria-selected=\"true\"]", "expectText": "Sheet 1" },
+    { "id": "f7-erc", "do": "menu", "title": "Design > Run ERC reports the resistor's unconnected pins", "menu": "Design", "item": "Run ERC", "expect": "section[aria-label=\"ERC report\"] li.finding > button" },
+    { "id": "f7-erc-finding", "do": "click", "title": "S12: a click on the ERC finding opens the Sheet 2 document, where the resistor is, not the first sheet", "selector": "section[aria-label=\"ERC report\"] li.finding > button", "expect": "[role=\"tablist\"][aria-label=\"Documents\"] [role=\"tab\"][aria-selected=\"true\"]", "expectText": "Sheet 2" },
+    { "id": "f7-erc-selected", "do": "wait", "title": "S12: the resistor is selected on Sheet 2", "selector": "section[aria-label=\"Schematic view\"] g.symbol.selected" },
+    { "id": "f7-sheet1-again", "do": "click", "title": "Back to Sheet 1 from the Pages tab", "selector": ".dm-row > button", "text": "Sheet 1", "expect": "[role=\"tablist\"][aria-label=\"Documents\"] [role=\"tab\"][aria-selected=\"true\"]", "expectText": "Sheet 1", "shot": false },
+    { "id": "f7-qo-symbol", "do": "key", "title": "S11: Quick open (Ctrl+P)", "keys": "ctrl+p", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"]", "shot": false },
+    { "id": "f7-qo-type", "do": "type", "title": "S11: type the resistor's designator", "value": "R1", "expect": "[role=\"dialog\"][aria-label=\"Quick open\"] [role=\"option\"][aria-selected=\"true\"]", "expectText": "R1", "shot": false },
+    { "id": "f7-qo-go", "do": "key", "title": "S11: Enter on the symbol opens Sheet 2 (it no longer only selects behind Sheet 1)", "keys": "Return", "expect": "[role=\"tablist\"][aria-label=\"Documents\"] [role=\"tab\"][aria-selected=\"true\"]", "expectText": "Sheet 2" },
+    { "id": "f7-qo-msg", "do": "wait", "title": "S11: the status line says the resistor was selected and zoomed in the schematic", "selector": "footer.status span.msg", "text": "R1: selected and zoomed in the schematic" }
+  ]
+}
