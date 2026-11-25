@@ -8,16 +8,19 @@ diff in the job summary and uploads the regenerated file as the `ui-inventory` a
 Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiInventoryAllowlist.ts`):
 - a registry action has a handler that some probed state enables, or is disabled in every state
   with a reason that starts with "Not implemented" or "Unavailable";
+- every action enabled in a probed state, and every quick-open item (Go to part, net or sheet…),
+  is run against recorded dependencies there and must call at least one (no no-op handlers);
 - a scanned interactive element (`button`, `input`, `select`, `textarea`, `a`, or an interactive
   `role`) has a handler (`on…`, spread props, `href`, submit, `readOnly`), or is disabled with a
-  `title` that gives the reason. The scan is static: a handler that exists but does nothing is not
-  detected here; that is what the registry probes and the UI tests are for.
+  `title` that gives the reason. The scan is static: a component handler that exists but does
+  nothing is not detected here; that is what the UI tests are for.
 
 ## Summary
 
-- Action registry: 76 controls: 2 unavailable with a reason, 1 violations (1 allowlisted).
-- Component scan: 320 controls: 0 unavailable with a reason, 0 violations (0 allowlisted).
-- Allowlist: 1 entries.
+- Action registry: 136 controls: 0 unavailable with a reason, 0 violations (0 allowlisted).
+- Component scan: 497 controls: 1 unavailable with a reason, 0 violations (0 allowlisted).
+- Quick open: 6 items probed, 0 no-op handlers.
+- Allowlist: 0 entries.
 
 ## Action registry
 
@@ -26,8 +29,9 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | `new` | New project… | home, schematic, pcb, 3d, file | File | file |  | state-dependent |
 | `open` | Open project… | home, schematic, pcb, 3d, file | File | file |  | state-dependent |
 | `recent-prj_other` | Recent: Other | home, schematic, pcb, 3d, file | File |  |  | state-dependent |
-| `save` | Save | home, schematic, pcb, 3d, file | File | file | Mod+S | state-dependent |
-| `saveas` | Save as… | home, schematic, pcb, 3d, file | File | file |  | unavailable (Not implemented: the engine saves the project in place) |
+| `save` | Save (confirm written) | home, schematic, pcb, 3d, file | File | file | Mod+S | state-dependent |
+| `export-bom` | Export BOM… | home, schematic, pcb | File |  |  | state-dependent |
+| `export-docs` | Export schematic and netlist… | home, schematic, pcb | File |  |  | state-dependent |
 | `close` | Close project | home, schematic, pcb, 3d, file | File | app |  | state-dependent |
 | `undo` | Undo | home, schematic, pcb, 3d, file | Edit | file | Mod+Z | state-dependent |
 | `redo` | Redo | home, schematic, pcb, 3d, file | Edit | file | Mod+Shift+Z, Mod+Y | state-dependent |
@@ -49,13 +53,17 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | `toolbar-labels` | Toolbar labels | home, schematic, pcb, 3d, file | View |  |  | enabled |
 | `toggle-side` | Side panel | home, schematic, pcb, 3d, file | View |  | Mod+B | enabled |
 | `toggle-bottom` | Bottom panel | home, schematic, pcb, 3d, file | View |  | Mod+J | enabled |
+| `toggle-right` | Right panel | home, schematic, pcb, 3d, file | View |  | Mod+Shift+B | enabled |
 | `toggle-split` | Split schematic and PCB | home, schematic, pcb, 3d, file | View |  |  | enabled |
 | `show-overview` | Show Overview | home, schematic, pcb, 3d, file | View |  |  | enabled |
 | `show-project` | Show Explorer | home, schematic, pcb, 3d, file | View |  | Mod+Shift+E | enabled |
-| `show-parts` | Show Library / Parts | home, schematic, pcb, 3d, file | View |  |  | enabled |
-| `show-layers` | Show PCB Layers | home, schematic, pcb, 3d, file | View |  |  | enabled |
+| `show-design` | Show Design manager | home, schematic, pcb, 3d, file | View |  | Mod+Shift+D | enabled |
 | `show-domain` | Show Domain | home, schematic, pcb, 3d, file | View |  |  | enabled |
 | `show-manufacturing` | Show Manufacturing | home, schematic, pcb, 3d, file | View |  |  | enabled |
+| `show-assets` | Show Assets | home, schematic, pcb, 3d, file | View |  |  | enabled |
+| `show-properties` | Show Properties | home, schematic, pcb, 3d, file | View |  |  | enabled |
+| `show-layers` | Show Layers | pcb | View |  |  | enabled |
+| `library` | Show library | home, schematic, pcb, 3d, file | View |  |  | enabled |
 | `bom` | Show BOM | home, schematic, pcb, 3d, file | View |  |  | enabled |
 | `log` | Show log | home, schematic, pcb, 3d, file | View |  |  | enabled |
 | `ws-schematic` | Go to Schematic editor | home, schematic, pcb, 3d, file | View |  | Mod+1 | enabled |
@@ -68,6 +76,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | `proj-prj_2` | Switch to project Second | home, schematic, pcb, 3d, file | Project |  |  | state-dependent |
 | `palette` | Command palette | home, schematic, pcb, 3d, file | Tools | app | Mod+K, Mod+Shift+P | enabled |
 | `quick-open` | Go to part, net or sheet… | home, schematic, pcb, 3d, file | Tools |  | Mod+P | enabled |
+| `preferences` | Settings… | home, schematic, pcb, 3d, file | Settings |  | Mod+, | enabled |
 | `settings` | Model settings | home, schematic, pcb, 3d, file | Settings |  |  | enabled |
 | `theme` | Light theme | home, schematic, pcb, 3d, file | Settings |  |  | enabled |
 | `help` | Keyboard shortcuts | home, schematic, pcb, 3d, file | Help |  |  | enabled |
@@ -75,13 +84,48 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | `sync` | Update PCB from schematic | home, schematic, pcb | Design | checks |  | state-dependent |
 | `rules` | Design rules and net classes… | home, schematic, pcb | Design | checks |  | enabled |
 | `t-place` | Place part | schematic | Place | edit |  | enabled |
-| `part-res` | Part: Resistor | schematic | Place |  |  | enabled |
 | `t-wire` | Wire | schematic | Place | edit |  | enabled |
+| `t-bus` | Bus | schematic | Place | edit |  | enabled |
+| `t-busentry` | Bus entry | schematic | Place | edit |  | enabled |
+| `t-power-0` | Power port GND | schematic | Place | edit |  | enabled |
+| `t-power-1` | Power port +3V3 | schematic | Place | edit |  | enabled |
+| `t-power-2` | Power port +5V | schematic | Place | edit |  | enabled |
+| `t-power-3` | Power port AGND | schematic | Place | edit |  | enabled |
+| `t-power-4` | Power port CHASSIS | schematic | Place | edit |  | enabled |
 | `t-label` | Net / power label | schematic | Place | edit |  | enabled |
+| `t-netport` | Net port (this sheet) | schematic | Place | edit |  | enabled |
+| `t-offpage` | Off-page connector | schematic | Place | edit |  | enabled |
 | `t-noconnect` | No connect | schematic | Place | edit |  | enabled |
 | `t-pinlabel` | Label pin | schematic | Place | edit |  | enabled |
-| `t-junction` | Junction | schematic | Place | edit |  | allowlisted: no handler, and the disabled reason does not say it is unavailable (Junctions are added automatically where wires meet) |
+| `t-line` | Line | schematic | Place | edit |  | enabled |
+| `t-rect` | Rectangle | schematic | Place | edit |  | enabled |
+| `t-circle` | Circle | schematic | Place | edit |  | enabled |
+| `t-text` | Text | schematic | Place | edit |  | enabled |
+| `fanout-labels` | Fan out net labels | schematic | Place |  |  | state-dependent |
+| `fanout-noconnects` | Fan out no-connects | schematic | Place |  |  | state-dependent |
+| `part-res` | Part: Resistor | schematic | Place |  |  | enabled |
 | `t-mirror` | Mirror selection | schematic | Edit | edit |  | state-dependent |
+| `flip-v` | Mirror selection vertically | schematic | Edit |  |  | state-dependent |
+| `cut` | Cut | schematic | Edit |  |  | state-dependent |
+| `copy` | Copy | schematic | Edit |  |  | state-dependent |
+| `paste` | Paste | schematic | Edit |  |  | state-dependent |
+| `duplicate` | Duplicate | schematic | Edit |  |  | state-dependent |
+| `select-all` | Select all | schematic | Edit |  |  | state-dependent |
+| `find-similar` | Find similar objects | schematic | Edit |  |  | state-dependent |
+| `find` | Find and replace… | schematic | Edit |  |  | state-dependent |
+| `highlight-net` | Highlight net | schematic | Edit |  |  | state-dependent |
+| `clear-highlight` | Clear net highlight | schematic | Edit |  |  | state-dependent |
+| `align-left` | Align left edges | schematic | Edit |  |  | state-dependent |
+| `align-right` | Align right edges | schematic | Edit |  |  | state-dependent |
+| `align-top` | Align top edges | schematic | Edit |  |  | state-dependent |
+| `align-bottom` | Align bottom edges | schematic | Edit |  |  | state-dependent |
+| `align-center-x` | Align centres on a vertical line | schematic | Edit |  |  | state-dependent |
+| `align-center-y` | Align centres on a horizontal line | schematic | Edit |  |  | state-dependent |
+| `distribute-x` | Distribute horizontally | schematic | Edit |  |  | state-dependent |
+| `distribute-y` | Distribute vertically | schematic | Edit |  |  | state-dependent |
+| `array` | Array… | schematic | Edit |  |  | state-dependent |
+| `group` | Group | schematic | Edit |  |  | state-dependent |
+| `ungroup` | Ungroup | schematic | Edit |  |  | state-dependent |
 | `erc` | Run ERC | schematic | Design | checks |  | state-dependent |
 | `annotate` | Annotate schematic | schematic | Design |  |  | state-dependent |
 | `annotate-options` | Annotate options… | schematic | Design |  |  | state-dependent |
@@ -101,6 +145,23 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | `export` | Export manufacturing files… | pcb, 3d | Manufacturing | mfg |  | state-dependent |
 | `release-check` | Release check… | pcb, 3d | Manufacturing |  |  | enabled |
 | `show-mfg-panel` | Show manufacturing panel | pcb, 3d | Manufacturing |  |  | enabled |
+| `v3d-top` | Top view | 3d | View |  |  | state-dependent |
+| `v3d-bottom` | Bottom view | 3d | View |  |  | state-dependent |
+| `v3d-front` | Front view | 3d | View |  |  | state-dependent |
+| `v3d-back` | Back view | 3d | View |  |  | state-dependent |
+| `v3d-left` | Left view | 3d | View |  |  | state-dependent |
+| `v3d-right` | Right view | 3d | View |  |  | state-dependent |
+| `v3d-iso` | Isometric view (fit) | 3d | View |  |  | state-dependent |
+| `v3d-reset` | Reset view | 3d | View | view |  | state-dependent |
+| `v3d-zout` | Zoom out | 3d | View | view |  | state-dependent |
+| `v3d-zin` | Zoom in | 3d | View | view |  | state-dependent |
+| `v3d-ortho` | Orthographic projection | 3d | View |  |  | state-dependent |
+| `v3d-labels` | Placeholder labels | 3d | View |  |  | state-dependent |
+| `v3d-probe-pcb` | Show selection in PCB | 3d | View |  |  | state-dependent |
+| `v3d-probe-sch` | Show selection in schematic | 3d | View |  |  | state-dependent |
+| `v3d-measure` | Measure distance | 3d | Tools | edit |  | state-dependent |
+| `v3d-measure-clear` | Clear measurement | 3d | Tools |  |  | state-dependent |
+| `v3d-reload` | Reload 3D models | 3d | Tools |  |  | state-dependent |
 
 ## Component scan
 
@@ -115,7 +176,6 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/CataloguePanel.tsx | button | Save credentials | form submit | 1 | handler |
 | src/CataloguePanel.tsx | button | Test connection | onClick | 1 | handler |
 | src/CataloguePanel.tsx | button | Remove credentials | onClick | 1 | handler |
-| src/CataloguePanel.tsx | a | apply | href | 1 | handler |
 | src/CataloguePanel.tsx | button | (dynamic) | onClick, {...props} | 1 | handler |
 | src/CataloguePanel.tsx | button | (no label) | onClick | 1 | handler |
 | src/CataloguePanel.tsx | button | Load categories | onClick | 1 | handler |
@@ -125,7 +185,6 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/CataloguePanel.tsx | input[type=text] | 0603 | onChange | 1 | handler |
 | src/CataloguePanel.tsx | input[type=checkbox] | (no label) | onChange | 1 | handler |
 | src/CataloguePanel.tsx | button | Search catalogue | form submit | 1 | handler |
-| src/CataloguePanel.tsx | a | datasheet | href | 1 | handler |
 | src/CataloguePanel.tsx | button | Save record | onClick | 1 | handler |
 | src/CataloguePanel.tsx | button | Import | onClick | 1 | handler |
 | src/CataloguePanel.tsx | button | Previous page | onClick | 1 | handler |
@@ -133,15 +192,20 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/CataloguePanel.tsx | button | Refresh from Distributor | onClick | 1 | handler |
 | src/CommandPalette.tsx | input[type=text] | (dynamic) | onChange, onKeyDown | 1 | handler |
 | src/CommandPalette.tsx | li[role=option] | (no label) | onMouseEnter, onClick | 1 | handler |
+| src/EngineeringMonitor.tsx | button | (dynamic) | onClick | 2 | handler |
+| src/EngineeringMonitor.tsx | button | Export | onClick | 1 | handler |
 | src/EngineeringMonitor.tsx | button | (no label) | onClick | 1 | handler |
+| src/EngineeringMonitor.tsx | input[type=checkbox] | Real-time DRC | onChange | 1 | handler |
+| src/ExternalUrl.tsx | button | Copy | onClick | 1 | handler |
 | src/grid.tsx | select | Grid spacing | onChange | 1 | handler |
 | src/grid.tsx | select | Unit | onChange | 1 | handler |
 | src/grid.tsx | input[type=checkbox] | Show grid | onChange | 1 | handler |
 | src/grid.tsx | input[type=checkbox] | Snap to grid | onChange | 1 | handler |
 | src/KicadImport.tsx | button | Read a KiCad symbol library or footprint file and report what EAK's importer understands. Optional; EAK does not need KiCad. | onClick | 1 | handler |
-| src/KicadImport.tsx | button | Commit imported components into EAK's library store | onClick | 1 | handler |
+| src/KicadImport.tsx | input[type=text] | Library licence | onChange | 1 | handler |
+| src/KicadImport.tsx | input[type=text] | Library source URL | onChange | 1 | handler |
+| src/KicadImport.tsx | button | (dynamic) | onClick | 1 | handler |
 | src/LibraryBrowser.tsx | select | (no label) | onChange | 1 | handler |
-| src/LibraryBrowser.tsx | a | open | href | 1 | handler |
 | src/LibraryBrowser.tsx | input[type=text] | id, name, MPN, Distributor #, package | onChange | 1 | handler |
 | src/LibraryBrowser.tsx | button | Search library | form submit | 1 | handler |
 | src/LibraryBrowser.tsx | input[type=checkbox] | (no label) | onChange | 2 | handler |
@@ -151,7 +215,6 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/LibraryBrowser.tsx | button | Remove | onClick | 2 | handler |
 | src/LibraryBrowser.tsx | input[type=text] | comma separated | onChange | 1 | handler |
 | src/LibraryBrowser.tsx | button | Save tags | form submit | 1 | handler |
-| src/LibraryBrowser.tsx | a | source | href | 1 | handler |
 | src/LibraryBrowser.tsx | input[type=text] | /path/to/library | onChange | 1 | handler |
 | src/LibraryBrowser.tsx | button | Import open-source library | form submit | 1 | handler |
 | src/ManufacturingPanel.tsx | select | (dynamic) | onChange | 1 | handler |
@@ -179,15 +242,24 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/ModelSettings.tsx | button | Save | onClick | 1 | handler |
 | src/ModelSettings.tsx | button | Discover models | onClick | 1 | handler |
 | src/ModelSettings.tsx | button | Done | onClick | 1 | handler |
-| src/PartsPanel.tsx | a | datasheet | href | 1 | handler |
+| src/partEditor/PartEditor.tsx | input[type=text] | (dynamic) | onChange, onBlur, onKeyDown | 2 | handler |
+| src/partEditor/PartEditor.tsx | button | Revert | onClick | 1 | handler |
+| src/partEditor/PartEditor.tsx | button | Save | onClick | 1 | handler |
+| src/partEditor/PartEditor.tsx | button | Add a pin (mapped to the pad of the same number when the footprint has one) | onClick | 1 | handler |
+| src/partEditor/PartEditor.tsx | select | (dynamic) | onChange | 4 | handler |
+| src/partEditor/PartEditor.tsx | input[type=checkbox] | (dynamic) | onChange | 2 | handler |
+| src/partEditor/PartEditor.tsx | button | × | onClick | 2 | handler |
+| src/partEditor/PartEditor.tsx | select | New graphic kind | onChange | 1 | handler |
+| src/partEditor/PartEditor.tsx | button | Add a graphic of the chosen kind to the symbol body | onClick, {...props} | 1 | handler |
+| src/partEditor/PartEditor.tsx | button | × | onClick, {...props} | 1 | handler |
+| src/partEditor/PartEditor.tsx | input[type=checkbox] | (dynamic) | onChange, {...props} | 1 | handler |
+| src/partEditor/PartEditor.tsx | button | Add a pad one pitch right of the right-most pad, like the last pad | onClick | 1 | handler |
 | src/PartsPanel.tsx | button | Import | onClick | 1 | handler |
 | src/PartsPanel.tsx | input[type=text] | C25804 | onChange | 1 | handler |
 | src/PartsPanel.tsx | button | Search | form submit | 1 | handler |
-| src/PcbView.tsx | button | (dynamic) | onClick | 1 | handler |
-| src/PcbView.tsx | select | Layer | onChange | 1 | handler |
-| src/PcbView.tsx | select | Net | onChange | 1 | handler |
-| src/PcbView.tsx | input[type=text] | Track width | onChange | 1 | handler |
-| src/PcbView.tsx | button | Bend mode | onClick | 1 | handler |
+| src/PartsPanel.tsx | button | Retry | onClick | 1 | handler |
+| src/PcbView.tsx | button | (dynamic) | onClick | 2 | handler |
+| src/PcbView.tsx | select | PCB renderer | onChange | 1 | handler |
 | src/PcbView.tsx | button | Place a via here and continue on the next copper layer (L) | onClick | 1 | handler |
 | src/PcbView.tsx | button | Remove the last fixed step (Backspace) | onClick | 1 | handler |
 | src/PcbView.tsx | button | Discard this route (Esc) | onClick | 1 | handler |
@@ -195,9 +267,6 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/PcbView.tsx | button | Remove this net's tracks and vias and re-route it with the EAK router (one undo step) | onClick | 1 | handler |
 | src/PcbView.tsx | button | Start routing the most constrained unrouted connection (power and high-current first, then shortest) | onClick | 1 | handler |
 | src/PcbView.tsx | button | Run DRC (clearance and connectivity) in eak-validation | onClick | 1 | handler |
-| src/PcbView.tsx | select | Via from | onChange | 1 | handler |
-| src/PcbView.tsx | select | Via to | onChange | 1 | handler |
-| src/PcbView.tsx | input[type=text] | Zone clearance | onChange | 1 | handler |
 | src/PcbView.tsx | button | Finish zone ( | onClick | 1 | handler |
 | src/PcbView.tsx | button | Finish outline ( | onClick | 1 | handler |
 | src/PcbView.tsx | input[type=text] | Selected track width | onChange | 1 | handler |
@@ -217,9 +286,12 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/PcbView.tsx | button | Lock: the footprint cannot be moved | onClick | 1 | handler |
 | src/PcbView.tsx | button | Unlock | onClick | 1 | handler |
 | src/PcbView.tsx | select | Copper layers | onChange | 1 | handler |
-| src/PcbView.tsx | input[type=checkbox] | (dynamic) | onChange | 1 | handler |
+| src/PcbView.tsx | button[role=tab] | (dynamic) | onClick | 1 | handler |
+| src/PcbView.tsx | button | Flip board: view the board from the bottom (mirrored left to right) | onClick | 1 | handler |
+| src/PcbView.tsx | button | Outline view: draw tracks, pads, vias and zones as outlines | onClick | 1 | handler |
 | src/PcbView.tsx | button | Fill planes with net | onClick | 1 | handler |
 | src/PcbView.tsx | button | Draw board outline | onClick | 1 | handler |
+| src/PerformancePanel.tsx | button | Retry | onClick | 1 | handler |
 | src/PerformancePanel.tsx | input[type=number] | (no label) | onChange, {...props} | 1 | handler |
 | src/PerformancePanel.tsx | select | (no label) | onChange, {...props} | 1 | handler |
 | src/PerformancePanel.tsx | input[type=checkbox] | (no label) | onChange, {...props} | 1 | handler |
@@ -245,28 +317,72 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/ProjectHome.tsx | input[type=search] | Search projects | onChange, onKeyDown | 1 | handler |
 | src/SchematicView.tsx | select | Sheet | onChange | 1 | handler |
 | src/SchematicView.tsx | button | (dynamic) | onClick | 1 | handler |
-| src/SchematicView.tsx | select | Part | onChange | 1 | handler |
-| src/SchematicView.tsx | input[type=text] | Net name | onChange | 1 | handler |
-| src/SchematicView.tsx | select | Label kind | onChange | 1 | handler |
 | src/SchematicView.tsx | button | Rotate 90° (R) | onClick | 1 | handler |
 | src/SchematicView.tsx | button | Flip left/right (X) | onClick | 1 | handler |
 | src/SchematicView.tsx | button | Flip top/bottom (Y) | onClick | 1 | handler |
-| src/SchematicView.tsx | button | Duplicate (Ctrl+D) | onClick | 1 | handler |
+| src/SchematicView.tsx | button | Duplicate | onClick | 1 | handler |
 | src/SchematicView.tsx | button | Delete (Del) | onClick | 1 | handler |
 | src/SchematicView.tsx | input[type=text] | Reference | onChange, onBlur, onKeyDown | 1 | handler |
 | src/SchematicView.tsx | input[type=text] | Value | onChange, onBlur, onKeyDown | 1 | handler |
+| src/settings/SettingsDialog.tsx | button | Close | onClick | 1 | handler |
+| src/settings/SettingsDialog.tsx | input[type=search] | Search settings | onChange | 1 | handler |
+| src/settings/SettingsDialog.tsx | button | (no label) | onClick | 2 | handler |
+| src/settings/SettingsDialog.tsx | input[type=checkbox] | (no label) | onChange | 1 | handler |
+| src/settings/SettingsDialog.tsx | button | Open model settings… | onClick | 1 | handler |
+| src/settings/SettingsDialog.tsx | select | Key map preset | onChange | 1 | handler |
+| src/settings/SettingsDialog.tsx | button | Reset all rebindings | onClick | 1 | handler |
+| src/settings/SettingsDialog.tsx | input[type=search] | Search hotkeys by command or key | onChange | 1 | handler |
+| src/settings/SettingsDialog.tsx | button | Key: | onClick | 1 | handler |
+| src/settings/SettingsDialog.tsx | button | (dynamic) | onClick | 1 | handler |
+| src/settings/SettingsDialog.tsx | button | Remove | onClick | 2 | handler |
+| src/settings/SettingsDialog.tsx | button | Reset | onClick | 2 | handler |
+| src/settings/SettingsDialog.tsx | select | Canvas colour preset | onChange | 1 | handler |
+| src/settings/SettingsDialog.tsx | button | Reset all colours | onClick | 1 | handler |
+| src/settings/SettingsDialog.tsx | input[type=color] | (dynamic) | onChange | 1 | handler |
+| src/settings/SettingsDialog.tsx | button | Restore EAK defaults | onClick | 2 | handler |
+| src/settings/SettingsDialog.tsx | input[type=text] | (dynamic) | onChange | 1 | handler |
+| src/settings/SettingsDialog.tsx | select | (dynamic) | onChange | 1 | handler |
+| src/settings/SettingsDialog.tsx | button | Add power port | onClick | 1 | handler |
 | src/shell/ActivityBar.tsx | button | (dynamic) | onClick | 2 | handler |
 | src/shell/ActivityBar.tsx | button | Toggle light/dark theme | onClick | 1 | handler |
 | src/shell/ActivityBar.tsx | button | Model settings | onClick | 1 | handler |
+| src/shell/AnnotateDialog.tsx | button | Close | onClick | 1 | handler |
+| src/shell/AnnotateDialog.tsx | select | Annotate scope | onChange | 1 | handler |
+| src/shell/AnnotateDialog.tsx | select | Annotate order | onChange | 1 | handler |
+| src/shell/AnnotateDialog.tsx | input[type=checkbox] | Reset designators | onChange | 1 | handler |
+| src/shell/AnnotateDialog.tsx | button | (dynamic) | onClick | 1 | handler |
+| src/shell/AssetsPanel.tsx | button | (dynamic) | onClick | 3 | handler |
+| src/shell/AssetsPanel.tsx | button | Refresh | onClick | 1 | handler |
 | src/shell/BottomPanel.tsx | button | Remove finished tasks from the list | onClick | 1 | handler |
 | src/shell/BottomPanel.tsx | input[type=search] | Search query | onChange | 1 | handler |
 | src/shell/BottomPanel.tsx | button | Select in the editor | onClick | 1 | handler |
 | src/shell/BottomPanel.tsx | button[role=tab] | (dynamic) | onClick | 1 | handler |
 | src/shell/BottomPanel.tsx | button | Hide bottom panel | onClick | 1 | handler |
+| src/shell/CanvasContextMenu.tsx | button[role=menuitem] | (dynamic) | onClick | 1 | handler |
+| src/shell/DesignManager.tsx | button | (dynamic) | onClick | 1 | handler |
+| src/shell/DesignManager.tsx | button[role=tab] | (no label) | onClick | 1 | handler |
+| src/shell/DesignManager.tsx | input[type=search] | Search design manager | onChange | 1 | handler |
+| src/shell/DesignManager.tsx | button | Add sheet | onClick | 1 | handler |
+| src/shell/DesignManager.tsx | button | Rename | onClick | 1 | handler |
+| src/shell/DesignManager.tsx | button | ↑ | onClick | 1 | handler |
+| src/shell/DesignManager.tsx | button | ↓ | onClick | 1 | handler |
+| src/shell/DesignManager.tsx | button | Delete | onClick | 1 | handler |
+| src/shell/DesignManager.tsx | input[type=text] | Sheet name | onChange | 1 | handler |
+| src/shell/DesignManager.tsx | button | Rename | form submit | 1 | handler |
+| src/shell/DesignManager.tsx | button | Cancel | onClick | 2 | handler |
+| src/shell/DesignManager.tsx | button | Delete sheet and contents | onClick | 1 | handler |
+| src/shell/DiagnosticsTab.tsx | button | Read the model providers' stored connection status again | onClick | 1 | handler |
+| src/shell/DiagnosticsTab.tsx | button | (dynamic) | onClick | 1 | handler |
 | src/shell/DocTabs.tsx | button[role=tab] | (dynamic) | onClick | 1 | handler |
 | src/shell/DocTabs.tsx | button | × | onClick | 1 | handler |
 | src/shell/DocTabs.tsx | button | Show the schematic and the PCB side by side (off by default: each is its own view) | onClick | 1 | handler |
 | src/shell/DocTabs.tsx | button | Close all documents | onClick | 1 | handler |
+| src/shell/EcoPreviewDialog.tsx | select | Group changes by | onChange | 1 | handler |
+| src/shell/EcoPreviewDialog.tsx | input[type=checkbox] | Select all changes | onChange | 1 | handler |
+| src/shell/EcoPreviewDialog.tsx | input[type=checkbox] | (dynamic) | onChange | 1 | handler |
+| src/shell/EcoPreviewDialog.tsx | button | Save this preview as evidence/eco-r<revision>.json in the project | onClick | 1 | handler |
+| src/shell/EcoPreviewDialog.tsx | button | Apply changes | onClick | 1 | handler |
+| src/shell/EcoPreviewDialog.tsx | button | Cancel | onClick | 1 | handler |
 | src/shell/ExportDialog.tsx | button | Close | onClick | 2 | handler |
 | src/shell/ExportDialog.tsx | button | (no label) | onClick | 1 | handler |
 | src/shell/FileExplorer.tsx | button | New file in the selected folder | onClick | 1 | handler |
@@ -281,20 +397,51 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/shell/FileExplorer.tsx | button | (dynamic) | onClick, onContextMenu | 1 | handler |
 | src/shell/FileExplorer.tsx | button[role=menuitem] | (dynamic) | onClick | 1 | handler |
 | src/shell/FileViewer.tsx | button | Read the file from disk again | onClick | 1 | handler |
+| src/shell/FindResultsTab.tsx | button | (dynamic) | onClick | 1 | handler |
+| src/shell/Inspector.tsx | select | (dynamic) | onChange | 2 | handler |
+| src/shell/Inspector.tsx | input[type=text] | (dynamic) | onChange | 1 | handler |
+| src/shell/Inspector.tsx | input[type=text] | (dynamic) | onChange, onBlur, onKeyDown | 1 | handler |
 | src/shell/LayerManager.tsx | select | Layer count | onChange | 1 | handler |
-| src/shell/LayerManager.tsx | input[type=radio] | Active routing layer | onChange | 1 | handler |
+| src/shell/LayerManager.tsx | input[type=radio] | Active layer: new tracks, zones and picks use it | onChange | 1 | handler |
 | src/shell/LayerManager.tsx | input[type=checkbox] | Show / hide | onChange | 1 | handler |
+| src/shell/LayerManager.tsx | input[type=checkbox] | Lock: objects on this layer cannot be selected or edited | onChange | 1 | handler |
 | src/shell/LayerManager.tsx | input[type=color] | Layer colour (display only) | onChange | 1 | handler |
+| src/shell/LayerManager.tsx | input[type=checkbox] | Show Board outline | onChange | 1 | handler |
+| src/shell/LayerManager.tsx | input[type=checkbox] | Lock Board outline | onChange | 1 | handler |
+| src/shell/LayerManager.tsx | select | Colour preset | onChange | 1 | handler |
 | src/shell/LayerManager.tsx | input[type=checkbox] | (no label) | onChange | 1 | handler |
-| src/shell/LayerManager.tsx | select | (dynamic) | onChange | 1 | handler |
+| src/shell/LayerManager.tsx | select | (dynamic) | onChange | 2 | handler |
+| src/shell/LayerManager.tsx | button | (dynamic) | onClick | 1 | handler |
+| src/shell/LayerManager.tsx | input[type=number] | (dynamic) | onChange, onBlur, onKeyDown | 1 | handler |
+| src/shell/LayerManager.tsx | input[type=text] | (dynamic) | onChange, onBlur, onKeyDown | 1 | handler |
+| src/shell/LibraryDock.tsx | button | Place | onDragStart, onDragEnd, onClick | 1 | handler |
+| src/shell/LibraryDock.tsx | button | Arm the schematic Place tool with this part; placing copies it into the project library | onClick | 1 | handler |
+| src/shell/LibraryDock.tsx | button | (dynamic) | onClick | 2 | handler |
+| src/shell/LibraryDock.tsx | button | (dynamic) | onClick, onDragStart, onDragEnd | 1 | handler |
+| src/shell/LibraryDock.tsx | input[type=checkbox] | Offline mode | onChange | 1 | handler |
+| src/shell/LibraryDock.tsx | button | All categories | onClick | 1 | handler |
+| src/shell/LibraryDock.tsx | button | (no label) | onClick | 2 | handler |
+| src/shell/LibraryDock.tsx | button[role=tab] | (no label) | onClick | 2 | handler |
+| src/shell/LibraryDock.tsx | input[type=search] | Search library | onChange | 1 | handler |
+| src/shell/LibraryDock.tsx | button | Previous page | onClick | 1 | handler |
+| src/shell/LibraryDock.tsx | button | Next page | onClick | 1 | handler |
+| src/shell/LibraryDock.tsx | button | (dynamic) | onDragStart, onDragEnd, onClick | 1 | handler |
+| src/shell/LibraryDock.tsx | button | Run the sourcing check again on the current revision | onClick | 1 | handler |
 | src/shell/LibraryManager.tsx | input[type=text] | Search libraries | onChange | 1 | handler |
 | src/shell/LibraryManager.tsx | input[type=checkbox] | (dynamic) | onChange | 1 | handler |
+| src/shell/LibraryPanel.tsx | input[type=text] | New part id | onChange, {...props} | 1 | handler |
+| src/shell/LibraryPanel.tsx | input[type=text] | New part name | onChange, {...props} | 1 | handler |
+| src/shell/LibraryPanel.tsx | input[type=text] | New part reference prefix | onChange, {...props} | 1 | handler |
+| src/shell/LibraryPanel.tsx | input[type=text] | New part category | onChange, {...props} | 1 | handler |
+| src/shell/LibraryPanel.tsx | button | Create part | onClick | 1 | handler |
 | src/shell/LibraryPanel.tsx | input[type=text] | Search library | onChange | 1 | handler |
 | src/shell/LibraryPanel.tsx | select | Category filter | onChange | 1 | handler |
 | src/shell/LibraryPanel.tsx | select | Source filter | onChange | 1 | handler |
 | src/shell/LibraryPanel.tsx | button | Click to select · Drag onto schematic to place | onClick, onDragStart, onDragEnd | 1 | handler |
-| src/shell/LibraryPanel.tsx | button | Arm the schematic place tool with this part; the footprint is created by Sync to PCB | onClick | 1 | handler |
-| src/shell/LibraryPanel.tsx | button | Copy into the project library so it can be edited | onClick | 1 | handler |
+| src/shell/LibraryPanel.tsx | button | Place on schematic | onClick | 1 | handler |
+| src/shell/LibraryPanel.tsx | button | Add to project | onClick | 1 | handler |
+| src/shell/LibraryPanel.tsx | button | Open the symbol editor: pin table, body graphics, pin-to-pad map (saved with UpsertComponentDefinition) | onClick | 1 | handler |
+| src/shell/LibraryPanel.tsx | button | Open the footprint editor: pads, drill, courtyard (saved with AssignComponentFootprint) | onClick | 1 | handler |
 | src/shell/LibraryPanel.tsx | input[type=text] | (dynamic) | onChange, {...props} | 1 | handler |
 | src/shell/LibraryPanel.tsx | button | Save properties | onClick | 1 | handler |
 | src/shell/LibraryPanel.tsx | select | Assign footprint | onChange | 1 | handler |
@@ -305,11 +452,23 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/shell/LibraryPanel.tsx | input[type=text] | 3D model licence | onChange, {...props} | 1 | handler |
 | src/shell/LibraryPanel.tsx | input[type=text] | 3D model provenance | onChange, {...props} | 1 | handler |
 | src/shell/LibraryPanel.tsx | input[type=text] | (dynamic) | onChange | 1 | handler |
-| src/shell/LibraryPanel.tsx | button | (no label) | onClick | 1 | handler |
+| src/shell/LibraryPanel.tsx | button | (dynamic) | onClick | 1 | handler |
 | src/shell/LibraryPanel.tsx | button | Remove 3D model | onClick | 1 | handler |
-| src/shell/MenuBar.tsx | button | (no label) | onClick, onPointerEnter | 1 | handler |
+| src/shell/MenuBar.tsx | button | (no label) | onClick, onPointerEnter, onKeyDown | 1 | handler |
 | src/shell/MenuBar.tsx | button[role=menuitem] | (dynamic) | onClick | 1 | handler |
-| src/shell/panels.tsx | button | (no label) | onClick | 3 | handler |
+| src/shell/OutputDialogs.tsx | button | Close | onClick | 2 | handler |
+| src/shell/OutputDialogs.tsx | input[type=checkbox] | (dynamic) | onChange | 1 | handler |
+| src/shell/OutputDialogs.tsx | input[type=text] | (dynamic) | onChange | 2 | handler |
+| src/shell/OutputDialogs.tsx | select | (dynamic) | onChange | 3 | handler |
+| src/shell/OutputDialogs.tsx | button | Up | onClick | 1 | handler |
+| src/shell/OutputDialogs.tsx | button | Down | onClick | 1 | handler |
+| src/shell/OutputDialogs.tsx | select | Group rows | onChange, {...props} | 1 | handler |
+| src/shell/OutputDialogs.tsx | select | File format | onChange | 1 | handler |
+| src/shell/OutputDialogs.tsx | button | Remove | onClick, {...props} | 1 | handler |
+| src/shell/OutputDialogs.tsx | button | Add filter rule | onClick, {...props} | 1 | handler |
+| src/shell/OutputDialogs.tsx | button | (dynamic) | onClick | 2 | handler |
+| src/shell/OutputDialogs.tsx | button | Restore the default columns, sorting and grouping, and remove every filter rule | onClick | 1 | handler |
+| src/shell/OutputDialogs.tsx | input[type=checkbox] | (dynamic) | onChange, {...props} | 1 | handler |
 | src/shell/panels.tsx | button | Gerber, Excellon, BOM, CPL | onClick | 1 | handler |
 | src/shell/ProjectDialogs.tsx | button | Close | onClick | 1 | handler |
 | src/shell/ProjectDialogs.tsx | input[type=text] | (no label) | onChange | 3 | handler |
@@ -328,15 +487,37 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/shell/ProjectTabs.tsx | button[role=tab] | (dynamic) | onClick | 1 | handler |
 | src/shell/ProjectTabs.tsx | button | × | onClick | 1 | handler |
 | src/shell/ProjectTabs.tsx | button | Open another project | onClick | 1 | handler |
+| src/shell/PropertyList.tsx | select | Object kind | onChange | 1 | handler |
+| src/shell/PropertyList.tsx | select | New value | onChange | 1 | handler |
+| src/shell/PropertyList.tsx | input[type=text] | New value | onChange, onKeyDown | 1 | handler |
+| src/shell/PropertyList.tsx | button | Apply | onClick | 1 | handler |
+| src/shell/PropertyList.tsx | button | (dynamic) | onClick | 2 | handler |
+| src/shell/ReleaseCheckDialog.tsx | button | Close | onClick | 1 | handler |
+| src/shell/ReleaseCheckDialog.tsx | button | (dynamic) | onClick | 1 | handler |
+| src/shell/RightDock.tsx | button[role=tab] | (dynamic) | onClick | 1 | handler |
+| src/shell/RightDock.tsx | button | Hide right panel | onClick | 1 | handler |
 | src/shell/RulesDialog.tsx | input[type=text] | (dynamic) | onChange, {...props} | 2 | handler |
 | src/shell/RulesDialog.tsx | button | Close | onClick | 1 | handler |
+| src/shell/RulesDialog.tsx | button | (no label) | onClick | 2 | handler |
 | src/shell/RulesDialog.tsx | button | Apply board rules | onClick | 1 | handler |
-| src/shell/RulesDialog.tsx | button | (no label) | onClick | 1 | handler |
 | src/shell/RulesDialog.tsx | button | Save net class | onClick | 1 | handler |
 | src/shell/RulesDialog.tsx | select | Declared net | onChange | 1 | handler |
 | src/shell/RulesDialog.tsx | input[type=text] | Net current (A) | onChange | 1 | handler |
 | src/shell/RulesDialog.tsx | input[type=text] | Net voltage (V) | onChange | 1 | handler |
 | src/shell/RulesDialog.tsx | button | Apply net declaration | onClick | 1 | handler |
+| src/shell/ruleTables.tsx | input[type=text] | (dynamic) | onChange, {...props} | 1 | handler |
+| src/shell/ruleTables.tsx | button | Apply clearance matrix | onClick | 1 | handler |
+| src/shell/ruleTables.tsx | button | Remove | onClick | 1 | handler |
+| src/shell/ruleTables.tsx | select | First net | onChange | 1 | handler |
+| src/shell/ruleTables.tsx | select | Second net | onChange | 1 | handler |
+| src/shell/ruleTables.tsx | input[type=text] | Net pair clearance (mm) | onChange | 1 | handler |
+| src/shell/ruleTables.tsx | button | Apply net pair rule | onClick | 1 | handler |
+| src/shell/ruleTables.tsx | button | Run | onClick | 1 | handler |
+| src/shell/ruleTables.tsx | input[type=checkbox] | (dynamic) | onChange, {...props} | 1 | handler |
+| src/shell/ruleTables.tsx | select | (dynamic) | onChange, {...props} | 1 | unavailable |
+| src/shell/ruleTables.tsx | button | Apply | onClick | 1 | handler |
+| src/shell/SelectionFilter.tsx | input[type=checkbox] | (no label) | onChange | 1 | handler |
+| src/shell/SelectionFilter.tsx | button | Allow every kind | onClick | 1 | handler |
 | src/shell/SyncReportDialog.tsx | button | Open PCB editor | onClick | 1 | handler |
 | src/shell/SyncReportDialog.tsx | button | Close | onClick | 1 | handler |
 | src/shell/Toolbar.tsx | button | (dynamic) | onClick | 2 | handler |
@@ -345,7 +526,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/SimulationPanel.tsx | select | Analysis | onChange | 1 | handler |
 | src/SimulationPanel.tsx | input[type=text] | Stop time | onChange | 1 | handler |
 | src/SimulationPanel.tsx | input[type=text] | Step time | onChange | 1 | handler |
-| src/SimulationPanel.tsx | button | (no label) | onClick | 1 | handler |
+| src/SimulationPanel.tsx | button | (dynamic) | onClick | 1 | handler |
 | src/SimulationPanel.tsx | button | + Add | onClick | 1 | handler |
 | src/SimulationPanel.tsx | select | (dynamic) | onChange | 3 | handler |
 | src/SimulationPanel.tsx | input[type=text] | 5, 3.3V, PULSE(0 5 0 1n 1n 1 2), SIN(0 1 1k) | onChange | 1 | handler |
@@ -360,6 +541,7 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/terminal/TerminalWorkspace.tsx | button | New terminal | onClick | 2 | handler |
 | src/terminal/TerminalWorkspace.tsx | button | Choose shell | onClick | 1 | handler |
 | src/terminal/TerminalWorkspace.tsx | button | Show or hide the details panel (Ctrl+Shift+P) | onClick | 1 | handler |
+| src/terminal/TerminalWorkspace.tsx | button | Go to | onClick | 1 | handler |
 | src/terminal/TerminalWorkspace.tsx | button | Dismiss | onClick | 1 | handler |
 | src/terminal/TerminalWorkspace.tsx | button | Split right (Ctrl+Shift+D) | onClick | 1 | handler |
 | src/terminal/TerminalWorkspace.tsx | button | Split down (Ctrl+Shift+E) | onClick | 1 | handler |
@@ -388,16 +570,40 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/tools/pcb/OutlinePanel.tsx | input[type=text] | (dynamic) | onChange, onBlur, onKeyDown | 2 | handler |
 | src/tools/pcb/OutlinePanel.tsx | button | Insert a vertex at the midpoint of the next edge | onClick | 1 | handler |
 | src/tools/pcb/OutlinePanel.tsx | button | Delete vertex | onClick | 1 | handler |
-| src/viewer3d/Viewer3D.tsx | button | Look straight down at the top side | onClick | 1 | handler |
-| src/viewer3d/Viewer3D.tsx | button | Look up at the bottom side | onClick | 1 | handler |
-| src/viewer3d/Viewer3D.tsx | button | Isometric view, fit to board | onClick | 1 | handler |
-| src/viewer3d/Viewer3D.tsx | input[type=checkbox] | (no label) | onChange | 1 | handler |
-| src/viewer3d/Viewer3D.tsx | button | (dynamic) | onClick | 1 | handler |
+| src/tools/schematic/ArrayPanel.tsx | input[type=text] | Columns | onChange | 1 | handler |
+| src/tools/schematic/ArrayPanel.tsx | input[type=text] | Rows | onChange | 1 | handler |
+| src/tools/schematic/ArrayPanel.tsx | input[type=text] | X step (mm) | onChange | 1 | handler |
+| src/tools/schematic/ArrayPanel.tsx | input[type=text] | Y step (mm) | onChange | 1 | handler |
+| src/tools/schematic/ArrayPanel.tsx | button | Create | onClick | 1 | handler |
+| src/tools/schematic/ArrayPanel.tsx | button | Cancel | onClick | 1 | handler |
+| src/tools/schematic/FindBar.tsx | input[type=text] | Find | onChange | 1 | handler |
+| src/tools/schematic/FindBar.tsx | input[type=text] | Replace with | onChange | 1 | handler |
+| src/tools/schematic/FindBar.tsx | input[type=checkbox] | (no label) | onChange, {...props} | 3 | handler |
+| src/tools/schematic/FindBar.tsx | button | Select matches | onClick | 1 | handler |
+| src/tools/schematic/FindBar.tsx | button | Replace all | onClick | 1 | handler |
+| src/tools/schematic/FindBar.tsx | button | List in Find Results | onClick | 1 | handler |
+| src/tools/schematic/FindBar.tsx | button | Close find and replace | onClick | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | button | (dynamic) | onClick | 3 | handler |
+| src/viewer3d/Viewer3D.tsx | button | Zoom in | onClick | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | button | Zoom out | onClick | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | button | Orthographic | onClick | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | button | Reset | onClick | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | button | Measure | onClick | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | select | Solder mask colour | onChange | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | select | Surface finish | onChange | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | input[type=checkbox] | (no label) | onChange | 2 | handler |
+| src/viewer3d/Viewer3D.tsx | button | Reload models | onClick | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | button | Open the PCB with this part selected | onClick | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | button | Open the schematic sheet with this part selected | onClick | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | input[type=text] | Selected part 3D model path | onChange, {...props} | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | button | Browse… | onClick | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | select | Selected part 3D model quality | onChange, {...props} | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | input[type=text] | Selected part 3D model provenance | onChange, {...props} | 1 | handler |
+| src/viewer3d/Viewer3D.tsx | button | Remove model | onClick | 1 | handler |
 | src/Workspace.tsx | button | Accept on-disk state | onClick | 1 | handler |
-| src/Workspace.tsx | button | Close | onClick | 1 | handler |
+| src/Workspace.tsx | button | Close | onClick | 2 | handler |
 
 ## Allowlist
 
 | Key | Owner | Why |
 |---|---|---|
-| `action:t-junction` | E1 | Junction toolbar/menu entry has no handler and a reason that does not mark it unavailable (dead-control sweep) |

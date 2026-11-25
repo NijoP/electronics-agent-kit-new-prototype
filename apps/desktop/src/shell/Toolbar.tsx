@@ -2,7 +2,9 @@
 // with its reason as the tooltip (no decorative controls). Buttons show the action's EAK icon
 // (`design/icons/`), with the label as accessible name and tooltip (plus the shortcut), and as
 // visible text when "Toolbar labels" is on. A tool family shares one split button: the main part
-// runs the member picked last from its dropdown, remembered across sessions.
+// runs the member picked last from its dropdown, remembered across sessions. An item's `run` comes
+// from `toolbarFor`, which goes through `runAction` (enabled only, destructive ones confirmed), so a
+// click here can never bypass the confirmation the menus, keys and context menu give.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SplitId } from "../actions/types";
 import { Icon, type IconName } from "../design/icons/icons";

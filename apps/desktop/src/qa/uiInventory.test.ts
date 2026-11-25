@@ -4,8 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import { fixture } from "../fixture.test-data";
 import { GRID_KINDS } from "../grid";
 import { SIDE_VIEWS } from "../shell/ActivityBar";
-import type { ActionDeps } from "../actions/sets";
-import { auditActions, renderInventory, scanSource, staleAllow, tagEnd, unallowed, type Audit } from "./uiInventory";
+import { workspaceActions, type ActionDeps } from "../actions/sets";
+import { quickOpenItems } from "../actions/quickOpen";
+import { auditActions, noOps, recorder, renderInventory, scanSource, staleAllow, tagEnd, unallowed, type Audit } from "./uiInventory";
 import { UI_INVENTORY_ALLOWLIST } from "./uiInventoryAllowlist";
 
 // @ts-expect-error node types are not installed for the frontend project
@@ -66,11 +67,19 @@ function probes(): ActionDeps[] {
   return [deps(), rich, deps({ busy: true }), deps({ grid: null }), in3d];
 }
 
+/** Quick open in the rich state (a library part, the fixture's symbols, nets and sheets), each item run against recorded dependencies. */
+function quickOpenAudit(): Audit["quickOpen"] {
+  const fn = () => vi.fn();
+  const rec = recorder({ snapshot: fixture(7), library: deps().library, placePart: fn(), select: fn(), showNet: fn(), open: fn() });
+  const items = quickOpenItems(rec.deps);
+  return { ids: items.map((i) => i.id), noOps: noOps(items, rec) };
+}
+
 function audit(): Audit {
   const controls = Object.entries(sources)
     .sort(([a], [b]) => a.localeCompare(b))
     .flatMap(([path, src]) => scanSource(`src/${path.replace(/^\.\.\//, "")}`, src));
-  return { actions: auditActions(probes()), controls, allow: UI_INVENTORY_ALLOWLIST };
+  return { actions: auditActions(probes()), controls, allow: UI_INVENTORY_ALLOWLIST, quickOpen: quickOpenAudit() };
 }
 
 describe("UI inventory scanner", () => {
@@ -113,6 +122,27 @@ describe("UI inventory scanner", () => {
     // slice E1 removed the three handler-less placeholders (Save as, Release check, Junction)
     for (const id of ["saveas", "release", "t-junction"]) expect(rows.find((r) => r.id === id), id).toBeUndefined();
     expect(byId("undo").state).toBe("state-dependent");
+  });
+
+  // G2: the gate used to check only `typeof run === "function"`, so an enabled no-op passed.
+  it("flags an enabled action whose handler calls nothing, and fails the gate on it", () => {
+    const dead = { id: "dead", label: "Dead", menu: "Tools" as const, enabled: () => true as const, run: () => {} };
+    const rows = auditActions(probes(), (d) => [...workspaceActions(d), dead]);
+    expect(rows.find((r) => r.id === "dead")).toMatchObject({ state: "violation", violation: expect.stringMatching(/no-op/) });
+    const a: Audit = { actions: rows, controls: [], allow: [], quickOpen: { ids: [], noOps: [] } };
+    expect(unallowed(a)).toEqual(["action:dead: enabled, but running it calls nothing (a no-op handler)"]);
+    // a real handler is not flagged
+    expect(rows.find((r) => r.id === "undo")?.violation).toBeUndefined();
+  });
+
+  it("probes quick-open items too: a no-op item fails the gate", () => {
+    const q = quickOpenAudit();
+    expect(q.ids.length).toBeGreaterThan(3);
+    expect(q.ids).toEqual(expect.arrayContaining(["part-res", "sym-sym_r1", "sheet-sht_1"]));
+    expect(q.noOps).toEqual([]);
+    const rec = recorder({ go: vi.fn() });
+    expect(noOps([{ id: "ok", run: () => rec.deps.go() }, { id: "dead", run: () => {} }, { id: "off", disabled: true, run: () => {} }], rec)).toEqual(["dead"]);
+    expect(unallowed({ actions: [], controls: [], allow: [], quickOpen: { ids: ["dead"], noOps: ["dead"] } })).toEqual(["quick:dead: enabled, but running it calls nothing (a no-op handler)"]);
   });
 });
 

@@ -6,13 +6,14 @@ import { api, describeError } from "./api";
 import { useRealtimeDrc } from "./realtimeDrc";
 import { DomainPanel } from "./DomainPanel";
 import { ManufacturingPanel as FabricatorPrepPanel } from "./ManufacturingPanel";
-import { CommandPalette, type PaletteAction } from "./CommandPalette";
+import { CommandPalette } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
 import { PcbView } from "./PcbView";
 import { SchematicView } from "./SchematicView";
 import { formatShortcut } from "./design/shortcuts";
 import { actionForKey, contextMenuFor, keysOf, menusFor, paletteFor, runAction, toolbarFor, visibleIn } from "./actions/registry";
 import { workspaceActions } from "./actions/sets";
+import { quickOpenItems } from "./actions/quickOpen";
 import { usePowerPorts } from "./settings/powerPorts";
 import { editorKeys } from "./actions/editorKeys";
 import { APP_VERSION } from "./version";
@@ -21,7 +22,7 @@ import { docContext, type Action, type DocContext } from "./actions/types";
 import type { Theme } from "./design/theme";
 import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
-import { ManufacturingPanel, netNames } from "./shell/panels";
+import { ManufacturingPanel } from "./shell/panels";
 import { ProjectOverview } from "./shell/ProjectOverview";
 import { LibraryDock } from "./shell/LibraryDock";
 import { StatusBar } from "./shell/StatusBar";
@@ -72,7 +73,6 @@ import { SettingsDialog } from "./settings/SettingsDialog";
 import { effectiveKeys, useKeymap } from "./settings/keymap";
 import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, reconcileSelection, type RevisionChange, type Shown } from "./revisionSync";
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
-import { sheetsInOrder } from "./shell/sheets";
 import { requestFindPick, useFindReveal } from "./shell/findResults";
 import type { FindHit } from "./tools/schematic/find";
 import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot, SyncChange } from "./types";
@@ -761,22 +761,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     setMessage(`Place tool armed with ${c.name}: click the schematic to place it.`);
   };
 
-  const quickItems: PaletteAction[] = [
-    ...library.map((c) => ({ id: `part-${c.id}`, label: c.name, group: "Part · place", run: () => placePart(c) })),
-    ...Object.values(snapshot.project.schematic.symbols).map((sy) => ({
-      id: `sym-${sy.id}`,
-      label: `${sy.refdes} ${sy.value}`,
-      group: "Symbol",
-      run: () => setSelected(sy.id),
-    })),
-    ...netNames(snapshot).map((n) => ({ id: `net-${n}`, label: n, group: "Net", run: () => showNet(n) })),
-    ...sheetsInOrder(snapshot.project.schematic).map((sh) => ({
-      id: `sheet-${sh.id}`,
-      label: sh.name,
-      group: "Sheet",
-      run: () => open(`sch:${sh.id}`),
-    })),
-  ];
+  const quickItems = quickOpenItems({ snapshot, library, placePart, select: setSelected, showNet, open });
 
   // The single global key listener runs the registry action bound to the key (default key map in
   // design/shortcuts.ts); it reads the latest actions through this ref.
@@ -850,8 +835,17 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     dialog: setDialog,
     save, undo, redo, close, openRecent, execute, check, syncPcb, refillZones, rotateSel, deleteSel,
     tool: toolTo,
-    zoomBy: (f) => canvasControls(activeId)?.zoomBy(f),
-    fit: () => canvasControls(activeId)?.fit(),
+    // G2: say so instead of silently doing nothing when the document has no canvas registered yet.
+    zoomBy: (f) => {
+      const c = canvasControls(activeId);
+      if (c) c.zoomBy(f);
+      else setMessage("Zoom: no canvas is drawing in this document yet");
+    },
+    fit: () => {
+      const c = canvasControls(activeId);
+      if (c) c.fit();
+      else setMessage("Fit to view: no canvas is drawing in this document yet");
+    },
     select: setSelected,
     toggleSplit: () => setSplit((v) => !v),
     showSide,
