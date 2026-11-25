@@ -212,10 +212,14 @@ async function placeResistor() {
 const activity = () => within(screen.getByRole("navigation", { name: "Activity bar" }));
 
 describe("end-to-end flow", () => {
-  it("1. new project dialog replaces the open project and lands in its schematic tab", async () => {
+  it("1. new project dialog opens the new project and lands in its schematic tab", async () => {
     await createFromHome("First");
     fireEvent.click(toolbar().getByRole("button", { name: "New project" }));
     const dlg = await screen.findByRole("dialog", { name: "New project" });
+    // F6 (audit §2): the backend keeps the other open projects open, so the hint must not say
+    // the current one is closed.
+    expect(within(dlg).getByText(/Other open projects stay open/)).toBeTruthy();
+    expect(within(dlg).queryByText(/project is closed/)).toBeNull();
     fireEvent.change(within(dlg).getByLabelText(/Project folder/), { target: { value: "/p/second.eak" } });
     fireEvent.change(within(dlg).getByLabelText("Name"), { target: { value: "Second" } });
     fireEvent.click(within(dlg).getByRole("button", { name: "Create" }));

@@ -107,7 +107,7 @@ function Pad({ pad, active }: { pad: PadGeom; active?: boolean }) {
   const h = mm(pad.size_y);
   const r = pad.shape === "circle" ? Math.min(w, h) / 2 : pad.shape === "oval" ? Math.min(w, h) / 2 : 0;
   return (
-    <g className={`pad ${pad.kind}${active ? " net-active" : ""}`}>
+    <g className={`pad ${pad.kind}${active ? " net-active" : ""}`} data-pad={pad.number}>
       <title>{`pad ${pad.number}${pad.net ? ` · ${pad.net}` : ""}`}</title>
       <rect x={x - w / 2} y={y - h / 2} width={w} height={h} rx={r} ry={r} />
       {pad.drill !== null && <circle className="drill" cx={x} cy={y} r={mm(pad.drill) / 2} />}
@@ -1387,6 +1387,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
               key={f.id}
               data-footprint-id={f.id}
               data-symbol-id={f.symbol_id}
+              data-refdes={f.refdes}
               className={`footprint ${f.side}${highlighted.has(f.id) || highlighted.has(f.symbol_id) ? " finding-hit" : ""}${sel.includes(f.id) ? " selected" : ""}${pcb.footprints[f.id]?.locked ? " locked" : ""}${aiPreview.includes(f.symbol_id) ? " ai-preview" : ""}`}
               transform={dragDelta && movingIds?.has(f.id) ? `translate(${mm(dragDelta.x)} ${-mm(dragDelta.y)})` : undefined}
               onClick={() => onSelect(f.symbol_id)}

@@ -198,6 +198,9 @@ async function waitGone(selector, timeout = 15000) {
 /** Values remembered by a step (`save`) for a later `check-attr` (`equalsVar`). */
 const vars = {};
 
+/** `{UI_OUT}` in a scenario value is this run's output folder (an absolute path). */
+const expand = (v) => String(v).replaceAll("{UI_OUT}", path.resolve(OUT));
+
 const xkey = (keys) => sh("xdotool", ["key", "--clearmodifiers", ...keys.split(" ")]);
 
 const MENU_BAR = 'nav[aria-label="Application menu"]';
@@ -354,14 +357,85 @@ const handlers = {
     if (r.components_created !== 1) throw new Error(`expected 1 imported symbol, got ${r.components_created} (rejected: ${r.rejected.join("; ")})`);
     return `SETUP (IPC kicad_import_commit: ${s.file}.kicad_sym, licence ${s.licence}, ${r.component_ids.join(", ")}; not a UI action)`;
   },
-  // XTest click into a field, then XTest typing.
-  // XTest typing of `value`: into `selector` after clicking it, or without one into the focused field.
+  // XTest typing of `value` (with `{UI_OUT}` replaced by this run's output folder): into
+  // `selector` after clicking it, or without one into the focused field.
   async type(s) {
     const how = s.selector ? await xclick(s.selector, s.text) : "focused field";
-    sh("xdotool", ["type", "--delay", "40", "--", s.value]);
+    const value = expand(s.value);
+    sh("xdotool", ["type", "--delay", "40", "--", value]);
     await sleep(300);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
-    return `${how}; XTest typed "${s.value}"${s.expect ? `; then visible: ${s.expect}` : ""}`;
+    return `${how}; XTest typed "${value}"${s.expect ? `; then visible: ${s.expect}` : ""}`;
+  },
+  // XTest in the native folder chooser (tauri-plugin-dialog → GTK file chooser, a separate X
+  // window the webview cannot see): focus the window named `window`, Ctrl+L, type `path`
+  // (`{UI_OUT}` expanded; the folder is created first), Return. If the chooser only changed into
+  // the folder, a further Return selects it. Fails if the window never appears or stays open.
+  async "folder-chooser"(s) {
+    const dir = expand(s.path);
+    fs.mkdirSync(dir, { recursive: true });
+    const find = () => {
+      try {
+        return sh("xdotool", ["search", "--onlyvisible", "--name", s.window]).split("\n")[0] || null;
+      } catch {
+        return null; // xdotool search exits 1 when nothing matches
+      }
+    };
+    const until = async (open, ms) => {
+      const t0 = Date.now();
+      while (Date.now() - t0 < ms) {
+        const id = find();
+        if (open ? id : !id) return id ?? true;
+        await sleep(250);
+      }
+      return null;
+    };
+    const id = await until(true, s.timeout ?? 15000);
+    if (!id) throw new Error(`no native window named "${s.window}" after ${s.timeout ?? 15000} ms`);
+    await sleep(700);
+    sh("xdotool", ["windowfocus", "--sync", id]);
+    await sleep(200);
+    xkey("ctrl+l");
+    await sleep(400);
+    sh("xdotool", ["type", "--delay", "30", "--", dir]);
+    await sleep(600);
+    xkey("Return");
+    let returns = 1;
+    while (!(await until(false, 3000))) {
+      if (returns >= 3) throw new Error(`the native window "${s.window}" is still open after ${returns} Return presses`);
+      sh("xdotool", ["windowfocus", "--sync", id]);
+      xkey("Return");
+      returns++;
+    }
+    if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
+    return `XTest in the native folder chooser "${s.window}": Ctrl+L, typed ${dir}, Return ×${returns}${s.expect ? `; then visible: ${s.expect}` : ""}`;
+  },
+  // A native JavaScript dialog (window.confirm, e.g. a destructive menu entry asking first) is
+  // held by WebKit's automation session and drawn as no X window, so XTest cannot reach it: this
+  // step reads its text through WebDriver (it must start with `text`) and accepts it. Run it
+  // straight after the step that opened the dialog, with no `expect` on that step (any other
+  // WebDriver call would dismiss the dialog).
+  async "accept-dialog"(s) {
+    let text = null;
+    await browser.waitUntil(
+      async () => {
+        try {
+          text = await browser.getAlertText();
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { timeout: s.timeout ?? 5000, interval: 200, timeoutMsg: "no native JavaScript dialog is open" },
+    );
+    if (s.text && !String(text).startsWith(s.text)) {
+      await browser.dismissAlert();
+      throw new Error(`dialog says "${text}", expected it to start with "${s.text}" (dismissed)`);
+    }
+    await browser.acceptAlert();
+    await sleep(300);
+    if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
+    return `WebDriver accepted the native confirm "${text}" (no X window to click)${s.expect ? `; then visible: ${s.expect}` : ""}`;
   },
   async click(s) {
     const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0, s.button === "right" ? 3 : 1);
