@@ -101,8 +101,9 @@
 - **Consequences:** v4 files are refused by older builds (as for v3). The desktop PCB view draws
   regions, cut-outs, text, dimensions and arc tracks/edges in both renderers, and the Delete tool
   deletes a footprint; creating and editing the new objects is reachable through commands (CLI,
-  MCP, agent). Interactive drawing tools for them are later UI work and no desktop control claims
-  them. The autorouter does not avoid keep-outs or cut-outs yet (DRC reports what it routes into
+  MCP, agent). Slice F5 later added the PCB editor's Keep-out, Cut-out, Text and Dimension tools
+  and the outline's per-edge arc field on top of the same commands (no IR or command change); a
+  vertex insert or delete re-sends the arcs on their new edge numbers in the same Batch. The autorouter does not avoid keep-outs or cut-outs yet (DRC reports what it routes into
   them); this is listed as a DRC limitation.
 - **Source requirement:** product spec, PCB layout (tracks, vias, zones, keep-outs, board shape,
   text and dimensions, Gerber output); Phase 1 plan slice C4 (gaps #30-#32).

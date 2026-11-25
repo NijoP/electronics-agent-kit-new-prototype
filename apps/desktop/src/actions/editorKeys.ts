@@ -10,7 +10,8 @@ export interface EditorKey {
   label: string;
 }
 
-const digits = (tools: readonly (readonly [string, string])[]): EditorKey[] => tools.map(([, label], i) => ({ keys: String(i + 1), label: `${label} tool` }));
+// Only nine digits exist: later tools are chosen from the toolbar or the Place menu.
+const digits = (tools: readonly (readonly [string, string])[]): EditorKey[] => tools.map(([, label], i) => ({ keys: i < 9 ? String(i + 1) : "Place menu", label: `${label} tool` }));
 
 const SCHEMATIC: EditorKey[] = [
   { keys: "W", label: "Wire tool, from any other tool" },
@@ -34,7 +35,7 @@ const SCHEMATIC: EditorKey[] = [
 const PCB: EditorKey[] = [
   { keys: "R / F", label: "Rotate / flip selected footprints (Select and Move tools)" },
   { keys: "Delete / Backspace", label: "Delete the selected track (Select tool)" },
-  { keys: "Enter", label: "Finish the route, outline or zone" },
+  { keys: "Enter", label: "Finish the route, outline, zone, keep-out or cut-out" },
   { keys: "Backspace", label: "Undo the last route segment (Route tool)" },
   { keys: "/", label: "Change the route corner mode (Route tool)" },
   { keys: "L", label: "Next copper layer (Route tool)" },
