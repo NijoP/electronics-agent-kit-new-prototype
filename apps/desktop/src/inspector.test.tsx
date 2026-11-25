@@ -120,6 +120,18 @@ describe("selection mode", () => {
       ],
     });
     expect(commit(field(m.fields, "x"), "abc")).toMatch(/not a number/);
+    // F3 (S4): X/Y on a wired part drags the attached wire end and pin label (rubber-band Batch)
+    const w = fixture();
+    w.project.schematic.wires.wir_1 = { ...w.project.schematic.wires.wir_1, a: { x: 54_000_000, y: 50_000_000 }, b: { x: 76_000_000, y: 50_000_000 } };
+    const one = selectionModel(w, { ...NO_SELECTION, symbols: ["sym_r1"] })!;
+    expect(commit(field(one.fields, "x"), "60")).toEqual({
+      type: "Batch",
+      label: "Set X of 1 symbol",
+      commands: [
+        { type: "MoveWire", wire_id: "wir_1", a: { x: 64_000_000, y: 50_000_000 }, b: { x: 76_000_000, y: 50_000_000 } },
+        { type: "MoveSymbol", symbol_id: "sym_r1", position: { x: 60_000_000, y: 50_000_000 } },
+      ],
+    });
     // an unchanged value sends nothing
     expect(commit(field(m.fields, "rotation"), "R0")).toBeNull();
   });
@@ -146,21 +158,40 @@ describe("selection mode", () => {
     expect(commit(field(m.fields, "locked"), "no")).toEqual({ type: "SetFootprintLocked", footprint_id: "fp_r1", locked: false });
   });
 
+  it("S16 regression: a footprint shows its part's 3D model and MPN from the library, not a stale 'no IR field' reason", () => {
+    const s = fixture();
+    const part = { name: "", category: "", refdes_prefix: "", default_value: "", symbol: { pins: [] } };
+    s.project.library = {
+      R_0603: {
+        ...part, id: "R_0603", manufacturer: "Yageo", mpn: "RC0603FR-07330RL",
+        model3d: { kind: "box", color: "#202020", external_ref: null, model_ref: { source: { kind: "file", path: "/lib/R_0603.step" }, format: "step", quality: "LIBRARY_VERIFIED", transform: { offset_mm: [0, 0, 0], rotation_deg: [0, 0, 0], scale: [1, 1, 1] }, licence: null, provenance: "user 3D library" } },
+      },
+      LED_0603: { ...part, id: "LED_0603", model3d: { kind: "box", color: "#202020", external_ref: null, model_ref: null } },
+    };
+    const r1 = selectionModel(s, { ...NO_SELECTION, footprints: ["fp_r1"] })!;
+    expect(field(r1.fields, "model3d")).toMatchObject({ value: "/lib/R_0603.step (STEP, LIBRARY_VERIFIED)" });
+    expect(field(r1.fields, "model3d").unavailable).toBeUndefined();
+    expect(field(r1.fields, "model3d").edit).toBeUndefined();
+    expect(field(r1.fields, "mpn")).toMatchObject({ value: "Yageo RC0603FR-07330RL" });
+    expect(field(selectionModel(s, { ...NO_SELECTION, footprints: ["fp_d1"] })!.fields, "model3d").value).toBe("none: box body placeholder");
+    expect(field(selectionModel(s, { ...NO_SELECTION, footprints: ["fp_r1", "fp_d1"] })!.fields, "model3d").mixed).toBe(true);
+    expect(field(selectionModel(s, { ...NO_SELECTION, symbols: ["sym_d1"] })!.fields, "mpn").value).toBe("not set");
+  });
+
   it("labels, tracks, wires and mixed kinds", () => {
     const s = fixture();
     const l = selectionModel(s, { ...NO_SELECTION, labels: ["lab_1"] })!;
     // ADR-0045: a rename keeps the label and its id (one command, one undo step)
     expect(commit(field(l.fields, "name"), "VCC")).toEqual({ type: "RenameNetLabel", label_id: "lab_1", name: "VCC" });
     expect(commit(field(l.fields, "name"), "GND")).toBeNull();
-    // the kind has no command of its own: placed again with the other kind, in one Batch
-    expect(commit(field(l.fields, "kind"), "net")).toEqual({
-      type: "Batch",
-      label: "Change 1 label kind",
-      commands: [
-        { type: "DeleteNetLabel", label_id: "lab_1" },
-        { type: "AddNetLabel", sheet_id: "sht_1", name: "GND", position: { x: 85_000_000, y: 50_000_000 }, kind: "net" },
-      ],
-    });
+    // F3 / ADR-0049: a kind change keeps the label, its id, group and power style (SetNetLabelKind)
+    expect(commit(field(l.fields, "kind"), "net")).toEqual({ type: "SetNetLabelKind", label_id: "lab_1", kind: "net" });
+    expect(commit(field(l.fields, "kind"), "power")).toBeNull();
+    s.project.schematic.labels.lab_2 = { ...s.project.schematic.labels.lab_1, id: "lab_2", kind: "net" };
+    const two = selectionModel(s, { ...NO_SELECTION, labels: ["lab_1", "lab_2"] })!;
+    expect(commit(field(two.fields, "kind"), "power")).toEqual({ type: "SetNetLabelKind", label_id: "lab_2", kind: "power" });
+    expect(JSON.stringify(commit(field(two.fields, "kind"), "net"))).not.toMatch(/DeleteNetLabel|AddNetLabel/);
+    delete s.project.schematic.labels.lab_2;
     const t = selectionModel(s, { ...NO_SELECTION, tracks: ["trk_1"] })!;
     expect(field(t.fields, "width").value).toBe("0.250");
     expect(commit(field(t.fields, "width"), "0.4")).toEqual({ type: "EditTrack", track_id: "trk_1", width: 400_000 });

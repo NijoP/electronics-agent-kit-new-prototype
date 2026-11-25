@@ -194,6 +194,7 @@ fn undo_redo_round_trips_every_command_kind() {
             default_clearance: None,
             temp_rise_c: Some(20.0),
             max_component_height: None,
+            clear_max_component_height: false,
         },
         C::DeleteSymbol {
             symbol_id: r2.clone(),

@@ -12,6 +12,7 @@ import { LAYER_COUNTS, layerKey, layerName, stackLayers } from "../layers";
 import { trackEdit, widthFromMm } from "../routeTool";
 import type { Command, CopperLayer, Id, Point, Rotation, Side, Snapshot } from "../types";
 import { mm } from "../viewport";
+import { moveSymbolsTo } from "../tools/schematic/selection";
 import { sheetsInOrder } from "./sheets";
 
 // ---- Tool option schema --------------------------------------------------------------------
@@ -184,6 +185,21 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 const withAxis = (p: Point, k: "x" | "y", n: number): Point => (k === "x" ? { x: n, y: p.y } : { x: p.x, y: n });
 const present = <T>(x: T | undefined): x is T => x !== undefined;
 
+/** The project library definition of a placed part (absent in fixtures without a library). */
+const defOf = (s: Snapshot, componentId: string) => s.project.library?.[componentId];
+/** "Maker MPN" from the part's library definition, or "not set". */
+const mpnText = (s: Snapshot, componentId: string) => {
+  const d = defOf(s, componentId);
+  return [d?.manufacturer, d?.mpn].filter(Boolean).join(" ") || "not set";
+};
+/** The part's 3D model as the library definition holds it (`model3d.model_ref`, read-only here). */
+export function modelText(s: Snapshot, componentId: string): string {
+  const m = defOf(s, componentId)?.model3d;
+  const r = m?.model_ref;
+  if (r) return `${r.source.path} (${r.format.toUpperCase()}, ${r.quality ?? "unclassified"})`;
+  return m ? `none: ${m.kind} body placeholder` : "none";
+}
+
 function symbolFields(s: Snapshot, ids: Id[]): PropModel {
   const syms = ids.map((id) => s.project.schematic.symbols[id]).filter(present);
   const one = syms.length === 1 ? syms[0] : null;
@@ -196,8 +212,9 @@ function symbolFields(s: Snapshot, ids: Id[]): PropModel {
       commit: (v) => {
         const n = parseMm(v);
         if (typeof n === "string") return n;
-        const cmds: Command[] = syms.filter((y) => y.position[k] !== n).map((y): Command => ({ type: "MoveSymbol", symbol_id: y.id, position: withAxis(y.position, k, n) }));
-        return batch(cmds, `Set ${k.toUpperCase()} of ${plural(cmds.length, "symbol")}`);
+        // Attached wire ends and pin labels follow (rubber-band, as a drag does): one Batch.
+        const targets = syms.filter((y) => y.position[k] !== n).map((y) => ({ id: y.id, position: withAxis(y.position, k, n) }));
+        return batch(moveSymbolsTo(s, targets), `Set ${k.toUpperCase()} of ${plural(targets.length, "symbol")}`);
       },
     },
   });
@@ -238,7 +255,7 @@ function symbolFields(s: Snapshot, ids: Id[]): PropModel {
       },
       { id: "mirror", label: "Mirrored", ...common(syms.map((y) => (y.mirror ? "yes" : "no"))) },
       { id: "footprint", label: "Footprint", ...common(syms.map((y) => (Object.values(s.project.pcb.footprints).some((f) => f.symbol_id === y.id) ? "on the PCB" : "not on the PCB yet"))) },
-      unavailable("mpn", "Manufacturer / MPN"),
+      { id: "mpn", label: "Manufacturer / MPN", ...common(syms.map((y) => mpnText(s, y.component_id))) },
       unavailable("supplier", "Supplier part"),
       unavailable("bom", "In BOM / in PCB"),
       unavailable("unit", "Sub-part (unit)"),
@@ -315,9 +332,10 @@ function footprintFields(s: Snapshot, ids: Id[]): PropModel {
           },
         },
       },
-      unavailable("model3d", "3D model"),
+      // Read-only: the model belongs to the part's library definition (Library › Attach 3D model).
+      { id: "model3d", label: "3D model", ...common(fps.map((f) => modelText(s, f.component_id))) },
       unavailable("bom", "In BOM"),
-      unavailable("mpn", "Manufacturer / MPN"),
+      { id: "mpn", label: "Manufacturer / MPN", ...common(fps.map((f) => mpnText(s, f.component_id))) },
     ],
   };
 }
@@ -346,17 +364,13 @@ function labelFields(s: Snapshot, ids: Id[]): PropModel {
       ls.filter((l) => l.name !== name).map((l): Command => ({ type: "RenameNetLabel", label_id: l.id, name })),
       `Rename ${plural(ls.length, "label")}`,
     );
-  // The engine has no command to change a label's kind: the label is placed again with the other
-  // kind (same name, position and scope) in one Batch, so it is still one revision and one undo step.
-  const rekind = (kind: "net" | "power"): Commit => {
-    const cmds: Command[] = ls
-      .filter((l) => l.kind !== kind)
-      .flatMap((l): Command[] => [
-        { type: "DeleteNetLabel", label_id: l.id },
-        { type: "AddNetLabel", sheet_id: l.sheet_id, name: l.name, position: l.position, kind, ...(l.scope ? { scope: l.scope } : {}) },
-      ]);
-    return cmds.length ? { type: "Batch", commands: cmds, label: `Change ${plural(ls.length, "label")} kind` } : null;
-  };
+  // A kind change keeps the label in place: `SetNetLabelKind` (ADR-0049) keeps its id, group,
+  // scope and power style; a Batch for several labels, so one undo step.
+  const rekind = (kind: "net" | "power"): Commit =>
+    batch(
+      ls.filter((l) => l.kind !== kind).map((l): Command => ({ type: "SetNetLabelKind", label_id: l.id, kind })),
+      `Change ${plural(ls.length, "label")} kind`,
+    );
   const axis = (k: "x" | "y"): PropField => ({
     id: k,
     label: `${k.toUpperCase()} (mm)`,

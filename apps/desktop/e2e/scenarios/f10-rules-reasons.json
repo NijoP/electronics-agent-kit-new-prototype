@@ -1,0 +1,36 @@
+{
+  "name": "F10 rules, inspector reasons and small PCB fixes",
+  "description": "Definition-of-done slice F10 (audit S16, S17 PCB part, S19) on an isolated fixture with one resistor synced to the PCB and a 3D model reference on its library part. S19 (ADR-0050): Design rules sets a max component height, then emptying the field and applying is accepted as an explicit clear (before, an empty field meant 'unchanged', so that Apply changed nothing), and a further Apply with the field still empty is refused as no change, so the limit is gone. S16: the footprint's 3D model row in the inspector shows the library part's model path and quality instead of 'the EAK-IR has no field'; the Route tool's arc-corners row no longer says the EAK-IR has no arc tracks. S17: with the Route tool and no route started, Finish route and Rip up & re-route are disabled and say why. The click-then-click Move grid delta (DoD audit defect 6) is covered by vitest (editors.test.tsx F10 regressions): this harness cannot place the two clicks on known board coordinates under the Canvas2D renderer.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "F10 Evidence Fixture", "folder": "f10-fixture" },
+    {
+      "id": "fixture-part",
+      "do": "fixture-commands",
+      "title": "SETUP: one resistor, synced to the PCB",
+      "commands": [
+        { "type": "PlaceSymbol", "sheet_id": null, "component_id": "R_0603", "position": { "x": 50000000, "y": 50000000 }, "rotation": "R0", "refdes": null, "value": null },
+        { "type": "SyncSchematicToPcb" }
+      ]
+    },
+    { "id": "fixture-model", "do": "fixture-model", "title": "SETUP: a 3D model reference on R_0603", "component": "R_0603", "path": "/f10-fixture/R_0603.step", "format": "step", "quality": "LIBRARY_VERIFIED", "licence": "CC0-1.0", "provenance": "F10 UI evidence fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "F10 Evidence Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "s19-rules", "do": "menu", "title": "S19: Design rules", "menu": "Design", "item": "Design rules and net classes…", "expect": "[role=\"dialog\"][aria-label=\"Design rules\"] input[aria-label=\"Max component height (mm, empty = no limit)\"]" },
+    { "id": "s19-type", "do": "type", "title": "S19: a 12 mm max component height", "selector": "[role=\"dialog\"][aria-label=\"Design rules\"] input[aria-label=\"Max component height (mm, empty = no limit)\"]", "value": "12", "shot": false },
+    { "id": "s19-set", "do": "click", "title": "S19: Apply board rules stores the limit (SetDesignRules accepted)", "selector": "[role=\"dialog\"][aria-label=\"Design rules\"] section[aria-label=\"Board rules\"] button.primary", "text": "Apply board rules", "expect": "footer.status span.msg", "expectText": "SetDesignRules → revision 4" },
+    { "id": "s19-empty", "do": "click", "title": "S19: focus the height field", "selector": "[role=\"dialog\"][aria-label=\"Design rules\"] input[aria-label=\"Max component height (mm, empty = no limit)\"]", "shot": false },
+    { "id": "s19-erase", "do": "key", "title": "S19: empty the height field", "keys": "ctrl+a BackSpace", "shot": false },
+    { "id": "s19-clear", "do": "click", "title": "S19: Apply with the field emptied is an accepted change: the explicit clear", "selector": "[role=\"dialog\"][aria-label=\"Design rules\"] section[aria-label=\"Board rules\"] button.primary", "text": "Apply board rules", "expect": "footer.status span.msg", "expectText": "SetDesignRules → revision 5" },
+    { "id": "s19-gone", "do": "click", "title": "S19: Apply again changes nothing: the limit is gone", "selector": "[role=\"dialog\"][aria-label=\"Design rules\"] section[aria-label=\"Board rules\"] button.primary", "text": "Apply board rules", "expect": "footer.status span.msg", "expectText": "SetDesignRules rejected" },
+    { "id": "s19-close", "do": "click", "title": "Close Design rules", "selector": "[role=\"dialog\"][aria-label=\"Design rules\"] .modal-head button", "text": "Close", "gone": "[role=\"dialog\"][aria-label=\"Design rules\"]", "shot": false },
+    { "id": "pcb", "do": "menu", "title": "Open PCB", "menu": "View", "item": "Go to PCB editor", "expect": "section[aria-label=\"PCB view\"]" },
+    { "id": "props", "do": "click", "title": "PCB right dock › Properties tab", "shot": false, "selector": "[role=\"tablist\"][aria-label=\"Right panel tabs\"] [role=\"tab\"]", "text": "Properties", "expect": "section[aria-label=\"Properties\"]" },
+    { "id": "s16-select", "do": "key", "title": "S16: Ctrl+A selects the footprint", "keys": "ctrl+a", "expect": "section[aria-label=\"Properties\"] [data-field=\"model3d\"] dd" },
+    { "id": "s16-model", "do": "wait", "title": "S16: the footprint's 3D model row shows the library part's model, not 'no IR field'", "selector": "section[aria-label=\"Properties\"] [data-field=\"model3d\"] dd", "text": "/f10-fixture/R_0603.step (STEP, LIBRARY_VERIFIED)" },
+    { "id": "s16-model-not-unavailable", "do": "absent", "title": "S16: the 3D model row is not marked unavailable", "selector": "section[aria-label=\"Properties\"] [data-field=\"model3d\"].unavailable", "shot": false },
+    { "id": "route", "do": "click", "title": "Route tool", "selector": "section[aria-label=\"PCB view\"] [role=\"toolbar\"][aria-label=\"PCB tools\"] button", "text": "Route", "expect": "section[aria-label=\"Properties\"] [data-field=\"Arc corners\"]" },
+    { "id": "s16-arc", "do": "wait", "title": "S16: arc corners: unavailable with the current reason (the IR has arc tracks; the router makes none)", "selector": "section[aria-label=\"Properties\"] [data-field=\"Arc corners\"] .unavail", "text": "Unavailable: the route tool draws straight" },
+    { "id": "s17-finish", "do": "wait", "title": "S17: Finish route is disabled and says why", "selector": "section[aria-label=\"PCB view\"] .tool-options button[disabled][title=\"No route started: click a pad or track end first\"]", "text": "Finish route" },
+    { "id": "s17-ripup", "do": "wait", "title": "S17: Rip up & re-route is disabled and says why", "selector": "section[aria-label=\"PCB view\"] .tool-options button[disabled][title=\"Pick a net in the Net field first\"]", "text": "Rip up" }
+  ]
+}

@@ -357,6 +357,11 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
             "Set how far a net label reaches: local (its sheet only), global or off_page (every sheet). Power ports always connect on every sheet.",
             obj(&[("label_id", id("label id")), ("scope", net_scope())], &["label_id", "scope"]),
         ),
+        SetNetLabelKind { .. } => (
+            D::Schematic,
+            "Change a label between a net label and a power port in place (same id, name, position, scope, power style and group). Power ports connect on every sheet whatever their scope.",
+            obj(&[("label_id", id("label id")), ("kind", label_kind())], &["label_id", "kind"]),
+        ),
         SetPowerPortStyle { .. } => (
             D::Schematic,
             "Set (or clear with null) the drawing style of a power port label.",
@@ -745,6 +750,7 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                     ("default_clearance", nullable(nm("default class clearance"))),
                     ("temp_rise_c", nullable(number("allowed conductor temperature rise, °C"))),
                     ("max_component_height", nullable(nm("maximum component height"))),
+                    ("clear_max_component_height", boolean("remove the height limit")),
                 ],
                 &[],
             ),
@@ -990,6 +996,10 @@ pub fn command_samples() -> Vec<Command> {
             label_id: "l".into(),
             scope: NetScope::Local,
         },
+        SetNetLabelKind {
+            label_id: "l".into(),
+            kind: LabelKind::Power,
+        },
         SetPowerPortStyle {
             label_id: "l".into(),
             style: Some(PowerStyle::Ground),
@@ -1216,6 +1226,7 @@ pub fn command_samples() -> Vec<Command> {
             default_clearance: Some(1),
             temp_rise_c: Some(10.0),
             max_component_height: None,
+            clear_max_component_height: false,
         },
         UpsertNetClass {
             class: Constraints::default().default_class,
@@ -1342,12 +1353,13 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 88 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
+        // 89 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
         // schematic commands of ADR-0040, the 16 PCB commands of ADR-0042 (15 schema-v4 edits plus
         // SyncSchematicToPcbSelected), the 3 sheet commands of ADR-0043, the 2 schema-v5 commands of
-        // ADR-0044, the 3 group and rename commands of ADR-0045 and the 3 schema-v7 rule commands
-        // of ADR-0046); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 88);
+        // ADR-0044, the 3 group and rename commands of ADR-0045, the 3 schema-v7 rule commands
+        // of ADR-0046 and SetNetLabelKind of ADR-0049); keep in step with
+        // REQUIREMENTS_TRACEABILITY INT-04.
+        assert_eq!(tools.len(), 89);
         for t in &tools {
             assert!(t
                 .spec

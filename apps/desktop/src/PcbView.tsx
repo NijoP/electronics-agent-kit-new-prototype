@@ -93,6 +93,8 @@ export const TOOLS: [Tool, string][] = [
 /** Hidden-layer key of a drawing layer (as the renderers file them). */
 const drawKey = (l: string) => (l === "top_silk" ? "top:silk" : l === "bottom_silk" ? "bottom:silk" : "outline");
 const CAPTURE = mmToNm(0.8);
+/** Disabled state and title for a button: the reason it is disabled, else what it does (S17). */
+const gate = (reason: string | null, title: string) => ({ disabled: reason !== null, title: reason ?? title });
 /** Tools under which pressing on a footprint and dragging moves it (instead of panning). */
 const MOVE_TOOLS: Tool[] = ["select", "move"];
 type Drag = { mode: "move" | "marquee"; from: Point; to: Point; additive: boolean };
@@ -198,10 +200,14 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const zoomTo = focus ? { bounds: focusBounds(snapshot, focus.objects, focus.location), n: focus.n } : null;
   const [net, setNet] = useState("");
   const [corners, setCorners] = useState<Point[]>([]);
+  const cornersReason = corners.length < 2 ? `Click at least two points first (${corners.length} so far)` : null;
   // Board-outline vertex handle being dragged (index + current snapped position).
   const [vdrag, setVdrag] = useState<{ i: number; to: Point } | null>(null);
   const docId = useDocId();
-  const [picked, setPicked] = useState<Id | null>(null);
+  // Move tool click-then-click: the footprint picked up and the pointer point it was picked at,
+  // so the second click moves it by the grid-snapped pointer delta (as a drag does) and never
+  // snaps its origin onto another part's pad or track end.
+  const [picked, setPicked] = useState<{ id: Id; from: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
   // Interactive route: fixed steps (pure reducer) plus the engine's live proposal for the cursor.
   const [draft, dispatch] = useReducer(routeReducer, null);
@@ -685,15 +691,16 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
       case "move": {
         if (!picked) {
           if (fpId) {
-            setPicked(fpId);
+            setPicked({ id: fpId, from: fromView(x, y) });
             const f = snapshot.geometry.footprints.find((g) => g.id === fpId);
             if (f) onSelect(f.symbol_id);
           }
           return;
         }
-        const id = picked;
+        const { id, from } = picked;
         setPicked(null);
-        void edit.execute({ type: "MoveFootprint", footprint_id: id, position: snap.point, rotation: null, side: null });
+        if (P.movable(snapshot, [id]).locked) return edit.notify(`${fps(1)} locked; unlock to move.`);
+        submit(P.moveCommands(snapshot, [id], snapDelta(from, fromView(x, y))), `Move ${fps(1)}`);
         return;
       }
       case "route": {
@@ -876,7 +883,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
             onChange: (v) => v !== mode && toggleMode(),
             title: "45° or 90° corners (/)",
           },
-          { kind: "unavailable", name: "Arc corners", label: "Arc corners", reason: "Unavailable: arc corners need arc tracks, which the EAK-IR does not have yet" },
+          { kind: "unavailable", name: "Arc corners", label: "Arc corners", reason: "Unavailable: the route tool draws straight 45° / 90° segments only. The EAK-IR stores arc tracks (schema v4, AddTrack arc_deg) and the canvas draws them, but the route tool does not make arc corners yet" },
           {
             kind: "select",
             name: "Obstacle mode",
@@ -1024,7 +1031,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
                   <button type="button" title="Place a via here and continue on the next copper layer (L)" onClick={() => changeLayer(order[(order.findIndex((o) => sameLayer(o, layer)) + 1) % order.length])}>
                     Via + switch layer
                   </button>
-                  <button type="button" title="Remove the last fixed step (Backspace)" disabled={!draft.steps.length} onClick={() => dispatch({ type: "back" })}>
+                  <button type="button" {...gate(draft.steps.length ? null : "No fixed step to remove yet: click to fix a step first", "Remove the last fixed step (Backspace)")} onClick={() => dispatch({ type: "back" })}>
                     Undo step
                   </button>
                   <button type="button" title="Discard this route (Esc)" onClick={reset}>
@@ -1032,21 +1039,29 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
                   </button>
                 </>
               )}
-              <button type="button" onClick={finishRoute} disabled={!draft || !draft.steps.length}>
+              <button
+                type="button"
+                onClick={finishRoute}
+                {...gate(!draft ? "No route started: click a pad or track end first" : !draft.steps.length ? "The route has no fixed step yet: click to fix one" : null, "Commit the route as one undo step (Enter)")}
+              >
                 Finish route ({draft?.steps.length ?? 0} steps)
               </button>
               <button
                 type="button"
-                title="Remove this net's tracks and vias and re-route it with the EAK router (one undo step)"
                 onClick={() => edit && net && void edit.execute(ripUpAndReroute(net))}
-                disabled={!net || !Object.values(pcb.tracks).some((t) => t.net === net)}
+                {...gate(
+                  !net ? "Pick a net in the Net field first" : !Object.values(pcb.tracks).some((t) => t.net === net) ? `Net ${net} has no tracks to rip up` : null,
+                  "Remove this net's tracks and vias and re-route it with the EAK router (one undo step)",
+                )}
               >
                 Rip up &amp; re-route net
               </button>
               <button
                 type="button"
-                title="Start routing the most constrained unrouted connection (power and high-current first, then shortest)"
-                disabled={!!draft || !queue.length}
+                {...gate(
+                  draft ? "Finish or cancel the current route first" : !queue.length ? "No unrouted connection is left" : null,
+                  "Start routing the most constrained unrouted connection (power and high-current first, then shortest)",
+                )}
                 onClick={() => queue[0] && startRoute(queue[0][0], queue[0][1])}
               >
                 Route next ({unrouted.length} unrouted)
@@ -1058,18 +1073,18 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
           )}
           {tool === "zone" && (
             <>
-              <button type="button" onClick={finishZone} disabled={corners.length < 2}>
+              <button type="button" onClick={finishZone} {...gate(cornersReason, "Commit the shape (Enter)")}>
                 Finish zone ({corners.length} pts)
               </button>
             </>
           )}
           {tool === "region" && (
-            <button type="button" onClick={finishRegion} disabled={corners.length < 2}>
+            <button type="button" onClick={finishRegion} {...gate(cornersReason, "Commit the shape (Enter)")}>
               Finish keep-out ({corners.length} pts)
             </button>
           )}
           {tool === "cutout" && (
-            <button type="button" onClick={finishCutout} disabled={corners.length < 2}>
+            <button type="button" onClick={finishCutout} {...gate(cornersReason, "Commit the shape (Enter)")}>
               Finish cut-out ({corners.length} pts)
             </button>
           )}
@@ -1086,7 +1101,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
           )}
           {tool === "outline" && edit && (
             <>
-              <button type="button" onClick={finishOutline} disabled={corners.length < 2}>
+              <button type="button" onClick={finishOutline} {...gate(cornersReason, "Commit the shape (Enter)")}>
                 Finish outline ({corners.length} pts)
               </button>
               <OutlinePanel edit={edit} outline={outline} arcs={pcb.board.outline_arcs ?? []} corners={corners} setCorners={setCorners} />
@@ -1101,7 +1116,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
                     Width (mm)
                     <input aria-label="Selected track width" inputMode="decimal" size={6} value={trackWidthText} onChange={(e) => setTrackWidthText(e.target.value)} />
                   </label>
-                  <button type="button" disabled={widthFromMm(trackWidthText) === null} onClick={() => applyTrackEdit({ width: widthFromMm(trackWidthText) ?? undefined })}>
+                  <button type="button" {...gate(widthFromMm(trackWidthText) === null ? "Type a positive width in mm first" : null, "Set the track width (EditTrack)")} onClick={() => applyTrackEdit({ width: widthFromMm(trackWidthText) ?? undefined })}>
                     Apply width
                   </button>
                   <select aria-label="Selected track layer" value={layerKey(selTrack.layer)} onChange={(e) => { const l = order.find((o) => layerKey(o) === e.target.value); if (l) applyTrackEdit({ layer: l }); }}>
@@ -1142,12 +1157,12 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
                   <button type="button" title="Align bottom edges" onClick={() => actions.align("bottom")}>Align bottom</button>
                   <button type="button" title="Put centres on one horizontal line" onClick={() => actions.align("hcenter")}>Center H</button>
                   <button type="button" title="Put centres on one vertical line" onClick={() => actions.align("vcenter")}>Center V</button>
-                  <button type="button" title="Equal horizontal spacing (needs 3+)" disabled={sel.length < 3} onClick={() => actions.distribute("x")}>Distribute H</button>
-                  <button type="button" title="Equal vertical spacing (needs 3+)" disabled={sel.length < 3} onClick={() => actions.distribute("y")}>Distribute V</button>
+                  <button type="button" {...gate(sel.length < 3 ? "Select 3 or more footprints to distribute" : null, "Equal horizontal spacing")} onClick={() => actions.distribute("x")}>Distribute H</button>
+                  <button type="button" {...gate(sel.length < 3 ? "Select 3 or more footprints to distribute" : null, "Equal vertical spacing")} onClick={() => actions.distribute("y")}>Distribute V</button>
                 </>
               )}
-              <button type="button" title="Lock: the footprint cannot be moved" disabled={lockedCount === sel.length} onClick={() => actions.lock(true)}>Lock</button>
-              <button type="button" title="Unlock" disabled={lockedCount === 0} onClick={() => actions.lock(false)}>Unlock</button>
+              <button type="button" {...gate(lockedCount === sel.length ? "Every selected footprint is already locked" : null, "Lock: the footprint cannot be moved")} onClick={() => actions.lock(true)}>Lock</button>
+              <button type="button" {...gate(lockedCount === 0 ? "No selected footprint is locked" : null, "Unlock")} onClick={() => actions.lock(false)}>Unlock</button>
             </span>
           )}
           <span className="muted hint">
@@ -1242,7 +1257,14 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
           Outline view
         </button>
         {edit && !stack.every((s) => s.kind !== "plane" || hasZone(s.layer)) && (
-          <button type="button" onClick={fillPlanes} disabled={!outline.length || !net}>
+          <button
+            type="button"
+            onClick={fillPlanes}
+            {...gate(
+              !outline.length ? "Draw the board outline first" : !net ? "Pick a net in the Net field (Route, Via or Zone tool) first" : null,
+              "Add one zone over the board outline on every plane layer that has none, on the chosen net (one undo step)",
+            )}
+          >
             Fill planes with net
           </button>
         )}

@@ -35,8 +35,10 @@ describe("Property List model", () => {
     expect(m.rows.map((r) => r.label)).toEqual(["D1", "R1"]);
     const ids = m.columns.map((c) => c.id);
     expect(ids).toEqual(expect.arrayContaining(["refdes", "value", "component", "x", "y", "rotation"]));
-    // unavailable fields (MPN, supplier, ...) and the Group row are not columns
-    for (const id of ["mpn", "supplier", "bom", "group"]) expect(ids).not.toContain(id);
+    // unavailable fields (supplier, BOM, ...) and the Group row are not columns
+    for (const id of ["supplier", "bom", "group"]) expect(ids).not.toContain(id);
+    // F10 (S16): the IR holds the part's manufacturer / MPN, so it is a read-only column
+    expect(m.columns.find((c) => c.id === "mpn")?.editable).toBe(false);
     expect(m.columns.find((c) => c.id === "value")?.editable).toBe(true);
     expect(m.columns.find((c) => c.id === "component")?.editable).toBe(false);
     expect(m.columns.find((c) => c.id === "rotation")?.choices?.map((c) => c.value)).toEqual(["R0", "R90", "R180", "R270"]);
@@ -88,6 +90,29 @@ describe("Property List tab", () => {
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0].type).toBe("Batch");
     expect(batchOf(sent[0])).toHaveLength(2);
+  });
+
+  it("mixed cells with an empty field: Apply is disabled with the reason until a value is given (F3, S3)", () => {
+    const sent: Command[] = [];
+    const snap = fixture();
+    snap.project.schematic.symbols.sym_d1.rotation = "R90";
+    render(<BottomPanel tab="proplist" onTab={() => {}} snapshot={snap} results={{}} events={[]} onProbe={() => {}} onClose={() => {}} execute={async (c) => void sent.push(c)} />);
+    const list = within(screen.getByRole("region", { name: "Property list" }));
+    const apply = () => list.getByRole("button", { name: "Apply" }) as HTMLButtonElement;
+    // Value: 330 and Green, so the field starts empty; Apply would blank both
+    fireEvent.click(list.getByRole("button", { name: "Pick every Value cell" }));
+    expect(apply().disabled).toBe(true);
+    expect(apply().title).toMatch(/different values/);
+    fireEvent.keyDown(list.getByRole("textbox", { name: "New value" }), { key: "Enter" });
+    expect(sent).toHaveLength(0);
+    fireEvent.change(list.getByRole("textbox", { name: "New value" }), { target: { value: "1k" } });
+    expect(apply().disabled).toBe(false);
+    // Rotation: R0 and R90 show "(mixed)"; the engine would refuse "", so Apply waits for a choice
+    fireEvent.click(list.getByRole("button", { name: "Pick every Rotation cell" }));
+    expect(apply().disabled).toBe(true);
+    fireEvent.change(list.getByRole("combobox", { name: "New value" }), { target: { value: "R180" } });
+    expect(apply().disabled).toBe(false);
+    expect(sent).toHaveLength(0);
   });
 
   it("Ctrl+click adds and removes cells of one column; a click in another column starts over", () => {

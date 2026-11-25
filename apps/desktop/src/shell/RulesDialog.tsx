@@ -105,7 +105,10 @@ export function RulesDialog({ snapshot, busy, apply, onClose, reports, onRun }: 
     const f = Object.fromEntries(Object.entries(rules).map(([k, v]) => [k, k === "temp_rise_c" ? num(v) : mm(v)]));
     const bad = Object.entries(f).find(([, v]) => v === undefined);
     if (bad) return setError(`"${bad[0].replace(/_/g, " ")}" must be a positive number (mm, or °C for temperature rise).`);
-    run([{ type: "SetDesignRules", ...(f as Record<string, number | null>) } as Command]);
+    // A null field means "unchanged" to the engine, so emptying the optional height limit is an
+    // explicit clear (ADR-0050); an empty field that had no limit stays a no-op.
+    const clear = f.max_component_height === null && (c?.max_component_height ?? null) !== null;
+    run([{ type: "SetDesignRules", ...(f as Record<string, number | null>), ...(clear ? { clear_max_component_height: true } : {}) } as Command]);
   };
   const applyClass = () => {
     const name = cls.name.trim();
@@ -186,7 +189,7 @@ export function RulesDialog({ snapshot, busy, apply, onClose, reports, onRun }: 
             {field("default_track_width", "Default track width (mm)")}
             {field("default_clearance", "Default clearance (mm)")}
             {field("temp_rise_c", "Allowed temperature rise (°C)")}
-            {field("max_component_height", "Max component height (mm, optional)")}
+            {field("max_component_height", "Max component height (mm, empty = no limit)")}
           </div>
           <button type="button" className="primary" disabled={busy} onClick={applyRules}>Apply board rules</button>
         </section>

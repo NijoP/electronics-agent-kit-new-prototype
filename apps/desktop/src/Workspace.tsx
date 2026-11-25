@@ -794,8 +794,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   };
   const deleteSel = () => {
     if (!selectedSymbol) return;
-    if (!window.confirm(`Delete ${selectedSymbol.refdes}? This is a destructive change.`)) return;
+    // The schematic delete policy (SchematicView): at once, one undo step, no prompt.
     execute({ type: "DeleteSymbol", symbol_id: selectedSymbol.id });
+    setMessage(`Deleted ${selectedSymbol.refdes}: Ctrl+Z restores it.`);
   };
   // Save: the engine writes every accepted command before it returns, so "Save" asks it for its
   // state and reports whether anything is blocked; it never claims more than the engine says.
