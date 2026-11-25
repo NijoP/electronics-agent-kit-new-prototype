@@ -17,8 +17,8 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 
 ## Summary
 
-- Action registry: 136 controls: 0 unavailable with a reason, 0 violations (0 allowlisted).
-- Component scan: 497 controls: 1 unavailable with a reason, 0 violations (0 allowlisted).
+- Action registry: 140 controls: 0 unavailable with a reason, 0 violations (0 allowlisted).
+- Component scan: 502 controls: 1 unavailable with a reason, 0 violations (0 allowlisted).
 - Quick open: 6 items probed, 0 no-op handlers.
 - Allowlist: 0 entries.
 
@@ -133,6 +133,10 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | `t-via` | Via | pcb | Place | edit |  | enabled |
 | `t-outline` | Board outline | pcb | Place | edit |  | enabled |
 | `t-zone` | Copper zone | pcb | Place | edit |  | enabled |
+| `t-region` | Keep-out region | pcb | Place | edit |  | enabled |
+| `t-cutout` | Board cut-out | pcb | Place |  |  | enabled |
+| `t-pcb-text` | PCB text | pcb | Place | edit |  | enabled |
+| `t-dimension` | Dimension | pcb | Place | edit |  | enabled |
 | `t-flip` | Flip footprint | pcb | Edit | edit |  | state-dependent |
 | `t-route` | Route track | pcb | Route | edit |  | enabled |
 | `route` | Auto-route all nets | pcb | Route | checks |  | state-dependent |
@@ -261,16 +265,20 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/PcbView.tsx | button | (dynamic) | onClick | 2 | handler |
 | src/PcbView.tsx | select | PCB renderer | onChange | 1 | handler |
 | src/PcbView.tsx | button | Place a via here and continue on the next copper layer (L) | onClick | 1 | handler |
-| src/PcbView.tsx | button | Remove the last fixed step (Backspace) | onClick | 1 | handler |
+| src/PcbView.tsx | button | Undo step | onClick, {...props} | 1 | handler |
 | src/PcbView.tsx | button | Discard this route (Esc) | onClick | 1 | handler |
-| src/PcbView.tsx | button | Finish route ( | onClick | 1 | handler |
-| src/PcbView.tsx | button | Remove this net's tracks and vias and re-route it with the EAK router (one undo step) | onClick | 1 | handler |
-| src/PcbView.tsx | button | Start routing the most constrained unrouted connection (power and high-current first, then shortest) | onClick | 1 | handler |
+| src/PcbView.tsx | button | Finish route ( | onClick, {...props} | 1 | handler |
+| src/PcbView.tsx | button | Rip up &amp; re-route net | onClick, {...props} | 1 | handler |
+| src/PcbView.tsx | button | Route next ( | onClick, {...props} | 1 | handler |
 | src/PcbView.tsx | button | Run DRC (clearance and connectivity) in eak-validation | onClick | 1 | handler |
-| src/PcbView.tsx | button | Finish zone ( | onClick | 1 | handler |
-| src/PcbView.tsx | button | Finish outline ( | onClick | 1 | handler |
+| src/PcbView.tsx | button | Finish zone ( | onClick, {...props} | 1 | handler |
+| src/PcbView.tsx | button | Finish keep-out ( | onClick, {...props} | 1 | handler |
+| src/PcbView.tsx | button | Finish cut-out ( | onClick, {...props} | 1 | handler |
+| src/PcbView.tsx | button | Turn the picked text 90° (MovePcbText) | onClick | 1 | handler |
+| src/PcbView.tsx | button | Put the text down where it is (Esc) | onClick | 1 | handler |
+| src/PcbView.tsx | button | Finish outline ( | onClick, {...props} | 1 | handler |
 | src/PcbView.tsx | input[type=text] | Selected track width | onChange | 1 | handler |
-| src/PcbView.tsx | button | Apply width | onClick | 1 | handler |
+| src/PcbView.tsx | button | Apply width | onClick, {...props} | 1 | handler |
 | src/PcbView.tsx | select | Selected track layer | onChange | 1 | handler |
 | src/PcbView.tsx | button | Delete this track (Delete) | onClick | 1 | handler |
 | src/PcbView.tsx | button | Rotate 90° (R) | onClick | 1 | handler |
@@ -281,15 +289,15 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/PcbView.tsx | button | Align bottom edges | onClick | 1 | handler |
 | src/PcbView.tsx | button | Put centres on one horizontal line | onClick | 1 | handler |
 | src/PcbView.tsx | button | Put centres on one vertical line | onClick | 1 | handler |
-| src/PcbView.tsx | button | Equal horizontal spacing (needs 3+) | onClick | 1 | handler |
-| src/PcbView.tsx | button | Equal vertical spacing (needs 3+) | onClick | 1 | handler |
-| src/PcbView.tsx | button | Lock: the footprint cannot be moved | onClick | 1 | handler |
-| src/PcbView.tsx | button | Unlock | onClick | 1 | handler |
+| src/PcbView.tsx | button | Distribute H | onClick, {...props} | 1 | handler |
+| src/PcbView.tsx | button | Distribute V | onClick, {...props} | 1 | handler |
+| src/PcbView.tsx | button | Lock | onClick, {...props} | 1 | handler |
+| src/PcbView.tsx | button | Unlock | onClick, {...props} | 1 | handler |
 | src/PcbView.tsx | select | Copper layers | onChange | 1 | handler |
 | src/PcbView.tsx | button[role=tab] | (dynamic) | onClick | 1 | handler |
 | src/PcbView.tsx | button | Flip board: view the board from the bottom (mirrored left to right) | onClick | 1 | handler |
 | src/PcbView.tsx | button | Outline view: draw tracks, pads, vias and zones as outlines | onClick | 1 | handler |
-| src/PcbView.tsx | button | Fill planes with net | onClick | 1 | handler |
+| src/PcbView.tsx | button | Fill planes with net | onClick, {...props} | 1 | handler |
 | src/PcbView.tsx | button | Draw board outline | onClick | 1 | handler |
 | src/PerformancePanel.tsx | button | Retry | onClick | 1 | handler |
 | src/PerformancePanel.tsx | input[type=number] | (no label) | onChange, {...props} | 1 | handler |
@@ -568,7 +576,8 @@ Rules (the unit test fails on a violation that is not allowlisted in `src/qa/uiI
 | src/tools/pcb/OutlinePanel.tsx | button | Undo vertex | onClick | 1 | handler |
 | src/tools/pcb/OutlinePanel.tsx | button | Apply outline | onClick | 1 | handler |
 | src/tools/pcb/OutlinePanel.tsx | input[type=text] | (dynamic) | onChange, onBlur, onKeyDown | 2 | handler |
-| src/tools/pcb/OutlinePanel.tsx | button | Insert a vertex at the midpoint of the next edge | onClick | 1 | handler |
+| src/tools/pcb/OutlinePanel.tsx | input[type=text] | arc° | onChange, onBlur, onKeyDown | 1 | handler |
+| src/tools/pcb/OutlinePanel.tsx | button | Insert a vertex at the midpoint of the next edge (an arc edge is split in two halves) | onClick | 1 | handler |
 | src/tools/pcb/OutlinePanel.tsx | button | Delete vertex | onClick | 1 | handler |
 | src/tools/schematic/ArrayPanel.tsx | input[type=text] | Columns | onChange | 1 | handler |
 | src/tools/schematic/ArrayPanel.tsx | input[type=text] | Rows | onChange | 1 | handler |
