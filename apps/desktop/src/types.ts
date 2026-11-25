@@ -755,6 +755,7 @@ export interface LibraryHit {
 
 export type LiveStatus =
   | "ok"
+  | "not_configured"
   | "stale"
   | "needs_credentials"
   | "unauthorized"

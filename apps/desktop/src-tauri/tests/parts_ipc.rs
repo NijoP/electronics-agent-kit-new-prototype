@@ -14,6 +14,9 @@ use std::net::TcpListener;
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// A configured (non-reserved) distributor host: the live path runs against the local fake.
+const HOST: &str = "https://api.distributor.example";
+
 fn tmpdir(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("eak-parts-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -91,7 +94,7 @@ fn open_empty(name: &str) -> (Session, PathBuf) {
 fn search_reports_a_blocked_live_search_and_still_returns_library_hits() {
     let (s, _d) = open_empty("search");
     let p = distributor_site();
-    let r = parts_search(&s, &p, "resistor").unwrap();
+    let r = parts_search(&s, &p, HOST, "resistor").unwrap();
     assert_eq!(r.live.status, "blocked");
     assert!(
         r.live.message.contains("refused automated access"),
@@ -101,15 +104,15 @@ fn search_reports_a_blocked_live_search_and_still_returns_library_hits() {
     assert!(r.live.records.is_empty(), "no invented results");
     assert!(r.library.iter().any(|h| h.id == "R_0603"));
 
-    let by_number = parts_search(&s, &p, "c25804").unwrap();
+    let by_number = parts_search(&s, &p, HOST, "c25804").unwrap();
     assert_eq!(by_number.live.status, "ok");
     assert_eq!(
         by_number.live.records[0].mpn.as_deref(),
         Some("0603WAF1002T5E")
     );
-    assert!(parts_search(&s, &p, "   ").is_err());
+    assert!(parts_search(&s, &p, HOST, "   ").is_err());
     // The same query again is served from the process cache, not a second request.
-    let cached = parts_search(&s, &p, "C25804").unwrap();
+    let cached = parts_search(&s, &p, HOST, "C25804").unwrap();
     assert!(matches!(
         cached.live.served,
         Some(eak_manufacturing::provider::Served::Cache { .. })
@@ -123,11 +126,11 @@ fn import_is_one_engine_command_with_a_revision_check_and_stores_the_record() {
     let rev = current_project(&s).unwrap().project.revision;
 
     // A stale revision is rejected by the engine; nothing is stored.
-    let stale = parts_import(&s, &p, rev + 5, "C25804").unwrap();
+    let stale = parts_import(&s, &p, HOST, rev + 5, "C25804").unwrap();
     assert!(!stale.response.accepted);
     assert!(!d.join("sourcing").join("C25804.json").exists());
 
-    let ok = parts_import(&s, &p, rev, "C25804").unwrap();
+    let ok = parts_import(&s, &p, HOST, rev, "C25804").unwrap();
     assert!(ok.response.accepted, "{:?}", ok.response.error);
     assert_eq!(ok.component_id, "DISTRIBUTOR_C25804");
     assert_eq!(ok.response.revision_after, rev + 1);
@@ -147,12 +150,12 @@ fn import_is_one_engine_command_with_a_revision_check_and_stores_the_record() {
     assert_eq!(journal[0].actor, "human:user");
 
     // The stored record now answers an offline search.
-    let again = parts_search(&s, &p, "0603WAF1002T5E").unwrap();
+    let again = parts_search(&s, &p, HOST, "0603WAF1002T5E").unwrap();
     assert_eq!(again.stored.len(), 1);
 
     // No template: refused with the reason, project untouched.
     let before = current_project(&s).unwrap().project.revision;
-    let err = parts_import(&s, &p, before, "C99").unwrap_err();
+    let err = parts_import(&s, &p, HOST, before, "C99").unwrap_err();
     assert!(err.contains("no EAK symbol/footprint template"), "{err}");
     assert_eq!(current_project(&s).unwrap().project.revision, before);
 }
@@ -269,4 +272,65 @@ fn part_standardisation_runs_the_sourcing_check_without_writing() {
     assert_eq!(current_project(&s).unwrap().project.revision, revision);
     // No project open: refused, not an empty pass.
     assert!(part_standardisation(&session()).is_err());
+}
+
+/// S20 regression: `parts_search` asked the reserved `https://distributor.invalid` host on every
+/// search. With a reserved host no request is made at all: the live part says
+/// `not_configured`, offline library hits still come back, and import / save are refused.
+#[test]
+fn search_sends_no_request_to_a_reserved_invalid_host() {
+    use eak_desktop::parts::{parts_save_record, require_configured, reserved_host};
+    use eak_manufacturing::provider::{ProviderError, SupplierProvider};
+    use eak_manufacturing::sourcing::SourcingRecord;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    struct Counting(Arc<AtomicUsize>);
+    impl SupplierProvider for Counting {
+        fn name(&self) -> &str {
+            "counting"
+        }
+        fn lookup(&self, part: &str) -> Result<SourcingRecord, ProviderError> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            panic!("no lookup may reach a reserved host (asked for {part})")
+        }
+        fn search(&self, query: &str) -> Result<Vec<SourcingRecord>, ProviderError> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            panic!("no search may reach a reserved host (asked for {query})")
+        }
+    }
+
+    let (s, _d) = open_empty("reserved");
+    let asked = Arc::new(AtomicUsize::new(0));
+    let p = Resilient::new(Counting(asked.clone())).with_sleep(|_| {});
+    for host in [
+        "https://distributor.invalid",
+        "https://api.distributor.invalid/rest",
+        "https://INVALID",
+    ] {
+        assert!(reserved_host(host), "{host}");
+        let r = parts_search(&s, &p, host, "resistor").unwrap();
+        assert_eq!(r.live.status, "not_configured");
+        assert!(
+            r.live.message.contains("no request was sent"),
+            "{}",
+            r.live.message
+        );
+        assert!(r.live.records.is_empty());
+        assert!(!r.library.is_empty(), "offline library hits still returned");
+        assert!(parts_import(&s, &p, host, 0, "C25804").is_err());
+        assert!(parts_save_record(&s, &p, host, "C25804").is_err());
+        assert!(require_configured(host).is_err());
+    }
+    assert_eq!(
+        asked.load(Ordering::SeqCst),
+        0,
+        "a request reached the provider"
+    );
+    // The build's own placeholder host is reserved, so the shipped commands never call it.
+    assert!(reserved_host(
+        eak_manufacturing::distributor_api::PRODUCTION_BASE
+    ));
+    assert!(!reserved_host(HOST));
+    assert!(require_configured(HOST).is_ok());
 }

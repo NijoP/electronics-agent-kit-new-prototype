@@ -123,6 +123,40 @@ describe("LibraryPanel", () => {
     expect(c.footprint.name).toBe("R_0805");
     expect(c.pin_map).toEqual({ "1": ["1"], "2": ["2"] });
   });
+
+  // S18: "New part…" opened the symbol editor even when the engine refused the definition.
+  it("opens the new part's symbol editor only when the engine accepted it", async () => {
+    for (const accepted of [false, true]) {
+      const execute = vi.fn(async (_c: unknown) => accepted);
+      const onEdit = vi.fn();
+      render(<LibraryPanel revision={1} busy={false} execute={execute} onPlace={vi.fn()} onEdit={onEdit} />);
+      await screen.findByText("LED 0603");
+      fireEvent.click(screen.getByText("New part…"));
+      fireEvent.change(screen.getByLabelText("New part id"), { target: { value: "MY_SENSOR" } });
+      fireEvent.change(screen.getByLabelText("New part name"), { target: { value: "My sensor" } });
+      fireEvent.click(screen.getByRole("button", { name: "Create part" }));
+      await waitFor(() => expect(execute).toHaveBeenCalledWith(expect.objectContaining({ type: "UpsertComponentDefinition" })));
+      if (accepted) await waitFor(() => expect(onEdit).toHaveBeenCalledWith("symbol", "MY_SENSOR"));
+      else {
+        expect((await screen.findByRole("alert")).textContent).toMatch(/Part not created/);
+        expect(onEdit).not.toHaveBeenCalled();
+      }
+      cleanup();
+    }
+  });
+
+  // S17: a disabled library button says why.
+  it("every disabled detail button carries a reason", async () => {
+    mount();
+    fireEvent.click(await screen.findByText("Resistor 0603"));
+    const save = screen.getByRole("button", { name: "Save properties" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    expect(save.title).toMatch(/no property was changed/);
+    const attach = screen.getByRole("button", { name: "Attach 3D model" }) as HTMLButtonElement;
+    expect(attach.disabled).toBe(true);
+    expect(attach.title).toMatch(/Choose a model file/);
+    for (const b of screen.getAllByRole("button") as HTMLButtonElement[]) if (b.disabled) expect(b.title, b.textContent ?? "").not.toBe("");
+  });
 });
 
 describe("sourceLabel (F8)", () => {

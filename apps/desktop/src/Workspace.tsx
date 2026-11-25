@@ -1,7 +1,7 @@
 // Project workspace: toolbar, schematic + PCB views with cross-probing, Engineering
 // Monitor, activity log, status bar and command palette. State shown here is always the
 // latest engine snapshot; edits are engine calls carrying the rendered revision.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, describeError } from "./api";
 import { useRealtimeDrc } from "./realtimeDrc";
 import { DomainPanel } from "./DomainPanel";
@@ -404,11 +404,14 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     return why ? refuse(why) : submit(() => api.execute(revision, command));
   };
   // Chain commands so each one carries the revision the previous one produced; stop at the
-  // first rejection (the engine already left the project untouched for it).
-  const executeAll = (commands: Command | Command[]): Promise<void> => {
+  // first rejection (the engine already left the project untouched for it). Resolves to whether
+  // every command was accepted (false when refused, locked, busy or failed), so a caller such as
+  // New part or Annotate proceeds only on acceptance (S18).
+  const executeChecked = async (commands: Command | Command[]): Promise<boolean> => {
     const why = lockRefusal(commands);
-    if (why) return refuse(why);
-    return guarded(async () => {
+    if (why) return refuse(why).then(() => false);
+    let ok = false;
+    await guarded(async () => {
       let rev = revision;
       let last: CommandResponse | null = null;
       for (const c of Array.isArray(commands) ? commands : [commands]) {
@@ -416,6 +419,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         if (!last.accepted) break;
         rev = last.revision_after;
       }
+      ok = !!last?.accepted;
       if (last)
         setMessage(
           last.accepted
@@ -424,7 +428,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         );
       await refresh();
     });
+    return ok;
   };
+  const executeAll = (commands: Command | Command[]): Promise<void> => executeChecked(commands).then(() => undefined);
   const edit: EditCtx = { execute: executeAll, busy, library, notify: setMessage };
   // "Update PCB from schematic" (slice C2, ADR-0041): first the engine's read-only preview of what
   // SyncSchematicToPcb would change, reviewed in the ECO dialog. Nothing changes until Apply.
@@ -777,7 +783,9 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const keys = useRef<{ actions: Action[]; ctx: DocContext }>({ actions: [], ctx: "home" });
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
-  useEffect(() => {
+  // Layout effect: the listener is attached in the same commit as the workspace DOM, so a shortcut
+  // pressed right after the editor appears is never lost (CI flake in shell.test quick open).
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!visibleRef.current || modalOpen()) return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
@@ -1067,7 +1075,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
                 <LibraryDock
                   revision={revision}
                   busy={busy}
-                  execute={edit.execute}
+                  execute={executeChecked}
                   onPlace={placePart}
                   onEdit={(kind: PartDocKind, id: string) => open(partDocId(kind, id))}
                   onImported={async (m) => {
@@ -1122,7 +1130,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         />
       )}
       {dialog === "annotate" && (
-        <AnnotateDialog busy={busy} selected={selectedSymbol ? selected ?? undefined : undefined} apply={edit.execute} onClose={() => setDialog(null)} />
+        <AnnotateDialog busy={busy} selected={selectedSymbol ? selected ?? undefined : undefined} apply={executeChecked} onClose={() => setDialog(null)} />
       )}
       {dialog === "bom" && <BomExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "outputs" && <DocumentExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}

@@ -219,6 +219,17 @@ jobs:
           UI_SCENARIO: scenarios/c6-3d.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # F9 (library and panels honesty): Add to project of an imported part, plain-text external
+      # addresses, disabled-button reasons, Distributor not configured, Performance section shown.
+      - name: Run F9 library and panels honesty scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/f9
+          UI_SCENARIO: scenarios/f9-honesty.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # C4 (schema v4 PCB objects, ADR-0042): arc edge, cut-out, keep-out drawn; DRC-021 reported.
       - name: Run C4 PCB objects scenario under Xvfb
         if: always()
@@ -398,6 +409,8 @@ jobs:
             ${{ runner.temp }}/ui-evidence/b6/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/c6/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/c6/UI_EVIDENCE.md
+            ${{ runner.temp }}/ui-evidence/f9/screenshots/*.png
+            ${{ runner.temp }}/ui-evidence/f9/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/c4/screenshots/*.png
             ${{ runner.temp }}/ui-evidence/c4/UI_EVIDENCE.md
             ${{ runner.temp }}/ui-evidence/c1/screenshots/*.png

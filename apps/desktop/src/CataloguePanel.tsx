@@ -7,6 +7,7 @@
 // and shows no rows; it never fills the table itself.
 import { useCallback, useState } from "react";
 import { api } from "./api";
+import { ExternalUrl } from "./ExternalUrl";
 import type {
   CatalogueReply,
   CatalogueResults,
@@ -19,6 +20,9 @@ import type {
   Served,
   Standing,
 } from "./types";
+
+const WAIT = "A Distributor request is running; wait for it to finish";
+const needKeys = (busy: boolean, has: boolean, what: string) => (busy ? WAIT : has ? what : "Save your Distributor API credentials first");
 
 interface Props {
   busy: boolean;
@@ -99,7 +103,7 @@ function Settings() {
     <section aria-label="Distributor API credentials">
       <h3>Distributor API credentials</h3>
       {!view && (
-        <button type="button" disabled={busy} onClick={() => void run(api.distributorSettings)}>
+        <button type="button" disabled={busy} title={busy ? WAIT : "Read the stored credential status"} onClick={() => void run(api.distributorSettings)}>
           Show credential status
         </button>
       )}
@@ -151,12 +155,13 @@ function Settings() {
                 spellCheck={false}
               />
             </label>
-            <button type="submit" disabled={busy || key.trim() === "" || secret.trim() === ""}>
+            <button type="submit" disabled={busy || key.trim() === "" || secret.trim() === ""} title={busy ? WAIT : key.trim() === "" || secret.trim() === "" ? "Enter both the API key and the secret" : "Store the credentials in the OS credential store"}>
               Save credentials
             </button>
             <button
               type="button"
               disabled={busy || !view.has_credentials}
+              title={needKeys(busy, view.has_credentials, "Send one signed test request to Distributor")}
               onClick={() => void run(api.distributorTestConnection)}
             >
               Test connection
@@ -164,6 +169,7 @@ function Settings() {
             <button
               type="button"
               disabled={busy || !view.has_credentials}
+              title={needKeys(busy, view.has_credentials, "Delete the stored credentials")}
               onClick={() => void run(api.distributorClearCredentials)}
             >
               Remove credentials
@@ -171,9 +177,7 @@ function Settings() {
           </form>
           <p className="muted">
             Approved credentials and a whitelisted IP address come from Distributor (
-            <a href={view.apply_url} target="_blank" rel="noreferrer">
-              apply
-            </a>
+            <ExternalUrl url={view.apply_url} label="apply" />
             ). The secret is kept in the OS credential store only; requests go to {view.host} and are signed locally.
           </p>
         </>
@@ -275,6 +279,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
         <button
           type="button"
           disabled={wait}
+          title={wait ? WAIT : "Load the Distributor category tree"}
           onClick={() => void guard(async () => setTree(await api.catalogueCategories(false)))}
         >
           Load categories
@@ -282,6 +287,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
         <button
           type="button"
           disabled={wait}
+          title={wait ? WAIT : "Load the Distributor manufacturer list"}
           onClick={() => void guard(async () => setMakers(await api.catalogueManufacturers(false)))}
         >
           Load manufacturers
@@ -354,7 +360,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
             ))}
           </select>
         </label>
-        <button type="submit" disabled={wait || keyword.trim() === ""}>
+        <button type="submit" disabled={wait || keyword.trim() === ""} title={wait ? WAIT : keyword.trim() === "" ? "Type a keyword first" : "Search the Distributor catalogue"}>
           Search catalogue
         </button>
       </form>
@@ -432,9 +438,7 @@ export function CataloguePanel({ busy, onImport }: Props) {
                     <td>{price(c)}</td>
                     <td>
                       {c.record.datasheet_url ? (
-                        <a href={c.record.datasheet_url} target="_blank" rel="noreferrer">
-                          datasheet
-                        </a>
+                        <ExternalUrl url={c.record.datasheet_url} label="datasheet" />
                       ) : (
                         "—"
                       )}
@@ -444,13 +448,13 @@ export function CataloguePanel({ busy, onImport }: Props) {
                     </td>
                     <td>
                       {distributor && (
-                        <button type="button" disabled={wait} onClick={() => void saveRecord(distributor)} aria-label={`Save record ${distributor}`}>
+                        <button type="button" disabled={wait} title={wait ? WAIT : "Keep this listing with the project (no engineering definition)"} onClick={() => void saveRecord(distributor)} aria-label={`Save record ${distributor}`}>
                           Save record
                         </button>
                       )}
                       {/* Import only where an existing symbol/footprint template can carry the part. */}
                       {distributor && (link === undefined || link.standing === "supplier_only") && (
-                        <button type="button" disabled={busy} onClick={() => onImport(distributor)} aria-label={`Import ${distributor}`}>
+                        <button type="button" disabled={busy} title={busy ? WAIT : "Import this part into the project library"} onClick={() => onImport(distributor)} aria-label={`Import ${distributor}`}>
                           Import
                         </button>
                       )}
@@ -462,13 +466,13 @@ export function CataloguePanel({ busy, onImport }: Props) {
             </table>
           )}
           <div>
-            <button type="button" disabled={wait || data.page <= 1} onClick={() => void query(data.page - 1, category, false)}>
+            <button type="button" disabled={wait || data.page <= 1} title={wait ? WAIT : data.page <= 1 ? "Already on the first page" : "Show the previous page"} onClick={() => void query(data.page - 1, category, false)}>
               Previous page
             </button>
-            <button type="button" disabled={wait || !data.has_more} onClick={() => void query(data.page + 1, category, false)}>
+            <button type="button" disabled={wait || !data.has_more} title={wait ? WAIT : !data.has_more ? "No more results" : "Show the next page"} onClick={() => void query(data.page + 1, category, false)}>
               Next page
             </button>
-            <button type="button" disabled={wait} onClick={() => void query(data.page, category, true)}>
+            <button type="button" disabled={wait} title={wait ? WAIT : "Ask Distributor again instead of using the cached answer"} onClick={() => void query(data.page, category, true)}>
               Refresh from Distributor
             </button>
           </div>

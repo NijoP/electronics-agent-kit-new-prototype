@@ -698,7 +698,14 @@ pub fn resolve_scoped_parts(
         };
         let mut v: Vec<String> = vec![];
         for s in steps {
-            if let C::PlaceSymbol { component_id, .. } = s {
+            // "Add to project" (`ImportLibraryComponent`) of a personal or imported part needs
+            // the same copy: the engine only imports built-in parts (finding S10).
+            let id = match s {
+                C::PlaceSymbol { component_id, .. } => Some(component_id),
+                C::ImportLibraryComponent { component_id } => Some(component_id),
+                _ => None,
+            };
+            if let Some(component_id) = id {
                 if missing(component_id.as_str()) && !v.contains(component_id) {
                     v.push(component_id.clone());
                 }
@@ -712,6 +719,7 @@ pub fn resolve_scoped_parts(
     let defs = all_defs(store, project);
     let mut upserts = vec![];
     let mut notes = vec![];
+    let mut copied: Vec<String> = vec![];
     for id in &wanted {
         let personal = defs
             .iter()
@@ -743,6 +751,7 @@ pub fn resolve_scoped_parts(
         upserts.push(C::UpsertComponentDefinition {
             definition: Box::new(pick.1.clone()),
         });
+        copied.push(id.clone());
     }
     if upserts.is_empty() {
         return Ok((command, vec![]));
@@ -751,7 +760,17 @@ pub fn resolve_scoped_parts(
         C::Batch { commands, label } => (commands, label),
         c => (vec![c], None),
     };
-    let label = label.or_else(|| Some(format!("Place {}", wanted.join(", "))));
+    // The upsert already is the import: an `ImportLibraryComponent` of a copied part would
+    // then fail with "already in the project", so it is dropped.
+    let steps: Vec<C> = steps
+        .into_iter()
+        .filter(|c| match c {
+            C::ImportLibraryComponent { component_id } => !copied.contains(component_id),
+            _ => true,
+        })
+        .collect();
+    let verb = if steps.is_empty() { "Add" } else { "Place" };
+    let label = label.or_else(|| Some(format!("{verb} {}", wanted.join(", "))));
     upserts.extend(steps);
     Ok((
         C::Batch {

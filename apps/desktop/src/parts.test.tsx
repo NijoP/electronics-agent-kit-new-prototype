@@ -80,17 +80,21 @@ const preview: ManufacturingPreview = {
 let liveReply: PartsSearch;
 // The distributor host the backend reports (a real-looking host unless a test says otherwise).
 let host: string;
+// When set, `distributor_settings_get` fails with this message (S20: the gate must fail closed).
+let settingsError: string | null;
 const ran = (cmd: string) => calls.find((c) => c.cmd === cmd);
 
 beforeEach(() => {
   calls = [];
   liveReply = search("ok", [record]);
   host = "https://api.distributor.example";
+  settingsError = null;
   mockIPC((cmd, payload) => {
     const args = (payload ?? {}) as Record<string, unknown>;
     calls.push({ cmd, args });
     switch (cmd) {
       case "distributor_settings_get":
+        if (settingsError) throw settingsError;
         return { has_credentials: false, key_hint: null, store_error: null, status: { state: "untested", message: "", tested_at_unix_s: null, last_success_unix_s: null }, requests_this_session: 0, apply_url: `${host}/apply`, host, needs: null };
       case "parts_search":
         return liveReply;
@@ -138,7 +142,10 @@ describe("PartsPanel", () => {
     expect(screen.getByText("0603WAF1002T5E")).toBeTruthy();
     expect(screen.getByText("1,004,300")).toBeTruthy();
     expect(screen.getByText("$0.0022 @ 100+")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "datasheet" }).getAttribute("href")).toContain("distributor.invalid");
+    // S23: no opener plugin, so the address is plain text with a Copy button, never a dead link.
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText("https://distributor.invalid/x.pdf")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy datasheet address" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Import C25804" }));
     await waitFor(() => expect(onImported).toHaveBeenCalled());
@@ -170,6 +177,25 @@ describe("PartsPanel", () => {
     expect(screen.queryByRole("table", { name: "Distributor results" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Import C25804" })).toBeNull();
     expect(ran("parts_import")).toBeUndefined();
+  });
+
+  it("S20: when the distributor settings cannot be read the catalogue and live import stay hidden, with Retry", async () => {
+    settingsError = "credential store locked";
+    render(<PartsPanel revision={1} onImported={async () => {}} />);
+    const alert = await screen.findByRole("alert", { name: "Distributor settings unavailable" });
+    expect(alert.textContent).toContain("credential store locked");
+    expect(screen.queryByText(/Distributor catalogue: credentials/)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Part number or keyword/i), { target: { value: "C25804" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await screen.findByRole("list", { name: "Library matches" });
+    expect(screen.queryByRole("table", { name: "Distributor results" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Import C25804" })).toBeNull();
+    // Retry reads the settings again; once they name a real host the catalogue comes back.
+    settingsError = null;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await screen.findByText(/Distributor catalogue: credentials/);
+    expect(screen.queryByRole("alert", { name: "Distributor settings unavailable" })).toBeNull();
+    expect(calls.filter((c) => c.cmd === "distributor_settings_get").length).toBe(2);
   });
 
   it("classifies distributor hosts: only reserved or unparsable hosts are 'not configured'", () => {

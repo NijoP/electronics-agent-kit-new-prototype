@@ -18,22 +18,28 @@ export function PerformancePanel() {
   const [settings, setSettings] = useState<PerformanceSettings | null>(null);
   const [profile, setProfile] = useState<ResourceProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Why the settings could not be read (S21: the section used to vanish silently); Retry re-reads.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
+    setLoadError(null);
     Promise.resolve()
       .then(() => api.performanceSettings())
       .then((s) => {
-        if (live && s && typeof s.mode === "string") setSettings(s);
+        if (!live) return;
+        if (s && typeof s.mode === "string") setSettings(s);
+        else setLoadError("the app returned no performance settings");
       })
-      .catch(() => undefined);
+      .catch((e) => live && setLoadError(String(e).replace(/^Error: /, "")));
     void loadProfile().then((p) => {
       if (live) setProfile(p);
     });
     return () => {
       live = false;
     };
-  }, []);
+  }, [attempt]);
 
   const save = (next: PerformanceSettings) => {
     setSettings(next);
@@ -47,7 +53,20 @@ export function PerformancePanel() {
       .catch((e) => setError(`Could not save the performance mode: ${String(e)}`));
   };
 
-  if (!settings) return null;
+  if (!settings)
+    return loadError ? (
+      <section aria-label="Performance" className="performance-panel">
+        <h3>Performance</h3>
+        <p role="alert" className="error">
+          Could not read the performance settings: {loadError}. The performance mode cannot be shown or changed until they are read.
+        </p>
+        <button type="button" onClick={() => setAttempt((n) => n + 1)}>
+          Retry
+        </button>
+      </section>
+    ) : (
+      <p className="muted">Reading the performance settings…</p>
+    );
   const custom = settings.custom;
   const num = (key: Exclude<keyof typeof custom, "antialias">, label: string, step = 1) => (
     <label>
