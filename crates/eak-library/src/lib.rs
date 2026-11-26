@@ -1,0 +1,23 @@
+//! # eak-library — component library management (library data, not EAK-IR)
+//!
+//! * `part`    – MPN-keyed part records: identity is (manufacturer, MPN) after normalisation;
+//!   a merged part keeps every source's record and names disagreements instead of picking one.
+//! * `source`  – the provider-independent [`source::PartSource`] trait and the resolver that
+//!   merges exact hits by key, keeps fuzzy hits as suggestions, and never calls a source that
+//!   is not ready.
+//! * `sources` – adapters: the built-in starter library, and any supplier integration that
+//!   already yields `SourcingRecord`s (no network code and no supplier call in this crate).
+//! * `kicad`   – KiCad `.kicad_sym` / `.kicad_mod` export, the inverse of the clean-room reader
+//!   in `eak_core::kicad_import`, with every loss reported.
+//!
+//! Nothing here mutates a design: a part enters a project only through `Engine::execute`
+//! (`UpsertComponentDefinition`) in the layers above. Nothing here is verified by import or by
+//! being stored.
+
+pub mod kicad;
+pub mod part;
+pub mod source;
+pub mod sources;
+
+pub use part::{Part, PartKey, PartKeyError, PartRecord, SourceId};
+pub use source::{resolve, PartQuery, PartSource, Resolution, SourceStatus};

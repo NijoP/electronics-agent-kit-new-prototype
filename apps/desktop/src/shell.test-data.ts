@@ -14,6 +14,9 @@ export function shellCmd(
       return { handled: true, value: { available: false, branch: null, entries: [] } };
     case "close_project_by_id":
       return { handled: true, value: null };
+    // Project Home (S1): no default projects folder in tests, so a folder is always chosen.
+    case "home_default_dir":
+      return { handled: true, value: null };
     default:
       return { handled: false };
   }
