@@ -901,6 +901,11 @@ pub fn prepare_with(
     // hashed; the Fabricator files below are derived from the same project revision.
     let pkg_dir = out_dir.join("eak-package");
     let package = compile(p, reports, &pkg_dir)?;
+    // Package only files that are still the ones this revision exported and its gates decided on.
+    let problems = crate::verify_package_for(&pkg_dir, p)?;
+    if !problems.is_empty() {
+        return Err(format!("refusing to package: {}", problems.join("; ")));
+    }
     let stem = stem(p);
 
     let mut zip_entries = vec![];

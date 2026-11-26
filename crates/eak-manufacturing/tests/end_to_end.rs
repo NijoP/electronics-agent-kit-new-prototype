@@ -105,9 +105,14 @@ fn reference_design_end_to_end() {
     let dir = std::env::temp_dir().join(format!("eak-mfg-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let m = compile(e.project(), &[&erc_r, &drc_r, &mech_r, &dfm_r], &dir).expect("compile");
-    assert_eq!(
-        m.status,
-        PackageStatus::InternallyVerifiedReleaseCandidate,
+    // ADR-0054: every other gate passes; only the unverified footprints (no land-pattern table
+    // on record) keep the package DRAFT.
+    assert_eq!(m.status, PackageStatus::Draft);
+    assert!(!m.blocking_reasons.is_empty());
+    assert!(
+        m.blocking_reasons
+            .iter()
+            .all(|b| b.starts_with("footprint ")),
         "{:?}",
         m.blocking_reasons
     );

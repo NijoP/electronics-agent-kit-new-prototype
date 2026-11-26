@@ -158,6 +158,22 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
     files_and_manifest(p, input, gates, blocking, out_dir)
 }
 
+/// [`compile`] with the land-pattern tables and fabrication limits on record (ADR-0054).
+pub fn compile_with_footprints(
+    p: &Project,
+    reports: &[&Report],
+    footprints: &FootprintInputs,
+    out_dir: &Path,
+) -> Result<Manifest, String> {
+    std::fs::create_dir_all(out_dir).map_err(|e| e.to_string())?;
+    let input = project_hash(p);
+    if p.pcb.board.outline.len() < 3 {
+        return Err("cannot compile manufacturing outputs without a board outline".into());
+    }
+    let (gates, blocking, _) = release_gates_with_footprints(p, reports, footprints);
+    files_and_manifest(p, input, gates, blocking, out_dir)
+}
+
 /// The release gate of a package for this revision: the supplied ERC, DRC, MECH and DFM
 /// reports (each must be bound to this revision and input hash and have no errors), the
 /// mechanical-fit unknowns and the fail-closed engineering gates. Returns the per-report gate
@@ -172,6 +188,24 @@ pub fn release_gates(p: &Project, reports: &[&Report]) -> (Vec<GateResult>, Vec<
 pub fn release_gates_with_report(
     p: &Project,
     reports: &[&Report],
+) -> (Vec<GateResult>, Vec<String>, eak_validation::GateReport) {
+    release_gates_with_footprints(p, reports, &FootprintInputs::default())
+}
+
+/// Land-pattern tables (by component definition id) and fabrication limits that a caller has on
+/// record, for footprint verification at the release gate (ADR-0054). Library data, not EAK-IR.
+#[derive(Debug, Clone, Default)]
+pub struct FootprintInputs {
+    pub specs: BTreeMap<String, eak_validation::footprint::LandPatternSpec>,
+    pub limits: Option<eak_validation::footprint::FabLimits>,
+}
+
+/// [`release_gates_with_report`] with the land-pattern tables and fabrication limits on record,
+/// so a part whose footprint matches its reviewed datasheet table no longer blocks.
+pub fn release_gates_with_footprints(
+    p: &Project,
+    reports: &[&Report],
+    footprints: &FootprintInputs,
 ) -> (Vec<GateResult>, Vec<String>, eak_validation::GateReport) {
     let input = project_hash(p);
     let mut blocking = vec![];
@@ -247,6 +281,8 @@ pub fn release_gates_with_report(
             ));
         }
     }
+    // ADR-0054: a part whose footprint does not verify blocks release (recomputed here).
+    blocking.extend(footprint_blockers_with(p, footprints));
     // Fail-closed engineering gates, evaluated independently on this revision: every required
     // gate must be PASS (FAIL and UNKNOWN both block). Fabricator capability is covered by the
     // supplied, revision-bound DFM report above, so that gate is skipped here.
@@ -265,6 +301,52 @@ pub fn release_gates_with_report(
         }
     }
     (gates, blocking, gate_report)
+}
+
+/// ADR-0054: one blocking reason per component definition used on the schematic whose footprint
+/// does not verify. FP-001..FP-009 are recomputed by `eak_validation::footprint::verify` on every
+/// gate evaluation (the IR stores no verification result, so nothing can go stale). With no
+/// land-pattern table or fabrication limits on record the dimension rules are UNKNOWN, and
+/// UNKNOWN is never a pass: such a part blocks, naming the first rule that does not certify.
+pub fn footprint_blockers(p: &Project) -> Vec<String> {
+    footprint_blockers_with(p, &FootprintInputs::default())
+}
+
+/// [`footprint_blockers`] with the land-pattern tables and fabrication limits on record.
+pub fn footprint_blockers_with(p: &Project, inputs: &FootprintInputs) -> Vec<String> {
+    let mut refs: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for s in p.schematic.symbols.values() {
+        refs.entry(s.component_id.as_str())
+            .or_default()
+            .push(s.refdes.as_str());
+    }
+    let mut out = vec![];
+    for (id, mut used) in refs {
+        used.sort_by_key(|a| natural(a));
+        let used = used.join(",");
+        let Some(def) = p.library.get(id) else {
+            out.push(format!(
+                "footprint of {used} is not verified: no library definition {id}"
+            ));
+            continue;
+        };
+        let report = eak_validation::footprint::verify(
+            def,
+            inputs.specs.get(id),
+            inputs.limits.as_ref(),
+            eak_validation::footprint::DEFAULT_TOLERANCE,
+        );
+        let not = report.blocking();
+        if let Some(first) = not.first() {
+            out.push(format!(
+                "footprint {} of {used} is not verified ({} of {} rules do not certify): {first}",
+                def.footprint.name,
+                not.len(),
+                eak_validation::footprint::RULES.len()
+            ));
+        }
+    }
+    out
 }
 
 /// Package status from the blocking reasons: DRAFT unless there are none.
@@ -493,6 +575,50 @@ pub fn verify_package(dir: &Path) -> Result<Vec<String>, String> {
             }
         }
     }
+    Ok(problems)
+}
+
+/// [`verify_package`] for release packaging of `p`: the manifest must also name this exact
+/// project, revision and EAK-IR hash. A package built from another revision (or a design
+/// changed since the export) is refused, whatever its own files say.
+pub fn verify_package_for(dir: &Path, p: &Project) -> Result<Vec<String>, String> {
+    let m: Manifest = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("manifest.json")).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    let mut problems = vec![];
+    if m.project_id != p.id {
+        problems.push(format!(
+            "manifest is for project {}, not {}",
+            m.project_id, p.id
+        ));
+    }
+    if m.revision != p.revision {
+        problems.push(format!(
+            "manifest is for revision {} but the project is at revision {}: export again",
+            m.revision, p.revision
+        ));
+    }
+    let input = project_hash(p);
+    if m.input_sha256 != input {
+        problems.push("manifest EAK-IR hash does not match this design: export again".into());
+    }
+    // Every Gerber and drill file names the design it was generated from (ADR-0054).
+    let stamp = format!("EAK-IR sha256 {input} revision {}", p.revision);
+    for f in m
+        .files
+        .iter()
+        .filter(|f| f.kind == "gerber" || f.kind == "drill")
+    {
+        let text = std::fs::read_to_string(dir.join(&f.name)).unwrap_or_default();
+        if !text.contains(&stamp) {
+            problems.push(format!(
+                "{} was not generated from this design revision: export again",
+                f.name
+            ));
+        }
+    }
+    problems.extend(verify_package(dir)?);
     Ok(problems)
 }
 
