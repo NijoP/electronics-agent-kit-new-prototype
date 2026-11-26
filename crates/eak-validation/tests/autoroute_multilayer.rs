@@ -250,32 +250,35 @@ fn constrained_four_layer_design_routes_with_every_rule_kept() {
     assert_drc_clean(p);
 }
 
-/// Route fingerprint: track and via count plus an FNV-1a hash of the sorted geometry (layer,
-/// end points, width, net; via position, drill, size, span). Object ids are excluded: they are
-/// random per run.
-fn fingerprint(p: &Project) -> (usize, usize, u64) {
-    let mut rows: Vec<String> = p
-        .pcb
-        .tracks
-        .values()
-        .map(|t| {
-            let (a, b) = if t.a <= t.b {
-                (t.a, t.b)
-            } else {
-                (t.b, t.a)
-            };
-            format!("T {:?} {a:?} {b:?} {} {}", t.layer, t.width, t.net)
-        })
-        .chain(p.pcb.vias.values().map(|v| {
-            format!(
-                "V {:?} {} {} {:?} {:?} {}",
-                v.position, v.drill, v.diameter, v.from, v.to, v.net
-            )
-        }))
-        .collect();
+/// The board's layout as sorted text rows, object ids left out (they are random per run):
+/// footprint placement (refdes, position, rotation, side), tracks (layer, ends, width, net) and
+/// vias (position, drill, size, span, net).
+fn layout_rows(p: &Project) -> Vec<String> {
+    let fps = p.pcb.footprints.values().map(|f| {
+        format!(
+            "F {} {:?} {:?} {:?}",
+            f.refdes, f.position, f.rotation, f.side
+        )
+    });
+    let tracks = p.pcb.tracks.values().map(|t| {
+        let (a, b) = if t.a <= t.b { (t.a, t.b) } else { (t.b, t.a) };
+        format!("T {:?} {a:?} {b:?} {} {}", t.layer, t.width, t.net)
+    });
+    let vias = p.pcb.vias.values().map(|v| {
+        format!(
+            "V {:?} {} {} {:?} {:?} {}",
+            v.position, v.drill, v.diameter, v.from, v.to, v.net
+        )
+    });
+    let mut rows: Vec<String> = fps.chain(tracks).chain(vias).collect();
     rows.sort();
+    rows
+}
+
+/// Route fingerprint: track and via count plus an FNV-1a hash of the layout rows.
+fn fingerprint(p: &Project) -> (usize, usize, u64) {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in rows.join("\n").bytes() {
+    for b in layout_rows(p).join("\n").bytes() {
         h = (h ^ b as u64).wrapping_mul(0x0100_0000_01b3);
     }
     (p.pcb.tracks.len(), p.pcb.vias.len(), h)
@@ -283,14 +286,30 @@ fn fingerprint(p: &Project) -> (usize, usize, u64) {
 
 /// The same design routes to the same copper on every run and platform (undo/replay and
 /// reviewable diffs depend on it). Two builds in one process get different random object ids,
-/// which used to reorder the ratsnest and change the routes.
+/// which used to reorder the ratsnest and change the routes. On a mismatch the differing rows
+/// are printed, so the CI log names what moved.
 #[test]
 fn the_same_board_routes_to_the_same_copper_every_run() {
     use std::io::Write;
     for board in ["route_inner_keepout", "route_ref4", "route_constrained4"] {
-        let first = fingerprint(build(board, 0).0.project());
-        let second = fingerprint(build(board, 0).0.project());
-        assert_eq!(first, second, "{board}: two runs routed differently");
+        let (e1, _) = build(board, 0);
+        let (e2, _) = build(board, 0);
+        let (r1, r2) = (layout_rows(e1.project()), layout_rows(e2.project()));
+        if r1 != r2 {
+            let only = |a: &[String], b: &[String]| -> Vec<String> {
+                a.iter()
+                    .filter(|r| !b.contains(r))
+                    .take(12)
+                    .cloned()
+                    .collect()
+            };
+            panic!(
+                "{board}: two runs laid out differently\nonly in run 1: {:#?}\nonly in run 2: {:#?}",
+                only(&r1, &r2),
+                only(&r2, &r1)
+            );
+        }
+        let first = fingerprint(e1.project());
         let _ = writeln!(
             std::io::stderr(),
             "ROUTER-FINGERPRINT {board}: tracks={} vias={} hash={:016x}",
