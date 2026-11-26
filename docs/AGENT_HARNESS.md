@@ -179,3 +179,7 @@ registry, the tasks and every inbox are rebuilt from that journal, so the histor
   proposal is refused, so nothing is overwritten silently. Reject one, or propose again on the
   new revision; EAK does not rebase.
 - **History.** `weft_history` returns every event with its agent, task, proposal and revision.
+- **Launched sessions.** A launcher (Settings › AI tools) that starts `eak-mcp` with
+  `EAK_AGENT_TOOL` (plus `EAK_AGENT_MODEL`, `EAK_AGENT_CAPABILITIES`, `EAK_AGENT_NAME`,
+  `EAK_SESSION_ID`) gets the session registered automatically once the project exists. Other
+  sessions call `weft_register`.

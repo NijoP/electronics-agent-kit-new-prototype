@@ -102,5 +102,24 @@
     - Show on canvas selects and zooms to the first changed symbol or footprint.
   - ui-evidence `scenarios/w2-activity.json` covers it.
   - Limitation: the view polls; there is no push from the bus.
+- **Addendum, launch integration (2026-11-26):**
+  - Launch contract: a launcher starts `eak-mcp` with these variables set:
+    - `EAK_AGENT_NAME` (the tool id);
+    - `EAK_SESSION_ID` (its session or task id);
+    - `EAK_AGENT_TOOL`, `EAK_AGENT_MODEL` and `EAK_AGENT_CAPABILITIES` (comma-separated).
+
+    The launcher is the AI tools adapter (eak-v2-aitools) or any other.
+  - When `EAK_AGENT_TOOL` is set, `eak-mcp` registers the session on the bus itself, through the
+    same `weft_register` tool path as a call. It tries after `initialize`, and after each tool
+    call while the project does not exist yet. The session's WEFT id is the journal actor label
+    `agent:<name>@<session>`, so the activity view shows the registration and everything the
+    session does under one actor, live (the view polls every 2 s).
+  - A session started without `EAK_AGENT_TOOL` is not registered and calls `weft_register`
+    itself.
+  - The registration is what the launcher said: EAK does not verify which model a tool runs.
+  - Test: `crates/eak-harness/tests/weft.rs`
+    `launched_sessions_register_themselves_delegate_review_and_meet_a_stale_conflict`. Two
+    launched `eak-mcp` sessions register without a call, delegate, review with a verdict, and
+    meet a stale-revision conflict; a session started by hand stays unregistered.
 - **Source requirement:** Captain's 19:00 directive §2 (WEFT orchestration); AGENTS.md (one write
   path through `Engine::execute`, AI never self-certifies); ADR-0051.
