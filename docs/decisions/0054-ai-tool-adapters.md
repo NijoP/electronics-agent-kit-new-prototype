@@ -34,9 +34,11 @@
     and whose documented stream lines become events. Headless Claude allows only EAK's own MCP tools
     (`--allowedTools mcp__eak`); the harness still bounds them and every design change goes through
     `Engine::execute`.
-- **Consequences:** no IR, `Command`, report or harness-envelope change. Eight new IPC commands
-  (`agent_*`). The adapters' flags are pinned by fake-binary tests; a tool that changes its CLI shows
-  "unknown" or an error with the tool's message, not a false state. App-launched sessions do not yet
-  default to propose mode (ADR-0051); the Agents area (W2-F) adds that choice.
+- **Consequences:** no IR, `Command`, report or harness-envelope change. Nine new IPC commands
+  (`agent_*`, including `agent_session_restart`). The adapters' flags are pinned by fake-binary tests; a tool that changes its CLI shows
+  "unknown" or an error with the tool's message, not a false state. App-launched sessions run the
+  harness in propose mode (`EAK_HARNESS_APPLY_MODE=propose`, ADR-0051; amended 2026-11-26 on the
+  captain's instruction): an agent started from EAK proposes and a person applies. A session the
+  user starts by hand keeps the harness default. The Agents area (W2-F) may add a per-session choice.
 - **Source requirement:** Captain's directive 2026-11-26 (AI Tools Integration); Spec §9 (agents act
   through the same commands as people).

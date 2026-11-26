@@ -18,6 +18,8 @@
 //!   in `eak_core::kicad_import`, with every loss reported.
 //! * `db`     – local SQLite library database: items with a token index for prefix search, and
 //!   a cache of source answers that keeps each retrieval time.
+//! * `kicad_lib` – KiCad library folder import (sym-lib-table / fp-lib-table, symbol-footprint
+//!   pairing, 3D model references found only when on disk).
 //!
 //! Nothing here mutates a design: a part enters a project only through `Engine::execute`
 //! (`UpsertComponentDefinition`) in the layers above. Nothing here is verified by import or by
@@ -25,6 +27,7 @@
 
 pub mod db;
 pub mod kicad;
+pub mod kicad_lib;
 pub mod mpn;
 pub mod part;
 pub mod source;

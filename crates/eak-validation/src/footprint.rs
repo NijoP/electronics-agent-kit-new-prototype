@@ -158,7 +158,7 @@ fn nm_of(v: &DatasheetValue) -> Option<Nm> {
     (v.unit.trim() == "mm" && v.value.is_finite()).then(|| mm(v.value))
 }
 
-fn mechanical(number: &str) -> bool {
+pub(crate) fn mechanical(number: &str) -> bool {
     number.trim().is_empty() || number.starts_with("MP")
 }
 

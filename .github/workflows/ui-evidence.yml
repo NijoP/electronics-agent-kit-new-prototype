@@ -100,6 +100,16 @@ jobs:
           UI_SCENARIO: scenarios/d4-settings.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # W2-E (ADR-0054): Settings > AI tools is honest on a runner without Claude Code or Codex.
+      - name: Run W2 AI tools scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/w2
+          UI_SCENARIO: scenarios/w2-ai-tools.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # B1 (IR schema v3): regression that a v3 project opens and draws a placed part.
       - name: Run B1 scenario under Xvfb
         if: always()

@@ -14,6 +14,7 @@ import { api } from "../api";
 import { setDraggedComponent, EAK_COMPONENT_MIME } from "../dragState";
 import { LibraryBrowser } from "../LibraryBrowser";
 import { PartsPanel } from "../PartsPanel";
+import { VerificationReport } from "../library/VerificationReport";
 import type { Command, ComponentDef, LibraryBrowse, LibraryEntry, LibraryEntry2, Report } from "../types";
 import type { PartDocKind } from "./documents";
 import { BUSY, FootprintPreview, LibraryPanel, SymbolPreview, entryOf } from "./LibraryPanel";
@@ -178,6 +179,7 @@ function Preview({ kind, entry, fpRow, onPlace, onFavourite, busy }: PreviewProp
         <dt>Provenance</dt>
         <dd>{d.provenance}</dd>
       </dl>
+      {kind !== "model" && <VerificationReport id={d.id} />}
       <div className="row">
         <button type="button" className="primary" disabled={busy} onClick={() => placeEntry(entry, onPlace)} title="Arm the schematic Place tool with this part; placing copies it into the project library">
           Place on schematic

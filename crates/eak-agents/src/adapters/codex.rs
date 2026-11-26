@@ -12,7 +12,7 @@ use super::check_prompt;
 use crate::probe::{self, Output, CHANGE_TIMEOUT, PROBE_TIMEOUT};
 use crate::{
     clip, identity_env, server_command, AgentEvent, AgentTool, Auth, Parser, Registration, Surface,
-    MCP_SERVER_NAME,
+    APPLY_MODE_ENV, MCP_SERVER_NAME,
 };
 use serde_json::Value;
 use std::path::Path;
@@ -119,7 +119,9 @@ impl AgentTool for Codex {
     fn session_args(&self) -> Vec<String> {
         vec![
             "-c".into(),
-            format!("mcp_servers.{MCP_SERVER_NAME}.env_vars=[\"EAK_SESSION_ID\"]"),
+            format!(
+                "mcp_servers.{MCP_SERVER_NAME}.env_vars=[\"EAK_SESSION_ID\",\"{APPLY_MODE_ENV}\"]"
+            ),
         ]
     }
 
