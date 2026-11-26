@@ -19,6 +19,8 @@ same typed commands as the editor. Pre-release software, not yet proven on real 
   <img src="https://img.shields.io/badge/platforms-Windows%20x64%20%7C%20Linux%20x64%20%7C%20macOS-lightgrey" alt="Platforms">
 </p>
 
+Execution roadmap (goals, owners, evidence, completion marks): [ROADMAP_EXECUTION.md](ROADMAP_EXECUTION.md).
+
 ## Contents
 
 - [What EAK is](#what-eak-is)
