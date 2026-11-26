@@ -12,6 +12,7 @@ use eak_core::{Nm, ObjectClass, PadKind, Point, Project, Rect, RegionObject, Sid
 use eak_engineering::board::BoardGeometry;
 use eak_engineering::copper::{self, distance, Core, ItemKind};
 use eak_engineering::ipc::{self, ClearanceCondition};
+use eak_engineering::verify::{self, Verdict};
 use eak_engineering::{netlist, silk};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -118,7 +119,9 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
             // The copper weight of the layer this track is on; a layer missing from the
             // stackup yields 0 oz, which the sizing rejects as an error (never a pass).
             let oz = p.pcb.board.stackup.copper_oz(t.layer).unwrap_or(0.0);
-            match ipc::trace_width_mm(amps, false, oz, c.temp_rise_c) {
+            // Inner layers are buried in laminate: IPC-2221 halves the constant for them.
+            let inner = !t.layer.is_outer();
+            match ipc::trace_width_mm(amps, inner, oz, c.temp_rise_c) {
                 Ok(req) => {
                     if to_mm(t.width) + 1e-9 < req {
                         f.push(
@@ -282,7 +285,15 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
             .net_voltages_v
             .values()
             .fold(0.0f64, |a, &b| a.max(b.abs()));
-        m.max((ipc::clearance_mm(vmax * 2.0, ClearanceCondition::B2) * 1e6) as i64)
+        // Broad-phase bound: the worst IPC-2221B condition (B3) or a declared creepage.
+        let mut v_nm = ipc::clearance_mm(vmax * 2.0, ClearanceCondition::B3) * 1e6;
+        if let Some(i) = &c.insulation {
+            let (pd, mg) = (i.pollution_degree, &i.material_group);
+            if let Ok(mm) = ipc::creepage_mm(vmax * 2.0, pd, mg) {
+                v_nm = v_nm.max(mm * 1e6);
+            }
+        }
+        m.max(v_nm as i64)
     };
     let mut order: Vec<usize> = (0..items.len()).collect();
     order.sort_by_key(|&i| boxes[i].min.x);
@@ -313,7 +324,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
             {
                 if v_req > req {
                     req = v_req;
-                    basis = format!("IPC-2221B {cond:?} for {dv:.0} V (unverified table)");
+                    basis = format!("{cond} for {dv:.0} V (unverified table)");
                 }
             }
             // Phase 1 C5 (ADR-0046): the clearance-matrix cell of the two object classes and
@@ -932,8 +943,12 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         .matrix_cell(ObjectClass::Silk, ObjectClass::Outline)
         .map_or(SILK_TO_EDGE_MIN, |m| m.max(SILK_TO_EDGE_MIN));
     f.extend(holes::silk_to_edge(geo, silk_min));
+    // DRC-024..026: declared differential pairs.
+    let pair_unknown = crate::pairs::check(p, &mut f);
+    // DRC-027: via barrel current.
+    let via_unknown = via_current(p, &mut f);
 
-    let rules = vec![
+    let mut rules = vec![
         rule("DRC-001", "Minimum / net-class track width", format!("min {}", mm(c.min_track_width as f64)), "Project constraints"),
         rule("DRC-002", "Copper clearance", format!("min {}, net classes, declared net voltages, clearance-matrix cells, net-pair rules", mm(c.min_clearance as f64)), "Project constraints; IPC-2221B Table 6-1 B2 for declared voltages (table unverified against standard text)"),
         rule("DRC-003", "Shorts between nets", "", "EAK"),
@@ -941,7 +956,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         rule("DRC-005", "Board edge clearance", format!("{} from the outline (arc edges flattened, chord error ≤ 10 µm) and from every board cut-out", mm(c.board_edge_clearance as f64)), "Project constraints"),
         rule("DRC-006", "Drill size / annular ring", format!("drill ≥ {}, ring ≥ {}", mm(c.min_drill as f64), mm(c.min_annular_ring as f64)), "Project constraints"),
         rule("DRC-007", "Courtyard overlap", "", "EAK"),
-        rule("DRC-008", "Track current capacity", format!("ΔT {} °C, copper weight of each track's own layer ({})", c.temp_rise_c, p.pcb.board.stackup.layers.iter().map(|l| format!("{} {} oz", l.layer.name(), l.copper_oz)).collect::<Vec<_>>().join(", ")), "IPC-2221 (via DESK audit; verified_against_standard = false)"),
+        rule("DRC-008", "Track current capacity", format!("ΔT {} °C, IPC-2221 k 0.048 on outer / 0.024 on inner layers, copper weight of each track's own layer ({})", c.temp_rise_c, p.pcb.board.stackup.layers.iter().map(|l| format!("{} {} oz", l.layer.name(), l.copper_oz)).collect::<Vec<_>>().join(", ")), "IPC-2221 (via DESK audit; verified_against_standard = false)"),
         rule("DRC-009", "Board outline", "closed simple polygon", "EAK"),
         rule("DRC-010", "Schematic/PCB net consistency", "", "EAK"),
         rule("DRC-011", "Missing footprints", "", "EAK"),
@@ -958,9 +973,21 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         rule("DRC-022", "Constraint-region track width", "tracks touching a region must be within its min/max track width", "EAK (ADR-0042)"),
         rule("DRC-023", "Silkscreen text and dimensions", format!("silk text and dimension labels ≥ {} high and drawable by the stroke font", mm(MIN_SILK_TEXT as f64)), "EAK default (common fabricator practice; unverified)"),
     ];
+    rules.extend(crate::pairs::rules());
+    rules.push(rule(
+        "DRC-027",
+        "Via current capacity",
+        format!(
+            "net current through each via of the net, ΔT {} °C, plating {}",
+            c.temp_rise_c,
+            c.via_plating_um
+                .map_or("not declared".into(), |t| format!("{t} µm"))
+        ),
+        verify::SOURCE_VIA,
+    ));
     let not_implemented = vec![
-        "Controlled impedance and signal integrity".into(),
-        "Differential-pair length/skew matching".into(),
+        "Single-ended controlled impedance (net-class target Z0) and signal integrity beyond the declared differential pairs".into(),
+        "DC voltage drop along a net against net_max_drop_v (no path-resistance model yet)".into(),
         "Thermal analysis and copper current density in zones (only relief-spoke width vs declared net current is checked)".into(),
         "Creepage (surface path) analysis — only voltage-based clearance (air gap) is checked"
             .into(),
@@ -975,11 +1002,12 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     let mut limitations: Vec<String> = vec![
         "Zone fill connectivity is evaluated on a 0.1 mm raster; necks narrower than the raster may be misjudged".into(),
         "Thermal reliefs: relief gap and spoke width are derived from the zone clearance and net class (no per-zone/per-pad relief settings in the IR yet); vias and tracks connect solidly".into(),
-        "The autorouter works on the two outer layers with through vias; inner-layer routing, blind and buried vias are placed by hand. Via aspect ratio and drill-to-layer-span limits are not checked".into(),
+        "The autorouter routes every signal layer with through vias only; blind and buried vias are placed by hand. Via aspect ratio and drill-to-layer-span limits are not checked".into(),
         "Pad shapes: rectangle, circle, oval (no rounded-rectangle or custom polygons)".into(),
         "Arc tracks and arc board edges are checked as chords with at most 10 µm error; the autorouter and auto-placer do not avoid keep-out regions (DRC-021 reports what they put there)".into(),
         "Text and dimensions on the documentation layer are not fabricated and not checked; silk text is not checked against other silk or the courtyards".into(),
         "Clearance-matrix cells are checked by DRC only: the interactive router keeps net classes, declared voltages and net-pair rules but not the matrix, and the autorouter keeps neither the matrix nor net-pair rules (ADR-0046)".into(),
+        "Differential pairs: skew counts track length only (no via barrels); the gap rule checks only the closest approach, not where the members run apart; impedance uses the positive member's width and is not checked on uncoupled segments".into(),
     ];
     limitations.extend(undeclared_nets_not_evaluated(p));
     let (no_current, no_voltage) = undeclared_nets(p, items);
@@ -990,13 +1018,23 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         let why = format!("no declared current for: {}", no_current.join(", "));
         report = report
             .degrade("DRC-008", CheckState::Unknown, &why)
-            .degrade("DRC-014", CheckState::Unknown, &why);
+            .degrade("DRC-014", CheckState::Unknown, &why)
+            .degrade("DRC-027", CheckState::Unknown, &why);
     }
     if !no_voltage.is_empty() {
         let why = format!(
             "no declared voltage for: {} (net-class clearance was checked; voltage-based clearance was not)",
             no_voltage.join(", ")
         );
+        report = report.degrade("DRC-002", CheckState::Unknown, &why);
+    }
+    for (rule, why) in pair_unknown {
+        report = report.degrade(rule, CheckState::Unknown, &why);
+    }
+    if let Some(why) = via_unknown {
+        report = report.degrade("DRC-027", CheckState::Unknown, &why);
+    }
+    if let Some(why) = eak_engineering::clearance::spacing_unknown(c) {
         report = report.degrade("DRC-002", CheckState::Unknown, &why);
     }
     // A configured clearance-matrix cell no rule enforces is reported, never assumed met.
@@ -1021,6 +1059,41 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         report = report.degrade("DRC-002", CheckState::Unknown, &why);
     }
     report
+}
+
+/// DRC-027: each via on a net with a declared current against its IPC-2221 barrel capacity, with
+/// the whole net current through that one via (as DRC-008 sizes every track for it). Returns why
+/// it could not be evaluated.
+fn via_current(p: &Project, f: &mut Vec<Finding>) -> Option<String> {
+    let c = &p.constraints;
+    let mut why = None;
+    for v in p.pcb.vias.values() {
+        let Some(&amps) = c.net_currents_a.get(&v.net) else {
+            continue;
+        };
+        let drill = to_mm(v.drill);
+        let rise = Some(c.temp_rise_c);
+        let ch = verify::via_current(Some(amps), drill, c.via_plating_um, rise, 1);
+        match ch.verdict {
+            Verdict::Pass => {}
+            Verdict::Fail => {
+                let cap = ch.limit.unwrap_or(0.0);
+                let id = &v.id;
+                let msg = format!("via {id} carries {amps} A, above its {cap:.2} A capacity");
+                f.push(
+                    finding("DRC-027", Error, msg, vec![v.id.clone()], Some(v.position))
+                        .measured(amps, "A")
+                        .required(Bound::Max, cap, "A")
+                        .fix(format!(
+                            "Use a larger drill or several vias in parallel for net {} at via {}.",
+                            v.net, v.id
+                        )),
+                );
+            }
+            Verdict::Unknown | Verdict::Blocked => why = Some(ch.reason),
+        }
+    }
+    why
 }
 
 /// The rule that enforces a clearance-matrix cell, `None` when no rule does (Phase 1 C5,
@@ -1163,8 +1236,9 @@ fn core_to_ring(core: &Core, ring: &[Point]) -> (f64, Point) {
     best
 }
 
-/// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, unverified).
-pub const HOLE_TO_HOLE_MIN: Nm = 500_000;
+/// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, unverified); the autorouter
+/// keeps the same value.
+pub const HOLE_TO_HOLE_MIN: Nm = eak_engineering::clearance::HOLE_TO_HOLE_MIN;
 /// DRC-020 minimum legend-to-board-edge clearance (EAK default, unverified).
 pub const SILK_TO_EDGE_MIN: Nm = 200_000;
 
@@ -1221,7 +1295,7 @@ fn thermal_reliefs(p: &Project, fill: &copper::ZoneFill) -> Vec<Finding> {
         }
         match ipc::trace_width_mm(
             amps,
-            false,
+            !fill.layer.is_outer(),
             p.pcb.board.stackup.copper_oz(fill.layer).unwrap_or(0.0),
             c.temp_rise_c,
         ) {
@@ -1337,6 +1411,39 @@ mod tests {
             },
         );
         p
+    }
+
+    /// Regression: DRC-008 sized inner-layer tracks with the external IPC-2221 constant, passing a
+    /// buried 0.5 mm track at 1 A / 1 oz / 10 °C that needs about 0.78 mm.
+    #[test]
+    fn inner_layer_track_current_uses_the_internal_constant() {
+        let mut p = Project::new("inner");
+        let four = eak_core::Stackup::multilayer(4, 1_600_000, 1.0, 1.0, "FR-4", 4.5);
+        p.pcb.board.stackup = four;
+        p.constraints.temp_rise_c = 10.0;
+        p.constraints.net_currents_a.insert("PWR".into(), 1.0);
+        let drc008 = |layer: CopperLayer| {
+            let mut q = p.clone();
+            q.pcb.tracks.insert(
+                "t".into(),
+                eak_core::Track {
+                    id: "t".into(),
+                    layer,
+                    width: 500_000,
+                    a: Point::mm(2.0, 2.0),
+                    b: Point::mm(12.0, 2.0),
+                    net: "PWR".into(),
+                    arc_deg: None,
+                },
+            );
+            run(&q)
+                .findings
+                .into_iter()
+                .filter(|f| f.rule_id == "DRC-008" && f.severity == Error)
+                .count()
+        };
+        assert_eq!(drc008(CopperLayer::Top), 0);
+        assert_eq!(drc008(CopperLayer::Inner(1)), 1);
     }
 
     #[test]

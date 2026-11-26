@@ -557,6 +557,35 @@ pub enum Command {
         #[serde(default)]
         clearance: Option<Nm>,
     },
+    /// Declare a differential pair (schema v8, ADR-0055); replaces any pair sharing either net.
+    SetDiffPair {
+        rule: DiffPairRule,
+    },
+    /// Remove the differential pair that contains `net`.
+    DeleteDiffPair {
+        net: String,
+    },
+    /// Replace the via spans the router may use besides through vias (schema v8, ADR-0055).
+    SetViaSpans {
+        #[serde(default)]
+        spans: Vec<ViaSpanRule>,
+    },
+    /// Replace the engineering-check inputs (schema v8, ADR-0055): the command carries the whole
+    /// set, and an omitted field is cleared (undeclared).
+    SetEngineeringInputs {
+        #[serde(default)]
+        ambient_temp_c: Option<f64>,
+        #[serde(default)]
+        via_plating_um: Option<f64>,
+        #[serde(default)]
+        net_max_drop_v: BTreeMap<String, f64>,
+        #[serde(default)]
+        part_dissipation_w: BTreeMap<String, f64>,
+        #[serde(default)]
+        insulation: Option<Insulation>,
+        #[serde(default)]
+        enclosure: Option<Enclosure>,
+    },
     SetManufacturing {
         config: ManufacturingConfig,
     },
@@ -718,6 +747,10 @@ impl Command {
             | SetRuleConfig { .. }
             | SetClearanceCell { .. }
             | SetNetPairClearance { .. }
+            | SetDiffPair { .. }
+            | DeleteDiffPair { .. }
+            | SetViaSpans { .. }
+            | SetEngineeringInputs { .. }
             | SetManufacturing { .. } => EngineeringImpacting,
             DeleteSymbol { .. } | DeleteSheet { .. } | ClearRouting { .. } => Destructive,
             // A batch carries the risk of its riskiest step, so approval covers every step.
@@ -1104,7 +1137,11 @@ fn rename_nets(p: &mut Project, map: &BTreeMap<String, String>) {
     for class in &mut c.net_classes {
         class.nets.iter_mut().for_each(re);
     }
-    for values in [&mut c.net_currents_a, &mut c.net_voltages_v] {
+    for values in [
+        &mut c.net_currents_a,
+        &mut c.net_voltages_v,
+        &mut c.net_max_drop_v,
+    ] {
         let old = std::mem::take(values);
         *values = old
             .into_iter()
@@ -1136,6 +1173,12 @@ fn rename_nets(p: &mut Project, map: &BTreeMap<String, String>) {
             clearance,
         })
         .collect();
+    // A differential pair the rename merges into one net is no longer a pair.
+    for d in &mut c.diff_pairs {
+        re(&mut d.positive);
+        re(&mut d.negative);
+    }
+    c.diff_pairs.retain(|d| d.positive != d.negative);
 }
 
 fn symbol<'a>(p: &'a Project, id: &str) -> Result<&'a SymbolInstance, CommandError> {
@@ -1220,6 +1263,34 @@ fn passes_through(a: Point, b: Point, pts: &[Point], allowed: &[Point]) -> Vec<P
         .filter(|q| !allowed.contains(q) && point_segment_distance(**q, a, b) <= 1_000.0)
         .copied()
         .collect()
+}
+
+/// Connectivity proof of the board as it now is: every net's pads in one copper group (tracks,
+/// vias, pads and zone fills of the one board geometry, the same input as DRC-004), and no shorts.
+/// Each open net and short is named; nothing is assumed from what the router reported.
+fn connectivity_proof(p: &Project) -> Vec<String> {
+    let c = eak_engineering::board::BoardGeometry::build(p).connectivity();
+    let mut out: Vec<String> = c
+        .net_groups
+        .iter()
+        .filter(|(_, g)| **g > 1)
+        .map(|(net, g)| {
+            let links = c.ratsnest.iter().filter(|(n, _, _)| n == net).count();
+            format!(
+                "connectivity proof: {net} is OPEN: its pads are in {g} separate copper groups ({links} unrouted link(s))"
+            )
+        })
+        .collect();
+    out.extend(c.shorts.iter().map(|(a, b, ia, ib)| {
+        format!("connectivity proof: SHORT between {a} and {b} ({ia} touches {ib})")
+    }));
+    if out.is_empty() {
+        out.push(format!(
+            "connectivity proof: all {} nets with pads are each one copper group, no shorts (board geometry incl. zone fills)",
+            c.net_groups.len()
+        ));
+    }
+    out
 }
 
 pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
@@ -3112,6 +3183,10 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     why.join("; ")
                 )));
             }
+            // Push-and-shove moved these aside: their new polylines are among `res.tracks`.
+            for id in &res.replaced_tracks {
+                p.pcb.tracks.remove(id);
+            }
             for t in res.tracks {
                 let id = new_id("trk");
                 p.pcb.tracks.insert(
@@ -3149,6 +3224,12 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 res.routed_connections,
                 res.failed_connections.len()
             ));
+            if !res.replaced_tracks.is_empty() {
+                warnings.push(format!(
+                    "router: {} lower-priority track(s) pushed aside (push-and-shove)",
+                    res.replaced_tracks.len()
+                ));
+            }
             if res.passes.len() > 1 || res.ripups > 0 || res.stagnated {
                 warnings.push(format!(
                     "router: {} pass(es), {} rip-up(s) of lower-priority routes{}",
@@ -3177,6 +3258,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     geom::to_mm(b.y)
                 ));
             }
+            warnings.extend(connectivity_proof(p));
         }
         StitchZones { net } => {
             if !p
@@ -3434,6 +3516,40 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 });
                 r.sort_by(|m, n| (&m.net_a, &m.net_b).cmp(&(&n.net_a, &n.net_b)));
             }
+        }
+        // Schema-v8 data (ADR-0055): the values are checked by the integrity pass after apply.
+        SetDiffPair { rule } => {
+            let pairs = &mut p.constraints.diff_pairs;
+            pairs.retain(|d| !d.has(&rule.positive) && !d.has(&rule.negative));
+            pairs.push(rule.clone());
+            pairs.sort_by(|a, b| a.positive.cmp(&b.positive));
+        }
+        DeleteDiffPair { net } => {
+            let pairs = &mut p.constraints.diff_pairs;
+            let before = pairs.len();
+            pairs.retain(|d| !d.has(net));
+            if pairs.len() == before {
+                return Err(CommandError::NothingTo(format!(
+                    "{net} is not in a differential pair"
+                )));
+            }
+        }
+        SetViaSpans { spans } => p.constraints.via_spans = spans.clone(),
+        SetEngineeringInputs {
+            ambient_temp_c,
+            via_plating_um,
+            net_max_drop_v,
+            part_dissipation_w,
+            insulation,
+            enclosure,
+        } => {
+            let c = &mut p.constraints;
+            c.ambient_temp_c = *ambient_temp_c;
+            c.via_plating_um = *via_plating_um;
+            c.net_max_drop_v = net_max_drop_v.clone();
+            c.part_dissipation_w = part_dissipation_w.clone();
+            c.insulation = insulation.clone();
+            c.enclosure = enclosure.clone();
         }
         SetManufacturing { config } => {
             if config.mask_expansion < 0 {

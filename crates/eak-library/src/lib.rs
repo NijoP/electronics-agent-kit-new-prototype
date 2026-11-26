@@ -37,3 +37,4 @@ pub use eak_validation::footprint::{LandPatternSpec, PadSpec};
 pub use mpn::{discover, identify_manufacturer, Discovery, ManufacturerId, MpnMatch};
 pub use part::{Part, PartKey, PartKeyError, PartRecord, SourceId, Spec, SpecOrigin, SpecValue};
 pub use source::{resolve, PartQuery, PartSource, Resolution, SourceStatus};
+pub use sources::{lcsc::LcscSlot, local::LocalListSource};
