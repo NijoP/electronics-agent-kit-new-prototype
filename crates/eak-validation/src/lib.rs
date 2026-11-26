@@ -7,6 +7,7 @@
 pub mod dfm;
 pub mod drc;
 pub mod erc;
+pub mod footprint;
 pub mod gates;
 pub mod holes;
 pub mod mech;
