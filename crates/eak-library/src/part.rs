@@ -13,6 +13,7 @@
 use eak_core::libmeta::LibraryMaturity;
 use eak_manufacturing::matching::{normalize_manufacturer, normalize_mpn};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Why a [`PartKey`] could not be built.
@@ -95,13 +96,193 @@ pub struct Parameter {
     pub value: String,
 }
 
-/// A datasheet reference. A URL is a pointer only; nothing here fetches it.
+/// A datasheet reference: where the document is (a URL, a local file, or both), which revision,
+/// when it was retrieved, and, for a local copy, the SHA-256 of its bytes. A URL is a pointer
+/// only; nothing here fetches it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DatasheetRef {
     pub url: Option<String>,
+    /// Path of a local copy, as the user gave it.
+    #[serde(default)]
+    pub local_path: Option<String>,
     /// SHA-256 of a local copy, when one was supplied.
     pub sha256: Option<String>,
     pub revision: Option<String>,
+    /// When the URL was retrieved or the local copy was hashed, when known.
+    #[serde(default)]
+    pub retrieved_at_unix_s: Option<u64>,
+}
+
+impl DatasheetRef {
+    /// A reference to a URL only (not fetched, so no hash).
+    pub fn url(url: &str) -> DatasheetRef {
+        DatasheetRef {
+            url: Some(url.trim().to_string()),
+            local_path: None,
+            sha256: None,
+            revision: None,
+            retrieved_at_unix_s: None,
+        }
+    }
+
+    /// A reference to a local copy whose bytes the caller has read; the hash is computed here.
+    pub fn local(path: &str, bytes: &[u8], retrieved_at_unix_s: Option<u64>) -> DatasheetRef {
+        DatasheetRef {
+            url: None,
+            local_path: Some(path.to_string()),
+            sha256: Some(format!("{:x}", Sha256::digest(bytes))),
+            revision: None,
+            retrieved_at_unix_s,
+        }
+    }
+
+    /// Read a local file and reference it with its hash.
+    pub fn from_file(
+        path: &std::path::Path,
+        retrieved_at_unix_s: Option<u64>,
+    ) -> std::io::Result<DatasheetRef> {
+        let bytes = std::fs::read(path)?;
+        Ok(DatasheetRef::local(
+            &path.to_string_lossy(),
+            &bytes,
+            retrieved_at_unix_s,
+        ))
+    }
+
+    pub fn with_revision(mut self, revision: &str) -> DatasheetRef {
+        self.revision = Some(revision.trim().to_string()).filter(|r| !r.is_empty());
+        self
+    }
+
+    /// Whether the local copy still has the recorded hash. `None` when there is no local
+    /// copy or no recorded hash to compare against.
+    pub fn local_copy_matches(&self, bytes: &[u8]) -> Option<bool> {
+        let want = self.sha256.as_deref()?;
+        self.local_path.as_ref()?;
+        Some(format!("{:x}", Sha256::digest(bytes)) == want)
+    }
+}
+
+/// Who stated a specification value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "by", content = "source", rename_all = "snake_case")]
+pub enum SpecOrigin {
+    /// Taken from a part source (a library, an imported file, a supplier listing).
+    Source(SourceId),
+    /// Entered by a person.
+    User,
+    /// Proposed by an AI model. Never trusted until a person reviews it.
+    AiNeedsReview,
+}
+
+/// A specification value: a number with a unit, or text when the value is not numeric.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SpecValue {
+    /// A finite decimal number, kept as the text it was given in (never rounded), and its
+    /// unit as written (for example "V", "mA", "°C"; empty for a dimensionless count).
+    Number {
+        value: String,
+        unit: String,
+    },
+    Text {
+        value: String,
+    },
+}
+
+/// Why a specification could not be built.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpecError {
+    EmptyName,
+    /// The value is not a finite decimal number.
+    NotANumber(String),
+}
+
+impl std::fmt::Display for SpecError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SpecError::EmptyName => f.write_str("specification name is empty"),
+            SpecError::NotANumber(v) => write!(f, "{v:?} is not a finite decimal number"),
+        }
+    }
+}
+
+impl std::error::Error for SpecError {}
+
+/// One typed specification of a part, with who stated it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Spec {
+    pub name: String,
+    pub value: SpecValue,
+    pub origin: SpecOrigin,
+}
+
+impl Spec {
+    /// A numeric specification. `value` must parse as a finite decimal number.
+    pub fn number(
+        name: &str,
+        value: &str,
+        unit: &str,
+        origin: SpecOrigin,
+    ) -> Result<Spec, SpecError> {
+        let name = Self::name(name)?;
+        let v = value.trim();
+        let allowed = |c: char| c.is_ascii_digit() || matches!(c, '.' | '-' | '+' | 'e' | 'E');
+        let finite = v.parse::<f64>().is_ok_and(f64::is_finite);
+        if v.is_empty() || !v.chars().all(allowed) || !finite {
+            return Err(SpecError::NotANumber(value.to_string()));
+        }
+        Ok(Spec {
+            name,
+            value: SpecValue::Number {
+                value: v.to_string(),
+                unit: unit.trim().to_string(),
+            },
+            origin,
+        })
+    }
+
+    /// A text specification.
+    pub fn text(name: &str, value: &str, origin: SpecOrigin) -> Result<Spec, SpecError> {
+        Ok(Spec {
+            name: Self::name(name)?,
+            value: SpecValue::Text {
+                value: value.trim().to_string(),
+            },
+            origin,
+        })
+    }
+
+    fn name(name: &str) -> Result<String, SpecError> {
+        let n = name.trim();
+        if n.is_empty() {
+            return Err(SpecError::EmptyName);
+        }
+        Ok(n.to_string())
+    }
+
+    /// The numeric value, when the specification is a number.
+    pub fn as_f64(&self) -> Option<f64> {
+        match &self.value {
+            SpecValue::Number { value, .. } => value.parse().ok(),
+            SpecValue::Text { .. } => None,
+        }
+    }
+
+    /// Whether a person must review this value before anything relies on it.
+    pub fn needs_review(&self) -> bool {
+        self.origin == SpecOrigin::AiNeedsReview
+    }
+
+    /// The value as display text, with its unit.
+    pub fn display_value(&self) -> String {
+        match &self.value {
+            SpecValue::Number { value, unit } if unit.is_empty() => value.clone(),
+            SpecValue::Number { value, unit } => format!("{value} {unit}"),
+            SpecValue::Text { value } => value.clone(),
+        }
+    }
 }
 
 /// What kind of definition a [`DefLink`] points at.
@@ -174,6 +355,9 @@ pub struct PartRecord {
     /// Package text as the source wrote it, for example "SOT-23-5".
     pub package: Option<String>,
     pub parameters: Vec<Parameter>,
+    /// Typed specifications with who stated each one.
+    #[serde(default)]
+    pub specs: Vec<Spec>,
     pub datasheets: Vec<DatasheetRef>,
     pub definitions: Vec<DefLink>,
     pub offers: Vec<OfferSnapshot>,
@@ -197,6 +381,7 @@ impl PartRecord {
             category: None,
             package: None,
             parameters: Vec::new(),
+            specs: Vec::new(),
             datasheets: Vec::new(),
             definitions: Vec::new(),
             offers: Vec::new(),
@@ -258,7 +443,8 @@ impl Part {
     }
 
     /// Every stated value of the scalar fields (`description`, `category`, `package`,
-    /// `lifecycle`) and of each named parameter (`parameter:<name>`), with its source.
+    /// `lifecycle`), of each named parameter (`parameter:<name>`) and of each specification
+    /// (`spec:<name>`, value with unit), with its source.
     pub fn field_values(&self) -> Vec<FieldValues> {
         let mut out: BTreeMap<String, Vec<(String, SourceId)>> = BTreeMap::new();
         for r in &self.records {
@@ -279,6 +465,11 @@ impl Part {
                 out.entry(format!("parameter:{}", p.name))
                     .or_default()
                     .push((p.value.clone(), src.clone()));
+            }
+            for s in &r.specs {
+                out.entry(format!("spec:{}", s.name))
+                    .or_default()
+                    .push((s.display_value(), src.clone()));
             }
         }
         out.into_iter()
@@ -375,5 +566,81 @@ mod tests {
             ]
         );
         assert!(part.offers().is_empty(), "no offer is invented");
+    }
+
+    #[test]
+    fn numeric_specs_must_be_finite_decimals_and_keep_their_text() {
+        let src = SpecOrigin::Source(SourceId::new("s1"));
+        let s = Spec::number("Vout", " 3.30 ", "V", src.clone()).unwrap();
+        assert_eq!(s.display_value(), "3.30 V");
+        assert_eq!(s.as_f64(), Some(3.3));
+        assert!(Spec::number("R", "1e3", "", src.clone()).is_ok());
+        for bad in ["", "abc", "inf", "NaN", "1e999", "3.3V", "0x10"] {
+            assert_eq!(
+                Spec::number("Vout", bad, "V", src.clone()),
+                Err(SpecError::NotANumber(bad.to_string())),
+                "{bad:?}"
+            );
+        }
+        assert_eq!(
+            Spec::text(" ", "x", SpecOrigin::User),
+            Err(SpecError::EmptyName)
+        );
+    }
+
+    #[test]
+    fn ai_specs_need_review_and_specs_show_in_field_values() {
+        let ai = Spec::number("Iq", "55", "uA", SpecOrigin::AiNeedsReview).unwrap();
+        assert!(ai.needs_review());
+        let user = Spec::text("Grade", "Automotive", SpecOrigin::User).unwrap();
+        assert!(!user.needs_review());
+        let mut a = PartRecord::new("M", "P1", prov("s1")).unwrap();
+        a.specs
+            .push(Spec::number("Iq", "50", "uA", SpecOrigin::User).unwrap());
+        let mut b = PartRecord::new("M", "P1", prov("s2")).unwrap();
+        b.specs.push(ai);
+        let part = Part::merge(vec![a, b]).remove(0);
+        let conflicts = part.conflicts();
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].field, "spec:Iq");
+        assert_eq!(conflicts[0].values[0].0, "50 uA");
+        assert_eq!(conflicts[0].values[1].0, "55 uA");
+    }
+
+    #[test]
+    fn local_datasheets_carry_a_hash_that_detects_changes() {
+        let d = DatasheetRef::local("ds/tps2051.pdf", b"abc", Some(1_700_000_000))
+            .with_revision("Rev. C");
+        assert_eq!(
+            d.sha256.as_deref(),
+            Some("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+        );
+        assert_eq!(d.revision.as_deref(), Some("Rev. C"));
+        assert_eq!(d.local_copy_matches(b"abc"), Some(true));
+        assert_eq!(d.local_copy_matches(b"abd"), Some(false));
+        let u = DatasheetRef::url(" https://example.com/ds.pdf ");
+        assert_eq!(u.url.as_deref(), Some("https://example.com/ds.pdf"));
+        assert_eq!(u.local_copy_matches(b"abc"), None, "a URL has no hash");
+    }
+
+    #[test]
+    fn datasheet_from_file_hashes_the_file_bytes() {
+        let name = format!("eak-library-ds-test-{}.pdf", std::process::id());
+        let path = std::env::temp_dir().join(name);
+        std::fs::write(&path, b"abc").unwrap();
+        let d = DatasheetRef::from_file(&path, None).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(d.local_path, Some(path.to_string_lossy().into_owned()));
+        assert_eq!(d.local_copy_matches(b"abc"), Some(true));
+        assert!(DatasheetRef::from_file(&path, None).is_err());
+    }
+
+    #[test]
+    fn older_datasheet_json_without_the_new_fields_still_reads() {
+        let d: DatasheetRef =
+            serde_json::from_str(r#"{"url":"https://x","sha256":null,"revision":"A"}"#).unwrap();
+        assert_eq!(d.local_path, None);
+        assert_eq!(d.retrieved_at_unix_s, None);
+        assert_eq!(d.revision.as_deref(), Some("A"));
     }
 }

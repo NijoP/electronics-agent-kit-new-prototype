@@ -25,8 +25,13 @@ export const statusLine = (c: ReleaseCheck) =>
 export const NOT_CERTIFIED =
   "Gates are necessary, not sufficient: passing them means the implemented checks found no violation in this revision. They never certify the board for fabrication; independent engineering review and the fabricator's own DFM review remain required.";
 
-export function ReleaseCheckDialog({ revision, busy, onClose }: { revision: number; busy: boolean; onClose: () => void }) {
-  const [check, setCheck] = useState<ReleaseCheck | null>(null);
+export function ReleaseCheckDialog({ revision, busy, onClose, onCheck }: { revision: number; busy: boolean; onClose: () => void; onCheck?: (c: ReleaseCheck) => void }) {
+  const [check, setShown] = useState<ReleaseCheck | null>(null);
+  // Every check the view reads or runs is also handed to the workspace (journey bar, Problems).
+  const setCheck = (c: ReleaseCheck) => {
+    setShown(c);
+    onCheck?.(c);
+  };
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 

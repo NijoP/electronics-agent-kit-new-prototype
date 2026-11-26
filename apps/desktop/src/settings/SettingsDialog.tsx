@@ -11,8 +11,9 @@ import { CANVAS_OBJECTS, COLOUR_PRESETS, overrideOf, resetColour, resetColours, 
 import { POWER_STYLES, powerPortProblem, resetPowerPorts, setPowerPorts, usePowerPorts } from "./powerPorts";
 import type { PowerStyle } from "../types";
 import { bind, clearAction, effectiveKeys, normalize, PRESETS, presetKeys, resetAction, resetAll, setPreset, specOf, useKeymap, type PresetId } from "./keymap";
+import { AiToolsSettings } from "./AiToolsSettings";
 
-type Page = "keys" | "colours" | "theme" | "grid-schematic" | "grid-pcb" | "power" | "model";
+type Page = "keys" | "colours" | "theme" | "grid-schematic" | "grid-pcb" | "power" | "model" | "ai-tools";
 interface Node {
   id: Page;
   group: string;
@@ -28,6 +29,7 @@ const TREE: readonly Node[] = [
   { id: "grid-pcb", group: "Editors", label: "PCB grid", words: "grid snap unit mm mil inch spacing default" },
   { id: "power", group: "Editors", label: "Power ports", words: "power port gnd ground rail vcc agnd analog chassis net flag schematic" },
   { id: "model", group: "Assistant", label: "Model provider", words: "ai model provider api" },
+  { id: "ai-tools", group: "Assistant", label: "AI tools", words: "ai agent claude code codex opencode gemini cli mcp connect sign in login session terminal headless" },
 ];
 
 const CTX_LABEL: Record<DocContext, string> = { home: "Project", schematic: "Schematic", pcb: "PCB", "3d": "3D", file: "File" };
@@ -110,6 +112,7 @@ export function SettingsDialog({ actions, theme, onTheme, onModel, onClose }: Se
             {shown === "colours" && <Colours />}
             {(shown === "grid-schematic" || shown === "grid-pcb") && <GridPage kind={shown === "grid-pcb" ? "pcb" : "schematic"} />}
             {shown === "power" && <PowerPortsPage />}
+            {shown === "ai-tools" && <AiToolsSettings />}
             {shown === "model" && (
               <>
                 <h3>Model provider</h3>
