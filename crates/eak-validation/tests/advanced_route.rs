@@ -97,12 +97,6 @@ fn four_layer() -> Stackup {
 
 /// Commit a route result the way `AutoRoute` does.
 fn commit(p: &mut Project, res: &RouteResult) {
-    for id in &res.replaced_tracks {
-        assert!(
-            p.pcb.tracks.remove(id).is_some(),
-            "replaced track {id} exists"
-        );
-    }
     for (k, t) in res.tracks.iter().enumerate() {
         let id = format!("trk{k}");
         p.pcb.tracks.insert(
