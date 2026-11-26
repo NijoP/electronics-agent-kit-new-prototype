@@ -51,6 +51,7 @@ import { buildPcbScene, fillPath } from "./render/pcbScene";
 import { dimensionDrawing, outlinePath, trackPath } from "./render/pcbObjects";
 import { PcbSceneCanvas } from "./render/PcbSceneCanvas";
 import { ATTR_KIND, PickIndex } from "./render/pick";
+import { whenConfirmed } from "./confirm";
 import type { OverlayItem, OverlayScene, RenderObject } from "./render/types";
 
 /** Canvas picking tolerance in screen pixels. */
@@ -109,7 +110,7 @@ function Pad({ pad, active }: { pad: PadGeom; active?: boolean }) {
   const h = mm(pad.size_y);
   const r = pad.shape === "circle" ? Math.min(w, h) / 2 : pad.shape === "oval" ? Math.min(w, h) / 2 : 0;
   return (
-    <g className={`pad ${pad.kind}${active ? " net-active" : ""}`}>
+    <g className={`pad ${pad.kind}${active ? " net-active" : ""}`} data-pad={pad.number}>
       <title>{`pad ${pad.number}${pad.net ? ` · ${pad.net}` : ""}`}</title>
       <rect x={x - w / 2} y={y - h / 2} width={w} height={h} rx={r} ry={r} />
       {pad.drill !== null && <circle className="drill" cx={x} cy={y} r={mm(pad.drill) / 2} />}
@@ -500,12 +501,15 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     const { cmd, footprints, locked } = deletion();
     if (!edit) return;
     if (!cmd) return edit.notify(locked ? `${fps(locked)} locked; unlock to delete.` : "Nothing is selected on the PCB.");
-    if (footprints && !window.confirm(`Delete ${fps(footprints)} from the PCB? This is a destructive change.`)) return;
-    if (locked) edit.notify(`${fps(locked)} locked; left in place.`);
-    setTrackSel(null);
-    setCopperSel(null);
-    setSel([]);
-    void edit.execute(cmd);
+    const go = () => {
+      if (locked) edit.notify(`${fps(locked)} locked; left in place.`);
+      setTrackSel(null);
+      setCopperSel(null);
+      setSel([]);
+      void edit.execute(cmd);
+    };
+    if (footprints) void whenConfirmed(`Delete ${fps(footprints)} from the PCB? This is a destructive change.`, go);
+    else go();
   };
   // EditTrack keeps the track's id, so the edited track stays selected.
   const applyTrackEdit = (change: { width?: number; layer?: CopperLayer }) => {
@@ -1289,6 +1293,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
       </div>
       <Canvas
         label="PCB canvas"
+        boxed
         bounds={pcbBounds(snapshot)}
         mirror={lv.flip}
         zoomTo={zoomTo && zoomTo.bounds ? { bounds: zoomTo.bounds, n: zoomTo.n } : null}
@@ -1427,6 +1432,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
               key={f.id}
               data-footprint-id={f.id}
               data-symbol-id={f.symbol_id}
+              data-refdes={f.refdes}
               className={`footprint ${f.side}${highlighted.has(f.id) || highlighted.has(f.symbol_id) ? " finding-hit" : ""}${sel.includes(f.id) ? " selected" : ""}${pcb.footprints[f.id]?.locked ? " locked" : ""}${aiPreview.includes(f.symbol_id) ? " ai-preview" : ""}`}
               transform={dragDelta && movingIds?.has(f.id) ? `translate(${mm(dragDelta.x)} ${-mm(dragDelta.y)})` : undefined}
               onClick={() => onSelect(f.symbol_id)}

@@ -1,8 +1,9 @@
 // New / Open project dialogs for the running workspace (File menu, toolbar). They use the same
-// backend calls as Project Home. The backend replaces the open project when a new one is created
-// or opened, and drops the old one *before* opening the new one: if that fails the workspace
-// would show a project the backend no longer holds, so a failure checks the session and
-// returns to Project Home when the old project is gone.
+// backend calls as Project Home. The backend keeps the other open projects open (the new or
+// opened one becomes active in its own tab); it drops only an engine that already holds the same
+// folder, *before* opening it again: if that fails the workspace would show a project the
+// backend no longer holds, so a failure checks the session and returns to Project Home when the
+// active project is gone.
 import { useEffect, useRef, useState } from "react";
 import { api, pickFolder } from "../api";
 import type { RecentProject, Snapshot } from "../types";
@@ -65,7 +66,7 @@ export function NewProjectDialog(c: Common) {
           void attempt(() => api.createProject(path, name), c, setError, setBusy);
         }}
       >
-        <p className="muted hint">The current project is closed and the new one opens in its place. Every accepted command is saved as you go.</p>
+        <p className="muted hint">Other open projects stay open: the new project opens in its own tab and becomes the active one. Every accepted command is saved as you go.</p>
         <label>
           Project folder (absolute path)
           <input ref={first} value={path} onChange={(e) => setPath(e.target.value)} />

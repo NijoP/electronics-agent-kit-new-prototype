@@ -365,6 +365,19 @@ jobs:
           UI_SCENARIO: scenarios/f8-keys.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # F6 (Phase 1 PCB workflow, no SETUP): new project through Project Home (native folder
+      # chooser) and File > New project; two parts wired, ERC, outline drawn, Update PCB,
+      # auto-place, one net routed by clicks with a layer change and two vias, auto-route, clear
+      # routing and undo, a zone drawn and refilled, DRC, export, release check DRAFT.
+      - name: Run F6 PCB workflow scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/f6
+          UI_SCENARIO: scenarios/p1-pcb-flow.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # Fails the job when a scenario wrote no results file (it crashed or never ran); failing
       # rows already failed their own step. Runs before the upload, which still runs (always()).
       # The scenario list is every UI_OUT of this file, so a new scenario step is gated (and

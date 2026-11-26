@@ -155,13 +155,55 @@ const reveal = (selector, text) =>
     text ?? null,
   );
 
+/**
+ * The part of the first visible match that can be seen: its box cut by every ancestor that
+ * clips (overflow other than visible) and by the viewport. `box` is the whole element box.
+ */
+const visibleRectOf = (selector, text) =>
+  browser.execute(
+    (s, t) => {
+      const norm = (x) => x.replace(/\s+/g, " ").trim();
+      const el = [...document.querySelectorAll(s)].find((e) => {
+        const r = e.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && (!t || norm(e.textContent ?? "").startsWith(t));
+      });
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      let [x0, y0, x1, y1] = [r.left, r.top, r.right, r.bottom];
+      for (let a = el.parentElement; a; a = a.parentElement) {
+        const cs = getComputedStyle(a);
+        if (cs.overflowX === "visible" && cs.overflowY === "visible") continue;
+        const c = a.getBoundingClientRect();
+        [x0, y0, x1, y1] = [Math.max(x0, c.left), Math.max(y0, c.top), Math.min(x1, c.right), Math.min(y1, c.bottom)];
+      }
+      [x0, y0, x1, y1] = [Math.max(x0, 0), Math.max(y0, 0), Math.min(x1, innerWidth), Math.min(y1, innerHeight)];
+      const where = (q) => { const h = document.elementFromPoint(q[0], q[1]); return h && !el.contains(h) ? `${h.tagName.toLowerCase()}${typeof h.className === "string" && h.className ? `.${h.className.split(" ").join(".")}` : ""}` : null; };
+      return {
+        box: { x: r.x, y: r.y, w: r.width, h: r.height },
+        vis: { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) },
+        // what covers the box's bottom-centre and right-centre points, if anything
+        coverBottom: where([r.x + r.width / 2, r.bottom - 2]),
+        coverRight: where([r.right - 2, r.y + r.height / 2]),
+      };
+    },
+    selector,
+    text ?? null,
+  );
+
 /** Real X pointer click (XTest) at the centre of an element, optionally offset by dx/dy px;
  *  the element is first scrolled into view if needed, as a user would. */
-async function xclick(selector, text, dx = 0, dy = 0, button = 1) {
+async function xclick(selector, text, dx = 0, dy = 0, button = 1, at = null) {
   await waitRect(selector, text);
   await reveal(selector, text);
   await sleep(150);
-  const r = await waitRect(selector, text);
+  let r = await waitRect(selector, text);
+  // `at` [fx, fy]: fractions of the element's visible part, measured now (a canvas whose size
+  // depends on the window and the docks), instead of px offsets from its centre.
+  if (at) {
+    const v = await visibleRectOf(selector, text);
+    if (!v || v.vis.w === 0 || v.vis.h === 0) throw new Error(`no visible part of ${selector}`);
+    r = { x: v.vis.x + v.vis.w * at[0] - v.vis.w / 2, y: v.vis.y + v.vis.h * at[1] - v.vis.h / 2, w: v.vis.w, h: v.vis.h };
+  }
   const cover = await coveredBy(selector, text, r.x + r.w / 2 + dx, r.y + r.h / 2 + dy);
   if (cover) throw new Error(`the click point of ${selector}${text ? ` "${text}"` : ""} is covered by or scrolled out to ${cover}`);
   const o = origin();
@@ -203,6 +245,9 @@ async function waitGone(selector, timeout = 15000) {
 }
 /** Values remembered by a step (`save`) for a later `check-attr` (`equalsVar`). */
 const vars = {};
+
+/** `{UI_OUT}` in a scenario value is this run's output folder (an absolute path). */
+const expand = (v) => String(v).replaceAll("{UI_OUT}", path.resolve(OUT));
 
 const xkey = (keys) => sh("xdotool", ["key", "--clearmodifiers", ...keys.split(" ")]);
 
@@ -360,20 +405,67 @@ const handlers = {
     if (r.components_created !== 1) throw new Error(`expected 1 imported symbol, got ${r.components_created} (rejected: ${r.rejected.join("; ")})`);
     return `SETUP (IPC kicad_import_commit: ${s.file}.kicad_sym, licence ${s.licence}, ${r.component_ids.join(", ")}; not a UI action)`;
   },
-  // XTest click into a field, then XTest typing.
-  // XTest typing of `value`: into `selector` after clicking it, or without one into the focused field.
+  // XTest typing of `value` (with `{UI_OUT}` replaced by this run's output folder): into
+  // `selector` after clicking it, or without one into the focused field.
   async type(s) {
     const how = s.selector ? await xclick(s.selector, s.text) : "focused field";
-    sh("xdotool", ["type", "--delay", "40", "--", s.value]);
+    const value = expand(s.value);
+    sh("xdotool", ["type", "--delay", "40", "--", value]);
     await sleep(300);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
-    return `${how}; XTest typed "${s.value}"${s.expect ? `; then visible: ${s.expect}` : ""}`;
+    return `${how}; XTest typed "${value}"${s.expect ? `; then visible: ${s.expect}` : ""}`;
+  },
+  // A native window the webview cannot see (tauri-plugin-dialog's GTK file chooser): waits until
+  // a window named `window` is shown, focuses it and sends `keys` (XTest; default Escape, which
+  // cancels it). Fails if the window never appears or is still open afterwards. Picking a folder
+  // in the chooser is not deterministic under Xvfb (it opens on Recent with Open disabled, and
+  // Return on a typed path does not select it), so scenarios type the path into the app instead.
+  async "native-dialog"(s) {
+    const find = () => {
+      try {
+        return sh("xdotool", ["search", "--onlyvisible", "--name", s.window]).split("\n")[0] || null;
+      } catch {
+        return null; // xdotool search exits 1 when nothing matches
+      }
+    };
+    const until = async (open, ms) => {
+      const t0 = Date.now();
+      while (Date.now() - t0 < ms) {
+        const id = find();
+        if (open ? id : !id) return id ?? true;
+        await sleep(250);
+      }
+      return null;
+    };
+    const id = await until(true, s.timeout ?? 15000);
+    if (!id) throw new Error(`no native window named "${s.window}" after ${s.timeout ?? 15000} ms`);
+    await sleep(700);
+    const file = shot(s.id);
+    const keys = s.keys ?? "Escape";
+    sh("xdotool", ["windowfocus", "--sync", id]);
+    await sleep(200);
+    xkey(keys);
+    if (!(await until(false, 5000))) throw new Error(`the native window "${s.window}" is still open after XTest ${keys}`);
+    if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
+    return { evidence: `native window "${s.window}" shown (screenshot), XTest ${keys} closed it${s.expect ? `; then visible: ${s.expect}` : ""}`, file };
   },
   async click(s) {
-    const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0, s.button === "right" ? 3 : 1);
+    const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0, s.button === "right" ? 3 : 1, s.at ?? null);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
     if (s.gone) await waitGone(s.gone, s.timeout ?? 20000);
     return `${how}${s.expect ? `; then visible: ${s.expect}` : ""}${s.gone ? `; then gone: ${s.gone}` : ""}`;
+  },
+  // Passes when the element's whole box can be seen: no clipping ancestor, no viewport edge and
+  // nothing drawn over its bottom or right edge (a canvas taller than the room its layout gives it).
+  async fits(s) {
+    await waitRect(s.selector, s.text);
+    const v = await visibleRectOf(s.selector, s.text);
+    const fmt = (b) => `${Math.round(b.w)}×${Math.round(b.h)} at ${Math.round(b.x)},${Math.round(b.y)}`;
+    const msg = `box ${fmt(v.box)}, visible ${fmt(v.vis)}`;
+    const cut = v.box.w - v.vis.w > 1 || v.box.h - v.vis.h > 1;
+    if (cut || v.coverBottom || v.coverRight)
+      throw new Error(`${s.selector} does not fit its layout: ${msg}${v.coverBottom ? `; bottom edge under ${v.coverBottom}` : ""}${v.coverRight ? `; right edge under ${v.coverRight}` : ""}`);
+    return `fits: ${msg}`;
   },
   // Passes once no visible element matches (a removed control, a closed dialog); fails if one
   // is still visible after `timeout` ms.
