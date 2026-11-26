@@ -13,6 +13,7 @@
 //! * `interactive` – route-step API for the interactive PCB route tool (walkaround, 45/90, vias).
 //! * `placer`  – constructive footprint placement.
 //! * `placement_intel` – placement mental models (roles, snaps, analysis) ported from DESK.
+//! * `impedance` – microstrip/stripline and edge-coupled differential Z0 from the stack-up (IPC-2141A).
 //! * `power`   – unit-aware trace width, voltage drop, rail drop, return-path continuity.
 //! * `rating`  – part-rating names and derating facts (ERC-022..024, harness component checks).
 //! * `scene3d` – board/component geometry for the 3D workspace and mechanical checks.
@@ -23,6 +24,7 @@ pub mod calc;
 pub mod clearance;
 pub mod copper;
 pub mod fill_view;
+pub mod impedance;
 pub mod interactive;
 pub mod ipc;
 pub mod netlist;

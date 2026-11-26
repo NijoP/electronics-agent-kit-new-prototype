@@ -261,6 +261,12 @@ pub fn net_class() -> Value {
             ("via_drill", nm("via drill")),
             ("via_diameter", nm("via pad diameter (> drill)")),
             ("nets", array(string("net name"), "member nets")),
+            (
+                "target_z0_ohm",
+                nullable(number(
+                    "single-ended target impedance in ohm (omit = none declared)",
+                )),
+            ),
         ],
         &[
             "name",
@@ -269,6 +275,114 @@ pub fn net_class() -> Value {
             "via_drill",
             "via_diameter",
         ],
+    )
+}
+
+/// `BTreeMap<String, f64>`.
+fn number_map(desc: &str) -> Value {
+    json!({"type": "object", "additionalProperties": number(desc), "description": desc})
+}
+
+pub fn diff_pair_rule() -> Value {
+    obj(
+        &[
+            ("positive", string("positive net")),
+            ("negative", string("negative net")),
+            ("width", nullable(nm("member track width"))),
+            ("gap", nullable(nm("edge-to-edge gap where coupled"))),
+            (
+                "target_zdiff_ohm",
+                nullable(number("target differential impedance in ohm")),
+            ),
+            (
+                "zdiff_tolerance_pct",
+                nullable(number("allowed impedance deviation in percent")),
+            ),
+            (
+                "max_skew",
+                nullable(nm("largest allowed length difference")),
+            ),
+        ],
+        &["positive", "negative"],
+    )
+}
+
+pub fn via_span() -> Value {
+    obj(
+        &[
+            ("from", copper_layer()),
+            ("to", copper_layer()),
+            ("drill", nm("drill")),
+            ("diameter", nm("pad diameter (> drill)")),
+        ],
+        &["from", "to", "drill", "diameter"],
+    )
+}
+
+pub fn engineering_inputs() -> Value {
+    let insulation = obj(
+        &[
+            (
+                "standard",
+                enumeration(&["ipc2221b", "iec60664_1"], "creepage / clearance standard"),
+            ),
+            ("pollution_degree", integer("pollution degree 1-4")),
+            (
+                "material_group",
+                enumeration(&["I", "II", "IIIa", "IIIb"], "material group (CTI)"),
+            ),
+            ("altitude_m", number("altitude in m")),
+            ("coated", boolean("conformal coating over the conductors")),
+        ],
+        &[
+            "standard",
+            "pollution_degree",
+            "material_group",
+            "altitude_m",
+            "coated",
+        ],
+    );
+    let hole = obj(
+        &[
+            ("position", point("hole centre")),
+            ("drill", nm("drill")),
+            ("tolerance", nm("allowed position error")),
+            ("keepout_radius", nm("keep-out radius around the centre")),
+        ],
+        &["position", "drill", "tolerance", "keepout_radius"],
+    );
+    let enclosure = obj(
+        &[
+            (
+                "max_height_bottom",
+                nullable(nm("tallest part allowed on the bottom side")),
+            ),
+            ("mounting_holes", array(hole, "required mounting holes")),
+        ],
+        &[],
+    );
+    obj(
+        &[
+            (
+                "ambient_temp_c",
+                nullable(number("ambient temperature in °C")),
+            ),
+            (
+                "via_plating_um",
+                nullable(number("via barrel plating thickness in µm")),
+            ),
+            (
+                "net_max_drop_v",
+                number_map("largest allowed voltage drop per net, in V"),
+            ),
+            (
+                "part_dissipation_w",
+                number_map("power dissipation per reference designator, in W"),
+            ),
+            ("insulation", nullable(insulation)),
+            ("enclosure", nullable(enclosure)),
+        ],
+        &[],
     )
 }
 

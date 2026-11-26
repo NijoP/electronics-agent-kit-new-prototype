@@ -26,6 +26,12 @@
 //!   empty: every rule enabled at its default severity and no extra clearances, exactly the v6
 //!   meaning. Only the version number changes; a v7 file is refused by v6 builds, which would
 //!   otherwise drop a disabled rule's configuration and run it as enabled.
+//! * v7 → v8 (ADR-0055): routing and engineering-check inputs. `constraints.diff_pairs`,
+//!   `constraints.via_spans`, `net_classes[].target_z0_ohm` and the engineering inputs
+//!   (`ambient_temp_c`, `via_plating_um`, `net_max_drop_v`, `part_dissipation_w`, `insulation`,
+//!   `enclosure`) are new and absent means undeclared: no pairs, through vias only, and every
+//!   check that needs an input UNKNOWN, exactly the v7 meaning. Only the version number changes;
+//!   a v8 file is refused by v7 builds, which would silently drop the declared rules.
 
 use crate::ir::{Stackup, FR4_ER, SCHEMA_VERSION};
 use crate::library::SymbolDef;
@@ -58,8 +64,9 @@ pub fn migrate(mut raw: Value) -> Result<Value, CoreError> {
     if found <= 5 {
         raw = v5_to_v6(raw);
     }
-    if found <= 6 {
-        raw["schema_version"] = Value::from(7);
+    // v6 → v7 and v7 → v8 only add optional data: the version number is all that changes.
+    if found <= 7 {
+        raw["schema_version"] = Value::from(8);
     }
     Ok(raw)
 }
@@ -702,6 +709,67 @@ mod tests {
         bad.constraints.clearance_matrix[0].clearance = 0;
         let Err(CoreError::Integrity(problems)) = from_json(&to_json(&bad)) else {
             panic!("integrity must refuse the rule data");
+        };
+        assert_eq!(problems.len(), 2, "{problems:?}");
+    }
+
+    /// v7 → v8 (ADR-0055): a v7 file loads with nothing declared, a project without v8 data
+    /// saves without the new keys, a declared set round-trips, and bad values fail integrity.
+    #[test]
+    fn v8_engineering_inputs_migrate_and_round_trip() {
+        use crate::{DiffPairRule, Enclosure, ViaSpanRule};
+        let plain = Project::new("v7-board");
+        let json = to_json(&plain);
+        for k in [
+            "diff_pairs",
+            "via_spans",
+            "target_z0_ohm",
+            "ambient_temp_c",
+            "via_plating_um",
+            "net_max_drop_v",
+            "part_dissipation_w",
+            "insulation",
+            "enclosure",
+        ] {
+            assert!(!json.contains(k), "undeclared {k} must not be written");
+        }
+        let mut v: Value = serde_json::from_str(&json).unwrap();
+        v["schema_version"] = Value::from(7);
+        let p = from_json(&v.to_string()).expect("v7 project loads");
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
+        assert_eq!(p, plain);
+
+        let mut q = Project::new("declared");
+        let c = &mut q.constraints;
+        c.default_class.target_z0_ohm = Some(50.0);
+        c.diff_pairs.push(DiffPairRule {
+            positive: "USB_DP".into(),
+            negative: "USB_DN".into(),
+            width: None,
+            gap: Some(150_000),
+            target_zdiff_ohm: Some(90.0),
+            zdiff_tolerance_pct: None,
+            max_skew: Some(100_000),
+        });
+        c.via_spans.push(ViaSpanRule {
+            from: CopperLayer::Top,
+            to: CopperLayer::Bottom,
+            drill: 300_000,
+            diameter: 600_000,
+        });
+        c.via_plating_um = Some(25.0);
+        c.part_dissipation_w.insert("U1".into(), 0.25);
+        c.enclosure = Some(Enclosure::default());
+        let a = to_json(&q);
+        let back = from_json(&a).expect("declared project loads");
+        assert_eq!(back, q);
+        assert_eq!(a, to_json(&back));
+
+        let mut bad = q.clone();
+        bad.constraints.diff_pairs[0].negative = "USB_DP".into();
+        bad.constraints.default_class.target_z0_ohm = Some(-1.0);
+        let Err(CoreError::Integrity(problems)) = from_json(&to_json(&bad)) else {
+            panic!("integrity must refuse the v8 data");
         };
         assert_eq!(problems.len(), 2, "{problems:?}");
     }
