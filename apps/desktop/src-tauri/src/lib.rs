@@ -16,6 +16,7 @@
 pub mod ai;
 pub mod catalogue;
 pub mod eco;
+pub mod home;
 pub mod kicad;
 pub mod libcatalog;
 pub mod libstore;
@@ -1327,7 +1328,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 86] = [
+pub const IPC_COMMANDS: [&str; 91] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -1414,6 +1415,11 @@ pub const IPC_COMMANDS: [&str; 86] = [
     "resource_profile",
     "performance_settings",
     "set_performance_settings",
+    "home_project_facts",
+    "home_default_dir",
+    "home_suggest_folder",
+    "create_project_with_brief",
+    "create_sample_project",
 ];
 
 /// Tauri command wrappers: argument decoding only, no logic.
@@ -1904,6 +1910,11 @@ pub fn run() {
             resources::cmd::resource_profile,
             resources::cmd::performance_settings,
             resources::cmd::set_performance_settings,
+            home::cmd::home_project_facts,
+            home::cmd::home_default_dir,
+            home::cmd::home_suggest_folder,
+            home::cmd::create_project_with_brief,
+            home::cmd::create_sample_project,
         ])
         .build(tauri::generate_context!())
         .expect("EAK desktop failed to start")
