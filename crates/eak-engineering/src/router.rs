@@ -37,21 +37,23 @@
 //!   layers, internal on inner layers); a connection whose width does not fit fails and says
 //!   why, it is never necked below its current-sized width.
 //!
-//! The exact check applies the DRC's own rules: `clearance::required` (DRC-002), the clearance
-//! matrix, board edge (DRC-005), copper-to-hole (DRC-018), hole-to-hole (DRC-019), keep-outs
-//! (DRC-021) and constraint-region track widths (DRC-022). The router is still a heuristic: whether
+//! The exact check applies the DRC's own rules: `clearance::required` (DRC-002, with the
+//! declared insulation spacing), the clearance matrix, board edge (DRC-005), copper-to-hole
+//! (DRC-018), hole-to-hole (DRC-019), keep-outs (DRC-021) and constraint-region track widths
+//! (DRC-022). The router is still a heuristic: whether
 //! the resulting board is electrically or manufacturing correct is decided afterwards by
 //! `eak-validation` (DRC, connectivity), never here.
 
 use crate::board::{BoardGeometry, Hole};
 use crate::clearance;
 use crate::copper::{distance, CopperItem, Core, ItemKind, Shape};
-use crate::ipc::{self, ClearanceCondition};
 use crate::routing_intel::{
     self as intel, CongestionMap, Hotspot, NetSpec, PassRecord, Stagnation,
 };
 use eak_core::geom::{point_in_polygon, point_segment_distance, segment_segment_distance};
-use eak_core::{CopperLayer, LayerKind, Nm, ObjectClass, Point, Project, Rect, RegionObject};
+use eak_core::{
+    Constraints, CopperLayer, LayerKind, Nm, ObjectClass, Point, Project, Rect, RegionObject,
+};
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, VecDeque};
@@ -67,13 +69,35 @@ pub struct RoutedTrack {
     pub net: String,
 }
 
-/// A via the router or the stitcher places: always a through via (top to bottom).
+/// A via the router or the stitcher places: a through via (top to bottom), or a blind or buried
+/// via of an allowed `Constraints::via_spans` span where a through via does not fit.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoutedVia {
     pub position: Point,
     pub drill: Nm,
     pub diameter: Nm,
     pub net: String,
+    #[serde(default = "top_layer")]
+    pub from: CopperLayer,
+    #[serde(default = "bottom_layer")]
+    pub to: CopperLayer,
+}
+
+fn top_layer() -> CopperLayer {
+    CopperLayer::Top
+}
+fn bottom_layer() -> CopperLayer {
+    CopperLayer::Bottom
+}
+
+/// An allowed blind/buried via span on the grid: stack-up planes `lo..=hi` (not the full stack)
+/// and its size, raised to the board minimum drill and annular ring.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SpanRule {
+    lo: usize,
+    hi: usize,
+    drill: Nm,
+    diameter: Nm,
 }
 
 /// What one routing pass achieved.
@@ -177,8 +201,13 @@ struct Grid {
     rows: usize,
     /// One plane per stack-up layer, top to bottom.
     owner: Vec<Vec<u32>>,
-    /// Cells where no via may be drilled (keep-outs, hole-to-hole spacing).
+    /// Cells where no via may be drilled (all-layer keep-outs, hole-to-hole spacing).
     no_via: Vec<bool>,
+    /// Per plane: cells a via may not touch there (keep-outs limited to some layers), so a
+    /// blind/buried via that does not reach those layers may still sit there.
+    no_via_on: Vec<Vec<bool>>,
+    /// Allowed blind/buried spans, shortest first (empty = through vias only).
+    spans: Vec<SpanRule>,
 }
 
 impl Grid {
@@ -210,6 +239,8 @@ impl Grid {
             rows: self.rows,
             owner: vec![vec![FREE; n]; self.owner.len()],
             no_via: vec![false; n],
+            no_via_on: vec![vec![false; n]; self.owner.len()],
+            spans: self.spans.clone(),
         }
     }
     /// Cells whose centre lies in `shape` grown by `inflate`.
@@ -251,16 +282,30 @@ impl Grid {
     /// A through via of `net` may sit at cell (c, r): drilling allowed and every layer free
     /// here and around (a via is larger than a track).
     fn via_ok(&self, c: usize, r: usize, net: u32) -> bool {
-        !self.no_via[self.idx(c, r)]
+        self.via_ok_on(c, r, net, 0, self.owner.len() - 1)
+    }
+    /// As `via_ok`, for a via that only spans planes `lo..=hi`.
+    fn via_ok_on(&self, c: usize, r: usize, net: u32, lo: usize, hi: usize) -> bool {
+        let i = self.idx(c, r);
+        !self.no_via[i]
+            && (lo..=hi).all(|l| !self.no_via_on[l][i])
             && (-1i64..=1).all(|dr| {
                 (-1i64..=1).all(|dc| {
                     let (x, y) = (c as i64 + dc, r as i64 + dr);
                     x >= 0 && y >= 0 && x < self.cols as i64 && y < self.rows as i64 && {
                         let j = self.idx(x as usize, y as usize);
-                        (0..self.owner.len()).all(|l| self.passable(l, j, net))
+                        (lo..=hi).all(|l| self.passable(l, j, net))
                     }
                 })
             })
+    }
+    /// The shortest allowed blind/buried span joining planes `a` and `b` that fits at (c, r).
+    fn span_fits(&self, c: usize, r: usize, net: u32, a: usize, b: usize) -> Option<SpanRule> {
+        let (lo, hi) = (a.min(b), a.max(b));
+        self.spans
+            .iter()
+            .find(|s| s.lo <= lo && hi <= s.hi && self.via_ok_on(c, r, net, s.lo, s.hi))
+            .copied()
     }
 }
 
@@ -315,6 +360,8 @@ struct Placed {
     via_diameter: Nm,
     segs: Vec<(usize, Point, Point)>,
     vias: Vec<Point>,
+    /// Blind/buried vias (where a through via did not fit) and their span.
+    blind: Vec<(Point, SpanRule)>,
     shapes: Vec<(usize, Shape)>,
     /// Placed by the coupled pair router; never ripped up alone (its partner would lose it).
     pair: bool,
@@ -371,6 +418,10 @@ struct Env<'a> {
     via_keepouts: &'a [KeepOut],
     /// Grid inflation per plane: largest clearance + half the widest track on that layer + margin.
     inflate: Vec<f64>,
+    /// Per-plane inflation of the nets that need less than `inflate` (own spacing and width).
+    own_inflate: &'a BTreeMap<String, Vec<f64>>,
+    /// Discretisation margin added to every inflation.
+    margin: f64,
     /// Minimum drill-edge to drill-edge spacing (DRC-019).
     hole_min: f64,
     /// Grid inflation of a drill so another via drill keeps `hole_min`.
@@ -427,6 +478,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
     let cols = (bb.width() / pitch) as usize + 1;
     let rows = (bb.height() / pitch) as usize + 1;
     let n = cols * rows;
+    let spans = span_rules(c, &layers);
     let mut base = Grid {
         origin: bb.min,
         pitch,
@@ -434,6 +486,8 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         rows,
         owner: vec![vec![FREE; n]; nl],
         no_via: vec![false; n],
+        no_via_on: vec![vec![false; n]; nl],
+        spans: spans.clone(),
     };
 
     // Net ids.
@@ -485,37 +539,72 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         .values()
         .map(|s| s.via_diameter)
         .chain(std::iter::once(c.default_class.via_diameter))
+        .chain(spans.iter().map(|s| s.diameter))
         .max()
         .unwrap_or(600_000) as f64;
     let max_via_drill = specs
         .values()
         .map(|s| s.via_drill)
         .chain(std::iter::once(c.default_class.via_drill))
+        .chain(spans.iter().map(|s| s.drill))
         .max()
         .unwrap_or(300_000) as f64;
-    // shortcut: one grid inflation per layer for every net (the largest clearance anywhere and
-    // that layer's widest track), so one high-voltage or high-current net makes every net route
-    // with its spacing on that layer; per-net grids would recover the space when dense HV /
-    // high-current boards need it.
-    let vmax = c
-        .net_voltages_v
-        .values()
-        .fold(0.0f64, |a, &b| a.max(b.abs()));
-    let mut max_clear = specs
+    // Class, board-minimum and matrix rules: a floor under every net's spacing.
+    let floor = specs
         .values()
         .map(|s| s.clearance)
         .chain([c.default_class.clearance, c.min_clearance])
-        .chain(c.net_pair_rules.iter().map(|r| r.clearance))
         .chain(c.clearance_matrix.iter().map(|m| m.clearance))
         .max()
         .unwrap_or(200_000) as f64;
-    if c.net_voltages_v.len() >= 2 {
-        max_clear = max_clear.max(ipc::clearance_mm(vmax * 2.0, ClearanceCondition::B2) * 1e6);
-    }
+    // Spacing each net needs from any other net, per layer: the DRC-002 rule (classes, net
+    // pairs, declared voltages) and the declared insulation (`clearance::required`).
+    let nets: Vec<&String> = net_ids.keys().collect();
+    let clear_of: BTreeMap<String, Vec<f64>> = nets
+        .iter()
+        .map(|&n| {
+            let per_layer = layers
+                .iter()
+                .map(|&layer| {
+                    nets.iter()
+                        .filter(|&&m| m != n)
+                        .map(|m| clearance::required(c, n, m, layer))
+                        .fold(floor, f64::max)
+                })
+                .collect();
+            (n.clone(), per_layer)
+        })
+        .collect();
+    let max_clear = clear_of.values().flatten().copied().fold(floor, f64::max);
     let margin = pitch as f64 * 0.5;
+    // shortcut: one shared grid inflated for the most demanding net (largest spacing anywhere,
+    // widest track on the layer); a connection that finds no path on it retries once on a grid
+    // inflated for its own net (`own_grid`, rebuilt per retry). Per-net grids kept up to date
+    // through the pass would save the rebuild on boards with many such retries.
     let inflate: Vec<f64> = width_on
         .iter()
         .map(|w| max_clear + w / 2.0 + margin)
+        .collect();
+    // Nets that need less than the shared inflation on some layer: their own clearance and width.
+    let own_inflate: BTreeMap<String, Vec<f64>> = specs
+        .iter()
+        .filter_map(|(net, s)| {
+            let clear = clear_of.get(net)?;
+            let own: Vec<f64> = layers
+                .iter()
+                .enumerate()
+                .map(|(l, layer)| {
+                    let w = if layer.is_outer() {
+                        s.track_width
+                    } else {
+                        s.inner_track_width
+                    };
+                    clear[l] + w as f64 / 2.0 + margin
+                })
+                .collect();
+            let smaller = own.iter().zip(&inflate).any(|(o, sh)| *o < sh - 1.0);
+            smaller.then(|| (net.clone(), own))
+        })
         .collect();
 
     // Board edge keep-out: outline and cut-outs.
@@ -570,7 +659,16 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         }
         if reg.forbids(RegionObject::Vias) {
             let k = ko();
-            base.forbid_via(&k.shape, max_via_d / 2.0 + margin);
+            let grow = max_via_d / 2.0 + margin;
+            if k.layers.iter().all(|on| *on) {
+                base.forbid_via(&k.shape, grow);
+            } else {
+                for (l, _) in k.layers.iter().enumerate().filter(|(_, on)| **on) {
+                    for i in base.cells(&k.shape, grow) {
+                        base.no_via_on[l][i] = true;
+                    }
+                }
+            }
             via_keepouts.push(k);
         }
     }
@@ -662,6 +760,8 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         track_keepouts: &track_keepouts,
         via_keepouts: &via_keepouts,
         inflate,
+        own_inflate: &own_inflate,
+        margin,
         hole_min,
         via_hole_inflate,
     };
@@ -729,6 +829,18 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
                 drill: pl.via_drill,
                 diameter: pl.via_diameter,
                 net: pl.net.clone(),
+                from: layers[0],
+                to: layers[nl - 1],
+            });
+        }
+        for (v, s) in &pl.blind {
+            result.vias.push(RoutedVia {
+                position: *v,
+                drill: s.drill,
+                diameter: s.diameter,
+                net: pl.net.clone(),
+                from: layers[s.lo],
+                to: layers[s.hi],
             });
         }
         if let Some(s) = specs.get(&pl.net) {
@@ -746,10 +858,11 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         ));
     }
     if nl > 2 && !result.vias.is_empty() {
-        notes.insert(
-            "vias are through vias (F.Cu to B.Cu): EAK-IR has no allowed blind/buried span rule yet"
-                .into(),
-        );
+        notes.insert(if spans.is_empty() {
+            "vias are through vias: the board allows no blind/buried span (SetViaSpans)".into()
+        } else {
+            "vias are through vias, or an allowed blind/buried span (SetViaSpans) where a through via does not fit".into()
+        });
     }
     result.routed_connections = best.placed.iter().filter(|pl| pl.moved.is_none()).count();
     result.replaced_tracks = moved_ids(best.placed.iter()).into_iter().collect();
@@ -850,7 +963,7 @@ fn pair_reports(
         placed
             .iter()
             .filter(|pl| pl.net == net)
-            .map(|pl| pl.vias.len())
+            .map(|pl| pl.vias.len() + pl.blind.len())
             .sum()
     };
     let complete = |net: &str| -> bool {
@@ -957,16 +1070,48 @@ fn pad_layers(env: &Env, pt: Point, net: &str) -> Vec<usize> {
 }
 
 fn mark_placed(grid: &mut Grid, pl: &Placed, env: &Env) {
+    mark_placed_at(grid, pl, env, &env.inflate);
+}
+
+/// As `mark_placed`, with the copper grown by `inflate` (per plane).
+fn mark_placed_at(grid: &mut Grid, pl: &Placed, env: &Env, inflate: &[f64]) {
     for (l, s) in &pl.shapes {
-        grid.mark(*l, s, env.inflate[*l], pl.id);
+        grid.mark(*l, s, inflate[*l], pl.id);
     }
-    for v in &pl.vias {
+    let blind = pl.blind.iter().map(|(v, s)| (*v, s.drill));
+    for (v, d) in pl.vias.iter().map(|v| (*v, pl.via_drill)).chain(blind) {
         let drill = Shape {
-            core: Core::Segment(*v, *v),
-            radius: pl.via_drill as f64 / 2.0,
+            core: Core::Segment(v, v),
+            radius: d as f64 / 2.0,
         };
         grid.forbid_via(&drill, env.via_hole_inflate);
     }
+}
+
+/// The board's allowed blind/buried spans as grid plane ranges, shortest first. A rule naming a
+/// layer the stack-up does not have, or the whole stack (that is a through via), is skipped.
+fn span_rules(c: &Constraints, layers: &[CopperLayer]) -> Vec<SpanRule> {
+    let at = |l: CopperLayer| layers.iter().position(|x| *x == l);
+    let mut out: Vec<SpanRule> = c
+        .via_spans
+        .iter()
+        .filter_map(|s| {
+            let (a, b) = (at(s.from)?, at(s.to)?);
+            let (lo, hi) = (a.min(b), a.max(b));
+            if lo == hi || (lo == 0 && hi + 1 == layers.len()) {
+                return None;
+            }
+            let drill = s.drill.max(c.min_drill);
+            Some(SpanRule {
+                lo,
+                hi,
+                drill,
+                diameter: s.diameter.max(drill + 2 * c.min_annular_ring),
+            })
+        })
+        .collect();
+    out.sort_by_key(|s| (s.hi - s.lo, s.lo));
+    out
 }
 
 /// The base grid plus the given placed routes; the pre-existing tracks a shove moved are gone.
@@ -979,6 +1124,43 @@ fn grid_with<'a>(env: &Env, placed: impl Iterator<Item = &'a Placed>) -> Grid {
     let hidden = moved_ids(placed.iter().copied());
     if !hidden.is_empty() {
         unhide(&mut g, env, &hidden, &placed);
+    }
+    g
+}
+
+/// The grid `net` sees when its own spacing and width (`inflate`, per plane) are below the shared
+/// inflation: the same board edge, keep-outs, drills and via rules, with fixed copper and the
+/// `placed` routes grown for this net only. Pre-existing tracks a shove moved are left out.
+fn own_grid(env: &Env, net: &str, inflate: &[f64], placed: &[Placed]) -> Grid {
+    let mut g = env.base.blank();
+    g.no_via.clone_from(&env.base.no_via);
+    g.no_via_on.clone_from(&env.base.no_via_on);
+    for (i, _) in env.outside.iter().enumerate().filter(|(_, o)| **o) {
+        for plane in g.owner.iter_mut() {
+            plane[i] = MULTI;
+        }
+    }
+    let spec = &env.specs[net];
+    for k in env.track_keepouts {
+        for (l, layer) in env.layers.iter().enumerate().filter(|(l, _)| k.layers[*l]) {
+            let w = if layer.is_outer() {
+                spec.track_width
+            } else {
+                spec.inner_track_width
+            };
+            g.mark(l, &k.shape, w as f64 / 2.0 + env.margin, MULTI);
+        }
+    }
+    let hidden = moved_ids(placed.iter());
+    let stack = &env.p.pcb.board.stackup;
+    for it in env.geo.copper.iter().filter(|it| !is_hidden(it, &hidden)) {
+        let id = env.net_ids.get(&it.net).copied().unwrap_or(MULTI);
+        if let Some(l) = stack.index_of(it.layer) {
+            g.mark(l, &it.shape, inflate[l], id);
+        }
+    }
+    for pl in placed {
+        mark_placed_at(&mut g, pl, env, inflate);
     }
     g
 }
@@ -1203,7 +1385,7 @@ fn run_pass(env: &Env, conns: &[Conn], key: &[i64]) -> PassOutcome {
         .flat_map(|pl| pl.segs.iter())
         .map(|(_, a, b)| a.dist(*b) as i64)
         .sum();
-    let vias = placed.iter().map(|pl| pl.vias.len()).sum();
+    let vias = placed.iter().map(|pl| pl.vias.len() + pl.blind.len()).sum();
     PassOutcome {
         placed,
         failed,
@@ -1435,6 +1617,7 @@ fn shove(
         via_diameter: spec.via_diameter,
         segs,
         vias,
+        blind: vec![],
         shapes,
         pair: false,
         moved: None,
@@ -1459,6 +1642,7 @@ fn shove(
             via_diameter: 0,
             segs,
             vias: vec![],
+            blind: vec![],
             pair: false,
             moved: Some(s.id),
         });
@@ -1503,19 +1687,35 @@ fn attempt(
     let spec = &env.specs[&conn.net];
     let la = pad_layers(env, conn.a, &conn.net);
     let lb = pad_layers(env, conn.b, &conn.net);
-    let Some(path) = astar(
-        grid,
-        id,
-        (conn.a, &la),
-        (conn.b, &lb),
-        env.routable,
-        env.opts,
-        costs,
-    ) else {
-        // Explained once, on the final board, for connections that stay unrouted (`route`).
-        return Err(NO_PATH.into());
+    let search = |g: &Grid| {
+        astar(
+            g,
+            id,
+            (conn.a, &la),
+            (conn.b, &lb),
+            env.routable,
+            env.opts,
+            costs,
+        )
     };
-    let (segs, vias) = path_to_segments(grid, &path, conn.a, conn.b);
+    // The shared grid is inflated for the most demanding net; a net that needs less (a
+    // fine-pitch escape next to a wide power net) retries on a grid inflated for itself.
+    let own;
+    let (grid, path) = match search(grid) {
+        Some(path) => (grid, path),
+        None => {
+            // Explained once, on the final board, for connections that stay unrouted (`route`).
+            let Some(inf) = env.own_inflate.get(&conn.net) else {
+                return Err(NO_PATH.into());
+            };
+            own = own_grid(env, &conn.net, inf, placed);
+            match search(&own) {
+                Some(path) => (&own, path),
+                None => return Err(NO_PATH.into()),
+            }
+        }
+    };
+    let (segs, mut vias) = path_to_segments(grid, &path, conn.a, conn.b);
     let widths: Vec<Nm> = env
         .layers
         .iter()
@@ -1527,8 +1727,43 @@ fn attempt(
             }
         })
         .collect();
-    let shapes = shapes_for(&segs, &vias, &widths, spec.via_diameter, env.layers.len());
-    if let Some(v) = violation(env, &shapes, &vias, spec.via_drill, &conn.net, placed) {
+    // A layer change a through via cannot take uses the shortest allowed span that fits there.
+    let blind: Vec<(Point, SpanRule)> = hops(grid, &path)
+        .into_iter()
+        .filter_map(|(pt, lo, hi)| {
+            let (c, r) = grid.cell_of(pt);
+            if grid.via_ok(c, r, id) {
+                return None;
+            }
+            grid.span_fits(c, r, id, lo, hi).map(|s| (pt, s))
+        })
+        .collect();
+    vias.retain(|v| !blind.iter().any(|(b, _)| b == v));
+    let mut shapes = shapes_for(&segs, &vias, &widths, spec.via_diameter, env.layers.len());
+    for (v, s) in &blind {
+        for l in s.lo..=s.hi {
+            shapes.push((
+                l,
+                Shape {
+                    core: Core::Segment(*v, *v),
+                    radius: s.diameter as f64 / 2.0,
+                },
+            ));
+        }
+    }
+    // shortcut: hole spacing of this route's vias is checked at its largest drill (exact for
+    // through-only routes, conservative when blind and through vias mix); per-via drills in
+    // `violation` would recover that margin.
+    let drills: Vec<Point> = vias
+        .iter()
+        .copied()
+        .chain(blind.iter().map(|b| b.0))
+        .collect();
+    let drill = blind
+        .iter()
+        .map(|b| b.1.drill)
+        .fold(spec.via_drill, Nm::max);
+    if let Some(v) = violation(env, &shapes, &drills, drill, &conn.net, placed) {
         return Err(format!("CLEARANCE_CONFLICT: {v}"));
     }
     Ok(Placed {
@@ -1540,10 +1775,32 @@ fn attempt(
         via_diameter: spec.via_diameter,
         segs,
         vias,
+        blind,
         shapes,
         pair: false,
         moved: None,
     })
+}
+
+/// Layer changes along a grid path: (via point, lowest plane, highest plane), consecutive
+/// changes at one cell merged, matching the vias of `path_to_segments`.
+fn hops(grid: &Grid, path: &[(usize, usize, usize)]) -> Vec<(Point, usize, usize)> {
+    let mut out: Vec<(Point, usize, usize)> = vec![];
+    for w in path.windows(2) {
+        let ((la, c, r), (lb, _, _)) = (w[0], w[1]);
+        if la == lb {
+            continue;
+        }
+        let pt = grid.center(c, r);
+        match out.last_mut() {
+            Some(h) if h.0 == pt => {
+                h.1 = h.1.min(la.min(lb));
+                h.2 = h.2.max(la.max(lb));
+            }
+            _ => out.push((pt, la.min(lb), la.max(lb))),
+        }
+    }
+    out
 }
 
 fn at(env: &Env, l: usize, pt: Point) -> String {
@@ -1613,7 +1870,9 @@ fn explain_no_path(
         let mut prev_layer = None;
         for &(l, c, r) in path {
             let pt = grid.center(c, r);
-            let why = if prev_layer.is_some_and(|pl| pl != l) && !grid.via_ok(c, r, id) {
+            let why = if prev_layer.is_some_and(|pl| {
+                pl != l && !grid.via_ok(c, r, id) && grid.span_fits(c, r, id, pl, l).is_none()
+            }) {
                 Some(format!(
                     "no via fits at {}: {}",
                     at(env, l, pt),
@@ -1983,12 +2242,9 @@ fn violation_hiding(
         .map(|h| (h.center, h.drill as f64 / 2.0, h.label.clone()))
         .collect();
     for pl in placed {
-        for v in &pl.vias {
-            drills.push((
-                *v,
-                pl.via_drill as f64 / 2.0,
-                format!("a new {} via", pl.net),
-            ));
+        let blind = pl.blind.iter().map(|(v, s)| (*v, s.drill));
+        for (v, d) in pl.vias.iter().map(|v| (*v, pl.via_drill)).chain(blind) {
+            drills.push((v, d as f64 / 2.0, format!("a new {} via", pl.net)));
         }
     }
     for (k, v) in vias.iter().enumerate() {
@@ -2159,10 +2415,13 @@ fn astar(
             let step = base_step + costs.extra(l, ni);
             relax(state(l, ni), step, &mut heap);
         }
-        // Layer change: one through via, straight to any other routing layer.
-        if routable.len() > 1 && grid.via_ok(c, r, net) {
+        // Layer change to any other routing layer: a through via where it fits, else an allowed blind/buried span joining both planes.
+        if routable.len() > 1 {
+            let through = grid.via_ok(c, r, net);
             for &ol in routable.iter().filter(|&&ol| ol != l) {
-                relax(state(ol, i), opts.via_cost + costs.extra(ol, i), &mut heap);
+                if through || grid.span_fits(c, r, net, l, ol).is_some() {
+                    relax(state(ol, i), opts.via_cost + costs.extra(ol, i), &mut heap);
+                }
             }
         }
     }
@@ -2189,6 +2448,8 @@ mod tests {
             rows,
             owner: vec![vec![FREE; cols * rows]; layers],
             no_via: vec![false; cols * rows],
+            no_via_on: vec![vec![false; cols * rows]; layers],
+            spans: vec![],
         }
     }
 
@@ -2294,6 +2555,110 @@ mod tests {
         );
         let (_, vias) = path_to_segments(&g, &path, Point::new(0, 2_000), Point::new(8_000, 2_000));
         assert_eq!(vias.len(), 2, "down and back up");
+    }
+
+    #[test]
+    fn a_blind_span_crosses_where_no_through_via_fits() {
+        // Top (0) has a wall at column 4; Bottom (3) is taken by another net everywhere, so no
+        // through via fits anywhere. Only a Top-In1 blind span lets the route cross on In1.
+        let mut g = grid(9, 5, 4);
+        for i in 0..g.cols * g.rows {
+            g.owner[3][i] = MULTI;
+        }
+        for r in 0..5 {
+            let i = g.idx(4, r);
+            g.owner[0][i] = MULTI;
+        }
+        let pen = no_costs(4, 45);
+        let costs = Costs {
+            congestion: &pen,
+            affinity: None,
+        };
+        let opts = RouterOptions::default();
+        let route = |g: &Grid| {
+            astar(
+                g,
+                1,
+                (Point::new(0, 2_000), &[0]),
+                (Point::new(8_000, 2_000), &[0]),
+                &[0, 1],
+                &opts,
+                &costs,
+            )
+        };
+        assert!(route(&g).is_none(), "through vias only: no way across");
+        let blind = SpanRule {
+            lo: 0,
+            hi: 1,
+            drill: 200,
+            diameter: 450,
+        };
+        g.spans = vec![blind];
+        let path = route(&g).expect("the Top-In1 span crosses");
+        assert!(path.iter().any(|&(l, _, _)| l == 1), "crosses on In1");
+        let hops = hops(&g, &path);
+        assert_eq!(hops.len(), 2, "down and up again");
+        for (pt, lo, hi) in hops {
+            let (c, r) = g.cell_of(pt);
+            assert!(!g.via_ok(c, r, 1));
+            assert_eq!((lo, hi), (0, 1));
+            assert_eq!(g.span_fits(c, r, 1, lo, hi), Some(blind));
+            assert_eq!(
+                g.span_fits(c, r, 1, 0, 2),
+                None,
+                "the span does not reach In2"
+            );
+        }
+    }
+
+    #[test]
+    fn a_via_keepout_on_some_layers_only_blocks_vias_that_reach_them() {
+        let mut g = grid(3, 3, 4);
+        let i = g.idx(1, 1);
+        g.no_via_on[3][i] = true;
+        assert!(
+            !g.via_ok(1, 1, 1),
+            "a through via reaches the bottom keep-out"
+        );
+        assert!(g.via_ok_on(1, 1, 1, 0, 1), "a Top-In1 blind via does not");
+        g.no_via[i] = true;
+        assert!(
+            !g.via_ok_on(1, 1, 1, 0, 1),
+            "an all-layer keep-out blocks every via"
+        );
+    }
+
+    #[test]
+    fn span_rules_skip_through_and_unknown_layers_and_keep_board_minimums() {
+        let mut c = Constraints::default();
+        let rule = |from, to, drill, diameter| eak_core::ViaSpanRule {
+            from,
+            to,
+            drill,
+            diameter,
+        };
+        c.via_spans = vec![
+            rule(CopperLayer::Inner(1), CopperLayer::Bottom, 300_000, 600_000),
+            rule(CopperLayer::Top, CopperLayer::Bottom, 300_000, 600_000),
+            rule(CopperLayer::Top, CopperLayer::Inner(1), 100_000, 200_000),
+            rule(CopperLayer::Top, CopperLayer::Inner(5), 300_000, 600_000),
+        ];
+        let layers = [
+            CopperLayer::Top,
+            CopperLayer::Inner(1),
+            CopperLayer::Inner(2),
+            CopperLayer::Bottom,
+        ];
+        let s = span_rules(&c, &layers);
+        assert_eq!(
+            s.len(),
+            2,
+            "through and unknown-layer rules are skipped: {s:?}"
+        );
+        assert_eq!((s[0].lo, s[0].hi), (0, 1), "shortest first");
+        assert_eq!(s[0].drill, c.min_drill.max(100_000));
+        assert!(s[0].diameter >= s[0].drill + 2 * c.min_annular_ring);
+        assert_eq!((s[1].lo, s[1].hi), (1, 3));
     }
 
     #[test]

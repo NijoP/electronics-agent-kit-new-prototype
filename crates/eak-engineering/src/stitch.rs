@@ -280,6 +280,8 @@ pub fn plan(p: &Project, net: Option<&str>) -> StitchPlan {
                 drill: spec.via_drill,
                 diameter: spec.via_diameter,
                 net: net.clone(),
+                from: CopperLayer::Top,
+                to: CopperLayer::Bottom,
             });
         };
 

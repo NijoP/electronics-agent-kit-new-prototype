@@ -330,3 +330,72 @@ fn the_same_board_routes_to_the_same_copper_every_run() {
         );
     }
 }
+
+/// Blind via span (schema v8 `SetViaSpans`): a via keep-out on the bottom layer covers the board,
+/// so no through via may be placed (it would reach the bottom), and a top-layer wall stands
+/// between the parts. The only way across is In1, reached by the allowed Top-In1 blind span;
+/// without that rule SIG stays open.
+#[test]
+fn a_blind_span_is_used_where_no_through_via_fits() {
+    let (e, warnings) = build("route_blind_span", 0);
+    eprintln!("{warnings:#?}");
+    let p = e.project();
+    let sig: Vec<_> = p.pcb.vias.values().filter(|v| v.net == "SIG").collect();
+    assert!(sig.len() >= 2, "SIG goes down to In1 and back: {sig:?}");
+    for v in &sig {
+        assert_eq!(
+            (v.from, v.to),
+            (CopperLayer::Top, CopperLayer::Inner(1)),
+            "{v:?}"
+        );
+    }
+    assert!(p
+        .pcb
+        .tracks
+        .values()
+        .any(|t| t.net == "SIG" && t.layer == CopperLayer::Inner(1)));
+    evidence("route_blind_span", p, &warnings, Some(2), 2);
+    assert_all_connected(p);
+    assert_drc_clean(p);
+
+    // Same board without the span rule: through vias only, and none fits for SIG.
+    let (mut e, _) = build("route_blind_span", 2);
+    let _ = exec(&mut e, json!({"type": "AutoRoute"}));
+    let conn = eak_engineering::copper::analyse(e.project());
+    assert!(
+        conn.net_groups.get("SIG").is_some_and(|g| *g > 1),
+        "SIG cannot cross without a blind span"
+    );
+}
+
+/// Per-net inflation: a 3 A +5V rail (about 1.3 mm wide) inflates the shared grid by more than
+/// the 0.67 mm gap between the SOIC-8 pads, so on that grid every pad's own cell is blocked and
+/// the escapes found no path (NO_LEGAL_PATH). Each signal net now retries on a grid inflated for
+/// its own clearance and width, and the board routes complete and DRC clean.
+#[test]
+fn fine_pitch_escapes_route_next_to_a_wide_power_net() {
+    let (e, warnings) = build("route_fine_pitch", 0);
+    eprintln!("{warnings:#?}");
+    let p = e.project();
+    assert!(
+        !warnings.iter().any(|w| w.starts_with("unrouted ")),
+        "{warnings:#?}"
+    );
+    let width = |net: &str| {
+        p.pcb
+            .tracks
+            .values()
+            .filter(|t| t.net == net)
+            .map(|t| t.width)
+            .max()
+            .unwrap_or(0)
+    };
+    assert!(width("+5V") >= 1_000_000, "+5V is current-sized");
+    for net in ["RST", "MOSI", "MISO", "SCK"] {
+        let w = width(net);
+        assert!(w > 0 && w < 500_000, "{net} escapes at its own width: {w}");
+    }
+    evidence("route_fine_pitch", p, &warnings, None, 0);
+    assert_all_connected(p);
+    assert_drc_clean(p);
+}
