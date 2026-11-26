@@ -3155,6 +3155,10 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     why.join("; ")
                 )));
             }
+            // Push-and-shove moved these aside: their new polylines are among `res.tracks`.
+            for id in &res.replaced_tracks {
+                p.pcb.tracks.remove(id);
+            }
             for t in res.tracks {
                 let id = new_id("trk");
                 p.pcb.tracks.insert(
@@ -3192,6 +3196,12 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 res.routed_connections,
                 res.failed_connections.len()
             ));
+            if !res.replaced_tracks.is_empty() {
+                warnings.push(format!(
+                    "router: {} lower-priority track(s) pushed aside (push-and-shove)",
+                    res.replaced_tracks.len()
+                ));
+            }
             if res.passes.len() > 1 || res.ripups > 0 || res.stagnated {
                 warnings.push(format!(
                     "router: {} pass(es), {} rip-up(s) of lower-priority routes{}",

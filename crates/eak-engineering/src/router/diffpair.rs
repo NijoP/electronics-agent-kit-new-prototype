@@ -67,9 +67,11 @@ pub(super) fn resolve(p: &Project, rule: &DiffPairRule) -> Result<Coupled, Strin
                     ));
                     value
                 }
-                Sizing::Unknown { missing } => return Err(format!(
+                Sizing::Unknown { missing } => {
+                    return Err(format!(
                     "gap undeclared and not derivable from the {z} ohm target: missing {missing}"
-                )),
+                ))
+                }
             }
         }
         (None, None) => {
@@ -185,26 +187,9 @@ fn pair_grid(
     ends: [Point; 2],
     keep: f64,
 ) -> Grid {
-    let mut g = env.base.blank();
-    for (i, &out) in env.outside.iter().enumerate() {
-        if out {
-            for o in g.owner.iter_mut() {
-                o[i] = MULTI;
-            }
-        }
-    }
-    let remap = |id: u32| if id == idn { idp } else { id };
-    for it in env.copper {
-        let id = env.net_ids.get(&it.net).copied().unwrap_or(MULTI);
-        if let Some(l) = layer_index(it.layer) {
-            g.mark(l, &it.shape, env.inflate, remap(id));
-        }
-    }
-    for pl in placed {
-        for (l, s) in &pl.shapes {
-            g.mark(*l, s, env.inflate, remap(pl.id));
-        }
-    }
+    let refs: Vec<&Placed> = placed.iter().collect();
+    let hidden = moved_ids(placed.iter());
+    let mut g = fresh_grid(env, &refs, &hidden, |id| if id == idn { idp } else { id });
     let near_end: Vec<bool> = (0..g.cols * g.rows)
         .map(|i| {
             let p = g.center(i % g.cols, i / g.cols);
@@ -420,9 +405,20 @@ pub(super) fn attempt(
     let c_pair = clearance::required(&env.p.constraints, &cp.net, &cn.net, CopperLayer::Top);
     // Vias side by side need their own clearance, so the members spread at a layer change.
     let via_half = o.max((spec.via_diameter as f64 + c_pair) / 2.0 + 1_000.0);
-    let keep = cp.a.dist(ca).max(cp.b.dist(cb)) + o + 2.0 * pitch;
+    // Break out of each end perpendicular to its pad axis, towards the other end: the members
+    // then leave their pads side by side instead of one running over its partner's pad.
+    let reach = 2.0 * o + 2.0 * pitch;
+    let keep = cp.a.dist(ca).max(cp.b.dist(cb)) + o + reach + 2.0 * pitch;
     let k = (o / pitch).ceil() as usize;
     let grid = pair_grid(env, placed, (idp, idn), k, [ca, cb], keep);
+    let breakout = |m: Point, pad: Point, other: Point| -> Point {
+        let n = left(unit(m, pad));
+        let towards = (other.x - m.x) as f64 * n.0 + (other.y - m.y) as f64 * n.1;
+        let raw = shift(m, n, if towards >= 0.0 { reach } else { -reach });
+        let (c, r) = grid.cell_of(raw);
+        grid.center(c, r)
+    };
+    let (ba, bb) = (breakout(ca, cp.a, cb), breakout(cb, cp.b, ca));
     let common = |x: Point, y: Point| -> Vec<usize> {
         let ly = pad_layers(env.copper, y, &cn.net);
         pad_layers(env.copper, x, &cp.net)
@@ -434,9 +430,13 @@ pub(super) fn attempt(
     if la.is_empty() || lb.is_empty() {
         return Err("the members' pads share no layer at one end".into());
     }
-    let path = astar(&grid, idp, ca, &la, cb, &lb, env.opts, costs)
+    let path = astar(&grid, idp, ba, &la, bb, &lb, env.opts, costs)
         .ok_or("NO_LEGAL_PATH: no corridor wide enough for both members")?;
-    let (centre, cvias) = path_to_segments(&grid, &path, ca, cb);
+    let (mut centre, cvias) = path_to_segments(&grid, &path, ba, bb);
+    let (l0, l1) = (path[0].0, path[path.len() - 1].0);
+    centre.insert(0, (l0, ca, ba));
+    centre.push((l1, bb, cb));
+    centre.retain(|(_, a, b)| a != b);
     if centre.is_empty() {
         return Err("the pair's ends coincide".into());
     }
@@ -527,6 +527,7 @@ pub(super) fn attempt(
         shapes: shapes(&m, k),
         note: None,
         pair: true,
+        moved: None,
     };
     Ok(PairRoute {
         placed: [make(0, ip, cp, idp), make(1, inn, cn, idn)],
