@@ -926,6 +926,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
+name = "eak-agents"
+version = "0.1.5"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "eak-core"
 version = "0.1.5"
 dependencies = [
@@ -939,6 +947,7 @@ dependencies = [
 name = "eak-desktop"
 version = "0.1.5"
 dependencies = [
+ "eak-agents",
  "eak-core",
  "eak-engineering",
  "eak-harness",

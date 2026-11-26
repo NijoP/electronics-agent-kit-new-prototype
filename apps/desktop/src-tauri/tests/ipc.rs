@@ -374,10 +374,16 @@ fn frontend_invokes_exactly_the_registered_commands() {
     };
     let mut ts = names("IPC_COMMANDS = [");
     ts.extend(names("TERMINAL_IPC = ["));
+    ts.extend(names("AGENT_IPC = ["));
     ts.sort();
     let mut rust: Vec<String> = IPC_COMMANDS.iter().map(|s| s.to_string()).collect();
     rust.extend(
         eak_desktop::terminal::TERMINAL_COMMANDS
+            .iter()
+            .map(|s| s.to_string()),
+    );
+    rust.extend(
+        eak_desktop::agents::AGENT_COMMANDS
             .iter()
             .map(|s| s.to_string()),
     );
