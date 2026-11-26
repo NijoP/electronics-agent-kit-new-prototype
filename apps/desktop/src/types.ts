@@ -225,6 +225,8 @@ export interface Project {
   id: Id;
   name: string;
   revision: number;
+  /** IR `requirements` (`AddRequirement`); absent in fixtures that predate this field here. */
+  requirements?: { id: Id; text: string }[];
   schematic: {
     sheets: Record<Id, Sheet>;
     symbols: Record<Id, SymbolInstance>;
