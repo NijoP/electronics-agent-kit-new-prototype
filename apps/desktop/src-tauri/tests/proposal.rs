@@ -111,6 +111,29 @@ fn the_person_reviews_exports_and_applies_a_proposal_as_one_undo_step() {
     );
     assert!(proposal_apply(&s, &pid, 1, None).is_err(), "applied twice");
     assert_eq!(proposal_list(&s).unwrap()[0]["status"], "applied");
+    // The activity timeline (ADR-0053) is read from the journals: the applied Batch under the
+    // agent's label with the object it changed, and the proposal's applied event.
+    let timeline = eak_desktop::proposal::activity_timeline(&s).unwrap();
+    let rev = timeline
+        .iter()
+        .find(|i| i.source == "revision" && i.kind == "Batch")
+        .expect("the applied Batch is a revision row");
+    assert_eq!(rev.actor, "agent:ipc-agent@sess-prop");
+    assert_eq!(
+        (rev.revision_before, rev.revision_after),
+        (Some(0), Some(1))
+    );
+    assert!(
+        rev.objects
+            .iter()
+            .any(|o| o.starts_with("schematic.symbols:")),
+        "{:?}",
+        rev.objects
+    );
+    assert!(timeline.iter().any(|i| i.source == "proposal"
+        && i.kind == "applied"
+        && i.proposal_id.as_deref() == Some(pid.as_str())));
+    assert!(timeline.windows(2).all(|w| w[0].ts_ms <= w[1].ts_ms));
     undo(&s, 1).unwrap();
     assert!(current_project(&s)
         .unwrap()

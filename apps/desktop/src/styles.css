@@ -534,6 +534,9 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .proposal-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .proposal-review section h4 { margin: var(--s-1) 0 var(--s-half); }
 .proposal-rationale, .proposal-findings { font-size: var(--fs-sm); }
+.activity-list { list-style: none; padding: 0; margin: 0 0 var(--s-1); font-size: var(--fs-sm); }
+.activity-list li { display: block; cursor: default; padding: var(--s-quarter) 0; border-bottom: 1px solid var(--line); }
+.activity-actions { display: inline-flex; gap: var(--s-half); margin-left: var(--s-1); }
 .eco-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .eco-table th, .eco-table td { text-align: left; padding: var(--s-quarter) var(--s-1); border-bottom: 1px solid var(--line); }
 .eco-table thead th { position: sticky; top: 0; background: var(--bg-raised); color: var(--fg-dim); font-weight: var(--fw-medium); }
