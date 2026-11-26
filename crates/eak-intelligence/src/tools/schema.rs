@@ -467,6 +467,16 @@ pub fn engineering_inputs() -> Value {
             ),
             ("insulation", nullable(insulation)),
             ("enclosure", nullable(enclosure)),
+            (
+                "return_via_max_distance",
+                nullable(nm(
+                    "largest distance from a high-speed layer change to its return via",
+                )),
+            ),
+            (
+                "plane_min_neck_width",
+                nullable(nm("narrowest allowed neck of a plane zone fill")),
+            ),
         ],
         &[],
     )

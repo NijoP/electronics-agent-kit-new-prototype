@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 9;
+pub const SCHEMA_VERSION: u32 = 10;
 
 pub type Id = String;
 
@@ -1138,6 +1138,13 @@ pub struct Constraints {
     /// Enclosure limits for mechanical checks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enclosure: Option<Enclosure>,
+    /// Largest distance from a declared high-speed layer change to the return via joining its
+    /// reference planes (schema v10, ADR-0059; DRC-030).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_via_max_distance: Option<Nm>,
+    /// Narrowest allowed neck of a plane zone's fill (schema v10, ADR-0059; DRC-031).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plane_min_neck_width: Option<Nm>,
 }
 
 /// Report severity a rule override may set (EasyEDA's ladder maps onto it: Fatal and Error
@@ -1364,6 +1371,8 @@ impl Default for Constraints {
             part_dissipation_w: BTreeMap::new(),
             insulation: None,
             enclosure: None,
+            return_via_max_distance: None,
+            plane_min_neck_width: None,
         }
     }
 }

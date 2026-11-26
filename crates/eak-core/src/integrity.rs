@@ -364,6 +364,12 @@ fn engineering_inputs(c: &crate::ir::Constraints) -> Vec<String> {
             e.push("altitude must not be negative".into());
         }
     }
+    if c.return_via_max_distance.is_some_and(|d| d <= 0) {
+        e.push("largest return-via distance must be positive".into());
+    }
+    if c.plane_min_neck_width.is_some_and(|w| w <= 0) {
+        e.push("plane neck width must be positive".into());
+    }
     if let Some(enc) = &c.enclosure {
         if enc.max_height_bottom.is_some_and(|h| h <= 0) {
             e.push("bottom-side height limit must be positive".into());

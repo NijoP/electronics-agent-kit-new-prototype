@@ -36,6 +36,10 @@
 //!   means empty: every requirement field UNKNOWN and no rails or interfaces declared, exactly the
 //!   v8 meaning (v8 recorded none). Only the version number changes; a v9 file is refused by v8
 //!   builds, which would silently drop the record.
+//! * v9 → v10 (ADR-0059): the reference-plane inputs `constraints.return_via_max_distance` and
+//!   `constraints.plane_min_neck_width` are new and absent means undeclared: DRC-030 and the plane
+//!   neck check are UNKNOWN, never PASS, exactly the v9 meaning. Only the version number changes; a
+//!   v10 file is refused by v9 builds, which would silently drop the declared limits.
 
 use crate::ir::{Stackup, FR4_ER, SCHEMA_VERSION};
 use crate::library::SymbolDef;
@@ -68,10 +72,9 @@ pub fn migrate(mut raw: Value) -> Result<Value, CoreError> {
     if found <= 5 {
         raw = v5_to_v6(raw);
     }
-    // v6 → v7, v7 → v8 and v8 → v9 only add optional data: the version number is all that
-    // changes.
-    if found <= 8 {
-        raw["schema_version"] = Value::from(9);
+    // v6 → v7 up to v9 → v10 only add optional data: the version number is all that changes.
+    if found <= 9 {
+        raw["schema_version"] = Value::from(10);
     }
     Ok(raw)
 }
@@ -865,5 +868,38 @@ mod tests {
     fn corrupt_file_fails_safely() {
         assert!(matches!(from_json("{not json"), Err(CoreError::Parse(_))));
         assert!(matches!(from_json("{}"), Err(CoreError::Parse(_))));
+    }
+
+    /// v9 → v10 (ADR-0059): a v9 file loads with both reference-plane limits undeclared, a
+    /// project without them saves without the keys, declared limits round-trip, and a limit that
+    /// is not positive fails integrity.
+    #[test]
+    fn v10_reference_plane_limits_migrate_and_round_trip() {
+        let plain = Project::new("v9-board");
+        let json = to_json(&plain);
+        for k in ["return_via_max_distance", "plane_min_neck_width"] {
+            assert!(!json.contains(k), "an undeclared {k} is not written");
+        }
+        let mut v: Value = serde_json::from_str(&json).unwrap();
+        v["schema_version"] = Value::from(9);
+        let p = from_json(&v.to_string()).expect("v9 project loads");
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
+        assert_eq!(p.constraints.return_via_max_distance, None);
+        assert_eq!(p.constraints.plane_min_neck_width, None);
+        assert_eq!(p, plain);
+
+        let mut q = Project::new("declared");
+        q.constraints.return_via_max_distance = Some(1_500_000);
+        q.constraints.plane_min_neck_width = Some(400_000);
+        let back = from_json(&to_json(&q)).expect("declared limits load");
+        assert_eq!(back, q);
+
+        let mut bad = q.clone();
+        bad.constraints.return_via_max_distance = Some(0);
+        bad.constraints.plane_min_neck_width = Some(-1);
+        let Err(CoreError::Integrity(problems)) = from_json(&to_json(&bad)) else {
+            panic!("integrity must refuse a limit that is not positive");
+        };
+        assert_eq!(problems.len(), 2, "{problems:?}");
     }
 }
