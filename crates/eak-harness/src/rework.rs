@@ -730,7 +730,11 @@ fn step_touches(step: &Value, idx: &Index) -> Result<Touches, String> {
         | "SetNetVoltage"
         | "SetRuleConfig"
         | "SetClearanceCell"
-        | "SetNetPairClearance" => {
+        | "SetNetPairClearance"
+        | "SetDiffPair"
+        | "DeleteDiffPair"
+        | "SetViaSpans"
+        | "SetEngineeringInputs" => {
             hit.insert("@constraints".into());
         }
         "SetManufacturing" => {

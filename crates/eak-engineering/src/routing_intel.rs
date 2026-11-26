@@ -40,7 +40,7 @@ pub struct Hotspot {
     pub utilization_pct: f64,
 }
 
-/// Fraction of each coarse cell (`block` x `block` router cells) that is blocked, per outer layer.
+/// Fraction of each coarse cell (`block` x `block` router cells) that is blocked, per copper layer.
 #[derive(Debug, Clone)]
 pub struct CongestionMap {
     block: usize,
@@ -48,21 +48,32 @@ pub struct CongestionMap {
     grid_rows: usize,
     cols: usize,
     rows: usize,
-    util: [Vec<f32>; 2],
+    layers: Vec<CopperLayer>,
+    util: Vec<Vec<f32>>,
+}
+
+/// Hotspot layer label: `top`, `bottom`, `in1` ...
+fn layer_label(l: CopperLayer) -> String {
+    match l {
+        CopperLayer::Top => "top".into(),
+        CopperLayer::Bottom => "bottom".into(),
+        CopperLayer::Inner(n) => format!("in{n}"),
+    }
 }
 
 impl CongestionMap {
-    /// `occupied[l][r * grid_cols + c]` is true when router cell (c, r) of layer `l` is blocked.
+    /// `occupied[l][r * grid_cols + c]` is true when router cell (c, r) of `layers[l]` is blocked.
     pub fn new(
         grid_cols: usize,
         grid_rows: usize,
         block: usize,
-        occupied: [&[bool]; 2],
+        occupied: &[&[bool]],
+        layers: &[CopperLayer],
     ) -> CongestionMap {
         let block = block.max(1);
         let cols = grid_cols.div_ceil(block).max(1);
         let rows = grid_rows.div_ceil(block).max(1);
-        let mut util = [vec![0f32; cols * rows], vec![0f32; cols * rows]];
+        let mut util = vec![vec![0f32; cols * rows]; occupied.len()];
         for (l, occ) in occupied.iter().enumerate() {
             let mut count = vec![0u32; cols * rows];
             let mut total = vec![0u32; cols * rows];
@@ -89,6 +100,7 @@ impl CongestionMap {
             grid_rows,
             cols,
             rows,
+            layers: layers.to_vec(),
             util,
         }
     }
@@ -98,12 +110,9 @@ impl CongestionMap {
         f64::from(self.util[layer][(r / self.block) * self.cols + c / self.block])
     }
 
-    /// Per router cell extra step cost, both layers (`[layer][r * grid_cols + c]`).
-    pub fn step_penalties(&self) -> [Vec<u8>; 2] {
-        let mut out = [
-            vec![0u8; self.grid_cols * self.grid_rows],
-            vec![0u8; self.grid_cols * self.grid_rows],
-        ];
+    /// Per router cell extra step cost, every layer (`[layer][r * grid_cols + c]`).
+    pub fn step_penalties(&self) -> Vec<Vec<u8>> {
+        let mut out = vec![vec![0u8; self.grid_cols * self.grid_rows]; self.util.len()];
         for (l, plane) in out.iter_mut().enumerate() {
             for r in 0..self.grid_rows {
                 for c in 0..self.grid_cols {
@@ -118,7 +127,7 @@ impl CongestionMap {
     pub fn hotspots(&self, n: usize, origin: Point, pitch: Nm) -> Vec<Hotspot> {
         // (utilisation, layer, coarse column, coarse row)
         let mut all: Vec<(f32, usize, usize, usize)> = vec![];
-        for l in 0..2 {
+        for l in 0..self.util.len() {
             for k in 0..self.cols * self.rows {
                 if self.util[l][k] > 0.0 {
                     all.push((self.util[l][k], l, k % self.cols, k / self.cols));
@@ -135,7 +144,10 @@ impl CongestionMap {
         all.into_iter()
             .take(n)
             .map(|(u, l, cx, cy)| Hotspot {
-                layer: if l == 0 { "top" } else { "bottom" }.into(),
+                layer: self
+                    .layers
+                    .get(l)
+                    .map_or_else(|| format!("layer{l}"), |&x| layer_label(x)),
                 center: Point::new(
                     origin.x + cx as Nm * span + span / 2,
                     origin.y + cy as Nm * span + span / 2,
@@ -259,7 +271,12 @@ const VIA_PLATING_MIL: f64 = 0.984;
 pub struct NetSpec {
     pub net: String,
     pub class: String,
+    /// Track width on the outer layers.
     pub track_width: Nm,
+    /// Track width on the inner signal layers (IPC-2221 internal; equal to `track_width` without
+    /// a declared current or without inner signal layers).
+    #[serde(default)]
+    pub inner_track_width: Nm,
     pub clearance: Nm,
     pub via_drill: Nm,
     pub via_diameter: Nm,
@@ -286,33 +303,51 @@ pub fn net_spec(p: &Project, net: &str) -> NetSpec {
     let c = &p.constraints;
     let class = c.class_for(net);
     let mut notes = vec![];
-    let mut width = class.track_width.max(c.min_track_width);
+    let class_width = class.track_width.max(c.min_track_width);
     let current = c.net_currents_a.get(net).copied().filter(|a| *a > 0.0);
-    let oz = p
-        .pcb
-        .board
-        .stackup
-        .copper_oz(CopperLayer::Top)
-        .unwrap_or(1.0);
-    match current {
-        Some(a) => match ipc::trace_width_mm(a, false, oz, c.temp_rise_c) {
+    let stack = &p.pcb.board.stackup;
+    // The thinnest copper of each group needs the widest track.
+    let thinnest = |outer: bool| {
+        stack
+            .layers
+            .iter()
+            .filter(|l| l.layer.is_outer() == outer && l.kind == eak_core::LayerKind::Signal)
+            .map(|l| l.copper_oz)
+            .reduce(f64::min)
+    };
+    let mut sized = |internal: bool, oz: Option<f64>| -> Nm {
+        let (Some(a), Some(oz)) = (current, oz) else {
+            return class_width;
+        };
+        let kind = if internal { "internal" } else { "external" };
+        match ipc::trace_width_mm(a, internal, oz, c.temp_rise_c) {
             Ok(mm) => {
                 let need = nm_ceil(mm);
-                if need > width {
+                if need > class_width {
                     notes.push(format!(
-                        "width raised {:.3} -> {:.3} mm for {a} A (IPC-2221 external, {oz} oz, {} C rise)",
-                        width as f64 / 1e6,
+                        "{kind} width raised {:.3} -> {:.3} mm for {a} A (IPC-2221 {kind}, {oz} oz, {} C rise)",
+                        class_width as f64 / 1e6,
                         need as f64 / 1e6,
                         c.temp_rise_c
                     ));
-                    width = need;
                 }
+                need.max(class_width)
             }
-            Err(e) => notes.push(format!("width not current-sized: {e}")),
-        },
-        None => notes.push(
+            Err(e) => {
+                notes.push(format!("{kind} width not current-sized: {e}"));
+                class_width
+            }
+        }
+    };
+    let width = sized(false, thinnest(true).or(Some(1.0)));
+    let inner_width = match thinnest(false) {
+        Some(oz) => sized(true, Some(oz)),
+        None => width,
+    };
+    if current.is_none() {
+        notes.push(
             "no declared current: class width kept (not current-sized; declare net_currents_a to size it)".into(),
-        ),
+        );
     }
     let drill = class.via_drill.max(c.min_drill);
     let diameter = class.via_diameter.max(drill + 2 * c.min_annular_ring);
@@ -346,6 +381,7 @@ pub fn net_spec(p: &Project, net: &str) -> NetSpec {
         net: net.into(),
         class: class.name.clone(),
         track_width: width,
+        inner_track_width: inner_width,
         clearance: class.clearance.max(c.min_clearance),
         via_drill: drill,
         via_diameter: diameter,
@@ -377,7 +413,7 @@ mod tests {
     fn hotspot_is_the_blocked_cell() {
         let blocked: Vec<bool> = (0..16).map(|i| i % 4 < 2 && i / 4 < 2).collect();
         let free = vec![false; 16];
-        let m = CongestionMap::new(4, 4, 2, [&blocked, &free]);
+        let m = CongestionMap::new(4, 4, 2, &[&blocked, &free], &CopperLayer::OUTER);
         assert!((m.utilization(0, 0, 0) - 1.0).abs() < 1e-6);
         assert!(m.utilization(0, 3, 3).abs() < 1e-6);
         let h = m.hotspots(1, Point::new(0, 0), 1_000);
@@ -415,14 +451,41 @@ mod tests {
     }
 
     #[test]
+    fn inner_signal_layers_get_the_ipc_internal_width_of_their_copper() {
+        let mut p = Project::new("w4");
+        // 4 layers, 1 oz outside, 0.5 oz inside; In2 made a signal layer (In1 stays a plane).
+        let mut st = eak_core::Stackup::multilayer(4, 1_600_000, 1.0, 0.5, "FR-4", 4.5);
+        st.layers[2].kind = eak_core::LayerKind::Signal;
+        p.pcb.board.stackup = st;
+        p.constraints.net_currents_a.insert("VBUS".into(), 3.0);
+        let s = net_spec(&p, "VBUS");
+        let t = p.constraints.temp_rise_c;
+        let outer = nm_ceil(ipc::trace_width_mm(3.0, false, 1.0, t).unwrap());
+        let inner = nm_ceil(ipc::trace_width_mm(3.0, true, 0.5, t).unwrap());
+        assert_eq!(s.track_width, outer);
+        assert_eq!(s.inner_track_width, inner);
+        assert!(
+            s.inner_track_width > s.track_width,
+            "internal, thinner copper: wider"
+        );
+        assert!(s
+            .notes
+            .iter()
+            .any(|n| n.starts_with("internal width raised")));
+    }
+
+    #[test]
     fn current_widens_the_track_and_flags_vias() {
         let mut p = Project::new("w");
         p.constraints.net_currents_a.insert("VBUS".into(), 3.0);
         let s = net_spec(&p, "VBUS");
         assert!(s.track_width > p.constraints.default_class.track_width);
         assert!(s.notes.iter().any(|n| n.contains("raised")));
+        // Two layers: no inner signal layer, the inner width is the outer one.
+        assert_eq!(s.inner_track_width, s.track_width);
         let plain = net_spec(&p, "SIG");
         assert_eq!(plain.track_width, p.constraints.default_class.track_width);
+        assert_eq!(plain.inner_track_width, plain.track_width);
         assert!(plain
             .notes
             .iter()

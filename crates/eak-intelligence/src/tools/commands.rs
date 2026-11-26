@@ -826,6 +826,26 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                 &["net_a", "net_b"],
             ),
         ),
+        SetDiffPair { .. } => (
+            D::Constraints,
+            "Declare a differential pair (replaces any pair sharing either net); an omitted figure is undeclared and its checks are UNKNOWN.",
+            obj(&[("rule", diff_pair_rule())], &["rule"]),
+        ),
+        DeleteDiffPair { .. } => (
+            D::Constraints,
+            "Remove the differential pair that contains a net.",
+            obj(&[("net", string("either net of the pair"))], &["net"]),
+        ),
+        SetViaSpans { .. } => (
+            D::Constraints,
+            "Replace the blind/buried via spans the router may use besides through vias (empty = through vias only).",
+            obj(&[("spans", array(via_span(), "allowed via spans"))], &[]),
+        ),
+        SetEngineeringInputs { .. } => (
+            D::Constraints,
+            "Replace the engineering-check inputs (ambient, via plating, allowed drops, part dissipation, insulation basis, enclosure). Send the whole set: an omitted field is cleared and its checks become UNKNOWN.",
+            engineering_inputs(),
+        ),
         SetManufacturing { .. } => (
             D::Manufacturing,
             "Set the manufacturing configuration.",
@@ -1256,6 +1276,50 @@ pub fn command_samples() -> Vec<Command> {
             net_b: "VIN".into(),
             clearance: None,
         },
+        SetDiffPair {
+            rule: DiffPairRule {
+                positive: "USB_DP".into(),
+                negative: "USB_DN".into(),
+                width: Some(200_000),
+                gap: Some(150_000),
+                target_zdiff_ohm: Some(90.0),
+                zdiff_tolerance_pct: Some(10.0),
+                max_skew: None,
+            },
+        },
+        DeleteDiffPair {
+            net: "USB_DN".into(),
+        },
+        SetViaSpans {
+            spans: vec![ViaSpanRule {
+                from: CopperLayer::Top,
+                to: CopperLayer::Inner(1),
+                drill: 150_000,
+                diameter: 350_000,
+            }],
+        },
+        SetEngineeringInputs {
+            ambient_temp_c: Some(40.0),
+            via_plating_um: Some(25.0),
+            net_max_drop_v: [("VIN".to_string(), 0.1)].into_iter().collect(),
+            part_dissipation_w: [("U1".to_string(), 0.5)].into_iter().collect(),
+            insulation: Some(Insulation {
+                standard: InsulationStandard::Iec60664_1,
+                pollution_degree: 2,
+                material_group: "IIIa".into(),
+                altitude_m: 2000.0,
+                coated: false,
+            }),
+            enclosure: Some(Enclosure {
+                max_height_bottom: Some(2_000_000),
+                mounting_holes: vec![MountingHoleSpec {
+                    position: Point::mm(3.0, 3.0),
+                    drill: 3_200_000,
+                    tolerance: 100_000,
+                    keepout_radius: 3_000_000,
+                }],
+            }),
+        },
         SetManufacturing {
             config: ManufacturingConfig::default(),
         },
@@ -1353,13 +1417,13 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 89 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
+        // 93 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
         // schematic commands of ADR-0040, the 16 PCB commands of ADR-0042 (15 schema-v4 edits plus
         // SyncSchematicToPcbSelected), the 3 sheet commands of ADR-0043, the 2 schema-v5 commands of
         // ADR-0044, the 3 group and rename commands of ADR-0045, the 3 schema-v7 rule commands
-        // of ADR-0046 and SetNetLabelKind of ADR-0049); keep in step with
+        // of ADR-0046, SetNetLabelKind of ADR-0049 and the 4 schema-v8 commands of ADR-0055); keep in step with
         // REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 89);
+        assert_eq!(tools.len(), 93);
         for t in &tools {
             assert!(t
                 .spec

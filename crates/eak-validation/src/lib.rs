@@ -11,10 +11,12 @@ pub mod footprint;
 pub mod gates;
 pub mod holes;
 pub mod mech;
+mod pairs;
 pub mod pin_pad;
 pub mod report;
 pub mod sourcing;
 pub mod state;
+pub mod stress;
 
 pub use gates::{GateReport, GateState};
 pub use report::{Bound, Finding, Limit, Outcome, Quantity, Report, Severity};

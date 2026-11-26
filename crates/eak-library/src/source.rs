@@ -107,6 +107,15 @@ pub trait PartSource: Send + Sync {
     fn kind(&self) -> SourceKind;
     fn capabilities(&self) -> Capabilities;
     fn status(&self) -> SourceStatus;
+    /// Short status text for a UI, for example "ready" or "not connected".
+    fn status_text(&self) -> String {
+        match self.status() {
+            SourceStatus::Ready => "ready".into(),
+            SourceStatus::NeedsSetup(why) => format!("needs setup: {why}"),
+            SourceStatus::Disabled => "disabled".into(),
+            SourceStatus::Error(why) => format!("error: {why}"),
+        }
+    }
     /// Licence or terms text shown next to anything this source supplied.
     fn terms(&self) -> String;
     /// Bounded search. Only called when `status()` is `Ready`.

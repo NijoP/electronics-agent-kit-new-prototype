@@ -810,7 +810,12 @@ pub fn analyse_with(items: &[CopperItem], fills: &[ZoneFill]) -> Connectivity {
         }
         conn.net_groups.insert(net.clone(), groups.len());
         // Prim over groups for a minimal ratsnest.
-        let gs: Vec<Vec<Point>> = groups.into_values().collect();
+        // Groups and their pads in coordinate order, not item order: item order follows the
+        // (random) object ids, and the first strict minimum below would pick different pad
+        // pairs on ties, so the same board would route differently on every run.
+        let mut gs: Vec<Vec<Point>> = groups.into_values().collect();
+        gs.iter_mut().for_each(|g| g.sort());
+        gs.sort();
         if gs.len() > 1 {
             let mut in_tree = vec![false; gs.len()];
             in_tree[0] = true;

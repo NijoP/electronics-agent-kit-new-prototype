@@ -6,7 +6,7 @@
 
 use crate::command::Command as C;
 use crate::engine::{Actor, CommandRequest, CommandResponse, Engine};
-use eak_core::{CopperLayer, Id, LabelKind, Point, Rotation};
+use eak_core::{CopperLayer, Enclosure, Id, LabelKind, Point, Rating, Rotation};
 
 pub struct Builder<'a> {
     pub engine: &'a mut Engine,
@@ -235,12 +235,17 @@ pub fn build_pcb_layers(engine: &mut Engine, copper_layers: u8) -> Result<Vec<St
     Ok(warnings)
 }
 
-/// Declares a voltage and a current, through typed commands, for every copper net of the board
-/// that has none, so every voltage- and current-based DRC rule is evaluated (ADR-0048: a rule
-/// left UNKNOWN blocks the release). Fixture ratings for this logic-level reference design, not
-/// engineering data: GND 0 V and 0.3 A (the return of the 3V3 rail), any other net 3.3 V and
-/// 0.02 A. Declared values are kept.
-pub fn declare_undeclared_nets(engine: &mut Engine) -> Result<(), String> {
+/// Declares, through typed commands, the inputs the checks need that the reference design leaves
+/// open, so no rule is UNKNOWN for want of one (ADR-0048: a rule left UNKNOWN blocks the
+/// release). Fixture values for this logic-level reference design, not engineering data:
+/// - a voltage and a current for every copper net without one: GND 0 V and 0.3 A (the return of
+///   the 3V3 rail), any other net 3.3 V and 0.01 A;
+/// - the voltage rating its generic resistor, LED and headers lack (ERC-022), unverified;
+/// - an enclosure with no bottom-side limit and no mounting holes (MECH-004);
+/// - 25 µm via plating (DRC-027).
+///
+/// Declared values are kept.
+pub fn declare_check_inputs(engine: &mut Engine) -> Result<(), String> {
     let p = engine.project();
     let nets: std::collections::BTreeSet<String> = eak_engineering::copper::items(p)
         .into_iter()
@@ -274,11 +279,47 @@ pub fn declare_undeclared_nets(engine: &mut Engine) -> Result<(), String> {
         })?;
     }
     for net in no_current {
-        let amps = if net == "GND" { 0.3 } else { 0.02 };
+        let amps = if net == "GND" { 0.3 } else { 0.01 };
         b.run(C::SetNetCurrent {
             net,
             amps: Some(amps),
         })?;
+    }
+    for (id, name, volts) in [
+        ("R_0603", "voltage", 50.0),
+        ("LED_0603", "reverse_voltage_max", 5.0),
+        ("CONN_1x02_P2.54", "voltage", 50.0),
+        ("CONN_1x04_P2.54", "voltage", 50.0),
+    ] {
+        let Some(def) = b.engine.project().library.get(id) else {
+            continue;
+        };
+        if def.ratings.iter().any(|r| r.name == name) {
+            continue;
+        }
+        let mut def = def.clone();
+        def.ratings.push(Rating {
+            name: name.into(),
+            value: volts,
+            unit: "V".into(),
+            source: "EAK reference fixture, not engineering data".into(),
+            verified: false,
+        });
+        b.run(C::UpsertComponentDefinition {
+            definition: Box::new(def),
+        })?;
+    }
+    let c = &b.engine.project().constraints;
+    if c.enclosure.is_none() || c.via_plating_um.is_none() {
+        let inputs = C::SetEngineeringInputs {
+            ambient_temp_c: c.ambient_temp_c,
+            via_plating_um: c.via_plating_um.or(Some(25.0)),
+            net_max_drop_v: c.net_max_drop_v.clone(),
+            part_dissipation_w: c.part_dissipation_w.clone(),
+            insulation: c.insulation.clone(),
+            enclosure: c.enclosure.clone().or(Some(Enclosure::default())),
+        };
+        b.run(inputs)?;
     }
     Ok(())
 }

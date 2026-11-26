@@ -41,7 +41,7 @@ fn board(rated: bool) -> Engine {
         },
     );
     if rated {
-        fixtures::declare_undeclared_nets(&mut e).expect("net ratings");
+        fixtures::declare_check_inputs(&mut e).expect("check inputs");
     }
     e
 }
