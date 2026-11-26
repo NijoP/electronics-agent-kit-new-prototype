@@ -1958,6 +1958,7 @@ pub fn run() {
             agents::cmd::agent_sessions,
             agents::cmd::agent_session_log,
             agents::cmd::agent_tool_stop,
+            agents::cmd::agent_session_restart,
         ])
         .build(tauri::generate_context!())
         .expect("EAK desktop failed to start")

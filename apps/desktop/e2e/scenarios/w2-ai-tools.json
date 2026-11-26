@@ -1,0 +1,18 @@
+{
+  "name": "W2-E Settings > AI tools on a computer without coding agents",
+  "description": "Opens an isolated software fixture project, then Settings > Settings… > AI tools (remap slice W2-E, ADR-0054). The CI runner has no Claude Code or Codex, so each row must read 'Not found' with an install link, never a guessed version or sign-in state; Connect, Sign in and Launch session are disabled with the reason as their tooltip; the sessions list says no session was started; the propose-mode note for new sessions is shown.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "W2 AI Tools Fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "W2 AI Tools Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "w2-settings", "do": "menu", "title": "W2-E: Settings > Settings… opens the settings dialog", "menu": "Settings", "item": "Settings", "expect": "[role=\"dialog\"][aria-label=\"Settings\"] [role=\"tree\"]", "shot": false },
+    { "id": "w2-page", "do": "click", "title": "W2-E: the AI tools page lists the coding agents", "selector": "[role=\"tree\"] button", "text": "AI tools", "expect": "table[aria-label=\"AI tools\"] tr[data-tool=\"claude\"]" },
+    { "id": "w2-claude-missing", "do": "wait", "title": "W2-E: Claude Code reads Not found on the CI runner", "selector": "table[aria-label=\"AI tools\"] tr[data-tool=\"claude\"] td", "text": "Not found", "timeout": 60000 },
+    { "id": "w2-codex-missing", "do": "wait", "title": "W2-E: Codex reads Not found on the CI runner", "selector": "table[aria-label=\"AI tools\"] tr[data-tool=\"codex\"] td", "text": "Not found" },
+    { "id": "w2-reason", "do": "wait", "title": "W2-E: the row says why and where to install it", "selector": "table[aria-label=\"AI tools\"] tr[data-tool=\"claude\"] td", "text": "Not installed on this computer" },
+    { "id": "w2-connect-disabled", "do": "wait", "title": "W2-E: Connect is disabled with the reason as its tooltip", "selector": "table[aria-label=\"AI tools\"] tr[data-tool=\"claude\"] button[disabled][title=\"Claude Code is not installed\"]", "text": "Connect", "shot": false },
+    { "id": "w2-launch-disabled", "do": "wait", "title": "W2-E: Launch session is disabled with the reason as its tooltip", "selector": "table[aria-label=\"AI tools\"] tr[data-tool=\"codex\"] button[disabled][title=\"Codex is not installed\"]", "text": "Launch session", "shot": false },
+    { "id": "w2-sessions", "do": "wait", "title": "W2-E: no AI session is listed", "selector": "[role=\"dialog\"][aria-label=\"Settings\"] p.muted", "text": "No AI session started from EAK", "shot": false },
+    { "id": "w2-propose", "do": "wait", "title": "W2-E: new sessions are said to run the harness in propose mode", "selector": "[role=\"dialog\"][aria-label=\"Settings\"] p.muted", "text": "Sessions started here run EAK's harness in propose mode" }
+  ]
+}

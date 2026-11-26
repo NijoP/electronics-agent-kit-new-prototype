@@ -99,6 +99,11 @@ beforeEach(() => {
         return sessions;
       case "agent_session_log":
         return "line one\nline two";
+      case "agent_session_restart": {
+        const s: AgentSession = { ...sessions[0], id: "claude-2-2", state: "running", detail: "running", exit_code: null };
+        sessions = [s, ...sessions];
+        return s;
+      }
       case "agent_tool_stop":
         sessions = sessions.map((s) => ({ ...s, state: "stopped" as const }));
         return sessions[0];
@@ -182,6 +187,12 @@ describe("Settings › AI tools", () => {
     await waitFor(() => expect((within(list).getByRole("button", { name: "Stop" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(within(list).getByRole("button", { name: "Stop" }));
     await waitFor(() => expect(calls.some((c) => c.cmd === "agent_tool_stop" && c.args.id === "claude-1-1")).toBe(true));
+    // Restart starts the same task again as a new session, listed with its task id.
+    await waitFor(() => expect((within(list).getAllByRole("button", { name: "Restart" })[0] as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(within(list).getAllByRole("button", { name: "Restart" })[0]);
+    await waitFor(() => expect(calls.find((c) => c.cmd === "agent_session_restart")?.args).toEqual({ id: "claude-1-1" }));
+    expect(await within(await screen.findByRole("table", { name: "AI sessions" })).findByText("claude-2-2")).toBeTruthy();
+    expect(screen.getByText(/propose mode/)).toBeTruthy();
   });
 
   it("an IPC failure is shown, not hidden", async () => {

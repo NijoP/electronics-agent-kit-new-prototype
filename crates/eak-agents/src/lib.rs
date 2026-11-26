@@ -28,6 +28,8 @@ use std::path::{Path, PathBuf};
 
 /// Name EAK registers its MCP server under in every tool.
 pub const MCP_SERVER_NAME: &str = "eak";
+/// The harness reads its apply mode from this variable (`eak-harness` `context::ENV_APPLY_MODE`).
+pub const APPLY_MODE_ENV: &str = "EAK_HARNESS_APPLY_MODE";
 
 /// Where a session runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -289,6 +291,8 @@ pub fn launch_plan(
         ("EAK_AGENT_NAME".into(), tool.agent_name().into()),
         ("EAK_AGENT_TOOL".into(), tool.agent_name().into()),
         ("EAK_TASK_ID".into(), task_id.into()),
+        // Sessions started from EAK propose design changes for a person to apply (ADR-0051).
+        (APPLY_MODE_ENV.into(), "propose".into()),
     ];
     // A terminal tab exports its own `EAK_SESSION_ID` (the terminal session id `eak-term` uses);
     // a headless session has none, so its task id is its session id.
@@ -386,6 +390,9 @@ mod tests {
         assert!(p
             .env
             .contains(&("EAK_AGENT_NAME".to_string(), "claude-code".to_string())));
+        assert!(p
+            .env
+            .contains(&(APPLY_MODE_ENV.to_string(), "propose".to_string())));
         // The terminal tab keeps its own session id.
         assert!(!p.env.iter().any(|(k, _)| k == "EAK_SESSION_ID"));
         assert!(p
