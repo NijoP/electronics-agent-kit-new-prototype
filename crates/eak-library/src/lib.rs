@@ -7,6 +7,9 @@
 //!   is not ready.
 //! * `sources` – adapters: the built-in starter library, and any supplier integration that
 //!   already yields `SourcingRecord`s (no network code and no supplier call in this crate).
+//! * land patterns – [`LandPatternSpec`] / [`PadSpec`], the datasheet land-pattern table a
+//!   footprint is verified against. The type lives in `eak_validation::footprint` (this crate
+//!   depends on eak-validation, not the other way round, ADR-0052) and is re-exported here.
 //! * `kicad`   – KiCad `.kicad_sym` / `.kicad_mod` export, the inverse of the clean-room reader
 //!   in `eak_core::kicad_import`, with every loss reported.
 //!
@@ -19,5 +22,6 @@ pub mod part;
 pub mod source;
 pub mod sources;
 
+pub use eak_validation::footprint::{LandPatternSpec, PadSpec};
 pub use part::{Part, PartKey, PartKeyError, PartRecord, SourceId};
 pub use source::{resolve, PartQuery, PartSource, Resolution, SourceStatus};

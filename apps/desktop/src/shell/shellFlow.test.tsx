@@ -1,5 +1,5 @@
 // IDE shell against a mocked Tauri IPC: one editor at a time, no assistant, registered workspaces
-// (app bar + "+", kept mounted), the file explorer, and the multi-project tab strip.
+// (navigation rail + "+", kept mounted), the file explorer, and the multi-project tab strip.
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { useEffect } from "react";
@@ -85,7 +85,7 @@ describe("workspace separation", () => {
 });
 
 describe("registered workspaces", () => {
-  it("an app workspace gets a tab and the + action; switching keeps both mounted and gates EDA keys", async () => {
+  it("an app workspace gets a rail button and the + action; switching keeps both mounted and gates EDA keys", async () => {
     let mounts = 0;
     let created = 0;
     const Body = ({ cwd }: { cwd: string | null }) => {
@@ -100,14 +100,15 @@ describe("registered workspaces", () => {
       fireEvent.click(screen.getByRole("button", { name: "New terminal space" }));
       expect(created).toBe(1);
       await screen.findByText(/terminal body/);
-      const tab = screen.getByRole("tab", { name: "Terminal Workspace" });
-      expect(tab.getAttribute("aria-selected")).toBe("true");
+      // The shell draws the rail beside the terminal; its Terminal entry is the current area.
+      expect(bar().getByRole("button", { name: "Terminal Workspace" }).getAttribute("aria-pressed")).toBe("true");
       // EDA is hidden, not unmounted, and its global shortcuts do nothing while the terminal is shown
       expect(screen.getByRole("img", { name: "Schematic canvas", hidden: true }).closest(".ws-host")!.hasAttribute("hidden")).toBe(true);
       fireEvent.keyDown(window, { key: "j", ctrlKey: true });
       expect(screen.getByRole("region", { name: "Bottom panel", hidden: true })).toBeTruthy();
-      fireEvent.click(screen.getByRole("tab", { name: "Project / EDA" }));
-      fireEvent.click(screen.getByRole("tab", { name: "Terminal Workspace" }));
+      fireEvent.click(bar().getByRole("button", { name: "Schematic" }));
+      expect(screen.getByRole("img", { name: "Schematic canvas" }).closest(".ws-host")!.hasAttribute("hidden")).toBe(false);
+      fireEvent.click(bar().getByRole("button", { name: "Terminal Workspace" }));
       expect(mounts).toBe(1); // never remounted
       expect(screen.getByRole("img", { name: "Schematic canvas", hidden: true })).toBeTruthy();
     } finally {
@@ -237,5 +238,72 @@ describe("document state helpers", () => {
     expect(gone.open).toEqual(["sch:1", "file:dir/b.txt"]);
     expect(gone.active).not.toBe("file:a.txt");
     expect(act).toBeTruthy();
+  });
+});
+
+// v2 shell (product vision §1): the top bar shows the wordmark alone with the full name, and the
+// rail's areas run the existing views, docks and dialogs.
+describe("v2 shell chrome", () => {
+  it("top bar: the EAK wordmark alone, Electronics Agent Kit, then the project", async () => {
+    await open();
+    const top = document.querySelector("header.topbar")!;
+    expect(top.querySelector(".brand")!.textContent).toBe("EAK");
+    expect(top.querySelector(".brand-name")!.textContent).toBe("Electronics Agent Kit");
+    expect(top.querySelector(".home-mark, img, svg")).toBeNull();
+    expect(top.querySelector(".appbar-project")!.textContent).toBe("Fixture board");
+  });
+
+  it("rail lists the areas in the vision's order, then the project panels", async () => {
+    await open();
+    const areas = within(bar().getByRole("group", { name: "Areas" }));
+    expect(areas.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Home", "Schematic", "PCB", "Library", "Agents", "Checks", "Manufacturing"]);
+    const panels = within(bar().getByRole("group", { name: "Project panels" }));
+    expect(panels.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Explorer", "Overview", "Design manager", "Domain", "Assets"]);
+    expect(bar().getByRole("button", { name: "Schematic" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("Library and Checks show the bottom dock's Library and Findings tabs and toggle it", async () => {
+    await open();
+    const dock = () => within(screen.getByRole("region", { name: "Bottom panel" }));
+    fireEvent.click(bar().getByRole("button", { name: "Library" }));
+    expect(dock().getByRole("tab", { name: "Library" }).getAttribute("aria-selected")).toBe("true");
+    expect(bar().getByRole("button", { name: "Library" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(bar().getByRole("button", { name: "Checks" }));
+    expect(dock().getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
+    expect(bar().getByRole("button", { name: "Library" }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(bar().getByRole("button", { name: "Checks" }));
+    expect(screen.queryByRole("region", { name: "Bottom panel" })).toBeNull();
+    expect(bar().getByRole("button", { name: "Checks" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("Manufacturing opens its side view; Agents opens Model settings", async () => {
+    await open();
+    fireEvent.click(bar().getByRole("button", { name: "Manufacturing" }));
+    await screen.findByRole("region", { name: "Manufacturing prep" });
+    expect(bar().getByRole("button", { name: "Manufacturing" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(bar().getByRole("button", { name: "Agents" }));
+    await screen.findByRole("dialog", { name: "Model settings" });
+  });
+
+  it("Home shows Project Home beside the shell's rail; an EDA area there returns to the workspace", async () => {
+    await open();
+    fireEvent.click(bar().getByRole("button", { name: "Home" }));
+    await screen.findByRole("heading", { name: "Recent projects" });
+    expect(screen.getByRole("img", { name: "Schematic canvas", hidden: true }).closest(".ws-host")!.hasAttribute("hidden")).toBe(true);
+    expect(bar().getByRole("button", { name: "Home" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(bar().getByRole("button", { name: "PCB" }));
+    await waitFor(() => expect(slot("PCB canvas").className).not.toContain("off"));
+    expect(screen.getByRole("img", { name: "PCB canvas" }).closest(".ws-host")!.hasAttribute("hidden")).toBe(false);
+    expect(bar().getByRole("button", { name: "PCB" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("with no project open, the rail's EDA areas are disabled and say why", async () => {
+    render(<App />);
+    await screen.findByRole("heading", { name: "Recent projects" });
+    const pcb = bar().getByRole("button", { name: "PCB" }) as HTMLButtonElement;
+    expect(pcb.disabled).toBe(true);
+    expect(pcb.title).toContain("Open or create a project first");
+    expect((bar().getByRole("button", { name: "Agents" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(bar().getByRole("button", { name: "Home" }).getAttribute("aria-pressed")).toBe("true");
   });
 });
