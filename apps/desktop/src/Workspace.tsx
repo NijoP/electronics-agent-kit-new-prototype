@@ -29,6 +29,7 @@ import { StatusBar } from "./shell/StatusBar";
 import { ExportDialog } from "./shell/ExportDialog";
 import { BomExportDialog, DocumentExportDialog } from "./shell/OutputDialogs";
 import { ReleaseCheckDialog } from "./shell/ReleaseCheckDialog";
+import { ProposalReviewDialog } from "./shell/ProposalReviewDialog";
 import { JourneyBar } from "./shell/JourneyBar";
 import { journeyStages, type StageId } from "./shell/journey";
 import { ProblemsPanel } from "./shell/ProblemsPanel";
@@ -132,7 +133,7 @@ const writeFlag = (key: string, on: boolean) => {
 };
 
 export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged, landing = null, onTour, home, apps, navRequest }: Props) {
-  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate" | "release">(null);
+  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate" | "release" | "proposals">(null);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [snapshot, setSnapshot] = useState(initial);
   const [events, setEvents] = useState<EngineEvent[]>([]);
@@ -1319,6 +1320,18 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       {dialog === "bom" && <BomExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "outputs" && <DocumentExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "release" && <ReleaseCheckDialog revision={revision} busy={busy} onCheck={(c) => setRelease({ check: c, error: null })} onClose={() => setDialog(null)} />}
+      {dialog === "proposals" && (
+        <ProposalReviewDialog
+          revision={revision}
+          busy={busy}
+          onApplied={(out) => {
+            setDialog(null);
+            setMessage(`Applied as one undo step: proposal ${out.proposal.id} → revision ${out.response.revision_after} (checkpoint ${out.checkpoint})${out.response.warnings.length ? ` (${out.response.warnings.length} warning(s))` : ""}`);
+            void refresh();
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
       {dialog === "export" && (
         <ExportDialog
           result={exported}

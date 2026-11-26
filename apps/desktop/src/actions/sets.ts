@@ -34,7 +34,7 @@ export interface ActionDeps {
   projects: OpenProject[];
   sideViews: { id: SideView; label: string }[];
   edaViews: { id: string; label: string; shortcut?: string }[];
-  dialog: (d: "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate" | "release") => void;
+  dialog: (d: "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate" | "release" | "proposals") => void;
   save: () => void;
   undo: () => void;
   redo: () => void;
@@ -166,6 +166,8 @@ export function commonActions(d: ActionDeps): Action[] {
 
     { id: "palette", label: "Command palette", short: "Commands", whileTyping: true, menu: "Tools", toolbar: "app", icon: "palette", palette: false, enabled: () => true, run: d.palette },
     { id: "quick-open", label: "Go to part, net or sheet…", whileTyping: true, menu: "Tools", enabled: () => true, run: d.quickOpen },
+    // S9 (ADR-0051): what an agent session in propose mode wants to change, reviewed by EAK on a copy.
+    { id: "proposals", label: "Review agent proposals…", title: "Edits an agent proposed (propose mode): EAK checks them on a copy; nothing changes until you apply", docs: DESIGN, menu: "Tools", sep: true, enabled: () => true, run: () => d.dialog("proposals") },
 
     { id: "preferences", label: "Settings…", title: "Hotkeys, canvas colours, grid defaults and theme", whileTyping: true, menu: "Settings", enabled: () => true, run: d.preferences },
     { id: "settings", label: "Model settings", menu: "Settings", enabled: () => true, run: d.onSettings },

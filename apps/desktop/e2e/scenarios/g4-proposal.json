@@ -1,0 +1,61 @@
+{
+  "name": "G4 agent proposal review",
+  "description": "Slice S9 (ADR-0051): an agent proposal reviewed and applied in the real window. SETUP: on an isolated software fixture, an agent session in propose mode reaches the app through its harness endpoint, exactly as `eak --propose` would, and proposes four steps (two parts, a VIN label on a pin of the first part, a design-rule change). The project does not move: the schematic stays empty. Tools > Review agent proposals... shows EAK's review: six changes grouped by object (Part 4, Net 1, Rule 1) and ERC and DRC on a copy. Unchecking the first part's row also unchecks the label that names it (Applying 2 of 4 steps); EAK reviews that selection again, Export report saves its review as evidence, and Apply sends the two steps as one Batch: one part on the sheet, and one Edit > Undo takes it all back. A second proposal is then discarded (asked to confirm first), after which it cannot be applied and nothing changed. Stale and agent-applied refusals are covered by crates/eak-harness/tests/proposal.rs and src-tauri/tests/proposal.rs; the rows and selection rules by src/shell/proposalReview.test.tsx.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "G4 Proposal Fixture", "folder": "g4-proposal-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "G4 Proposal Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    {
+      "id": "g4-propose",
+      "do": "fixture-agent-propose",
+      "title": "G4: an agent session in propose mode proposes four steps through the app's harness endpoint (SETUP)",
+      "folder": "g4-proposal-fixture",
+      "agent": "g4-agent",
+      "session": "g4-session",
+      "proposalTitle": "Input stage",
+      "rationale": "input decoupling and a VIN label; clearance raised to 0.2 mm",
+      "commands": [
+        { "type": "PlaceSymbol", "component_id": "C_0805", "position": { "x": 20000000, "y": 40000000 }, "value": "100n" },
+        { "type": "PlaceSymbol", "component_id": "R_0805", "position": { "x": 60000000, "y": 40000000 } },
+        { "type": "LabelPin", "symbol_id": "$created:0", "pin": "1", "name": "VIN" },
+        { "type": "SetDesignRules", "min_clearance": 200000 }
+      ],
+      "shot": false
+    },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]", "shot": false },
+    { "id": "g4-untouched", "do": "count", "title": "G4: the proposal changed nothing: the sheet is empty", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 0 },
+    { "id": "g4-open", "do": "menu", "title": "G4: Tools > Review agent proposals... opens EAK's review", "menu": "Tools", "item": "Review agent proposals…", "expect": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] table[aria-label=\"Proposed changes\"]" },
+    { "id": "g4-rows", "do": "count", "title": "G4: six changes listed (two library parts, two symbols, a label, the rules)", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] tr[data-proposal-row]", "equals": 6, "shot": false },
+    { "id": "g4-part", "do": "wait", "title": "G4: grouped by object: Part (4)", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] tbody[aria-label=\"Part (4)\"]", "shot": false },
+    { "id": "g4-net", "do": "wait", "title": "G4: grouped by object: Net (1)", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] tbody[aria-label=\"Net (1)\"]", "shot": false },
+    { "id": "g4-rule", "do": "wait", "title": "G4: grouped by object: Rule (1)", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] tbody[aria-label=\"Rule (1)\"]", "shot": false },
+    { "id": "g4-erc", "do": "wait", "title": "G4: ERC before and after, on a copy", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] table[aria-label=\"Checks on a copy\"] tr[data-check=\"ERC\"]", "shot": false },
+    { "id": "g4-drc", "do": "wait", "title": "G4: DRC before and after, on a copy", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] table[aria-label=\"Checks on a copy\"] tr[data-check=\"DRC\"]" },
+    { "id": "g4-uncheck", "do": "click", "title": "G4: uncheck the first part: the label naming it goes too; EAK reviews the two steps left", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] tr[data-proposal-row] input[type=\"checkbox\"]", "expect": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] p.proposal-partial", "expectText": "Applying 2 of 4 step(s) as one undo step" },
+    { "id": "g4-off", "do": "count", "title": "G4: three rows unchecked (the part's library entry and symbol, the label)", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] tr[data-proposal-row].off", "equals": 3, "shot": false },
+    { "id": "g4-apply-on", "do": "wait", "title": "G4: Apply is enabled for the reviewed selection", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] button.primary:not([disabled])", "text": "Apply proposal", "shot": false },
+    { "id": "g4-export", "do": "click", "title": "G4: Export report saves EAK's review as evidence", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] button", "text": "Export report", "expect": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] p", "expectText": "Report saved:" },
+    { "id": "g4-apply", "do": "click", "title": "G4: Apply sends the two steps as one Batch", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] button.primary", "text": "Apply proposal", "gone": "[role=\"dialog\"][aria-label=\"Review agent proposal\"]", "expect": "footer.status span.msg", "expectText": "Applied as one undo step" },
+    { "id": "g4-applied", "do": "count", "title": "G4: one part on the sheet (the unchecked one was not applied)", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 1 },
+    { "id": "g4-undo", "do": "menu", "title": "G4: one Edit > Undo takes the applied proposal back", "menu": "Edit", "item": "Undo", "expect": "footer.status span.msg", "expectText": "Undo → revision", "shot": false },
+    { "id": "g4-undone", "do": "count", "title": "G4: after one Undo the sheet is empty again (one undo step)", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 0 },
+    {
+      "id": "g4-propose-2",
+      "do": "fixture-agent-propose",
+      "title": "G4: the agent proposes one more part, left open (SETUP)",
+      "folder": "g4-proposal-fixture",
+      "agent": "g4-agent",
+      "session": "g4-session",
+      "rationale": "a second capacitor",
+      "submit": false,
+      "commands": [{ "type": "PlaceSymbol", "component_id": "C_0805", "position": { "x": 20000000, "y": 60000000 } }],
+      "shot": false
+    },
+    { "id": "g4-open-2", "do": "menu", "title": "G4: the newest open proposal is shown", "menu": "Tools", "item": "Review agent proposals…", "expect": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] table[aria-label=\"Proposed changes\"]", "shot": false },
+    { "id": "g4-discard", "do": "click", "title": "G4: Discard proposal asks to confirm first", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] button", "text": "Discard proposal", "expect": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] button.danger", "expectText": "Confirm discard" },
+    { "id": "g4-confirm", "do": "click", "title": "G4: Confirm discard marks it discarded", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] button.danger", "text": "Confirm discard", "expect": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] p", "expectText": "Proposal discarded" },
+    { "id": "g4-discarded", "do": "wait", "title": "G4: a discarded proposal cannot be applied", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] button.primary[disabled]", "text": "Apply proposal" },
+    { "id": "g4-close", "do": "key", "title": "G4: Escape closes the review", "keys": "Escape", "gone": "[role=\"dialog\"][aria-label=\"Review agent proposal\"]", "shot": false },
+    { "id": "g4-nothing", "do": "count", "title": "G4: discarding changed nothing: the sheet is still empty", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 0, "shot": false }
+  ]
+}
