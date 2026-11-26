@@ -154,17 +154,17 @@ import; nothing has been tested on real hardware.
 > **Unsigned builds.** Windows SmartScreen and macOS Gatekeeper will warn. Verify the SHA-256 checksum
 > first; each block below does.
 
-> **Release availability.** The commands below install `v0.1.5-rc.2`, the newest release published when
-> this README was written. `v0.2.0-rc.1`, which this README describes, is being published: once it is
-> on the [releases page](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases),
-> replace `v0.1.5-rc.2` in the commands with `v0.2.0-rc.1`. The asset names are the same.
+> **Release.** The commands below install
+> [`v0.2.0-rc.1`](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/tag/v0.2.0-rc.1),
+> an unsigned pre-release. For another release, replace the tag in the URLs with one from the
+> [releases page](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases).
 
 ### Linux x86_64: Debian / Ubuntu (.deb)
 
 ```bash
 cd "$(mktemp -d)"
-curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.1.5-rc.2/eak-linux-x86_64.deb
-curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.1.5-rc.2/SHA256SUMS
+curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.2.0-rc.1/eak-linux-x86_64.deb
+curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.2.0-rc.1/SHA256SUMS
 grep ' eak-linux-x86_64.deb$' SHA256SUMS | sha256sum -c -
 sudo apt install ./eak-linux-x86_64.deb
 eak-desktop
@@ -176,8 +176,8 @@ apt installs the WebKitGTK 4.1 and GTK 3 libraries the app needs. Uninstall: `su
 
 ```bash
 mkdir -p ~/Applications && cd ~/Applications
-curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.1.5-rc.2/eak-linux-x86_64.AppImage
-curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.1.5-rc.2/SHA256SUMS
+curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.2.0-rc.1/eak-linux-x86_64.AppImage
+curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.2.0-rc.1/SHA256SUMS
 grep ' eak-linux-x86_64.AppImage$' SHA256SUMS | sha256sum -c -
 chmod +x eak-linux-x86_64.AppImage
 ./eak-linux-x86_64.AppImage
@@ -191,8 +191,8 @@ has not been checked on non-Debian distributions. Uninstall: delete the file.
 
 ```powershell
 cd $env:TEMP
-Invoke-WebRequest https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.1.5-rc.2/eak-windows-x86_64-setup.exe -OutFile eak-windows-x86_64-setup.exe
-Invoke-WebRequest https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.1.5-rc.2/SHA256SUMS -OutFile SHA256SUMS
+Invoke-WebRequest https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.2.0-rc.1/eak-windows-x86_64-setup.exe -OutFile eak-windows-x86_64-setup.exe
+Invoke-WebRequest https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.2.0-rc.1/SHA256SUMS -OutFile SHA256SUMS
 $want = ((Select-String -Path SHA256SUMS -Pattern '[ *]eak-windows-x86_64-setup\.exe$').Line -split '\s+')[0]
 if ((Get-FileHash .\eak-windows-x86_64-setup.exe -Algorithm SHA256).Hash -ne $want) { throw 'checksum mismatch: do not run this file' }
 .\eak-windows-x86_64-setup.exe
@@ -207,8 +207,8 @@ the installer downloads it if it is missing. Uninstall: **Settings > Apps**.
 ```bash
 cd "$(mktemp -d)"
 ARCH=$(uname -m | sed 's/arm64/aarch64/')   # aarch64 = Apple silicon, x86_64 = Intel
-curl -fLo eak.dmg "https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.1.5-rc.2/eak-macos-$ARCH.dmg"
-curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.1.5-rc.2/SHA256SUMS
+curl -fLo eak.dmg "https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.2.0-rc.1/eak-macos-$ARCH.dmg"
+curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.2.0-rc.1/SHA256SUMS
 echo "$(grep " eak-macos-$ARCH.dmg$" SHA256SUMS | cut -d' ' -f1)  eak.dmg" | shasum -a 256 -c -
 mkdir mnt && hdiutil attach eak.dmg -nobrowse -readonly -mountpoint ./mnt
 ditto ./mnt/EAK.app /Applications/EAK.app
@@ -224,8 +224,8 @@ Privacy & Security > Open Anyway**. Uninstall: delete `/Applications/EAK.app`.
 
 ```bash
 mkdir -p ~/.local/bin && cd "$(mktemp -d)"
-curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.1.5-rc.2/eak-cli-linux-x86_64.tar.gz
-curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.1.5-rc.2/SHA256SUMS
+curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.2.0-rc.1/eak-cli-linux-x86_64.tar.gz
+curl -fLO https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/download/v0.2.0-rc.1/SHA256SUMS
 grep ' eak-cli-linux-x86_64.tar.gz$' SHA256SUMS | sha256sum -c -
 tar -xzf eak-cli-linux-x86_64.tar.gz -C ~/.local/bin eak eak-mcp
 eak --help
