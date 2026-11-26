@@ -3,6 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { PerformanceSettings, ResourceProfile } from "./resourceProfile";
+import type { ComponentSaved, FootprintReport, PinPadReport } from "./library/VerificationReport";
 import type {
   AiProposal,
   RouteStepReport,
@@ -13,6 +14,7 @@ import type {
   Command,
   CommandError,
   CommandResponse,
+  ComponentDef,
   LockState,
   BoardGeometry,
   ConnectivityReport,
@@ -174,6 +176,9 @@ export const IPC_COMMANDS = [
   "manufacturing_preview",
   "part_standardisation",
   "fabricator_prepare",
+  "footprint_verify",
+  "pin_pad_verify",
+  "component_save",
   "open_projects",
   "switch_project",
   "close_project_by_id",
@@ -345,6 +350,12 @@ export const api = {
   /** Part standardisation (D1): the SOURCING check over the placed parts and the stored supplier records (read-only, offline). */
   partStandardisation: () => call<Report>("part_standardisation"),
   fabricatorPrepare: (outDir: string) => call<PrepareResult>("fabricator_prepare", { out_dir: outDir }),
+  /** Footprint rules FP-001..FP-009 of one library part (read-only; UNKNOWN without a land-pattern table). */
+  footprintVerify: (id: string) => call<FootprintReport>("footprint_verify", { id }),
+  /** Pin-to-pad rules PP-001..PP-005 of one library part (read-only). */
+  pinPadVerify: (id: string) => call<PinPadReport>("pin_pad_verify", { id }),
+  /** Create or edit a component in the personal library; refused when the pin map fails PP-001. */
+  componentSave: (def: ComponentDef) => call<ComponentSaved>("component_save", { def }),
   // IDE shell: several open projects (one active) and the sandboxed project file explorer. Every
   // file call names its project, so a late call from one project can never act on another.
   openProjects: () => call<OpenProject[]>("open_projects"),

@@ -39,3 +39,16 @@
     an IR change and out of scope here.
 - **Source requirement:** product spec library maturity ("a level is only ever raised with
   evidence"); `report.md` §3.5 and the W2-D row.
+
+## Addendum: pin-to-pad compatibility report (W2-D follow-up)
+
+- **Decision:** `pin_pad::verify(def)` returns a `PinPadReport` of the same shape as
+  `FootprintReport` (per-rule `RuleResult`, `overall`, `not_implemented`, `limitations`):
+  PP-001 pins and pads by number (no missing pad, no pad joining differently named pins),
+  PP-002 exposed / thermal pads (at least 3x the median pad area) carry power, ground or passive
+  pins only, PP-003 a pin split over several pads is not a no-connect and, when it is a logic
+  signal, needs human approval, PP-004 no-connect pins keep their pads to themselves, PP-005
+  mechanical pads carry no logic signal. PP-006 (pin functions against the datasheet pinout) is
+  listed in `not_implemented`. An unmapped exposed pad is `REQUIRES_HUMAN_APPROVAL`, never pass.
+- **Consequences:** a second library report type in `eak-validation`; no EAK-IR, schema or
+  `Command` change.
