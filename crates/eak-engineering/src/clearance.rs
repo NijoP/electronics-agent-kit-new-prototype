@@ -7,7 +7,7 @@
 //! layers; the table is not verified against the standard text).
 
 use crate::ipc::{self, ClearanceCondition};
-use eak_core::{Constraints, CopperLayer, Nm};
+use eak_core::{Constraints, CopperLayer, InsulationStandard, Nm};
 
 /// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, common fabricator practice,
 /// unverified), shared by the DRC and the autorouter.
@@ -40,6 +40,40 @@ pub fn required(c: &Constraints, a: &str, b: &str, layer: CopperLayer) -> f64 {
         .max(c.class_for(b).clearance)
         .max(c.net_pair_clearance(a, b).unwrap_or(0)) as f64;
     voltage_clearance(c, a, b, layer).map_or(k, |(v, _, _)| k.max(v))
+}
+
+/// The spacing (nm) the declared insulation (`Constraints::insulation`, schema v8) requires
+/// between nets `a` and `b` on `layer`, from their declared voltage difference: IPC-2221B B1
+/// inner, B2/B3 (above 3050 m) outer uncoated, B4 outer coated; IEC 60664-1 creepage on outer
+/// layers. `None` without an insulation declaration or both voltages, or where the transcribed
+/// tables do not apply (IEC inner layers or a case they do not cover).
+pub fn insulation_clearance(c: &Constraints, a: &str, b: &str, layer: CopperLayer) -> Option<f64> {
+    let ins = c.insulation.as_ref()?;
+    let v = (c.net_voltages_v.get(a)? - c.net_voltages_v.get(b)?).abs();
+    let outer = matches!(layer, CopperLayer::Top | CopperLayer::Bottom);
+    let mm = match ins.standard {
+        InsulationStandard::Ipc2221b => {
+            let cond = match (outer, ins.coated, ins.altitude_m > 3050.0) {
+                (false, _, _) => ClearanceCondition::B1,
+                (true, true, _) => ClearanceCondition::B4,
+                (true, false, true) => ClearanceCondition::B3,
+                (true, false, false) => ClearanceCondition::B2,
+            };
+            ipc::clearance_mm(v, cond)
+        }
+        InsulationStandard::Iec60664_1 if outer => {
+            ipc::creepage_mm(v, ins.pollution_degree, &ins.material_group).ok()?
+        }
+        InsulationStandard::Iec60664_1 => return None,
+    };
+    Some(mm * 1e6)
+}
+
+/// The spacing (nm) the autorouter keeps between nets `a` and `b` on `layer`: the DRC-002 rule
+/// raised to the declared insulation's spacing, so a route never needs an insulation finding.
+pub fn routing_required(c: &Constraints, a: &str, b: &str, layer: CopperLayer) -> f64 {
+    let r = required(c, a, b, layer);
+    insulation_clearance(c, a, b, layer).map_or(r, |i| r.max(i))
 }
 
 #[cfg(test)]
@@ -95,6 +129,42 @@ mod tests {
         assert_eq!(
             required(&c, "GND", "HV", CopperLayer::Top),
             400_000.0_f64.max(ipc::clearance_mm(0.0, ClearanceCondition::B2) * 1e6)
+        );
+    }
+
+    #[test]
+    fn routing_spacing_follows_the_declared_insulation() {
+        let mut c = constraints();
+        c.net_voltages_v.insert("HV".into(), 300.0);
+        c.net_voltages_v.insert("GND".into(), 0.0);
+        let drc = required(&c, "GND", "HV", CopperLayer::Top);
+        assert_eq!(routing_required(&c, "GND", "HV", CopperLayer::Top), drc);
+        let ins = |standard, altitude_m, coated| eak_core::Insulation {
+            standard,
+            pollution_degree: 2,
+            material_group: "IIIa".into(),
+            altitude_m,
+            coated,
+        };
+        let ipc_at = |cond| ipc::clearance_mm(300.0, cond) * 1e6;
+        c.insulation = Some(ins(InsulationStandard::Ipc2221b, 4000.0, false));
+        let b3 = routing_required(&c, "GND", "HV", CopperLayer::Top);
+        assert_eq!(b3, drc.max(ipc_at(ClearanceCondition::B3)));
+        assert!(b3 > drc, "B3 above 3050 m needs more than the B2 DRC rule");
+        c.insulation = Some(ins(InsulationStandard::Ipc2221b, 0.0, true));
+        let b4 = routing_required(&c, "GND", "HV", CopperLayer::Top);
+        assert_eq!(b4, drc.max(ipc_at(ClearanceCondition::B4)));
+        c.insulation = Some(ins(InsulationStandard::Iec60664_1, 0.0, false));
+        let creep = ipc::creepage_mm(300.0, 2, "IIIa").unwrap() * 1e6;
+        assert_eq!(
+            routing_required(&c, "GND", "HV", CopperLayer::Top),
+            drc.max(creep)
+        );
+        // IEC inner layers: no creepage path, the DRC rule alone.
+        let inner = required(&c, "GND", "HV", CopperLayer::Inner(1));
+        assert_eq!(
+            routing_required(&c, "GND", "HV", CopperLayer::Inner(1)),
+            inner
         );
     }
 }

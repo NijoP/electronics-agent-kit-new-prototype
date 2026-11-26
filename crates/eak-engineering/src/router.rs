@@ -37,16 +37,16 @@
 //!   layers, internal on inner layers); a connection whose width does not fit fails and says
 //!   why, it is never necked below its current-sized width.
 //!
-//! The exact check applies the DRC's own rules: `clearance::required` (DRC-002), the clearance
-//! matrix, board edge (DRC-005), copper-to-hole (DRC-018), hole-to-hole (DRC-019), keep-outs
-//! (DRC-021) and constraint-region track widths (DRC-022). The router is still a heuristic: whether
+//! The exact check applies the DRC's own rules: `clearance::routing_required` (DRC-002 raised to
+//! the declared insulation spacing), the clearance matrix, board edge (DRC-005), copper-to-hole
+//! (DRC-018), hole-to-hole (DRC-019), keep-outs (DRC-021) and constraint-region track widths
+//! (DRC-022). The router is still a heuristic: whether
 //! the resulting board is electrically or manufacturing correct is decided afterwards by
 //! `eak-validation` (DRC, connectivity), never here.
 
 use crate::board::{BoardGeometry, Hole};
 use crate::clearance;
 use crate::copper::{distance, CopperItem, Core, ItemKind, Shape};
-use crate::ipc::{self, ClearanceCondition};
 use crate::routing_intel::{
     self as intel, CongestionMap, Hotspot, NetSpec, PassRecord, Stagnation,
 };
@@ -418,6 +418,10 @@ struct Env<'a> {
     via_keepouts: &'a [KeepOut],
     /// Grid inflation per plane: largest clearance + half the widest track on that layer + margin.
     inflate: Vec<f64>,
+    /// Per-plane inflation of the nets that need less than `inflate` (own spacing and width).
+    own_inflate: &'a BTreeMap<String, Vec<f64>>,
+    /// Discretisation margin added to every inflation.
+    margin: f64,
     /// Minimum drill-edge to drill-edge spacing (DRC-019).
     hole_min: f64,
     /// Grid inflation of a drill so another via drill keeps `hole_min`.
@@ -545,29 +549,62 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         .chain(spans.iter().map(|s| s.drill))
         .max()
         .unwrap_or(300_000) as f64;
-    // shortcut: one grid inflation per layer for every net (the largest clearance anywhere and
-    // that layer's widest track), so one high-voltage or high-current net makes every net route
-    // with its spacing on that layer; per-net grids would recover the space when dense HV /
-    // high-current boards need it.
-    let vmax = c
-        .net_voltages_v
-        .values()
-        .fold(0.0f64, |a, &b| a.max(b.abs()));
-    let mut max_clear = specs
+    // Class, board-minimum and matrix rules: a floor under every net's spacing.
+    let floor = specs
         .values()
         .map(|s| s.clearance)
         .chain([c.default_class.clearance, c.min_clearance])
-        .chain(c.net_pair_rules.iter().map(|r| r.clearance))
         .chain(c.clearance_matrix.iter().map(|m| m.clearance))
         .max()
         .unwrap_or(200_000) as f64;
-    if c.net_voltages_v.len() >= 2 {
-        max_clear = max_clear.max(ipc::clearance_mm(vmax * 2.0, ClearanceCondition::B2) * 1e6);
-    }
+    // Spacing each net needs from any other net, per layer: the DRC-002 rule (classes, net
+    // pairs, declared voltages) raised to the declared insulation (`routing_required`).
+    let nets: Vec<&String> = net_ids.keys().collect();
+    let clear_of: BTreeMap<String, Vec<f64>> = nets
+        .iter()
+        .map(|&n| {
+            let per_layer = layers
+                .iter()
+                .map(|&layer| {
+                    nets.iter()
+                        .filter(|&&m| m != n)
+                        .map(|m| clearance::routing_required(c, n, m, layer))
+                        .fold(floor, f64::max)
+                })
+                .collect();
+            (n.clone(), per_layer)
+        })
+        .collect();
+    let max_clear = clear_of.values().flatten().copied().fold(floor, f64::max);
     let margin = pitch as f64 * 0.5;
+    // shortcut: one shared grid inflated for the most demanding net (largest spacing anywhere,
+    // widest track on the layer); a connection that finds no path on it retries once on a grid
+    // inflated for its own net (`own_grid`, rebuilt per retry). Per-net grids kept up to date
+    // through the pass would save the rebuild on boards with many such retries.
     let inflate: Vec<f64> = width_on
         .iter()
         .map(|w| max_clear + w / 2.0 + margin)
+        .collect();
+    // Nets that need less than the shared inflation on some layer: their own clearance and width.
+    let own_inflate: BTreeMap<String, Vec<f64>> = specs
+        .iter()
+        .filter_map(|(net, s)| {
+            let clear = clear_of.get(net)?;
+            let own: Vec<f64> = layers
+                .iter()
+                .enumerate()
+                .map(|(l, layer)| {
+                    let w = if layer.is_outer() {
+                        s.track_width
+                    } else {
+                        s.inner_track_width
+                    };
+                    clear[l] + w as f64 / 2.0 + margin
+                })
+                .collect();
+            let smaller = own.iter().zip(&inflate).any(|(o, sh)| *o < sh - 1.0);
+            smaller.then(|| (net.clone(), own))
+        })
         .collect();
 
     // Board edge keep-out: outline and cut-outs.
@@ -723,6 +760,8 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         track_keepouts: &track_keepouts,
         via_keepouts: &via_keepouts,
         inflate,
+        own_inflate: &own_inflate,
+        margin,
         hole_min,
         via_hole_inflate,
     };
@@ -1031,8 +1070,13 @@ fn pad_layers(env: &Env, pt: Point, net: &str) -> Vec<usize> {
 }
 
 fn mark_placed(grid: &mut Grid, pl: &Placed, env: &Env) {
+    mark_placed_at(grid, pl, env, &env.inflate);
+}
+
+/// As `mark_placed`, with the copper grown by `inflate` (per plane).
+fn mark_placed_at(grid: &mut Grid, pl: &Placed, env: &Env, inflate: &[f64]) {
     for (l, s) in &pl.shapes {
-        grid.mark(*l, s, env.inflate[*l], pl.id);
+        grid.mark(*l, s, inflate[*l], pl.id);
     }
     let blind = pl.blind.iter().map(|(v, s)| (*v, s.drill));
     for (v, d) in pl.vias.iter().map(|v| (*v, pl.via_drill)).chain(blind) {
@@ -1080,6 +1124,43 @@ fn grid_with<'a>(env: &Env, placed: impl Iterator<Item = &'a Placed>) -> Grid {
     let hidden = moved_ids(placed.iter().copied());
     if !hidden.is_empty() {
         unhide(&mut g, env, &hidden, &placed);
+    }
+    g
+}
+
+/// The grid `net` sees when its own spacing and width (`inflate`, per plane) are below the shared
+/// inflation: the same board edge, keep-outs, drills and via rules, with fixed copper and the
+/// `placed` routes grown for this net only. Pre-existing tracks a shove moved are left out.
+fn own_grid(env: &Env, net: &str, inflate: &[f64], placed: &[Placed]) -> Grid {
+    let mut g = env.base.blank();
+    g.no_via.clone_from(&env.base.no_via);
+    g.no_via_on.clone_from(&env.base.no_via_on);
+    for (i, _) in env.outside.iter().enumerate().filter(|(_, o)| **o) {
+        for plane in g.owner.iter_mut() {
+            plane[i] = MULTI;
+        }
+    }
+    let spec = &env.specs[net];
+    for k in env.track_keepouts {
+        for (l, layer) in env.layers.iter().enumerate().filter(|(l, _)| k.layers[*l]) {
+            let w = if layer.is_outer() {
+                spec.track_width
+            } else {
+                spec.inner_track_width
+            };
+            g.mark(l, &k.shape, w as f64 / 2.0 + env.margin, MULTI);
+        }
+    }
+    let hidden = moved_ids(placed.iter());
+    let stack = &env.p.pcb.board.stackup;
+    for it in env.geo.copper.iter().filter(|it| !is_hidden(it, &hidden)) {
+        let id = env.net_ids.get(&it.net).copied().unwrap_or(MULTI);
+        if let Some(l) = stack.index_of(it.layer) {
+            g.mark(l, &it.shape, inflate[l], id);
+        }
+    }
+    for pl in placed {
+        mark_placed_at(&mut g, pl, env, inflate);
     }
     g
 }
@@ -1484,7 +1565,7 @@ fn shove(
                 q.layer == it.layer
                     && q.net != it.net
                     && distance(&seg, &it.shape)
-                        < clearance::required(c, &q.net, &it.net, it.layer) - 1.0
+                        < clearance::routing_required(c, &q.net, &it.net, it.layer) - 1.0
             });
             if hit {
                 out.push(it.object_id.clone());
@@ -1606,17 +1687,33 @@ fn attempt(
     let spec = &env.specs[&conn.net];
     let la = pad_layers(env, conn.a, &conn.net);
     let lb = pad_layers(env, conn.b, &conn.net);
-    let Some(path) = astar(
-        grid,
-        id,
-        (conn.a, &la),
-        (conn.b, &lb),
-        env.routable,
-        env.opts,
-        costs,
-    ) else {
-        // Explained once, on the final board, for connections that stay unrouted (`route`).
-        return Err(NO_PATH.into());
+    let search = |g: &Grid| {
+        astar(
+            g,
+            id,
+            (conn.a, &la),
+            (conn.b, &lb),
+            env.routable,
+            env.opts,
+            costs,
+        )
+    };
+    // The shared grid is inflated for the most demanding net; a net that needs less (a
+    // fine-pitch escape next to a wide power net) retries on a grid inflated for itself.
+    let own;
+    let (grid, path) = match search(grid) {
+        Some(path) => (grid, path),
+        None => {
+            // Explained once, on the final board, for connections that stay unrouted (`route`).
+            let Some(inf) = env.own_inflate.get(&conn.net) else {
+                return Err(NO_PATH.into());
+            };
+            own = own_grid(env, &conn.net, inf, placed);
+            match search(&own) {
+                Some(path) => (&own, path),
+                None => return Err(NO_PATH.into()),
+            }
+        }
     };
     let (segs, mut vias) = path_to_segments(grid, &path, conn.a, conn.b);
     let widths: Vec<Nm> = env
@@ -1856,7 +1953,12 @@ fn blocker(env: &Env, l: usize, pt: Point, net: &str, placed: &[Placed]) -> Stri
         return format!(
             "{} ({net_name}): tracks keep {} from it [DRC-002]",
             it.label(),
-            mm(clearance::required(&env.p.constraints, net, &it.net, layer))
+            mm(clearance::routing_required(
+                &env.p.constraints,
+                net,
+                &it.net,
+                layer
+            ))
         );
     }
     let regions: Vec<&str> = env
@@ -2017,7 +2119,7 @@ fn violation_hiding(
         let layer = env.layers[*l];
         let me = class(s);
         let rule = |other_net: &str, other: ObjectClass| -> f64 {
-            let r = clearance::required(c, net, other_net, layer);
+            let r = clearance::routing_required(c, net, other_net, layer);
             c.matrix_cell(me, other).map_or(r, |m| r.max(m as f64))
         };
         for (it, oc) in env.geo.copper.iter().zip(env.classes) {

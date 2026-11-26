@@ -367,3 +367,35 @@ fn a_blind_span_is_used_where_no_through_via_fits() {
         "SIG cannot cross without a blind span"
     );
 }
+
+/// Per-net inflation: a 3 A +5V rail (about 1.3 mm wide) inflates the shared grid by more than
+/// the 0.67 mm gap between the SOIC-8 pads, so on that grid every pad's own cell is blocked and
+/// the escapes found no path (NO_LEGAL_PATH). Each signal net now retries on a grid inflated for
+/// its own clearance and width, and the board routes complete and DRC clean.
+#[test]
+fn fine_pitch_escapes_route_next_to_a_wide_power_net() {
+    let (e, warnings) = build("route_fine_pitch", 0);
+    eprintln!("{warnings:#?}");
+    let p = e.project();
+    assert!(
+        !warnings.iter().any(|w| w.starts_with("unrouted ")),
+        "{warnings:#?}"
+    );
+    let width = |net: &str| {
+        p.pcb
+            .tracks
+            .values()
+            .filter(|t| t.net == net)
+            .map(|t| t.width)
+            .max()
+            .unwrap_or(0)
+    };
+    assert!(width("+5V") >= 1_000_000, "+5V is current-sized");
+    for net in ["RST", "MOSI", "MISO", "SCK"] {
+        let w = width(net);
+        assert!(w > 0 && w < 500_000, "{net} escapes at its own width: {w}");
+    }
+    evidence("route_fine_pitch", p, &warnings, None, 0);
+    assert_all_connected(p);
+    assert_drc_clean(p);
+}
