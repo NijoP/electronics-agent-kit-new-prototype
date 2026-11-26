@@ -73,11 +73,20 @@ fn four_layer_board_passes_drc_and_exports_every_layer() {
         .blocking_reasons
         .iter()
         .partition(|b| b.contains("DRC-028 is UNKNOWN"));
-    assert_eq!(vdrop.len(), 1, "{:?}", m.blocking_reasons);
+    // Once from the DRC report and once from the electrical_constraints gate it feeds.
+    let (drc, gate): (Vec<&&String>, Vec<&&String>) =
+        vdrop.iter().partition(|b| b.starts_with("DRC: "));
+    assert_eq!((drc.len(), gate.len()), (1, 1), "{:?}", m.blocking_reasons);
     assert!(
-        vdrop[0].contains("+5V: net has a copper zone"),
+        gate[0].starts_with("gate electrical_constraints "),
         "{}",
-        vdrop[0]
+        gate[0]
+    );
+    assert!(
+        vdrop
+            .iter()
+            .all(|b| b.contains("+5V: net has a copper zone")),
+        "{vdrop:?}"
     );
     assert!(!rest.is_empty());
     assert!(
