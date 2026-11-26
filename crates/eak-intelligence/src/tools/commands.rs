@@ -902,7 +902,7 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
         ),
         SetEngineeringInputs { .. } => (
             D::Constraints,
-            "Replace the engineering-check inputs (ambient, via plating, allowed drops, part dissipation, insulation basis, enclosure). Send the whole set: an omitted field is cleared and its checks become UNKNOWN.",
+            "Replace the engineering-check inputs (ambient, via plating, allowed drops, part dissipation, insulation basis, enclosure, largest return-via distance, plane neck width). Send the whole set: an omitted field is cleared and its checks become UNKNOWN.",
             engineering_inputs(),
         ),
         SetManufacturing { .. } => (
@@ -1416,6 +1416,8 @@ pub fn command_samples() -> Vec<Command> {
                     keepout_radius: 3_000_000,
                 }],
             }),
+            return_via_max_distance: Some(2_000_000),
+            plane_min_neck_width: Some(500_000),
         },
         SetManufacturing {
             config: ManufacturingConfig::default(),

@@ -647,6 +647,10 @@ pub enum Command {
         insulation: Option<Insulation>,
         #[serde(default)]
         enclosure: Option<Enclosure>,
+        #[serde(default)]
+        return_via_max_distance: Option<Nm>,
+        #[serde(default)]
+        plane_min_neck_width: Option<Nm>,
     },
     SetManufacturing {
         config: ManufacturingConfig,
@@ -3779,6 +3783,8 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             part_dissipation_w,
             insulation,
             enclosure,
+            return_via_max_distance,
+            plane_min_neck_width,
         } => {
             let c = &mut p.constraints;
             c.ambient_temp_c = *ambient_temp_c;
@@ -3787,6 +3793,8 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             c.part_dissipation_w = part_dissipation_w.clone();
             c.insulation = insulation.clone();
             c.enclosure = enclosure.clone();
+            c.return_via_max_distance = *return_via_max_distance;
+            c.plane_min_neck_width = *plane_min_neck_width;
         }
         SetManufacturing { config } => {
             if config.mask_expansion < 0 {

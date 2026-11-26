@@ -2,9 +2,8 @@
 - **Date:** 2026-11-27
 - **Status:** Accepted (execution brief goals M4.2 and M4.3, §8.1, §8.2 and §7.2 A-C; task
   eak-domain). Builds on ADR-0057.
-- **Numbering:** schema v10 and ADR-0059 are held by open PR #155 (reference-plane limits) and
-  ADR-0058 by open PR #152, so this change takes v11 and ADR-0060. v10 was never released on main,
-  so a v9 file migrates straight to v11. Whichever of #155 and this lands second renumbers.
+- **Numbering:** schema v10 and ADR-0059 are #155 (reference-plane limits, merged), and ADR-0058
+  is held by open PR #152, so this change takes v11 and ADR-0060.
 - **Context:** ADR-0057 recorded requirement values, but `SetRequirementField` replaced the whole
   entry, so a second source with a different value silently overwrote the first. The brief
   (§8.1, M4.2) asks for conflicting values to be shown as conflicts and resolved by a person. M4.3
@@ -16,7 +15,7 @@
 
 ## Decision
 - **Conflicts in the IR (v11).** `ReqEntry.conflicts: Vec<ReqEntry>` holds competing values not
-  yet resolved. It is `#[serde(default)]` and omitted when empty, so a v9 file has none, which is
+  yet resolved. It is `#[serde(default)]` and omitted when empty, so a v9 or v10 file has none, which is
   exactly the v11 meaning. Integrity rules:
   - only an entry with a value has conflicts;
   - each candidate has a value that differs from the recorded value and from every other candidate;
@@ -111,7 +110,7 @@
 5. **A scored classifier (DESK):** a number hides weak evidence and contradictions. Rejected.
 
 ## Consequences
-- v11 files are refused by v9 builds. Those builds would drop the conflicts silently and show a
+- v11 files are refused by v10 and earlier builds. Those builds would drop the conflicts silently and show a
   disputed value as settled.
 - Keyword evidence matches English whole words only. Power conversion has only indirect
   evidence in the record, so a person confirms it.

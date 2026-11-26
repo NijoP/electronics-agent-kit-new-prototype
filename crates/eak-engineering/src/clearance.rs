@@ -191,4 +191,39 @@ mod tests {
         c.insulation = Some(ins);
         assert!(spacing_unknown(&c).is_some());
     }
+
+    /// Restored from 3c9901f (dropped in the #140 merge, 500e938), ported onto `required`, which
+    /// the router and the DRC now share: the declared insulation picks the outer condition (B3 at
+    /// altitude, B4 coated) and IEC 60664-1 adds creepage on outer layers only.
+    #[test]
+    fn routing_spacing_follows_the_declared_insulation() {
+        let mut c = constraints();
+        c.net_voltages_v.insert("HV".into(), 300.0);
+        c.net_voltages_v.insert("GND".into(), 0.0);
+        let ipc_at = |cond| ipc::clearance_mm(300.0, cond) * 1e6;
+        let b2 = required(&c, "GND", "HV", CopperLayer::Top);
+        assert_eq!(b2, 400_000.0_f64.max(ipc_at(ClearanceCondition::B2)));
+        let ins = |standard, altitude_m, coated| eak_core::Insulation {
+            standard,
+            pollution_degree: 2,
+            material_group: "IIIa".into(),
+            altitude_m,
+            coated,
+        };
+        c.insulation = Some(ins(InsulationStandard::Ipc2221b, 4000.0, false));
+        let b3 = required(&c, "GND", "HV", CopperLayer::Top);
+        assert_eq!(b3, b2.max(ipc_at(ClearanceCondition::B3)));
+        assert!(b3 > b2, "B3 above 3050 m needs more than B2");
+        c.insulation = Some(ins(InsulationStandard::Ipc2221b, 0.0, true));
+        let b4 = required(&c, "GND", "HV", CopperLayer::Top);
+        assert_eq!(b4, 400_000.0_f64.max(ipc_at(ClearanceCondition::B4)));
+        c.insulation = Some(ins(InsulationStandard::Iec60664_1, 0.0, false));
+        let creep = ipc::creepage_mm(300.0, 2, "IIIa").unwrap() * 1e6;
+        assert_eq!(required(&c, "GND", "HV", CopperLayer::Top), b2.max(creep));
+        // IEC inner layers: no creepage path, the B1 rule alone.
+        assert_eq!(
+            required(&c, "GND", "HV", CopperLayer::Inner(1)),
+            400_000.0_f64.max(ipc_at(ClearanceCondition::B1))
+        );
+    }
 }
