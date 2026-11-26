@@ -10,8 +10,10 @@
 //! partner (the DRC-002 rule for each pair of nets); nothing that fails is returned.
 //!
 //! The two ends break out perpendicular to their pad axis, so each member reaches its own pad
-//! without running over its partner's. Length matching is not done yet: the report gives the
-//! skew and whether it is within `max_skew`. Width and gap come from the rule, or the gap is derived from the target impedance with
+//! without running over its partner's. Length matching: when the pair declares `max_skew` and
+//! the members differ by more, the shorter member gets a serpentine (rectangular bumps on its
+//! outer side, away from the partner) that adds exactly the difference, again checked exactly;
+//! larger bumps are tried first. Width and gap come from the rule, or the gap is derived from the target impedance with
 //! `impedance` (IPC-2141A); a gap that is neither declared nor derivable means the pair is not
 //! routed coupled, and the reason names the missing input.
 
@@ -259,6 +261,8 @@ fn pair_grid(
 struct Members {
     segs: [Vec<Seg>; 2],
     vias: [Vec<Point>; 2],
+    /// Segments that run coupled (not fan-outs or via spreads), by index into `segs`.
+    tunable: [Vec<usize>; 2],
     /// Side of the centreline each member is on (+1 left of travel, -1 right).
     side: [f64; 2],
 }
@@ -286,6 +290,7 @@ fn members(
     let mut out = Members {
         segs: [vec![], vec![]],
         vias: [vec![], vec![]],
+        tunable: [vec![], vec![]],
         side: [side_p, -side_p],
     };
     let push = |segs: &mut Vec<Seg>, l: usize, a: Point, b: Point| {
@@ -302,7 +307,10 @@ fn members(
             // Fan-out from the pad, or from the via on this layer, to the first offset point.
             push(&mut out.segs[m], *l, from, off[0]);
             for w in off.windows(2) {
-                push(&mut out.segs[m], *l, w[0], w[1]);
+                if w[0] != w[1] {
+                    out.tunable[m].push(out.segs[m].len());
+                    out.segs[m].push((*l, w[0], w[1]));
+                }
             }
             let last = *off.last().expect("a run has two points");
             if k + 1 < runs.len() {
@@ -351,6 +359,67 @@ fn check(
         }
     }
     Ok(())
+}
+
+/// Rectangular bumps on the `tunable` segments (longest first) on the `outer` side, adding
+/// `extra` nm of length, at most `amp` nm high and `pitch` nm wide, with `pitch` between
+/// bumps and at both ends. `None` when they do not fit.
+fn serpentine(
+    segs: &[Seg],
+    tunable: &[usize],
+    outer: f64,
+    extra: f64,
+    amp: f64,
+    pitch: f64,
+) -> Option<Vec<Seg>> {
+    let len = |i: usize| segs[i].1.dist(segs[i].2);
+    let mut order: Vec<usize> = tunable.to_vec();
+    order.sort_by(|&a, &b| len(b).total_cmp(&len(a)));
+    let mut rest = extra;
+    // Per segment: (start along the segment, height) of each bump.
+    let mut bumps: BTreeMap<usize, Vec<(f64, f64)>> = BTreeMap::new();
+    for i in order {
+        let fit = ((len(i) - pitch) / (2.0 * pitch)).floor().max(0.0) as usize;
+        for j in 0..fit {
+            if rest < 1.0 {
+                break;
+            }
+            let h = amp.min(rest / 2.0);
+            bumps
+                .entry(i)
+                .or_default()
+                .push((pitch + 2.0 * pitch * j as f64, h));
+            rest -= 2.0 * h;
+        }
+    }
+    if rest >= 1.0 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(segs.len() + 4 * bumps.values().map(Vec::len).sum::<usize>());
+    for (i, &(l, a, b)) in segs.iter().enumerate() {
+        let Some(list) = bumps.get(&i) else {
+            out.push((l, a, b));
+            continue;
+        };
+        let d = unit(a, b);
+        let n = left(d);
+        let n = (n.0 * outer, n.1 * outer);
+        let mut cur = a;
+        for &(s0, h) in list {
+            let (p0, p1) = (shift(a, d, s0), shift(a, d, s0 + pitch));
+            let (u0, u1) = (shift(p0, n, h), shift(p1, n, h));
+            for (x, y) in [(cur, p0), (p0, u0), (u0, u1), (u1, p1)] {
+                if x != y {
+                    out.push((l, x, y));
+                }
+            }
+            cur = p1;
+        }
+        if cur != b {
+            out.push((l, cur, b));
+        }
+    }
+    Some(out)
 }
 
 /// The routed pair: one placed route per member (positive first) and what was done.
@@ -434,7 +503,7 @@ pub(super) fn attempt(
     let n0 = left(unit(centre[0].1, centre[0].2));
     let toward = (cp.a.x - ca.x) as f64 * n0.0 + (cp.a.y - ca.y) as f64 * n0.1;
     let side_p = if toward >= 0.0 { 1.0 } else { -1.0 };
-    let m = members(
+    let mut m = members(
         &centre,
         &cvias,
         [[cp.a, cp.b], [na, nb]],
@@ -444,18 +513,70 @@ pub(super) fn attempt(
     )?;
     let nl = env.layers.len();
     let widths = vec![rule.width; nl];
-    let shapes = |k: usize| shapes_for(&m.segs[k], &m.vias[k], &widths, specs[k].via_diameter, nl);
-    let member_shapes = [shapes(0), shapes(1)];
-    check(env, rule, &member_shapes, &m.vias, placed)?;
+    let shapes = |m: &Members, k: usize| {
+        shapes_for(&m.segs[k], &m.vias[k], &widths, specs[k].via_diameter, nl)
+    };
+    let both = |m: &Members| [shapes(m, 0), shapes(m, 1)];
+    check(env, rule, &both(&m), &m.vias, placed)?;
 
+    // Length matching on the shorter member: a serpentine on its outer side, larger bumps first.
     let (lp, ln) = (length(&m.segs[0]), length(&m.segs[1]));
-    let note = format!(
-        "coupled: width {:.3} mm, gap {:.3} mm, skew {:.3} mm (not length matched)",
+    let mut note = format!(
+        "coupled: width {:.3} mm, gap {:.3} mm",
         rule.width as f64 / 1e6,
-        rule.gap as f64 / 1e6,
-        (lp - ln).abs() / 1e6
+        rule.gap as f64 / 1e6
     );
-    let [sp, sn] = member_shapes;
+    match rule.max_skew {
+        None => note.push_str(&format!(
+            "; skew {:.3} mm (no max_skew declared: not length matched)",
+            (lp - ln).abs() / 1e6
+        )),
+        Some(max) if (lp - ln).abs() > max as f64 => {
+            let skew = (lp - ln).abs();
+            let short = usize::from(ln < lp);
+            let q = (3.0 * w).max(w + 2.0 * rule.gap as f64);
+            let tuned = [4.0 * q, 3.0 * q, 2.0 * q, q].into_iter().find_map(|amp| {
+                let segs = serpentine(
+                    &m.segs[short],
+                    &m.tunable[short],
+                    m.side[short],
+                    skew,
+                    amp,
+                    q,
+                )?;
+                let mut cand = m.clone();
+                cand.segs[short] = segs;
+                check(env, rule, &both(&cand), &cand.vias, placed)
+                    .ok()
+                    .map(|()| (cand, amp))
+            });
+            let member = if short == 0 {
+                &rule.positive
+            } else {
+                &rule.negative
+            };
+            match tuned {
+                Some((cand, amp)) => {
+                    note.push_str(&format!(
+                        "; length matched with a serpentine on {member} ({:.3} mm added, bumps up to {:.3} mm)",
+                        skew / 1e6,
+                        amp / 1e6
+                    ));
+                    m = cand;
+                }
+                None => note.push_str(&format!(
+                    "; skew {:.3} mm exceeds {:.3} mm and no serpentine on {member} fits clear of other copper",
+                    skew / 1e6,
+                    max as f64 / 1e6
+                )),
+            }
+        }
+        Some(_) => note.push_str(&format!(
+            "; skew {:.3} mm within max_skew without tuning",
+            (lp - ln).abs() / 1e6
+        )),
+    }
+    let [sp, sn] = both(&m);
     let make = |k: usize, ci: usize, conn: &Conn, id: u32, shapes: Vec<(usize, Shape)>| Placed {
         conn: ci,
         net: conn.net.clone(),
@@ -524,6 +645,20 @@ mod tests {
         }
         // A reversal cannot be offset.
         assert!(offset(&[pts[0], pts[1], pts[0]], 100_000.0).is_none());
+    }
+
+    #[test]
+    fn serpentine_adds_exactly_the_missing_length() {
+        let segs = vec![(0, Point::new(0, 0), Point::new(10_000_000, 0))];
+        let out = serpentine(&segs, &[0], 1.0, 1_234_000.0, 400_000.0, 300_000.0).unwrap();
+        let added = length(&out) - length(&segs);
+        assert!((added - 1_234_000.0).abs() < 10.0, "{added}");
+        // Bumps go to the outer side only and keep both ends.
+        assert!(out.iter().all(|(_, a, b)| a.y >= 0 && b.y >= 0));
+        assert_eq!(out.first().unwrap().1, Point::new(0, 0));
+        assert_eq!(out.last().unwrap().2, Point::new(10_000_000, 0));
+        // More than the segment can take.
+        assert!(serpentine(&segs, &[0], 1.0, 1e9, 400_000.0, 300_000.0).is_none());
     }
 
     #[test]
