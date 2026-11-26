@@ -302,6 +302,21 @@ impl Report {
         self
     }
 
+    /// Records that `rule_id` had nothing to evaluate on this board (`NOT_APPLICABLE`, never a
+    /// pass); only a rule that is still `PASS` (no findings, not disabled) changes.
+    pub(crate) fn not_applicable(mut self, rule_id: &str, reason: &str) -> Report {
+        if let Some(r) = self
+            .rule_results
+            .iter_mut()
+            .find(|r| r.rule_id == rule_id && r.state == CheckState::Pass)
+        {
+            r.state = CheckState::NotApplicable;
+            r.reason = reason.into();
+        }
+        self.recompute_overall();
+        self
+    }
+
     /// State of one rule; `Unknown` when the report has no such rule.
     pub fn state_of(&self, rule_id: &str) -> CheckState {
         self.rule_results

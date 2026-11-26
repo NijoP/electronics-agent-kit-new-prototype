@@ -947,6 +947,8 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     let pair_unknown = crate::pairs::check(p, &mut f);
     // DRC-027: via barrel current.
     let via_unknown = via_current(p, &mut f);
+    // DRC-028..031: reference planes of declared high-speed nets, plane islands (M7.6).
+    let plane_gaps = crate::planes::check(p, geo, None, &mut f);
 
     let mut rules = vec![
         rule("DRC-001", "Minimum / net-class track width", format!("min {}", mm(c.min_track_width as f64)), "Project constraints"),
@@ -985,6 +987,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         ),
         verify::SOURCE_VIA,
     ));
+    rules.extend(crate::planes::rules());
     let not_implemented = vec![
         "Single-ended controlled impedance (net-class target Z0) and signal integrity beyond the declared differential pairs".into(),
         "DC voltage drop along a net against net_max_drop_v (no path-resistance model yet)".into(),
@@ -1007,6 +1010,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         "Arc tracks and arc board edges are checked as chords with at most 10 µm error; the autorouter avoids keep-out regions, the auto-placer does not (DRC-021 reports what it puts there)".into(),
         "Text and dimensions on the documentation layer are not fabricated and not checked; silk text is not checked against other silk or the courtyards".into(),
         "Clearance-matrix cells are checked by DRC only: the interactive router keeps net classes, declared voltages and net-pair rules but not the matrix, and the autorouter keeps neither the matrix nor net-pair rules (ADR-0046)".into(),
+        "Reference planes (DRC-028..031): only declared high-speed nets are checked; a reference is an adjacent plane layer or a neighbour carrying a pour; two zones of one net are assumed joined; return vias are matched by net and layer span, not by the current path; plane neck width is not checked (no declared minimum)".into(),
         "Differential pairs: skew counts track length only (no via barrels); the gap rule checks only the closest approach, not where the members run apart; impedance uses the positive member's width and is not checked on uncoupled segments".into(),
     ];
     limitations.extend(undeclared_nets_not_evaluated(p));
@@ -1033,6 +1037,12 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     }
     if let Some(why) = via_unknown {
         report = report.degrade("DRC-027", CheckState::Unknown, &why);
+    }
+    for (rule, why) in plane_gaps.unknown {
+        report = report.degrade(rule, CheckState::Unknown, &why);
+    }
+    for (rule, why) in plane_gaps.not_applicable {
+        report = report.not_applicable(rule, &why);
     }
     if let Some(why) = eak_engineering::clearance::spacing_unknown(c) {
         report = report.degrade("DRC-002", CheckState::Unknown, &why);

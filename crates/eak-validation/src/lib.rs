@@ -13,6 +13,7 @@ pub mod holes;
 pub mod mech;
 mod pairs;
 pub mod pin_pad;
+mod planes;
 pub mod report;
 pub mod sourcing;
 pub mod state;
