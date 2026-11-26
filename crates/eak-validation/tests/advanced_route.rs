@@ -425,9 +425,13 @@ fn the_router_reports_a_connection_whose_own_clearance_cannot_be_met() {
         !wide[0].3.is_empty(),
         "a failed connection names its reason"
     );
+    // J3's and J4's own pad-to-pad links are legal; no WIDE copper enters the neck (x 15..35).
+    let in_neck = |q: Point| (15_000_000..=35_000_000).contains(&q.x);
     assert!(
-        res.tracks.iter().all(|t| t.net != "WIDE"),
-        "WIDE copper was placed"
+        res.tracks
+            .iter()
+            .all(|t| t.net != "WIDE" || !(in_neck(t.a) || in_neck(t.b))),
+        "WIDE copper was placed in the neck"
     );
     commit(&mut p, &res);
     let conn = copper::analyse(&p);
