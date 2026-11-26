@@ -1385,6 +1385,9 @@ pub const IPC_COMMANDS: [&str; 101] = [
     "manufacturing_preview",
     "part_standardisation",
     "fabricator_prepare",
+    "footprint_verify",
+    "pin_pad_verify",
+    "component_save",
     "library_components",
     "domain_classification",
     "intelligence_summary",
@@ -1921,6 +1924,9 @@ pub fn run() {
             parts::cmd::manufacturing_preview,
             parts::cmd::part_standardisation,
             parts::cmd::fabricator_prepare,
+            parts::cmd::footprint_verify,
+            parts::cmd::pin_pad_verify,
+            parts::cmd::component_save,
             workspace::cmd::open_projects,
             workspace::cmd::switch_project,
             workspace::cmd::close_project_by_id,
@@ -1977,6 +1983,7 @@ pub fn run() {
             agents::cmd::agent_sessions,
             agents::cmd::agent_session_log,
             agents::cmd::agent_tool_stop,
+            agents::cmd::agent_session_restart,
         ])
         .build(tauri::generate_context!())
         .expect("EAK desktop failed to start")

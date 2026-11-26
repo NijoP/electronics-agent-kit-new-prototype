@@ -90,6 +90,32 @@ beforeEach(() => {
       case "library_personal_remove":
       case "library_imported_remove":
         return null;
+      case "footprint_verify":
+        return {
+          check: "footprint",
+          definition_id: String((payload as Record<string, unknown> | undefined)?.id),
+          footprint: "R_0603",
+          spec_source: null,
+          tolerance_nm: 50_000,
+          rule_results: [
+            { rule_id: "FP-001", state: "PASS", reason: "" },
+            { rule_id: "FP-002", state: "UNKNOWN", reason: "no land-pattern table" },
+          ],
+          overall: "UNKNOWN",
+          not_implemented: ["FP-010 3D model bounding box against the footprint body"],
+          limitations: [],
+        };
+      case "pin_pad_verify":
+        return {
+          check: "pin_pad",
+          definition_id: String((payload as Record<string, unknown> | undefined)?.id),
+          footprint: "R_0603",
+          exposed_pads: [],
+          rule_results: ["PP-001", "PP-002", "PP-003", "PP-004", "PP-005"].map((rule_id) => ({ rule_id, state: rule_id === "PP-001" ? "PASS" : "NOT_APPLICABLE", reason: "" })),
+          overall: "PASS",
+          not_implemented: ["PP-006 pin names and functions against the datasheet pinout table"],
+          limitations: [],
+        };
       default:
         throw new Error(`unmocked ${cmd}`);
     }
@@ -147,5 +173,19 @@ describe("LibraryBrowser", () => {
     expect(list.textContent).toContain("CC-BY-SA-4.0");
     fireEvent.click(screen.getByRole("button", { name: "Remove kicad-lite" }));
     await waitFor(() => expect(calls.some((c) => c.cmd === "library_imported_remove" && c.args.name === "kicad-lite")).toBe(true));
+  });
+
+  it("shows a part whose footprint rules are not all passing as footprint unverified, with the rule table", async () => {
+    render(<LibraryBrowser />);
+    await screen.findByRole("table", { name: "Library results" });
+    fireEvent.click(screen.getAllByRole("button", { name: "OSS_R" })[0] as HTMLElement);
+    const rules = await screen.findByRole("table", { name: "Footprint rules" });
+    expect(rules.textContent).toContain("no land-pattern table");
+    const status = screen.getByLabelText("Footprint status");
+    expect(status.textContent).toBe("Footprint unverified");
+    expect(status.getAttribute("data-verified")).toBe("false");
+    expect(screen.getByText(/Not implemented: FP-010/)).toBeTruthy();
+    expect(screen.getByLabelText("Pin to pad status").textContent).toBe("Pin-to-pad checks passed");
+    expect(calls.some((c) => c.cmd === "footprint_verify" && c.args.id === "OSS_R")).toBe(true);
   });
 });
