@@ -28,7 +28,7 @@ pub const PIN1_DOT: Nm = 300_000;
 pub const MASK_CLEARANCE: Nm = 100_000;
 
 /// One legend stroke: a round-ended line of `width` (a == b draws a round dot).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub struct Stroke {
     pub a: Point,
     pub b: Point,
