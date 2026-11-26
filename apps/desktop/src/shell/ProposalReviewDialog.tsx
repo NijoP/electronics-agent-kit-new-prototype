@@ -152,6 +152,8 @@ export function ProposalReviewDialog({ revision, busy, onApplied, onClose }: Pro
     <div className="palette-backdrop" onClick={onClose}>
       <div className="palette eco-preview proposal-review" role="dialog" aria-modal="true" aria-label="Review agent proposal" onClick={(e) => e.stopPropagation()}>
         <h3>Review agent proposal</h3>
+        {/* Only the body scrolls, so the reason and the action row stay in the window. */}
+        <div className="proposal-body">
         {error && (
           <p role="alert" className="explorer-error">
             {error}
@@ -278,6 +280,7 @@ export function ProposalReviewDialog({ revision, busy, onApplied, onClose }: Pro
             <p className="muted">{review.note}</p>
           </>
         )}
+        </div>
         {review && review.proposal.id === id && state.reason && (
           <p className="eco-reason proposal-reason" role="note">
             {state.reason}
