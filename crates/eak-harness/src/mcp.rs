@@ -71,16 +71,47 @@ pub fn handle_message(ctx: &CallContext, msg: &Value) -> Option<Value> {
 }
 
 /// Serve MCP on stdin/stdout until EOF.
+/// Launch registration (ADR-0053): when the launcher set `EAK_AGENT_TOOL`, register the session
+/// on the WEFT bus through the same `weft_register` tool path as any call. Tried after
+/// `initialize` and, while it has not succeeded (for example the project does not exist yet),
+/// after every tool call. Returns whether it is still pending.
+fn try_register(ctx: &CallContext, pending: &Option<Value>) -> bool {
+    let Some(args) = pending else {
+        return false;
+    };
+    let env = route::invoke(ctx, "weft_register", args);
+    if env["ok"] == json!(true) {
+        eprintln!(
+            "eak-mcp: registered on the WEFT bus as {}",
+            env["result"]["agent"]["id"].as_str().unwrap_or("?")
+        );
+        false
+    } else {
+        true
+    }
+}
+
 pub fn serve(ctx: &CallContext) -> std::io::Result<()> {
     let stdin = std::io::stdin();
     let mut out = std::io::stdout().lock();
+    let mut launch = crate::weft::launch_registration(|k| std::env::var(k).ok());
     for line in stdin.lock().lines() {
         let line = line?;
         if line.trim().is_empty() {
             continue;
         }
         let reply = match serde_json::from_str::<Value>(&line) {
-            Ok(msg) => handle_message(ctx, &msg),
+            Ok(msg) => {
+                let reply = handle_message(ctx, &msg);
+                let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
+                if launch.is_some()
+                    && matches!(method, "initialize" | "tools/call")
+                    && !try_register(ctx, &launch)
+                {
+                    launch = None;
+                }
+                reply
+            }
             Err(e) => Some(
                 json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": format!("parse error: {e}")}}),
             ),
