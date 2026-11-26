@@ -10,12 +10,15 @@
 //! * `manufacturing` – compile the manufacturing package of the current revision into
 //!   `output/rev-N/` (re-runs every check first). Never edits the design.
 //! * `project` / `discovery` – create a project; list tools; read the agent guide.
+//! * `proposal`      – propose mode (ADR-0051): design tools add steps to a proposal checked on a
+//!   copy; these tools name, review, submit or discard it. Only a person applies it, in EAK.
 //!
 //! The command tools and most read tools are the ones `eak-intelligence` already generates from
 //! the runtime (one schema per `Command` variant, checked against serde in its tests), so the
 //! harness cannot drift from the command set.
 
 use crate::context::CallContext;
+use crate::proposal::ApplyMode;
 use eak_core::Project;
 use eak_engineering::netlist;
 use eak_intelligence::tools::{command_tools, decode_command, read_tools, readonly};
@@ -47,6 +50,9 @@ pub enum Category {
     Knowledge,
     /// Agent task ledger (ADR-0036): begin, finish and read the execution-grounded task record.
     Task,
+    /// Proposals (ADR-0051): name, read, submit or discard what a propose-mode session built.
+    /// Never applies one: a person does, in EAK.
+    Proposal,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -342,6 +348,38 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         Category::Task,
         "This session's active task and the project's recent tasks: phase, starting revision, latest revision, last ERC/DRC error counts and phase history. Read-only.",
         empty(),
+    ));
+    // Proposals (ADR-0051, `proposal` module). There is no apply tool: a person applies.
+    let prop = Category::Proposal;
+    v.push(spec(
+        "proposal_begin",
+        prop,
+        "Start this session's proposal at the current revision, or rename the open one, with a title and the rationale the reviewer will see (shown as assumed, never as evidence). In propose mode the first design call starts one anyway. Does not change the design.",
+        props(json!({"title": str_schema("short title, e.g. 'Add USB-C 5 V input with ESD'"), "rationale": str_schema("why: the requirement or finding this addresses")}), &[]),
+    ));
+    v.push(spec(
+        "proposal_status",
+        prop,
+        "Review a proposal as EAK computes it now on a copy of the project: each step's changes, the total delta, ERC/DRC before and after (findings that appear or are resolved, rules newly UNKNOWN), evidence labels, and why it cannot be applied (stale, failing on the copy). Default: this session's open proposal. Read-only.",
+        props(json!({"proposal_id": str_schema("proposal id (default: this session's open or ready one)"), "steps": {"type": "array", "items": {"type": "integer", "minimum": 0}, "description": "review only these step indices"}}), &[]),
+    ));
+    v.push(spec(
+        "proposal_list",
+        prop,
+        "Every proposal of the project: id, title, status (open, ready, applied, discarded), agent, session, base revision, stale, steps. Read-only.",
+        empty(),
+    ));
+    v.push(spec(
+        "proposal_submit",
+        prop,
+        "Mark this session's open proposal ready for review. It takes no more steps; the next design call starts a new proposal. The user applies or discards it in EAK.",
+        props(json!({"proposal_id": str_schema("proposal id (default: this session's open one)")}), &[]),
+    ));
+    v.push(spec(
+        "proposal_discard",
+        prop,
+        "Discard one of this session's proposals (open or ready). Nothing in the design changes.",
+        props(json!({"proposal_id": str_schema("proposal id (default: this session's open or ready one)")}), &[]),
     ));
     // Autonomous design flow (ADR-0020, `design` module).
     let flow = Category::Flow;
@@ -675,6 +713,11 @@ fn dispatch(
     spec: &ToolSpec,
     args: &Value,
 ) -> Result<Value, Fail> {
+    if ctx.apply_mode == ApplyMode::Propose {
+        if let Some(r) = propose_mode(engine, ctx, spec, args) {
+            return r;
+        }
+    }
     match spec.category {
         Category::Design => design(engine, ctx, spec, args),
         Category::Validation if spec.name == "run_gates" => run_gates(engine, args),
@@ -689,6 +732,7 @@ fn dispatch(
         Category::Rework => crate::rework::dispatch(engine, ctx, &spec.name, args),
         Category::Knowledge => crate::knowledge::dispatch(engine, &spec.name, args),
         Category::Task => crate::agent_task::dispatch(engine, ctx, &spec.name, args),
+        Category::Proposal => crate::proposal::dispatch(engine, ctx, &spec.name, args),
         // Discovery needs no project, but a client that sends its project context (the MCP
         // server, any app-endpoint client) must still get an answer rather than a refusal.
         Category::Discovery => Ok(discovery(&spec.name)),
@@ -697,6 +741,89 @@ fn dispatch(
             format!("{} does not run against an open project", spec.name),
         )),
     }
+}
+
+/// Propose mode (ADR-0051): the calls that act differently, or `None` for the rest.
+/// * design tools add a step to the session's proposal instead of executing; Undo/Redo, which
+///   would change the project, are refused;
+/// * `design_apply` adds its plan to the proposal (in `design`); `rework_apply` is refused
+///   (rework has its own human approval and per-repair readback);
+/// * reads, checks and simulation run on a copy with the session's open proposal applied, so
+///   the agent sees its own pending edits; such checks store no evidence (the copy is not a
+///   revision).
+fn propose_mode(
+    engine: &mut Engine,
+    ctx: &CallContext,
+    spec: &ToolSpec,
+    args: &Value,
+) -> Option<Result<Value, Fail>> {
+    match spec.category {
+        Category::Design => Some(propose_design(engine, ctx, spec, args)),
+        Category::Rework if spec.name == "rework_apply" => Some(Err(Fail(
+            ErrorCode::Precondition,
+            "rework_apply is not available in propose mode: start the session without --propose (rework plans need their own human approval)".into(),
+            json!({"apply_mode": "propose"}),
+        ))),
+        // Project records (identity, history, the stored spec behind intel_*) stay the project's.
+        Category::Read
+            if matches!(spec.name.as_str(), "project_info" | "get_history")
+                || spec.name.starts_with("intel_") =>
+        {
+            None
+        }
+        Category::Read | Category::Validation | Category::Simulation => {
+            let (mut view, id) = crate::proposal::session_view(engine, ctx)?;
+            let mut r = match spec.category {
+                Category::Read => read(&view, &spec.name, args),
+                Category::Validation if spec.name == "run_gates" => run_gates(&mut view, args),
+                Category::Validation => {
+                    let check = args.get("check").and_then(Value::as_str).unwrap_or("");
+                    run_checks(&mut view, check)
+                }
+                _ => simulation(view.project(), &spec.name, args),
+            };
+            if let Ok(Value::Object(m)) = &mut r {
+                m.insert(
+                    "proposal_view".into(),
+                    json!({"proposal_id": id, "base_revision": engine.project().revision,
+                           "note": "computed on a copy with this session's open proposal applied; the project itself is unchanged and no evidence was stored"}),
+                );
+            }
+            Some(r)
+        }
+        _ => None,
+    }
+}
+
+fn propose_design(
+    engine: &mut Engine,
+    ctx: &CallContext,
+    spec: &ToolSpec,
+    args: &Value,
+) -> Result<Value, Fail> {
+    let expected = expected_revision(args)?;
+    if spec.name == "Undo" || spec.name == "Redo" {
+        return Err(Fail(
+            ErrorCode::Precondition,
+            format!("{} would change the project; in propose mode drop the proposal with proposal_discard instead", spec.name),
+            json!({"apply_mode": "propose"}),
+        ));
+    }
+    let command = decode_command(&spec.name, &command_args(args))
+        .map_err(|e| fail(ErrorCode::InvalidArguments, e))?;
+    // The same ERC gate as standing mode guards a proposed PCB synchronisation (ADR-0036).
+    if carries_pcb_sync(&command) {
+        crate::agent_task::pcb_sync_gate(engine).map_err(|why| {
+            Fail(
+                ErrorCode::Precondition,
+                why,
+                json!({"gate": "pcb_sync", "needs": ["committed schematic symbols", "ERC run since the last schematic change"]}),
+            )
+        })?;
+    }
+    let mut v = crate::proposal::propose(engine, ctx, &spec.name, command, expected)?;
+    v["rerun_checks"] = json!(spec.rerun_checks);
+    Ok(v)
 }
 
 /// Result of a discovery tool; none of them reads a project.

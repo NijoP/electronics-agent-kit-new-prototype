@@ -14,9 +14,80 @@ pub const SCHEMA_VERSION: u32 = 7;
 pub type Id = String;
 
 /// Allocate a fresh stable object identifier with a type prefix (`sym_`, `wir_`, ...).
+///
+/// Inside [`with_id_script`] the identifier comes from the script's replay queue for that prefix
+/// when it holds one, and every identifier handed out is recorded.
 pub fn new_id(prefix: &str) -> Id {
+    let scripted = ID_SCRIPT.with(|s| {
+        let mut s = s.borrow_mut();
+        let script = s.as_mut()?;
+        let id = script
+            .replay
+            .get_mut(prefix)
+            .and_then(std::collections::VecDeque::pop_front)
+            .unwrap_or_else(|| random_id(prefix));
+        script.issued.push(id.clone());
+        Some(id)
+    });
+    scripted.unwrap_or_else(|| random_id(prefix))
+}
+
+fn random_id(prefix: &str) -> Id {
     let u = uuid::Uuid::new_v4().simple().to_string();
     format!("{prefix}_{}", &u[..16])
+}
+
+struct IdScript {
+    replay: BTreeMap<String, std::collections::VecDeque<Id>>,
+    issued: Vec<Id>,
+}
+
+thread_local! {
+    static ID_SCRIPT: std::cell::RefCell<Option<IdScript>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Run `f` with [`new_id`] replaying `replay` and recording what it hands out (ADR-0051).
+///
+/// A proposal is computed on a copy of the project and applied later through
+/// `Engine::execute`. Re-running its commands would allocate new random ids, so a later step
+/// that names an object an earlier step created (by the id the agent was shown) would miss
+/// it. Replaying the ids recorded on the copy makes the re-run allocate the same ones. Ids
+/// are taken in order per prefix (the part before the last `_`); a prefix with no recorded id
+/// left gets a random one. Returns `f`'s result and every id handed out, in order. Scripts do
+/// not nest: an inner call replaces the outer script until it returns.
+pub fn with_id_script<T>(replay: &[Id], f: impl FnOnce() -> T) -> (T, Vec<Id>) {
+    let mut queues: BTreeMap<String, std::collections::VecDeque<Id>> = BTreeMap::new();
+    for id in replay {
+        let prefix = id.rsplit_once('_').map_or("", |(p, _)| p);
+        queues
+            .entry(prefix.into())
+            .or_default()
+            .push_back(id.clone());
+    }
+    struct Restore(Option<IdScript>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let outer = self.0.take();
+            ID_SCRIPT.with(|s| *s.borrow_mut() = outer);
+        }
+    }
+    let outer = ID_SCRIPT.with(|s| {
+        s.borrow_mut().replace(IdScript {
+            replay: queues,
+            issued: vec![],
+        })
+    });
+    let restore = Restore(outer);
+    let out = f();
+    let issued = ID_SCRIPT
+        .with(|s| {
+            s.borrow_mut()
+                .as_mut()
+                .map(|x| std::mem::take(&mut x.issued))
+        })
+        .unwrap_or_default();
+    drop(restore);
+    (out, issued)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1388,6 +1459,49 @@ mod multilayer_tests {
             mk(CopperLayer::Inner(1), CopperLayer::Inner(2)).kind(),
             ViaKind::Buried
         );
+    }
+}
+
+#[cfg(test)]
+mod id_script_tests {
+    use super::*;
+
+    #[test]
+    fn a_script_replays_recorded_ids_per_prefix_and_records_what_it_hands_out() {
+        let ((), first) = with_id_script(&[], || {
+            new_id("sym");
+            new_id("wir");
+            new_id("sym");
+        });
+        assert_eq!(first.len(), 3);
+        // Replayed in order per prefix; an interleaved other prefix does not shift them, and a
+        // prefix with nothing recorded gets a fresh id.
+        let (ids, second) = with_id_script(&first, || {
+            [new_id("op"), new_id("sym"), new_id("sym"), new_id("wir")]
+        });
+        assert_eq!(ids[1], first[0]);
+        assert_eq!(ids[2], first[2]);
+        assert_eq!(ids[3], first[1]);
+        assert!(ids[0].starts_with("op_") && !first.contains(&ids[0]));
+        assert_eq!(second, ids.to_vec());
+        // Exhausted queue: random again. Outside a script nothing is recorded or replayed.
+        let ((), third) = with_id_script(&first[..1], || {
+            new_id("sym");
+            new_id("sym");
+        });
+        assert_eq!(third[0], first[0]);
+        assert_ne!(third[1], first[2]);
+        assert_ne!(new_id("sym"), first[0]);
+    }
+
+    #[test]
+    fn the_script_is_removed_even_when_the_closure_panics() {
+        let r = std::panic::catch_unwind(|| {
+            let replay = ["sym_0000000000000001".to_string()];
+            with_id_script(&replay, || -> u8 { panic!("boom") })
+        });
+        assert!(r.is_err());
+        assert_ne!(new_id("sym"), "sym_0000000000000001");
     }
 }
 
