@@ -77,6 +77,7 @@ export const AGENT_IPC = [
   "agent_sessions",
   "agent_session_log",
   "agent_tool_stop",
+  "agent_session_restart",
 ] as const;
 
 // Terminal workspace commands: must match `TERMINAL_COMMANDS` in src-tauri/src/terminal.rs.
@@ -390,6 +391,7 @@ export const api = {
   agentSessions: () => call<AgentSession[]>("agent_sessions"),
   agentSessionLog: (id: string, lines: number) => call<string>("agent_session_log", { id, lines }),
   agentToolStop: (id: string) => call<AgentSession>("agent_tool_stop", { id }),
+  agentSessionRestart: (id: string) => call<AgentSession>("agent_session_restart", { id }),
 };
 
 export function describeError(e: CommandError): string {

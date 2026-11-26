@@ -70,7 +70,7 @@ fn sign_in_and_launch_open_terminal_tabs_and_sessions_are_listed() {
     let fake = bin.join("claude");
     std::fs::write(
         &fake,
-        "#!/bin/sh\ncase \"$1 $2\" in\n  \"auth login\") echo \"fake sign-in for $EAK_AGENT_NAME\"; read x ;;\n  \"--allowedTools \"*) echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"ok\"}' ;;\n  *) echo \"fake claude session $EAK_TASK_ID\"; read x ;;\nesac\n",
+        "#!/bin/sh\ncase \"$1 $2\" in\n  \"auth login\") echo \"fake sign-in for $EAK_AGENT_NAME\"; read x ;;\n  \"--allowedTools \"*) echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"ok\"}' ;;\n  *) echo \"fake claude session $EAK_TASK_ID $EAK_HARNESS_APPLY_MODE\"; read x ;;\nesac\n",
     )
     .unwrap();
     std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -120,8 +120,9 @@ fn sign_in_and_launch_open_terminal_tabs_and_sessions_are_listed() {
         }
         std::thread::sleep(Duration::from_millis(50));
     };
+    // Sessions started from Settings run the harness in propose mode.
     assert!(
-        log.contains(&format!("fake claude session {}", v.id)),
+        log.contains(&format!("fake claude session {} propose", v.id)),
         "{log}"
     );
     let listed = agents::sessions(&s, &manager);
@@ -153,5 +154,32 @@ fn sign_in_and_launch_open_terminal_tabs_and_sessions_are_listed() {
         std::thread::sleep(Duration::from_millis(50));
     };
     assert_eq!(done.state, SessionState::Completed, "{done:?}");
+
+    // Restart: the same tool, surface and first message as a new session.
+    let again = agents::restart(&s, &manager, &h.id).unwrap();
+    assert_ne!(again.id, h.id);
+    assert_eq!(again.surface, Surface::Headless);
+    assert_eq!(again.prompt.as_deref(), Some("check"));
+    let start = Instant::now();
+    let done = loop {
+        let v = agents::sessions(&s, &manager)
+            .into_iter()
+            .find(|x| x.id == again.id)
+            .unwrap();
+        if v.state != SessionState::Running || start.elapsed() > Duration::from_secs(10) {
+            break v;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert_eq!(done.state, SessionState::Completed, "{done:?}");
+    // A stopped terminal session restarts in a new tab, which Stop closes again.
+    let tab = agents::restart(&s, &manager, &v.id).unwrap();
+    assert_eq!(tab.surface, Surface::Terminal);
+    let new_term = tab.terminal_session.unwrap();
+    assert_ne!(new_term, term);
+    assert!(manager.info(new_term).is_ok());
+    agents::stop(&s, &manager, &tab.id).unwrap();
+    assert!(manager.info(new_term).is_err(), "the new tab is closed");
+    assert!(agents::restart(&s, &manager, "no-such-session").is_err());
     manager.shutdown();
 }
