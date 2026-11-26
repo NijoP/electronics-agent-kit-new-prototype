@@ -83,5 +83,24 @@
     - the engineer's apply leaving the other proposal stale and refused;
     - the journal history.
   - `weft::tests` round-trips journal lines and replays them into the state.
+- **Addendum, activity view (2026-11-26):**
+  - `eak_harness::activity::timeline(dir)` builds one time-ordered list. It reads files only and
+    writes nothing. Its sources:
+    - committed operations of the engine journal (the last line per `op_id`), with the actor,
+      the command, the revision before and after, and the changed objects as `path:key`;
+    - proposal events (`proposals/journal.jsonl`);
+    - WEFT events;
+    - saved validation reports (`evidence/*.json` that carry `check`, `revision`, `errors` and
+      `warnings`).
+  - The desktop IPC `activity_timeline` serves it. Tools › Agent activity… (`ActivityDialog`)
+    groups it by actor and re-reads it every 2 s while open, because WEFT messages do not move the
+    revision. A revision shows the ERC/DRC errors of the reports saved for its before and after
+    revisions; a side with no saved report reads "not run", never 0.
+  - The actions use existing paths only:
+    - Review proposal opens the S9 review dialog on that proposal (Apply / Discard there);
+    - Undo this revision is Edit › Undo, offered only on the newest committed revision;
+    - Show on canvas selects and zooms to the first changed symbol or footprint.
+  - ui-evidence `scenarios/w2-activity.json` covers it.
+  - Limitation: the view polls; there is no push from the bus.
 - **Source requirement:** Captain's 19:00 directive §2 (WEFT orchestration); AGENTS.md (one write
   path through `Engine::execute`, AI never self-certifies); ADR-0051.
