@@ -12,6 +12,7 @@ const toMm = (nm: number) => nm / MM;
 const OZ_MM = 0.035;
 
 export interface SceneLayer {
+  layer: CopperLayer;
   key: string;
   name: string;
   colour: string;
@@ -70,19 +71,54 @@ const rotDeg = (r: unknown) => ({ R90: 90, R180: 180, R270: 270 } as Record<stri
 const pt = (p: Point): [number, number] => [toMm(p.x), toMm(p.y)];
 
 /**
- * Centre heights per copper layer: outer layers sit on the surfaces, inner ones are spread evenly.
- * `colourOf` is the PCB layer manager's colour (user override or default), so 3D and PCB agree.
+ * Centre heights per copper layer: outer layers sit on the surfaces; inner ones at their depth in the
+ * stack-up (copper plus the dielectric gap after each layer, as `SetStackup` sets them, scaled to the
+ * board thickness), spread evenly when no gaps are given. `colourOf` is the PCB layer manager's
+ * colour (user override or default), so 3D and PCB agree.
  */
-export function layerHeights(layers: CopperLayer[], thickness: number, copper: number[], colourOf: (l: CopperLayer) => string = layerColour): SceneLayer[] {
+export function layerHeights(layers: CopperLayer[], thickness: number, copper: number[], colourOf: (l: CopperLayer) => string = layerColour, gaps: number[] = []): SceneLayer[] {
   const n = layers.length;
+  const ct = layers.map((_, i) => Math.max(copper[i] ?? OZ_MM, 0.02));
+  const stack = ct.reduce((a, b) => a + b, 0) + gaps.slice(0, n - 1).reduce((a, b) => a + Math.max(b, 0), 0);
+  // Without declared dielectric gaps (older stack-ups) the inner layers are spread evenly.
+  const useGaps = gaps.length >= n - 1 && gaps.slice(0, n - 1).some((g) => g > 0) && stack > 0;
+  let depth = 0;
   return layers.map((l, i) => {
-    const ct = Math.max(copper[i] ?? OZ_MM, 0.02);
     let y: number;
-    if (i === 0) y = thickness / 2 + ct / 2;
-    else if (i === n - 1) y = -thickness / 2 - ct / 2;
+    if (i === 0) y = thickness / 2 + ct[i] / 2;
+    else if (i === n - 1) y = -thickness / 2 - ct[i] / 2;
+    else if (useGaps) y = thickness / 2 - ((depth + ct[i] / 2) * thickness) / stack;
     else y = thickness / 2 - (thickness * i) / (n - 1);
-    return { key: layerKey(l), name: layerName(l), colour: colourOf(l), y, thickness: ct };
+    depth += ct[i] + Math.max(gaps[i] ?? 0, 0);
+    return { layer: l, key: layerKey(l), name: layerName(l), colour: colourOf(l), y, thickness: ct[i] };
   });
+}
+
+/** Gap (mm) between neighbouring copper layers at full explode. */
+export const EXPLODE_GAP_MM = 4;
+
+/**
+ * The scene with its copper layers pulled apart symmetrically about the board centre: `factor` 0 is
+ * the real stack-up, 1 separates neighbouring layers by `EXPLODE_GAP_MM`. Vias stretch with the
+ * layers they join; parts, silkscreen and courtyards follow the outer layers. View only.
+ */
+export function explodeScene(sc: BoardScene, factor: number): BoardScene {
+  const f = Math.min(Math.max(factor, 0), 1);
+  if (f === 0 || sc.layers.length < 2) return sc;
+  const mid = (sc.layers.length - 1) / 2;
+  const shift = sc.layers.map((_, i) => f * EXPLODE_GAP_MM * (mid - i));
+  const near = (y: number) => {
+    let best = 0;
+    sc.layers.forEach((l, i) => {
+      if (Math.abs(l.y - y) < Math.abs(sc.layers[best].y - y)) best = i;
+    });
+    return shift[best];
+  };
+  return {
+    ...sc,
+    layers: sc.layers.map((l, i) => ({ ...l, y: l.y + shift[i] })),
+    vias: sc.vias.map((v) => ({ ...v, yTop: v.yTop + near(v.yTop), yBottom: v.yBottom + near(v.yBottom) })),
+  };
 }
 
 /** A pad's copper item as a scene pad: polygon = rectangle, disc = circle, stadium = oval. */
@@ -114,7 +150,8 @@ export function buildScene(s: Snapshot, colourOf: (l: CopperLayer) => string = l
     const sl = stackup?.layers.find((x) => layerKey(x.layer) === layerKey(l));
     return (sl?.copper_oz ?? 1) * OZ_MM;
   });
-  const layers = layerHeights(order, thickness, copper, colourOf);
+  const gaps = order.map((l) => (stackup?.layers.find((x) => layerKey(x.layer) === layerKey(l))?.dielectric_after_um ?? 0) / 1000);
+  const layers = layerHeights(order, thickness, copper, colourOf, stackup?.layers.length ? gaps : []);
   const byKey = new Map(layers.map((l) => [l.key, l]));
   const top = layers[0];
   const bottom = layers[layers.length - 1];

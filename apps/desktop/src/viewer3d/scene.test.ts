@@ -1,6 +1,6 @@
 // Scene builder for the 3D viewer.
 import { describe, expect, it } from "vitest";
-import { buildScene, layerHeights, modelStatus } from "./scene";
+import { buildScene, EXPLODE_GAP_MM, explodeScene, layerHeights, modelStatus } from "./scene";
 import type { BoardGeometry, CopperItem, Snapshot } from "../types";
 
 const MM = 1_000_000;
@@ -96,6 +96,28 @@ describe("buildScene", () => {
     expect(stale.source).toBe("snapshot");
     expect(stale.fills).toEqual([]);
     expect(stale.tracks).toHaveLength(1);
+  });
+
+  it("W2-K: inner layers sit at their stack-up depth (SetStackup gaps), scaled to the board", () => {
+    // 0.2 mm prepreg, 1.2 mm core, 0.2 mm prepreg: In1 near the top, In2 near the bottom.
+    const ls = layerHeights(["top", { inner: 1 }, { inner: 2 }, "bottom"], 1.6, [0, 0, 0, 0].map(() => 0.035), undefined, [0.2, 1.2, 0.2, 0]);
+    expect(ls[1].y).toBeGreaterThan(0.5);
+    expect(ls[2].y).toBeLessThan(-0.5);
+    expect(ls[1].y + ls[2].y).toBeCloseTo(0, 6);
+    expect(ls.map((l) => l.layer)).toEqual(["top", { inner: 1 }, { inner: 2 }, "bottom"]);
+    // No gaps declared: even spread, as before.
+    const even = layerHeights(["top", { inner: 1 }, { inner: 2 }, "bottom"], 1.6, [0.035, 0.035, 0.035, 0.035]);
+    expect(even[1].y).toBeCloseTo(1.6 / 2 - 1.6 / 3, 6);
+  });
+  it("W2-K: explode pulls the copper layers apart symmetrically and stretches vias with them", () => {
+    const sc = buildScene(snap({ vias: { v1: { id: "v1", position: { x: MM, y: MM }, drill: 300_000, diameter: 600_000, net: "N", from: "top", to: "bottom" } } }));
+    expect(explodeScene(sc, 0)).toBe(sc);
+    const ex = explodeScene(sc, 1);
+    expect(ex.layers[0].y - sc.layers[0].y).toBeCloseTo(EXPLODE_GAP_MM / 2, 6);
+    expect(ex.layers[1].y - sc.layers[1].y).toBeCloseTo(-EXPLODE_GAP_MM / 2, 6);
+    expect(ex.vias[0].yTop - ex.vias[0].yBottom).toBeCloseTo(sc.vias[0].yTop - sc.vias[0].yBottom + EXPLODE_GAP_MM, 6);
+    expect(ex.bounds).toEqual(sc.bounds);
+    expect(explodeScene(sc, 5).layers[0].y).toBeCloseTo(ex.layers[0].y, 6);
   });
 
   it("places outer copper on the surfaces and inner copper inside", () => {

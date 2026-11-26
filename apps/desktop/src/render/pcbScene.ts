@@ -43,7 +43,6 @@ export interface PcbSceneOptions {
    * null: the refdes label is drawn as before.
    */
   silk?: { top: SilkStroke[]; bottom: SilkStroke[] } | null;
-}| null;
 }
 
 /** Outline-view line width in view mm. */

@@ -65,6 +65,32 @@ describe("3D document properties", () => {
     expect(reload.title).toBe("No part references a 3D model file");
   });
 
+  it("W2-K: copper visibility is the PCB layer manager's store; other groups stay local", async () => {
+    const toggle = vi.fn();
+    render(<Viewer3D projectId="prj_1" revision={7} active layerHidden={new Set(["bottom"])} onToggleLayer={toggle} />);
+    const layers = within(await screen.findByRole("region", { name: "3D layers" }));
+    const bottom = (await layers.findByRole("checkbox", { name: /B.Cu copper|Bottom copper/ })) as HTMLInputElement;
+    expect(bottom.checked).toBe(false);
+    fireEvent.click(bottom);
+    expect(toggle).toHaveBeenCalledWith("bottom");
+    const silk = layers.getByRole("checkbox", { name: "Top silkscreen" }) as HTMLInputElement;
+    expect(silk.checked).toBe(true);
+    fireEvent.click(silk);
+    expect(silk.checked).toBe(false);
+    expect(toggle).toHaveBeenCalledTimes(1);
+    expect(layers.getByRole("slider", { name: "Explode stack-up" })).toBeTruthy();
+  });
+
+  it("E1: says when the engine board geometry is drawn", async () => {
+    mockIPC((cmd) => {
+      if (cmd === "current_project") return snap;
+      if (cmd === "board_geometry") return { revision: snap.project.revision, outline: [], cutouts: [], thickness: 1_600_000, copper: [], fill_views: [], holes: [], silk: { top: [], bottom: [] }, outline_mm: [], thickness_mm: 1.6, bodies: [], missing_models: [] };
+      throw new Error(`unexpected ${cmd}`);
+    });
+    render(<Viewer3D projectId="prj_1" revision={7} active />);
+    expect(await screen.findByText(/engine board geometry DRC checks/)).toBeTruthy();
+  });
+
   it("board colour and finish are SetManufacturing commands on the IR settings", async () => {
     const execute = vi.fn<(c: Command) => Promise<void>>(async () => undefined);
     render(<Viewer3D projectId="prj_1" revision={7} active execute={execute} />);

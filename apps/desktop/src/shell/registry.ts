@@ -34,6 +34,9 @@ export interface WorkspaceContext {
   busy?: boolean;
   /** Display colour of a copper layer in the PCB layer manager (user override or default). */
   layerColour?: (l: CopperLayer) => string;
+  /** Copper layer keys hidden in the PCB layer manager, and its toggle (one visibility store). */
+  layerHidden?: ReadonlySet<string>;
+  toggleLayer?: (l: CopperLayer) => void;
 }
 
 export interface WorkspaceEntry {

@@ -15,7 +15,7 @@ import { api, pickModelFile } from "../api";
 import { layerColour, stackLayers } from "../layers";
 import { modelFormOf, modelRefFromForm, QUALITIES, type ModelForm } from "../shell/LibraryPanel";
 import type { BoardGeometry, Command, ComponentDef, CopperLayer, ModelQuality, ModelRef, Snapshot } from "../types";
-import { buildScene, modelStatus, type BoardScene, type ModelStatus } from "./scene";
+import { buildScene, explodeScene, modelStatus, type BoardScene, type ModelStatus } from "./scene";
 import { evictModel, loadModel, modelKey } from "./modelLoader";
 import { modelToWorld } from "./modelTransform";
 import { publishView3d } from "./controls";
@@ -37,6 +37,10 @@ interface Props {
   busy?: boolean;
   /** The PCB layer manager's colour per copper layer (layer colour sync). */
   layerColourOf?: (l: CopperLayer) => string;
+  /** Copper layer keys the PCB layer manager hides (one visibility store for Board and 3D). */
+  layerHidden?: ReadonlySet<string>;
+  /** Show or hide a copper layer in that store (absent: the 3D view keeps its own toggle). */
+  onToggleLayer?: (l: CopperLayer) => void;
 }
 
 /** Layer-group keys beyond the copper layers. */
@@ -246,9 +250,9 @@ interface Three {
   groups: Map<string, THREE.Group>;
 }
 
-export function Viewer3D({ projectId, revision, active, selected = null, onSelect, onProbe, execute, busy = false, layerColourOf = layerColour }: Props) {
+export function Viewer3D({ projectId, revision, active, selected = null, onSelect, onProbe, execute, busy = false, layerColourOf = layerColour, layerHidden, onToggleLayer }: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const three = useRef<Three |  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const three = useRef<Three | null>(null);
   /** The engine board geometry (ADR-0051) of the latest revision read; null until it arrives. */
   const [geometry, setGeometry] = useState<BoardGeometry | null>(null);
   const [loads, setLoads] = useState<Record<string, Load>>({});
@@ -258,11 +262,21 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
   const [webgl, setWebgl] = useState(true);
   const [gpuLost, setGpuLost] = useState(false);
   const [ready, setReady] = useState(false);
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [ownHidden, setHidden] = useState<Set<string>>(new Set());
+  // Copper visibility comes from the PCB layer manager when the workspace shares it.
+  const sharedKey = layerHidden ? [...layerHidden].sort().join(",") : null;
+  const hidden = useMemo(() => {
+    if (sharedKey === null) return ownHidden;
+    const h = new Set([...ownHidden].filter((k) => !k.startsWith("cu:")));
+    for (const k of sharedKey ? sharedKey.split(",") : []) h.add(`cu:${k}`);
+    return h;
+  }, [ownHidden, sharedKey]);
   const [projection, setProjectionState] = useState<Projection>("perspective");
   const [measuring, setMeasuring] = useState(false);
   const [points, setPoints] = useState<V3[]>([]);
   const [labelsOn, setLabelsOn] = useState(true);
+  /** Stack-up explode, 0 (real stack-up) to 1 (layers pulled apart); view only. */
+  const [explode, setExplode] = useState(0);
   const hiddenRef = useRef(hidden);
   hiddenRef.current = hidden;
   const measuringRef = useRef(measuring);
@@ -273,7 +287,8 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
   // Layer colour sync: the scene is rebuilt when the PCB layer manager's colours change.
   const colourSig = snapshot ? stackLayers(snapshot.project.pcb.board.stackup).map((l) => layerColourOf(l.layer)).join(",") : "";
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const scene = useMemo(() => (snapshot ? buildScene(snapshot, layerColourOf, geometry) : null), [snapshot, geometry, colourSig]);
+  const board = useMemo(() => (snapshot ? buildScene(snapshot, layerColourOf, geometry) : null), [snapshot, geometry, colourSig]);
+  const scene = useMemo(() => (board ? explodeScene(board, explode) : null), [board, explode]);
   const look = useMemo(() => (snapshot ? appearance(snapshot) : null), [snapshot]);
   const stack = useMemo(() => (snapshot ? stackTable(snapshot) : null), [snapshot]);
   /** Footprint ids whose real model loaded (comma-joined so it works as an effect dependency). */
@@ -698,13 +713,16 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
   }, [ready, scene, projection, measuring, points.length, labelsOn, modelCount]);
   useEffect(() => () => publishView3d(null), []);
 
-  const toggle = (key: string) =>
+  const toggle = (key: string) => {
+    const shared = onToggleLayer && key.startsWith("cu:") ? scene?.layers.find((l) => `cu:${l.key}` === key)?.layer : undefined;
+    if (shared !== undefined) return onToggleLayer?.(shared);
     setHidden((h) => {
       const n = new Set(h);
       if (n.has(key)) n.delete(key);
       else n.add(key);
       return n;
     });
+  };
 
   const toggles: { key: string; label: string; colour?: string }[] = [
     ...GROUPS.map((g) => ({ key: g.key as string, label: g.label as string })),
@@ -728,7 +746,7 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
   const noGl = webgl ? null : "Unavailable: WebGL is not available in this window";
 
   return (
-    <div className="viewer3d" aria-label="3D board viewer" data-projection={projection}>
+    <div className="viewer3d" aria-label="3D board viewer" data-projection={projection} data-geometry={scene?.source ?? "none"} data-explode={explode > 0 ? "on" : "off"}>
       <div className="v3d-bar" role="toolbar" aria-label="3D view">
         {PRESETS.map((p) => (
           <button key={p.id} type="button" disabled={noGl !== null} onClick={() => preset(p.id)} title={noGl ?? p.title}>
@@ -823,6 +841,10 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
           )}
           <section aria-label="3D layers">
             <strong>Visibility</strong>
+            <label title="Pull the copper layers apart about the board centre (view only; the stack-up is unchanged)">
+              Explode stack-up
+              <input type="range" aria-label="Explode stack-up" min={0} max={1} step={0.05} value={explode} onChange={(e) => setExplode(Number(e.target.value))} />
+            </label>
             {toggles.map((g) => (
               <label key={g.key}>
                 <input type="checkbox" checked={!hidden.has(g.key)} onChange={() => toggle(g.key)} />
