@@ -11,6 +11,7 @@ eak-manufacturing.workspace = true
 eak-validation.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+rusqlite = { version = "0.37", features = ["bundled"] }
 sha2.workspace = true
 
 [lints]

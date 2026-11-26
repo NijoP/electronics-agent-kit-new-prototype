@@ -38,11 +38,7 @@ fn text_matches(q: &str, hay: &str) -> bool {
 }
 
 fn datasheet_link(url: &str) -> DatasheetRef {
-    DatasheetRef {
-        url: Some(url.to_string()),
-        sha256: None,
-        revision: None,
-    }
+    DatasheetRef::url(url)
 }
 
 /// The built-in starter library as a part source.
