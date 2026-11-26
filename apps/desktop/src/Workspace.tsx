@@ -29,6 +29,11 @@ import { StatusBar } from "./shell/StatusBar";
 import { ExportDialog } from "./shell/ExportDialog";
 import { BomExportDialog, DocumentExportDialog } from "./shell/OutputDialogs";
 import { ReleaseCheckDialog } from "./shell/ReleaseCheckDialog";
+import { JourneyBar } from "./shell/JourneyBar";
+import { journeyStages, type StageId } from "./shell/journey";
+import { ProblemsPanel } from "./shell/ProblemsPanel";
+import { collectProblems, uncheckedChecks, type Problem } from "./shell/problems";
+import { outputRevisions } from "./shell/assetsModel";
 import { RulesDialog } from "./shell/RulesDialog";
 import { AnnotateDialog } from "./shell/AnnotateDialog";
 import { NewProjectDialog, OpenProjectDialog } from "./shell/ProjectDialogs";
@@ -77,7 +82,7 @@ import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks
 import { requestFindPick, useFindReveal } from "./shell/findResults";
 import type { FindHit } from "./tools/schematic/find";
 import { whenConfirmed } from "./confirm";
-import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot, SyncChange } from "./types";
+import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, ReleaseCheck, Snapshot, SyncChange } from "./types";
 
 interface Props {
   initial: Snapshot;
@@ -185,6 +190,13 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     setRealtimeDrcState(on);
   };
   const agentTasks = useAgentTasks(snapshot.project.id, revision);
+  // Facts the journey bar and the Problems tab read (S2, S3): the read-only release check of this
+  // revision (re-read when a check result arrives, since checks save their evidence) and whether
+  // an output folder exists for this revision (re-read after each export).
+  const [release, setRelease] = useState<{ check: ReleaseCheck | null; error: string | null }>({ check: null, error: null });
+  const [outputsSeq, setOutputsSeq] = useState(0);
+  const [outputsCurrent, setOutputsCurrent] = useState<boolean | null>(null);
+  const [activeProblem, setActiveProblem] = useState<string | null>(null);
   // An external commit may delete what is selected; otherwise selection (and camera) survive it.
   useEffect(() => {
     setSelected((s) => reconcileSelection(s, snapshot.project));
@@ -315,6 +327,31 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       live = false;
     };
   }, [revision]);
+
+  useEffect(() => {
+    let live = true;
+    api
+      .releaseCheck()
+      .then((c) => live && setRelease({ check: c, error: null }))
+      .catch((e) => live && setRelease({ check: null, error: String(e).replace(/^Error: /, "") }));
+    return () => {
+      live = false;
+    };
+  }, [snapshot.project.id, revision, results]);
+  useEffect(() => {
+    setOutputsCurrent(null);
+    if (!snapshot.dir) return;
+    let live = true;
+    const id = snapshot.project.id;
+    api
+      .projectFiles(id, "")
+      .then(async (root) => (root.some((e) => e.is_dir && e.name === "output") ? outputRevisions(await api.projectFiles(id, "output"), revision).some((r) => r.current) : false))
+      .then((current) => live && setOutputsCurrent(current))
+      .catch(() => live && setOutputsCurrent(null));
+    return () => {
+      live = false;
+    };
+  }, [snapshot.project.id, snapshot.dir, revision, outputsSeq]);
 
   // Deterministic and local: re-run whenever the design revision changes.
   useEffect(() => {
@@ -535,6 +572,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     guarded(async () => {
       const r = await track("Export manufacturing files", () => api.exportManufacturing(), (x) => `${x.manifest.files.length} files, status ${x.manifest.status}`);
       setExported(r);
+      setOutputsSeq((n) => n + 1);
       setMessage(`Exported ${r.manifest.files.length} files to ${r.out_dir} (${r.manifest.status}, revision ${r.manifest.revision})`);
       await syncTo(r.manifest.revision);
     });
@@ -546,6 +584,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   };
   // D3 BOM and document exports (their dialogs run the export and show the manifest).
   const outputExported = (r: ExportResult) => {
+    setOutputsSeq((n) => n + 1);
     setMessage(`Exported ${r.manifest.files.length} file(s) to ${r.out_dir} (${r.manifest.status}, revision ${r.manifest.revision})`);
     void syncTo(r.manifest.revision).catch((e) => setMessage(String(e)));
   };
@@ -566,11 +605,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       setBottomTab("findings");
       setMessage(`Zones refilled: connectivity and DRC recomputed for revision ${out.drc.report.revision}`);
     });
-  const check = (c: Check) =>
+  const check = (c: Check, tab: BottomTab = "findings") =>
     guarded(async () => {
       const result = await track(`Run ${c.toUpperCase()}`, () => api.runCheck(c), (r) => `${r.report.findings.length} finding(s) at revision ${r.report.revision}`);
       setResults((old) => ({ ...old, [c]: result }));
-      setBottomTab("findings");
+      setBottomTab(tab);
       setMessage(`${result.report.check} ran on revision ${result.report.revision}`);
       await syncTo(result.report.revision);
     });
@@ -728,11 +767,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   // Click a finding: open the right editor, select the object, zoom to it, highlight it.
   // DRC and DFM findings live in the PCB editor (zoom + highlight); ERC findings open the sheet of
   // the first object they name that has a place there, select it and zoom to it (F7, S12).
-  const navigateFinding = (f: Finding, checkName: Check) => {
+  const navigateFinding = (f: Finding, checkName: Check, tab: BottomTab = "findings") => {
     const kind = checkName === "erc" ? "schematic" : "pcb";
     setActiveFinding(findingKey(f));
-    // The findings stay in view in the workspace the finding opened.
-    setBottomTab("findings", kind);
+    // The findings (or the Problems list it came from) stay in view in the workspace the finding opened.
+    setBottomTab(tab, kind);
     if (kind === "schematic") {
       setFocus(null);
       const placed = f.objects.some((id) => {
@@ -765,6 +804,53 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     }
     setBottomTab("findings", "schematic");
   };
+  // Journey bar (S2): a stage opens the view that acts on it.
+  const has3d = edaViews.some((w) => w.id === "viewer3d");
+  const goStage = (id: StageId) => {
+    switch (id) {
+      case "requirements":
+        return showSide("overview");
+      case "parts":
+        return setBottomTab("library");
+      case "schematic":
+      case "erc":
+        showWorkspace("schematic");
+        if (id === "erc") setBottomTab("problems", "schematic");
+        return;
+      case "layout":
+      case "routing":
+      case "drc":
+        showWorkspace("pcb");
+        if (id === "drc") setBottomTab("problems", "pcb");
+        return;
+      case "3d":
+        return showWorkspace("viewer3d");
+      case "outputs":
+        return showSide("manufacturing");
+      case "release":
+        return setDialog("release");
+    }
+  };
+  // Problems tab (S3): findings go through the F7 navigation (the Problems tab stays in view);
+  // the other rows open the view that holds what is missing.
+  const goProblem = (p: Problem) => {
+    if (!p.go) return;
+    setActiveProblem(p.key);
+    switch (p.go.kind) {
+      case "finding":
+        return navigateFinding(p.go.finding, p.go.check, "problems");
+      case "rules":
+        return setDialog("rules");
+      case "assets":
+        return showSide("assets");
+      case "release":
+        return setDialog("release");
+      case "editor":
+        return showWorkspace(p.go.editor);
+    }
+  };
+  const problems = collectProblems({ snapshot, results, release: release.check, agentTasks });
+  const stages = journeyStages({ snapshot, results, conn, release: release.check, releaseError: release.error, outputsCurrent });
   // B5 export: the engine re-runs the check on this revision and writes that report; the panel
   // then shows exactly the report that was written.
   const exportFindings = (c: Check, format: "csv" | "json") =>
@@ -981,7 +1067,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         onTheme={onTheme}
       />
       <div className="workspace-body">
-      <MenuBar menus={menus} />
+      <MenuBar menus={menus} aside={<JourneyBar stages={stages} onStage={goStage} blocked={(id) => (id === "3d" && !has3d ? "Unavailable: no 3D view is registered in this window" : null)} />} />
       <Toolbar
         groups={shownToolbar}
         labels={tbLabels}
@@ -1155,6 +1241,19 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
               busy={busy}
               onFindPick={navigateFind}
               onClose={() => setBottomOpen(false)}
+              problemCount={problems.length}
+              problems={
+                <ProblemsPanel
+                  problems={problems}
+                  revision={revision}
+                  unchecked={uncheckedChecks(results, revision)}
+                  onGo={goProblem}
+                  onCheck={(c) => void check(c, "problems")}
+                  onRelease={() => setDialog("release")}
+                  busy={busy}
+                  activeKey={activeProblem}
+                />
+              }
               library={
                 <LibraryDock
                   revision={revision}
@@ -1219,7 +1318,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       )}
       {dialog === "bom" && <BomExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "outputs" && <DocumentExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
-      {dialog === "release" && <ReleaseCheckDialog revision={revision} busy={busy} onClose={() => setDialog(null)} />}
+      {dialog === "release" && <ReleaseCheckDialog revision={revision} busy={busy} onCheck={(c) => setRelease({ check: c, error: null })} onClose={() => setDialog(null)} />}
       {dialog === "export" && (
         <ExportDialog
           result={exported}

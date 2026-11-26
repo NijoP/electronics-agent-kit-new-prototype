@@ -4,7 +4,7 @@
 // its first item and ArrowUp on its last; ArrowLeft / ArrowRight move between menus; inside a menu
 // ArrowUp / ArrowDown / Home / End move between items, Enter runs one, Escape closes the menu and
 // returns focus to its button, Tab closes it.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatShortcut } from "../design/shortcuts";
 import { nativeConfirm, whenConfirmed, type Confirm } from "../confirm";
 
@@ -26,7 +26,8 @@ export interface Menu {
 
 type Focus = "first" | "last" | null;
 
-export function MenuBar({ menus, confirm = nativeConfirm }: { menus: Menu[]; confirm?: Confirm }) {
+/** `aside`: shown at the end of the menu row (the workspace puts the journey bar there, so it takes no editor height). */
+export function MenuBar({ menus, confirm = nativeConfirm, aside }: { menus: Menu[]; confirm?: Confirm; aside?: ReactNode }) {
   const [open, setOpen] = useState<number | null>(null);
   const root = useRef<HTMLElement>(null);
   // Which item to focus once the menu that was just opened from the keyboard has rendered.
@@ -161,6 +162,7 @@ export function MenuBar({ menus, confirm = nativeConfirm }: { menus: Menu[]; con
           )}
         </div>
       ))}
+      {aside}
     </nav>
   );
 }
