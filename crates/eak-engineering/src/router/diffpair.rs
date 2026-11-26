@@ -365,17 +365,23 @@ fn check(
         env.specs[&rule.positive].via_drill as f64 / 2.0,
         env.specs[&rule.negative].via_drill as f64 / 2.0,
     );
-    for vp in &vias[0] {
-        for vn in &vias[1] {
-            if vp.dist(*vn) - rp - rn < env.hole_min - 1.0 {
-                return Err(format!(
+    if vias_too_close(vias, rp, rn, env.hole_min) {
+        return Err(format!(
                     "CLEARANCE_CONFLICT: the members' vias would be closer than the {:.3} mm hole-to-hole spacing [DRC-019]",
                     env.hole_min / 1e6
-                ));
-            }
-        }
+        ));
     }
     Ok(())
+}
+
+/// Whether a positive-member via and a negative-member via (drill radii `rp`, `rn`) would be
+/// closer than `hole_min` edge to edge (DRC-019).
+fn vias_too_close(vias: &[Vec<Point>; 2], rp: f64, rn: f64, hole_min: f64) -> bool {
+    vias[0].iter().any(|vp| {
+        vias[1]
+            .iter()
+            .any(|vn| vp.dist(*vn) - rp - rn < hole_min - 1.0)
+    })
 }
 
 /// Rectangular bumps on the `tunable` segments (longest first) on the `outer` side, adding
@@ -682,6 +688,20 @@ mod tests {
         assert_eq!(out.last().unwrap().2, Point::new(10_000_000, 0));
         // More than the segment can take.
         assert!(serpentine(&segs, &[0], 1.0, 1e9, 400_000.0, 300_000.0).is_none());
+    }
+
+    #[test]
+    fn member_vias_closer_than_the_hole_spacing_are_rejected() {
+        // 0.3 mm drills, 0.5 mm hole-to-hole minimum: centres 0.8 mm apart are exactly legal.
+        let (r, min) = (150_000.0, 500_000.0);
+        let at = |x: i64| vec![Point::new(x, 0)];
+        assert!(!vias_too_close(&[at(0), at(800_000)], r, r, min));
+        // The fixture's failure: 0.452 mm edge to edge.
+        assert!(vias_too_close(&[at(0), at(752_000)], r, r, min));
+        // Any pair counts, not only the first; a member with no via never conflicts.
+        let p = vec![Point::new(0, 5_000_000), Point::new(0, 0)];
+        assert!(vias_too_close(&[p.clone(), at(700_000)], r, r, min));
+        assert!(!vias_too_close(&[p, vec![]], r, r, min));
     }
 
     #[test]
