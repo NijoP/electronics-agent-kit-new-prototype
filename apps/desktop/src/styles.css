@@ -88,11 +88,11 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 /* Shell */
 /* Shell (product vision §1): the navigation rail runs the full height beside the workspace body
    (menus, toolbar, docks, status bar); levels are separated by tone, not by borders. */
-.workspace { height: 100%; display: grid; grid-template-columns: var(--w-rail) minmax(0, 1fr); background: var(--bg-app); }
-.workspace-body { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.workspace { height: 100%; display: grid; grid-template-columns: var(--w-rail) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); background: var(--bg-app); }
+.workspace-body { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
 .toolbar { display: flex; gap: var(--s-1); align-items: center; padding: var(--s-half) var(--s-2); min-height: 40px; flex-wrap: wrap; border-bottom: 1px solid var(--line); background: var(--bg-panel); }
 .banner { background: color-mix(in srgb, var(--warn) 22%, var(--bg-panel)); padding: var(--s-1) var(--s-2); display: flex; gap: var(--s-2); align-items: center; }
-.main { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); transition: grid-template-columns var(--t-slow) var(--ease); }
+.main { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); transition: grid-template-columns var(--t-slow) var(--ease); }
 .activity-bar { display: flex; flex-direction: column; align-items: center; gap: var(--s-quarter); width: var(--w-rail); min-height: 0; overflow-y: auto; padding: var(--s-1h) 0; background: var(--bg-deep); }
 .rail-group { display: flex; flex-direction: column; align-items: center; gap: var(--s-quarter); }
 .ab { width: 40px; height: 40px; flex: none; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--fg-faint); border-radius: var(--r-2); position: relative; transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease); }
