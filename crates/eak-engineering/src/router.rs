@@ -446,12 +446,16 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         }
     }
     let terminals = crate::priority::terminal_counts(p);
+    let fast = crate::priority::high_speed_nets(p);
     let priority: BTreeMap<String, u32> = net_ids
         .keys()
         .map(|net| {
             let n = terminals.get(net).copied().unwrap_or(2);
             let amps = p.constraints.net_currents_a.get(net).copied();
-            (net.clone(), crate::priority::net_priority(net, n, amps))
+            (
+                net.clone(),
+                crate::priority::net_priority(net, n, amps, fast.contains(net)),
+            )
         })
         .collect();
     // Per-net width / via from class and declared current.
