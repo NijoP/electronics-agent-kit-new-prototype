@@ -112,10 +112,12 @@ impl FootprintReport {
         RULES
             .iter()
             .filter(|id| !self.state_of(id).certifies())
-            .map(|id| match self.rule_results.iter().find(|r| r.rule_id == *id) {
-                Some(r) => format!("{id} is {:?}: {}", r.state, r.reason),
-                None => format!("{id} is missing from the report"),
-            })
+            .map(
+                |id| match self.rule_results.iter().find(|r| r.rule_id == *id) {
+                    Some(r) => format!("{id} is {:?}: {}", r.state, r.reason),
+                    None => format!("{id} is missing from the report"),
+                },
+            )
             .collect()
     }
 
@@ -223,7 +225,10 @@ fn fp002(fp: &FootprintDef, spec: Option<&LandPatternSpec>, tol: Nm) -> RuleResu
     let mut problems = Vec::new();
     for s in &spec.pads {
         if !fp.pads.iter().any(|p| p.number == s.number) {
-            problems.push(format!("spec pad {} is missing from the footprint", s.number));
+            problems.push(format!(
+                "spec pad {} is missing from the footprint",
+                s.number
+            ));
         }
     }
     let mut verified = true;
@@ -270,7 +275,10 @@ fn row_pitches(fp: &FootprintDef, tol: Nm) -> Vec<(String, String, Nm)> {
         let along = |q: &PadDef| if by_y { q.position.x } else { q.position.y };
         let mut lines: Vec<Vec<&PadDef>> = Vec::new();
         for &p in &pads {
-            match lines.iter_mut().find(|l| (across(l[0]) - across(p)).abs() <= tol) {
+            match lines
+                .iter_mut()
+                .find(|l| (across(l[0]) - across(p)).abs() <= tol)
+            {
                 Some(l) => l.push(p),
                 None => lines.push(vec![p]),
             }
