@@ -46,7 +46,7 @@ esac
 
 /// Codex as its `--help` documents it: user-level registration in `$D/codex.reg`.
 const CODEX: &str = r#"
-if [ "$1" = "-c" ]; then echo "$2 $EAK_SESSION_ID" > "$D/codex.session"; shift 2; fi
+if [ "$1" = "-c" ]; then echo "$2 $EAK_SESSION_ID $EAK_HARNESS_APPLY_MODE" > "$D/codex.session"; shift 2; fi
 case "$1 $2" in
   "--version "*) echo "codex-cli 0.200.0" ;;
   "login status") echo "Logged in using ChatGPT" ;;
@@ -224,7 +224,7 @@ fn fake_tools_probe_connect_disconnect_and_run_headless() {
         std::fs::read_to_string(bin.join("codex.session"))
             .unwrap()
             .trim(),
-        format!("mcp_servers.eak.env_vars=[\"EAK_SESSION_ID\"] {id2}")
+        format!("mcp_servers.eak.env_vars=[\"EAK_SESSION_ID\",\"EAK_HARNESS_APPLY_MODE\"] {id2} propose")
     );
     assert_eq!(sessions.list().first().map(|v| v.id.clone()), Some(id2));
 
