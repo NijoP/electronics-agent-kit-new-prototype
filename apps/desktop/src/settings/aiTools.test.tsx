@@ -91,6 +91,8 @@ beforeEach(() => {
           terminal_session: null,
           log_file: "/data/agent-sessions/claude-1-1.log",
           events: [{ kind: "tool_call", name: "mcp__eak__design_report" }],
+          weft_id: "agent:claude-code@claude-1-1",
+          from_earlier_run: false,
         };
         sessions = [s];
         return s;

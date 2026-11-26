@@ -147,7 +147,8 @@ fn fake_tools_probe_connect_disconnect_and_run_headless() {
 
     // Headless Claude: events parsed from its stream, stderr kept, log file written, and the
     // task id and agent name reach the process.
-    let sessions = Sessions::new(Some(tmpdir("logs")));
+    let logs = tmpdir("logs");
+    let sessions = Sessions::new(Some(logs.clone()));
     let id = sessions.next_id("claude");
     let plan = launch_plan(
         claude,
@@ -226,7 +227,25 @@ fn fake_tools_probe_connect_disconnect_and_run_headless() {
             .trim(),
         format!("mcp_servers.eak.env_vars=[\"EAK_SESSION_ID\",\"EAK_HARNESS_APPLY_MODE\"] {id2} propose")
     );
-    assert_eq!(sessions.list().first().map(|v| v.id.clone()), Some(id2));
+    assert_eq!(
+        sessions.list().first().map(|v| v.id.clone()),
+        Some(id2.clone())
+    );
+
+    // Durable (ADR-0058): the next app run restores both from the index with their final
+    // states, their WEFT ids and their logs, and cannot stop them.
+    let next_run = Sessions::new(Some(logs.clone()));
+    let back = next_run.get(&id).unwrap();
+    assert!(back.from_earlier_run);
+    assert_eq!(back.state, SessionState::Completed);
+    assert_eq!(back.weft_id, Some(format!("agent:claude-code@{id}")));
+    assert!(next_run
+        .tail(&id, 50)
+        .unwrap()
+        .iter()
+        .any(|l| l == "stderr: progress on stderr"));
+    assert_eq!(next_run.get(&id2).unwrap().state, SessionState::Failed);
+    assert!(next_run.stop(&id).is_err());
 
     // A long-running session can be stopped.
     let plan3 = eak_agents::LaunchPlan {
