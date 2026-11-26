@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EAK product demo: an electronics engineer's journey</title>
+<!--
+  EAK product demo / storyboard. Self-contained: no network, no build step.
+  This is NOT the EAK application. It shows the proposed product experience on top of
+  what EAK already has. Every surface carries an EXISTS or PROPOSED badge.
+  Colours and type follow apps/desktop/src/design/tokens.css (dark theme).
+  See docs/product/README.md.
+-->
+<style>
+:root{
+  --s-half:4px;--s-1:8px;--s-1h:12px;--s-2:16px;--s-3:24px;--r-1:4px;--r-2:8px;--r-pill:999px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+  --fs-2xs:10px;--fs-xs:11px;--fs-sm:12px;--fs-md:13px;--fs-lg:15px;--fs-xl:18px;--fs-2xl:22px;
+  --h-row:22px;--h-sm:24px;--h-md:28px;--h-bar:34px;--h-tab:42px;
+  --bg-canvas:#0d0f11;--bg-app:#14161a;--bg-panel:#181b1f;--bg-raised:#1f2328;--bg-hover:#262b31;--bg-active:#2d333a;
+  --line:#262a30;--line-strong:#363c44;--fg:#e6e8eb;--fg-dim:#9aa2ad;--fg-faint:#6b727c;
+  --accent:#e8c35a;--accent-fg:#1a1505;--accent-soft:rgba(232,195,90,.14);
+  --err:#ff8a80;--warn:#e8c35a;--ok:#8fd694;--info:#79b8ff;--neutral:#6b727c;
+  --err-soft:color-mix(in srgb,var(--err) 18%,transparent);--warn-soft:color-mix(in srgb,var(--warn) 18%,transparent);
+  --ok-soft:color-mix(in srgb,var(--ok) 16%,transparent);--info-soft:color-mix(in srgb,var(--info) 16%,transparent);
+  --term-bg:#0a0b0d;--c-sheet:#12151a;--shadow:0 16px 48px rgba(0,0,0,.5);
+  --proposed:#c9a0ff;--proposed-soft:color-mix(in srgb,#c9a0ff 16%,transparent);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg-canvas);color:var(--fg);font:var(--fs-md)/1.45 var(--font)}
+button{font:inherit;color:inherit;background:var(--bg-raised);border:1px solid var(--line-strong);border-radius:var(--r-1);height:var(--h-sm);padding:0 10px;cursor:pointer;white-space:nowrap}
+button:hover{background:var(--bg-hover)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:none;box-shadow:0 0 0 1px var(--accent),0 0 0 4px var(--accent-soft)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+button.primary:hover{filter:brightness(1.08)}
+button.ghost{background:transparent;border-color:transparent}
+button.ghost:hover{background:var(--bg-hover)}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--bg-canvas);border:1px solid var(--line-strong);border-radius:var(--r-1);height:var(--h-sm);padding:0 8px}
+textarea{height:auto;padding:8px;resize:vertical}
+.mono{font-family:var(--mono)}
+.dim{color:var(--fg-dim)}.faint{color:var(--fg-faint)}
+.row{display:flex;gap:var(--s-1);align-items:center;min-width:0}
+.col{display:flex;flex-direction:column;gap:var(--s-1);min-width:0}
+.grow{flex:1;min-width:0}
+.caps{font-size:var(--fs-2xs);letter-spacing:.06em;text-transform:uppercase;color:var(--fg-faint);font-weight:600}
+.b{display:inline-flex;align-items:center;height:16px;padding:0 6px;border-radius:var(--r-pill);font-size:9.5px;font-weight:700;letter-spacing:.05em;vertical-align:middle;cursor:help;flex:none}
+.b.ex{background:var(--ok-soft);color:var(--ok);border:1px solid color-mix(in srgb,var(--ok) 40%,transparent)}
+.b.pr{background:var(--proposed-soft);color:var(--proposed);border:1px dashed var(--proposed)}
+.chip{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 7px;border-radius:var(--r-pill);font-size:var(--fs-xs);background:var(--bg-raised);border:1px solid var(--line);white-space:nowrap}
+.chip.err{background:var(--err-soft);color:var(--err);border-color:transparent}
+.chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.ok{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.chip.info{background:var(--info-soft);color:var(--info);border-color:transparent}
+.chip.unk{background:transparent;color:var(--fg-dim);border:1px dashed var(--fg-faint)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.proposed-zone{outline:1px dashed color-mix(in srgb,var(--proposed) 55%,transparent);outline-offset:-1px}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--line);font-size:var(--fs-sm);vertical-align:top}
+th{color:var(--fg-faint);font-weight:600;font-size:var(--fs-xs);position:sticky;top:0;background:var(--bg-panel)}
+tr.click{cursor:pointer}tr.click:hover td{background:var(--bg-hover)}
+tr.sel td{background:var(--accent-soft)}
+
+/* ---- demo chrome ---- */
+#demoBar{display:flex;align-items:center;gap:var(--s-2);padding:6px 12px;background:#0b0c0e;border-bottom:1px solid var(--line);flex-wrap:wrap}
+#demoBar .title{font-weight:600}
+#legend{display:flex;gap:10px;align-items:center;font-size:var(--fs-xs);color:var(--fg-dim);flex-wrap:wrap}
+#shell{display:grid;grid-template-columns:minmax(0,1fr) auto;height:calc(100vh - 40px);min-height:620px}
+#app{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg-app);border-right:1px solid var(--line)}
+#story{width:340px;background:var(--bg-panel);overflow:auto;padding:var(--s-2);display:flex;flex-direction:column;gap:var(--s-1h)}
+#story.hidden{display:none}
+#story h3{margin:0;font-size:var(--fs-lg)}
+.story-card{background:var(--bg-raised);border:1px solid var(--line);border-radius:var(--r-2);padding:10px 12px}
+.story-card dt{font-size:var(--fs-2xs);letter-spacing:.06em;text-transform:uppercase;color:var(--fg-faint);font-weight:700;margin-top:6px}
+.story-card dd{margin:2px 0 0;font-size:var(--fs-sm)}
+.stepdots{display:flex;flex-wrap:wrap;gap:4px}
+.stepdots button{height:20px;min-width:24px;padding:0 5px;font-size:var(--fs-2xs)}
+.stepdots button.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+
+/* ---- app title bar ---- */
+#titlebar{display:flex;align-items:center;gap:var(--s-1);height:var(--h-bar);padding:0 8px;border-bottom:1px solid var(--line);background:var(--bg-panel)}
+#titlebar .brand{font-weight:700;letter-spacing:.04em;color:var(--accent);margin-right:6px}
+.wsbtn{height:26px}
+.wsbtn.on{background:var(--bg-active);border-color:var(--accent)}
+#rev{font-family:var(--mono);font-size:var(--fs-xs);color:var(--fg-dim)}
+#main{flex:1;min-height:0;display:flex;flex-direction:column}
+.screen{display:none;flex:1;min-height:0}
+.screen.on{display:flex}
+
+/* ---- home ---- */
+#home{overflow:auto;justify-content:center}
+.home-inner{width:min(980px,100%);padding:28px 24px;display:flex;flex-direction:column;gap:18px}
+.prompt{background:var(--bg-panel);border:1px solid var(--line-strong);border-radius:12px;padding:12px}
+.prompt textarea{width:100%;border:none;background:transparent;min-height:56px;font-size:var(--fs-lg)}
+.prompt textarea:focus-visible{box-shadow:none}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.card{background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--r-2);padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.card.click{cursor:pointer}.card.click:hover{border-color:var(--line-strong);background:var(--bg-raised)}
+.card h4{margin:0;font-size:var(--fs-md)}
+
+/* ---- EDA workspace ---- */
+#eda{flex-direction:column}
+#journey{display:flex;gap:2px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--bg-panel);overflow-x:auto}
+.stage{display:flex;align-items:center;gap:5px;height:26px;padding:0 8px;border-radius:var(--r-1);background:var(--bg-raised);border:1px solid var(--line);font-size:var(--fs-xs);cursor:pointer;white-space:nowrap}
+.stage:hover{background:var(--bg-hover)}
+.stage.cur{border-color:var(--accent)}
+.stage .n{font-family:var(--mono);color:var(--fg-faint)}
+#toolbar{display:flex;gap:6px;padding:5px 8px;border-bottom:1px solid var(--line);flex-wrap:wrap;align-items:center}
+#toolbar .sep{width:1px;height:18px;background:var(--line-strong)}
+#edaBody{flex:1;min-height:0;display:grid;grid-template-columns:44px 240px minmax(0,1fr) 300px;grid-template-rows:minmax(0,1fr) 210px}
+#activity{grid-column:1;grid-row:1/3;background:var(--bg-panel);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding-top:6px;gap:4px}
+#activity button{width:38px;height:34px;padding:0;font-size:9px;border-color:transparent;background:transparent;line-height:1.05;white-space:normal}
+#activity button.on{background:var(--bg-active);border-left:2px solid var(--accent)}
+#side .chip{white-space:normal;height:auto;padding:1px 7px}
+#side{grid-column:2;grid-row:1;background:var(--bg-panel);border-right:1px solid var(--line);overflow:auto;padding:8px}
+#center{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--c-sheet)}
+#edTabs{display:flex;gap:2px;padding:4px 6px 0;background:var(--bg-panel);border-bottom:1px solid var(--line)}
+#edTabs button{border-bottom:none;border-radius:var(--r-1) var(--r-1) 0 0}
+#edTabs button.on{background:var(--c-sheet);border-color:var(--accent)}
+#canvas{flex:1;min-height:0;position:relative;overflow:hidden}
+#canvas svg{width:100%;height:100%;display:block}
+#right{grid-column:4;grid-row:1/3;background:var(--bg-panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+#rightTabs{display:flex;gap:2px;padding:4px;border-bottom:1px solid var(--line)}
+#rightTabs button.on{background:var(--bg-active);border-color:var(--accent)}
+#rightBody{flex:1;overflow:auto;padding:10px;min-height:0}
+#bottom{grid-column:2/4;grid-row:2;border-top:1px solid var(--line);background:var(--bg-panel);display:flex;flex-direction:column;min-height:0}
+#botTabs{display:flex;gap:2px;padding:4px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+#botTabs button.on{background:var(--bg-active);border-color:var(--accent)}
+#botBody{flex:1;overflow:auto;min-height:0}
+.prob{display:grid;grid-template-columns:70px minmax(0,1fr) auto;gap:8px;align-items:center;padding:4px 8px;border-bottom:1px solid var(--line);font-size:var(--fs-sm)}
+.prob:hover{background:var(--bg-hover)}
+.sym{cursor:pointer}
+.sym rect.body{fill:#171b21;stroke:#8fa3b8;stroke-width:1.2}
+.sym:hover rect.body{stroke:var(--accent)}
+.sym.sel rect.body{stroke:var(--accent);stroke-width:2}
+.sym.new rect.body{stroke:var(--proposed);stroke-dasharray:4 2}
+.sym.flash rect.body{stroke:var(--err);stroke-width:2.4}
+.wire{stroke:#5fb878;stroke-width:1.3;fill:none}
+.net{fill:#e6c07b;font:10px var(--mono)}
+.ref{fill:var(--fg);font:600 11px var(--font)}
+.val{fill:var(--fg-dim);font:10px var(--font)}
+.fp{cursor:pointer}
+.fp rect.body{fill:#1e2a1e;stroke:#c9b458;stroke-width:1}
+.fp.sel rect.body{stroke:var(--accent);stroke-width:2}
+.fp.flash rect.body{stroke:var(--err);stroke-width:2.4}
+.rats{stroke:#8ab4f8;stroke-width:.8;stroke-dasharray:3 3}
+.track{stroke:#c0504d;stroke-width:2.4;fill:none;stroke-linecap:round}
+.track.b{stroke:#4f81bd}
+.ins{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;flex-wrap:wrap;max-width:calc(100% - 20px)}
+.overlay-note{position:absolute;right:10px;top:10px;background:var(--bg-raised);border:1px solid var(--line);border-radius:var(--r-2);padding:6px 10px;font-size:var(--fs-xs);max-width:320px}
+
+/* ---- 3D ---- */
+#v3d{width:100%;height:100%;display:flex;align-items:center;justify-content:center;perspective:900px;background:radial-gradient(circle at 50% 40%,#1a1f26,#0d0f11)}
+#board3d{width:400px;height:280px;position:relative;transform-style:preserve-3d;transition:transform .5s ease}
+#board3d .pcb{position:absolute;inset:0;background:#1f5130;border:2px solid #2c6b41;border-radius:6px}
+#board3d .cmp{position:absolute;transform-style:preserve-3d}
+#board3d .cmp .top{position:absolute;inset:0;border-radius:2px;border:1px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;text-align:center;font:600 9px var(--font);color:#fff}
+#board3d .cmp.tall .top{box-shadow:0 0 0 2px var(--warn)}
+
+/* ---- terminal (as today) ---- */
+#term{flex-direction:row;min-height:0}
+#termSide{width:210px;background:var(--bg-panel);border-right:1px solid var(--line);padding:8px;display:flex;flex-direction:column;gap:8px;overflow:auto}
+#termMain{flex:1;display:flex;flex-direction:column;min-width:0}
+#termTabs{display:flex;gap:2px;padding:4px;background:var(--bg-panel);border-bottom:1px solid var(--line);align-items:center}
+#termTabs .tab{display:flex;align-items:center;gap:6px}
+#termTabs .tab.on{background:var(--bg-active);border-color:var(--accent)}
+#termPanes{flex:1;display:flex;min-height:0}
+.pane{flex:1;background:var(--term-bg);font:12px/1.5 var(--mono);padding:8px;overflow:auto;display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line)}
+.pane.focus{outline:1px solid var(--line-strong);outline-offset:-1px}
+.pane .out{white-space:pre-wrap;flex:1}
+.pane input{background:transparent;border:none;font:inherit;color:var(--fg);width:100%;height:auto;padding:0}
+.pane input:focus-visible{box-shadow:none}
+#termDetails{width:230px;background:var(--bg-panel);border-left:1px solid var(--line);padding:8px;overflow:auto;font-size:var(--fs-sm)}
+#termDetails dl{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;margin:0}
+#termDetails dt{color:var(--fg-faint)}#termDetails dd{margin:0;word-break:break-all}
+
+/* ---- settings ---- */
+#settings{flex-direction:row}
+#setNav{width:200px;background:var(--bg-panel);border-right:1px solid var(--line);padding:8px;display:flex;flex-direction:column;gap:4px}
+#setNav button{text-align:left;display:flex;gap:6px;align-items:center}
+#setNav button.on{background:var(--bg-active);border-color:var(--accent)}
+#setBody{flex:1;overflow:auto;padding:16px 20px}
+.toolrow{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:var(--r-2);background:var(--bg-panel);margin-bottom:8px}
+
+/* ---- modal, toast, status ---- */
+#modalWrap{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:30}
+#modalWrap.on{display:flex}
+#modal{width:min(760px,94vw);max-height:86vh;overflow:auto;background:var(--bg-panel);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow);padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+#modal h2{margin:0;font-size:var(--fs-xl)}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--bg-raised);border:1px solid var(--line-strong);border-radius:var(--r-2);padding:8px 14px;box-shadow:var(--shadow);display:none;z-index:40;max-width:80vw;font-size:var(--fs-sm)}
+#toast.on{display:block}
+#statusbar{height:24px;display:flex;align-items:center;gap:12px;padding:0 8px;border-top:1px solid var(--line);background:var(--bg-panel);font-size:var(--fs-xs);color:var(--fg-dim);overflow:hidden;white-space:nowrap}
+.bubble{background:var(--bg-raised);border:1px solid var(--line);border-radius:var(--r-2);padding:8px 10px;font-size:var(--fs-sm)}
+.bubble.me{background:var(--accent-soft);border-color:transparent;align-self:flex-end;max-width:90%}
+.qopt{display:block;width:100%;text-align:left;margin-top:4px;height:auto;padding:5px 8px;white-space:normal}
+.plan li{margin:3px 0;font-size:var(--fs-sm)}
+.plan li.done{color:var(--ok)}.plan li.run{color:var(--info)}
+@media (max-width:1180px){#story{width:280px}#edaBody{grid-template-columns:44px 200px minmax(0,1fr) 260px}}
+</style>
+</head>
+<body>
+<div id="demoBar">
+  <span class="title">EAK product demo</span>
+  <span class="dim" style="font-size:var(--fs-xs)">A storyboard you can click. This is not the EAK app: sample project, simulated checks, nothing leaves this page.</span>
+  <span class="grow"></span>
+  <div id="legend">
+    <span class="b ex" title="Exists in EAK on main today. Hover any badge for the file or test that backs it.">EXISTS</span><span>in EAK today (hover for evidence)</span>
+    <span class="b pr" title="Proposed, not built. Dashed outline marks proposed areas.">PROPOSED</span><span>new, dashed outline</span>
+  </div>
+  <button data-act="toggleStory" id="storyBtn">Hide storyboard</button>
+  <button data-act="resetDemo">Reset demo</button>
+</div>
+<div id="shell">
+  <div id="app">
+    <div id="titlebar">
+      <span class="brand">EAK</span>
+      <button class="wsbtn on" data-act="ws" data-arg="home">Home</button>
+      <button class="wsbtn" data-act="ws" data-arg="eda">EDA workspace</button>
+      <button class="wsbtn" data-act="ws" data-arg="term">Terminal</button>
+      <button class="wsbtn" data-act="ws" data-arg="settings">Settings</button>
+      <span class="grow"></span>
+      <span id="projName" class="dim" style="font-size:var(--fs-sm)"></span>
+      <span id="rev"></span>
+    </div>
+    <div id="main">
+      <section class="screen on" id="home"></section>
+      <section class="screen" id="eda">
+        <div id="journey" class="proposed-zone"></div>
+        <div id="toolbar"></div>
+        <div id="edaBody">
+          <nav id="activity"></nav>
+          <aside id="side"></aside>
+          <div id="center"><div id="edTabs"></div><div id="canvas"></div></div>
+          <aside id="right"><div id="rightTabs"></div><div id="rightBody"></div></aside>
+          <div id="bottom"><div id="botTabs"></div><div id="botBody"></div></div>
+        </div>
+      </section>
+      <section class="screen" id="term"></section>
+      <section class="screen" id="settings"></section>
+    </div>
+    <div id="statusbar"></div>
+  </div>
+  <aside id="story"></aside>
+</div>
+<div id="modalWrap"><div id="modal" role="dialog" aria-modal="true"></div></div>
+<div id="toast" role="status"></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   Evidence behind each EXISTS badge (file, ADR or ui-evidence scenario on EAK main),
+   and the report slice behind each PROPOSED badge.
+   ========================================================================== */
+const EV = {
+  home:"ProjectHome.tsx: Open / New project, Continue working card, Recent table",
+  newproj:"New Project dialog (ProjectHome.tsx). Not yet driven in a real window by ui-evidence",
+  kicad:"KiCad import: apps/desktop/src-tauri/src/kicad.rs",
+  shell:"Workspace shell: shell/ActivityBar.tsx side views Overview, Explorer, Design manager, Domain, Manufacturing, Assets",
+  overview:"shell/ProjectOverview.tsx: read-only facts; a check that was not run says 'Not run', never passing",
+  explorer:"shell/FileExplorer.tsx (Explorer side view)",
+  schematic:"SchematicView.tsx: PlaceSymbol, AddWire, AddNetLabel, sheets; ui-evidence b2, b3, b4, b6, e2, f3",
+  pcb:"PCB editor; ui-evidence c1, c3, c4, e5, f2",
+  v3d:"viewer3d/Viewer3D.tsx: presets, ortho, measure; ui-evidence c6. Limits: arcs and cut-outs ignored, no collision check, no STEP export",
+  erc:"Run ERC -> Findings (EngineeringMonitor.tsx); ui-evidence b5, f7 (a click goes to the right sheet)",
+  findings:"Findings tab (EngineeringMonitor.tsx) with CSV/JSON export",
+  drc:"eak-validation/src/drc.rs, realtimeDrc.ts, Rules dialog; ui-evidence c4, f10. Rules that need V/I stay UNKNOWN until declared",
+  eco:"Update PCB = ERC gate -> EcoPreviewDialog.tsx (preview on a project copy, eco.rs) -> SyncSchematicToPcb as one Batch; ADR-0041; ui-evidence c2",
+  autoplace:"AutoPlace command; ui-evidence d2, f2",
+  autoroute:"AutoRoute command. Limits: outer 2 layers, through vias, ignores keep-outs, no differential-pair rules",
+  route:"Route tool (walk-around / push / block)",
+  zone:"Zones / copper pour; ui-evidence e5, c4",
+  library:"LibraryDock.tsx, parts_search (src-tauri/src/parts.rs), catalogue (ADR-0032); ui-evidence d1",
+  distributor:"Distributor search is not configured on main (distributor.invalid): no live stock or price",
+  bom:"BOM table + CSV/XLSX export (shell/bomConfig.ts: Stock and Unit price are 'stored record' fields); ui-evidence d3",
+  outputs:"Gerber / drill / CPL / BOM / PDF to output/rev-N; ui-evidence d2, d3, e9",
+  release:"ReleaseCheckDialog.tsx + release_check; UNKNOWN blocks release (ADR-0048); ui-evidence e7",
+  fabprep:"fabricator_prepare (eak-harness): result is 'prepared for review', never 'manufacturing-ready'",
+  props:"Inspector / Properties (shell/inspectorModel.ts: Designator, Value, Footprint, Manufacturer / MPN)",
+  log:"Every Command is journalled with actor and revision (eak-runtime journal, get_history)",
+  tasks:"Agent task ledger (agent-tasks.json, ADR-0036) and its status-bar summary (Workspace.tsx)",
+  undo:"Engine undo / redo: one shared stack; a Batch is one step (eak-runtime/src/engine.rs)",
+  ckptEngine:"Engine::create_checkpoint / list_checkpoints / restore_checkpoint exist (eak-runtime/src/engine.rs); nothing in the app calls them yet",
+  terminal:"Terminal workspace on its own PTY engine (crates/eak-terminal, ADR-0019; TerminalWorkspace.tsx): spaces, tabs, split, details panel",
+  detect:"Agent detection from the foreground program name (eak-terminal KNOWN_AGENTS + terminal-agents.json). macOS reports no agent today (proc_info.rs)",
+  nolaunch:"No agent launcher in the Terminal workspace, by design: terminal.test.tsx asserts the + control opens a normal shell tab and there is no agent launcher",
+  harness:"eak CLI + eak-mcp (crates/eak-harness): every Command is a typed tool, routed to the running app (ADR-0018)",
+  models:"Settings > Model settings (ModelSettings.tsx): provider catalog, keys in the OS keystore, staged connection test (ADR-0010, ADR-0017)",
+  aiBackend:"ai_propose / ai_accept / ai_reject / ai_rollback IPC (src-tauri/src/ai.rs): a proposal on an in-memory copy. Registered, but no screen calls it",
+  spec:"Typed design spec design_spec_set -> design-flow/spec.json (eak-harness design.rs, ADR-0020); CLI / MCP only today",
+  evidence:"Evidence labels verified / passed_deterministic_checks / datasheet_supported / assumed / unverified (ADR-0020)",
+  netvi:"SetNetVoltage / SetNetCurrent Commands feed DRC",
+};
+const PR = {
+  journey:"Journey bar: stage colour from real check and sync state, never from an agent's claim",
+  problems:"Unified Problems panel: ERC + DRC + release blockers + missing inputs + AI review notes + unfinished AI tasks",
+  prompt:"Home prompt box. Without an AI tool it only opens the project and fills the brief",
+  tour:"First-run tour and bundled sample board",
+  copilot:"AI co-pilot panel, closed by default; it proposes, never applies on its own",
+  proposal:"Proposal review: the Update PCB preview generalised to every AI change, with the check delta computed by EAK",
+  ckpt:"Checkpoints and history panel over the engine's existing checkpoints",
+  aitools:"Settings > AI tools: find, sign in, connect and test each AI tool, no terminal needed",
+  brief:"Brief screen: edit the typed spec in the app; declaring a current runs SetNetCurrent",
+  fabprofile:"Choose a fabricator capability profile so the release check can test it. On main the fabricator capability is not configured, so it stays UNKNOWN",
+  agentname:"Export EAK_AGENT_NAME so the journal names the agent instead of external-agent",
+};
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+const ex = k => `<span class="b ex" title="${esc(EV[k]||k)}">EXISTS</span>`;
+const pr = k => `<span class="b pr" title="${esc(PR[k]||k)}">PROPOSED</span>`;
+
+/* ============================================================================
+   Sample project: ESP32-S3 environmental sensor board, 12 V in, USB-C, two I2C sensors.
+   Real part numbers. Stock and price are stored sample records, not live data.
+   ========================================================================== */
+const CATALOG = [
+  {mpn:"ESP32-S3-WROOM-1-N8",mfr:"Espressif",cat:"MCU module",fp:"Module_ESP32-S3-WROOM-1",spec:"3.0-3.6 V, Wi-Fi/BLE, native USB",stock:4210,price:3.10,ds:"VDD 3.0-3.6 V; EN needs an RC delay (10 kΩ + 1 µF)"},
+  {mpn:"TPS62933DRLR",mfr:"Texas Instruments",cat:"Buck converter",fp:"SOT-583-8",spec:"3.8-30 V in, 3 A, synchronous buck",stock:9800,price:0.92,ds:"VIN 3.8-30 V; IOUT 3 A; PG is open-drain"},
+  {mpn:"LMR51430XDDCR",mfr:"Texas Instruments",cat:"Buck converter",fp:"SOT-23-6",spec:"4.5-36 V in, 3 A",stock:2650,price:0.84,ds:"VIN 4.5-36 V; IOUT 3 A"},
+  {mpn:"SHT40-AD1B",mfr:"Sensirion",cat:"Humidity / temperature sensor",fp:"DFN-4_1.5x1.5",spec:"I2C 0x44, 1.08-3.6 V",stock:15100,price:1.45,ds:"VDD 1.08-3.6 V; I2C needs external pull-ups"},
+  {mpn:"BME280",mfr:"Bosch Sensortec",cat:"Pressure sensor",fp:"LGA-8_2.5x2.5",spec:"I2C 0x76/0x77, 1.71-3.6 V",stock:3300,price:2.95,ds:"VDD 1.71-3.6 V; SDO selects the I2C address"},
+  {mpn:"USB4105-GF-A",mfr:"GCT",cat:"USB-C receptacle",fp:"USB_C_USB4105",spec:"USB 2.0, 16 pin",stock:22000,price:0.58,ds:"5 V VBUS; CC needs 5.1 kΩ to GND for a sink"},
+  {mpn:"TPD4E05U06DQAR",mfr:"Texas Instruments",cat:"ESD protection",fp:"USON-10",spec:"4 channels, 5.5 V",stock:18000,price:0.31,ds:"4 channels, low capacitance for USB 2.0"},
+  {mpn:"PJ-002AH",mfr:"CUI Devices",cat:"DC barrel jack",fp:"BarrelJack_CUI_PJ-002AH",spec:"2.0 mm pin, 24 V",stock:5400,price:0.62,ds:"Body height 11 mm"},
+  {mpn:"SS34",mfr:"onsemi",cat:"Schottky diode",fp:"SMA",spec:"40 V, 3 A",stock:51000,price:0.12,ds:"VF 0.5 V at 3 A"},
+  {mpn:"XAL4030-332MEB",mfr:"Coilcraft",cat:"Inductor",fp:"L_Coilcraft_XAL4030",spec:"3.3 µH, 5.5 A saturation",stock:7600,price:0.88,ds:"Isat 5.5 A"},
+  {mpn:"GRM21BR61E106KA73L",mfr:"Murata",cat:"Capacitor",fp:"C_0805",spec:"10 µF 25 V X5R",stock:120000,price:0.06,ds:"25 V rated"},
+  {mpn:"GRM21BR61A226ME44L",mfr:"Murata",cat:"Capacitor",fp:"C_0805",spec:"22 µF 10 V X5R",stock:88000,price:0.07,ds:"10 V rated"},
+  {mpn:"RC0402FR-074K7L",mfr:"YAGEO",cat:"Resistor",fp:"R_0402",spec:"4.7 kΩ 1%",stock:900000,price:0.002,ds:"1/16 W"},
+  {mpn:"RC0402FR-072K2L",mfr:"YAGEO",cat:"Resistor",fp:"R_0402",spec:"2.2 kΩ 1%",stock:640000,price:0.002,ds:"1/16 W"},
+  {mpn:"RC0402FR-0710KL",mfr:"YAGEO",cat:"Resistor",fp:"R_0402",spec:"10 kΩ 1%",stock:900000,price:0.002,ds:"1/16 W"},
+  {mpn:"GRM155R61A105KE15D",mfr:"Murata",cat:"Capacitor",fp:"C_0402",spec:"1 µF 10 V X5R",stock:300000,price:0.01,ds:"10 V rated"},
+];
+const cat = mpn => CATALOG.find(c=>c.mpn===mpn);
+const BASE_PARTS = [
+  {ref:"J1",mpn:"PJ-002AH",val:"12 V in",x:30,y:60,w:70,h:44,h3d:11},
+  {ref:"J2",mpn:"USB4105-GF-A",val:"USB-C",x:30,y:200,w:70,h:60,h3d:3.2},
+  {ref:"U5",mpn:"TPD4E05U06DQAR",val:"ESD",x:140,y:205,w:60,h:46,h3d:0.6},
+  {ref:"D1",mpn:"SS34",val:"SS34",x:150,y:70,w:46,h:26,h3d:2.3},
+  {ref:"D2",mpn:"SS34",val:"SS34",x:240,y:180,w:46,h:26,h3d:2.3},
+  {ref:"U2",mpn:"TPS62933DRLR",val:"Buck 3V3",x:300,y:55,w:90,h:70,h3d:1},
+  {ref:"L1",mpn:"XAL4030-332MEB",val:"3.3 µH",x:420,y:62,w:50,h:26,h3d:3.1},
+  {ref:"C1",mpn:"GRM21BR61E106KA73L",val:"10 µF",x:250,y:110,w:30,h:30,h3d:1.25},
+  {ref:"C2",mpn:"GRM21BR61A226ME44L",val:"22 µF",x:490,y:105,w:30,h:30,h3d:1.25},
+  {ref:"U1",mpn:"ESP32-S3-WROOM-1-N8",val:"ESP32-S3",x:560,y:150,w:130,h:130,h3d:3.1},
+  {ref:"U3",mpn:"SHT40-AD1B",val:"SHT40",x:770,y:150,w:70,h:50,h3d:0.8},
+  {ref:"U4",mpn:"BME280",val:"BME280",x:770,y:240,w:70,h:50,h3d:0.9},
+];
+// footprint positions on a 60 x 42 mm board: x, y, w, h (mm)
+const PCBPOS = {J1:[3,3,11,9],J2:[2,25,9,9],U5:[13,27,4,3],D1:[17,5,4,3],D2:[17,19,4,3],U2:[24,6,4,4],L1:[31,5,5,5],C1:[24,13,3,2],C2:[38,6,3,2],
+  U1:[36,18,18,20],U3:[55,3,3,3],U4:[55,10,3,3],R1:[50,4,2,1],R2:[50,7,2,1],R3:[31,30,2,1],C7:[31,34,2,1],C5:[29,13,3,2]};
+const NETS = ["+12V_IN","VBUS","VIN_OR","+3V3","GND","SW","USB_D+","USB_D-","I2C_SDA","I2C_SCL","EN","PG"];
+
+function initialState(){
+  return {
+    rev:41, project:"esp32s3-env-sensor", opened:false, firstRun:true,
+    parts: BASE_PARTS.map(p=>({...p})).concat([{ref:"C5",mpn:"GRM21BR61E106KA73L",val:"10 µF",x:300,y:150,w:30,h:30,h3d:1.25}]),
+    pwrFlag:false, enRC:false, pgNC:false,
+    brief:{rails:[{net:"+12V_IN",v:"12",i:""},{net:"+3V3",v:"3.3",i:""}],env:"Indoor, 0-50 °C",enclosure:"12",iface:"USB 2.0 device, I2C"},
+    currents:false,
+    erc:null, drc:null,
+    pcbParts:BASE_PARTS.map(p=>p.ref),
+    syncRev:38, schemRev:40, placed:BASE_PARTS.map(p=>p.ref), routed:"partial", clearFix:false, pour:false,
+    outputsRev:null, release:null, viewed3d:false, fabProfile:"",
+    checkpoints:[{name:"Schematic reviewed with the team",rev:36}],
+    log:[
+      {rev:38,actor:"you",cmd:"SyncSchematicToPcb (Batch, 14 changes)"},
+      {rev:39,actor:"you",cmd:"AutoPlace (12 footprints)"},
+      {rev:40,actor:"you",cmd:"PlaceSymbol C5 (10 µF at U2 input)"},
+      {rev:41,actor:"you",cmd:"AddWire C5.1 to VIN_OR"},
+    ],
+    tools:{claude:{found:true,signed:null,conn:false},codex:{found:true,signed:true,conn:false},gemini:{found:true,signed:false,conn:false},opencode:{found:false,signed:null,conn:false}},
+    modelKeys:{anthropic:false,openai:false,ollama:true},
+    permMode:"ask",
+    chat:[], copilotBusy:false, proposal:null, aiTasks:[],
+    ws:"home", side:"overview", editor:"schematic", rtab:"props", btab:"problems", sel:null, flash:null, probFilter:"all",
+    libQuery:"", libSel:null, view3d:"iso", show3dParts:true, measure:false,
+    term:{tabs:[{id:1,name:"shell",cwd:"~/eak/esp32s3-env-sensor",out:"",agent:null,status:"idle"}],cur:1,split:false,details:true,next:2},
+    setTab:"aitools", tourStep:null,
+  };
+}
+let S = initialState();
+let UNDO=[], REDO=[];
+const CORE=["rev","parts","pwrFlag","enRC","pgNC","brief","currents","pcbParts","syncRev","schemRev","placed","routed","clearFix","pour","outputsRev","erc","drc","release","log","checkpoints"];
+const clone = o => JSON.parse(JSON.stringify(o));
+const snap = () => clone(Object.fromEntries(CORE.map(k=>[k,S[k]])));
+function restore(o){for(const k of CORE)S[k]=clone(o[k])}
+
+/* One write path, like Engine::execute: snapshot for undo, bump the revision, journal it. */
+/* Read-only work (checks, outputs) does not change the design revision: journalled only. */
+function record(cmd, actor, fn){ fn(S); S.log.push({rev:S.rev,actor,cmd:cmd+" (read-only)"}); render(); }
+function execute(cmd, actor, fn, opts={}){
+  UNDO.push(snap()); REDO=[];
+  fn(S);
+  S.rev++;
+  if(opts.schem) S.schemRev=S.rev;
+  S.log.push({rev:S.rev,actor,cmd});
+  render();
+}
+function undo(){ if(!UNDO.length) return toast("Nothing to undo"); REDO.push(snap()); restore(UNDO.pop()); render(); toast("Undone: one step, back to r"+S.rev); }
+function redo(){ if(!REDO.length) return toast("Nothing to redo"); UNDO.push(snap()); restore(REDO.pop()); render(); toast("Redone: r"+S.rev); }
+
+/* ============================================================================
+   Checks (simulated). The honesty rules are EAK's own: UNKNOWN never passes,
+   a check run on an older revision is shown as stale.
+   ========================================================================== */
+const has = (s,ref)=>s.parts.some(p=>p.ref===ref);
+function runErc(s){
+  const f=[];
+  if(!s.pwrFlag) f.push({sev:"error",obj:"U1",where:"schematic",msg:"Net +3V3: power input pins (U1, U3, U4) but no power output or power flag drives it",fix:"erc"});
+  if(!s.enRC) f.push({sev:"error",obj:"U1",where:"schematic",msg:"U1 pin EN (input) is not connected",fix:"erc"});
+  if(!s.pgNC) f.push({sev:"warning",obj:"U2",where:"schematic",msg:"U2 pin PG (open-drain output) is not connected",fix:"erc"});
+  return f;
+}
+function aiNotes(s){
+  return has(s,"R1")?[]:[{sev:"note",obj:"U3",where:"schematic",msg:"I2C_SDA / I2C_SCL have no pull-up resistors. SHT40 datasheet: external pull-ups are required",label:"datasheet_supported",fix:"pullups"}];
+}
+function pcbInSync(s){ return s.parts.map(p=>p.ref).sort().join()===[...s.pcbParts].sort().join() && s.syncRev>=s.schemRev; }
+function runDrc(s){
+  const f=[];
+  const unplaced=s.pcbParts.filter(r=>!s.placed.includes(r));
+  if(!pcbInSync(s)) f.push({sev:"warning",obj:null,where:"pcb",msg:"PCB is out of date with the schematic. Run Update PCB",fix:null});
+  if(unplaced.length) f.push({sev:"error",obj:unplaced[0],where:"pcb",msg:`${unplaced.length} footprint(s) outside the board outline: ${unplaced.join(", ")}`,fix:null});
+  if(s.routed==="partial") f.push({sev:"error",obj:"U1",where:"pcb",msg:"11 connections unrouted",fix:null});
+  if(s.routed==="auto") f.push({sev:"error",obj:"J2",where:"pcb",msg:"2 connections unrouted: USB_D+ / USB_D- (the autorouter has no differential-pair rules)",fix:null});
+  if(s.routed!=="partial" && !s.clearFix) f.push({sev:"error",obj:"J1",where:"pcb",msg:"Clearance 0.12 mm < 0.15 mm: track +12V_IN to the GND pad of J1",fix:"clear"});
+  if(!s.currents) f.push({sev:"unknown",obj:null,where:"pcb",msg:"Track width vs current: UNKNOWN. No current declared for +12V_IN and +3V3",fix:"currents"});
+  return f;
+}
+const ercCurrent = ()=> !!S.erc && S.erc.rev>=S.schemRev;
+const drcCurrent = ()=> !!S.drc && S.drc.rev===S.rev;
+function counts(list){return {e:list.filter(x=>x.sev==="error").length,w:list.filter(x=>x.sev==="warning").length,u:list.filter(x=>x.sev==="unknown").length,n:list.filter(x=>x.sev==="note").length}}
+function bomRows(s){
+  const g={};
+  for(const p of s.parts){const c=cat(p.mpn); (g[p.mpn]=g[p.mpn]||{mpn:p.mpn,mfr:c.mfr,fp:c.fp,val:p.val,refs:[],stock:c.stock,price:c.price}).refs.push(p.ref)}
+  return Object.values(g);
+}
+function releaseCheck(s){
+  const items=[];
+  const e=s.erc&&s.erc.rev>=s.schemRev?counts(s.erc.findings):null;
+  items.push(e?(e.e?{st:"FAIL",name:"ERC",why:`${e.e} error(s)`}:{st:"PASS",name:"ERC",why:"0 errors at r"+s.erc.rev}):{st:"UNKNOWN",name:"ERC",why:"Not run on the current schematic"});
+  const d=s.drc&&s.drc.rev===s.rev?counts(s.drc.findings):null;
+  items.push(d?(d.e?{st:"FAIL",name:"DRC",why:`${d.e} error(s)`}:d.u?{st:"UNKNOWN",name:"DRC",why:`${d.u} rule(s) UNKNOWN (missing inputs)`}:{st:"PASS",name:"DRC",why:"0 errors, 0 unknown at r"+s.drc.rev}):{st:"UNKNOWN",name:"DRC",why:"Not run on the current board"});
+  items.push(pcbInSync(s)?{st:"PASS",name:"Schematic and PCB",why:"In sync"}:{st:"FAIL",name:"Schematic and PCB",why:"PCB out of date"});
+  items.push(s.outputsRev===s.rev?{st:"PASS",name:"Outputs",why:"Generated for r"+s.rev}:{st:"FAIL",name:"Outputs",why:s.outputsRev?`Generated for r${s.outputsRev}, board is r${s.rev}`:"Not generated"});
+  items.push({st:"PASS",name:"BOM: every line has an MPN",why:bomRows(s).length+" lines"});
+  items.push(s.fabProfile?{st:"PASS",name:"Fabricator capability",why:"Checked against "+s.fabProfile+" (proposed profile choice)"}:{st:"UNKNOWN",name:"Fabricator capability",why:"No fabricator profile configured (the DFM preview uses the 2-layer 1 oz profile)"});
+  return {rev:s.rev,items,blocked:items.some(i=>i.st!=="PASS")};
+}
+
+/* ============================================================================
+   Journey: the 12 stages. Colour only from the facts above.
+   ========================================================================== */
+const STAGES=[
+  {n:1,name:"Requirements",go:()=>go("eda",{side:"brief"})},
+  {n:2,name:"Parts",go:()=>go("eda",{btab:"library"})},
+  {n:3,name:"Symbols & footprints",go:()=>go("eda",{btab:"bom"})},
+  {n:4,name:"Schematic",go:()=>go("eda",{editor:"schematic"})},
+  {n:5,name:"ERC",go:()=>go("eda",{editor:"schematic",btab:"problems"})},
+  {n:6,name:"Update PCB",go:()=>go("eda",{editor:"pcb"})},
+  {n:7,name:"Placement",go:()=>go("eda",{editor:"pcb"})},
+  {n:8,name:"Routing & pour",go:()=>go("eda",{editor:"pcb"})},
+  {n:9,name:"DRC",go:()=>go("eda",{editor:"pcb",btab:"problems"})},
+  {n:10,name:"3D check",go:()=>go("eda",{editor:"3d"})},
+  {n:11,name:"Outputs",go:()=>go("eda",{side:"manufacturing"})},
+  {n:12,name:"Release",go:()=>go("eda",{side:"manufacturing"})},
+];
+function stageState(n){
+  const s=S;
+  switch(n){
+    case 1: return s.currents?["ok","Brief complete"]:["warn","Rail currents not declared"];
+    case 2: return ["ok",bomRows(s).length+" BOM lines, all with an MPN"];
+    case 3: return ["ok","Every part has a symbol and a footprint"];
+    case 4: return ["ok",s.parts.length+" symbols"];
+    case 5: { if(!ercCurrent()) return ["unk",s.erc?"Stale: the schematic changed":"Not run"]; const c=counts(s.erc.findings); return c.e?["err",c.e+" errors"]:c.w?["warn",c.w+" warnings"]:["ok","0 errors"]; }
+    case 6: return pcbInSync(s)?["ok","In sync"]:["warn","Schematic changed since r"+s.syncRev];
+    case 7: { const u=s.pcbParts.filter(r=>!s.placed.includes(r)); return u.length?["warn",u.length+" to place"]:["ok","All placed"]; }
+    case 8: return s.routed==="done"?(s.pour?["ok","Routed, GND pour"]:["warn","Routed, no GND pour"]):s.routed==="auto"?["warn","2 left to route"]:["warn","11 unrouted"];
+    case 9: { if(!drcCurrent()) return ["unk",s.drc?"Stale: the board changed":"Not run"]; const c=counts(s.drc.findings); return c.e?["err",c.e+" errors"]:c.u?["unk",c.u+" UNKNOWN"]:c.w?["warn",c.w+" warnings"]:["ok","0 errors"]; }
+    case 10: return s.viewed3d?["ok","Heights checked"]:["unk","Not checked"];
+    case 11: return s.outputsRev===s.rev?["ok","r"+s.rev]:s.outputsRev?["warn","Stale (r"+s.outputsRev+")"]:["unk","Not generated"];
+    case 12: return s.release&&s.release.rev===s.rev?(s.release.blocked?["err","Blocked"]:["ok","Prepared for review"]):["unk","Not checked"];
+  }
+}
+const COL={ok:"var(--ok)",warn:"var(--warn)",err:"var(--err)",unk:"transparent"};
+function nextStage(){ for(const st of STAGES){ if(stageState(st.n)[0]!=="ok") return st } return null }
+
+/* ============================================================================
+   Storyboard frames: sees / thinks / feels, how EAK guides, what backs it.
+   ========================================================================== */
+const STORY=[
+  {t:"First launch",where:()=>go("home"),
+   sees:"Home: one box 'Describe the board you want to build', quick starts, a sample board, recent projects.",
+   thinks:"\"Where do I start? Do I have to learn agents and terminals?\"",
+   feels:"Cautious. Wants proof the tool respects engineering rigour.",
+   guide:"A 4-step tour on a sample board: the journey, Problems, where AI helps, how undo works. No terminal anywhere.",
+   backs:[["ex","home"],["pr","prompt"],["pr","tour"]]},
+  {t:"Describe the design goal",where:()=>{go("home");setTimeout(()=>{const t=document.getElementById("homePrompt"); if(t){t.value="12 V powered ESP32-S3 board with USB-C for programming, SHT40 and BME280 on I2C, fits a 12 mm tall enclosure"; t.focus()}},0)},
+   sees:"Their own words in the box. EAK turns them into a typed brief: rails, currents, interfaces, enclosure height.",
+   thinks:"\"Will it make up numbers?\"",
+   feels:"Relieved when missing numbers are asked for, not guessed.",
+   guide:"Question cards ask only for what is missing (input range, rail current). The brief is typed data that EAK can check.",
+   backs:[["ex","spec"],["pr","brief"],["pr","copilot"]]},
+  {t:"Continue next day",where:()=>go("home"),
+   sees:"Continue card: next stage, open errors, last checkpoint, what changed since they left.",
+   thinks:"\"Where was I?\"",
+   feels:"Oriented in seconds.",
+   guide:"The card names the next step from real state. Continue lands on it.",
+   backs:[["ex","home"],["pr","journey"]]},
+  {t:"Workspace and journey",where:()=>go("eda",{editor:"schematic",side:"overview"}),
+   sees:"Journey bar across the top, schematic, file tree, Problems, Properties.",
+   thinks:"\"What is left before I can order boards?\"",
+   feels:"In control: every stage colour comes from a check result, not from an agent.",
+   guide:"Click any stage to jump there. Dashed grey means not run, and is never green.",
+   backs:[["ex","shell"],["ex","overview"],["pr","journey"]]},
+  {t:"Choose components",where:()=>go("eda",{btab:"library"}),
+   sees:"Library: search, datasheet limits next to each part, stored stock and price.",
+   thinks:"\"Is this buck rated for 12 V with margin?\"",
+   feels:"Confident when the datasheet value is quoted, not paraphrased.",
+   guide:"Live distributor stock is not connected in EAK today. The demo shows stored records and says so.",
+   backs:[["ex","library"],["ex","distributor"]]},
+  {t:"Schematic capture",where:()=>go("eda",{editor:"schematic",btab:"problems"}),
+   sees:"Power, USB-C, MCU and sensor blocks. Clicking a part shows its properties and datasheet limits.",
+   thinks:"\"Did I wire EN and the power flag?\"",
+   feels:"Focused on the circuit, not on the tool.",
+   guide:"Problems shows what is missing; each row goes to the object.",
+   backs:[["ex","schematic"],["ex","props"],["pr","problems"]]},
+  {t:"ERC with guided fixes",where:()=>go("eda",{editor:"schematic",btab:"problems"}),
+   sees:"Run ERC: 2 errors, 1 warning. 'Propose a fix' next to each.",
+   thinks:"\"Why is +3V3 not driven? The buck drives it.\"",
+   feels:"Helped: the reason is in plain words and the fix is a proposal they review.",
+   guide:"The co-pilot proposes a power flag and the EN RC. Nothing is applied without Review.",
+   backs:[["ex","erc"],["pr","problems"],["pr","copilot"]]},
+  {t:"Review a proposed change",where:()=>go("eda",{rtab:"copilot"}),
+   sees:"Proposal: 4 changes, ERC errors 2 → 0 (EAK re-ran it on a copy), evidence labels, Apply / Discard.",
+   thinks:"\"What exactly will it change?\"",
+   feels:"Safe: Apply is one step, Undo takes it back, a checkpoint is made first.",
+   guide:"The same pattern as the Update PCB change preview, which already runs on a copy.",
+   backs:[["ex","eco"],["ex","aiBackend"],["pr","proposal"],["pr","ckpt"]]},
+  {t:"Update PCB",where:()=>go("eda",{editor:"pcb"}),
+   sees:"Update PCB: the ERC gate, then the list of footprint and net changes.",
+   thinks:"\"Did the new capacitor make it onto the board?\"",
+   feels:"Certain: nothing changes until Apply.",
+   guide:"An out-of-date PCB stays amber on the journey bar until synced.",
+   backs:[["ex","eco"]]},
+  {t:"Placement, routing, DRC",where:()=>go("eda",{editor:"pcb",btab:"problems"}),
+   sees:"Auto-place, auto-route (2 USB connections left for hand routing), GND pour, DRC with one UNKNOWN rule.",
+   thinks:"\"Why UNKNOWN? I didn't break anything.\"",
+   feels:"Respected: EAK names the missing input (rail current) instead of passing silently.",
+   guide:"Declare the currents in the brief and the rule can be checked.",
+   backs:[["ex","autoplace"],["ex","autoroute"],["ex","drc"],["ex","netvi"]]},
+  {t:"3D check",where:()=>go("eda",{editor:"3d"}),
+   sees:"3D board; parts close to the 12 mm enclosure limit from the brief are outlined.",
+   thinks:"\"Will the barrel jack fit?\"",
+   feels:"Reassured, with the viewer's limits stated (no collision check yet).",
+   guide:"Measure shows the heights.",
+   backs:[["ex","v3d"]]},
+  {t:"Outputs and release check",where:()=>go("eda",{side:"manufacturing"}),
+   sees:"Generate outputs for this revision, BOM, release check with PASS / FAIL / UNKNOWN.",
+   thinks:"\"Can I send this to the fab?\"",
+   feels:"Clear: EAK says 'prepared for review', never 'manufacturing-ready'. A person signs off.",
+   guide:"Every blocker links back to its stage through Problems.",
+   backs:[["ex","outputs"],["ex","release"],["ex","fabprep"]]},
+  {t:"Checkpoint, come back tomorrow",where:()=>go("eda",{side:"history"}),
+   sees:"Named checkpoints and the revision history with who changed what (you or an agent).",
+   thinks:"\"I can try the risky change tomorrow and go back.\"",
+   feels:"Free to experiment.",
+   guide:"Restore is a new revision, so it can be undone too.",
+   backs:[["ex","ckptEngine"],["ex","log"],["pr","ckpt"]]},
+  {t:"Connect an AI tool, no terminal",where:()=>go("settings",{setTab:"aitools"}),
+   sees:"Settings › AI tools: Claude Code, Codex, Gemini CLI, OpenCode with Found / Signed in / Connected.",
+   thinks:"\"I already pay for Claude. Can EAK use it?\"",
+   feels:"Capable: Sign in and Connect are buttons, not commands.",
+   guide:"EAK keeps no keys for these tools; each keeps its own sign-in. Connect registers EAK's tool server with the tool.",
+   backs:[["pr","aitools"],["ex","harness"],["ex","models"]]},
+  {t:"Terminal (advanced, unchanged)",where:()=>go("term"),
+   sees:"The Terminal workspace as it is today: spaces, tabs, split, details, agent detection.",
+   thinks:"\"I only need this when I want it.\"",
+   feels:"Not forced into it.",
+   guide:"Experts still run agents by hand here. It stays as it is for this phase.",
+   backs:[["ex","terminal"],["ex","detect"],["ex","nolaunch"]]},
+];
+
+/* ============================================================================
+   Navigation and rendering
+   ========================================================================== */
+function go(ws,o={}){ S.ws=ws; if(ws!=="home") S.opened=true; Object.assign(S,o); render(); }
+
+function render(){
+  document.querySelectorAll(".screen").forEach(e=>e.classList.toggle("on",e.id===S.ws));
+  document.querySelectorAll(".wsbtn").forEach(b=>b.classList.toggle("on",b.dataset.arg===S.ws));
+  document.getElementById("projName").textContent = S.opened? S.project : "";
+  document.getElementById("rev").textContent = S.opened? "r"+S.rev : "";
+  if(S.ws==="home") renderHome();
+  if(S.ws==="eda") renderEda();
+  if(S.ws==="term") renderTerm();
+  if(S.ws==="settings") renderSettings();
+  renderStatus(); renderStory();
+}
+
+function renderHome(){
+  const ns=nextStage(); const c=counts(S.erc&&ercCurrent()?S.erc.findings:runErc(S));
+  const last=S.checkpoints[S.checkpoints.length-1];
+  document.getElementById("home").innerHTML=`
+  <div class="home-inner">
+    <div class="row"><h1 style="margin:0;font-size:var(--fs-2xl)">Good morning</h1>${ex("home")}<span class="grow"></span>
+      <button data-act="tour" data-arg="0">Take the 4-step tour</button>${pr("tour")}</div>
+    <div class="prompt proposed-zone">
+      <div class="row"><span class="caps">Describe the board you want to build</span>${pr("prompt")}</div>
+      <textarea id="homePrompt" placeholder="e.g. 12 V powered ESP32-S3 board with USB-C and two I2C sensors"></textarea>
+      <div class="row"><span class="faint" style="font-size:var(--fs-xs)">${toolReady()?`AI tool: ${toolReady()} (connected). It asks before changing anything.`:`No AI tool connected. EAK still opens the project and the design brief.`}</span>
+      <span class="grow"></span><button class="primary" data-act="homeStart">Start</button></div>
+    </div>
+    <div class="cards">
+      <div class="card click" data-act="newProject"><h4>New board ${ex("newproj")}</h4><span class="dim">Name, folder, template</span></div>
+      <div class="card click" data-act="openSample"><h4>Open sample board ${pr("tour")}</h4><span class="dim">ESP32-S3 sensor board to explore safely</span></div>
+      <div class="card click" data-act="importKicad"><h4>Import KiCad ${ex("kicad")}</h4><span class="dim">Bring an existing design in</span></div>
+      <div class="card click" data-act="go" data-arg="settings:aitools"><h4>Connect an AI tool ${pr("aitools")}</h4><span class="dim">Claude Code, Codex and others, no terminal</span></div>
+    </div>
+    <div class="card click" data-act="continue" style="border-color:var(--line-strong)">
+      <div class="row"><span class="caps">Continue working</span>${ex("home")}<span class="grow"></span><span class="faint mono" style="font-size:var(--fs-xs)">r${S.rev}</span></div>
+      <div class="row"><h4 style="font-size:var(--fs-lg)">${esc(S.project)}</h4><span class="dim">ESP32-S3 environmental sensor, 12 V in</span></div>
+      <div class="row proposed-zone" style="padding:6px;border-radius:6px;flex-wrap:wrap">
+        <span class="chip info">Next: ${ns?ns.n+" · "+ns.name:"all stages done"}</span>
+        ${c.e?`<span class="chip err">${c.e} ERC errors</span>`:""}${c.w?`<span class="chip warn">${c.w} warnings</span>`:""}
+        ${!S.currents?`<span class="chip unk">1 DRC rule UNKNOWN</span>`:""}
+        <span class="chip">Last checkpoint: ${esc(last.name)} (r${last.rev})</span>${pr("journey")}
+      </div>
+      <div class="faint" style="font-size:var(--fs-xs)">Since you left: ${S.log.slice(-2).map(l=>esc(l.cmd)).join(" · ")}</div>
+    </div>
+    <div class="card"><div class="row"><span class="caps">Recent</span>${ex("home")}</div>
+      <table><thead><tr><th>Project</th><th>Stage</th><th>Validation</th><th>Revision</th></tr></thead><tbody>
+        <tr class="click" data-act="continue"><td>${esc(S.project)}</td><td>${ns?ns.name:"Release"}</td><td>${S.erc&&ercCurrent()?(c.e?c.e+" ERC errors":"ERC clean"):"checks pending"}</td><td class="mono">r${S.rev}</td></tr>
+        <tr class="click" data-act="toast" data-arg="Demo: only the ESP32-S3 project is included."><td>buck-12v-5v</td><td>Outputs</td><td>1 DRC rule UNKNOWN</td><td class="mono">r112</td></tr>
+        <tr class="click" data-act="toast" data-arg="Demo: only the ESP32-S3 project is included."><td>usb-pd-sink</td><td>Schematic</td><td>Not run</td><td class="mono">r9</td></tr>
+      </tbody></table></div>
+  </div>`;
+}
+
+function renderEda(){
+  const ns=nextStage();
+  document.getElementById("journey").innerHTML = STAGES.map(st=>{const [k,why]=stageState(st.n);
+    return `<div class="stage ${ns&&ns.n===st.n?"cur":""}" data-act="stage" data-arg="${st.n}" title="${esc(why)}"><span class="dot" style="background:${COL[k]};${k==="unk"?"border:1px dashed var(--fg-faint)":""}"></span><span class="n">${st.n}</span>${st.name}</div>`}).join("")+`<span style="margin-left:6px;align-self:center">${pr("journey")}</span>`;
+  document.getElementById("toolbar").innerHTML=`<button data-act="undo" title="Undo (Ctrl+Z)">Undo</button><button data-act="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>${ex("undo")}
+   <button data-act="checkpoint">Checkpoint…</button>${pr("ckpt")}<span class="sep"></span>
+   <button data-act="runErc">Run ERC</button><button data-act="updatePcb">Update PCB…</button>${ex("eco")}<span class="sep"></span>
+   <button data-act="autoplace">Auto-place</button><button data-act="autoroute">Auto-route</button><button data-act="routeManual">Route USB pair</button><button data-act="pour">${S.pour?"Remove GND pour":"GND pour"}</button>
+   <button data-act="runDrc">Run DRC</button>${ex("drc")}<span class="sep"></span>
+   <button data-act="releaseCheck">Release check…</button>${ex("release")}
+   <span class="grow"></span><button data-act="rtab" data-arg="copilot" class="${S.rtab==="copilot"?"primary":""}">AI co-pilot</button>${pr("copilot")}`;
+  const acts=[["overview","Over-view"],["project","Explorer"],["design","Design"],["domain","Domain"],["manufacturing","Mfg"],["assets","Assets"],["brief","Brief"],["history","History"]];
+  document.getElementById("activity").innerHTML=acts.map(([id,l])=>`<button class="${S.side===id?"on":""} ${id==="brief"||id==="history"?"proposed-zone":""}" data-act="side" data-arg="${id}" title="${l}">${l}</button>`).join("");
+  renderSide(); renderEditor(); renderRight(); renderBottom();
+}
+
+function renderSide(){
+  let h="";
+  if(S.side==="overview"){
+    const rows=STAGES.map(st=>{const [k,why]=stageState(st.n); return `<tr class="click" data-act="stage" data-arg="${st.n}"><td>${st.n}. ${st.name}</td><td><span class="chip ${k}">${esc(why)}</span></td></tr>`}).join("");
+    h=`<div class="row"><span class="caps">Overview</span>${ex("overview")}</div><p class="dim" style="font-size:var(--fs-xs);margin:4px 0">Facts from the project. A check that was not run says so; it is never shown as passing.</p><table>${rows}</table>`;
+  } else if(S.side==="project"){
+    const files=[["esp32s3-env-sensor.eak","project"],["schematic/","Power, MCU, Sensors"],["pcb/board.eak-pcb",""],["design-flow/spec.json","typed brief"],["output/"+(S.outputsRev?"rev-"+S.outputsRev+"/":""),S.outputsRev?"Gerber, drill, BOM, PDF":"empty"],["evidence/eco-r000038.json","Update PCB report"],["checkpoints/",S.checkpoints.length+" saved"],[".harness.json","agent tool endpoint"]];
+    h=`<div class="row"><span class="caps">Explorer</span>${ex("explorer")}</div>`+files.map(([f,d])=>`<div class="row" style="padding:3px 4px;cursor:pointer" data-act="fileOpen" data-arg="${f}"><span class="mono" style="font-size:var(--fs-xs)">${f}</span><span class="faint" style="font-size:var(--fs-2xs)">${d}</span></div>`).join("");
+  } else if(S.side==="design"){
+    h=`<div class="row"><span class="caps">Design manager</span>${ex("shell")}</div><div class="caps" style="margin-top:8px">Components</div>`+S.parts.map(p=>`<div class="row" style="padding:2px 4px;cursor:pointer" data-act="select" data-arg="${p.ref}"><b style="width:30px">${p.ref}</b><span class="dim" style="font-size:var(--fs-xs)">${esc(p.val)}</span></div>`).join("")+`<div class="caps" style="margin-top:8px">Nets</div><div class="mono dim" style="font-size:var(--fs-xs)">${NETS.join(" · ")}</div>`;
+  } else if(S.side==="domain"){
+    h=`<div class="row"><span class="caps">Domain</span>${ex("shell")}</div><p class="dim" style="font-size:var(--fs-sm)">Circuit blocks recognised in the schematic (sample output):</p><ul style="padding-left:16px;font-size:var(--fs-sm)"><li>Buck converter (U2, L1, C1, C2)</li><li>USB 2.0 device port (J2, U5)</li><li>Power OR-ing (D1, D2)</li><li>I2C sensor bus (U3, U4)</li></ul>`;
+  } else if(S.side==="assets"){
+    h=`<div class="row"><span class="caps">Assets</span>${ex("shell")}</div><p class="dim" style="font-size:var(--fs-sm)">Datasheets, 3D models and drawings attached to the project.</p>`+["TPS62933 datasheet link","SHT40 datasheet link","USB4105 3D model","Enclosure drawing.pdf"].map(a=>`<div class="row" style="padding:3px 4px;cursor:pointer" data-act="toast" data-arg="Demo: in EAK this opens '${a}' from the project's assets.">${a}</div>`).join("");
+  } else if(S.side==="manufacturing"){
+    const r=S.release; const b=bomRows(S);
+    h=`<div class="row"><span class="caps">Manufacturing</span>${ex("outputs")}</div>
+      <div class="col" style="margin-top:6px"><button data-act="genOutputs">Generate outputs for r${S.rev}</button>
+      <div class="dim" style="font-size:var(--fs-xs)">${S.outputsRev?`output/rev-${S.outputsRev}/: Gerber, drill, CPL, BOM.csv, schematic.pdf ${S.outputsRev!==S.rev?'<span class="chip warn">stale</span>':""}`:"Nothing generated yet"}</div>
+      <button data-act="releaseCheck">Run release check</button>
+      ${r?`<div><span class="chip ${r.rev!==S.rev?"warn":r.blocked?"err":"ok"}">${r.rev!==S.rev?"Release check stale":r.blocked?"Blocked":"Prepared for review"}</span></div>`:""}
+      <div class="proposed-zone" style="padding:6px;border-radius:6px"><div class="row"><span class="caps">Fabricator profile</span>${pr("fabprofile")}</div><select data-act-change="fab" aria-label="Fabricator profile" style="width:100%;margin-top:4px"><option value="" ${S.fabProfile?"":"selected"}>None (capability check stays UNKNOWN)</option><option ${S.fabProfile?"selected":""}>Generic 2-layer, 1 oz, 0.15 mm / 0.3 mm drill</option></select></div>
+      <button data-act="fabPrepare">Prepare fabrication package for review</button><div>${ex("fabprep")}</div>
+      <div class="caps" style="margin-top:6px">BOM: ${b.length} lines, ${S.parts.length} parts</div>
+      <div class="dim" style="font-size:var(--fs-xs)">Per-board part cost from stored records: $${b.reduce((a,x)=>a+x.price*x.refs.length,0).toFixed(2)} ${ex("distributor")}</div>
+      <button data-act="btab" data-arg="bom">Open the BOM table</button></div>`;
+  } else if(S.side==="brief"){
+    h=`<div class="proposed-zone" style="padding:6px;border-radius:6px"><div class="row" style="flex-wrap:wrap"><span class="caps">Design brief</span>${pr("brief")}${ex("spec")}</div>
+      <p class="dim" style="font-size:var(--fs-xs);margin:4px 0">Typed, so EAK can check the design against it. Every AI tool reads the same brief.</p>
+      <table><thead><tr><th>Rail</th><th>V</th><th>Max I (A)</th></tr></thead><tbody>${S.brief.rails.map((r,i)=>`<tr><td class="mono">${r.net}</td><td>${r.v}</td><td><input id="railI${i}" style="width:60px" value="${r.i}" placeholder="?"></td></tr>`).join("")}</tbody></table>
+      <button data-act="declareCurrents" style="margin-top:6px">Save currents (SetNetCurrent)</button>
+      <div style="font-size:var(--fs-sm);margin-top:8px"><div><span class="faint">Environment:</span> ${S.brief.env}</div><div><span class="faint">Enclosure height limit:</span> ${S.brief.enclosure} mm</div><div><span class="faint">Interfaces:</span> ${S.brief.iface}</div></div></div>`;
+  } else if(S.side==="history"){
+    h=`<div class="proposed-zone" style="padding:6px;border-radius:6px"><div class="row" style="flex-wrap:wrap"><span class="caps">Checkpoints</span>${pr("ckpt")}${ex("ckptEngine")}</div>
+      ${S.checkpoints.map((c,i)=>`<div class="row" style="padding:3px 0"><span class="grow" style="font-size:var(--fs-sm)">${esc(c.name)} <span class="faint mono">r${c.rev}</span></span><button data-act="restoreCkpt" data-arg="${i}">Restore</button></div>`).join("")}
+      <button data-act="checkpoint">New checkpoint…</button>
+      <div class="row" style="margin-top:10px"><span class="caps">History</span>${ex("log")}</div>
+      ${S.log.slice().reverse().slice(0,14).map(l=>`<div style="font-size:var(--fs-xs);padding:2px 0"><span class="mono faint">r${l.rev}</span> <span style="color:${l.actor.startsWith("agent")?"var(--proposed)":"var(--fg-dim)"}">${esc(l.actor)}</span> ${esc(l.cmd)}</div>`).join("")}</div>`;
+  }
+  document.getElementById("side").innerHTML=h;
+}
+
+function renderEditor(){
+  const tabs=[["schematic","Schematic"],["pcb","PCB"],["3d","3D"]];
+  document.getElementById("edTabs").innerHTML=tabs.map(([id,l])=>`<button class="${S.editor===id?"on":""}" data-act="editor" data-arg="${id}">${l}</button>`).join("")+`<span style="align-self:center;margin-left:6px">${ex(S.editor==="schematic"?"schematic":S.editor==="pcb"?"pcb":"v3d")}</span>`;
+  const c=document.getElementById("canvas");
+  c.innerHTML = S.editor==="schematic"?schematicSvg():S.editor==="pcb"?pcbSvg():view3d();
+}
+
+function partSvg(p){
+  const nw=S.proposal&&S.proposal.preview&&S.proposal.newRefs.includes(p.ref);
+  return `<g class="sym ${S.sel===p.ref?"sel":""} ${S.flash===p.ref?"flash":""} ${nw?"new":""}" data-act="select" data-arg="${p.ref}"><rect class="body" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="3"/><text class="ref" x="${p.x+4}" y="${p.y+13}">${p.ref}</text><text class="val" x="${p.x+4}" y="${p.y+26}">${esc(p.val)}</text></g>`;
+}
+function schematicSvg(){
+  const view = S.proposal&&S.proposal.preview ? S.proposal.copy : S;
+  const P=Object.fromEntries(view.parts.map(p=>[p.ref,p]));
+  const w=(a,b,c,d)=>`<path class="wire" d="M${a} ${b} L${c} ${d}"/>`;
+  const wires=w(100,82,150,83)+w(196,83,300,83)+w(100,230,140,228)+w(200,228,240,193)+w(286,193,300,110)+w(390,75,420,75)+w(470,75,505,75)+w(505,75,505,105)+w(505,75,560,170)+w(690,175,770,175)+w(690,265,770,265)+w(265,110,265,90)+w(315,150,315,125);
+  const labels=`<text class="net" x="210" y="78">VIN_OR</text><text class="net" x="520" y="70">+3V3</text><text class="net" x="700" y="170">I2C_SDA/SCL</text><text class="net" x="700" y="260">I2C</text><text class="net" x="104" y="78">+12V_IN</text><text class="net" x="104" y="224">VBUS</text><text class="net" x="200" y="246">USB_D±</text>`;
+  let extras="";
+  if(view.pwrFlag) extras+=`<path class="wire" d="M540 75 L540 50"/><polygon points="532,50 548,50 540,38" fill="none" stroke="var(--ok)"/><text class="net" x="550" y="46">PWR_FLAG</text>`;
+  if(view.pgNC) extras+=`<text x="392" y="112" fill="var(--fg-dim)" font-size="14">✕</text><text class="val" x="404" y="112">PG no-connect</text>`;
+  const ercF = ercCurrent()?S.erc.findings:[];
+  const marks = ercF.filter(f=>f.obj&&P[f.obj]).map((f,i)=>{const p=P[f.obj]; return `<circle cx="${p.x+p.w-i*14}" cy="${p.y}" r="7" fill="${f.sev==="error"?"var(--err)":"var(--warn)"}"/><text x="${p.x+p.w-3-i*14}" y="${p.y+4}" font-size="10" fill="#000">!</text>`}).join("");
+  const sheet=`<rect x="10" y="10" width="880" height="320" fill="none" stroke="#2a313a"/><text x="16" y="324" fill="#4a5462" font-size="10">Sheets Power · MCU · Sensors, shown on one page in this demo</text>`;
+  const note = S.proposal&&S.proposal.preview?`<div class="overlay-note proposed-zone">Previewing the proposal on a copy. Dashed parts are new. Nothing is applied yet. ${pr("proposal")}</div>`:"";
+  const ercChip = S.erc?(ercCurrent()?`<span class="chip ${counts(S.erc.findings).e?"err":"ok"}">ERC r${S.erc.rev}: ${counts(S.erc.findings).e} errors, ${counts(S.erc.findings).w} warnings</span>`:`<span class="chip unk">ERC stale (r${S.erc.rev})</span>`):`<span class="chip unk">ERC not run</span>`;
+  return `<svg viewBox="0 0 900 340" preserveAspectRatio="xMidYMid meet">${sheet}${wires}${labels}${extras}${view.parts.map(partSvg).join("")}${marks}</svg>${note}
+   <div class="ins"><span class="chip">${view.parts.length} symbols</span>${ercChip}</div>`;
+}
+function pcbSvg(){
+  const sc=12, ox=40, oy=20;
+  const fps=S.pcbParts.map((r,i)=>{const [x,y,w,h]=PCBPOS[r]||[0,0,3,2]; const placed=S.placed.includes(r);
+    const X=placed?ox+x*sc:ox+61*sc+(i%2)*40, Y=placed?oy+y*sc:oy+(i%10)*40; return {r,X,Y,W:w*sc,H:h*sc,placed}});
+  const F=Object.fromEntries(fps.map(f=>[f.r,f]));
+  const cx=f=>f.X+f.W/2, cy=f=>f.Y+f.H/2;
+  const pairs=[["J1","D1"],["D1","U2"],["J2","U5"],["U5","D2"],["D2","U2"],["U2","L1"],["L1","C2"],["C2","U1"],["U1","U3"],["U1","U4"],["C1","U2"],["C5","U2"],["R1","U3"],["R2","U4"],["R3","U1"],["C7","U1"]].filter(([a,b])=>F[a]&&F[b]);
+  let tracks="",rats="";
+  for(const [a,b] of pairs){const A=F[a],B=F[b]; const usb=(a==="J2"&&b==="U5");
+    const routed=S.routed==="done"||(S.routed==="auto"&&!usb)||(S.routed==="partial"&&["J1-D1","D1-U2","U2-L1"].includes(a+"-"+b));
+    if(routed&&A.placed&&B.placed) tracks+=`<path class="track ${usb?"b":""}" d="M${cx(A)} ${cy(A)} L${cx(A)} ${cy(B)} L${cx(B)} ${cy(B)}"/>`; else rats+=`<line class="rats" x1="${cx(A)}" y1="${cy(A)}" x2="${cx(B)}" y2="${cy(B)}"/>`;}
+  const pour=S.pour?`<rect x="${ox+2}" y="${oy+2}" width="${60*sc-4}" height="${42*sc-4}" fill="rgba(79,129,189,.16)" stroke="rgba(79,129,189,.5)" stroke-dasharray="4 3"/>`:"";
+  const clr=(!S.clearFix&&S.routed!=="partial")?`<circle cx="${ox+15*sc}" cy="${oy+8*sc}" r="10" fill="none" stroke="var(--err)" stroke-width="2"/>`:"";
+  const body=fps.map(f=>`<g class="fp ${S.sel===f.r?"sel":""} ${S.flash===f.r?"flash":""}" data-act="select" data-arg="${f.r}"><rect class="body" x="${f.X}" y="${f.Y}" width="${f.W}" height="${f.H}" rx="2"/><text class="ref" x="${f.X+3}" y="${f.Y+12}" font-size="10">${f.r}</text></g>`).join("");
+  const dc=S.drc&&drcCurrent()?counts(S.drc.findings):null;
+  return `<svg viewBox="0 0 900 560" preserveAspectRatio="xMidYMid meet"><rect x="${ox}" y="${oy}" width="${60*sc}" height="${42*sc}" fill="#0f2416" stroke="#e8c35a" stroke-width="1.5"/>${pour}${tracks}${rats}${body}${clr}
+   <text x="${ox}" y="${oy+42*sc+16}" fill="var(--fg-faint)" font-size="11">Board 60 × 42 mm, 2 layers. Dashed blue lines are unrouted connections; parts right of the board are not placed yet.</text></svg>
+   <div class="ins">${pcbInSync(S)?`<span class="chip ok">In sync with the schematic</span>`:`<span class="chip warn">PCB out of date: run Update PCB</span>`}<span class="chip">${S.routed==="done"?"All routed":S.routed==="auto"?"2 connections left":"11 unrouted"}</span>${S.drc?(dc?`<span class="chip ${dc.e?"err":dc.u?"unk":"ok"}">DRC r${S.drc.rev}: ${dc.e} errors, ${dc.u} unknown</span>`:`<span class="chip unk">DRC stale</span>`):`<span class="chip unk">DRC not run</span>`}</div>
+   ${S.routed==="auto"?`<div class="overlay-note">Auto-route limits on main: outer 2 layers, through vias, keep-outs ignored, no differential-pair rules. So USB_D± are left for hand routing. ${ex("autoroute")}</div>`:""}`;
+}
+function view3d(){
+  S.viewed3d=true;
+  const rot={iso:"rotateX(58deg) rotateZ(-32deg)",top:"rotateX(0deg)",side:"rotateX(84deg)"}[S.view3d];
+  const lim=+S.brief.enclosure;
+  const colors={J1:"#333",J2:"#999",U1:"#556",U2:"#222",L1:"#444",U3:"#2a2a2a",U4:"#3a3a3a"};
+  const cmps=S.show3dParts?S.pcbParts.filter(r=>S.placed.includes(r)).map(r=>{const [x,y,w,h]=PCBPOS[r]; const p=S.parts.find(q=>q.ref===r)||{h3d:1}; const tall=p.h3d>lim-1.5;
+    return `<div class="cmp ${tall?"tall":""}" style="left:${x/60*400}px;top:${y/42*280}px;width:${Math.max(w/60*400,8)}px;height:${Math.max(h/42*280,6)}px;transform:translateZ(${p.h3d*4}px)"><div class="top" style="background:${colors[r]||"#7a5"}">${r}${S.measure?`<br>${p.h3d} mm`:""}</div></div>`}).join(""):"";
+  const tallest=S.parts.reduce((a,p)=>p.h3d>a.h3d?p:a,{h3d:0,ref:"-"});
+  return `<div id="v3d"><div id="board3d" style="transform:${rot}"><div class="pcb"></div>${cmps}</div></div>
+  <div class="ins"><button data-act="v3d" data-arg="iso" class="${S.view3d==="iso"?"primary":""}">Iso</button><button data-act="v3d" data-arg="top" class="${S.view3d==="top"?"primary":""}">Top</button><button data-act="v3d" data-arg="side" class="${S.view3d==="side"?"primary":""}">Side</button>
+   <button data-act="v3dParts">${S.show3dParts?"Hide":"Show"} components</button><button data-act="v3dMeasure" class="${S.measure?"primary":""}">Measure heights</button></div>
+  <div class="overlay-note">Tallest part: <b>${tallest.ref}</b> ${tallest.h3d} mm against the enclosure limit of ${lim} mm (from the brief): <span class="chip ${tallest.h3d<lim?"ok":"err"}">${tallest.h3d<lim?(lim-tallest.h3d).toFixed(1)+" mm margin":"too tall"}</span><br><span class="faint">The real viewer today: no collision check, no STEP export, arcs and cut-outs ignored.</span> ${ex("v3d")}</div>`;
+}
+
+function renderRight(){
+  document.getElementById("rightTabs").innerHTML=`<button class="${S.rtab==="props"?"on":""}" data-act="rtab" data-arg="props">Properties</button><button class="${S.rtab==="copilot"?"on":""} proposed-zone" data-act="rtab" data-arg="copilot">AI co-pilot</button>`;
+  const el=document.getElementById("rightBody");
+  if(S.rtab==="props"){
+    const p=S.parts.find(q=>q.ref===S.sel);
+    if(!p){ el.innerHTML=`<div class="row"><span class="caps">Properties</span>${ex("props")}</div><p class="dim">Select a part on the schematic or the PCB.</p>`; return; }
+    const c=cat(p.mpn);
+    el.innerHTML=`<div class="row"><span class="caps">Properties</span>${ex("props")}</div>
+     <table><tr><td class="faint">Designator</td><td><b>${p.ref}</b></td></tr><tr><td class="faint">Value</td><td>${esc(p.val)}</td></tr><tr><td class="faint">Manufacturer / MPN</td><td>${c.mfr}<br><span class="mono">${c.mpn}</span></td></tr><tr><td class="faint">Footprint</td><td class="mono">${c.fp}<br><span class="dim">${S.pcbParts.includes(p.ref)?"on the PCB":"not on the PCB yet"}</span></td></tr><tr><td class="faint">Height</td><td>${p.h3d} mm</td></tr></table>
+     <div class="bubble" style="margin-top:8px"><div class="caps">Datasheet limits</div>${esc(c.ds)}<div class="faint" style="font-size:var(--fs-2xs);margin-top:4px">Label: datasheet_supported ${ex("evidence")}</div></div>
+     <div class="row" style="margin-top:8px"><button data-act="askAbout" data-arg="${p.ref}">Ask the co-pilot about ${p.ref}</button>${pr("copilot")}</div>`;
+    return;
+  }
+  el.innerHTML=copilotHtml();
+  const log=document.getElementById("chatLog"); if(log) log.scrollTop=log.scrollHeight;
+}
+
+const TOOLS={claude:{label:"Claude Code",bin:"claude"},codex:{label:"Codex",bin:"codex"},gemini:{label:"Gemini CLI",bin:"gemini"},opencode:{label:"OpenCode",bin:"opencode"}};
+function toolReady(){ for(const [k,t] of Object.entries(S.tools)) if(t.conn&&t.signed) return TOOLS[k].label; if(S.modelKeys.anthropic||S.modelKeys.openai) return "Direct model key"; return null; }
+function copilotHtml(){
+  const tool=toolReady();
+  let h=`<div class="proposed-zone" style="padding:6px;border-radius:6px;display:flex;flex-direction:column;gap:8px;min-height:100%">
+   <div class="row"><span class="caps">AI co-pilot</span>${pr("copilot")}</div>`;
+  if(!tool){
+    return h+`<div class="bubble">No AI tool connected yet. The co-pilot uses a tool you already have (Claude Code, Codex…) or a direct model key.<div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="primary" data-act="go" data-arg="settings:aitools">Connect an AI tool</button><button data-act="go" data-arg="settings:models">Use a model key</button></div></div>
+     <div class="faint" style="font-size:var(--fs-xs)">Without AI, everything else in EAK works the same.</div></div>`;
+  }
+  h+=`<div class="row" style="font-size:var(--fs-xs);flex-wrap:wrap"><span class="chip ok">${tool}</span><span class="grow"></span><select data-act-change="perm" aria-label="AI change policy"><option value="ask" ${S.permMode==="ask"?"selected":""}>Ask before every change</option><option value="auto" ${S.permMode==="auto"?"selected":""}>Auto-apply reversible layout tweaks</option></select></div>
+   <div id="chatLog" class="col" style="flex:1;overflow:auto;min-height:120px">`;
+  if(!S.chat.length) h+=`<div class="faint" style="font-size:var(--fs-sm)">Ask in plain words. The co-pilot reads the brief and Problems through EAK's tools, then proposes a change for you to review. It cannot apply anything by itself, and it never marks its own work as passing: EAK re-runs the checks.</div>`;
+  for(const m of S.chat){
+    if(m.who==="me") h+=`<div class="bubble me">${esc(m.text)}</div>`;
+    else if(m.kind==="q") h+=`<div class="bubble"><div>${esc(m.text)}</div>${m.answered?`<div class="chip info" style="margin-top:4px;height:auto;white-space:normal">You chose: ${esc(m.answered)}</div>`:m.opts.map((o,i)=>`<button class="qopt" data-act="answer" data-arg="${i}">${esc(o)}</button>`).join("")}</div>`;
+    else if(m.kind==="plan") h+=`<div class="bubble"><div class="caps">Plan</div><ol class="plan" style="padding-left:18px;margin:4px 0">${m.steps.map((s,i)=>`<li class="${i<m.done?"done":i===m.done&&S.copilotBusy?"run":""}">${esc(s)}</li>`).join("")}</ol></div>`;
+    else if(m.kind==="prop") h+=`<div class="bubble" style="border-color:var(--proposed)"><div class="row"><b>Proposal</b><span class="grow"></span>${m.state==="applied"?`<span class="chip ok">Applied r${m.rev}</span>`:m.state==="discarded"?`<span class="chip">Discarded</span>`:`<span class="chip info">Waiting for you</span>`}</div><div class="dim">${esc(m.text)}</div>${m.state==="open"?`<div class="row" style="margin-top:6px;flex-wrap:wrap"><button class="primary" data-act="reviewProposal">Review…</button><button data-act="previewProposal">${S.proposal&&S.proposal.preview?"Hide preview":"Preview on canvas"}</button></div>`:""}</div>`;
+    else h+=`<div class="bubble">${esc(m.text)}</div>`;
+  }
+  if(S.copilotBusy) h+=`<div class="row"><span class="chip info">Working…</span><button data-act="stopAi">Stop</button></div>`;
+  h+=`</div><div class="row" style="flex-wrap:wrap;gap:4px">${[["Fix the ERC errors","erc"],["Add I2C pull-ups","pullups"],["Declare rail currents from the brief","currents"],["Fix the DRC clearance","clear"]].map(([l,k])=>`<button style="font-size:var(--fs-xs);height:22px" data-act="aiAsk" data-arg="${k}">${l}</button>`).join("")}</div>
+   <div class="row"><input id="chatIn" class="grow" placeholder="Ask about this board…" aria-label="Ask the co-pilot"><button data-act="aiSend">Send</button></div></div>`;
+  return h;
+}
+
+function allProblems(){
+  const out=[];
+  out.push(...(S.erc?S.erc.findings.map(f=>({...f,src:"ERC",stale:!ercCurrent()})):[{sev:"unknown",obj:null,where:"schematic",msg:"ERC has not been run",src:"ERC",fix:null}]));
+  out.push(...(S.drc?S.drc.findings.map(f=>({...f,src:"DRC",stale:!drcCurrent()})):[{sev:"unknown",obj:null,where:"pcb",msg:"DRC has not been run",src:"DRC",fix:null}]));
+  out.push(...aiNotes(S).map(f=>({...f,src:"Review note"})));
+  if(S.release&&S.release.rev===S.rev) for(const i of S.release.items) if(i.st!=="PASS") out.push({sev:i.st==="FAIL"?"error":"unknown",obj:null,where:"release",msg:`Release: ${i.name}: ${i.why}`,src:"Release"});
+  for(const t of S.aiTasks) if(!["completed","discarded","stopped"].includes(t.status)) out.push({sev:"warning",obj:null,where:"copilot",msg:`AI task '${t.name}': ${t.status}`,src:"AI task"});
+  return out;
+}
+const SEVCHIP={error:"err",warning:"warn",unknown:"unk",note:"info"};
+function renderBottom(){
+  const tabs=[["problems","Problems"],["findings","Findings"],["library","Library"],["bom","BOM"],["log","Log"],["tasks","Tasks"]];
+  const pc=counts(allProblems());
+  document.getElementById("botTabs").innerHTML=tabs.map(([id,l])=>`<button class="${S.btab===id?"on":""} ${id==="problems"?"proposed-zone":""}" data-act="btab" data-arg="${id}">${l}${id==="problems"?` <span class="chip ${pc.e?"err":"unk"}" style="height:15px">${pc.e+pc.w+pc.u+pc.n}</span>`:""}</button>`).join("")+`<span style="align-self:center;margin-left:4px">${S.btab==="problems"?pr("problems"):ex(S.btab)}</span>`;
+  let h="";
+  if(S.btab==="problems"){
+    const list=allProblems().filter(p=>S.probFilter==="all"||p.sev===S.probFilter);
+    h=`<div class="row" style="padding:4px 8px;flex-wrap:wrap">${[["all","All"],["error","Errors"],["warning","Warnings"],["unknown","Unknown"],["note","Review notes"]].map(([k,l])=>`<button style="height:20px;font-size:var(--fs-xs)" class="${S.probFilter===k?"primary":""}" data-act="pfilter" data-arg="${k}">${l}</button>`).join("")}<span class="faint" style="font-size:var(--fs-xs)">ERC, DRC, release blockers, missing inputs and unfinished AI tasks in one list. Unknown is never a pass.</span></div>`;
+    h+=list.map(p=>`<div class="prob"><span class="chip ${SEVCHIP[p.sev]}">${p.sev}</span><span><b class="faint">${p.src}</b> ${esc(p.msg)}${p.label?` <span class="chip">label: ${p.label}</span>`:""}${p.stale?` <span class="chip unk">stale</span>`:""}</span><span class="row">${p.obj||p.where==="release"||p.where==="copilot"?`<button style="height:20px" data-act="goto" data-arg="${esc(JSON.stringify({obj:p.obj,where:p.where}))}">Go to</button>`:""}${p.fix?`<button style="height:20px" data-act="aiAsk" data-arg="${p.fix}">Propose a fix</button>`:""}</span></div>`).join("")||`<div class="dim" style="padding:10px">Nothing in this filter.</div>`;
+  } else if(S.btab==="findings"){
+    const f=[...(S.erc?S.erc.findings.map(x=>["ERC r"+S.erc.rev,x]):[]),...(S.drc?S.drc.findings.map(x=>["DRC r"+S.drc.rev,x]):[])];
+    h=`<table><thead><tr><th>Check</th><th>Severity</th><th>Message</th><th>Object</th></tr></thead><tbody>${f.map(([k,x])=>`<tr class="click" data-act="goto" data-arg="${esc(JSON.stringify({obj:x.obj,where:x.where}))}"><td>${k}</td><td>${x.sev}</td><td>${esc(x.msg)}</td><td>${x.obj||""}</td></tr>`).join("")||`<tr><td colspan="4" class="dim">Run ERC or DRC from the toolbar.</td></tr>`}</tbody></table>`;
+  } else if(S.btab==="library"){
+    const q=S.libQuery.toLowerCase(); const rows=CATALOG.filter(c=>!q||(c.mpn+" "+c.mfr+" "+c.cat+" "+c.spec+" "+c.fp).toLowerCase().includes(q));
+    h=`<div class="row" style="padding:4px 8px;flex-wrap:wrap"><input id="libQ" placeholder="Search parts: buck, I2C, 0402…" value="${esc(S.libQuery)}" style="width:240px" aria-label="Search parts"><button data-act="libSearch">Search</button><span class="faint" style="font-size:var(--fs-xs)">Stock and price are stored sample records. Live distributor search is not configured in EAK today. ${ex("distributor")}</span></div>
+     <table><thead><tr><th>MPN</th><th>Manufacturer</th><th>Category</th><th>Key specs</th><th>Stock*</th><th>Price*</th><th></th></tr></thead><tbody>${rows.map(c=>{const used=S.parts.filter(p=>p.mpn===c.mpn).map(p=>p.ref);return `<tr class="click ${S.libSel===c.mpn?"sel":""}" data-act="libSel" data-arg="${c.mpn}"><td class="mono">${c.mpn}</td><td>${c.mfr}</td><td>${c.cat}</td><td>${c.spec}</td><td>${c.stock.toLocaleString("en-US")}</td><td>$${c.price.toFixed(c.price<0.1?3:2)}</td><td><button style="height:20px" data-act="place" data-arg="${c.mpn}">Place</button>${used.length?` <span class="chip">${used.join(", ")}</span>`:""}</td></tr>`}).join("")||`<tr><td colspan="7" class="dim">No part matches.</td></tr>`}</tbody></table>
+     ${S.libSel?`<div class="bubble" style="margin:6px 8px"><b>${S.libSel}</b>: ${esc(cat(S.libSel).ds)} <span class="faint">(datasheet_supported)</span></div>`:""}`;
+  } else if(S.btab==="bom"){
+    h=`<div class="row" style="padding:4px 8px"><button data-act="exportBom">Export BOM.csv</button><span class="faint" style="font-size:var(--fs-xs)">Columns follow EAK's BOM fields; stock and price are "stored record" values.</span></div><table><thead><tr><th>Designator</th><th>Qty</th><th>Value</th><th>Manufacturer</th><th>MPN</th><th>Footprint</th><th>Stock (stored record)</th><th>Unit price USD (stored record)</th></tr></thead><tbody>${bomRows(S).map(r=>`<tr><td>${r.refs.join(", ")}</td><td>${r.refs.length}</td><td>${esc(r.val)}</td><td>${r.mfr}</td><td class="mono">${r.mpn}</td><td class="mono">${r.fp}</td><td>${r.stock.toLocaleString("en-US")}</td><td>${r.price.toFixed(3)}</td></tr>`).join("")}</tbody></table>`;
+  } else if(S.btab==="log"){
+    h=`<table><thead><tr><th>Rev</th><th>Actor</th><th>Command</th></tr></thead><tbody>${S.log.slice().reverse().map(l=>`<tr><td class="mono">r${l.rev}</td><td style="color:${l.actor.startsWith("agent")?"var(--proposed)":"inherit"}">${esc(l.actor)}</td><td>${esc(l.cmd)}</td></tr>`).join("")}</tbody></table>`;
+  } else if(S.btab==="tasks"){
+    h=S.aiTasks.length?`<table><thead><tr><th>Task</th><th>Tool</th><th>Phase</th><th>Status</th></tr></thead><tbody>${S.aiTasks.map(t=>`<tr><td>${esc(t.name)}</td><td>${t.tool}</td><td class="mono">${t.phase}</td><td>${t.status}</td></tr>`).join("")}</tbody></table>`:`<div class="dim" style="padding:10px">No agent tasks yet. Tasks started by the co-pilot, or by an agent in the Terminal, show here with phases grounded in project facts.</div>`;
+  }
+  document.getElementById("botBody").innerHTML=h;
+}
+
+/* ---- Terminal workspace: as it exists today (with a simulated shell) ---- */
+const curTab=()=>S.term.tabs.find(t=>t.id===S.term.cur);
+const PROMPT=()=>`<span style="color:var(--ok)">engineer@lab</span>:<span style="color:var(--info)">${curTab().cwd}</span>$ `;
+function renderTerm(){
+  const T=S.term, tab=curTab();
+  const dotc={idle:"var(--ok)",running:"var(--info)",waiting:"var(--warn)",ended:"var(--neutral)"};
+  document.getElementById("term").innerHTML=`
+  <div id="termSide"><div class="row"><span class="caps">Spaces</span>${ex("terminal")}<span class="grow"></span><button class="ghost" data-act="toast" data-arg="In EAK, Ctrl+Shift+N creates a new space. The demo has one space.">+</button></div>
+    <div class="row" style="padding:2px 4px;background:var(--bg-active);border-radius:4px"><span class="grow">${esc(S.project)}</span></div>
+    <div class="row" style="margin-top:6px"><span class="caps">Agents</span>${ex("detect")}</div>
+    ${T.tabs.filter(t=>t.agent).map(t=>`<div class="row" style="cursor:pointer" data-act="termTab" data-arg="${t.id}"><span class="dot" style="background:${dotc[t.status]}"></span>${t.agent} <span class="faint">${t.status}</span></div>`).join("")||`<div class="faint" style="font-size:var(--fs-xs)">No agent running. Agents are detected from the foreground program; type <span class="mono">claude</span> to see it.</div>`}
+    <div class="bubble" style="font-size:var(--fs-xs);margin-top:auto">Kept exactly as it is for this phase. There is no agent launcher here, by design. ${ex("nolaunch")}</div>
+  </div>
+  <div id="termMain">
+    <div id="termTabs">${T.tabs.map(t=>`<button class="tab ${t.id===T.cur?"on":""}" data-act="termTab" data-arg="${t.id}"><span class="dot" style="background:${dotc[t.status]}"></span>${esc(t.agent||t.name)}</button>${T.tabs.length>1?`<button class="ghost" title="Close tab" data-act="termClose" data-arg="${t.id}" style="padding:0 5px">×</button>`:""}`).join("")}
+      <button data-act="termNew" title="New terminal: a normal shell (Ctrl+Shift+T)">+</button><span class="grow"></span>
+      <button data-act="termSplit" title="Split right (Ctrl+Shift+D)">${T.split?"Close split":"Split right"}</button><button data-act="termDetails" title="Show or hide the details panel (Ctrl+Shift+P)">Details</button></div>
+    <div id="termPanes"><div class="pane focus" data-act="termFocus"><div class="out" id="termOut">${tab.out||`<span class="faint">EAK terminal. This shell has EAK_PROJECT_DIR, EAK_HARNESS_SOCKET and the eak CLI on PATH.
+Try: help · eak status · eak erc · claude · ls</span>\n`}</div><div class="row"><span>${PROMPT()}</span><input id="termIn" autocomplete="off" spellcheck="false" aria-label="Terminal input"></div></div>
+      ${T.split?`<div class="pane"><div class="out faint">Second pane: a normal shell. Type in the left pane.</div></div>`:""}</div>
+  </div>
+  ${T.details?`<aside id="termDetails"><div class="caps">Details</div><dl style="margin-top:6px"><dt>Name</dt><dd>${esc(tab.agent||tab.name)}</dd><dt>Status</dt><dd>${tab.status}</dd><dt>Agent</dt><dd>${tab.agent||"none"}</dd><dt>Foreground</dt><dd class="mono">${tab.agent||"bash"}</dd><dt>Folder</dt><dd class="mono">${tab.cwd}</dd><dt>Evidence</dt><dd>${tab.agent?"Detected from the foreground program name":"-"}</dd></dl>
+    <div class="faint" style="font-size:var(--fs-xs);margin-top:10px">Edits an agent makes here are journalled today as <span class="mono">external-agent</span>. Proposed: name the agent. ${pr("agentname")}</div></aside>`:""}`;
+  const out=document.getElementById("termOut"); if(out) out.parentElement.scrollTop=1e6;
+}
+function termRun(cmd){
+  const tab=curTab(); const c=cmd.trim(); let o="";
+  const line=PROMPT()+esc(cmd)+"\n";
+  if(tab.agent){
+    if(c==="/exit"||c==="exit"){ o=`<span class="faint">(${tab.agent} exited)</span>\n`; tab.agent=null; tab.status="idle"; }
+    else if(c){ o=`<span style="color:var(--proposed)">${tab.agent}</span>: (demo) the agent would call EAK's tools through eak-mcp here. Its edits go through the engine and appear in the EDA window at the next revision.\n`; tab.status="waiting"; }
+  } else if(c==="help"){ o="Demo commands: eak status, eak erc, eak drc, claude, codex, ls, clear\n"; }
+  else if(c==="clear"){ tab.out=""; renderTerm(); document.getElementById("termIn").focus(); return; }
+  else if(c==="ls"){ o="checkpoints/  design-flow/  evidence/  output/  pcb/  schematic/  esp32s3-env-sensor.eak\n"; }
+  else if(c==="eak status"){ const k=counts(allProblems()); const n=nextStage(); o=`project  ${esc(S.project)}\nrevision r${S.rev}\nproblems ${k.e} error, ${k.w} warning, ${k.u} unknown\nnext     ${n?n.name:"-"}\n`; }
+  else if(c==="eak erc"){ record("RunErc (eak CLI)","external-agent",s=>{s.erc={rev:s.rev,findings:runErc(s)}}); const k=counts(S.erc.findings); o=`ERC r${S.rev}: ${k.e} error(s), ${k.w} warning(s). The EDA window refreshed.\n`; }
+  else if(c==="eak drc"){ record("RunDrc (eak CLI)","external-agent",s=>{s.drc={rev:s.rev,findings:runDrc(s)}}); const k=counts(S.drc.findings); o=`DRC r${S.rev}: ${k.e} error(s), ${k.u} UNKNOWN (not passing).\n`; }
+  else if(c==="claude"||c==="codex"){ tab.agent=c; tab.status="running"; o=`<span style="color:var(--proposed)">${c}</span> started (demo). EAK detected the agent from the program name; the tab and the Agents list now show it.\n<span class="faint">One-time setup today, typed by hand: claude mcp add eak -- eak mcp\nProposed: Settings › AI tools › Connect does this for you.</span>\nType a request, or /exit.\n`; }
+  else if(c) o=`${esc(c.split(" ")[0])}: command not found in this demo (try help)\n`;
+  tab.out=(tab.out||"")+line+o; renderTerm(); const i=document.getElementById("termIn"); if(i) i.focus();
+}
+
+/* ---- Settings ---- */
+function renderSettings(){
+  const nav=[["aitools","AI tools",true],["models","Model settings"],["general","General"]];
+  let body="";
+  if(S.setTab==="aitools"){
+    body=`<div class="row"><h2 style="margin:0;font-size:var(--fs-xl)">AI tools</h2>${pr("aitools")}</div>
+    <p class="dim" style="max-width:720px">Use the AI tools you already have. EAK finds them, opens their own sign-in, and connects them to this project through EAK's tool server (eak-mcp ${ex("harness")}). EAK stores no keys for these tools. Every AI change still reaches you as a proposal.</p>
+    <div class="proposed-zone" style="padding:8px;border-radius:8px">${Object.entries(TOOLS).map(([k,t])=>{const s=S.tools[k];
+      const state=!s.found?`<span class="chip">Not found on this computer</span>`:`<span class="chip ok">Found: ${t.bin}</span> ${s.signed===true?`<span class="chip ok">Signed in</span>`:s.signed===false?`<span class="chip warn">Not signed in</span>`:`<span class="chip unk">Sign-in unknown</span>`} ${s.conn?`<span class="chip ok">Connected to ${esc(S.project)}</span>`:`<span class="chip">Not connected</span>`}`;
+      const btns=!s.found?`<button data-act="toolInstall" data-arg="${k}">How to install</button><button data-act="toolRescan" data-arg="${k}">Rescan</button>`:`<button data-act="toolSignin" data-arg="${k}">${s.signed===true?"Sign in again":"Sign in"}</button><button data-act="toolConnect" data-arg="${k}" class="${s.conn?"":"primary"}">${s.conn?"Disconnect":"Connect"}</button><button data-act="toolTest" data-arg="${k}">Test</button>`;
+      return `<div class="toolrow"><b>${t.label}</b><div class="row" style="flex-wrap:wrap">${state}</div><div class="row">${btns}</div></div>`}).join("")}
+    <div class="row" style="margin-top:6px;flex-wrap:wrap"><span class="faint" style="font-size:var(--fs-xs)">Default for AI changes:</span><select data-act-change="perm" aria-label="Default AI change policy"><option value="ask" ${S.permMode==="ask"?"selected":""}>Ask before every change</option><option value="auto" ${S.permMode==="auto"?"selected":""}>Auto-apply reversible layout tweaks, ask for the rest</option></select><span class="faint" style="font-size:var(--fs-xs)">Destructive changes always ask.</span></div></div>
+    <div class="bubble" style="margin-top:12px;max-width:720px;font-size:var(--fs-xs)"><b>What exists today:</b> these CLIs can already drive EAK through <span class="mono">eak</span> / <span class="mono">eak-mcp</span> when you start them by hand in the Terminal and register the tool server yourself. Sign-in and headless flags differ per tool and are not verified by this demo.</div>`;
+  } else if(S.setTab==="models"){
+    const prov=[["anthropic","Anthropic"],["openai","OpenAI"],["ollama","Ollama (local)"]];
+    body=`<div class="row"><h2 style="margin:0;font-size:var(--fs-xl)">Model settings</h2>${ex("models")}</div><p class="dim" style="max-width:720px">Direct model keys, kept in the operating system's keystore. Optional infrastructure: no screen in EAK uses a model today ${ex("aiBackend")}.</p>
+    ${prov.map(([k,l])=>`<div class="toolrow"><b>${l}</b><div class="row">${S.modelKeys[k]?`<span class="chip ok">${k==="ollama"?"Endpoint set":"Key in keystore"}</span>`:`<span class="chip">No key</span>`}</div><div class="row">${k==="ollama"?"":`<input id="key_${k}" type="password" placeholder="API key" style="width:140px" aria-label="${l} API key"><button data-act="saveKey" data-arg="${k}">Save</button>`}<button data-act="testModel" data-arg="${k}">Test connection</button></div></div>`).join("")}`;
+  } else {
+    body=`<h2 style="margin:0;font-size:var(--fs-xl)">General</h2><p class="dim">Theme, units, grid and hotkeys live here in EAK ${ex("shell")}. Not reproduced in this demo.</p><button data-act="tour" data-arg="0">Replay the first-run tour</button>`;
+  }
+  document.getElementById("settings").innerHTML=`<nav id="setNav"><span class="caps" style="padding:4px">Settings</span>${nav.map(([id,l,p])=>`<button class="${S.setTab===id?"on":""} ${p?"proposed-zone":""}" data-act="setTab" data-arg="${id}">${l}</button>`).join("")}</nav><div id="setBody">${body}</div>`;
+}
+
+function renderStatus(){
+  const k=counts(allProblems()); const t=S.aiTasks.find(x=>!["completed","discarded","stopped"].includes(x.status));
+  document.getElementById("statusbar").innerHTML=S.opened?`<span>${esc(S.project)}</span><span class="mono">r${S.rev}</span><span style="color:${k.e?"var(--err)":"inherit"}">${k.e} errors</span><span>${k.w} warnings</span><span>${k.u} unknown</span><span>${pcbInSync(S)?"PCB in sync":"PCB out of date"}</span><span class="grow"></span><span>${t?`Agent task: ${esc(t.name)} · ${t.phase}`:"No agent task running"}</span>${ex("tasks")}`:`<span>No project open</span>`;
+}
+
+function renderStory(){
+  const el=document.getElementById("story"); if(el.classList.contains("hidden")) return;
+  const i=S.tourStep==null?-1:S.tourStep; const st=STORY[i];
+  el.innerHTML=`<div class="row"><h3>Storyboard</h3><span class="grow"></span><span class="faint" style="font-size:var(--fs-xs)">${i<0?"":(i+1)+" / "+STORY.length}</span></div>
+   <p class="dim" style="margin:0;font-size:var(--fs-sm)">Walk the engineer's journey frame by frame. Each frame moves the app to the right place; then click around freely.</p>
+   <div class="stepdots">${STORY.map((s,j)=>`<button class="${j===i?"on":""}" data-act="story" data-arg="${j}" title="${esc(s.t)}">${j+1}</button>`).join("")}</div>
+   ${st?`<div class="story-card"><b>${st.t}</b><dl><dt>Sees</dt><dd>${esc(st.sees)}</dd><dt>Thinks</dt><dd>${esc(st.thinks)}</dd><dt>Feels</dt><dd>${esc(st.feels)}</dd><dt>How EAK guides</dt><dd>${esc(st.guide)}</dd><dt>Backed by</dt><dd class="col" style="gap:3px">${st.backs.map(([k,key])=>`<span>${k==="ex"?ex(key):pr(key)} <span class="faint" style="font-size:var(--fs-xs)">${esc(k==="ex"?EV[key]:PR[key])}</span></span>`).join("")}</dd></dl></div>
+   <div class="row"><button data-act="story" data-arg="${Math.max(0,i-1)}" ${i<=0?"disabled":""}>Back</button><span class="grow"></span><button class="primary" data-act="story" data-arg="${Math.min(STORY.length-1,i+1)}" ${i>=STORY.length-1?"disabled":""}>Next frame</button></div>`
+   :`<button class="primary" data-act="story" data-arg="0">Start the walkthrough</button>`}
+   <div class="story-card"><b>The loops engineers repeat</b><ul style="padding-left:16px;margin:6px 0;font-size:var(--fs-sm)"><li>Datasheet check → change the part → re-run ERC</li><li>ERC/DRC finding → fix by hand or by proposal → re-run → stage turns green</li><li>Schematic change → Update PCB → place → route → DRC</li><li>Checkpoint → try something → keep it, or restore</li></ul><span class="faint" style="font-size:var(--fs-xs)">Not in EAK yet: back-annotation from PCB to schematic.</span></div>
+   <div class="story-card" style="font-size:var(--fs-xs)"><b>Rules this design keeps</b><ul style="padding-left:16px;margin:6px 0"><li>One write path: every change is a typed Command at a revision.</li><li>AI proposes; EAK re-runs the checks; a person applies.</li><li>Unknown is never shown as passing; nothing is called manufacturing-ready.</li><li>The Terminal workspace stays as it is.</li></ul></div>`;
+}
+
+/* ============================================================================
+   AI co-pilot simulation (PROPOSED). Proposals are built on a copy of the design,
+   EAK's checks run on the copy, and Apply is one execute() = one undo step.
+   ========================================================================== */
+const RECIPES={
+  erc:{name:"Fix the ERC errors",ask:"Fix the ERC errors",q:["U1 EN needs a reset delay. Which values?",["10 kΩ pull-up + 1 µF to GND (module datasheet values)","Leave EN to me, fix only the power flag and PG"]],
+    plan:["Read the ERC findings and the ESP32-S3 module note on EN","Add a power flag on +3V3 (the buck output drives it)","Add R3 10 kΩ to +3V3 and C7 1 µF to GND on EN","Mark U2 PG as no-connect","Re-run ERC on the copy"],
+    build:(c,ans)=>{c.pwrFlag=true;c.pgNC=true; if(ans===0){c.enRC=true; c.parts.push({ref:"R3",mpn:"RC0402FR-0710KL",val:"10 kΩ",x:560,y:296,w:36,h:24,h3d:0.35},{ref:"C7",mpn:"GRM155R61A105KE15D",val:"1 µF",x:610,y:296,w:36,h:24,h3d:0.5});}},
+    rows:ans=>[["Add","Power flag on +3V3","schematic"],...(ans===0?[["Add","R3 10 kΩ RC0402FR-0710KL, EN to +3V3","part"],["Add","C7 1 µF GRM155R61A105KE15D, EN to GND","part"]]:[]),["Set","U2 PG: no-connect marker","schematic"]],
+    labels:["passed_deterministic_checks (ERC re-run by EAK)","datasheet_supported (EN RC values)"],schem:true},
+  pullups:{name:"Add I2C pull-ups",ask:"Add I2C pull-ups",q:["Pull-up value for the I2C bus with 2 sensors?",["4.7 kΩ, 100 kHz bus","2.2 kΩ, 400 kHz bus"]],
+    plan:["Check the SHT40 and BME280 I2C requirements","Add R1 / R2 pull-ups to +3V3 on SDA / SCL","Re-run ERC on the copy"],
+    build:(c,ans)=>{const m=ans===0?"RC0402FR-074K7L":"RC0402FR-072K2L", v=ans===0?"4.7 kΩ":"2.2 kΩ"; c.parts.push({ref:"R1",mpn:m,val:v,x:700,y:110,w:36,h:24,h3d:0.35},{ref:"R2",mpn:m,val:v,x:745,y:110,w:36,h:24,h3d:0.35});},
+    rows:ans=>[["Add",`R1 ${ans===0?"4.7 kΩ RC0402FR-074K7L":"2.2 kΩ RC0402FR-072K2L"}, I2C_SDA to +3V3`,"part"],["Add",`R2 ${ans===0?"4.7 kΩ RC0402FR-074K7L":"2.2 kΩ RC0402FR-072K2L"}, I2C_SCL to +3V3`,"part"]],
+    labels:["datasheet_supported (SHT40: external pull-ups required)","assumed (bus speed you chose)"],schem:true},
+  currents:{name:"Declare rail currents",ask:"Declare rail currents from the brief",q:["The brief has no currents. Estimate them from the parts?",["Yes: +3V3 0.6 A (ESP32-S3 Wi-Fi peaks), +12V_IN 0.25 A","No, I'll type them in the brief myself"]],
+    plan:["Read the brief and the part datasheets","Estimate peak current per rail","SetNetCurrent on +12V_IN and +3V3","Re-run DRC on the copy"],
+    build:(c,ans)=>{if(ans===0){c.currents=true;c.brief.rails[0].i="0.25";c.brief.rails[1].i="0.6";}},
+    rows:ans=>ans===0?[["Set","+12V_IN current 0.25 A (SetNetCurrent)","rule input"],["Set","+3V3 current 0.6 A (SetNetCurrent)","rule input"]]:[],
+    labels:["assumed (estimate: please confirm)","datasheet_supported (ESP32-S3 RF peak current)"],schem:false},
+  clear:{name:"Fix the DRC clearance",ask:"Fix the DRC clearance",q:["Move the +12V_IN track or the GND via?",["Move the +12V_IN track 0.2 mm away","Move the GND via instead"]],
+    plan:["Read the DRC finding at J1","Move the track segment","Re-run DRC on the copy"],
+    build:c=>{c.clearFix=true;}, rows:ans=>[["Move",ans===0?"Track +12V_IN segment near J1 (0.12 → 0.21 mm)":"GND via near J1 (0.12 → 0.20 mm)","pcb"]], labels:["passed_deterministic_checks (DRC re-run by EAK)"],schem:false, reversible:true},
+};
+let aiTimer=null;
+const lastTask=()=>S.aiTasks[S.aiTasks.length-1];
+function aiStart(key, text){
+  if(!toolReady()){ go("eda",{rtab:"copilot"}); toast("Connect an AI tool first: Settings › AI tools."); return; }
+  if(S.copilotBusy) return toast("The co-pilot is working. Stop it first.");
+  if(S.proposal) return toast("Review or discard the open proposal first.");
+  const r=RECIPES[key]; S.ws="eda"; S.rtab="copilot";
+  if(!r){ S.chat.push({who:"me",text},{who:"ai",text:"(demo) This demo answers the four suggestions below. In the real flow the co-pilot reads the brief and Problems through EAK's tools and proposes a change."}); render(); return; }
+  if(key==="clear"&&(S.routed==="partial"||S.clearFix)){ S.chat.push({who:"me",text:text||r.ask},{who:"ai",text:"There is no clearance finding to fix right now. Route the board and run DRC first."}); render(); return; }
+  S.chat.push({who:"me",text:text||r.ask},{who:"ai",kind:"q",text:r.q[0],opts:r.q[1],key});
+  S.aiTasks.push({name:r.name,tool:toolReady(),phase:"planning",status:"waiting for you"});
+  render();
+}
+function aiAnswer(i){
+  const q=[...S.chat].reverse().find(m=>m.kind==="q"&&!m.answered); if(!q) return;
+  q.answered=q.opts[i]; const r=RECIPES[q.key];
+  const plan={who:"ai",kind:"plan",steps:r.plan,done:0}; S.chat.push(plan);
+  const task=lastTask(); task.phase="working"; task.status="running";
+  S.copilotBusy=true; render();
+  const step=()=>{ plan.done++; if(plan.done<r.plan.length){ render(); aiTimer=setTimeout(step,420); return; }
+    S.copilotBusy=false; buildProposal(q.key,i); render(); };
+  aiTimer=setTimeout(step,420);
+}
+function stopAi(){ clearTimeout(aiTimer); S.copilotBusy=false; const t=lastTask(); if(t){t.status="stopped";t.phase="partial"} S.chat.push({who:"ai",text:"Stopped. Nothing was changed in the project."}); render(); }
+function buildProposal(key,ans){
+  const r=RECIPES[key]; const t=lastTask();
+  const before=snap(); const copy=snap();
+  r.build(copy,ans);
+  const rows=r.rows(ans).map(x=>({op:x[0],what:x[1],kind:x[2],on:true}));
+  if(!rows.length){ S.chat.push({who:"ai",text:"OK, nothing to change. Open Brief in the left bar to type the currents."}); t.status="completed"; t.phase="completed"; return; }
+  const eb=counts(runErc(before)), ea=counts(runErc(copy)), db=counts(runDrc(before)), da=counts(runDrc(copy));
+  const had=new Set(S.parts.map(p=>p.ref));
+  S.proposal={key,ans,copy,rows,baseRev:S.rev,labels:r.labels,delta:{eb,ea,db,da},newRefs:copy.parts.filter(p=>!had.has(p.ref)).map(p=>p.ref),preview:false,schem:r.schem};
+  t.phase="proposal_ready"; t.status="waiting for review";
+  if(S.permMode==="auto"&&r.reversible){ applyProposal(true); return; }
+  S.chat.push({who:"ai",kind:"prop",text:`${rows.length} change(s). EAK re-ran the checks on a copy: ERC errors ${eb.e} → ${ea.e}, DRC errors ${db.e} → ${da.e}, DRC unknown ${db.u} → ${da.u}. Not self-checked.`,state:"open"});
+}
+function reviewDialog(){
+  const P=S.proposal; if(!P) return;
+  const stale=P.baseRev!==S.rev;
+  modal(`<div class="row" style="flex-wrap:wrap"><h2>Review proposed change</h2>${pr("proposal")}${ex("eco")}</div>
+  <div class="dim">From the co-pilot (${toolReady()}). Built on a copy of r${P.baseRev}; nothing in your project has changed yet.</div>
+  ${stale?`<div><span class="chip err">The project changed (now r${S.rev}). Apply is refused: ask the co-pilot to re-plan.</span></div>`:""}
+  <table><thead><tr><th>Keep</th><th>Change</th><th>What</th><th>Kind</th></tr></thead><tbody>${P.rows.map((r,i)=>`<tr><td><input type="checkbox" data-act-change="propRow" data-arg="${i}" ${r.on?"checked":""} style="height:auto" aria-label="Keep this change"></td><td>${r.op}</td><td>${esc(r.what)}</td><td class="faint">${r.kind}</td></tr>`).join("")}</tbody></table>
+  <div class="row" style="flex-wrap:wrap"><span class="caps">Checks re-run by EAK on the copy</span>
+   <span class="chip ${P.delta.ea.e<P.delta.eb.e?"ok":""}">ERC errors ${P.delta.eb.e} → ${P.delta.ea.e}</span><span class="chip">ERC warnings ${P.delta.eb.w} → ${P.delta.ea.w}</span><span class="chip ${P.delta.da.e<P.delta.db.e?"ok":""}">DRC errors ${P.delta.db.e} → ${P.delta.da.e}</span><span class="chip ${P.delta.da.u<P.delta.db.u?"ok":"unk"}">DRC unknown ${P.delta.db.u} → ${P.delta.da.u}</span></div>
+  <div class="row" style="flex-wrap:wrap"><span class="caps">Evidence labels</span>${P.labels.map(l=>`<span class="chip">${esc(l)}</span>`).join("")}${ex("evidence")}</div>
+  <div class="faint" style="font-size:var(--fs-xs)">Apply saves a checkpoint, then applies the change as one revision (one undo step) at r${P.baseRev}. In this demo a proposal is applied whole: untick a row and Apply is disabled until you tick it again or Discard.</div>
+  <div class="row"><button data-act="exportProposal">Export report</button><span class="grow"></span><button data-act="discardProposal">Discard</button><button class="primary" data-act="applyProposal" ${stale||!P.rows.every(r=>r.on)?"disabled":""}>Apply</button></div>`);
+}
+function applyProposal(auto){
+  const P=S.proposal; if(!P) return;
+  if(P.baseRev!==S.rev){ toast("Refused: the project changed since the proposal was made."); return; }
+  const r=RECIPES[P.key];
+  S.checkpoints.push({name:"Before AI: "+r.name,rev:S.rev});
+  const actor="agent:"+(toolReady()||"assistant").toLowerCase().replace(/ /g,"-")+(auto?" (auto, reversible)":" (applied by you)");
+  execute(`Batch: ${r.name} (${P.rows.length} changes)`,actor,s=>{ for(const k of ["parts","pwrFlag","enRC","pgNC","currents","brief","clearFix"]) s[k]=clone(P.copy[k]); },{schem:P.schem});
+  const m=[...S.chat].reverse().find(x=>x.kind==="prop"&&x.state==="open");
+  if(m){m.state="applied";m.rev=S.rev} else S.chat.push({who:"ai",kind:"prop",text:"Auto-applied a reversible layout tweak (your setting).",state:"applied",rev:S.rev});
+  const t=lastTask(); if(t){t.phase="completed";t.status="completed"}
+  S.chat.push({who:"ai",text:`Applied as r${S.rev}, with a checkpoint saved first. Undo takes the whole change back. ${P.schem?"Re-run ERC to confirm; the PCB is now out of date.":"Re-run DRC to confirm."}`});
+  S.proposal=null; closeModal(); render(); toast(auto?"Auto-applied (reversible, your setting). Undo is one step.":"Applied as one change: r"+S.rev);
+}
+function discardProposal(){ const m=[...S.chat].reverse().find(x=>x.kind==="prop"&&x.state==="open"); if(m)m.state="discarded"; const t=lastTask(); if(t){t.status="discarded";t.phase="discarded"} S.proposal=null; closeModal(); render(); toast("Discarded. Nothing changed."); }
+
+/* ============================================================================
+   Dialogs, toast, tour
+   ========================================================================== */
+function modal(html){ document.getElementById("modal").innerHTML=html; document.getElementById("modalWrap").classList.add("on"); }
+function closeModal(){ document.getElementById("modalWrap").classList.remove("on"); }
+let toastT=null;
+function toast(t){ const el=document.getElementById("toast"); el.textContent=t; el.classList.add("on"); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove("on"),3400); }
+
+function ecoDialog(){
+  const head=`<div class="row"><h2>Update PCB</h2>${ex("eco")}</div>`;
+  if(!ercCurrent()){ modal(`${head}<div><span class="chip unk">ERC has not been run on the current schematic</span></div><div class="dim">The ERC gate runs first.</div><div class="row"><span class="grow"></span><button data-act="closeModal">Close</button><button class="primary" data-act="ecoRunErc">Run ERC now</button></div>`); return; }
+  const e=counts(S.erc.findings).e;
+  if(e){ modal(`${head}<div><span class="chip err">Blocked by the ERC gate: ${e} ERC error(s) on the current schematic</span></div><div class="dim">Fix the errors (or ask the co-pilot to propose fixes), re-run ERC, then update the PCB.</div><div class="row"><span class="grow"></span><button data-act="closeModal">Close</button><button class="primary" data-act="ecoToProblems">Show Problems</button></div>`); return; }
+  const add=S.parts.map(p=>p.ref).filter(r=>!S.pcbParts.includes(r)); const rem=S.pcbParts.filter(r=>!has(S,r));
+  const rows=[...add.map(r=>({t:"Add footprint",o:r,d:cat(S.parts.find(p=>p.ref===r).mpn).fp})),...rem.map(r=>({t:"Remove footprint",o:r,d:""})),...(S.schemRev>S.syncRev?[{t:"Update connections",o:"nets",d:"from schematic r"+S.schemRev}]:[])];
+  if(!rows.length){ modal(`${head}<div><span class="chip ok">The PCB is already in sync with the schematic</span></div><div class="row"><span class="grow"></span><button class="primary" data-act="closeModal">Close</button></div>`); return; }
+  modal(`<div class="row"><h2>Update PCB: change preview</h2>${ex("eco")}</div><div class="dim">Computed on a copy of the project. Nothing changes until Apply, which applies everything as one change at r${S.rev}.</div>
+   <table><thead><tr><th>Change</th><th>Object</th><th>Detail</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.t}</td><td>${r.o}</td><td class="mono faint">${r.d}</td></tr>`).join("")}</tbody></table>
+   <div class="faint" style="font-size:var(--fs-xs)">In EAK each row has a checkbox for a partial update; this demo applies all rows.</div>
+   <div class="row"><button data-act="toast" data-arg="Report saved to evidence/eco-r${String(S.rev).padStart(6,"0")}.json (demo)">Export report</button><span class="grow"></span><button data-act="closeModal">Cancel</button><button class="primary" data-act="ecoApply">Apply ${rows.length} change(s)</button></div>`);
+}
+function releaseDialog(){
+  const r=releaseCheck(S); S.release=r; render();
+  modal(`<div class="row"><h2>Release check r${r.rev}</h2>${ex("release")}</div>
+   <table><thead><tr><th>Status</th><th>Check</th><th>Why</th></tr></thead><tbody>${r.items.map(i=>`<tr><td><span class="chip ${i.st==="PASS"?"ok":i.st==="FAIL"?"err":"unk"}">${i.st}</span></td><td>${i.name}</td><td>${esc(i.why)}</td></tr>`).join("")}</tbody></table>
+   <div><span class="chip ${r.blocked?"err":"ok"}">${r.blocked?"Blocked: every check must PASS. UNKNOWN counts as not passing.":"All checks pass: ready to prepare for review"}</span></div>
+   <div class="faint" style="font-size:var(--fs-xs)">EAK never calls a design manufacturing-ready. The best result is "prepared for review", for a person to sign off. As on main today, fabricator capability stays UNKNOWN (and blocks) until a fabricator profile is chosen; choosing one in Manufacturing is a proposed feature.</div>
+   <div class="row"><span class="grow"></span><button data-act="closeModal">Close</button><button class="primary" data-act="releaseToProblems">Show blockers in Problems</button></div>`);
+}
+const TOUR=[
+  ["The journey","Twelve stages from requirements to release run across the top of the workspace. Each colour comes from a real check, never from an AI's claim. Dashed grey means not run yet.",()=>go("eda",{editor:"schematic"})],
+  ["Problems","Every error, warning and missing input in one list. 'Go to' takes you to the object; 'Propose a fix' asks the co-pilot.",()=>go("eda",{btab:"problems"})],
+  ["Where AI helps","The co-pilot proposes changes; you review them like the Update PCB preview. It never applies on its own.",()=>go("eda",{rtab:"copilot"})],
+  ["Undo and checkpoints","Every change is one step you can undo. Checkpoints take you back to a named point.",()=>go("eda",{side:"history"})],
+];
+function tour(i){
+  i=+i; if(i>=TOUR.length){ closeModal(); S.firstRun=false; toast("Tour finished. Replay it from Settings › General."); return; }
+  S.opened=true; TOUR[i][2]();
+  modal(`<div class="row"><h2>${i+1}/4 · ${TOUR[i][0]}</h2>${pr("tour")}</div><div>${TOUR[i][1]}</div><div class="row"><button data-act="closeModal">Skip tour</button><span class="grow"></span>${i>0?`<button data-act="tour" data-arg="${i-1}">Back</button>`:""}<button class="primary" data-act="tour" data-arg="${i+1}">${i===TOUR.length-1?"Finish":"Next"}</button></div>`);
+}
+
+/* ============================================================================
+   Actions: every control in the page maps to one of these.
+   ========================================================================== */
+const A={
+  toggleStory(){ const s=document.getElementById("story"); s.classList.toggle("hidden"); document.getElementById("storyBtn").textContent=s.classList.contains("hidden")?"Show storyboard":"Hide storyboard"; renderStory(); },
+  resetDemo(){ clearTimeout(aiTimer); const hidden=document.getElementById("story").classList.contains("hidden"); S=initialState(); UNDO=[];REDO=[]; closeModal(); render(); if(!hidden) renderStory(); toast("Demo reset to the starting state."); },
+  ws(a){ go(a); },
+  go(a){ const [ws,tab]=a.split(":"); go(ws, ws==="settings"?{setTab:tab}:{}); },
+  toast(a){ toast(a); },
+  tour(a){ tour(a); },
+  story(a){ S.tourStep=+a; closeModal(); STORY[S.tourStep].where(); render(); },
+  homeStart(){ const t=(document.getElementById("homePrompt").value||"").trim(); if(!t){ toast("Describe the board first, in your own words."); return; }
+    if(toolReady()){ go("eda",{side:"brief",rtab:"copilot"}); S.chat.push({who:"me",text:t},{who:"ai",text:"I put your goal into the brief (left). Two numbers are missing: the rail currents. Use 'Declare rail currents from the brief', or type them in."}); render(); }
+    else { go("eda",{side:"brief"}); toast("Opened with a brief from your words (the demo uses the sample project). Connect an AI tool to get proposals."); } },
+  newProject(){ modal(`<div class="row"><h2>New project</h2>${ex("newproj")}</div><label class="col"><span class="caps">Name</span><input id="npName" value="my-sensor-board"></label><label class="col"><span class="caps">Folder</span><input id="npDir" value="~/eak-projects"></label><label class="col"><span class="caps">Template</span><select id="npTpl"><option>Blank 2-layer board</option><option>From the sample: ESP32-S3 sensor</option></select></label><div class="row"><span class="grow"></span><button data-act="closeModal">Cancel</button><button class="primary" data-act="createProject">Create</button></div>`); },
+  createProject(){ const n=(document.getElementById("npName").value||"").trim()||"my-sensor-board"; closeModal(); S.project=n; go("eda",{side:"brief"}); toast(`Created '${n}'. The demo fills it with the sample design so the rest of the journey can be shown.`); },
+  openSample(){ go("eda",{side:"overview",editor:"schematic"}); if(S.firstRun) tour(0); },
+  importKicad(){ go("eda"); toast("In EAK: File › Import KiCad project. This page has no file access, so it opens the sample design."); },
+  continue(){ const n=nextStage(); if(n) n.go(); else go("eda"); toast("Continuing at: "+(n?n.n+" · "+n.name:"the workspace")); },
+  stage(a){ STAGES[+a-1].go(); },
+  side(a){ S.side=a; render(); }, editor(a){ S.editor=a; render(); }, rtab(a){ S.rtab=a; render(); }, btab(a){ go("eda",{btab:a}); }, setTab(a){ S.setTab=a; render(); },
+  pfilter(a){ S.probFilter=a; render(); },
+  select(a){ S.sel=a; S.rtab="props"; render(); },
+  goto(a){ const o=JSON.parse(a); if(o.where==="release"){ go("eda",{side:"manufacturing"}); return; } if(o.where==="copilot"){ go("eda",{rtab:"copilot"}); return; }
+    go("eda",{editor:o.where==="pcb"?"pcb":"schematic",sel:o.obj,flash:o.obj,rtab:"props"}); setTimeout(()=>{S.flash=null; if(S.ws==="eda") renderEditor()},1400); },
+  undo(){ undo(); }, redo(){ redo(); },
+  checkpoint(){ modal(`<div class="row"><h2>New checkpoint</h2>${pr("ckpt")}</div><input id="ckName" value="Before routing changes" aria-label="Checkpoint name"><div class="row"><span class="grow"></span><button data-act="closeModal">Cancel</button><button class="primary" data-act="saveCkpt">Save checkpoint at r${S.rev}</button></div>`); },
+  saveCkpt(){ const n=(document.getElementById("ckName").value||"").trim()||"Checkpoint"; S.checkpoints.push({name:n,rev:S.rev}); closeModal(); render(); toast(`Checkpoint '${n}' saved at r${S.rev}`); },
+  restoreCkpt(a){ const c=S.checkpoints[+a]; execute(`RestoreCheckpoint '${c.name}' (design as at r${c.rev})`,"you",()=>{}); toast(`Restore is a new revision (r${S.rev}) and can be undone. The demo records it without rewinding the sample design.`); },
+  runErc(){ record("RunErc","you",s=>{s.erc={rev:s.rev,findings:runErc(s)}}); go("eda",{btab:"problems"}); const k=counts(S.erc.findings); toast(`ERC r${S.rev}: ${k.e} error(s), ${k.w} warning(s)`); },
+  runDrc(){ record("RunDrc","you",s=>{s.drc={rev:s.rev,findings:runDrc(s)}}); go("eda",{btab:"problems",editor:"pcb"}); const k=counts(S.drc.findings); toast(`DRC r${S.rev}: ${k.e} error(s), ${k.u} UNKNOWN`); },
+  updatePcb(){ go("eda",{editor:"pcb"}); ecoDialog(); },
+  ecoRunErc(){ closeModal(); A.runErc(); ecoDialog(); },
+  ecoToProblems(){ closeModal(); go("eda",{btab:"problems",editor:"schematic"}); },
+  ecoApply(){ closeModal(); execute("SyncSchematicToPcb (Batch)","you",s=>{ s.pcbParts=s.parts.map(p=>p.ref); s.placed=s.placed.filter(r=>s.pcbParts.includes(r)); s.syncRev=s.rev+1; if(s.routed==="done") s.routed="auto"; }); toast("PCB updated as one change. New footprints wait right of the board: use Auto-place."); },
+  autoplace(){ const u=S.pcbParts.filter(r=>!S.placed.includes(r)); if(!u.length){ toast(pcbInSync(S)?"Everything is placed.":"Nothing new to place. The schematic changed: run Update PCB first."); return; }
+    execute(`AutoPlace (${u.join(", ")})`,"you",s=>{s.placed=[...s.pcbParts]}); go("eda",{editor:"pcb"}); },
+  autoroute(){ if(S.pcbParts.some(r=>!S.placed.includes(r))){ toast("Place all footprints first (Auto-place)."); return; } if(S.routed!=="partial"){ toast("Already auto-routed."); return; }
+    execute("AutoRoute","you",s=>{s.routed="auto"}); go("eda",{editor:"pcb"}); toast("Auto-route done; the 2 USB connections are left for hand routing."); },
+  routeManual(){ if(S.routed==="partial"){ toast("Auto-route first; then route the USB pair by hand."); return; } if(S.routed==="done"){ toast("The USB pair is already routed."); return; }
+    execute("AddTrack ×6 (USB_D+ / USB_D- by hand)","you",s=>{s.routed="done"}); go("eda",{editor:"pcb"}); toast("USB pair routed with the Route tool."); },
+  pour(){ execute(S.pour?"Remove zone GND":"AddZone GND (bottom layer)","you",s=>{s.pour=!s.pour}); go("eda",{editor:"pcb"}); },
+  releaseCheck(){ releaseDialog(); },
+  releaseToProblems(){ closeModal(); go("eda",{btab:"problems",probFilter:"all"}); },
+  genOutputs(){ record("Generate outputs to output/rev-"+S.rev,"you",s=>{s.outputsRev=s.rev}); toast("Gerber, drill, CPL, BOM and PDF written to output/rev-"+S.rev); },
+  fabPrepare(){ const r=releaseCheck(S); S.release=r; render(); toast(r.blocked?"Not prepared: the release check is blocked. The blockers are in Problems.":"Package prepared for review. A person signs off; EAK never calls it manufacturing-ready."); },
+  exportBom(){ const rows=[["Designator","Qty","Value","Manufacturer","MPN","Footprint"],...bomRows(S).map(r=>[r.refs.join(" "),r.refs.length,r.val,r.mfr,r.mpn,r.fp])]; const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download="BOM.csv"; document.body.appendChild(a); a.click(); a.remove(); toast("BOM.csv downloaded ("+(rows.length-1)+" lines)"); },
+  fileOpen(a){ if(a.startsWith("schematic")) go("eda",{editor:"schematic"}); else if(a.startsWith("pcb")) go("eda",{editor:"pcb"}); else if(a.startsWith("design-flow")) go("eda",{side:"brief"}); else if(a.startsWith("checkpoints")) go("eda",{side:"history"}); else if(a.startsWith("output")) go("eda",{side:"manufacturing"}); else toast(a+": EAK opens this in its file viewer (not reproduced in the demo)."); },
+  libSearch(){ S.libQuery=document.getElementById("libQ").value; render(); },
+  libSel(a){ S.libSel=a; render(); },
+  place(a){ const c=cat(a); const n=c.cat==="Resistor"?"R":c.cat==="Capacitor"?"C":c.cat==="Inductor"?"L":/diode/i.test(c.cat)?"D":/jack|receptacle/i.test(c.cat)?"J":"U"; let i=1; while(has(S,n+i)) i++; const ref=n+i;
+    execute(`PlaceSymbol ${ref} (${a})`,"you",s=>{const k=s.parts.length; s.parts.push({ref,mpn:a,val:c.spec.split(",")[0],x:40+(k*47)%800,y:296,w:44,h:24,h3d:1}); PCBPOS[ref]=PCBPOS[ref]||[3+(k*3)%50,38,2,1];},{schem:true}); go("eda",{editor:"schematic"}); toast(`${ref} placed. ERC and the PCB are now out of date.`); },
+  declareCurrents(){ const v=S.brief.rails.map((r,i)=>document.getElementById("railI"+i).value.trim()); if(v.some(x=>!x||isNaN(+x)||+x<=0)){ toast("Enter a current in amps for every rail."); return; }
+    execute(`SetNetCurrent +12V_IN ${v[0]} A, +3V3 ${v[1]} A`,"you",s=>{s.brief.rails.forEach((r,i)=>r.i=v[i]); s.currents=true}); toast("Currents declared. Re-run DRC: the width rule can now be checked."); },
+  askAbout(a){ S.rtab="copilot"; if(!toolReady()){ render(); return; } const c=cat(S.parts.find(p=>p.ref===a).mpn); S.chat.push({who:"me",text:`Is ${a} right for this design?`},{who:"ai",text:`${a} (${c.mpn}): ${c.ds}. That fits the rails in the brief. Label: datasheet_supported. This is advice, not a check; ERC and DRC are the checks.`}); render(); },
+  aiAsk(a){ aiStart(a); },
+  aiSend(){ const el=document.getElementById("chatIn"); const t=(el&&el.value||"").trim(); if(!t){ toast("Type a question first."); return; } const k=/erc|power flag|\ben\b/i.test(t)?"erc":/pull/i.test(t)?"pullups":/current/i.test(t)?"currents":/clearance|drc/i.test(t)?"clear":null; aiStart(k,t); },
+  answer(a){ aiAnswer(+a); },
+  stopAi(){ stopAi(); },
+  reviewProposal(){ reviewDialog(); },
+  previewProposal(){ if(!S.proposal) return; S.proposal.preview=!S.proposal.preview; if(S.proposal.schem) S.editor="schematic"; render(); },
+  applyProposal(){ applyProposal(false); },
+  discardProposal(){ discardProposal(); },
+  exportProposal(){ toast("Proposal report saved to evidence/proposal-r"+String(S.proposal.baseRev).padStart(6,"0")+".json (demo)"); },
+  closeModal(){ closeModal(); },
+  v3d(a){ S.view3d=a; render(); }, v3dParts(){ S.show3dParts=!S.show3dParts; render(); }, v3dMeasure(){ S.measure=!S.measure; render(); },
+  termTab(a){ S.term.cur=+a; render(); },
+  termNew(){ const id=S.term.next++; S.term.tabs.push({id,name:"shell "+id,cwd:"~/eak/"+S.project,out:"",agent:null,status:"idle"}); S.term.cur=id; render(); },
+  termClose(a){ const T=S.term; if(T.tabs.length<2) return; T.tabs=T.tabs.filter(t=>t.id!==+a); if(T.cur===+a) T.cur=T.tabs[0].id; render(); },
+  termSplit(){ S.term.split=!S.term.split; render(); }, termDetails(){ S.term.details=!S.term.details; render(); },
+  termFocus(){ const i=document.getElementById("termIn"); if(i) i.focus(); },
+  toolInstall(a){ modal(`<div class="row"><h2>Install ${TOOLS[a].label}</h2>${pr("aitools")}</div><div>EAK would link to the tool's official install page, then rescan. EAK does not install AI tools for you.</div><div class="row"><span class="grow"></span><button class="primary" data-act="closeModal">OK</button></div>`); },
+  toolRescan(a){ toast(`${TOOLS[a].label}: still not found on this computer (demo).`); },
+  toolSignin(a){ const id=S.term.next++; S.term.tabs.push({id,name:"sign in: "+TOOLS[a].label,cwd:"~",out:`<span class="faint">EAK started ${TOOLS[a].label}'s own sign-in here. Finish it in your browser. EAK never sees the credentials.</span>\n`,agent:null,status:"waiting"});
+    toast(`Opened ${TOOLS[a].label}'s sign-in in a terminal tab (the Terminal workspace itself is unchanged).`); render();
+    setTimeout(()=>{ S.tools[a].signed=true; const t=S.term.tabs.find(x=>x.id===id); if(t){t.status="ended"; t.out+="Signed in.\n"} render(); toast(TOOLS[a].label+": signed in"); },1200); },
+  toolConnect(a){ const t=S.tools[a]; t.conn=!t.conn; render(); toast(t.conn?`${TOOLS[a].label} connected to ${S.project}: EAK registered its tool server with ${TOOLS[a].label}.`:`${TOOLS[a].label} disconnected.`); },
+  toolTest(a){ const t=S.tools[a]; toast(!t.signed?`${TOOLS[a].label}: not signed in. Sign in first.`:!t.conn?`${TOOLS[a].label}: signed in, but not connected to this project.`:`${TOOLS[a].label}: ready. It can reach EAK's tools for ${S.project}.`); },
+  saveKey(a){ const v=document.getElementById("key_"+a).value; if(!v){ toast("Paste a key first."); return; } S.modelKeys[a]=true; render(); toast("Saved (in EAK: to the OS keystore. The demo keeps only a flag, never the key)."); },
+  testModel(a){ toast(S.modelKeys[a]?"Staged test: endpoint reached · key accepted · model list read (demo)":"No key saved: the first stage fails, as in EAK."); },
+};
+const CHANGE={
+  fab(v){ S.fabProfile=v; render(); toast(v?"Profile chosen. Re-run the release check.":"No profile: fabricator capability stays UNKNOWN."); },
+  perm(v){ S.permMode=v; render(); toast(v==="ask"?"Every AI change asks first.":"Reversible layout tweaks apply automatically; everything else asks."); },
+  propRow(v,arg,el){ S.proposal.rows[+arg].on=el.checked; reviewDialog(); },
+};
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-act]");
+  if(!t){ if(e.target.id==="modalWrap") closeModal(); return; }
+  if(t.tagName==="INPUT"||t.tagName==="SELECT") return;
+  const f=A[t.dataset.act]; if(!f){ console.error("no handler for",t.dataset.act); return; }
+  e.stopPropagation(); f(t.dataset.arg);
+});
+document.addEventListener("change",e=>{ const t=e.target.closest("[data-act-change]"); if(t) CHANGE[t.dataset.actChange](t.value,t.dataset.arg,t); });
+document.addEventListener("keydown",e=>{
+  if(e.target.id==="termIn"&&e.key==="Enter"){ termRun(e.target.value); return; }
+  if(e.target.id==="chatIn"&&e.key==="Enter"){ A.aiSend(); return; }
+  if(e.target.id==="libQ"&&e.key==="Enter"){ A.libSearch(); return; }
+  if(e.key==="Escape") closeModal();
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"&&S.ws==="eda"&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){ e.preventDefault(); e.shiftKey?redo():undo(); }
+});
+// Self-checks used when testing the page: every control must map to a handler.
+window.__deadControls=()=>[...document.querySelectorAll("[data-act]")].map(x=>x.dataset.act).filter(a=>!A[a]);
+window.__buttonsWithoutAction=()=>[...document.querySelectorAll("button")].filter(b=>!b.dataset.act).map(b=>b.textContent.trim());
+render();
+</script>
+</body>
+</html>
