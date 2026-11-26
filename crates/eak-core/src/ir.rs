@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 7;
+pub const SCHEMA_VERSION: u32 = 8;
 
 pub type Id = String;
 
@@ -1067,6 +1067,10 @@ pub struct NetClass {
     pub via_diameter: Nm,
     #[serde(default)]
     pub nets: Vec<String>,
+    /// Single-ended target impedance (ohm) of the class (schema v8, ADR-0055); `None` = no
+    /// impedance requirement declared, so impedance checks are UNKNOWN, never a pass.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_z0_ohm: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1101,6 +1105,33 @@ pub struct Constraints {
     /// Minimum clearance between two named nets (schema v7, Phase 1 C5).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub net_pair_rules: Vec<NetPairRule>,
+    /// Declared differential pairs (schema v8, ADR-0055).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diff_pairs: Vec<DiffPairRule>,
+    /// Via layer spans the router may use besides through vias (schema v8, ADR-0055); empty =
+    /// through vias only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub via_spans: Vec<ViaSpanRule>,
+    /// Engineering-check inputs (schema v8, ADR-0055), set together by `SetEngineeringInputs`.
+    /// Absent = not declared: a check that needs one reports UNKNOWN or BLOCKED, never a pass.
+    /// Ambient temperature (°C) for thermal and junction estimates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ambient_temp_c: Option<f64>,
+    /// Via barrel plating thickness (µm) for via current capacity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via_plating_um: Option<f64>,
+    /// Largest allowed voltage drop per net (V).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub net_max_drop_v: BTreeMap<String, f64>,
+    /// Declared power dissipation per part (W), by reference designator.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub part_dissipation_w: BTreeMap<String, f64>,
+    /// Insulation coordination basis for creepage and clearance checks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub insulation: Option<Insulation>,
+    /// Enclosure limits for mechanical checks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enclosure: Option<Enclosure>,
 }
 
 /// Report severity a rule override may set (EasyEDA's ladder maps onto it: Fatal and Error
@@ -1208,6 +1239,91 @@ pub struct NetPairRule {
     pub clearance: Nm,
 }
 
+/// A declared differential pair (schema v8, ADR-0055). Every figure is optional: an absent one
+/// is undeclared, and a check that needs it reports UNKNOWN (never a pass).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DiffPairRule {
+    pub positive: String,
+    pub negative: String,
+    /// Track width of each member.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<Nm>,
+    /// Edge-to-edge gap between the members where they run coupled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gap: Option<Nm>,
+    /// Target differential impedance (ohm).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_zdiff_ohm: Option<f64>,
+    /// Allowed deviation from the target, in percent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zdiff_tolerance_pct: Option<f64>,
+    /// Largest allowed length difference between the members.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_skew: Option<Nm>,
+}
+
+impl DiffPairRule {
+    pub fn has(&self, net: &str) -> bool {
+        self.positive == net || self.negative == net
+    }
+}
+
+/// A via layer span the router may use (schema v8, ADR-0055).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViaSpanRule {
+    pub from: CopperLayer,
+    pub to: CopperLayer,
+    pub drill: Nm,
+    pub diameter: Nm,
+}
+
+/// Standard an insulation (creepage / clearance) check is made against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[allow(non_camel_case_types)] // the variant spells the standard's own number
+pub enum InsulationStandard {
+    Ipc2221b,
+    Iec60664_1,
+}
+
+/// Insulation coordination basis (schema v8, ADR-0055).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Insulation {
+    pub standard: InsulationStandard,
+    /// 1..=4 (IEC 60664-1 pollution degree).
+    pub pollution_degree: u8,
+    /// Material group by CTI: one of [`MATERIAL_GROUPS`].
+    pub material_group: String,
+    pub altitude_m: f64,
+    /// Conformal coating over the conductors.
+    pub coated: bool,
+}
+
+/// Material groups `Insulation::material_group` may name.
+pub const MATERIAL_GROUPS: [&str; 4] = ["I", "II", "IIIa", "IIIb"];
+
+/// A mounting hole the enclosure requires.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MountingHoleSpec {
+    pub position: Point,
+    pub drill: Nm,
+    /// Allowed position error.
+    pub tolerance: Nm,
+    /// Copper and component keep-out radius around the hole centre.
+    pub keepout_radius: Nm,
+}
+
+/// Enclosure limits (schema v8, ADR-0055); the top-side height limit stays
+/// `Constraints::max_component_height`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Enclosure {
+    /// Tallest part allowed on the bottom side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_height_bottom: Option<Nm>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mounting_holes: Vec<MountingHoleSpec>,
+}
+
 impl Default for Constraints {
     fn default() -> Self {
         // Defaults sized for common low-cost 2-layer fabrication (0.15 mm / 0.15 mm, 0.3 mm drill).
@@ -1224,6 +1340,7 @@ impl Default for Constraints {
                 via_drill: 300_000,
                 via_diameter: 600_000,
                 nets: vec![],
+                target_z0_ohm: None,
             },
             net_classes: vec![],
             net_currents_a: BTreeMap::new(),
@@ -1233,6 +1350,14 @@ impl Default for Constraints {
             rules: BTreeMap::new(),
             clearance_matrix: vec![],
             net_pair_rules: vec![],
+            diff_pairs: vec![],
+            via_spans: vec![],
+            ambient_temp_c: None,
+            via_plating_um: None,
+            net_max_drop_v: BTreeMap::new(),
+            part_dissipation_w: BTreeMap::new(),
+            insulation: None,
+            enclosure: None,
         }
     }
 }
