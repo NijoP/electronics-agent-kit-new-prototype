@@ -83,8 +83,9 @@ Evaluation of the brief's §9.2 composition, and what changed:
 2. **Filter.** One text filter over every roster group (name, id, tool, title, status). Sessions
    have a *This project only* toggle (on by default).
 3. **Live state without model polling.** The workspace reads files and process facts only, never a
-   model: WEFT state and the activity timeline every 2 s, sessions every 3 s, and only while the
-   workspace is shown. Runtimes are probed when it opens and on *Check again*.
+   model: the WEFT state, review queue, conflicts, activity timeline and sessions every 2 s (a
+   running session's log too), and only while the workspace is shown. Runtimes are probed when
+   it opens and on *Check again*.
 4. **Truthful availability (§9.4).** Every control acts, or is disabled with its reason as the
    tooltip and in the text beside it. Examples: *Stop* on a finished session ("The session is not
    running"); *Stop* on an unsupervised session ("Started before EAK last closed; EAK no longer
