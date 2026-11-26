@@ -310,7 +310,9 @@ fn constrained_usb_device_is_auto_routed_complete_coupled_and_drc_clean() {
 
     // Every routed segment of every power net is at least the IPC-2221 width its declared current
     // needs on that segment's layer (the DRC-008 calculation: `ipc::trace_width_mm` with the
-    // layer's copper weight and the board's temperature rise), and the 1 A +5V rail is wider
+    // layer's copper weight and the board's temperature rise; 1 oz outer, ΔT 10 °C: 0.116 mm at
+    // 0.5 A, 0.302 mm at 1 A) and never below its net class's track width (the router's
+    // max(IPC-2221, class) contract: a 0.25 mm floor for +3V3), and the 1 A +5V rail is wider
     // than the 0.25 mm default everywhere.
     let c = &p.constraints;
     for (net, amps) in [("+5V", 1.0), ("+3V3", 0.5)] {
@@ -328,12 +330,13 @@ fn constrained_usb_device_is_auto_routed_complete_coupled_and_drc_clean() {
                 .stackup
                 .copper_oz(t.layer)
                 .expect("track layer in stack-up");
-            let need = ipc::trace_width_mm(amps, !t.layer.is_outer(), oz, c.temp_rise_c)
+            let ipc_need = ipc::trace_width_mm(amps, !t.layer.is_outer(), oz, c.temp_rise_c)
                 .expect("IPC-2221 width computable");
+            let need = ipc_need.max(c.class_for(net).track_width as f64 / 1e6);
             let have = t.width as f64 / 1e6;
             assert!(
                 have + 1e-9 >= need,
-                "{net} segment {} on {} is {have:.3} mm, below the {need:.3} mm IPC-2221 needs for {amps} A",
+                "{net} segment {} on {} is {have:.3} mm, below the {need:.3} mm required (IPC-2221 {ipc_need:.3} mm for {amps} A, or the class width)",
                 t.id,
                 t.layer.name()
             );
