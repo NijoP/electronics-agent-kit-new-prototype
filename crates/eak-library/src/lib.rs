@@ -2,6 +2,8 @@
 //!
 //! * `part`    – MPN-keyed part records: identity is (manufacturer, MPN) after normalisation;
 //!   a merged part keeps every source's record and names disagreements instead of picking one.
+//!   Each record carries datasheet references (URL and/or hashed local copy, revision, retrieval
+//!   time) and typed specifications whose origin is a source, a person, or an AI needing review.
 //! * `source`  – the provider-independent [`source::PartSource`] trait and the resolver that
 //!   merges exact hits by key, keeps fuzzy hits as suggestions, and never calls a source that
 //!   is not ready.
@@ -30,5 +32,5 @@ pub mod sources;
 
 pub use eak_validation::footprint::{LandPatternSpec, PadSpec};
 pub use mpn::{discover, identify_manufacturer, Discovery, ManufacturerId, MpnMatch};
-pub use part::{Part, PartKey, PartKeyError, PartRecord, SourceId};
+pub use part::{Part, PartKey, PartKeyError, PartRecord, SourceId, Spec, SpecOrigin, SpecValue};
 pub use source::{resolve, PartQuery, PartSource, Resolution, SourceStatus};
