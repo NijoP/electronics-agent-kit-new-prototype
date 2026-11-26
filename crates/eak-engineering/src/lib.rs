@@ -13,6 +13,7 @@
 //!   routed coupled in `router::diffpair`).
 //! * `routing_intel` – congestion, stagnation, differential pairs, width/via selection (DESK-derived).
 //! * `interactive` – route-step API for the interactive PCB route tool (walkaround, 45/90, vias).
+//! * `planes`  – reference planes of each signal layer, split crossings and return-via needs (M7.6).
 //! * `placer`  – constructive footprint placement.
 //! * `placement_intel` – placement mental models (roles, snaps, analysis) ported from DESK.
 //! * `impedance` – microstrip/stripline and edge-coupled differential Z0 from the stack-up (IPC-2141A).
@@ -32,6 +33,7 @@ pub mod ipc;
 pub mod netlist;
 pub mod placement_intel;
 pub mod placer;
+pub mod planes;
 pub mod power;
 pub mod priority;
 pub mod rating;

@@ -108,18 +108,6 @@ impl Ctx<'_> {
     }
 }
 
-fn cell_value(f: &ZoneFill, pt: Point) -> u32 {
-    if pt.x < f.origin.x || pt.y < f.origin.y {
-        return 0;
-    }
-    let c = ((pt.x - f.origin.x) / f.pitch) as usize;
-    let r = ((pt.y - f.origin.y) / f.pitch) as usize;
-    if c >= f.cols || r >= f.rows {
-        return 0;
-    }
-    f.cells[r * f.cols + c]
-}
-
 /// Cells from each filled cell to the nearest empty cell or grid border (4-connected BFS).
 /// Islands are never 4-adjacent, so one pass gives each island's own depth map.
 fn depth(f: &ZoneFill) -> Vec<u32> {
@@ -180,7 +168,7 @@ fn live_islands(f: &ZoneFill, copper: &[CopperItem], placed: &[Placed]) -> BTree
 
 /// Size (cells) of the island of `f` at `pt`; 0 when `pt` is not in fill.
 fn island_size_at(f: &ZoneFill, sizes: &[usize], pt: Point) -> usize {
-    match cell_value(f, pt) {
+    match f.cell_at(pt) {
         0 => 0,
         k => sizes[k as usize],
     }
@@ -400,7 +388,7 @@ pub fn plan(p: &Project, net: Option<&str>) -> StitchPlan {
                     .find(|&c| {
                         live_other
                             .iter()
-                            .any(|(g, live)| live.contains(&cell_value(g, c)))
+                            .any(|(g, live)| live.contains(&g.cell_at(c)))
                             && ctx.via_ok(net, c, r, cl)
                     });
                 match found {

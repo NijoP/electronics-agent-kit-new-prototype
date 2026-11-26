@@ -287,6 +287,18 @@ impl ZoneFill {
         }
         out
     }
+    /// Island at `pt` (0 = no fill there or outside the raster).
+    pub fn cell_at(&self, pt: Point) -> u32 {
+        if pt.x < self.origin.x || pt.y < self.origin.y || self.pitch <= 0 {
+            return 0;
+        }
+        let c = ((pt.x - self.origin.x) / self.pitch) as usize;
+        let r = ((pt.y - self.origin.y) / self.pitch) as usize;
+        if c >= self.cols || r >= self.rows {
+            return 0;
+        }
+        self.cells[r * self.cols + c]
+    }
     pub fn filled_area_mm2(&self) -> f64 {
         let n = self.cells.iter().filter(|&&k| k != 0).count() as f64;
         n * (self.pitch as f64 / 1e6).powi(2)
