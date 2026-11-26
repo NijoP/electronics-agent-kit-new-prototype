@@ -55,7 +55,10 @@ fn junction_temperature_from_declared_dissipation() {
     let r = erc::run(&p);
     assert_eq!(r.state_of("ERC-025"), CheckState::Unknown);
     let why = reason(&r, "ERC-025");
-    assert!(why.contains("U1: missing input: θJA, ambient temperature"), "{why}");
+    assert!(
+        why.contains("U1: missing input: θJA, ambient temperature"),
+        "{why}"
+    );
     let rate = |name: &str, value: f64, unit: &str| Rating {
         name: name.into(),
         value,

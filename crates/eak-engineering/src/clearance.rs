@@ -7,7 +7,7 @@
 //! layers; the table is not verified against the standard text).
 
 use crate::ipc::{self, ClearanceCondition};
-use eak_core::{Constraints, CopperLayer, Nm};
+use eak_core::{Constraints, CopperLayer, InsulationStandard, Nm};
 
 /// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, common fabricator practice,
 /// unverified), shared by the DRC and the autorouter.
@@ -80,7 +80,9 @@ pub fn spacing_unknown(c: &Constraints) -> Option<String> {
         }
         Some(i) if i.standard == InsulationStandard::Iec60664_1 => {
             let creep = ipc::creepage_mm(dv, i.pollution_degree, &i.material_group);
-            creep.err().map(|e| format!("IEC 60664-1 creepage for {dv:.0} V: {e}"))
+            creep
+                .err()
+                .map(|e| format!("IEC 60664-1 creepage for {dv:.0} V: {e}"))
         }
         Some(_) => None,
     }
@@ -155,7 +157,7 @@ mod tests {
 
     #[test]
     fn declared_insulation_picks_the_condition_and_iec_creepage() {
-        use eak_core::{Insulation, InsulationStandard};
+        use eak_core::Insulation;
         let mut c = constraints();
         c.net_voltages_v.insert("HV".into(), 300.0);
         c.net_voltages_v.insert("GND".into(), 0.0);

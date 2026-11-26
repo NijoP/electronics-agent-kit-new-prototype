@@ -285,7 +285,10 @@ pub(crate) fn check(
 
 /// The first rating of `names` in `unit` (one of another unit counts as absent).
 fn rated(def: &ComponentDef, names: &[&str], unit: &str) -> Option<f64> {
-    let r = def.ratings.iter().find(|r| names.contains(&r.name.as_str()));
+    let r = def
+        .ratings
+        .iter()
+        .find(|r| names.contains(&r.name.as_str()));
     r.filter(|r| r.unit == unit).map(|r| r.value)
 }
 
