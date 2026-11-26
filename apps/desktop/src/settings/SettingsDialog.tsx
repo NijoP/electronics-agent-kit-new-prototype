@@ -29,7 +29,7 @@ const TREE: readonly Node[] = [
   { id: "grid-pcb", group: "Editors", label: "PCB grid", words: "grid snap unit mm mil inch spacing default" },
   { id: "power", group: "Editors", label: "Power ports", words: "power port gnd ground rail vcc agnd analog chassis net flag schematic" },
   { id: "model", group: "Assistant", label: "Model provider", words: "ai model provider api" },
-  { id: "ai-tools", group: "Assistant", label: "AI tools", words: "ai agent claude code codex opencode gemini cli mcp connect sign in login session terminal headless" },
+  { id: "ai-tools", group: "Assistant", label: "AI tools", words: "ai agent claude code codex opencode gemini kimi cli mcp connect sign in login session terminal headless" },
 ];
 
 const CTX_LABEL: Record<DocContext, string> = { home: "Project", schematic: "Schematic", pcb: "PCB", "3d": "3D", file: "File" };

@@ -31,7 +31,7 @@ fn nothing_installed_shows_not_found_and_every_action_says_why() {
     let project = tmpdir("none");
     let rows = agents::tools(&s, Some(&project));
     let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
-    assert_eq!(ids, ["claude", "codex", "opencode", "gemini"]);
+    assert_eq!(ids, ["claude", "codex", "opencode", "gemini", "kimi"]);
     for r in &rows {
         assert_eq!(r.reason, Some(Unavailable::MissingBinary), "{}", r.id);
         assert!(!r.available);

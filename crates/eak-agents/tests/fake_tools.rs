@@ -1,4 +1,4 @@
-//! The adapters against fake `claude` and `codex` binaries on a temp search path: probe
+//! The adapters against fake `claude`, `codex`, `gemini` and `kimi` binaries on a temp search path: probe
 //! (found / version / signed-in), connect (idempotent) and disconnect through the tool's own
 //! `mcp` commands, and a headless session whose stream becomes events and a log file.
 //!
@@ -8,7 +8,9 @@
 #![cfg(unix)]
 
 use eak_agents::sessions::{SessionState, SessionView, Sessions, Start};
-use eak_agents::{builtin_tools, find_tool, launch_plan, probe, AgentEvent, Locator, Surface};
+use eak_agents::{
+    builtin_tools, find_tool, launch_plan, login_plan, probe, AgentEvent, Locator, Surface,
+};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -71,6 +73,7 @@ fn wait_done(s: &Sessions, id: &str) -> SessionView {
 
 #[test]
 fn fake_tools_probe_connect_disconnect_and_run_headless() {
+    gemini_and_kimi_are_found_and_versioned_and_their_sign_in_stays_unknown();
     let bin = tmpdir("bin");
     let project = tmpdir("project");
     let other = tmpdir("other");
@@ -266,4 +269,47 @@ fn fake_tools_probe_connect_disconnect_and_run_headless() {
     let stopped = sessions.stop(&id3).unwrap();
     assert_eq!(stopped.state, SessionState::Stopped);
     assert_eq!(wait_done(&sessions, &id3).state, SessionState::Stopped);
+}
+
+/// Gemini CLI and Kimi Code (M2.3/M2.4 detection): found and versioned with their own `--version`;
+/// neither has a sign-in status command EAK can read, so sign-in stays unknown (never "signed in"),
+/// and the actions they have no confirmed command for refuse with the reason.
+/// Called from the one test function (see the module note on parallel script runs).
+fn gemini_and_kimi_are_found_and_versioned_and_their_sign_in_stays_unknown() {
+    let bin = tmpdir("bin-gk");
+    let project = tmpdir("project-gk");
+    script(
+        &bin,
+        "gemini",
+        r#"[ "$1" = "--version" ] && echo "0.21.3" || exit 2"#,
+    );
+    script(
+        &bin,
+        "kimi",
+        r#"[ "$1" = "--version" ] && echo "kimi, version 0.52.0" || exit 2"#,
+    );
+    let loc = Locator::only(vec![bin.clone()]);
+    let tools = builtin_tools();
+    for (id, version) in [("gemini", "0.21.3"), ("kimi", "0.52.0")] {
+        let tool = find_tool(&tools, id).unwrap();
+        let st = probe(tool, &loc, Some(&project));
+        assert!(st.binary.is_some(), "{id} found");
+        assert_eq!(st.version.as_deref(), Some(version), "{id}");
+        assert_eq!(st.signed_in, None, "{id}: unknown, never guessed");
+        assert!(
+            st.auth_detail.is_some(),
+            "{id}: says why sign-in is unknown"
+        );
+        assert!(!st.can_connect, "{id}: no confirmed MCP registration");
+        let b = loc.find(id).unwrap();
+        assert!(
+            login_plan(tool, &b, &project).is_err(),
+            "{id}: no login command"
+        );
+        assert!(launch_plan(tool, &b, &project, Surface::Headless, Some("go"), "x").is_err());
+    }
+    // Not installed: not found, no version, sign-in unknown.
+    let none = Locator::only(vec![tmpdir("empty-gk")]);
+    let st = probe(find_tool(&tools, "kimi").unwrap(), &none, Some(&project));
+    assert!(st.binary.is_none() && st.version.is_none() && st.signed_in.is_none() && !st.available);
 }
