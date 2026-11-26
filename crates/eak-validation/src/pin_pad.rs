@@ -226,7 +226,11 @@ fn pp003(def: &ComponentDef) -> RuleResult {
         }
     }
     if !any {
-        return result("PP-003", CheckState::NotApplicable, "no pin with several pads");
+        return result(
+            "PP-003",
+            CheckState::NotApplicable,
+            "no pin with several pads",
+        );
     }
     verdict("PP-003", problems, review)
 }
@@ -346,7 +350,13 @@ mod tests {
     fn no_builtin_part_fails() {
         for def in eak_core::builtin::components() {
             let r = verify(&def);
-            assert_ne!(r.overall, CheckState::Fail, "{}: {:?}", def.id, r.blocking());
+            assert_ne!(
+                r.overall,
+                CheckState::Fail,
+                "{}: {:?}",
+                def.id,
+                r.blocking()
+            );
             assert!(r.not_implemented.iter().any(|n| n.starts_with("PP-006")));
         }
     }
