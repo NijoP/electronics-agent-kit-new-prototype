@@ -142,7 +142,11 @@ impl DatasheetRef {
         retrieved_at_unix_s: Option<u64>,
     ) -> std::io::Result<DatasheetRef> {
         let bytes = std::fs::read(path)?;
-        Ok(DatasheetRef::local(&path.to_string_lossy(), &bytes, retrieved_at_unix_s))
+        Ok(DatasheetRef::local(
+            &path.to_string_lossy(),
+            &bytes,
+            retrieved_at_unix_s,
+        ))
     }
 
     pub fn with_revision(mut self, revision: &str) -> DatasheetRef {
@@ -177,8 +181,13 @@ pub enum SpecOrigin {
 pub enum SpecValue {
     /// A finite decimal number, kept as the text it was given in (never rounded), and its
     /// unit as written (for example "V", "mA", "°C"; empty for a dimensionless count).
-    Number { value: String, unit: String },
-    Text { value: String },
+    Number {
+        value: String,
+        unit: String,
+    },
+    Text {
+        value: String,
+    },
 }
 
 /// Why a specification could not be built.
@@ -586,7 +595,8 @@ mod tests {
         let user = Spec::text("Grade", "Automotive", SpecOrigin::User).unwrap();
         assert!(!user.needs_review());
         let mut a = PartRecord::new("M", "P1", prov("s1")).unwrap();
-        a.specs.push(Spec::number("Iq", "50", "uA", SpecOrigin::User).unwrap());
+        a.specs
+            .push(Spec::number("Iq", "50", "uA", SpecOrigin::User).unwrap());
         let mut b = PartRecord::new("M", "P1", prov("s2")).unwrap();
         b.specs.push(ai);
         let part = Part::merge(vec![a, b]).remove(0);
