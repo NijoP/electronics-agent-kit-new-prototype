@@ -1473,13 +1473,8 @@ impl Completeness {
 
     fn finish(mut self) -> Self {
         let total = self.total;
-        let pct = |n: usize| {
-            if total == 0 {
-                0
-            } else {
-                (n * 100 / total) as u32
-            }
-        };
+        // Floored percentage; an empty total (no fields) is 0 %, never a division by zero.
+        let pct = |n: usize| (n * 100).checked_div(total).map_or(0, |p| p as u32);
         self.percent_filled = pct(total - self.missing);
         self.percent_firm = pct(self.firm);
         self
