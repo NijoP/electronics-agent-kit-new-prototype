@@ -82,3 +82,9 @@ pub const CURRENT_RATINGS: &[&str] = &[
 
 /// Rating names EAK libraries use for a power (dissipation) limit.
 pub const POWER_RATINGS: &[&str] = &["power", "power_max"];
+
+/// Rating names for the junction-to-ambient thermal resistance (unit `°C/W`).
+pub const THETA_JA_RATINGS: &[&str] = &["theta_ja"];
+
+/// Rating names for the maximum junction temperature (unit `°C`).
+pub const TJ_MAX_RATINGS: &[&str] = &["tj_max"];

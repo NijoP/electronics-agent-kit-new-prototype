@@ -37,8 +37,8 @@
 //!   layers, internal on inner layers); a connection whose width does not fit fails and says
 //!   why, it is never necked below its current-sized width.
 //!
-//! The exact check applies the DRC's own rules: `clearance::routing_required` (DRC-002 raised to
-//! the declared insulation spacing), the clearance matrix, board edge (DRC-005), copper-to-hole
+//! The exact check applies the DRC's own rules: `clearance::required` (DRC-002, with the
+//! declared insulation spacing), the clearance matrix, board edge (DRC-005), copper-to-hole
 //! (DRC-018), hole-to-hole (DRC-019), keep-outs (DRC-021) and constraint-region track widths
 //! (DRC-022). The router is still a heuristic: whether
 //! the resulting board is electrically or manufacturing correct is decided afterwards by
@@ -558,7 +558,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         .max()
         .unwrap_or(200_000) as f64;
     // Spacing each net needs from any other net, per layer: the DRC-002 rule (classes, net
-    // pairs, declared voltages) raised to the declared insulation (`routing_required`).
+    // pairs, declared voltages) and the declared insulation (`clearance::required`).
     let nets: Vec<&String> = net_ids.keys().collect();
     let clear_of: BTreeMap<String, Vec<f64>> = nets
         .iter()
@@ -568,7 +568,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
                 .map(|&layer| {
                     nets.iter()
                         .filter(|&&m| m != n)
-                        .map(|m| clearance::routing_required(c, n, m, layer))
+                        .map(|m| clearance::required(c, n, m, layer))
                         .fold(floor, f64::max)
                 })
                 .collect();
@@ -1565,7 +1565,7 @@ fn shove(
                 q.layer == it.layer
                     && q.net != it.net
                     && distance(&seg, &it.shape)
-                        < clearance::routing_required(c, &q.net, &it.net, it.layer) - 1.0
+                        < clearance::required(c, &q.net, &it.net, it.layer) - 1.0
             });
             if hit {
                 out.push(it.object_id.clone());
@@ -1953,12 +1953,7 @@ fn blocker(env: &Env, l: usize, pt: Point, net: &str, placed: &[Placed]) -> Stri
         return format!(
             "{} ({net_name}): tracks keep {} from it [DRC-002]",
             it.label(),
-            mm(clearance::routing_required(
-                &env.p.constraints,
-                net,
-                &it.net,
-                layer
-            ))
+            mm(clearance::required(&env.p.constraints, net, &it.net, layer))
         );
     }
     let regions: Vec<&str> = env
@@ -2119,7 +2114,7 @@ fn violation_hiding(
         let layer = env.layers[*l];
         let me = class(s);
         let rule = |other_net: &str, other: ObjectClass| -> f64 {
-            let r = clearance::routing_required(c, net, other_net, layer);
+            let r = clearance::required(c, net, other_net, layer);
             c.matrix_cell(me, other).map_or(r, |m| r.max(m as f64))
         };
         for (it, oc) in env.geo.copper.iter().zip(env.classes) {

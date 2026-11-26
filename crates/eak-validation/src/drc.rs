@@ -12,6 +12,7 @@ use eak_core::{Nm, ObjectClass, PadKind, Point, Project, Rect, RegionObject, Sid
 use eak_engineering::board::BoardGeometry;
 use eak_engineering::copper::{self, distance, Core, ItemKind};
 use eak_engineering::ipc::{self, ClearanceCondition};
+use eak_engineering::verify::{self, Verdict};
 use eak_engineering::{netlist, silk};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -284,7 +285,15 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
             .net_voltages_v
             .values()
             .fold(0.0f64, |a, &b| a.max(b.abs()));
-        m.max((ipc::clearance_mm(vmax * 2.0, ClearanceCondition::B2) * 1e6) as i64)
+        // Broad-phase bound: the worst IPC-2221B condition (B3) or a declared creepage.
+        let mut v_nm = ipc::clearance_mm(vmax * 2.0, ClearanceCondition::B3) * 1e6;
+        if let Some(i) = &c.insulation {
+            let (pd, mg) = (i.pollution_degree, &i.material_group);
+            if let Ok(mm) = ipc::creepage_mm(vmax * 2.0, pd, mg) {
+                v_nm = v_nm.max(mm * 1e6);
+            }
+        }
+        m.max(v_nm as i64)
     };
     let mut order: Vec<usize> = (0..items.len()).collect();
     order.sort_by_key(|&i| boxes[i].min.x);
@@ -315,7 +324,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
             {
                 if v_req > req {
                     req = v_req;
-                    basis = format!("IPC-2221B {cond:?} for {dv:.0} V (unverified table)");
+                    basis = format!("{cond} for {dv:.0} V (unverified table)");
                 }
             }
             // Phase 1 C5 (ADR-0046): the clearance-matrix cell of the two object classes and
@@ -936,6 +945,8 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     f.extend(holes::silk_to_edge(geo, silk_min));
     // DRC-024..026: declared differential pairs.
     let pair_unknown = crate::pairs::check(p, &mut f);
+    // DRC-027: via barrel current.
+    let via_unknown = via_current(p, &mut f);
 
     let mut rules = vec![
         rule("DRC-001", "Minimum / net-class track width", format!("min {}", mm(c.min_track_width as f64)), "Project constraints"),
@@ -963,8 +974,20 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         rule("DRC-023", "Silkscreen text and dimensions", format!("silk text and dimension labels ≥ {} high and drawable by the stroke font", mm(MIN_SILK_TEXT as f64)), "EAK default (common fabricator practice; unverified)"),
     ];
     rules.extend(crate::pairs::rules());
+    rules.push(rule(
+        "DRC-027",
+        "Via current capacity",
+        format!(
+            "net current through each via of the net, ΔT {} °C, plating {}",
+            c.temp_rise_c,
+            c.via_plating_um
+                .map_or("not declared".into(), |t| format!("{t} µm"))
+        ),
+        verify::SOURCE_VIA,
+    ));
     let not_implemented = vec![
         "Single-ended controlled impedance (net-class target Z0) and signal integrity beyond the declared differential pairs".into(),
+        "DC voltage drop along a net against net_max_drop_v (no path-resistance model yet)".into(),
         "Thermal analysis and copper current density in zones (only relief-spoke width vs declared net current is checked)".into(),
         "Creepage (surface path) analysis — only voltage-based clearance (air gap) is checked"
             .into(),
@@ -995,7 +1018,8 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         let why = format!("no declared current for: {}", no_current.join(", "));
         report = report
             .degrade("DRC-008", CheckState::Unknown, &why)
-            .degrade("DRC-014", CheckState::Unknown, &why);
+            .degrade("DRC-014", CheckState::Unknown, &why)
+            .degrade("DRC-027", CheckState::Unknown, &why);
     }
     if !no_voltage.is_empty() {
         let why = format!(
@@ -1006,6 +1030,12 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     }
     for (rule, why) in pair_unknown {
         report = report.degrade(rule, CheckState::Unknown, &why);
+    }
+    if let Some(why) = via_unknown {
+        report = report.degrade("DRC-027", CheckState::Unknown, &why);
+    }
+    if let Some(why) = eak_engineering::clearance::spacing_unknown(c) {
+        report = report.degrade("DRC-002", CheckState::Unknown, &why);
     }
     // A configured clearance-matrix cell no rule enforces is reported, never assumed met.
     let unchecked: Vec<String> = c
@@ -1029,6 +1059,41 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         report = report.degrade("DRC-002", CheckState::Unknown, &why);
     }
     report
+}
+
+/// DRC-027: each via on a net with a declared current against its IPC-2221 barrel capacity, with
+/// the whole net current through that one via (as DRC-008 sizes every track for it). Returns why
+/// it could not be evaluated.
+fn via_current(p: &Project, f: &mut Vec<Finding>) -> Option<String> {
+    let c = &p.constraints;
+    let mut why = None;
+    for v in p.pcb.vias.values() {
+        let Some(&amps) = c.net_currents_a.get(&v.net) else {
+            continue;
+        };
+        let drill = to_mm(v.drill);
+        let rise = Some(c.temp_rise_c);
+        let ch = verify::via_current(Some(amps), drill, c.via_plating_um, rise, 1);
+        match ch.verdict {
+            Verdict::Pass => {}
+            Verdict::Fail => {
+                let cap = ch.limit.unwrap_or(0.0);
+                let id = &v.id;
+                let msg = format!("via {id} carries {amps} A, above its {cap:.2} A capacity");
+                f.push(
+                    finding("DRC-027", Error, msg, vec![v.id.clone()], Some(v.position))
+                        .measured(amps, "A")
+                        .required(Bound::Max, cap, "A")
+                        .fix(format!(
+                            "Use a larger drill or several vias in parallel for net {} at via {}.",
+                            v.net, v.id
+                        )),
+                );
+            }
+            Verdict::Unknown | Verdict::Blocked => why = Some(ch.reason),
+        }
+    }
+    why
 }
 
 /// The rule that enforces a clearance-matrix cell, `None` when no rule does (Phase 1 C5,
