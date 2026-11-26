@@ -18,6 +18,8 @@
 //! * `mcp`      – Model Context Protocol server over stdio exposing the same tools.
 //! * `proposal` – propose mode (ADR-0051): design edits collected on a copy, reviewed with their
 //!   ERC/DRC delta and applied by a person as one checkpointed `Batch`.
+//! * `weft`     – WEFT orchestration (ADR-0053): agent registry, delegated tasks, typed
+//!   messages and review verdicts in one journal; proposal conflict detection.
 //! * `cli`      – the `eak` command line.
 
 pub mod agent_task;
@@ -38,6 +40,7 @@ pub mod task_graph;
 pub mod task_invalidate;
 pub mod task_journal;
 pub mod tools;
+pub mod weft;
 
 pub use context::{CallContext, ProjectRef};
 pub use tools::{envelope_error, handle, tool_specs, ErrorCode, ToolSpec};

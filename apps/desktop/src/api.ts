@@ -14,6 +14,7 @@ import type {
   CommandError,
   CommandResponse,
   LockState,
+  BoardGeometry,
   ConnectivityReport,
   ConnectionReport,
   EngineEvent,
@@ -61,6 +62,20 @@ import type { FileContent, FileEntry, GitStatus } from "./shell/files";
 import type { SyncPreview } from "./shell/ecoPreview";
 import type { EngineChange } from "./shell/syncReport";
 import type { HomeFacts } from "./home/homeFacts";
+import type { AgentSession, Surface as AgentSurface, ToolStatus } from "./settings/aiTools";
+import type { SessionInfo as TerminalSessionInfo } from "./terminal/api";
+
+// Settings › AI tools commands: must match `AGENT_COMMANDS` in src-tauri/src/agents.rs.
+export const AGENT_IPC = [
+  "agent_tools",
+  "agent_tool_connect",
+  "agent_tool_disconnect",
+  "agent_tool_login",
+  "agent_tool_launch",
+  "agent_sessions",
+  "agent_session_log",
+  "agent_tool_stop",
+] as const;
 
 // Terminal workspace commands: must match `TERMINAL_COMMANDS` in src-tauri/src/terminal.rs.
 export const TERMINAL_IPC = [
@@ -128,6 +143,7 @@ export const IPC_COMMANDS = [
   "release_check",
   "run_release_checks",
   "connectivity",
+  "board_geometry",
   "ai_propose",
   "ai_accept",
   "ai_reject",
@@ -179,6 +195,7 @@ export const IPC_COMMANDS = [
   "create_project_with_brief",
   "create_sample_project",
   ...TERMINAL_IPC,
+  ...AGENT_IPC,
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
 
@@ -292,6 +309,8 @@ export const api = {
   releaseCheck: () => call<ReleaseCheck>("release_check"),
   runReleaseChecks: () => call<ReleaseCheck>("run_release_checks"),
   connectivity: () => call<ConnectivityReport>("connectivity"),
+  /** E1 (ADR-0052): the board as fabricated, the geometry DRC checks; the 2D and 3D views draw it. */
+  boardGeometry: () => call<BoardGeometry>("board_geometry"),
   aiPropose: (providerId: string, prompt: string) => call<AiProposal>("ai_propose", { provider_id: providerId, prompt }),
   aiAccept: (stepId: number) => call<CommandResponse>("ai_accept", { step_id: stepId }),
   aiReject: (stepId: number) => call<void>("ai_reject", { step_id: stepId }),
@@ -348,6 +367,18 @@ export const api = {
   setPerformanceSettings: (settings: PerformanceSettings) => call<ResourceProfile>("set_performance_settings", { settings }),
   projectFileDelete: (projectId: string, rel: string, recursive: boolean) =>
     call<void>("project_file_delete", { project_id: projectId, rel, recursive }),
+  // Settings › AI tools (src-tauri/src/agents.rs): locally installed coding-agent CLIs, probed with
+  // their own commands; Connect registers eak-mcp through the tool's own CLI; Sign in and terminal
+  // sessions open as tabs of the existing Terminal workspace.
+  agentTools: () => call<ToolStatus[]>("agent_tools"),
+  agentToolConnect: (tool: string) => call<ToolStatus>("agent_tool_connect", { tool }),
+  agentToolDisconnect: (tool: string) => call<ToolStatus>("agent_tool_disconnect", { tool }),
+  agentToolLogin: (tool: string) => call<TerminalSessionInfo>("agent_tool_login", { tool }),
+  agentToolLaunch: (tool: string, surface: AgentSurface, prompt: string | null) =>
+    call<AgentSession>("agent_tool_launch", { tool, surface, prompt }),
+  agentSessions: () => call<AgentSession[]>("agent_sessions"),
+  agentSessionLog: (id: string, lines: number) => call<string>("agent_session_log", { id, lines }),
+  agentToolStop: (id: string) => call<AgentSession>("agent_tool_stop", { id }),
 };
 
 export function describeError(e: CommandError): string {

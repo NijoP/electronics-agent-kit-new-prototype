@@ -11,12 +11,13 @@ members = [
     "crates/eak-harness",
     "crates/eak-terminal",
     "crates/eak-library",
+    "crates/eak-agents",
 #    "apps/cli",
     "apps/desktop/src-tauri",
 ]
 
 [workspace.package]
-version = "0.1.5"
+version = "0.2.0"
 edition = "2021"
 license = "LicenseRef-OSaasy"
 rust-version = "1.80"
@@ -38,6 +39,7 @@ eak-simulation = { path = "crates/eak-simulation" }
 eak-harness = { path = "crates/eak-harness" }
 eak-terminal = { path = "crates/eak-terminal" }
 eak-library = { path = "crates/eak-library" }
+eak-agents = { path = "crates/eak-agents" }
 
 [profile.release]
 lto = "thin"

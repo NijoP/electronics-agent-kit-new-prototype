@@ -22,6 +22,8 @@ registerWorkspace({
       execute={ctx.execute}
       busy={ctx.busy}
       layerColourOf={ctx.layerColour}
+      layerHidden={ctx.layerHidden}
+      onToggleLayer={ctx.toggleLayer}
     />
   ),
 });

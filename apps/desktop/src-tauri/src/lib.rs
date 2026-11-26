@@ -13,6 +13,7 @@
 //! * ERC/DRC run in `eak-validation`, and their revision-bound reports are stored as
 //!   evidence by the engine.
 
+pub mod agents;
 pub mod ai;
 pub mod catalogue;
 pub mod eco;
@@ -732,11 +733,30 @@ pub struct ConnectivityReport {
 
 pub fn connectivity(s: &Session) -> Result<ConnectivityReport, String> {
     let (_, p) = s.shared_project()?;
+    let g = eak_engineering::board::BoardGeometry::build(&p);
     Ok(ConnectivityReport {
         revision: p.revision,
-        connectivity: eak_engineering::copper::analyse(&p),
-        zone_fills: eak_engineering::fill_view::fill_views(&p),
+        connectivity: g.connectivity(),
+        zone_fills: g.fill_views,
     })
+}
+
+/// The board as fabricated for the current revision (ADR-0052): the one geometry DRC checks
+/// (outline, cut-outs, copper, zone fills, holes, legend) plus the 3D bodies built from it. The
+/// 2D and 3D views draw this; read-only and derived per call, never stored.
+#[derive(Debug, Clone, Serialize)]
+pub struct BoardGeometryReport {
+    #[serde(flatten)]
+    pub geometry: eak_engineering::board::BoardGeometry,
+    #[serde(flatten)]
+    pub scene: eak_engineering::scene3d::Scene,
+}
+
+pub fn board_geometry(s: &Session) -> Result<BoardGeometryReport, String> {
+    let (_, p) = s.shared_project()?;
+    let geometry = eak_engineering::board::BoardGeometry::build(&p);
+    let scene = eak_engineering::scene3d::build(&p, &geometry);
+    Ok(BoardGeometryReport { geometry, scene })
 }
 
 /// Simulation panel data: whether ngspice is installed plus the nets and elements an
@@ -1328,7 +1348,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 91] = [
+pub const IPC_COMMANDS: [&str; 92] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -1339,6 +1359,7 @@ pub const IPC_COMMANDS: [&str; 91] = [
     "simulation_status",
     "run_simulation",
     "connectivity",
+    "board_geometry",
     "route_step",
     "parts_search",
     "parts_import",
@@ -1593,6 +1614,11 @@ pub mod cmd {
     }
 
     #[tauri::command(rename_all = "snake_case")]
+    pub async fn board_geometry(app: AppHandle) -> Result<BoardGeometryReport, String> {
+        blocking(app, Priority::P2, super::board_geometry).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
     pub async fn library_search(
         app: AppHandle,
         query: String,
@@ -1781,6 +1807,14 @@ pub fn run() {
             }
             app.manage(ai::AiState::default());
             app.manage(terminal_state(app));
+            // Settings › AI tools: locally installed coding-agent CLIs; headless session logs go to
+            // the app data folder.
+            app.manage(agents::AgentsState::system(
+                app.path()
+                    .app_data_dir()
+                    .ok()
+                    .map(|d| d.join("agent-sessions")),
+            ));
             // Non-secret Distributor connection status lives beside the model settings; the Distributor API
             // key and secret go to the OS credential store only.
             if let Ok(dir) = app.path().app_config_dir() {
@@ -1839,6 +1873,7 @@ pub fn run() {
             cmd::library_footprint_candidates,
             cmd::library_model_read,
             cmd::connectivity,
+            cmd::board_geometry,
             cmd::simulation_status,
             cmd::run_simulation,
             cmd::route_step,
@@ -1915,6 +1950,14 @@ pub fn run() {
             home::cmd::home_suggest_folder,
             home::cmd::create_project_with_brief,
             home::cmd::create_sample_project,
+            agents::cmd::agent_tools,
+            agents::cmd::agent_tool_connect,
+            agents::cmd::agent_tool_disconnect,
+            agents::cmd::agent_tool_login,
+            agents::cmd::agent_tool_launch,
+            agents::cmd::agent_sessions,
+            agents::cmd::agent_session_log,
+            agents::cmd::agent_tool_stop,
         ])
         .build(tauri::generate_context!())
         .expect("EAK desktop failed to start")
