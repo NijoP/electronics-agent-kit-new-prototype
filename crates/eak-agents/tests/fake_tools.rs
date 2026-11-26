@@ -32,9 +32,10 @@ case "$1 $2" in
   "--version "*) echo "9.1.0 (Claude Code)" ;;
   "auth status") if [ -f "$D/claude.auth" ]; then echo '{"loggedIn":true,"authMethod":"claude.ai","email":"x@example.com"}'; else echo '{"loggedIn":false}'; exit 1; fi ;;
   "mcp get") if [ -f "$D/claude.reg" ]; then echo "eak:"; echo "  Scope: Local config (private to you in this project)"; echo "  Args: $(cat "$D/claude.reg")"; else echo 'No MCP server named "eak". Configured servers: none' >&2; exit 1; fi ;;
-  "mcp add") if [ -f "$D/claude.reg" ]; then echo "MCP server eak already exists in local config" >&2; exit 1; fi; pwd -P > "$D/claude.cwd"; shift 6; echo "$*" > "$D/claude.reg"; echo "Added stdio MCP server eak" ;;
+  "mcp add") if [ -f "$D/claude.reg" ]; then echo "MCP server eak already exists in local config" >&2; exit 1; fi; pwd -P > "$D/claude.cwd"; : > "$D/claude.env"; while [ "$1" != "--" ]; do [ "$1" = "-e" ] && echo "$2" >> "$D/claude.env"; shift; done; shift; echo "$*" > "$D/claude.reg"; echo "Added stdio MCP server eak" ;;
   "mcp remove") if [ -f "$D/claude.reg" ]; then rm "$D/claude.reg"; else echo 'No MCP server found with name: "eak"' >&2; exit 1; fi ;;
   "--allowedTools "*)
+    echo "$EAK_SESSION_ID" > "$D/claude.session"
     echo '{"type":"system","subtype":"init","model":"fake"}'
     echo '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__eak__design_report","input":{}}]}}'
     echo "progress on stderr" >&2
@@ -45,11 +46,12 @@ esac
 
 /// Codex as its `--help` documents it: user-level registration in `$D/codex.reg`.
 const CODEX: &str = r#"
+if [ "$1" = "-c" ]; then echo "$2 $EAK_SESSION_ID" > "$D/codex.session"; shift 2; fi
 case "$1 $2" in
   "--version "*) echo "codex-cli 0.200.0" ;;
   "login status") echo "Logged in using ChatGPT" ;;
   "mcp get") if [ -f "$D/codex.reg" ]; then printf '{"name":"eak","transport":{"type":"stdio","command":"x","args":[%s]}}\n' "$(cat "$D/codex.reg")"; else echo "No MCP server named 'eak' found." >&2; exit 1; fi ;;
-  "mcp add") shift 4; out=""; for a in "$@"; do out="$out${out:+,}\"$a\""; done; echo "$out" > "$D/codex.reg"; echo "Added global MCP server 'eak'." ;;
+  "mcp add") : > "$D/codex.env"; while [ "$1" != "--" ]; do [ "$1" = "--env" ] && echo "$2" >> "$D/codex.env"; shift; done; shift; out=""; for a in "$@"; do out="$out${out:+,}\"$a\""; done; echo "$out" > "$D/codex.reg"; echo "Added global MCP server 'eak'." ;;
   "mcp remove") rm -f "$D/codex.reg"; echo "Removed global MCP server 'eak'." ;;
   "exec --json") echo '{"type":"thread.started","thread_id":"t"}'; echo '{"type":"turn.failed","error":{"message":"quota"}}' ;;
   *) echo "unexpected: $*" >&2; exit 2 ;;
@@ -102,6 +104,12 @@ fn fake_tools_probe_connect_disconnect_and_run_headless() {
     claude.connect(&bin_claude, &project, &server).unwrap();
     let reg = std::fs::read_to_string(bin.join("claude.reg")).unwrap();
     assert!(reg.contains("--project") && reg.contains(&project.display().to_string()));
+    // The agent identity reaches the MCP registration (WEFT registry: agent:<name>@<session>).
+    assert_eq!(
+        std::fs::read_to_string(bin.join("claude.env")).unwrap(),
+        "EAK_AGENT_NAME=claude-code\nEAK_AGENT_TOOL=claude-code\n"
+    );
+    assert!(reg.contains("--agent claude-code"));
     assert_eq!(
         std::fs::read_to_string(bin.join("claude.cwd"))
             .unwrap()
@@ -130,6 +138,10 @@ fn fake_tools_probe_connect_disconnect_and_run_headless() {
     assert!(codex.disconnect(&bin_codex, &project).is_err());
     codex.connect(&bin_codex, &project, &server).unwrap();
     assert_eq!(probe(codex, &loc, Some(&project)).connected, Some(true));
+    assert_eq!(
+        std::fs::read_to_string(bin.join("codex.env")).unwrap(),
+        "EAK_AGENT_NAME=codex\nEAK_AGENT_TOOL=codex\n"
+    );
     codex.disconnect(&bin_codex, &project).unwrap();
     assert_eq!(probe(codex, &loc, Some(&project)).connected, Some(false));
 
@@ -163,7 +175,14 @@ fn fake_tools_probe_connect_disconnect_and_run_headless() {
     assert!(done.events.contains(&AgentEvent::ToolCall {
         name: "mcp__eak__design_report".into()
     }));
-    let want = format!("claude {id}");
+    let want = format!("claude-code {id}");
+    // Claude passes its environment on to the eak-mcp server it starts.
+    assert_eq!(
+        std::fs::read_to_string(bin.join("claude.session"))
+            .unwrap()
+            .trim(),
+        id
+    );
     assert!(
         done.events.iter().any(|e| matches!(
             e,
@@ -200,6 +219,13 @@ fn fake_tools_probe_connect_disconnect_and_run_headless() {
         .unwrap();
     let done2 = wait_done(&sessions, &id2);
     assert_eq!(done2.state, SessionState::Failed, "{done2:?}");
+    // Codex is told to pass the session id on to its eak-mcp server, for this run only.
+    assert_eq!(
+        std::fs::read_to_string(bin.join("codex.session"))
+            .unwrap()
+            .trim(),
+        format!("mcp_servers.eak.env_vars=[\"EAK_SESSION_ID\"] {id2}")
+    );
     assert_eq!(sessions.list().first().map(|v| v.id.clone()), Some(id2));
 
     // A long-running session can be stopped.

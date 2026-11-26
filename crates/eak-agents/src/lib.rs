@@ -118,6 +118,15 @@ pub type Parser = fn(&str) -> Option<AgentEvent>;
 pub trait AgentTool: Send + Sync {
     fn id(&self) -> &'static str;
     fn label(&self) -> &'static str;
+    /// Name the agent goes by in EAK (`EAK_AGENT_NAME`, `EAK_AGENT_TOOL`; WEFT registry `agent:<name>@<session>`).
+    fn agent_name(&self) -> &'static str {
+        self.id()
+    }
+    /// Arguments placed before the session arguments that pass `EAK_SESSION_ID` on to the tool's
+    /// EAK MCP server, for a tool that does not hand its environment to MCP servers (Codex).
+    fn session_args(&self) -> Vec<String> {
+        Vec::new()
+    }
     /// Executable name looked up on `PATH`.
     fn program(&self) -> &'static str;
     fn install_url(&self) -> &'static str;
@@ -273,14 +282,22 @@ pub fn launch_plan(
         return Err("a headless session needs a first message (the task)".into());
     }
     let mut argv = vec![bin.display().to_string()];
+    argv.extend(tool.session_args());
     argv.extend(tool.launch_args(surface, prompt)?);
+    let mut env: Vec<(String, String)> = vec![
+        ("EAK_PROJECT_DIR".into(), project.display().to_string()),
+        ("EAK_AGENT_NAME".into(), tool.agent_name().into()),
+        ("EAK_AGENT_TOOL".into(), tool.agent_name().into()),
+        ("EAK_TASK_ID".into(), task_id.into()),
+    ];
+    // A terminal tab exports its own `EAK_SESSION_ID` (the terminal session id `eak-term` uses);
+    // a headless session has none, so its task id is its session id.
+    if surface == Surface::Headless {
+        env.push(("EAK_SESSION_ID".into(), task_id.into()));
+    }
     Ok(LaunchPlan {
         argv,
-        env: vec![
-            ("EAK_PROJECT_DIR".into(), project.display().to_string()),
-            ("EAK_AGENT_NAME".into(), tool.id().into()),
-            ("EAK_TASK_ID".into(), task_id.into()),
-        ],
+        env,
         cwd: project.to_path_buf(),
         surface,
     })
@@ -298,7 +315,7 @@ pub fn login_plan(tool: &dyn AgentTool, bin: &Path, cwd: &Path) -> Result<Launch
     argv.extend(args);
     Ok(LaunchPlan {
         argv,
-        env: vec![("EAK_AGENT_NAME".into(), tool.id().into())],
+        env: vec![("EAK_AGENT_NAME".into(), tool.agent_name().into())],
         cwd: cwd.to_path_buf(),
         surface: Surface::Terminal,
     })
@@ -312,6 +329,14 @@ pub fn server_command(server: &Path, project: &Path, agent: &str) -> Vec<String>
         project.display().to_string(),
         "--agent".into(),
         agent.into(),
+    ]
+}
+
+/// The identity env EAK registers with its MCP server in each tool (`KEY=VALUE`).
+pub fn identity_env(tool: &dyn AgentTool) -> Vec<String> {
+    vec![
+        format!("EAK_AGENT_NAME={}", tool.agent_name()),
+        format!("EAK_AGENT_TOOL={}", tool.agent_name()),
     ]
 }
 
@@ -360,7 +385,9 @@ mod tests {
         assert_eq!(p.argv, vec!["/opt/claude".to_string()]);
         assert!(p
             .env
-            .contains(&("EAK_AGENT_NAME".to_string(), "claude".to_string())));
+            .contains(&("EAK_AGENT_NAME".to_string(), "claude-code".to_string())));
+        // The terminal tab keeps its own session id.
+        assert!(!p.env.iter().any(|(k, _)| k == "EAK_SESSION_ID"));
         assert!(p
             .env
             .contains(&("EAK_TASK_ID".to_string(), "claude-1-1".to_string())));

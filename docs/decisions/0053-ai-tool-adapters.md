@@ -25,6 +25,11 @@
     started in a terminal tab; Connect and headless runs report `Unsupported` with the reason.
   - Terminal sessions and sign-in are new tabs of the existing Terminal workspace through its
     session manager (with `EAK_AGENT_NAME`, `EAK_TASK_ID`); the workspace UI is unchanged.
+  - Agent identity for the WEFT registry (`agent:<EAK_AGENT_NAME>@<EAK_SESSION_ID>`): the MCP
+    registration carries `EAK_AGENT_NAME` and `EAK_AGENT_TOOL` (`claude-code`, `codex`). A terminal
+    tab keeps the `EAK_SESSION_ID` its terminal session exports; a headless session gets its task id
+    as `EAK_SESSION_ID`. Claude Code passes its environment on to `eak-mcp`; Codex gives a server
+    only its configured env, so each launch adds `-c mcp_servers.eak.env_vars=["EAK_SESSION_ID"]`.
   - Headless sessions are child processes whose output goes to `<app data>/agent-sessions/<id>.log`
     and whose documented stream lines become events. Headless Claude allows only EAK's own MCP tools
     (`--allowedTools mcp__eak`); the harness still bounds them and every design change goes through

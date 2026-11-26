@@ -11,7 +11,7 @@
 use super::check_prompt;
 use crate::probe::{self, Output, CHANGE_TIMEOUT, PROBE_TIMEOUT};
 use crate::{
-    clip, server_command, AgentEvent, AgentTool, Auth, Parser, Registration, Surface,
+    clip, identity_env, server_command, AgentEvent, AgentTool, Auth, Parser, Registration, Surface,
     MCP_SERVER_NAME,
 };
 use serde_json::Value;
@@ -70,11 +70,16 @@ impl AgentTool for Codex {
             None,
             CHANGE_TIMEOUT,
         );
-        let mut args: Vec<String> = ["mcp", "add", MCP_SERVER_NAME, "--"]
+        let mut args: Vec<String> = ["mcp", "add", MCP_SERVER_NAME]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        args.extend(server_command(server, project, "codex"));
+        for kv in identity_env(self) {
+            args.push("--env".into());
+            args.push(kv);
+        }
+        args.push("--".into());
+        args.extend(server_command(server, project, self.agent_name()));
         let a: Vec<&str> = args.iter().map(String::as_str).collect();
         let o = probe::run(bin, &a, Some(project), CHANGE_TIMEOUT)?;
         if o.ok() {
@@ -107,6 +112,15 @@ impl AgentTool for Codex {
 
     fn login_args(&self) -> Option<Vec<String>> {
         Some(vec!["login".into()])
+    }
+
+    /// Codex gives an MCP server only its configured env; `env_vars` names variables to pass on
+    /// from Codex's own environment. Set for this run only (`codex -c key=value`).
+    fn session_args(&self) -> Vec<String> {
+        vec![
+            "-c".into(),
+            format!("mcp_servers.{MCP_SERVER_NAME}.env_vars=[\"EAK_SESSION_ID\"]"),
+        ]
     }
 
     fn surfaces(&self) -> Vec<Surface> {

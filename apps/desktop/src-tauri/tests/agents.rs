@@ -2,7 +2,7 @@
 //! (CI has no Claude Code or Codex), Sign in opens the tool's own login as a tab of the existing
 //! Terminal workspace, and launched sessions are listed with their state and log.
 
-use eak_agents::sessions::{SessionState, Sessions};
+use eak_agents::sessions::Sessions;
 use eak_agents::{builtin_tools, Locator, Surface, Unavailable};
 use eak_desktop::agents::{self, AgentsState};
 use eak_terminal::Manager;
@@ -61,6 +61,7 @@ fn nothing_installed_shows_not_found_and_every_action_says_why() {
 #[cfg(unix)]
 #[test]
 fn sign_in_and_launch_open_terminal_tabs_and_sessions_are_listed() {
+    use eak_agents::sessions::SessionState;
     use std::os::unix::fs::PermissionsExt;
     use std::time::{Duration, Instant};
 

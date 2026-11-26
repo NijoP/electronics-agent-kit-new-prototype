@@ -11,7 +11,7 @@
 use super::{check_prompt, line_value};
 use crate::probe::{self, Output, CHANGE_TIMEOUT, PROBE_TIMEOUT};
 use crate::{
-    clip, server_command, AgentEvent, AgentTool, Auth, Parser, Registration, Surface,
+    clip, identity_env, server_command, AgentEvent, AgentTool, Auth, Parser, Registration, Surface,
     MCP_SERVER_NAME,
 };
 use serde_json::Value;
@@ -25,6 +25,9 @@ impl AgentTool for Claude {
     }
     fn label(&self) -> &'static str {
         "Claude Code"
+    }
+    fn agent_name(&self) -> &'static str {
+        "claude-code"
     }
     fn program(&self) -> &'static str {
         "claude"
@@ -70,11 +73,17 @@ impl AgentTool for Claude {
             Some(project),
             CHANGE_TIMEOUT,
         );
-        let mut args: Vec<String> = ["mcp", "add", "-s", "local", MCP_SERVER_NAME, "--"]
+        // `-e` takes several values, so it goes after the name and ends at `--` (claude mcp add --help).
+        let mut args: Vec<String> = ["mcp", "add", MCP_SERVER_NAME, "-s", "local"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        args.extend(server_command(server, project, "claude-code"));
+        for kv in identity_env(self) {
+            args.push("-e".into());
+            args.push(kv);
+        }
+        args.push("--".into());
+        args.extend(server_command(server, project, self.agent_name()));
         let a: Vec<&str> = args.iter().map(String::as_str).collect();
         let o = probe::run(bin, &a, Some(project), CHANGE_TIMEOUT)?;
         if o.ok() {
