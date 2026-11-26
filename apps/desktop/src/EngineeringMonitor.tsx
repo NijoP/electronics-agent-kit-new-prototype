@@ -4,6 +4,7 @@
 // clickable object references on every finding.
 import { useState } from "react";
 import type { Check, CheckResult, Finding, Id, RuleResult, Severity, Snapshot } from "./types";
+import { schematicPlace, schematicTarget } from "./shell/designManagerData";
 
 export type FindingsFormat = "csv" | "json";
 
@@ -65,6 +66,12 @@ export function objectRef(s: Snapshot, id: Id): { label: string; present: boolea
   if (z) return { label: z.net ? `Zone ${z.net}` : "Zone", present: true };
   return { label: id, present: false };
 }
+
+/** The object has a place to zoom to in the schematic (its sheet and box). */
+export const inSchematic = (s: Snapshot, id: Id): boolean => {
+  const t = schematicTarget(s, id);
+  return !!t && schematicPlace(s, t, null) !== null;
+};
 
 /** Map a finding's canonical object ids to the symbol id used for cross-probing. */
 export function probeTarget(snapshot: Snapshot, objects: Id[]): Id | null {
@@ -208,11 +215,13 @@ function ReportSection({
       <ul className="findings">
         {shown.map((f, i) => {
           const target = probeTarget(snapshot, f.objects);
+          // An ERC finding also goes to the wire, label, bus or no-connect it names (F7).
+          const placed = check === "erc" && f.objects.some((id) => inSchematic(snapshot, id));
           return (
             <li key={`${findingKey(f)}|${i}`} className={`finding ${f.severity}`}>
               <button
                 type="button"
-                disabled={!target && !f.location}
+                disabled={!target && !f.location && !placed}
                 aria-current={activeFinding !== undefined && activeFinding === findingKey(f) ? "true" : undefined}
                 onClick={() => (onNavigate ? onNavigate(f, check) : target && onProbe(target))}
               >
@@ -222,13 +231,15 @@ function ReportSection({
                 <span className="obj-refs" role="group" aria-label="Objects">
                   {[...new Set(f.objects)].map((id) => {
                     const o = objectRef(snapshot, id);
+                    // ERC objects zoom in the schematic: one with no position there says so (F7).
+                    const why = !o.present ? `${id} is not an object in revision ${snapshot.project.revision}` : check === "erc" && !inSchematic(snapshot, id) ? `${o.label} has no position in the schematic to zoom to` : null;
                     return (
                       <button
                         key={id}
                         type="button"
                         className="obj-ref"
-                        disabled={!o.present}
-                        title={o.present ? `Select and zoom to ${o.label}` : `${id} is not an object in revision ${snapshot.project.revision}`}
+                        disabled={why !== null}
+                        title={why ?? `Select and zoom to ${o.label}`}
                         onClick={() => onObject(f, check, id)}
                       >
                         {o.label}

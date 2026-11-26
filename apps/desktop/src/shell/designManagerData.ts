@@ -3,6 +3,7 @@
 // netlist (`netlist` IPC, eak-engineering) and its connectivity report (`connectivity` IPC); the
 // manager keeps no design model of its own.
 import type { ConnectivityReport, Id, Snapshot } from "../types";
+import type { Kind } from "../tools/schematic/selection";
 import { boundsOf, mm, toView, type Bounds } from "../viewport";
 import { availableDocs } from "./documents";
 import { netNames } from "./panels";
@@ -159,7 +160,47 @@ export function schematicPlace(s: Snapshot, t: Target, netlist: NetRow[] | null)
     if (w) take(w.sheet_id, [toView(w.a), toView(w.b)]);
     const l = sch.labels[t.id];
     if (l) take(l.sheet_id, [toView(l.position)]);
+    // Objects only a finding names (ERC): buses, bus entries and no-connect markers (F7).
+    const bus = sch.buses?.[t.id];
+    if (bus) take(bus.sheet_id, bus.points.map(toView));
+    const be = sch.bus_entries?.[t.id];
+    if (be) take(be.sheet_id, [toView(be.bus_point), toView(be.wire_point)]);
+    const nc = sch.no_connects[t.id];
+    if (nc) {
+      const g = s.geometry.symbols.find((x) => x.id === nc.symbol_id);
+      const pin = g?.pins.find((p) => p.number === nc.pin);
+      if (g && pin) take(g.sheet_id, [toView(pin.position)]);
+    }
   }
   const b = padded(boundsOf(pts));
   return on.sheet !== null && b ? { sheetId: on.sheet, bounds: b } : null;
+}
+
+/**
+ * The schematic target for one canonical object id a finding names (symbol or its footprint, wire,
+ * label, bus, bus entry or no-connect), or null when the id is not a schematic object in this revision.
+ */
+export function schematicTarget(s: Snapshot, id: Id): Target | null {
+  const sch = s.project.schematic;
+  if (sch.symbols[id]) return { kind: "component", symbolId: id };
+  const fp = s.project.pcb.footprints[id];
+  if (fp && sch.symbols[fp.symbol_id]) return { kind: "component", symbolId: fp.symbol_id };
+  if (sch.labels[id]) return { kind: "object", obj: "label", id };
+  if (sch.wires[id] || sch.buses?.[id] || sch.bus_entries?.[id] || sch.no_connects[id]) return { kind: "object", obj: "wire", id };
+  return null;
+}
+
+/**
+ * What the schematic editor selects for a target: the symbol, wire or label itself, a no-connect's
+ * symbol; null for nets, buses and bus entries (the editor has no selection for those, so it only
+ * zooms).
+ */
+export function schematicPick(s: Snapshot, t: Target): { kind: Kind; id: Id } | null {
+  const sch = s.project.schematic;
+  if (t.kind === "component") return { kind: "symbol", id: t.symbolId };
+  if (t.kind !== "object") return null;
+  if (sch.wires[t.id]) return { kind: "wire", id: t.id };
+  if (sch.labels[t.id]) return { kind: "label", id: t.id };
+  const nc = sch.no_connects[t.id];
+  return nc && sch.symbols[nc.symbol_id] ? { kind: "symbol", id: nc.symbol_id } : null;
 }

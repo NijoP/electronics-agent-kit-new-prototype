@@ -62,6 +62,11 @@ interface Props {
   armPart?: { id: string; n: number } | null;
   /** Engine sheet id this document shows (from the document tab). */
   sheetId?: Id;
+  /**
+   * The header sheet picker opens that sheet's document (`sch:<id>`), so the tab, its viewport and
+   * cross-probes follow the sheet shown (F7). Without it the picker switches the view locally.
+   */
+  onOpenSheet?: (sheetId: Id) => void;
   /** Canvas context menu for a right-click target: the action registry's entries for it (slice B3). */
   contextMenu?: (target: CanvasTarget) => ContextItem[];
 }
@@ -147,7 +152,7 @@ type Drag = { mode: "move" | "marquee"; from: Point; to: Point; additive: boolea
 const single = (s: S.Selection): [S.Kind, Id] | null =>
   S.count(s) !== 1 ? null : s.symbols.length ? ["symbol", s.symbols[0]] : s.wires.length ? ["wire", s.wires[0]] : ["label", s.labels[0]];
 
-export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = [], armPart, sheetId: docSheet, contextMenu }: Props) {
+export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = [], armPart, sheetId: docSheet, onOpenSheet, contextMenu }: Props) {
   const { schematic } = snapshot.project;
   const sheets = sheetsInOrder(schematic);
   const [sheetId, setSheetId] = useState<Id | undefined>(docSheet ?? sheets[0]?.id);
@@ -204,13 +209,14 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
   // The last press began on an object (Place tool: a click there never places).
   const downOnObject = useRef(false);
   const sheet = sheets.find((s) => s.id === sheetId) ?? sheets[0];
-  // Find Results (slice E4): a hit picked in the bottom dock on this sheet becomes the selection.
+  // Find Results (slice E4) and every other cross-probe (F7): an object picked elsewhere on this
+  // sheet becomes the selection.
   useEffect(() => {
     if (!sheet) return;
     const h = takeFindPick(sheet.id);
     if (!h) return;
     setTool("select");
-    setSel({ ...S.EMPTY, symbols: h.kind === "symbol" ? [h.id] : [], labels: h.kind === "label" ? [h.id] : [] });
+    setSel({ symbols: h.kind === "symbol" ? [h.id] : [], wires: h.kind === "wire" ? [h.id] : [], labels: h.kind === "label" ? [h.id] : [] });
   }, [findPick, sheet?.id]);
   // The canvas selection, or the symbol selected elsewhere (explorer, findings).
   const pruned = S.prune(selRaw, snapshot);
@@ -911,7 +917,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
       <header className="view-header">
         <span>Schematic</span>
         {sheets.length > 1 && (
-          <select aria-label="Sheet" value={sheet.id} onChange={(e) => setSheetId(e.target.value)}>
+          <select aria-label="Sheet" value={sheet.id} onChange={(e) => (onOpenSheet ? onOpenSheet(e.target.value) : setSheetId(e.target.value))}>
             {sheets.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}

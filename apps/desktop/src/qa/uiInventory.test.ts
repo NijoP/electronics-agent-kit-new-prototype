@@ -70,7 +70,7 @@ function probes(): ActionDeps[] {
 /** Quick open in the rich state (a library part, the fixture's symbols, nets and sheets), each item run against recorded dependencies. */
 function quickOpenAudit(): Audit["quickOpen"] {
   const fn = () => vi.fn();
-  const rec = recorder({ snapshot: fixture(7), library: deps().library, placePart: fn(), select: fn(), showNet: fn(), open: fn() });
+  const rec = recorder({ snapshot: fixture(7), library: deps().library, placePart: fn(), showSymbol: fn(), showNet: fn(), open: fn() });
   const items = quickOpenItems(rec.deps);
   return { ids: items.map((i) => i.id), noOps: noOps(items, rec) };
 }

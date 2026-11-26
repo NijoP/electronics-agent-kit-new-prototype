@@ -3,10 +3,19 @@
 //    hits from the live snapshot (so they follow every revision) across all sheets;
 //  * "List in Find Results" asks the workspace to show that tab;
 //  * a click on a result leaves a pick for the schematic editor that shows the hit's sheet, which
-//    takes it and selects the object (symbol or net label) on its canvas.
+//    takes it and selects the object (symbol, wire or net label) on its canvas. Every other
+//    cross-probe into the schematic (Design manager, Quick open, ERC findings; F7) uses the same pick.
 import { useSyncExternalStore } from "react";
 import type { Id } from "../types";
-import type { FindHit, FindOptions } from "../tools/schematic/find";
+import type { FindOptions } from "../tools/schematic/find";
+import type { Kind } from "../tools/schematic/selection";
+
+/** An object for the schematic editor of `sheet` to select (a Find hit is one). */
+export interface CanvasPick {
+  kind: Kind;
+  id: Id;
+  sheet: Id;
+}
 
 export interface FindSearch {
   query: string;
@@ -16,7 +25,7 @@ export interface FindSearch {
 let search: FindSearch | null = null;
 let signature = "";
 let reveal = 0;
-let pick: FindHit | null = null;
+let pick: CanvasPick | null = null;
 let pickSeq = 0;
 let version = 0;
 const listeners = new Set<() => void>();
@@ -52,14 +61,14 @@ export function revealFindResults(): void {
 }
 export const useFindReveal = (): number => useSyncExternalStore(subscribe, () => reveal);
 
-/** Leave a result for the schematic editor of its sheet to select. */
-export function requestFindPick(hit: FindHit): void {
+/** Leave an object for the schematic editor of its sheet to select. */
+export function requestFindPick(hit: CanvasPick): void {
   pick = hit;
   pickSeq += 1;
   emit();
 }
 /** The pending pick when it is on `sheetId` (taken once), else null. */
-export function takeFindPick(sheetId: Id): FindHit | null {
+export function takeFindPick(sheetId: Id): CanvasPick | null {
   if (!pick || pick.sheet !== sheetId) return null;
   const h = pick;
   pick = null;

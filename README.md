@@ -176,25 +176,28 @@ Checks to run before a pull request: `cargo fmt --all -- --check`, `cargo clippy
 
 EAK is an early prototype. **Phase 1, the EDA workspace inside the IDE shell, has landed on `main`.** It
 covers the schematic and PCB editors, routing, design rules with ERC/DRC, library and part editors,
-outputs, 3D, layers and panels. CI builds and tests it on Linux, Windows and macOS, and 22 scenarios drive
-the app in a real window ([docs/qa/UI_EVIDENCE.md](docs/qa/UI_EVIDENCE.md)). It has **not** been used to
+outputs, 3D, layers and panels. CI builds and tests it on Linux, Windows and macOS, and 30 scenarios drive
+the app in a real window (Linux, Xvfb) ([docs/qa/UI_EVIDENCE.md](docs/qa/UI_EVIDENCE.md)). It has **not** been used to
 make a real board, and EAK is not yet ready for professional hardware work.
 
-The Phase 1 definition-of-done audit (2026-11-23) found gaps. Fixes are landing one at a time:
+The Phase 1 definition-of-done audit (2026-11-23) found gaps. Its fixes F1-F5 and F7-F10 are on `main`,
+each with a ui-evidence scenario; F6 is still landing:
 
-- **Not yet driven in a real window:** drawing a board outline, via or zone by hand, interactive track
-  routing and auto-routing. jsdom and Rust tests cover them; no ui-evidence step clicks them through yet.
-  The New project dialog has also only been tested in jsdom.
-- **No drawing tool yet** for keep-out regions, PCB text, dimensions, board cut-outs and arc board edges.
-  The engine and DRC support them and the PCB view draws them, but you cannot create or select them in the
-  UI.
-- **Known wrong-edit defects being fixed.** Some click-click moves and Inspector X/Y edits disconnect
-  attached wires. Outline vertex edits straighten arc edges. Some track edits replace the track
-  (new id). Property List Apply on mixed values can blank them. The EasyEDA key preset has shortcut
-  clashes. Some shortcuts fire behind open dialogs.
-- **Already fixed since the audit:** the Release check no longer shows a report with UNKNOWN rules as PASS,
-  and UNKNOWN results block release (ADR-0048). PCB Edit › Delete now deletes the PCB's own objects
-  instead of the schematic symbol.
+- **Not yet driven in a real window:** drawing a board outline, via or zone by hand, routing a track and
+  auto-routing. jsdom and Rust tests cover them, and the Route tool's options are checked in a real window
+  (`c3-routing`), but no ui-evidence step routes a track yet. The New project dialog is jsdom-tested only.
+  (Slice F6 adds that scenario.)
+- **PCB objects you can draw but not select:** keep-out regions, board cut-outs and dimensions have
+  drawing tools (F5) and the Delete tool removes them, but the Select tool cannot pick or edit them: delete
+  and redraw. PCB text is placed, moved and rotated with the Text tool. The route tool draws no arc
+  corners, and the Canvas2D renderer does not rotate text.
+- **Fixed since the audit:** the Release check shows a report with UNKNOWN rules as UNKNOWN and blocks
+  release (F1, ADR-0048). PCB Edit › Delete deletes the PCB's own objects, and track edits keep the
+  track's id (F2). Click-click moves and Inspector X/Y keep attached wires connected, Property List Apply
+  is disabled with the reason instead of blanking mixed values, and a label kind change keeps the label (F3, ADR-0049). Outline vertex
+  edits keep arc edges (F5). The EasyEDA-style key preset no longer puts Route on the PCB layer key
+  Alt+T, and editor and shell shortcuts do nothing behind an open dialog (F8). Findings, Quick open and the sheet picker go to the object's own sheet (F7). Library,
+  panel and PCB disabled buttons say why (F9, F10).
 - **Engine limits:** the auto-router uses only the two outer layers and through vias, and ignores keep-outs,
   the clearance matrix and net-pair rules. The 3D view draws arc tracks straight and ignores arc edges and
   cut-outs. Schematic PDF fonts are not embedded.
@@ -211,15 +214,15 @@ used on real hardware.
 
 | Area | What it does | Status |
 |---|---|---|
-| IDE shell | Project Home, multiple projects, file explorer, document tabs, action registry with document-aware menus and toolbar, command palette and Quick open, three docks (design manager, inspector, library) with a canvas strip, bottom dock (Property List, Find Results, Diagnostics), settings with hotkey presets and canvas colours | Beta |
+| IDE shell | Project Home, multiple projects, file explorer, document tabs, action registry with document-aware menus and toolbar, command palette and Quick open, three docks (design manager, inspector, library) with a canvas strip, bottom dock (Property List, Find Results, Diagnostics), settings with hotkey presets and canvas colours | Beta, real-window tested |
 | Schematic capture | Symbols drawn from library graphics (schema v3); place tools (parts, power ports, labels, no-connect, bus, bus entry, off-page); select, drag, rubber-band, copy/paste, find, selection filter; groups; net-label rename; multiple sheets (rename, reorder, delete); annotate | Beta, real-window tested |
 | ERC | Unconnected pins, drivers, pin-conflict matrix, undriven inputs, power nets, capacitor voltage rating, bus rules, off-page connectors; per-rule enable and severity; findings panel with object links and CSV/JSON export | Beta, real-window tested |
 | Schematic → PCB | Update PCB with an ECO preview (apply part of it, undo) | Beta, real-window tested |
-| PCB editing | Board outline with arcs, footprints, tracks and arc tracks, vias, zones, planes, keep-outs, cut-outs, PCB text and dimensions in the model; layer manager, layer tabs, lock and visibility; Canvas2D renderer; inspector edits; auto-place | Beta (see the drawing-tool gaps above) |
+| PCB editing | Board outline with arcs, footprints, tracks and arc tracks, vias, zones, planes, keep-outs, cut-outs, PCB text and dimensions in the model; layer manager, layer tabs, lock and visibility; Canvas2D renderer; inspector edits; auto-place | Beta, real-window tested (see the selection gaps above) |
 | Routing | Interactive route tool: width and via presets, obstacle modes (walk around, block, push-and-shove), 45/90°, via drop with layer switch, ratsnest, net length; auto-route and rip-up/re-route | Beta, not yet driven in a real window |
 | Design rules and DRC | Rule configuration (schema v7), clearance matrix and net-pair rules, real-time DRC, pad mask/paste expansion, thermal reliefs, zone fill, stitching and dead-copper removal; unknown rule results are reported as UNKNOWN, never PASS | Beta: not all checks exist; every report lists `not_implemented` and `limitations` |
 | Stack-up and planes | 2-16 layers, via spans, editable stack-up, plane fills shown on the canvas | Beta, real-window tested |
-| Library and part editors | Native vendor-neutral library with scopes, library dock, symbol and footprint editors, part properties and footprint assignment, 3D model references, KiCad symbol/footprint import | Beta |
+| Library and part editors | Native vendor-neutral library with scopes, library dock, symbol and footprint editors, part properties and footprint assignment, 3D model references, KiCad symbol/footprint import | Beta, real-window tested (the KiCad import commit: unit tests only) |
 | Outputs | Gerber, drill, BOM (configurable CSV/XLSX), placement, IPC-D-356 and JSON netlists, schematic PDF/SVG, fabricator prep, assets view, release check with fail-closed gates | Beta: always labelled DRAFT |
 | 3D | 3D view as a document: presets, orthographic view, measure, cross-probe with the editors | Beta, real-window tested |
 | Simulation | ngspice netlist simulation | Beta: needs ngspice installed |

@@ -59,7 +59,7 @@ import { clampSize, DEFAULT_LAYOUT, LIMITS, useDockLayouts, type DockId, type La
 import { CanvasStrip } from "./shell/CanvasStrip";
 import { DesignManager } from "./shell/DesignManager";
 import { AssetsPanel } from "./shell/AssetsPanel";
-import { editorFor, pcbObjects, schematicPlace, type ManagerTab, type NetRow, type Target } from "./shell/designManagerData";
+import { editorFor, pcbObjects, schematicPick, schematicPlace, schematicTarget, type ManagerTab, type NetRow, type Target } from "./shell/designManagerData";
 import { RightDock, shownRightTab, type RightTab } from "./shell/RightDock";
 import { Inspector } from "./shell/Inspector";
 import { editorContext, useEditorContext } from "./shell/inspectorModel";
@@ -657,39 +657,57 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     setDocState({ open: [], active: null });
   };
   const resetLayout = () => docks.reset(ctx);
+  // Open the schematic sheet a target is on, select it there (through the editor's pick) and zoom
+  // to it. False when the target has no place in the schematic (F7).
+  const showInSchematic = (t: Target, netlist: NetRow[] | null): boolean => {
+    const place = schematicPlace(snapshot, t, netlist);
+    if (!place) return false;
+    const pick = schematicPick(snapshot, t);
+    if (pick?.kind === "symbol") setSelected(pick.id);
+    if (pick) requestFindPick({ ...pick, sheet: place.sheetId });
+    const docId = `sch:${place.sheetId}`;
+    open(docId);
+    setPendingZoom({ docId, bounds: place.bounds });
+    return true;
+  };
   // Click a finding: open the right editor, select the object, zoom to it, highlight it.
-  // DRC and DFM findings live in the PCB editor (zoom + highlight); ERC findings select the symbol in
-  // the schematic (no zoom there yet).
+  // DRC and DFM findings live in the PCB editor (zoom + highlight); ERC findings open the sheet of
+  // the first object they name that has a place there, select it and zoom to it (F7, S12).
   const navigateFinding = (f: Finding, checkName: Check) => {
     const kind = checkName === "erc" ? "schematic" : "pcb";
+    setActiveFinding(findingKey(f));
+    // The findings stay in view in the workspace the finding opened.
+    setBottomTab("findings", kind);
+    if (kind === "schematic") {
+      setFocus(null);
+      const placed = f.objects.some((id) => {
+        const t = schematicTarget(snapshot, id);
+        return !!t && showInSchematic(t, null);
+      });
+      if (placed) return;
+      const d = docs.find((x) => x.kind === "schematic");
+      if (d) open(d.id);
+      setMessage(f.objects.length ? "None of the objects this finding names is in the schematic of this revision" : "This finding names no object to zoom to");
+      return;
+    }
     const d = docs.find((x) => x.kind === kind);
     if (d) open(d.id);
     const target = probeTarget(snapshot, f.objects);
     if (target) setSelected(target);
-    setActiveFinding(findingKey(f));
-    if (kind === "pcb") setFocus({ n: Date.now(), objects: f.objects, location: f.location });
-    else setFocus(null);
-    // The findings stay in view in the workspace the finding opened.
-    setBottomTab("findings", kind);
+    setFocus({ n: Date.now(), objects: f.objects, location: f.location });
   };
   // One object a finding names (B5 object references): DRC/DFM objects are highlighted and
-  // zoomed to on the PCB like the finding itself; ERC objects are selected (symbols) and zoomed
-  // to in the schematic sheet they are on.
+  // zoomed to on the PCB like the finding itself; ERC objects (symbols, wires, labels, buses, bus
+  // entries, no-connects) are selected where the editor can and zoomed to on their sheet.
   const navigateObject = (f: Finding, checkName: Check, id: Id) => {
     if (checkName !== "erc") return navigateFinding({ ...f, objects: [id], location: null }, checkName);
-    const sch = snapshot.project.schematic;
-    const t: Target = sch.symbols[id] ? { kind: "component", symbolId: id } : { kind: "object", obj: sch.labels[id] ? "label" : "wire", id };
-    if (t.kind === "component") setSelected(id);
     setActiveFinding(findingKey(f));
     setFocus(null);
-    const place = schematicPlace(snapshot, t, null);
-    if (!place) {
+    const t = schematicTarget(snapshot, id);
+    if (!t || !showInSchematic(t, null)) {
       setMessage(`${id} has no position to zoom to in the schematic`);
       return;
     }
-    const docId = `sch:${place.sheetId}`;
-    open(docId);
-    setPendingZoom({ docId, bounds: place.bounds });
     setBottomTab("findings", "schematic");
   };
   // B5 export: the engine re-runs the check on this revision and writes that report; the panel
@@ -717,14 +735,10 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       else setMessage(`${name}: selected and zoomed in the PCB`);
       return;
     }
-    const place = schematicPlace(snapshot, t, netlist);
-    if (!place) {
+    if (!showInSchematic(t, netlist)) {
       setMessage(`${name} has no position to zoom to in the schematic or on the PCB`);
       return;
     }
-    const docId = `sch:${place.sheetId}`;
-    open(docId);
-    setPendingZoom({ docId, bounds: place.bounds });
     const pins = t.kind === "net" ? netlist?.find((n) => n.name === t.name)?.pins.length : undefined;
     setMessage(t.kind === "net" ? `${name}: ${pins ?? 0} pin(s) in the engine netlist; zoomed in the schematic` : `${name}: selected and zoomed in the schematic`);
   };
@@ -761,7 +775,21 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     setMessage(`Place tool armed with ${c.name}: click the schematic to place it.`);
   };
 
-  const quickItems = quickOpenItems({ snapshot, library, placePart, select: setSelected, showNet, open });
+  // Quick open goes where the Design manager goes (F7, S11): a symbol is selected and zoomed to on
+  // its sheet (or on the PCB when that is the active editor); a net is zoomed to with the engine's
+  // netlist, fetched when it is picked.
+  const quickItems = quickOpenItems({
+    snapshot,
+    library,
+    placePart,
+    showSymbol: (symbolId) => navigateManager({ kind: "component", symbolId }, null),
+    showNet: (name) =>
+      void api
+        .netlist()
+        .then((rows) => navigateManager({ kind: "net", name }, rows))
+        .catch(() => navigateManager({ kind: "net", name }, null)),
+    open,
+  });
 
   // The single global key listener runs the registry action bound to the key (default key map in
   // design/shortcuts.ts); it reads the latest actions through this ref.
@@ -1009,7 +1037,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
                   <DocIdContext.Provider key={d.id} value={d.id}>
                     <div className={visible ? "view-slot" : "view-slot off"} onPointerDownCapture={() => d.id !== activeId && open(d.id)}>
                       {d.kind === "schematic" ? (
-                        <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} armPart={armPart} sheetId={d.ref} contextMenu={(t) => contextMenuFor(allActions, "schematic", t)} />
+                        <SchematicView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} armPart={armPart} sheetId={d.ref} onOpenSheet={(id) => open(`sch:${id}`)} contextMenu={(t) => contextMenuFor(allActions, "schematic", t)} />
                       ) : d.kind === "pcb" ? (
                         <PcbView snapshot={snapshot} selected={selected} onSelect={setSelected} edit={edit} onStatus={setStatus} layerView={layerView} focus={focus} airwires={conn && conn.revision === revision ? conn.ratsnest : null} zoneFills={conn && conn.revision === revision ? (conn.zone_fills ?? null) : null} />
                       ) : d.kind === "view" ? (
