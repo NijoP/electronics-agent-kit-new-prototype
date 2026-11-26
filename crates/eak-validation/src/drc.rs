@@ -977,7 +977,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     let mut limitations: Vec<String> = vec![
         "Zone fill connectivity is evaluated on a 0.1 mm raster; necks narrower than the raster may be misjudged".into(),
         "Thermal reliefs: relief gap and spoke width are derived from the zone clearance and net class (no per-zone/per-pad relief settings in the IR yet); vias and tracks connect solidly".into(),
-        "The autorouter works on the two outer layers with through vias; inner-layer routing, blind and buried vias are placed by hand. Via aspect ratio and drill-to-layer-span limits are not checked".into(),
+        "The autorouter routes every signal layer with through vias only; blind and buried vias are placed by hand. Via aspect ratio and drill-to-layer-span limits are not checked".into(),
         "Pad shapes: rectangle, circle, oval (no rounded-rectangle or custom polygons)".into(),
         "Arc tracks and arc board edges are checked as chords with at most 10 µm error; the autorouter and auto-placer do not avoid keep-out regions (DRC-021 reports what they put there)".into(),
         "Text and dimensions on the documentation layer are not fabricated and not checked; silk text is not checked against other silk or the courtyards".into(),
@@ -1165,8 +1165,9 @@ fn core_to_ring(core: &Core, ring: &[Point]) -> (f64, Point) {
     best
 }
 
-/// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, unverified).
-pub const HOLE_TO_HOLE_MIN: Nm = 500_000;
+/// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, unverified); the autorouter
+/// keeps the same value.
+pub const HOLE_TO_HOLE_MIN: Nm = eak_engineering::clearance::HOLE_TO_HOLE_MIN;
 /// DRC-020 minimum legend-to-board-edge clearance (EAK default, unverified).
 pub const SILK_TO_EDGE_MIN: Nm = 200_000;
 

@@ -7,7 +7,11 @@
 //! layers; the table is not verified against the standard text).
 
 use crate::ipc::{self, ClearanceCondition};
-use eak_core::{Constraints, CopperLayer};
+use eak_core::{Constraints, CopperLayer, Nm};
+
+/// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, common fabricator practice,
+/// unverified), shared by the DRC and the autorouter.
+pub const HOLE_TO_HOLE_MIN: Nm = 500_000;
 
 /// The voltage part of the rule between nets `a` and `b` on `layer`: the IPC-2221B spacing (nm),
 /// its condition and the voltage difference (V). `None` unless both nets declare a voltage.

@@ -8,7 +8,8 @@
 //! * `copper`  – PCB copper shapes, zone fill with thermal reliefs, physical connectivity.
 //! * `stitch`  – zone stitching: escape vias for orphan SMD pads, stitching vias for pour islands (DESK).
 //! * `silk`    – silkscreen legend: stroke-font reference designators, mask-opening clip.
-//! * `router`  – EAK's native two-layer grid router (passes, rip-up, congestion, pairs, widths).
+//! * `router`  – EAK's native multilayer grid router (signal layers, through vias, passes, rip-up,
+//!   congestion, pairs, per-layer widths, failure explanations).
 //! * `routing_intel` – congestion, stagnation, differential pairs, width/via selection (DESK-derived).
 //! * `interactive` – route-step API for the interactive PCB route tool (walkaround, 45/90, vias).
 //! * `placer`  – constructive footprint placement.
