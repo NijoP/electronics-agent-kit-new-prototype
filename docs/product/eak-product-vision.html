@@ -48,14 +48,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 /* film */
 #film{position:fixed;inset:0;z-index:50;background:#0A0A0B;overflow:hidden}
 #film.gone{display:none}
-.tmark{display:inline-block;flex:none}
 #fStage{position:absolute;inset:0}
 .fs{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 700ms var(--e-cam)}
 .fs.on{opacity:1}
 .fs .cam{will-change:transform}
 #fs-brand .cam{display:flex;flex-direction:column;align-items:center;gap:18px}
-#fs-brand .tm{width:74px;height:74px}
-#fs-brand .tm path{fill:#EE5F1B;stroke:#EE5F1B;stroke-width:.25;stroke-dasharray:90;stroke-dashoffset:90;fill-opacity:0}
 #fs-brand .fw{font-weight:640;letter-spacing:.32em;font-size:58px;color:#F2F2F0;margin-right:-.32em}
 #fs-brand .ft{font-weight:300;font-size:22px;color:#F2F2F0}
 #fs-brand .fb{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#6E6E6B}
@@ -80,6 +77,21 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 #fs-final .cam{display:flex;flex-direction:column;align-items:center;gap:22px;text-align:center}
 #fs-final .big1{font-weight:300;font-size:56px;letter-spacing:-.01em}
 #fs-final .areas{display:flex;gap:26px;color:#A9A9A6;font-size:15px}
+#fPcbHost{position:absolute;inset:6% 4% 22% 4%;border-radius:14px;overflow:hidden;background:#0A0A0B;box-shadow:0 40px 100px rgba(0,0,0,.7)}
+#fPcbSvg{width:100%;height:100%;display:block}
+#fPcbDof{position:absolute;inset:0;pointer-events:none;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);-webkit-mask-image:radial-gradient(ellipse 40% 40% at 50% 50%,transparent 50%,#000 100%);mask-image:radial-gradient(ellipse 40% 40% at 50% 50%,transparent 50%,#000 100%)}
+#fs-b3d.on{pointer-events:auto}
+#fB3d{position:absolute;inset:0 0 12% 0;width:100%;height:88%;cursor:grab;touch-action:none}
+.fcap.top{bottom:auto;top:12%}
+.fhint{position:absolute;right:32px;bottom:96px;font-size:12px;color:#6E6E6B}
+#fs-fab .cam{width:min(1180px,90vw);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:44px;align-items:start}
+#fBom td{padding:7px 8px}
+#fGerb{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+#fGerb .gl{display:flex;flex-direction:column;gap:6px;font-size:11px;color:#A9A9A6}
+#fGerb svg{width:100%;border-radius:4px;display:block}
+#fPrep{margin-top:26px;max-width:460px}
+.ffull{font-size:14px;letter-spacing:.32em;text-transform:uppercase;color:#A9A9A6;margin-right:-.32em}
+.tusk{display:inline-flex;align-items:center;gap:9px;letter-spacing:.12em}.tusk img{width:20px;height:20px;border-radius:3px;display:block}
 #fTop{position:absolute;left:28px;right:24px;top:20px;display:flex;align-items:center;gap:14px;color:#A9A9A6;font-size:12px;z-index:2}
 #fTop .wm{display:flex;align-items:center;gap:8px;color:#F2F2F0;font-weight:640;letter-spacing:.2em;font-size:13px}
 #fBar{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:min(880px,86vw);display:flex;align-items:center;gap:12px;z-index:2}
@@ -193,19 +205,6 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--h2)}
 .att .dot{margin-top:6px}
 .big{font-weight:300;font-size:40px;line-height:1}
 
-/* helper modules: one schematic instance serves Schematic and Parts */
-const BUS={h:{},api:{navigate(a){const k={schematic:"sch",library:"parts",pcb:"pcb",agents:"agents",checks:"checks"}[a]||(R[a]?a:"home");go(k);},toast(t){toast(t)},
- emit(e,d){d=d||{};if(e==="select-part"){U.sel=d.area==="pcb"&&P[d.ref]?d.ref:null;if(d.area!=="pcb")renderShell();}if(e==="select-net"&&d.area==="pcb")U.hl=d.net||null;
-  if(e==="ask-agent"&&!D.ercFix&&!U.tasks.some(t=>t.key==="erc"&&["running","review"].includes(t.st))){const t=newTask("erc");if(t)setTimeout(()=>runTask(t),0);}
-  (BUS.h[e]||[]).forEach(fn=>fn(d));},on(e,fn){(BUS.h[e]=BUS.h[e]||[]).push(fn)}}};
-let sxRoot=null,SX=null;
-function sxMount(){if(sxRoot)return true;const M=window.EAKModules&&window.EAKModules.schematic,tp=document.getElementById("tpl-sx");if(!M||!M.data||!tp)return false;
- const w=document.createElement("div");w.style.cssText="width:100%;height:100%;min-width:0;display:flex";w.appendChild(tp.content.cloneNode(true));const root=w.querySelector('[data-module="schematic"]')||w;root.style.flex="1";
- sxRoot=w;document.getElementById("v-sch").appendChild(w);SX=M.mount(root,BUS.api);return true;}
-function sxShow(area,view){const v=document.getElementById(area);if(sxRoot.parentNode!==v){v.innerHTML="";v.appendChild(sxRoot);}const b=sxRoot.querySelector('[data-act="view"][data-view="'+view+'"]');if(b&&!b.classList.contains("is-on"))b.click();}
-R.sch=()=>{if(sxMount())sxShow("v-sch","sch");else R.schOwn();};
-R.parts=()=>{if(sxMount())sxShow("v-parts","lib");else R.partsOwn();};
-
 /* overlays */
 #scrim{position:fixed;inset:0;background:rgba(6,7,8,.55);z-index:60;display:none;align-items:center;justify-content:center}
 #scrim.on{display:flex}
@@ -274,13 +273,16 @@ R.parts=()=>{if(sxMount())sxShow("v-parts","lib");else R.partsOwn();};
 
 <section id="film" aria-label="EAK launch film">
   <div id="fStage">
-    <div class="fs" id="fs-brand"><div class="cam"><svg class="tmark tm" viewBox="0 0 20 20" aria-hidden="true"><path d="M0 0H20V3.2H15.6C14.1 3.2 13 4.3 13 5.9V20C11.4 16.2 9.8 9.6 9.8 3.2H0Z" fill="#EE5F1B"/></svg><div class="fw">EAK</div><div class="ft">Electronics, engineered with agents.</div><div class="fb">by Tusk Innovations Global</div></div></div>
+    <div class="fs" id="fs-brand"><div class="cam"><div class="fw">EAK</div><div class="ffull">Electronics Agent Kit</div><div class="ft">Electronics, engineered with agents.</div><div class="fb">by <span class="tusk"><img src="data:image/png;base64,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" alt="TUSK mark" width="20" height="20">TUSK Innovations Global</span></div></div></div>
     <div class="fs" id="fs-intent"><div class="cam"><div class="lbl">It starts with an intent</div><div class="fi"><span id="fiText"></span><i class="caret"></i></div><div class="fbrief" id="fiBrief"></div></div></div>
     <div class="fs" id="fs-agents"><div class="cam"><div><div class="lbl" style="margin-bottom:8px">Agents interpret the brief</div><div id="faLanes"></div></div><div><div class="row" style="margin-bottom:8px"><span class="lbl grow">Parts proposed from the library</span><span class="t3" style="font-size:11.5px">LCSC numbers · sample data</span></div><div id="faParts"></div></div></div></div>
     <div class="fs" id="fs-sch"><div id="fSchHost"><div class="cam" id="fSchCam"></div><div id="fDof"></div></div><div class="fcap" id="fSchCap">The real schematic. Three sheets, one model.<small>USB_DP / USB_DN, declared as a 90 Ω pair, followed across the design.</small></div></div>
-    <div class="fs" id="fs-final"><div class="cam"><div class="big1">One environment.</div><div class="areas" id="fAreas"></div><div class="row" style="gap:10px;margin-top:18px"><svg class="tmark" style="width:26px;height:26px" viewBox="0 0 20 20" aria-hidden="true"><path d="M0 0H20V3.2H15.6C14.1 3.2 13 4.3 13 5.9V20C11.4 16.2 9.8 9.6 9.8 3.2H0Z" fill="#EE5F1B"/></svg><span class="mark" style="font-size:18px;letter-spacing:.3em">EAK</span></div></div></div>
+    <div class="fs" id="fs-pcb"><div id="fPcbHost"><svg id="fPcbSvg" preserveAspectRatio="xMidYMid meet"></svg><div id="fPcbDof"></div></div><div class="fcap" id="fPcbCap"></div></div>
+    <div class="fs" id="fs-b3d"><canvas id="fB3d" aria-label="Aurora S3 in 3D: drag to rotate"></canvas><div class="fcap top" id="fB3dCap1">The physical board, from the same model.<small>Real footprints, heights and routing.</small></div><div class="fcap top" id="fB3dCap2">Four real layers: Top, GND, PWR, Bottom.<small>Stack-up heights from the board model; vias through all four.</small></div><div class="fhint">Drag to rotate</div></div>
+    <div class="fs" id="fs-fab"><div class="cam"><div><div class="lbl" style="margin-bottom:8px">Bill of materials · sample pricing</div><div id="fBom"></div></div><div><div class="lbl" style="margin-bottom:10px">Gerber layers</div><div id="fGerb"></div><div class="lbl" style="margin:26px 0 8px">Fabrication and assembly</div><div id="fPrep"></div></div></div></div>
+    <div class="fs" id="fs-final"><div class="cam"><div class="big1">One environment.</div><div class="areas" id="fAreas"></div><div class="row" style="gap:10px;margin-top:18px;flex-direction:column"><span class="mark" style="font-size:18px;letter-spacing:.3em">EAK</span><span class="ffull" style="font-size:12px">Electronics Agent Kit</span></div></div></div>
   </div>
-  <div id="fTop"><span class="wm"><svg class="tmark" style="width:16px;height:16px" viewBox="0 0 20 20" aria-hidden="true"><path d="M0 0H20V3.2H15.6C14.1 3.2 13 4.3 13 5.9V20C11.4 16.2 9.8 9.6 9.8 3.2H0Z" fill="#EE5F1B"/></svg>EAK</span><span>Product vision · interactive simulation</span><span class="grow"></span><button class="btn q" data-a="enter">Skip to EAK</button></div>
+  <div id="fTop"><span class="wm">EAK</span><span>Product vision · interactive simulation</span><span class="grow"></span><button class="btn q" data-a="enter">Skip to EAK</button></div>
   <div id="fBar"><button class="ibtn" id="fPlayBtn" data-a="fPlay" aria-label="Pause"></button><button class="ibtn" data-a="fReplay" aria-label="Replay"><svg class="ico" viewBox="0 0 20 20"><path d="M4 10a6 6 0 1 0 2-4.5"/><path d="M4 3v3.5h3.5"/></svg></button><div id="fTrack" role="slider" tabindex="0" aria-label="Film timeline" aria-valuemin="0"><div class="rail"></div><div id="fFill"></div><div id="fMarks"></div><div id="fHead"></div></div><span id="fTime"></span></div>
 </section>
 
@@ -1092,7 +1094,7 @@ R.parts=()=>{if(sxMount())sxShow("v-parts","lib");else R.partsOwn();};
     }
 
     /* camera */
-    function aspectFit(b) { var r = svg.clientWidth / Math.max(1, svg.clientHeight), w = b.w, h = b.h; if (w / h < r) { var nw = h * r; return { x: b.x - (nw - w) / 2, y: b.y, w: nw, h: h }; } var nh = w / r; return { x: b.x, y: b.y - (nh - h) / 2, w: w, h: nh }; }
+    function aspectFit(b) { if (!svg.clientWidth || !svg.clientHeight) return b; var r = svg.clientWidth / Math.max(1, svg.clientHeight), w = b.w, h = b.h; if (w / h < r) { var nw = h * r; return { x: b.x - (nw - w) / 2, y: b.y, w: nw, h: h }; } var nh = w / r; return { x: b.x, y: b.y - (nh - h) / 2, w: w, h: nh }; }
     function applyVB() { var v = state.vb; svg.setAttribute('viewBox', v.x + ' ' + v.y + ' ' + v.w + ' ' + v.h); }
     var anim = null;
     function moveTo(target, dur) {
@@ -1472,6 +1474,302 @@ R.parts=()=>{if(sxMount())sxShow("v-parts","lib");else R.partsOwn();};
 
 </script>
 <!--/MOD:schematic-->
+<!--MOD:board-->
+<script>
+/* EAK product vision: Aurora S3 board geometry, the one source for the 2D PCB view, the 3D
+   board, DRC, Gerber preview and BOM. Registers window.EAKBoard.
+   Units: millimetres, origin at the top-left board corner, +x right, +y down (top view).
+   Sample design for a demo: real MPNs, plausible LCSC numbers and prices labelled sample data.
+   Footprints and 3D bodies are modelled from datasheet dimensions (the EAK repo has no 3D models). */
+(function () {
+  'use strict';
+  var W = 70, H = 45;
+
+  /* ---------------- stack-up (JLC-style 4-layer 1.6 mm, sample values) ---------------- */
+  var stack = [
+    { id: 'L1', name: 'Top Cu', kind: 'copper', role: 'signal', t: 0.035, z: 1.6 },
+    { id: 'PP1', name: 'Prepreg 7628', kind: 'dielectric', t: 0.2104, er: 4.4 },
+    { id: 'L2', name: 'GND', kind: 'copper', role: 'plane', t: 0.0152, z: 1.355 },
+    { id: 'CORE', name: 'Core FR-4', kind: 'dielectric', t: 1.065, er: 4.6 },
+    { id: 'L3', name: 'PWR', kind: 'copper', role: 'split plane', t: 0.0152, z: 0.245 },
+    { id: 'PP2', name: 'Prepreg 7628', kind: 'dielectric', t: 0.2104, er: 4.4 },
+    { id: 'L4', name: 'Bottom Cu', kind: 'copper', role: 'signal', t: 0.035, z: 0 }
+  ];
+
+  /* ---------------- components ---------------- */
+  var components = [];
+  function pd(num, x, y, w, h, net, o) {
+    var p = { num: num, x: x, y: y, w: w, h: h, net: net || null, shape: 'rect', side: 'top' };
+    if (o) for (var k in o) p[k] = o[k];
+    return p;
+  }
+  function comp(o) {
+    o.side = o.side || 'top'; o.rot = o.rot || 0;
+    o.pads.forEach(function (p) { p.ref = o.ref; p.dx = +(p.x - o.x).toFixed(4); p.dy = +(p.y - o.y).toFixed(4); });
+    components.push(o); return o;
+  }
+  var CHIP = { // pitch, pad along, pad across, body L, body W, height (datasheet nominal)
+    '0402': { pitch: 1.0, a: 0.5, b: 0.6, L: 1.0, Wd: 0.5, h: 0.35, fp: '0402_1005Metric' },
+    '0805': { pitch: 1.8, a: 1.0, b: 1.3, L: 2.0, Wd: 1.25, h: 0.9, fp: '0805_2012Metric' },
+    '1206': { pitch: 2.8, a: 1.1, b: 1.8, L: 3.2, Wd: 1.6, h: 1.1, fp: '1206_3216Metric' }
+  };
+  function chip(ref, bomKey, size, cx, cy, orient, n1, n2) {
+    var k = CHIP[size], h = orient === 'h';
+    var pads = h ? [pd(1, cx - k.pitch / 2, cy, k.a, k.b, n1), pd(2, cx + k.pitch / 2, cy, k.a, k.b, n2)]
+      : [pd(1, cx, cy - k.pitch / 2, k.b, k.a, n1), pd(2, cx, cy + k.pitch / 2, k.b, k.a, n2)];
+    return comp({ ref: ref, bom: bomKey, footprint: (ref[0] === 'R' ? 'R_' : 'C_') + k.fp, pkg: size, model: ref[0] === 'R' ? 'chip-res' : 'chip-cap',
+      x: cx, y: cy, rot: h ? 0 : 90, body: { w: h ? k.L : k.Wd, h: h ? k.Wd : k.L, z: k.h }, pads: pads });
+  }
+
+  // U1 ESP32-S3-WROOM-1-N8R8: 18 x 25.5 x 3.1 mm, castellated, PCB antenna at the top.
+  (function () {
+    var pads = [], i, net;
+    for (i = 0; i < 14; i++) {
+      net = i === 0 ? 'GND' : i === 1 ? '+3V3' : i === 2 ? 'EN' : i === 12 ? 'USB_DN' : i === 13 ? 'USB_DP' : null;
+      pads.push(pd(i + 1, 46.6, +(9.5 + i * 1.27).toFixed(3), 1.5, 0.9, net));
+    }
+    for (i = 0; i < 12; i++) {
+      net = i === 4 ? 'I2C_SDA' : i === 5 ? 'I2C_SCL' : null;
+      pads.push(pd(15 + i, +(48.0 + i * 1.27).toFixed(3), 27.0, 0.9, 1.5, net));
+    }
+    for (i = 0; i < 14; i++) {
+      net = i === 0 ? 'IO0' : i === 13 ? 'GND' : null;
+      pads.push(pd(27 + i, 63.4, +(26.0 - i * 1.27).toFixed(3), 1.5, 0.9, net));
+    }
+    pads.push(pd(41, 55, 17.5, 3.7, 3.7, 'GND'));
+    comp({ ref: 'U1', bom: 'U-esp', footprint: 'ESP32-S3-WROOM-1', model: 'wroom', x: 55, y: 14.75, body: { w: 18, h: 25.5, z: 3.1 },
+      antenna: { x: 46, y: 2, w: 18, h: 6.2 }, pads: pads });
+  })();
+  comp({ ref: 'U2', bom: 'U-buck', footprint: 'SOT-583-8', model: 'sot583', x: 25, y: 32, body: { w: 1.6, h: 2.1, z: 0.8 }, pads: [
+    pd(1, 24.25, 31.25, 0.7, 0.3, null, { fn: 'RT' }), pd(2, 24.25, 31.75, 0.7, 0.3, 'VIN', { fn: 'EN' }), pd(3, 24.25, 32.25, 0.7, 0.3, 'VIN', { fn: 'VIN' }), pd(4, 24.25, 32.75, 0.7, 0.3, 'GND', { fn: 'GND' }),
+    pd(5, 25.75, 32.75, 0.7, 0.3, 'SW', { fn: 'SW' }), pd(6, 25.75, 32.25, 0.7, 0.3, 'BST', { fn: 'BST' }), pd(7, 25.75, 31.75, 0.7, 0.3, 'SS', { fn: 'SS' }), pd(8, 25.75, 31.25, 0.7, 0.3, 'FB', { fn: 'FB' })] });
+  comp({ ref: 'U3', bom: 'U-sw', footprint: 'SOT-23-5', model: 'sot23', x: 13, y: 31, body: { w: 1.6, h: 2.9, z: 1.1 }, pads: [
+    pd(1, 11.9, 30.05, 1.0, 0.6, 'VBUS', { fn: 'IN' }), pd(2, 11.9, 31.0, 1.0, 0.6, 'GND', { fn: 'GND' }), pd(3, 11.9, 31.95, 1.0, 0.6, 'VBUS', { fn: 'EN' }),
+    pd(4, 14.1, 31.95, 1.0, 0.6, null, { fn: 'OC' }), pd(5, 14.1, 30.05, 1.0, 0.6, 'VIN', { fn: 'OUT' })] });
+  comp({ ref: 'U4', bom: 'U-esd', footprint: 'SOT-23-6', model: 'sot23', x: 13, y: 22, body: { w: 1.6, h: 2.9, z: 1.1 }, pads: [
+    pd(1, 11.9, 21.05, 1.0, 0.6, 'USB_DN'), pd(2, 11.9, 22.0, 1.0, 0.6, 'GND'), pd(3, 11.9, 22.95, 1.0, 0.6, 'USB_DP'),
+    pd(4, 14.1, 22.95, 1.0, 0.6, 'USB_DP'), pd(5, 14.1, 22.0, 1.0, 0.6, 'VBUS'), pd(6, 14.1, 21.05, 1.0, 0.6, 'USB_DN')] });
+  comp({ ref: 'U5', bom: 'U-bme', footprint: 'LGA-8_2.5x2.5mm', model: 'lga-lid', x: 50, y: 37, body: { w: 2.5, h: 2.5, z: 0.93 }, pads: [
+    pd(1, 48.95, 36.025, 0.5, 0.35, 'GND'), pd(2, 48.95, 36.675, 0.5, 0.35, '+3V3', { fn: 'CSB' }), pd(3, 48.95, 37.325, 0.5, 0.35, 'I2C_SDA'), pd(4, 48.95, 37.975, 0.5, 0.35, 'I2C_SCL'),
+    pd(5, 51.05, 37.975, 0.5, 0.35, 'GND', { fn: 'SDO' }), pd(6, 51.05, 37.325, 0.5, 0.35, '+3V3', { fn: 'VDDIO' }), pd(7, 51.05, 36.675, 0.5, 0.35, 'GND'), pd(8, 51.05, 36.025, 0.5, 0.35, '+3V3', { fn: 'VDD' })] });
+  comp({ ref: 'U6', bom: 'U-sht', footprint: 'DFN-4_1.5x1.5mm', model: 'dfn', x: 40, y: 40, body: { w: 1.5, h: 1.5, z: 0.5 }, pads: [
+    pd(1, 39.45, 39.6, 0.55, 0.45, 'I2C_SDA'), pd(2, 39.45, 40.4, 0.55, 0.45, 'I2C_SCL'), pd(3, 40.55, 40.4, 0.55, 0.45, '+3V3'), pd(4, 40.55, 39.6, 0.55, 0.45, 'GND')] });
+  comp({ ref: 'J1', bom: 'J-usb', footprint: 'USB_C_HRO_TYPE-C-31-M-12', model: 'usb-c', x: 3.8, y: 22, body: { w: 7.6, h: 9.0, z: 3.2 }, overhang: 1.1, pads: [
+    pd('A1B12', 6.8, 18.8, 1.1, 0.3, 'GND'), pd('A4B9', 6.8, 19.6, 1.1, 0.3, 'VBUS'), pd('A5', 6.8, 20.6, 1.1, 0.3, 'CC1'), pd('A7', 6.8, 21.4, 1.1, 0.3, 'USB_DN'),
+    pd('A6', 6.8, 22.2, 1.1, 0.3, 'USB_DP'), pd('B5', 6.8, 23.2, 1.1, 0.3, 'CC2'), pd('B4A9', 6.8, 24.2, 1.1, 0.3, 'VBUS'), pd('B1A12', 6.8, 25.0, 1.1, 0.3, 'GND'),
+    pd('S1', 4.0, 17.6, 1.0, 2.0, 'GND', { shape: 'oval', side: 'th', drill: 0.6 }), pd('S2', 4.0, 26.4, 1.0, 2.0, 'GND', { shape: 'oval', side: 'th', drill: 0.6 })] });
+  comp({ ref: 'J2', bom: 'J-dc', footprint: 'BarrelJack_DC-005', model: 'barrel', x: 6.4, y: 40, body: { w: 13.0, h: 9.0, z: 11.0 }, overhang: 0.5, pads: [
+    pd(1, 10.8, 40, 2.4, 2.4, 'VIN', { shape: 'round', side: 'th', drill: 1.3, fn: 'centre +' }), pd(2, 4.8, 40, 2.4, 2.4, 'GND', { shape: 'round', side: 'th', drill: 1.3, fn: 'sleeve' }),
+    pd(3, 7.8, 36.2, 2.2, 2.2, 'GND', { shape: 'round', side: 'th', drill: 1.2, fn: 'switch' })] });
+  comp({ ref: 'L1', bom: 'L-4u7', footprint: 'L_Sunlord_SWPA4030', model: 'inductor', x: 31, y: 33, body: { w: 4, h: 4, z: 3.0 }, pads: [
+    pd(1, 29.45, 33, 1.2, 3.4, 'SW'), pd(2, 32.55, 33, 1.2, 3.4, '+3V3')] });
+  comp({ ref: 'SW1', bom: 'SW-tact', footprint: 'SW_TS-1187A', model: 'tact', x: 38, y: 5, body: { w: 5.1, h: 5.1, z: 1.5 }, label: 'EN', pads: [
+    pd(1, 35.4, 3.2, 1.2, 0.9, 'EN'), pd(2, 40.6, 3.2, 1.2, 0.9, 'EN'), pd(3, 35.4, 6.8, 1.2, 0.9, 'GND'), pd(4, 40.6, 6.8, 1.2, 0.9, 'GND')] });
+  comp({ ref: 'SW2', bom: 'SW-tact', footprint: 'SW_TS-1187A', model: 'tact', x: 58, y: 38, body: { w: 5.1, h: 5.1, z: 1.5 }, label: 'BOOT', pads: [
+    pd(1, 55.4, 36.2, 1.2, 0.9, 'IO0'), pd(2, 60.6, 36.2, 1.2, 0.9, 'IO0'), pd(3, 55.4, 39.8, 1.2, 0.9, 'GND'), pd(4, 60.6, 39.8, 1.2, 0.9, 'GND')] });
+  chip('C1', 'C1206-10u', '1206', 20.5, 35.5, 'v', 'VIN', 'GND');
+  chip('C2', 'C0805-22u', '0805', 35.5, 35.4, 'v', '+3V3', 'GND');
+  chip('C9', 'C0805-22u', '0805', 37.8, 35.4, 'v', '+3V3', 'GND');
+  chip('C3', 'C0402-100n', '0402', 27.4, 32.75, 'v', 'BST', 'SW');
+  chip('C4', 'C0402-100n', '0402', 44.6, 9.1, 'v', 'GND', '+3V3');
+  chip('C5', 'C0402-1u', '0402', 39.9, 9.0, 'h', 'GND', 'EN');
+  chip('C6', 'C0402-100n', '0402', 53.5, 37.0, 'v', '+3V3', 'GND');
+  chip('C7', 'C0402-100n', '0402', 42.8, 40.0, 'v', 'GND', '+3V3');
+  chip('C8', 'C0402-22n', '0402', 27.5, 29.8, 'h', 'SS', 'GND');
+  chip('R1', 'R0402-10k', '0402', 42.9, 6.5, 'v', '+3V3', 'EN');
+  chip('R3', 'R0402-4k7', '0402', 51.5, 30.9, 'v', '+3V3', 'I2C_SDA');
+  chip('R4', 'R0402-4k7', '0402', 56.0, 29.9, 'v', '+3V3', 'I2C_SCL');
+  chip('R5', 'R0402-5k1', '0402', 2.6, 29.5, 'v', 'CC1', 'GND');
+  chip('R6', 'R0402-5k1', '0402', 5.4, 29.5, 'v', 'CC2', 'GND');
+  chip('R7', 'R0402-31k6', '0402', 27.5, 28.3, 'h', 'FB', '+3V3');
+  chip('R8', 'R0402-10k', '0402', 27.5, 27.1, 'h', 'FB', 'GND');
+
+  /* mounting holes: M2.5, plated, GND ring */
+  var holes = [[3, 3], [67, 3], [67, 42], [28, 42.3]].map(function (c, i) {
+    return { id: 'H' + (i + 1), x: c[0], y: c[1], drill: 2.7, pad: 5.0, net: 'GND', plated: true };
+  });
+
+  /* ---------------- tracks: 45/90 degree, every end on a same-net pad or via ---------------- */
+  function T(id, net, layer, w, pts) { return { id: id, net: net, layer: layer, w: w, pts: pts }; }
+  var tracks = [
+    // VIN: barrel jack -> C1 -> buck; USB switch output -> C1
+    T('vin1', 'VIN', 'L1', 0.8, [[10.8, 40], [10.8, 36.0], [12.7, 34.1], [20.5, 34.1]]),
+    T('vin2', 'VIN', 'L1', 0.6, [[14.1, 30.05], [16.45, 30.05], [20.5, 34.1]]),
+    T('vin3', 'VIN', 'L1', 0.35, [[20.5, 34.1], [22.35, 32.25], [24.25, 32.25]]),
+    T('vin4', 'VIN', 'L1', 0.25, [[24.25, 31.75], [24.25, 32.25]]),
+    // VBUS
+    T('vbus1', 'VBUS', 'L1', 0.5, [[6.8, 24.2], [9.5, 24.2], [9.5, 26.5]]),
+    T('vbus2', 'VBUS', 'L1', 0.5, [[9.5, 26.5], [9.5, 28.65], [10.9, 30.05], [11.9, 30.05]]),
+    T('vbus3', 'VBUS', 'L1', 0.3, [[11.9, 31.95], [10.9, 31.95], [10.4, 31.45], [10.4, 30.55], [10.9, 30.05], [11.9, 30.05]]),
+    T('vbus4', 'VBUS', 'L1', 0.4, [[6.8, 19.6], [8.4, 19.6]]),
+    T('vbus5', 'VBUS', 'L4', 0.5, [[8.4, 19.6], [9.5, 20.7], [9.5, 26.5]]),
+    T('vbus6', 'VBUS', 'L1', 0.3, [[14.1, 22], [15, 22]]),
+    T('vbus7', 'VBUS', 'L4', 0.4, [[15, 22], [15, 25.5], [10.5, 25.5], [9.5, 26.5]]),
+    // USB 2.0 pair, 90 ohm: w 0.18, s 0.20 on L1 over L2
+    T('dn1', 'USB_DN', 'L1', 0.18, [[6.8, 21.4], [8.6, 21.4], [9.3, 20.7], [10.5, 20.7], [10.85, 21.05], [11.9, 21.05]]),
+    T('dn2', 'USB_DN', 'L1', 0.18, [[11.9, 21.05], [14.1, 21.05]]),
+    T('dn3', 'USB_DN', 'L1', 0.18, [[14.1, 21.05], [15.5, 21.05], [17.45, 23.0], [43, 23.0], [44.74, 24.74], [46.6, 24.74]]),
+    T('dp1', 'USB_DP', 'L1', 0.18, [[6.8, 22.2], [10.0, 22.2], [10.75, 22.95], [11.9, 22.95]]),
+    T('dp2', 'USB_DP', 'L1', 0.18, [[11.9, 22.95], [14.1, 22.95]]),
+    T('dp3', 'USB_DP', 'L1', 0.18, null), // built below with its length-tuning meander
+    // CC pull-downs
+    T('cc1a', 'CC1', 'L1', 0.2, [[6.8, 20.6], [7.7, 20.6]]),
+    T('cc1b', 'CC1', 'L4', 0.25, [[7.7, 20.6], [7.0, 21.3], [7.0, 27.75], [3.0, 27.75], [2.6, 28.15]]),
+    T('cc1c', 'CC1', 'L1', 0.25, [[2.6, 28.15], [2.6, 29.0]]),
+    T('cc2a', 'CC2', 'L1', 0.2, [[6.8, 23.2], [7.7, 23.2]]),
+    T('cc2b', 'CC2', 'L4', 0.25, [[7.7, 23.2], [7.9, 23.4], [7.9, 28.45], [5.4, 28.45]]),
+    T('cc2c', 'CC2', 'L1', 0.25, [[5.4, 28.45], [5.4, 29.0]]),
+    // buck: switch node leaves the corner pin downward, wide, to L1
+    T('sw1', 'SW', 'L1', 0.6, [[25.75, 32.9], [25.75, 33.5], [26.25, 34.0], [29.45, 34.0]]),
+    T('sw2', 'SW', 'L1', 0.3, [[27.4, 33.25], [28.9, 33.25]]),
+    T('bst1', 'BST', 'L1', 0.25, [[25.75, 32.25], [27.4, 32.25]]),
+    T('ss1', 'SS', 'L1', 0.25, [[25.75, 31.75], [26.35, 31.75], [26.85, 31.25], [26.85, 30.0]]),
+    T('fb1', 'FB', 'L1', 0.25, [[25.75, 31.25], [25.75, 28.3], [27.0, 28.3]]),
+    T('fb2', 'FB', 'L1', 0.25, [[27.0, 28.3], [27.0, 27.1]]),
+    // +3V3: buck output, then vias down to the L3 plane at every load
+    T('p3a', '+3V3', 'L1', 0.6, [[32.55, 33], [34.0, 33], [35.5, 34.5]]),
+    T('p3b', '+3V3', 'L1', 0.6, [[35.5, 34.5], [37.8, 34.5]]),
+    T('p3c', '+3V3', 'L1', 0.6, [[37.8, 34.5], [37.8, 33.4]]),
+    T('p3d', '+3V3', 'L1', 0.3, [[28.0, 28.3], [29.0, 28.3]]),
+    T('p3e', '+3V3', 'L1', 0.4, [[46.6, 10.77], [45.77, 10.77], [44.6, 9.6]]),
+    T('p3f', '+3V3', 'L1', 0.4, [[44.6, 9.6], [43.7, 9.6]]),
+    T('p3g', '+3V3', 'L1', 0.25, [[42.9, 6.0], [42.9, 5.0]]),
+    T('p3h', '+3V3', 'L1', 0.25, [[51.5, 30.4], [50.6, 30.4]]),
+    T('p3i', '+3V3', 'L1', 0.25, [[56.0, 29.4], [56.0, 28.4]]),
+    T('p3j', '+3V3', 'L1', 0.25, [[51.05, 36.025], [51.8, 36.025], [51.8, 37.325], [51.05, 37.325]]),
+    T('p3k', '+3V3', 'L1', 0.25, [[51.05, 36.025], [53.0, 36.025], [53.5, 36.525]]),
+    T('p3l', '+3V3', 'L1', 0.25, [[53.5, 36.5], [53.5, 35.4]]),
+    T('p3m', '+3V3', 'L1', 0.2, [[48.95, 36.675], [49.6, 36.675], [50.25, 36.025], [51.05, 36.025]]),
+    T('p3n', '+3V3', 'L1', 0.25, [[40.55, 40.4], [42.8, 40.4]]),
+    T('p3o', '+3V3', 'L1', 0.25, [[42.8, 40.5], [42.8, 41.5]]),
+    // EN: module -> pull-up -> button, delay cap into the pull-up node
+    T('en1', 'EN', 'L1', 0.25, [[46.6, 12.04], [43.6, 12.04], [42.9, 11.34], [42.9, 7.0]]),
+    T('en2', 'EN', 'L1', 0.25, [[42.9, 7.0], [41.6, 5.7], [41.6, 3.2], [40.6, 3.2]]),
+    T('en3', 'EN', 'L1', 0.25, [[40.4, 9.0], [41.0, 9.0], [42.9, 7.1]]),
+    // IO0 boot button
+    T('io0', 'IO0', 'L1', 0.25, [[63.4, 26.0], [66.0, 26.0], [66.0, 33.6], [63.4, 36.2], [60.6, 36.2]]),
+    // I2C: SDA on L1; SCL drops to L4 to cross under SDA
+    T('sda1', 'I2C_SDA', 'L1', 0.2, [[53.08, 27.0], [53.08, 29.82], [51.5, 31.4]]),
+    T('sda2', 'I2C_SDA', 'L1', 0.2, [[51.5, 31.4], [51.5, 31.5], [47.8, 35.2], [47.8, 37.325], [48.95, 37.325]]),
+    T('sda3', 'I2C_SDA', 'L1', 0.2, [[48.95, 37.325], [41.0, 37.325], [39.45, 38.875], [39.45, 39.6]]),
+    T('scl1', 'I2C_SCL', 'L1', 0.2, [[54.35, 27.0], [54.35, 29.15], [55.6, 30.4], [56.0, 30.4]]),
+    T('scl2', 'I2C_SCL', 'L1', 0.2, [[56.0, 30.4], [56.0, 31.4]]),
+    T('scl3', 'I2C_SCL', 'L4', 0.2, [[56.0, 31.4], [56.0, 34.0], [51.4, 38.6], [48.0, 38.6]]),
+    T('scl4', 'I2C_SCL', 'L1', 0.2, [[48.0, 38.6], [48.35, 38.6], [48.95, 38.0]]),
+    T('scl5', 'I2C_SCL', 'L4', 0.2, [[48.0, 38.6], [41.0, 38.6], [38.4, 41.2]]),
+    T('scl6', 'I2C_SCL', 'L1', 0.2, [[38.4, 41.2], [38.6, 41.2], [39.4, 40.4]])
+  ];
+
+  /* vias: 0.3 mm drill, 0.6 mm pad (0.15 mm annular ring), through L1-L4 */
+  var vias = [];
+  function V(x, y, net, why) { vias.push({ id: 'v' + vias.length, x: x, y: y, drill: 0.3, d: 0.6, ring: 0.15, from: 'L1', to: 'L4', net: net, why: why }); }
+  V(8.4, 19.6, 'VBUS', 'layer change'); V(9.5, 26.5, 'VBUS', 'layer change'); V(15, 22, 'VBUS', 'layer change');
+  V(7.7, 20.6, 'CC1', 'layer change'); V(2.6, 28.15, 'CC1', 'layer change'); V(7.7, 23.2, 'CC2', 'layer change'); V(5.4, 28.45, 'CC2', 'layer change');
+  V(56.0, 31.4, 'I2C_SCL', 'layer change'); V(48.0, 38.6, 'I2C_SCL', 'layer change'); V(38.4, 41.2, 'I2C_SCL', 'layer change');
+  [[37.8, 33.4], [43.7, 9.6], [42.9, 5.0], [50.6, 30.4], [56.0, 28.4], [29.0, 28.3], [53.5, 35.4], [42.8, 41.5]]
+    .forEach(function (c) { V(c[0], c[1], '+3V3', 'to L3 plane'); });
+  [[10, 4], [20, 4], [30, 4], [10, 12], [20, 12], [30, 12], [36, 14], [36, 25.5], [24, 25.5], [18, 28], [33, 40], [45, 43],
+    [60, 43], [68, 12], [68, 20], [44, 30], [14.5, 37.6], [31, 38.6], [65.5, 10.5], [21, 16], [30, 19], [21.5, 42.5]]
+    .forEach(function (c) { V(c[0], c[1], 'GND', 'stitching'); });
+
+  /* ---------------- length-match the USB pair: tune DP with a meander on its long straight ---------------- */
+  function len(p) { var s = 0; for (var i = 1; i < p.length; i++) s += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); return s; }
+  function netLen(net) { return tracks.reduce(function (s, t) { return t.net === net && t.pts ? s + len(t.pts) : s; }, 0); }
+  (function () {
+    var base = [[14.1, 22.95], [15.5, 22.95], [15.93, 23.38], [42.84, 23.38], [45.47, 26.01], [46.6, 26.01]];
+    var dp = tracks.filter(function (t) { return t.id === 'dp3'; })[0];
+    dp.pts = base;
+    var need = netLen('USB_DN') - netLen('USB_DP');
+    if (need > 0.01) {
+      var n = 2, amp = +(need / (2 * n)).toFixed(4), bw = 0.8, gap = 0.8, x0 = 30 - (n * bw + (n - 1) * gap) / 2, y = 23.38, ins = [];
+      for (var k = 0; k < n; k++) { var x = +(x0 + k * (bw + gap)).toFixed(3); ins.push([x, y], [x, +(y + amp).toFixed(4)], [+(x + bw).toFixed(3), +(y + amp).toFixed(4)], [+(x + bw).toFixed(3), y]); }
+      dp.pts = base.slice(0, 3).concat(ins, base.slice(3));
+      dp.tuning = { meanders: n, amplitude: amp, added: +need.toFixed(3) };
+    }
+  })();
+
+  /* ---------------- zones ---------------- */
+  var keepouts = [{ id: 'KO1', x: 46, y: 0, w: 18, h: 8.2, layers: ['L1', 'L2', 'L3', 'L4'], why: 'ESP32-S3 PCB antenna: no copper on any layer' }];
+  var vinIsland = { x: 0.5, y: 28, w: 22.5, h: 16.5 };
+  var zones = [
+    { id: 'Z1', net: 'GND', layer: 'L1', kind: 'pour', clearance: 0.3, minWidth: 0.2, thermal: { gap: 0.3, spoke: 0.3, spokes: 4 }, outline: 'board-0.3', priority: 0 },
+    { id: 'Z2', net: 'GND', layer: 'L4', kind: 'pour', clearance: 0.3, minWidth: 0.2, thermal: { gap: 0.3, spoke: 0.3, spokes: 4 }, outline: 'board-0.3', priority: 0 },
+    { id: 'Z3', net: 'GND', layer: 'L2', kind: 'plane', clearance: 0.35, outline: 'board-0.4', priority: 0 },
+    { id: 'Z4', net: 'VIN', layer: 'L3', kind: 'plane', clearance: 0.35, rect: vinIsland, priority: 1 },
+    { id: 'Z5', net: '+3V3', layer: 'L3', kind: 'plane', clearance: 0.35, outline: 'board-0.4', cutout: vinIsland, splitGap: 0.5, priority: 0 }
+  ];
+
+  /* ---------------- silkscreen ---------------- */
+  var labels = {
+    J1: [4, 15.6, 1.1], J2: [6.4, 34.3, 1.1], U1: [59, 29.5, 1.1], U2: [23.4, 30.4, 0.9], U3: [13, 28.4, 1.1], U4: [13, 19.5, 1.1],
+    U5: [50, 34.6, 1.0], U6: [40, 42.0, 0.9], L1: [31, 36.0, 1.1], C1: [18.4, 35.5, 0.9], C2: [35.5, 37.9, 0.8], C9: [37.8, 37.9, 0.8],
+    C3: [28.4, 31.4, 0.8], C8: [30.3, 29.6, 0.8], R7: [30.3, 28.5, 0.8], R8: [30.3, 27.4, 0.8], C4: [44.6, 8.9, 0.9],
+    C5: [39.4, 10.3, 0.8], C6: [53.5, 38.8, 0.8], C7: [44.3, 40.0, 0.8], R1: [44.2, 6.5, 0.8], R3: [50.2, 32.2, 0.8],
+    R4: [57.4, 29.9, 0.8], R5: [2.6, 31.4, 0.8], R6: [5.4, 31.4, 0.8], SW1: [38, 1.2, 1.1], SW2: [58, 41.9, 1.1]
+  };
+  var silk = {
+    labels: Object.keys(labels).map(function (r) { return { ref: r, x: labels[r][0], y: labels[r][1], size: labels[r][2] }; }),
+    texts: [
+      { t: 'AURORA S3', x: 20, y: 7.6, size: 2.4, weight: 300 },
+      { t: 'rev B · EAK', x: 20, y: 10.2, size: 1.1, weight: 400 },
+      { t: '12–24 V', x: 6.4, y: 44.0, size: 0.9, weight: 400 },
+      { t: 'EN', x: 38, y: 8.7, size: 0.8, weight: 400 },
+      { t: 'BOOT', x: 58, y: 34.2, size: 0.8, weight: 400 }
+    ],
+    outlines: components.filter(function (c) { return c.model !== 'chip-res' && c.model !== 'chip-cap'; }).map(function (c) {
+      return { ref: c.ref, x: c.x - c.body.w / 2 - 0.15, y: c.y - c.body.h / 2 - 0.15, w: c.body.w + 0.3, h: c.body.h + 0.3, pin1: /^U/.test(c.ref) };
+    })
+  };
+
+  /* ---------------- sample BOM data ---------------- */
+  var bom = {
+    'U-esp': { value: 'ESP32-S3 Wi-Fi/BLE module, 8 MB flash, 8 MB PSRAM', pkg: 'SMD module', mpn: 'ESP32-S3-WROOM-1-N8R8', mfr: 'Espressif', lcsc: 'C2913202', price: [3.85, 3.55, 3.30], ext: true },
+    'U-buck': { value: '3.8–30 V, 3 A sync buck', pkg: 'SOT-583-8', mpn: 'TPS62933DRLR', mfr: 'Texas Instruments', lcsc: 'C3200344', price: [0.62, 0.48, 0.40], ext: true },
+    'U-sw': { value: 'USB power switch, 0.5 A', pkg: 'SOT-23-5', mpn: 'TPS2051CDBVR', mfr: 'Texas Instruments', lcsc: 'C129581', price: [0.32, 0.25, 0.20], ext: true },
+    'U-esd': { value: 'USB ESD protection', pkg: 'SOT-23-6', mpn: 'USBLC6-2SC6', mfr: 'STMicroelectronics', lcsc: 'C7519', price: [0.11, 0.08, 0.06], ext: false },
+    'U-bme': { value: 'Pressure / humidity / temp', pkg: 'LGA-8 2.5×2.5', mpn: 'BME280', mfr: 'Bosch Sensortec', lcsc: 'C92489', price: [2.95, 2.60, 2.35], ext: true },
+    'U-sht': { value: 'Humidity / temp ±1.8 %RH', pkg: 'DFN-4 1.5×1.5', mpn: 'SHT40-AD1B-R2', mfr: 'Sensirion', lcsc: 'C2758103', price: [1.45, 1.20, 1.05], ext: true },
+    'J-usb': { value: 'USB-C receptacle 16P', pkg: 'SMD + THT shell', mpn: 'TYPE-C-31-M-12', mfr: 'Korean Hroparts', lcsc: 'C165948', price: [0.21, 0.16, 0.12], ext: false },
+    'J-dc': { value: 'DC barrel jack 5.5 × 2.1 mm', pkg: 'THT', mpn: 'DC-005-5A-2.0', mfr: 'SOFNG', lcsc: 'C381116', price: [0.14, 0.11, 0.08], ext: true },
+    'SW-tact': { value: 'Tactile switch 5.1 mm', pkg: 'SMD 5.1×5.1', mpn: 'TS-1187A-B-A-B', mfr: 'XKB Connection', lcsc: 'C318884', price: [0.05, 0.04, 0.03], ext: false },
+    'L-4u7': { value: '4.7 µH, 4.2 A, shielded', pkg: '4030', mpn: 'SWPA4030S4R7MT', mfr: 'Sunlord', lcsc: 'C83418', price: [0.09, 0.07, 0.05], ext: false },
+    'C1206-10u': { value: '10 µF 50 V X7R', pkg: '1206', mpn: 'GRM31CR71H106KA12L', mfr: 'Murata', lcsc: 'C77101', price: [0.08, 0.05, 0.04], ext: false },
+    'C0805-22u': { value: '22 µF 25 V X5R', pkg: '0805', mpn: 'CL21A226MAQNNNE', mfr: 'Samsung', lcsc: 'C45783', price: [0.03, 0.02, 0.015], ext: false },
+    'C0402-100n': { value: '100 nF 16 V X7R', pkg: '0402', mpn: 'CL05B104KO5NNNC', mfr: 'Samsung', lcsc: 'C1525', price: [0.002, 0.0015, 0.001], ext: false },
+    'C0402-1u': { value: '1 µF 10 V X5R', pkg: '0402', mpn: 'CL05A105KA5NQNC', mfr: 'Samsung', lcsc: 'C52923', price: [0.003, 0.002, 0.0015], ext: false },
+    'C0402-22n': { value: '22 nF 50 V X7R', pkg: '0402', mpn: 'CL05B223KB5NNNC', mfr: 'Samsung', lcsc: 'C1532', price: [0.002, 0.0015, 0.001], ext: false },
+    'R0402-10k': { value: '10 kΩ 1%', pkg: '0402', mpn: '0402WGF1002TCE', mfr: 'UNI-ROYAL', lcsc: 'C25744', price: [0.0012, 0.0009, 0.0006], ext: false },
+    'R0402-4k7': { value: '4.7 kΩ 1%', pkg: '0402', mpn: '0402WGF4701TCE', mfr: 'UNI-ROYAL', lcsc: 'C25900', price: [0.0012, 0.0009, 0.0006], ext: false },
+    'R0402-5k1': { value: '5.1 kΩ 1%', pkg: '0402', mpn: '0402WGF5101TCE', mfr: 'UNI-ROYAL', lcsc: 'C25905', price: [0.0012, 0.0009, 0.0006], ext: false },
+    'R0402-31k6': { value: '31.6 kΩ 1%', pkg: '0402', mpn: '0402WGF3162TCE', mfr: 'UNI-ROYAL', lcsc: 'C25779', price: [0.0012, 0.0009, 0.0006], ext: false }
+  };
+
+  var nets = {
+    VIN: { cls: 'Power · 12–24 V' }, '+3V3': { cls: 'Power · 3.3 V' }, GND: { cls: 'Ground' }, VBUS: { cls: 'Power · USB 5 V' },
+    SW: { cls: 'Power · switch node' }, USB_DP: { cls: 'Diff pair · 90 Ω', pair: 'USB_DN' }, USB_DN: { cls: 'Diff pair · 90 Ω', pair: 'USB_DP' },
+    I2C_SDA: { cls: 'I²C · 400 kHz' }, I2C_SCL: { cls: 'I²C · 400 kHz' }, EN: { cls: 'Control · reset' }, IO0: { cls: 'Control · boot' },
+    FB: { cls: 'Analog · feedback' }, BST: { cls: 'Power · bootstrap' }, SS: { cls: 'Analog · soft start' }, CC1: { cls: 'USB-C config' }, CC2: { cls: 'USB-C config' }
+  };
+
+  window.EAKBoard = {
+    name: 'Aurora S3', rev: 'B', units: 'mm',
+    outline: { w: W, h: H, cornerRadius: 1.5, thickness: 1.6, holes: holes, keepouts: keepouts },
+    stack: stack,
+    components: components,
+    tracks: tracks,
+    vias: vias,
+    zones: zones,
+    silk: silk,
+    nets: nets,
+    bom: bom,
+    diffPairs: [{ p: 'USB_DP', n: 'USB_DN', zdiff: 90, width: 0.18, gap: 0.2, layer: 'L1', ref: 'L2', computed: 90.4, note: 'sample stack-up value' }],
+    rules: { clearance: 0.15, width: 0.15, drill: 0.3, ring: 0.13, skew: 0.15, silk: 0.1, edge: 0.3 },
+    lengths: { USB_DP: +netLen('USB_DP').toFixed(3), USB_DN: +netLen('USB_DN').toFixed(3) }
+  };
+})();
+
+</script>
+<!--/MOD:board-->
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
@@ -1550,7 +1848,7 @@ const ENCL=12; // mm above the board, from the brief
 const NETCLS={"+12V_RAW":"pwr",VIN:"pwr","+3V3":"pwr",VBUS:"pwr",GND:"gnd",SW:"pwr"};
 function initialDesign(){return{rev:128,ercFix:false,synced:true,usbRouted:false,usbW:0.26,usbS:0.15,currents:{"+12V_RAW":null,"+3V3":null},powerSized:false,clearFix:false,
  rules:{clearance:0.15,track:0.15,via:0.30,annular:0.13,edge:0.30},lcsc:{},outputsRev:null,signoff:null,
- history:[{rev:125,who:"you",what:"Placed SHT40 at the board edge, away from the buck"},{rev:126,who:"you",what:"Assigned 4-layer stack-up (7628 prepreg, 1.6 mm)"},{rev:127,who:"agent · Claude Code (applied by you)",what:"Added I²C pull-ups R1, R2"},{rev:128,who:"you",what:"Moved D1 to clear the jack body"}],
+ history:[{rev:125,who:"you",what:"Placed SHT40 at the board edge, away from the buck"},{rev:126,who:"you",what:"Assigned 4-layer stack-up (7628 prepreg, 1.6 mm)"},{rev:127,who:"agent · Claude Opus 5.5 (applied by you)",what:"Added I²C pull-ups R1, R2"},{rev:128,who:"you",what:"Moved D1 to clear the jack body"}],
  checkpoints:[{name:"Schematic review",rev:121},{name:"Before layout pass 2",rev:126}]}}
 let D=initialDesign(),UNDO=[],REDO=[];
 function commit(what,who,fn){UNDO.push(clone(D));REDO=[];fn(D);D.rev++;D.history.push({rev:D.rev,who,what});renderAll();}
@@ -1731,19 +2029,22 @@ function render3D(cv,cam,opt={}){const dpr=Math.min(devicePixelRatio||1,2);const
 const U={view:"home",sheet:"mcu",sel:null,hl:null,vis:{F:1,In1:1,In2:1,B:1,SilkF:1,Edge:1},active:"F",pz:{sch:{x:0,y:0,k:1},pcb:{x:0,y:0,k:1}},
  cam:{yaw:-0.55,tilt:0.95,zoom:1},explode:0,auto:!RM,vis3:{comp:1,silk:1,F:1,In:1,B:1},
  partQ:"",partCat:"All",partSel:"U2",fabTab:"bom",qty:100,gerber:"F",tree:{sch:1,board:1,lib:0,out:0,docs:1},fileOn:null,
- tools:{claude:{name:"Claude Code",st:"ready",ver:"Connected · own sign-in"},codex:{name:"Codex",st:"ready",ver:"Connected · own sign-in"},gemini:{name:"Gemini CLI",st:"signin",ver:"Found · not signed in"},opencode:{name:"OpenCode",st:"missing",ver:"Not installed"}},
- tasks:[],taskSel:null,agentTool:"claude",group:null,
+ tools:{anthropic:{name:"Anthropic",st:"ready",ver:"Connected · key in the OS keychain"},openai:{name:"OpenAI",st:"ready",ver:"Connected · key in the OS keychain"},google:{name:"Google",st:"signin",ver:"Not signed in"},xai:{name:"xAI",st:"missing",ver:"Not connected"}},
+ models:{anthropic:"Claude Opus 5.5",openai:"GPT-6.1 Sol",google:"Gemini 4 Carbon",xai:"Grok 4.7"},roles:{Schematic:"anthropic",Layout:"openai",Power:"anthropic",Review:"google"},
+ tasks:[],taskSel:null,agentTool:"anthropic",group:null,
  term:{tabs:[{id:1,name:"aurora-s3",out:"",agent:null}],cur:1,n:2},guideOn:false,gi:0,
  projects:[{id:"atmos",name:"Aurora S3",sub:"Environmental sensor node · 4 layers · ESP32-S3",when:"Edited yesterday"},{id:"vela",name:"VELA-PD",sub:"USB-C PD 65 W sink · 2 layers",when:"Last week",draft:1},{id:"orbit",name:"ORBIT-BMS",sub:"4S Li-ion monitor · 6 layers",when:"Last month",draft:1}]};
+const MODELS={anthropic:["Claude Opus 5.5","Claude Fable 5.2","Claude Sonnet 5.5"],openai:["GPT-6.1 Sol","GPT-6.1 Terra"],google:["Gemini 4 Carbon","Gemini 4 Neon"],xai:["Grok 4.7","Grok 4.6"]};
+const agentN=t=>t.model||U.models[t.tool]||agentN(t);
 const VIEWS=[["home","Home","home"],["project","Project","project"],["sch","Schematic","sch"],["pcb","Board","pcb"],["parts","Parts","parts"],["agents","Agents","agents"],["checks","Checks","checks"],["v3d","3D","v3d"],["fab","Fabricate","fab"],["term","Terminal","term"]];
 
 function renderShell(){
- $("#rail").innerHTML=`<button class="brand" data-a="about" aria-label="About EAK"><svg class="tmark" style="width:15px;height:15px;margin-right:4px" viewBox="0 0 20 20" aria-hidden="true"><path d="M0 0H20V3.2H15.6C14.1 3.2 13 4.3 13 5.9V20C11.4 16.2 9.8 9.6 9.8 3.2H0Z" fill="#EE5F1B"/></svg><span class="mark" style="font-size:11px">EAK</span></button>`+VIEWS.map((v,i)=>`<button class="nav ${U.view===v[0]?"on":""}" data-a="go" data-arg="${v[0]}" aria-label="${v[1]}">${icon(v[2])}<span class="tip">${v[1]}<kbd>${(i+1)%10}</kbd></span></button>`).join("");
+ $("#rail").innerHTML=`<button class="brand" data-a="about" aria-label="About EAK"><span class="mark" style="font-size:11px">EAK</span></button>`+VIEWS.map((v,i)=>`<button class="nav ${U.view===v[0]?"on":""}" data-a="go" data-arg="${v[0]}" aria-label="${v[1]}">${icon(v[2])}<span class="tip">${v[1]}<kbd>${(i+1)%10}</kbd></span></button>`).join("");
  $("#revLbl").textContent="r"+D.rev;
  const st=STAGES.map((s,i)=>stageState(i));const nx=st.findIndex(v=>v!==2);
  $("#journey").innerHTML=STAGES.map((s,i)=>`<button class="jd s${st[i]} ${i===nx?"nx":""}" data-a="go" data-arg="${s[1]}" title="${s[0]}" aria-label="${s[0]}: ${["has errors","not done","done"][st[i]]}"><span></span></button>`).join("<i></i>")+`<span class="jl">${nx<0?"Every stage complete":"Next · "+STAGES[nx][0]}</span>`;
  const e=counts(ercRun(D)),r=counts(drcRun(D));const n=e.e+r.e,w=e.w+r.w,u=r.u+e.u;const run=U.tasks.find(t=>t.st==="running");const rv=U.tasks.filter(t=>t.st==="review"||t.st==="question").length;
- $("#topStatus").innerHTML=`<button class="pill" data-a="go" data-arg="checks" aria-label="Checks">${n?`<span class="dot" style="background:var(--err)"></span>${n}`:""}${w?`<span class="dot" style="background:var(--warn)"></span>${w}`:""}${u?`<span class="dot" style="background:var(--unk)"></span>${u}`:""}${!n&&!w&&!u?`<span class="dot" style="background:var(--ok)"></span>Checks pass`:""}</button><button class="pill" data-a="go" data-arg="agents" aria-label="Agents">${run?`<span class="dot" style="background:var(--ai);animation:blink 1.2s infinite"></span>${esc(U.tools[run.tool].name)} working`:`${icon("agents","width:14px;height:14px")}${rv?rv+" to review":"Agents"}`}</button>`;
+ $("#topStatus").innerHTML=`<button class="pill" data-a="go" data-arg="checks" aria-label="Checks">${n?`<span class="dot" style="background:var(--err)"></span>${n}`:""}${w?`<span class="dot" style="background:var(--warn)"></span>${w}`:""}${u?`<span class="dot" style="background:var(--unk)"></span>${u}`:""}${!n&&!w&&!u?`<span class="dot" style="background:var(--ok)"></span>Checks pass`:""}</button><button class="pill" data-a="go" data-arg="agents" aria-label="Agents">${run?`<span class="dot" style="background:var(--ai);animation:blink 1.2s infinite"></span>${esc(agentN(run))} working`:`${icon("agents","width:14px;height:14px")}${rv?rv+" to review":"Agents"}`}</button>`;
  $("#bUndo").disabled=!UNDO.length;$("#bRedo").disabled=!REDO.length;
  $("#footL").textContent=`Aurora S3 · r${D.rev} · 4 layers · 56 × 40 mm`;$("#footM").textContent=U.sel?`Selected ${U.sel} · ${P[U.sel].mpn}`:U.hl?`Net ${U.hl}`:"";
  $("#footGuide").style.display=U.guideOn?"none":"";renderGuide();}
@@ -1755,7 +2056,7 @@ const R={};
 /* Home */
 R.home=()=>{const e=counts(ercRun(D)),r=counts(drcRun(D));const rd=readiness(D);const done=rd.filter(x=>x.ok).length;const st=STAGES.map((s,i)=>stageState(i));const nx=st.findIndex(v=>v!==2);
  const att=[];if(e.e+e.w)att.push(["err",`${e.e} ERC error${e.e===1?"":"s"}, ${e.w} warning`,"On the MCU & USB sheet. An agent can propose a fix.","checks"]);
- const rv=U.tasks.filter(t=>t.st==="review"||t.st==="question");if(rv.length)att.push(["ai",`${rv.length} agent ${rv.length>1?"proposals":"proposal"} waiting for you`,rv.map(t=>U.tools[t.tool].name+": "+t.title).join(" · "),"agents"]);
+ const rv=U.tasks.filter(t=>t.st==="review"||t.st==="question");if(rv.length)att.push(["ai",`${rv.length} agent ${rv.length>1?"proposals":"proposal"} waiting for you`,rv.map(t=>agentN(t)+": "+t.title).join(" · "),"agents"]);
  att.push(["warn","Stock risk · SHT40-AD1B","640 in stock (sample data). The planned run needs 1,000.","parts:U4"]);
  if(r.u)att.push(["unk","DRC cannot check copper width","No current declared for +12V_RAW and +3V3.","project"]);
  if(D.ercFix&&!D.synced)att.push(["warn","Board is behind the schematic","R3 and D3 are not on the board yet.","pcb"]);
@@ -1763,7 +2064,7 @@ R.home=()=>{const e=counts(ercRun(D)),r=counts(drcRun(D));const rd=readiness(D);
  const SC={err:"var(--err)",warn:"var(--warn)",unk:"var(--unk)",ai:"var(--ai)"};let last=0;st.forEach((v,i)=>{if(v===2)last=i});
  const J=`<svg viewBox="-24 0 568 60" style="width:100%;height:60px"><line x1="10" y1="20" x2="510" y2="20" stroke="#2E3237" stroke-width="2"/><line x1="10" y1="20" x2="${10+last*(500/9)}" y2="20" stroke="#EE5F1B" stroke-width="2"/>${STAGES.map((s,i)=>{const x=10+i*(500/9),v=st[i];return`<g data-a="go" data-arg="${s[1]}" style="cursor:pointer"><rect x="${x-6}" y="14" width="12" height="12" rx="2.5" fill="${v===2?"#D4B36A":v===0?"#EC7C6B":"#17191C"}" stroke="${v===2?"#D4B36A":v===0?"#EC7C6B":"#6F6B65"}" stroke-width="1.5"/><text x="${x}" y="48" fill="${i===nx?"#ECE8E1":"#A7A29A"}" font-size="10.5" text-anchor="middle">${s[0]}</text></g>`}).join("")}</svg>`;
  $("#v-home").innerHTML=`<div class="home"><div class="l">
-  <div><div class="lbl" style="margin-bottom:10px">Good morning</div><div class="hello">Aurora S3 is ${done} of ${rd.length} steps from fabrication review.</div></div>
+  <div><div class="row" style="gap:12px;margin-bottom:22px"><span class="mark" style="font-size:12px">EAK</span><span class="t3" style="font-size:12px">Electronics Agent Kit</span></div><div class="lbl" style="margin-bottom:10px">Good morning</div><div class="hello">Aurora S3 is ${done} of ${rd.length} steps from fabrication review.</div></div>
   <div class="col" style="gap:10px"><div class="intent"><textarea id="intentIn" rows="1" placeholder="Describe the board you want to build…" aria-label="Describe a board"></textarea><button class="btn pri" data-a="intent" style="height:40px">Start</button></div>
    <div class="chips"><button data-a="intentEx" data-arg="A 65 W USB-C PD sink that powers a 20 V motor driver">USB-C PD sink, 65 W</button><button data-a="intentEx" data-arg="A 4S Li-ion battery monitor with balancing and CAN">4S battery monitor</button><button data-a="intentEx" data-arg="12–24 V powered ESP32-S3 board with USB-C for programming, SHT40 and BME280 on I2C, fits a 12 mm enclosure">ESP32-S3 sensor board</button></div></div>
   <div class="col" style="gap:4px"><div class="row" style="margin-bottom:6px"><span class="lbl grow">Projects</span><button class="btn q" data-a="newDesign">New design</button><button class="btn q" data-a="importDesign">Import KiCad</button></div>${U.projects.map(p=>`<div class="proj" data-a="openProj" data-arg="${p.id}" tabindex="0"><div class="thumb">${p.id==="atmos"?`<svg viewBox="-3 -3 62 46" style="width:100%;height:100%">${boardSvg({vis:{F:1,In1:0,In2:0,B:1,SilkF:0,Edge:1}})}</svg>`:`<svg viewBox="0 0 120 76" style="width:100%;height:100%"><rect x="34" y="18" width="52" height="40" rx="3" fill="none" stroke="#2E3237" stroke-dasharray="3 3"/></svg>`}</div><div class="col"><div style="font-weight:560">${esc(p.name)}</div><div class="t2" style="font-size:12.5px">${esc(p.sub)}</div></div><div class="t3" style="font-size:12px;text-align:right">${p.when}${p.draft?"<br>Brief only":""}</div></div>`).join("")}</div>
@@ -1867,17 +2168,17 @@ R.partsOwn=()=>{const q=U.partQ.toLowerCase();const cats=["All","MCU module","Po
 
 /* Agents: tools, orchestration, propose -> verify -> apply */
 const RECIPES={
- erc:{title:"Resolve ERC findings",tool:"claude",intent:"Fix the ERC findings on the MCU & USB sheet.",ctx:["Brief","ERC findings (3)","Sheet: MCU & USB","TPS2051B datasheet §OC̅"],
+ erc:{title:"Resolve ERC findings",role:"Schematic",intent:"Fix the ERC findings on the MCU & USB sheet.",ctx:["Brief","ERC findings (3)","Sheet: MCU & USB","TPS2051B datasheet §OC̅"],
   plan:["Read the ERC findings and the TPS2051B fault-flag guidance","Pull OC̅ up to +3V3 with 10 kΩ and route it to IO4","Add a Schottky OR-ing diode on the USB source of VIN","Re-run ERC on a copy of r{rev}"],
   cmds:["eak query erc --sheet 'MCU & USB'","eak <b>place_symbol</b> R3 0603WAF1002T5E --value 10k","eak <b>add_wire</b> U2.OC R3.2 U1.IO4 --net USB_FAULT","eak <b>place_symbol</b> D3 SS34","eak <b>insert_in_net</b> VIN D3 --from U2.OUT","eak erc --on-copy  → 0 errors, 0 warnings, 1 unknown (USB pair, checked by DRC)"],
   changes:[["Add","R3 · 10 kΩ · OC̅ pull-up to +3V3","MCU & USB"],["Add","Net USB_FAULT · U2.OC̅ → U1.IO4","MCU & USB"],["Add","D3 · SS34 · VIN OR-ing from the USB switch","MCU & USB"]],
   labels:["ERC re-run by EAK","Pull-up value from the TPS2051B datasheet"],apply:d=>{d.ercFix=true;d.synced=false;},kind:"sch"},
- usb:{title:"Route the USB pair at 90 Ω",tool:"codex",intent:"Route USB_DP / USB_DN from J1 through U6 to U1 as a 90 Ω differential pair.",ctx:["Stack-up (4 layers)","Net class USB_DIFF","J1, U6, U1 footprints","DRC rules"],
+ usb:{title:"Route the USB pair at 90 Ω",role:"Layout",intent:"Route USB_DP / USB_DN from J1 through U6 to U1 as a 90 Ω differential pair.",ctx:["Stack-up (4 layers)","Net class USB_DIFF","J1, U6, U1 footprints","DRC rules"],
   plan:["Read the stack-up: L1 over the L2 plane, 0.2104 mm prepreg, εr 4.4","Ask EAK for the geometry: 0.26 mm width, 0.15 mm gap","Route on L1 and length-match within 0.05 mm","Re-run DRC on a copy of r{rev}"],
   cmds:["eak query stackup","eak calc zdiff --layer L1 --w 0.26 --s 0.15  → 89.9 Ω","eak <b>route_diff_pair</b> USB_DP USB_DN --from J1 --via U6 --to U1 --layer L1","eak <b>length_match</b> USB_DP USB_DN --tol 0.05  → skew 0.03 mm","eak drc --on-copy  → unrouted 2 → 0"],
   changes:[["Add","USB_DP · 0.26 mm · 24.80 mm on L1","Board"],["Add","USB_DN · 0.26 mm · 24.83 mm on L1","Board"],["Set","Net class USB_DIFF · 0.26 / 0.15 mm","Rules"]],
   labels:["DRC re-run by EAK","Impedance computed by EAK, not by the agent"],apply:d=>{d.usbRouted=true;d.usbW=0.26;d.usbS=0.15;},kind:"pcb"},
- power:{title:"Size power copper from rail currents",tool:"claude",intent:"Declare rail currents and size the power tracks so DRC can check them.",ctx:["Brief: rail currents (missing)","Power nets on the board","IPC-2152 tables","DRC rules"],
+ power:{title:"Size power copper from rail currents",role:"Power",intent:"Declare rail currents and size the power tracks so DRC can check them.",ctx:["Brief: rail currents (missing)","Power nets on the board","IPC-2152 tables","DRC rules"],
   q:["The ESP32-S3 peaks near 500 mA during Wi-Fi transmit and the sensors draw under 5 mA. What should I declare for +3V3?",["0.8 A peak, with margin","1.2 A, headroom for an expansion header"]],
   plan:["Declare +12V_RAW 0.35 A and +3V3 {amps} A","Ask EAK for track width at 10 °C rise: 0.48 mm, use 0.60 mm","Move the +12V_RAW track to clear the GND via by 0.21 mm","Re-run DRC on a copy of r{rev}"],
   cmds:["eak <b>set_net_current</b> +12V_RAW 0.35","eak <b>set_net_current</b> +3V3 {amps}","eak calc trace-width --i {amps} --rise 10  → 0.48 mm","eak <b>edit_track</b> net:+3V3,+12V_RAW,VIN --width 0.60","eak <b>move_track</b> +12V_RAW@D1 --clear 0.21","eak drc --on-copy  → unknown 1 → 0, errors 1 → 0"],
@@ -1885,8 +2186,8 @@ const RECIPES={
   labels:["Currents from your answer","Widths computed by EAK","DRC re-run by EAK"],apply:(d,a)=>{d.currents={"+12V_RAW":"0.35","+3V3":a};d.powerSized=true;d.clearFix=true;},kind:"pcb"},
 };
 function newTask(key,free){const r=RECIPES[key];const t={id:Date.now()+Math.random(),key,title:r?r.title:"Question",tool:U.agentTool,st:"running",log:[{who:"me",text:free||r.intent}],plan:0,cmds:0,ans:null,base:D.rev};
- if(r&&!free&&U.tools[r.tool].st==="ready")t.tool=r.tool;
- if(U.tools[t.tool].st!=="ready"){const alt=Object.keys(U.tools).find(k=>U.tools[k].st==="ready");if(!alt){toast("Connect an AI tool first");return null;}t.tool=alt;}
+ if(r&&!free&&U.tools[U.roles[r.role]]&&U.tools[U.roles[r.role]].st==="ready")t.tool=U.roles[r.role];
+ if(U.tools[t.tool].st!=="ready"){const alt=Object.keys(U.tools).find(k=>U.tools[k].st==="ready");if(!alt){toast("Connect a model provider first");return null;}t.tool=alt;}t.model=U.models[t.tool];
  U.tasks.unshift(t);U.taskSel=t.id;return t;}
 function runTask(t){const r=RECIPES[t.key];if(!r){t.st="done";renderAll();return;}
  if(r.q&&t.ans===null){t.st="question";renderAll();return;}
@@ -1895,14 +2196,14 @@ function runTask(t){const r=RECIPES[t.key];if(!r){t.st="done";renderAll();return
  const step=()=>{if(t.st!=="running")return;if(t.cmds<t.cmdTxt.length){t.cmds++;t.plan=Math.min(t.planTxt.length-1,Math.floor(t.cmds*t.planTxt.length/(t.cmdTxt.length+1)));if(U.view==="agents")R.agents();renderShell();t.timer=setTimeout(step,RM?0:520);}else{t.plan=t.planTxt.length;buildProposal(t);}};
  t.timer=setTimeout(step,RM?0:520);}
 function buildProposal(t){const r=RECIPES[t.key];const copy=clone(D);r.apply(copy,t.amps);t.base=D.rev;
- t.prop={copy,be:counts(ercRun(D)),ae:counts(ercRun(copy)),bd:counts(drcRun(D)),ad:counts(drcRun(copy))};t.st="review";renderAll();toast(`${U.tools[t.tool].name} has a proposal for you to review`);}
+ t.prop={copy,be:counts(ercRun(D)),ae:counts(ercRun(copy)),bd:counts(drcRun(D)),ad:counts(drcRun(copy))};t.st="review";renderAll();toast(`${agentN(t)} has a proposal for you to review`);}
 function liveCanvas(t){const r=RECIPES[t.key];if(!r||!t.planTxt||!(t.st==="running"||t.st==="review"))return"";const rev=t.st==="review",c=t.cmds;let svg;
  if(r.kind==="sch"&&sxRoot){return`<div class="live"><div class="row"><span class="lbl">${rev?"Proposed change · on a copy":"Live · tool calls on a copy of r"+t.base}</span><span class="grow"></span><button class="btn q" data-a="go" data-arg="sch">Open the schematic</button></div></div>`;}if(r.kind==="sch"){const d=rev?t.prop.copy:D;const nr=rev?["R3","D3"]:[c>=2?"R3":null,c>=3?"D3":null].filter(Boolean);svg=`<svg viewBox="0 0 1000 620" style="width:100%;height:100%">${schSvg(c>=6||rev?"pwr":"mcu",{newRefs:nr,d,flag:c>=6||rev})}</svg>`;}
  else if(t.key==="usb")svg=`<svg viewBox="-3 -3 62 46" style="width:100%;height:100%">${boardSvg({d:D,proposal:rev||c>=3?usbProposalSvg(false):""})}</svg>`;
  else{const d=rev?t.prop.copy:c>=4?(()=>{const x=clone(D);r.apply(x,t.amps);return x})():D;svg=`<svg viewBox="-3 -3 62 46" style="width:100%;height:100%">${boardSvg({d,hl:rev||c>=4?"+3V3":null,markers:1})}</svg>`;}
  return`<div class="live"><div class="row" style="margin-bottom:8px"><span class="lbl">${rev?"Proposed change · on a copy":"Live · tool calls on a copy of r"+t.base}</span><span class="grow"></span><span class="t3" style="font-size:11.5px">${rev?"Cyan is what the agent adds":"Updates with each EAK command"}</span></div><div style="height:300px">${svg}</div></div>`;}
 const av=n=>`<span class="mono-av" style="width:20px;height:20px;font-size:9px">${n.slice(0,2).toUpperCase()}</span>`;
-function taskView(t){const r=RECIPES[t.key];const tool=U.tools[t.tool];let h="";
+function taskView(t){const r=RECIPES[t.key];const tool={name:agentN(t)};let h="";
  for(const m of t.log)h+=m.who==="me"?`<div class="msg me">${esc(m.text)}</div>`:`<div class="msg"><div class="who">${av(tool.name)}${tool.name}</div>${esc(m.text)}</div>`;
  if(r)h+=`<div class="msg"><div class="who">${av(tool.name)}${tool.name} · sees</div><div class="ctx">${r.ctx.map(x=>`<span>${esc(x)}</span>`).join("")}<span>r${t.base}</span></div></div>`;
  if(r&&r.q)h+=`<div class="msg"><div class="who">${av(tool.name)}${tool.name} asks</div><div>${esc(r.q[0])}</div>${t.ans===null?r.q[1].map((o,i)=>`<button class="qopt" data-a="answer" data-arg="${i}">${esc(o)}</button>`).join(""):`<div class="pill" style="margin-top:8px;color:var(--ai);background:var(--ai-soft)">${esc(r.q[1][t.ans])}</div>`}</div>`;
@@ -1920,19 +2221,25 @@ function taskView(t){const r=RECIPES[t.key];const tool=U.tools[t.tool];let h="";
 R.agents=()=>{const t=U.tasks.find(x=>x.id===U.taskSel);const grp=U.group?U.group.map(id=>U.tasks.find(x=>x.id===id)).filter(Boolean):[];
  const SL={running:"working",review:"proposal ready",question:"needs your answer",applied:"applied",discarded:"discarded",stopped:"stopped",done:"answered"};
  const SD=x=>x.st==="running"?"var(--ai)":x.st==="review"||x.st==="question"?"var(--warn)":x.st==="applied"?"var(--ok)":"var(--unk)";
- $("#v-agents").innerHTML=`<aside class="side" style="width:300px"><div class="ph"><span class="lbl">AI tools</span></div><div class="pb" style="padding-top:0">
-  ${Object.entries(U.tools).map(([k,v])=>`<div class="tool"><div class="mono-av">${v.name.slice(0,2).toUpperCase()}</div><div class="col grow"><span style="font-weight:560">${esc(v.name)}</span><span class="t3" style="font-size:11.5px">${esc(v.ver)}</span></div>${v.st==="ready"?`<span class="dot" style="background:${U.tasks.some(x=>x.tool===k&&x.st==="running")?"var(--ai)":"var(--ok)"}" title="Ready"></span>`:v.st==="signin"?`<button class="btn q" style="height:26px" data-a="toolSignin" data-arg="${k}">Sign in</button>`:v.st==="busy"?`<span class="t3" style="font-size:11.5px">Signing in…</span>`:v.st==="connect"?`<button class="btn q" style="height:26px" data-a="toolConnect" data-arg="${k}">Connect</button>`:`<button class="btn q" style="height:26px" data-a="toolInstall" data-arg="${k}">Install</button>`}</div>`).join("")}
-  <button class="btn q" style="margin-top:6px;width:100%;text-align:left" data-a="addTool">+ Add a command-line agent</button>
-  <div class="t3" style="font-size:11.5px;line-height:1.55;margin-top:10px">Each tool keeps its own sign-in. Connect registers EAK's tool server with it, so every action it takes is a checked EAK command.</div>
-  <div class="sec"><span class="lbl">Tasks</span><div class="list">${U.tasks.length?U.tasks.map(x=>`<div class="r ${x.id===U.taskSel?"on":""}" data-a="taskSel" data-arg="${x.id}"><span class="dot" style="background:${SD(x)}"></span><div class="col grow"><span style="font-size:12.5px">${esc(x.title)}</span><span class="t3" style="font-size:11.5px">${esc(U.tools[x.tool].name)} · ${SL[x.st]}</span></div></div>`).join(""):`<div class="t3" style="font-size:12px;padding:6px 10px">No tasks yet.</div>`}</div><button class="btn q" style="margin-top:6px" data-a="newTaskView">+ New task</button></div>
+ $("#v-agents").innerHTML=`<aside class="side" style="width:300px"><div class="ph"><span class="lbl">Model providers</span></div><div class="pb" style="padding-top:0">
+  ${Object.entries(U.tools).map(([k,v])=>`<div class="tool"><div class="mono-av">${v.name.slice(0,2).toUpperCase()}</div><div class="col grow"><span style="font-weight:560">${esc(v.name)}</span><span class="t3" style="font-size:11.5px">${esc(v.ver)}</span></div>${v.st==="ready"?`<span class="dot" style="background:${U.tasks.some(x=>x.tool===k&&x.st==="running")?"var(--ai)":"var(--ok)"}" title="Ready"></span>`:v.st==="signin"?`<button class="btn q" style="height:26px" data-a="toolSignin" data-arg="${k}">Sign in</button>`:v.st==="busy"?`<span class="t3" style="font-size:11.5px">Signing in…</span>`:v.st==="connect"?`<button class="btn q" style="height:26px" data-a="toolConnect" data-arg="${k}">Connect</button>`:`<button class="btn q" style="height:26px" data-a="toolInstall" data-arg="${k}">Add key</button>`}</div>`).join("")}
+  <button class="btn q" style="margin-top:6px;width:100%;text-align:left" data-a="addTool">+ Add a provider</button>
+  <div class="t3" style="font-size:11.5px;line-height:1.55;margin-top:10px">Providers are simulated in this vision. Keys stay in the OS keychain, and every action an agent takes is a checked EAK command.</div>
+  <div class="sec"><span class="lbl">Model selection</span>
+   ${Object.entries(U.tools).filter(([k])=>MODELS[k]).map(([k,v])=>`<label class="row" style="padding:3px 0;font-size:12.5px"><span class="grow">${esc(v.name)}</span><select data-model="${k}" ${v.st==="ready"?"":"disabled"} aria-label="${esc(v.name)} model" style="height:26px;width:150px">${MODELS[k].map(m=>`<option ${U.models[k]===m?"selected":""}>${m}</option>`).join("")}</select></label>`).join("")}
+   <span class="lbl" style="display:block;margin:14px 0 6px">Model per agent role</span>
+   ${Object.keys(U.roles).map(r=>`<label class="row" style="padding:3px 0;font-size:12.5px"><span class="grow">${r}</span><select data-role="${r}" aria-label="${r} agent model" style="height:26px;width:150px">${Object.entries(U.tools).filter(([k])=>U.models[k]).map(([k,v])=>`<option value="${k}" ${U.roles[r]===k?"selected":""} ${v.st==="ready"?"":"disabled"}>${esc(U.models[k])}${v.st==="ready"?"":" · not connected"}</option>`).join("")}</select></label>`).join("")}</div>
+  <div class="sec"><span class="lbl">Tasks</span><div class="list">${U.tasks.length?U.tasks.map(x=>`<div class="r ${x.id===U.taskSel?"on":""}" data-a="taskSel" data-arg="${x.id}"><span class="dot" style="background:${SD(x)}"></span><div class="col grow"><span style="font-size:12.5px">${esc(x.title)}</span><span class="t3" style="font-size:11.5px">${esc(agentN(x))} · ${SL[x.st]}</span></div></div>`).join(""):`<div class="t3" style="font-size:12px;padding:6px 10px">No tasks yet.</div>`}</div><button class="btn q" style="margin-top:6px" data-a="newTaskView">+ New task</button></div>
  </div></aside>
  <div class="col grow" style="min-height:0"><div class="thread" id="thread">
-  ${grp.length?`<div class="col" style="gap:10px;max-width:760px;width:100%"><div class="row"><span class="lbl grow">Orchestrated · Bring the layout to DRC clean</span><span class="t3" style="font-size:12px">${grp.length} agents · one shared brief</span></div><div class="lanes">${grp.map(x=>`<button class="lane ${x.id===U.taskSel?"on":""}" data-a="taskSel" data-arg="${x.id}"><span class="row">${av(U.tools[x.tool].name)}<span style="font-weight:560">${esc(U.tools[x.tool].name)}</span><span class="grow"></span><span class="dot" style="background:${SD(x)}"></span></span><span style="font-size:12.5px">${esc(x.title)}</span><span class="t3" style="font-size:11.5px">${SL[x.st]}${x.planTxt&&x.st==="running"?` · step ${Math.min(x.plan+1,x.planTxt.length)} of ${x.planTxt.length}`:""}</span></button>`).join("")}</div></div>`:""}
+  ${grp.length?`<div class="col" style="gap:10px;max-width:760px;width:100%"><div class="row"><span class="lbl grow">Orchestrated · Bring the layout to DRC clean</span><span class="t3" style="font-size:12px">${grp.length} agents · one shared brief</span></div><div class="lanes">${grp.map(x=>`<button class="lane ${x.id===U.taskSel?"on":""}" data-a="taskSel" data-arg="${x.id}"><span class="row">${av(agentN(x))}<span style="font-weight:560">${esc(agentN(x))}</span><span class="grow"></span><span class="dot" style="background:${SD(x)}"></span></span><span style="font-size:12.5px">${esc(x.title)}</span><span class="t3" style="font-size:11.5px">${SL[x.st]}${x.planTxt&&x.st==="running"?` · step ${Math.min(x.plan+1,x.planTxt.length)} of ${x.planTxt.length}`:""}</span></button>`).join("")}</div></div>`:""}
   ${t?taskView(t):`<div style="margin:auto;max-width:580px;text-align:center;display:flex;flex-direction:column;gap:14px;align-items:center"><div style="font-size:28px;font-weight:300">What should the agents work on?</div><div class="t2">Agents read the design through EAK, plan, and act only through EAK commands on a copy. You see the checks before anything changes.</div>
    <div class="col" style="gap:8px;margin-top:10px;width:100%">${[["agentTask","erc","Resolve ERC findings"],["agentTask","usb","Route the USB pair at 90 Ω"],["agentTask","power","Size power copper from rail currents"],["orchestrate","","Bring the layout to DRC clean · 2 agents"]].map(x=>`<button class="qopt" style="text-align:center;background:var(--h2)" data-a="${x[0]}" data-arg="${x[1]}">${x[2]}</button>`).join("")}</div></div>`}</div>
   <div class="composer"><div class="box"><textarea id="agentIn" rows="1" placeholder="Ask for a change, a review or an explanation…" aria-label="Task for the agent"></textarea>
-   <div class="row"><select id="agentTool" aria-label="Tool">${Object.entries(U.tools).filter(([k,v])=>v.st==="ready").map(([k,v])=>`<option value="${k}" ${U.agentTool===k?"selected":""}>${esc(v.name)}</option>`).join("")}</select><span class="pill" style="background:none">Propose, then I review</span><span class="grow"></span><button class="btn ai" data-a="agentSend">Send</button></div></div></div></div>`;
- const th=$("#thread");th.scrollTop=th.scrollHeight;$("#agentTool").addEventListener("change",e=>U.agentTool=e.target.value);};
+   <div class="row"><select id="agentTool" aria-label="Tool">${Object.entries(U.tools).filter(([k,v])=>v.st==="ready").map(([k,v])=>`<option value="${k}" ${U.agentTool===k?"selected":""}>${esc(v.name)} · ${esc(U.models[k]||"")}</option>`).join("")}</select><span class="pill" style="background:none">Propose, then I review</span><span class="grow"></span><button class="btn ai" data-a="agentSend">Send</button></div></div></div></div>`;
+ const th=$("#thread");th.scrollTop=th.scrollHeight;$("#agentTool").addEventListener("change",e=>U.agentTool=e.target.value);
+ document.querySelectorAll("[data-model]").forEach(el=>el.addEventListener("change",()=>{U.models[el.dataset.model]=el.value;R.agents();toast(`${U.tools[el.dataset.model].name} now uses ${el.value}`);}));
+ document.querySelectorAll("[data-role]").forEach(el=>el.addEventListener("change",()=>{U.roles[el.dataset.role]=el.value;R.agents();toast(`${el.dataset.role} agent now runs on ${U.models[el.value]}`);}));};
 
 /* Checks */
 R.checks=()=>{const e=ercRun(D),d=drcRun(D);const all=[...e.map(f=>({...f,k:"ERC"})),...d.map(f=>({...f,k:"DRC"}))];const ce=counts(e),cd=counts(d);
@@ -1985,24 +2292,24 @@ R.fab=()=>{const rd=readiness(D);const b=bomLines(D);const qi=U.qty>=1000?3:U.qt
 /* Terminal */
 const PS=()=>`<span style="color:#7FCB9B">engineer@bench</span> <span style="color:#86C5E0">~/aurora-s3</span> `;
 R.term=()=>{const T=U.term,t=T.tabs.find(x=>x.id===T.cur);
- $("#v-term").innerHTML=`<aside class="side" style="width:240px"><div class="ph"><span class="lbl">Sessions</span><span class="grow"></span><button class="ibtn" data-a="termNew" aria-label="New terminal">${icon("plus")}</button></div><div class="pb list">${T.tabs.map(x=>`<div class="r ${x.id===T.cur?"on":""}" data-a="termTab" data-arg="${x.id}"><span class="dot" style="background:${x.agent?"var(--ai)":"var(--ok)"}"></span><div class="col grow"><span style="font-size:12.5px">${esc(x.agent?U.tools[x.agent].name:x.name)}</span><span class="t3" style="font-size:11.5px">${x.agent?"agent detected · same tasks":"shell"}</span></div>${T.tabs.length>1?`<button class="ibtn" style="width:22px;height:22px" data-a="termClose" data-arg="${x.id}" aria-label="Close session">${icon("x","width:14px;height:14px")}</button>`:""}</div>`).join("")}
+ $("#v-term").innerHTML=`<aside class="side" style="width:240px"><div class="ph"><span class="lbl">Sessions</span><span class="grow"></span><button class="ibtn" data-a="termNew" aria-label="New terminal">${icon("plus")}</button></div><div class="pb list">${T.tabs.map(x=>`<div class="r ${x.id===T.cur?"on":""}" data-a="termTab" data-arg="${x.id}"><span class="dot" style="background:${x.agent?"var(--ai)":"var(--ok)"}"></span><div class="col grow"><span style="font-size:12.5px">${esc(x.agent?U.models[x.agent]:x.name)}</span><span class="t3" style="font-size:11.5px">${x.agent?"agent detected · same tasks":"shell"}</span></div>${T.tabs.length>1?`<button class="ibtn" style="width:22px;height:22px" data-a="termClose" data-arg="${x.id}" aria-label="Close session">${icon("x","width:14px;height:14px")}</button>`:""}</div>`).join("")}
   <div class="t3" style="font-size:11.5px;line-height:1.55;margin-top:14px">The terminal stays for engineers who prefer it. Shells here already know the project; agents started here are detected and share the same tasks, proposals and checks.</div></div></aside>
  <div class="term" id="termBox" data-a="termFocus"><div class="out" id="termOut">${t.out||`<span style="color:#6F6B65">Aurora S3 terminal · EAK tools on PATH · type help</span>\n`}</div><div class="row" style="gap:0"><span style="white-space:pre">${PS()}${t.agent?`<span style="color:#86C5E0">${t.agent}›</span> `:"$ "}</span><input id="termIn" autocomplete="off" spellcheck="false" aria-label="Terminal input"></div></div>`;
  const box=$("#termBox");box.scrollTop=box.scrollHeight;};
 function termRun(c){const t=U.term.tabs.find(x=>x.id===U.term.cur);const cmd=c.trim();let o="";const line=`${PS()}${t.agent?`<span style="color:#86C5E0">${t.agent}›</span> `:"$ "}${esc(c)}\n`;
- if(t.agent){if(cmd==="/exit"||cmd==="exit"){o=`<span style="color:#6F6B65">${U.tools[t.agent].name} session ended</span>\n`;t.agent=null;}
+ if(t.agent){if(cmd==="/exit"||cmd==="exit"){o=`<span style="color:#6F6B65">${U.models[t.agent]} session ended</span>\n`;t.agent=null;}
   else if(cmd){const k=/erc/i.test(cmd)?"erc":/usb|90/i.test(cmd)?"usb":/current|power/i.test(cmd)?"power":null;
-   if(k){const nt=newTask(k);if(nt){nt.tool=t.agent;runTask(nt);o=`<span style="color:#86C5E0">${U.tools[t.agent].name}</span> started “${RECIPES[k].title}”. It runs on a copy; the proposal appears in Agents for review.\n`;}}
-   else if(/left|release|status/i.test(cmd)){o=`<span style="color:#86C5E0">${U.tools[t.agent].name}</span> (simulated) From EAK's release check:\n`+readiness(D).map(x=>`  ${x.ok?"done   ":"open   "} ${x.k}: ${x.txt}`).join("\n")+"\n";}
-   else o=`<span style="color:#86C5E0">${U.tools[t.agent].name}</span> (simulated) I can resolve ERC findings, route the USB pair or size power copper, all as proposals you review.\n`;}}
- else if(cmd==="help")o="eak status · eak erc · eak drc · eak bom · ls · claude · codex · clear\n";
+   if(k){const nt=newTask(k);if(nt){nt.tool=t.agent;runTask(nt);o=`<span style="color:#86C5E0">${U.models[t.agent]}</span> started “${RECIPES[k].title}”. It runs on a copy; the proposal appears in Agents for review.\n`;}}
+   else if(/left|release|status/i.test(cmd)){o=`<span style="color:#86C5E0">${U.models[t.agent]}</span> (simulated) From EAK's release check:\n`+readiness(D).map(x=>`  ${x.ok?"done   ":"open   "} ${x.k}: ${x.txt}`).join("\n")+"\n";}
+   else o=`<span style="color:#86C5E0">${U.models[t.agent]}</span> (simulated) I can resolve ERC findings, route the USB pair or size power copper, all as proposals you review.\n`;}}
+ else if(cmd==="help")o="eak status · eak erc · eak drc · eak bom · ls · eak agent · clear\n";
  else if(cmd==="clear"){t.out="";R.term();$("#termIn").focus();return;}
  else if(cmd==="ls")o="board/  docs/  library/  outputs/  schematic/  aurora-s3.eak\n";
  else if(cmd==="eak status"){const e=counts(ercRun(D)),d=counts(drcRun(D));o=`project   Aurora S3 · r${D.rev}\nerc       ${e.e} errors · ${e.w} warnings\ndrc       ${d.e} errors · ${d.w} warnings · ${d.u} unknown\nboard     ${D.ercFix&&!D.synced?"behind schematic (2 parts)":"in sync"}\nagents    ${U.tasks.filter(x=>x.st==="review").length} proposals waiting\n`;}
  else if(cmd==="eak erc"){const e=ercRun(D);o=e.length?e.map(f=>`<span style="color:${f.sev==="err"?"#EC7C6B":"#E2B35C"}">${f.sev==="err"?"error":"warn "}</span> ${esc(f.msg)}`).join("\n")+"\n":"ERC clean\n";}
  else if(cmd==="eak drc"){const d=drcRun(D);o=d.length?d.map(f=>`<span style="color:${f.sev==="err"?"#EC7C6B":f.sev==="warn"?"#E2B35C":"#8A929E"}">${f.sev==="err"?"error  ":f.sev==="warn"?"warn   ":"unknown"}</span> ${esc(f.msg)}`).join("\n")+"\n":`DRC clean · ${RULES_TOTAL} rules\n`;}
  else if(cmd==="eak bom")o=bomLines(D).map(l=>`${l.refs.join(",").padEnd(16)} ${l.mpn.padEnd(22)} ${String(l.refs.length).padStart(2)}`).join("\n")+"\n";
- else if(cmd==="claude"||cmd==="codex"){if(U.tools[cmd].st!=="ready")o=`${cmd}: not signed in\n`;else{t.agent=cmd;o=`<span style="color:#86C5E0">${U.tools[cmd].name}</span> (simulated) connected to Aurora S3 through EAK's tool server. Ask for a change, or /exit.\n`;}}
+ else if(cmd==="eak agent"){const pv=U.roles.Schematic;if(U.tools[pv].st!=="ready")o=`eak agent: ${U.tools[pv].name} is not connected\n`;else{t.agent=pv;o=`<span style="color:#86C5E0">${U.models[pv]}</span> (simulated) connected to Aurora S3 through EAK's tool server. Ask for a change, or /exit.\n`;}}
  else if(cmd)o=`${esc(cmd.split(" ")[0])}: not available in this simulation · try help\n`;
  t.out=(t.out||"")+line+o;R.term();renderShell();const i=$("#termIn");if(i)i.focus();}
 
@@ -2039,7 +2346,7 @@ $("#palIn").addEventListener("keydown",e=>{if(e.key==="ArrowDown"){palI=Math.min
 $("#palRes").addEventListener("click",e=>{const it=e.target.closest("[data-pi]");if(!it)return;const f=palItems[+it.dataset.pi].f;palClose();f();});
 
 /* guided walkthrough: the 15-frame storyboard, in order */
-function ensureErcFixed(){if(!D.ercFix){const r=RECIPES.erc;D.checkpoints.push({name:"Before: "+r.title,rev:D.rev});commit(r.title+" (4 changes)","agent · Claude Code (applied by you)",d=>r.apply(d));const t=U.tasks.find(x=>x.key==="erc"&&(x.st==="review"||x.st==="running"));if(t){clearTimeout(t.timer);t.st="applied";t.appliedRev=D.rev;}}}
+function ensureErcFixed(){if(!D.ercFix){const r=RECIPES.erc;D.checkpoints.push({name:"Before: "+r.title,rev:D.rev});commit(r.title+" (4 changes)","agent · Claude Opus 5.5 (applied by you)",d=>r.apply(d));const t=U.tasks.find(x=>x.key==="erc"&&(x.st==="review"||x.st==="running"));if(t){clearTimeout(t.timer);t.st="applied";t.appliedRev=D.rev;}}}
 function ensureSynced(){ensureErcFixed();if(!D.synced)commit("Updated board from schematic: R3, D3 placed and routed","you",d=>{d.synced=true});}
 const GUIDE=[
  ["First launch","Home says what EAK is for: describe a board, open a project, import one, or continue. Nothing here needs a terminal or an agent.",()=>go("home")],
@@ -2049,14 +2356,14 @@ const GUIDE=[
  ["Choose components","Search parts with datasheet values, symbol, footprint and the LCSC number. Stock and prices are sample data.",()=>go("parts",{partSel:"U2",partQ:"",partCat:"All"})],
  ["Schematic capture","Three sheets of one model: power, MCU and USB, sensors. Click a wire to follow its net across sheets; click a part to inspect it.",()=>{U.sheet="pwr";go("sch",{sel:null,hl:null});}],
  ["ERC with guided fixes","ERC finds an error, a warning and one unknown, in plain words. Each locates on the schematic or goes to an agent as a proposal.",()=>go("checks")],
- ["Review a proposed change","Claude Code works through EAK commands on a copy. EAK re-runs ERC itself; you apply or discard.",()=>{if(!D.ercFix){let t=U.tasks.find(x=>x.key==="erc"&&["running","review"].includes(x.st));if(!t){t=newTask("erc");go("agents");runTask(t);}else go("agents",{taskSel:t.id});}else{const t=U.tasks.find(x=>x.key==="erc");go("agents",{taskSel:t?t.id:null});}}],
+ ["Review a proposed change","The schematic agent on Claude Opus 5.5 works through EAK commands on a copy. EAK re-runs ERC itself; you apply or discard.",()=>{if(!D.ercFix){let t=U.tasks.find(x=>x.key==="erc"&&["running","review"].includes(x.st));if(!t){t=newTask("erc");go("agents");runTask(t);}else go("agents",{taskSel:t.id});}else{const t=U.tasks.find(x=>x.key==="erc");go("agents",{taskSel:t?t.id:null});}}],
  ["Update PCB","The board knows it is behind the schematic. Update shows every footprint and net change before it lands as one step.",()=>{ensureErcFixed();go("pcb",{sel:null,hl:null});if(!D.synced)A.sync();}],
- ["Placement, routing, DRC","Two agents split the layout: Codex routes the 90 Ω USB pair, Claude Code sizes power copper. Each sees only the context it needs.",()=>{ensureSynced();if(!U.group)A.orchestrate();else go("agents",{taskSel:U.group[0]});}],
+ ["Placement, routing, DRC","Two agents split the layout: the layout agent on GPT-6.1 Sol routes the 90 Ω USB pair, the power agent on Claude Opus 5.5 sizes power copper. Each sees only the context it needs.",()=>{ensureSynced();if(!U.group)A.orchestrate();else go("agents",{taskSel:U.group[0]});}],
  ["3D check","The board in 3D, checked against the 12 mm enclosure from the brief. J2 is outlined: 1.0 mm to spare.",()=>{U.explode=0;U.cam={yaw:-0.55,tilt:0.95,zoom:1};go("v3d");}],
  ["Outputs and release check","Outputs are made per revision. The release check stays blocked while anything is unknown, unsourced or unsigned.",()=>go("fab",{fabTab:"bom"})],
  ["Checkpoint, come back tomorrow","Every change, yours or an agent's, is a revision with its author. Restoring a checkpoint is a new revision, so it can be undone too.",()=>A.open("history")],
- ["Connect an AI tool, no terminal","Claude Code, Codex, Gemini CLI and OpenCode keep their own sign-in. Connect points them at EAK's tool server.",()=>go("agents",{taskSel:null})],
- ["Terminal","Engineers who prefer the terminal keep it. Agents started there are detected and land in the same tasks and checks.",()=>{go("term");if(!U.term.tabs.some(x=>x.agent)){A.termNew();termRun("eak status");termRun("claude");termRun("what is left before release?");}}],
+ ["Connect an AI tool, no terminal","Model providers: Anthropic, OpenAI, Google and xAI, each with its connection state. Pick the model per provider and per agent role. Providers are simulated here.",()=>go("agents",{taskSel:null})],
+ ["Terminal","Engineers who prefer the terminal keep it. Agents started there are detected and land in the same tasks and checks.",()=>{go("term");if(!U.term.tabs.some(x=>x.agent)){A.termNew();termRun("eak status");termRun("eak agent");termRun("what is left before release?");}}],
 ];
 function renderGuide(){const g=$("#guide");g.classList.toggle("on",U.guideOn);if(!U.guideOn)return;const f=GUIDE[U.gi];
  g.innerHTML=`<button class="ibtn" data-a="guidePrev" aria-label="Previous frame" ${U.gi===0?"disabled":""}>${icon("l")}</button><span class="n">${String(U.gi+1).padStart(2,"0")} / ${GUIDE.length}</span><span class="bar"><b style="width:${(U.gi+1)/GUIDE.length*100}%"></b></span><span class="ti">${f[0]}</span><span class="cap grow">${f[1]}</span><button class="btn ${U.gi<GUIDE.length-1?"":"pri"}" data-a="guideNext">${U.gi<GUIDE.length-1?"Next":"Finish"}</button><button class="ibtn" data-a="guideClose" aria-label="Close the walkthrough">${icon("x")}</button>`;}
@@ -2067,7 +2374,7 @@ function guideGo(i){if(i<0)return;if(i>=GUIDE.length){U.guideOn=false;renderShel
 const A={
  go(a){go(a)},
  attn(a){if(a.startsWith("parts:"))go("parts",{partSel:a.slice(6)});else go(a)},
- about(){dlg(`<h2>About this vision</h2><div class="t2" style="line-height:1.65">EAK is an electronics engineering workspace where AI agents draft and route the design with you, and EAK itself checks every change before you accept it.<br><br>This page is a <b style="color:var(--t1);font-weight:560">product vision and interactive simulation</b>. The AI tools, the LCSC catalogue, stock and prices are simulated with sample data; nothing here connects to a live service. Engineering numbers (impedance, rule checks, BOM totals) are computed in the page from the sample design.</div><div class="row"><span class="grow"></span><button class="btn" data-a="replay">Replay the launch film</button><button class="btn" data-a="guideOpen">Guided walkthrough</button><button class="btn pri" data-a="closeDlg">Close</button></div>`)},
+ about(){dlg(`<h2>EAK · Electronics Agent Kit</h2><div class="t3" style="font-size:12px;letter-spacing:.08em">by <span class="tusk"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAACgCAYAAACLz2ctAAAQAElEQVR4Aex9C7RkV1nm95+q++rbnXQ6D4iPBIkCJv1KJxCSEMU8lEFGQcdxnDWOo66ZtWbGNQriA5Ul6EKZNS5kxCh5gUhcsnSUR0YegcEQeYQAaTovQgJ5J52QTt9+3HdVnT3f9++zq07Vrap7b9/uTvpWnezv/Hv//7///fpqn0dV32QAwhDDOXiuOCACsu1hGs7AczMDQwI+N/M+bLWYgRUQ0ArX5cRK/ZaLs17tz5f5KfdDeWElc75Sv5XEavn0JWCGDC/cUMF5W0ax47SRJs4/fQQXvGDUcf4Zo9h+2ii2nVrF1i0j9BVGse20Mew4XRjFjqKu6rUg/Si2n1qAMXaePoqdjCe5oygr/vnUC9I1wXopL5vqSO5i/QuEon/q564zRnA++7yzhF3My3bhC8ew6wVj7O+o938bx7r91BHsoF1t72TbZXibalso9XHXGWO4kG0mKPYulhXjfMY499QxnHPyCL574yhGK32nvbU6a8pFwsRzDOR5ncy4skCVt74TlYDNo8CZXOezN1Xxss0VaLwXcE4uYL8v4Bgv4FxccHoVF7jk2p/GfAcupF14OeUu4tTxzNsA1CB6HllPCw3ViuGnXzyCay8BrnslcXHEtZTXvDLgmosC9QE3XBzwPvq871LghldFXH8pbfS7nvWuv9joY7iO0uNQdx3rXH8J69LvBknWv979VS9A+eu8DOaj7gb50NfrvSrgBrVHXC89fRXT+6W+OXJc80qCbV0nn0vYj0sF4Fr28xq2/d5Lco4vZ78Z7zK2xbgxHvvLfl6vuiXcwDo30MehPONqTNeqHW8zsE3gGvbnvayvubr20gzXXWb4nVeM4wdO4WoHPfdxgo9lIskUPiMBxpl/AQmxkxvB684awy++dBS/+4pJ/O9XjeP9l4/jxqsmcOOPVHHjD2d4/2XsK/t+Ldf2Wo7n2otzrlsgAC9Tdw3H1QT93usA3nsR8JcXGd71ihFceKpaNrauXvRG1stkNLDfOHMyx/bNNewQTq5hJ7FjUw3bNxKSJ1HKRuwkzqd918mL2EW5k3J7gW2SJy1iO/23CapLn+0C6+2QndimsrCZvixvZR35y08+O2QrsIM+wnb6ORjX+6bY3r86tm+qYwfh7dJ/m/vWsKPwlf8O5s8/uQ71/Xz1hVA8+W4r2treSzLmdsaU31a2uU1g+1sF6rcy1rlbAg7aRvz57ll85al51I4hAbVuYzx9/6YKfvLFG/C2izbgb1+7ER//iUn8/ZVV/MUr63jn9hreeM4c/uPZi/iJF9RwxZZFvOqUGi5iXzUH2zct4jzCx8C52+qo4byT6tQTlFuJbZyzrZsb2HZyw23nUnce5+nczXVsHiOBuMMGQrle6ElAfUYtNMDPK0ZgyDKDCAkDtLdaBXAYVKTaHJlREvAjQFnVFWBUskUTmLeAqKITE4RMegAUjky+QqHo5gMe0nvc1C9J1nF9Iakq+gqPTXVJBqhtIemVL0NXTpVl17x6/zkG6XixgNFBcwJvqII6Mw/MT+LXvjqGn/jwM9i9r4GZWh2r55+3iHRwOiComTG2eQoZt/WUKv7TSzfgva/eiNt/9mR87Q3A3142j9/8wRn8+GmHsW3sMM4amcMLx+rYMh6wsZpjzHJehhuocJ2NeXBAiqnxCD6fakjNExqj9EkadSprjQR2BUKmyeG8MKUu95QK39PYMhgnLcDMHGqsaTPm1AtJgUW9WjQORn6ZbOoQwerI2GJGnVE6WEd6zyedJJVmNHq81Z20wA5WDwVWE0HNCr3qyJaxj2JBii8J5MhprMMwVc/wj4+N4edvnsf77jpEMgJm7AyO5AisZDCeq2x341iG79mU4dIzR/GmHRP4u9dswmdfP4H3XFzDz581i5eOHMQ4aqiSVKrDakhNt8oG4zrAaCUsgfFdR7Un6jVO+RptGRkqKZ37yU6k+pp3yEAdVnAwZB8vjdvNzQxL3FRZTA2afxyoZsf4gYc6Z6XGRUSVE+iJlE8S9A/sSYL0WuAsC1C+W52k72lTzBLAvHzLMDOYWVnleam6wY0dJxFPYCAo0kKo4O4Do/iTe6t4y+0L2DNVRyPESiGuTiys8jxZNbxk8wh+/EVjeOOOcbz3sjH83VWjeOu2eVy2+RBOyQ9jNNRQIem0C6n/5SZU1pxKmhnMygDLQEZCxrEAMMBJpnXl2sClIelZHekwo54FMwMTcxpwgDG3XFLo3j6M4AFDhwv1UnlnubOVrdJDlRIKo/SOoi4oE0hplMMobuAOmvw1EZ5nLJes6zKVWdDaClRBTXMuXSovpEKMzebKMZQXOBtuZxCG9C5JsthMKruP/AkZJHKeprJx/PW3K/j12wPes2cWT800ZD5CmHdZbyFec/Y43rR9FH96SQVX8yHqt85bxBWnz+EUTKOKhqbH+2pm4GfW8ygf1hpvTr3m28E5Bm2sRi19OIEsQuWMc2ECC2bS0k4vjR0qcoIzQiZ9sCTLoOuKEptYzk+tlXzYSmAxdUR5FluJ7rIJUUlFzMA7rvpUyZ7gevCgwligCyjAosuUV1lolqHDeEpglsnMYEaAkCSYLeIZ4GXeVjCreH2BjoN1vL6rveCX3QfnNuAtX8rxR7sb+PzeGha50kvmxut0O7WWQRG12bz4pAr++/YJvPvSCbzzAsObzstxxRkLOKO6gGqoexc0DG9DGYIJuop0a8ErkDDy9w+3MafGCDOeikrKNlHomkJuyUhlyiYpisZ8gFxRnNHnaI28p1Not3QU241rL/FDyPtNDqWjHTODmdCvDXOjPpECo3h5RadYFUgSPQ72IVqiY6NSxWf3jePXPl/DB+9fxJOzObS7RJ+VnoM3S37g7E1VvPH8SVx72Qje8oM1/OR3z+HcjfOYtBp3t+hnZjAjuHoZEW9zgjdmZgATisPMYGZFCcwDnUecq6gN/DQKgOoI6HuYGZjafaQQ2rVdS+x+V31TGTsX2IhFnQSxwvixzhrOfdthPxTazLx/FCquHdYewsyK+Nw1A+lFiNyLVuUldxy/8i8NfObJRSxy8QBufaRge4TlS2eMVfA/uON99DUj+N3zFnDpqQs4baQen1BZnS3z3J7YLfYLJRh0mBl1LUiXYNZdn+xJaohCKveTZtZmNui/NlXPQn8CBk0nh15qQKEFsBFBnczzAEFkFVAcWg/dGwV9tAWTgUGbCyRFQndbYBBdLbIQ4g6g6mzbzGBm0A1QzhvvBhc+p6PaS5BruT9mpkYcxnjGfjvoaN6OwSUo6WtmAPvdMCCBrkCoYKo+ir+4bwS//cVpfPvAIhq5ptKtHr/zZIwJB3gYwNgVPi2cylcov/SyDbjl32zEH++Yx7njc9hYqfPeLlfToCf8ksnw7CLYeBMqNyFtyHUuQMEUxx+Uc2i3LMfggKH1ac4Z5yXVYRdZJyYz7wkLrVgs8GoVHMrnbF7WnDFabcjSGxxWb6MsDA8FVf54QxMhqAMaUwvslQqlDvn8lMrdsh6LBsm26l0GGH1oaHMEMlLikfkM/+veUbz99jmQe9QYo3L2ee6VAr3iogB8oMWZ44bXn13FP752En/28jmcYwe524FeRlBaBPgBMMEMTHiuDs3Hatu2FVTIlvUJ/T3MDJlPEI7ZEaChJCxtxszYhwxm8kHfQxPZwakl/vJZoqQih+Gb0+N42+4K3nXHNGa4g/KjwM9HoLV/20YvOmHjSIZLzqziDy6ewHv4Fd3FJ81gTDb2nQnakcDDzGAWwWIzUUU9HDiKh1l7W2a26uhZ1l5Fs9KuWVrqqNLhwD7oNZ9xxdKipAlP5fip7tWU9GV0xO9VZBW1aS7lxAyFzgKzq07qr5AqKk7OgqTArKeyjyt44vBR52X31u+M4s1fCfjQ/QtogJOj6x/tMZWjRA3k44i5rVtG8aYdo3j3Kw3//mze42XzpF5AXmFdPfp6SFJVEnFm45l2elLFRKPHpEzqJGktJ40loqXVWFqlLjkxgugWUuvh3SiMip0iKK6gMnsmsSKwqf5+FQ1WDZbdOstl27J5dS+h7Jx0phaXoLUQsY6ZxUxxTpNhZjBrR+HSFDS35tGoFih6pUVU8eHHR/D7X8vx6Ufn0WjV7lXF9QprMPBqi5/j12R/8ooMv/rSBrbye1a9SqEJ6ksEJ1Uv8QQqxG1B42bR/RRU99oJJgWreXeU74CZsZ7QYYBRUQaLKbEOCG9bLklPaeB/bE9ENJZ7JhoZole32qr1JSDbAq8yYLtoO9hAW5kFNUjRN63UqHbTp0l1ynk1baazLC2IgGXIksrKl2FmYHKU9dGfS64O0CBRRwUfe7SCd95Rw1efrqEhJW0rSdzLcOYGw1tfMYm376zhh/ke76Ss5lWNZzNjHwjmlTTOiNC8sZdekF43+YLySSd5vKD5Wa4t75vPkS3n6va+BJSHx0IMpg5walgymJnMjphtlV15pCc1KHSpX27BzJp9UL+6uPdVmbXq93LMkUGX3XfsDrhnqrGqX7EYg77yu8bwgSsn8CsvmcfZIw1qAvtMgjOumTzAshFY0aEqQqezdAmdtlSWPeWPtQyraKAvAY3Wkaqi6W5JErxHNmhbLL++CNyvyyRQPgI86I8ygDgZ6mY7vE6XjZvhoVcFAvjAAx7uG1SfhS5JdqhZjkGvMUCZ4GUL0CuJ2Be07TiBjvVGFZ/jC+Zfv62Be6cWOOTQpZVOlRoEJqtVvO7sMVx9SYZXbZnFBsthWYMXcrbDKhlfGVF4Uj+DBgiD2VLk9BIKF/rAAR4B2mOFjP2nTE7UIwtowtgui6ziKbYZWCfClUd0arXLrnsENuVSbXhmmZOWpbcLO82k4SzxCTSoEQ7BB7LEoUPhvqpEfSGYOzrJzGC2FEcS3VjJ+FLsy1MjePMXFnDv/kVqVpjYh9PGM/zyD1b4TUYV504soEL26IEKDEwzBDCviOU5UXk1MCuC9KikORa6mc0MZi0kH/Un5dciTZV5YlKuL/oSUAMIftNjzQ6naOy/Z+XjmSM4KUYCYDjWR2pLsldbIavgK4dH8cYv1fyyy89ZL9cl+nP4/e3vXzCKP9oVsMVmOSKyj6nBnJzNDGYETMWeMDOYmdslynBlx0nEWa6fitFRbcVFj7+ChVYbGa9QRnAAXa5lS5vsS0AFhOZB6Kjr/eGoeSXj/k4j896iJIuelKejfBRCcH3pRDN3UCnkLNmO7tp2n74lBegGr1T0qLDnyHDn4Qm87as59vCeL7jP8idN4vmnV/GHF1bxy+fUMR7qjBTrxcu8rhPghTdKP/PpzueFjWiBo3c8q5wQNUvPsrs2TSBlUycD45bXg2ZpC5SNMZ/qJumO0YRWHM1XGe7lp6arzCKNFG7pf9Lc9fRQrEwsVKbw8mKpLHWaSEmVE+TmOo7e1ClHsh4HqUkg1LapOeY1mcqb98WoFcB72wzfmhnBO+5o4JYnFhBIEKzgMMa56nvH8QcXVPFT31tDheRTtTRPImAGsCflUwAAEABJREFUrqERNPhtGiWLrAkH2o6ik+qoo80IM3O4lvMqaWYSLT1L0iTEMKkkSYcVJmOHEwDVLYMatm3G+0+q6er3yvqAsYiVHH0JqABmGYz/KV8G20RCWd+Z1xwJiKdO87JlMwOYsIpDn2IhVVHem0+KQkY9p4trPpWP4M/uCrj5kXm+dC4clhHq1mv4sPF75xsuP71O8uUwM9/peBsJbYMhI/GIFEptRkIkzfJSfU/o9JZe7wU79akse8ovJ8u+6qc+hJLL1eu0q47Qqe9WLk1NN3NLZ2Y+uS1NK0cTbSwb0SVpYEIXU5vK42BpELOluraKqyikUJqgCGCez6fvf8DwoQdrmG+sPNiFZ4zgrTtzvHzzHEaszl0U3nvyGfFJG3AFu2/GE+Ihe8y1zmYGM6NCoGDyIuXxTGbGvSJ+KMv9NGv162j2J+sdjA2yB3XwVDSeFixor9XHG/TpDECVmUWLAbopFQLDcGuAv77h5S1jDD1tWs4AXHS3sxaHDpqgHURQnh7NpCfKFEOSs0Wbgkeoj1QsSYofYbxMWKxG4gXL8M/fqeCGbzZwqBaQ+7iWVG9T6M3UrtOqeMfLM1y4uQb/utKAnIMJWUDGr9YyltsqIbQXSyVOF/uTUyO0/NRfUGVUaaFiyEBfge5Mqqv5ldTlHt4OK3Au0QR4qE4ECx0pRvYYufHtTYYK5yHz+vCjc15VLiPjVm+sa+wvJ1jd9nrLnbLlHMqNyFdlyW7QMIRutk6d4kTEKUt2M4NZC0kv6f7MaGGa6Ciz2DPFOlwcZioU4JdqD8yO4LoHeP93sAZztmsGe4aA0fSSLRX80UWj+KEti6zDQEzSG2eTXadH9yQbm+5qlF7oaqQy2YL3EVAsM6M0rOQI7GPyU74M6c1s2Vg+/6woqTqSQspLlmHlQo88p6yHhWoPoAa5Y6khgeqeSWN0sA5HA+N/yTl9SlM5SY4bgn9wk7KLTG3H0NbyUIOtUs+c2hCSQw7DVCPDX92f4VMPznFX0QdBwYTktVR+36Yq3vnyEbx6yxz3iADFTOj0TvokO+0qm5nHUL4baG7aWz/3M3aWKCqYGX2sKB2Z0PwK5dpm5nHNopRNPgkqd4UBTFjJ0YeA3K4ZRme/n2G0QKTknWBBujLKRFLd+AP1wC2ZoCO57C7Mtkk21SVa2YtzzqIWQYB2AoG1lk2sByE5Ml/npN7yzAT+6hsL/k8mqUrWrtK4vb1wooK3nD+KH33hAioWYNY5zSq3Qx+YBAX2KnRR1x3smOyydYNsQrKxKhK0BlEf+AESYimeA0UCsym5KoMulRwCJ5WJi6I2BAaigk4qEIyqHjrULjO0M1hOQTeV9bBCTUyFzvUwRGXvc9bL5I1pqLyuQzc0nDkzagm1keoF+gQWBApPzYFRyTGoL9QbJevLnzPP/kOhBRajnZlA0BGQA+t7ntJrUjLxFiNNC6sxHrwO49PIhCaoV7yQfNSYEIDvNCbwzq/V8az/6yFFV6ze2MgbvzfvHMe/O6sBv9fSPQ/jpxqBMUWIhKhX3HaYGevTahExhFFnUYHeklVpDU2wAqSDj9hLPKX6zBZJfSuy7hlYkBfUOAuyi5Cac027fu3T4CLWCW0gTbCsKvIRVI/cZTT2gAEZCj69NMrmhmVOPQjIaDDeIQGPzFVxx6FJ7J7ZQEzg69MRe2Y34M7ZSdw1I2yk3Ii7Z4jZmL9zegPumqZtOpZjfhJ3lsp3Hp6kD+vMbILiqM6ewxvoQ73ien3mVUdge3dTfyexh22pfdUR7mJ7d9J/D2MqroN1Unt7WOfr7PPumQncwfzv7zbcuW8eEJGgqes1U4ZRfgB/decEfuHFixipLKKS8ztQPmwAnOke1dqJ2Omk+e3ULS33jxH9e72CEQESomdxZtMiUZ1SZKlZFfPZGPbbBjy2OIF75rTWk/jioQ24dWoDbpnaiM9NbcKtBza5/NyBja7756lJfJZ24TOUn35mAz69bwP+3/6N+Cx99tZG2CAbIY+Y6Zmy7hbtMMAi6X39vfN47T/N4qqPzRCzuOIm5okrPjqDyz8yjcs/GnFFIaX7Ec/TzjqXf2wasl0hedM0riSuuOkw5QyuumkGV9L3io8chupdwZhXso7k5ZQtTONHWF/lK1RHYPkqQv6CbJJXsZ5kBNuhj9q+kvJKxr/qY7OQz9/cO41G3D44BZooii6J+ype96IJ/Nz3NbBxhHuBZiyjJGn70bZLKFeZ9W7LHfqeDGa2xENEkzIRVlLlMswMOQwNVPBkbQK3HDoV73lkC/7bVyfxo/834OUfmsXF/ziPV3M9fozz+69vmsNPfWIOP/2Jabzh49P4qQIq/8ynpvFvb57Fz948R0l8SvkZlmfwM5+cxi99+hC++OQi28vZhf6zpOmkU7fEihzZQiPn6wkBlMDhGsAHxiU4QH1Cp72sP8BXHfp3FE0U9cp13H8RaPowfzCB/gfrgDDFvPtSluu35wMOLhL0OVRAY6hpbvgBA6cpftyWzoFZBWdPZvgPL6rj+ycWUc0b3P3oTQ5wPREqrM28dpLAXdLMYBbBDCmKJvhuA0LQtc6CzEsb7NCYGf2spWVWbSUkg+6JHVQEAnQI3OY0xPlGBXsXxvHFAxvwJw9uwas/XsG5fzODf/XhZ/HmW57FB+45iC/vW8RjnN9nuDZpnqfrAdMsT3POZpg/zPxhyTo54AhQ2f1Yni4wI0nfun64qL4sg2wZ+4CaudJMm7jj/exLRvGjZ7NAKnFNi/kwJ4aZFWUSLfjSN8udGZkTOm1HpczmMxIP7GSN/Xq2VsWXn53A/7xvAj/2yRxXfWQGb711Crd/p84X7+zvUWl07UGGBOw6hwG6g3nVGRX855cAo40FGLjCXX1Xr1xrJLMW8c0MTNBpli/WvzE9hg98ewRvuXMMr//UPN7xlWncN7UIXgQ4Au2Ja20dR/VYvwRcwzRlyPDdGzL8l5dV8L2j8zDGagPXkFdRbiPM0JaS7r2EVG6Tci2gWPCoKI7CQIowaKFrF63dM0QvBWG1nDveIu8Fvr0wig88UsHv3AH89m2L+OA905gS69rDsMRKPD9f0pCAXVZC7/j+665NuOK7cmScId9hCj+tO8gGl4VuOWFmTjejYwLaNFjBEQCy3lSPpNPVVjgURvD3j47iN74U8MdfreGTD83jEO/VcrrjBDg4vSdAL49zF1+0McMvnjOPEav5bqPmjSeBwpPvdCtYZLNyLa8q/hKxsseJ6r5nM+O+rOViPE+G/diA37zd8JtfWsAnHlnE3pkGdJHFCXRoRCdQd499Vyts4uqrzsTJ+SIq3GlYXHEyM5hZ09/MmmVmm/peGflEWJuLSOogvdSlQKe7ai/A5f+wgBsfWMR35nNaVEX1DKbsCYIhAYuF0qJl3GMuOqOKXRv2IUiBoDcnhUcUOYUufYJ8zNyR2s6ke7WcERpEHgmi2RZYxXg51f2eqguqzSs7IordkUpdSv0VC1X61xEH2fAHH5vE6/7PPtx3uIFaXT1SJDqzJeXoqsIJAU3HCdHRY91JLdrmiYA/vGQcG2yRxLNV7yS+S4lBK+hs2a2cL1c1FvSFi/oWyPbH50bx9q9V8Ou3TuNp7no0n/BpSMBiCbXYrz1rAi8e08uMnOTLwVME+h9mqt3uY2Z8gDGYJYnVH0HUA28FMjy+MIZ33wX8zf11vlhn37Qtdo94QmmHBCyW65TRDG84K+D0cZA0aB6iQBlNQ5EJvOwJsEJBIX+KJUl8SlhiLCn81yV+7QUv3Rn21kbxp/cY/vpbNUwtMDpTyf2Ezg4JyOXTJLz6rHHsPCX4/5ZCZOLGRQvgkl+zgeBVkAo0D+eBiNcEM16h6bKqjKp6TNZKRJ2vjOHtu3N84Jvz0NdhTnba10vS3K+XsRzxOCarwCtOWcSZ4zXuOK0wZkYCRuj+LlkSOWhOqiVS/mUsceinMO58DD5vI/it23LcyJ1vpkbqJXb2q3uC2YYE5IJtP30UV37PKHe/HFZQ0MxgZrQK8LxZzIOHsmZGPZrAER4M4zGcXwbmM8dfPjCOG7nzLeTghR7r8sjW5ahWPCjDSMWwdTPw0pNzNFhPE8L1Rp3bnP6RkeC/YNHjKGF0aH47Qh+9TRECK5M7aIMYpWCEfJpgOyh5BmQkWAZj8ABDjfKf90/i3V+fwTTj+rsZrM8jW5/DWtmojMv+ok0ZXvuiCsbDIrju4Gs2GFkkrCwKd6cQPdMlN5ZaepXJVYkmOn1liD4Z7p4exx9+bZ6vWorAMq5THFUCnmhzpMHr936XvIA7EFffCJB8Qj8Cypaw2jGrXrc6iZBPz1dw7d2L/rcIV/iTum7hThid1uCE6ezR7mi1ArzkpICJMO+hdYmscNORlEJ85CbJrYwl6j3PbEqyC6ncX4rZDKU4JUfVd/Ix+EKe4dN7q7j58RwL9ZLTOs4OLAFFh81jhjecM+a/dCY1SAGutBNE1oRCJ30CVZ1p6c6W6kfpJFN9ba+OVoSMLLRQwYPThvfdW8Njh8U+OQstv/WYG1gCgu/1zhjLsGtzAyKPaJIWOID/kRSJNMz6c4CkfJJUfjnEGC0iqdxeJ9pm84Cbn6rga8/UvK12n/VbGlgCigjnbTRMVuqRgGSgiOhLHTnh2c5TmXzyF5KPmTGWpWJfaRb91FQOw5P8tuPqr9f8l8t9K64z48AScIQL+QtbJ2D8TlVU0NNvAvlA69JkRk9HhpxfiyQEVeAjdPqFiy7nEUtjSCPyS5oZzPgsTlZ/9IkJPD4DxpVlcDCwBJysGi54oYbPy+0q1zsRqFUNvGyGcnEV+YD9lQm868sHUIf2wlVUXQeuWoF1MIzVD+GsyQyTYRohPfKuPkTXGtzQuKu1TGaGjG+uzQzdDlHuxgdGsF8/MqDDkdKYVU/INLAE/KGzJlANDWSIxBAPE1BmAc2WAQKv1+Be14T2zgTpVS3BwxYB3YeXWVaMiTGjX4Y5m8TVu/lBYBvROFjngRw21x+v+f4NXOmsyTXpEmjwZGbOIz8ZVR2gGQmgLZJqqZ+Ia2YwM/CkIvitnrf9qb3gvV/OSziKgz5FbhDEQBJwnKN+2eQi9NcMdAk22JK1Nluq63SSSzd0+pXLHlWVqAx86vnQvfP83pn7p9hLHXN+HpQTl2JQhtoa50SFr18a/PYj5ztALrwukS1r/5y4kyBPM4NZC9L1gh5eIuCPG3r4eHiGHYD1qrLu9QNGQC20YcsEoFcmfAUIa0Bs8Etguk3TpOjP/5oU5IcLSno2k5kxhjXLyohckg76G0GmeXxdcgXXMaB8b340YO+svOUoeeJhrT3WXK81xglUnwtNznzPZAVZXieBWl0nJ1qFlKN7ynZKEagT8lEcIeUlhegLsHlHjgpue3QO+mNAGOAjG7Sxawfaeuo4Rplp8GWyPwn0mwQxpp+9hy2RsNMcpGDMeb6aebpmWGxoC5ZyMDFgBDTffX7g5BwjujYaoNcrjutGyjwAAA8fSURBVArAdzJInBRRlKe2PbmBKhmbeZUFA6TL4U+6nldZQOsQOR+bH8XTixX1omUYwNyAETCAGw/O3AgnYsZd0DgDZiROCc4tqlDoCgE/SKaQk2c5H10oRTJ3pdFgEKOMASLgRDTWAQ+PQ6niVx5fwKP6Q4YsD3Li9A/W8PXm7yTudhnZICJo9Lo/k+wKbVc0SDiY75XynO/zaDQRkbJXCrQ/dKiB/XNkcOjlNRj6gSNglcTbxC3J+qyvmcHM+niszRS4Dc9ZFbXAT8Kxa2ZtnTxOtU9cAh7hBGVccKsEZFVDxtGLZwJ0LSWM5PTrpt6ZCPSPl1XoFhGGePhuyN1LkhsfX+MYzARA/5ApZxy+Z2Ze5VhHZ1bBvI3iUF5Fne8h2aTUAwsuwcCO/QgHLpIJIOGw5DCTzZboywpdevfNNpx7/T3LtdZnfuAIaDBwuyJWvqDkFATVSFJ5wYzxlOmAmbGOdWgBaZ6dy7BvXlNvTkIM8KFZGKDhGy+jBuOo9R2wLoc5Ci4yw6smQOmskFGQnVKX2gSqlqQlDzKso3gJcOqJcIanpmt46vAihge4HgM2C+RF5BeZwbclgBl0+LlpBFQW3LlZIoHIwiVkQ/dD9RNQinFoIcfhhfQCWh4Y2IN7wWCNXQ8HdT19LDNs8syv1GW35Yi3nD3Fmq0bZusqifGSg4sBImDcaWqNHDWu91qX3sxgZoyEpsQKjgDDAr8Hroc49THCCiq2XNZVLs7CuhpSr8EEGoL/o5/6ApedO5C/ZeE3Grwa+26nXY9ORaIPyQIH/DCTzrP0D45YAsyMAI/YDuK1m2VAr2mU0Q4p5Gwo95tN0Ev+sg4mBoiAcYG13HN5hQuv+zmBJJAymuOZZIqZtZ1FthQh5dVUQGw32QZZDiQBD/AeLPAJRH+JNIQuBOxghJm5JpHIC6s4pVvOVD/3eDHmKsKsS9fBIyC//npsxqDLoH5UwK1wycImorQM6d1MS7P6HJlO4ulruMD3QLrsDymIQXsNY+SN4f59NX4NFglBBbdAP7dObjKYCS31WnIMhcBTDkOD953+AVhLwHVSd8B2wMBb/wbuf3YefBWH3OIqkhcxUzprF0xIavlFGMwikm01ssHrfnoLuJp669F3VQRcHxMQsHchIFRGETIDEwwA+eRAj6PTbqZa7c6dKrOlPqoRqOYmq+zAYwAJCOhbsHo2wrdxpIFIIhZ2UEG7X1Jxw+IrFzhA8oDvb4Ll8F/NQHrGoQQ0ncYcwbjaYXNWyKkXMuS8DJP8VqGWbsPEmRnASZjnPdhCPorAsTdMZ4GFlMiflO2U8mwSssNYJm2HqVRUcEGqJJUfTOgjO3AjX8yBJ+sVfvpsyU5kJh1B2XVixMBkKPJmljRDucoZyFbpvy7cuQHi83vrJF/g1dT80ur3ZSRS7iMUsxKoIL9Uko1Z1qNOCgpegHlWQWA2JRa1uTI6/XMH2Ih0yWUowU1gAGeB3MCXHp2DJO/KQHYQRgAxj/aDJunJT0iqYqFCvyP5JAlWNgI81DbFwKeB3AG16vc8W+MjwQi4KSH0mwWTNyDyCVjDEb954UMIhvRL09hv6pPPupTP8lXMDJ9GMzGwxwg7CWdmsB6+K1FH6g3JV56rgSXgTCPgqdomEipAfx9GT7CCJifwJF4KdICZOajmV3jxri7AANejdATmC1iA/tWHv4qhKw2o0F+bX1GUauAxsATUg8jHH54XHxBEjDIVejAkElQEKzuvMs/YovAqa61b94EloL4K+8wjM6gbXw9ztyqvMDmizY0wR9mW8maWsktkTxMNZkP6lSdsYAmogT8xC9SqY3wVU54S5rXJ5XzBwm1SDw7cIlkQ4RLoo0Q/vZRWVmARZUi3FNaT1Et9179G67D+R9ljhAdqAQ/OjvBpuIdDYhOMDsZzBjNKgoq25CqjqgwWlyTZlyifv4pj3bPsWDfwfI3PDQ4H+ST8T99aQMbLcL9+6t5Pf/dFUL4J3++61xTPzMwJ2/Igo8tbZsswsLmBJSBgmKsH3P5UzX+ahR6H+JKI182FHIMgm6SgvGBmEkP0mYEBJmCGOt9A78srmK5M+mVYzyK57vu4UaU5E4f0YxmnkthIKJ8gP6r86zwPwq1VcWSHK2IwvY6RrztSFe2uGejTABNQz8HA44dy3Ppo/CsF0hhszYRoErJbJA/vp27WgdMNMAFFghxPzTTwhb11NEKFi2/QjmfMKXmeBUmVe0F2oZe9rI9+3ALLygHODzAB46rrp1mPzVcwVR+Nr2O0fUWTn0UVASRiE/7w4dp4RWW2o5rXRasCrLgGyy8EBcPw4Aw8fwnIzh3bRNawAZ3vn2pgz754AVZZoKmVxJeElrbIJYNkoWqKls5IRn0XDJKPCUvaaNYZrMwAE7C10I8cbuDu/TkfGTgd+ke8Fm2BLEmImtWd9bqmVSMGjZfglnbQc5zxQZ8CQH8o6PHaBsxmI7wM59yrjtGcOPsiEY9RCydc2CEBuWQ5ccuj87hvajFeGrnzwWloPBO8ZloCNckWJUqHMV8Gi0xm1OknNx5drXkDtAzTkIAFB759sIaHZqpooOI0ab98Fk6FkC2hUC0rdCkHSSxH8VFyCGBIwIIFc42AW5/KMDUH+J/sKPRHU+ghRHufk/FoBj6BYw0JWCxe4KX1Uw8v4sm5CnLTO0HAAgBeMfvtdslWlqzFpMplIMajytD3GCjjkICl5X5iJsed0+MknaaFNPGtiowp+ShrZjAzZfui7JLygdUM+q9v1YExaqYHZrD9Bmo01siOP9szC345QopUUOc53bfR3Expt8v4ysZMNQHnatMjZrrpMvqbmSJHpwE/DwlYEED7nDF/9/469la3oB7qfoOsvylNdVsyM5gZSada8DyLhTT0O2QV+vkMkm1IwOZq6xEhR42cetft01GrLYwzZGZOrqjsfjazDoPKEQrj38RZhgDTbaWD+2ZHncErcnoHb9DLjfjD35rBlE0gkFQhiESkSiBBS1guRi+7fu6lvw3Yyz5o+iEBu6z4oQbw9w9VETJDJfIPOsg/XnYBs5ISqzyKumuIsMoGn9/ubQR8fnf1+PVORLvxnjnMVca5CwZeLoM3nlEYgZwnQY5uSSfq0Q3wVzByN53cB8ODMzAkICehM4lCDx3O8U8PBzT85i16aNcqoxePik0uVuLZzGCUvn1KDtGcgSEBm1PRntm/mONv76+jhnFkIYOZoZGBEssevsnRSzIiRO45C2kYpuYMcEqb+WGmmAHxRMS552DAJx/nNyP8NoRfEpOIdJCRYpiOzgwMCdhlHgN1wuOH6vjEowtYyEaRcwd07slAu5lxNyRY1r2hQBUtRaJe94tG8mb+JG1u0Ets8Mtmmr086KchAfswoE6W7DlguHsK3P1yboLWvO2LRKIDt0rPMw6zPJcSzYABDp6VBQ9KJmaGaUhA50Dv0zf2LeILTwMLqPJJ1hnV27nDoh1RkNpMlDOYETCphuAMDAnISeiX5nkJ/cQTwAOHK6QNp4sc1E5Xhur7LkibqJUQfags9s20f5rJQ7WG4IwOJ6HfDIg+X3pyHrcfGMUcn4ZBGrYAP0Q0ZXTPBxLWoYpSOlKBUtzjPSFztKhAMcBpSMAVLP58w3D17lk8Mt0o9rIVVOrjEsnXx2GATEMCrmCxA2l394EGvrqwBXXtcCuoIxddaQXlm+CmNyRgczb8F0et0jDXcwbEu9/77BT2N8ZIx+5u8nF0IVnO9zG88nbUHVJxuAN251JX7V4+kfzD3g0QkYDAp2IyreypokBdILqnwsHvJbt7HE/tc93WkICrWAHtbn9820Hop1ooCKRLrAAeZolcLAzTimZgSMAVTVPL6emFHNfeY2hU+FIl090h4LsducdEWvLsiqhXVohO4K4JP+jlctBPQwKukgF633fjffN4YOEkBO542hWdYIqTBxKMYN4JRntgRqCgFiQohkdpBoYELE3GSrMP83XMO2+fwSK/HUl10rtAlRPZymxzXeCuWHaU84BjSMAjIMAiiXTbPuAz+8ZZW1OYwGK/RBYyiYX9vAbKppkbqAEfrcE+dKCOG++Zx1S9Cv9fOeQ5Aq+1AoqtT5drFEfuzCP3ivJQxBl47ggY2z9hz6Qbvvh0wKf3ZmjodSp3xdZgxDahpUk5chQo7g0xPDRzw1k40hl4araOmx4FHp6vxH/EvpJAJJ+oKazEfb37DHfANaywnoBvfmQRX9g3SgJW4JtgiK9m/GIrRULRTiRePBeqgRZDAq5x+Q/VAv58zwIemq0450RKfuvmedEsodkMd0BI2VQMdmZIwDWuf0423TVVxzXf4otp3tEElhO/JBOazXCH9K0yNDUDnRkScM3Lb8hDhmvuWsSjldPQ8H8/wkcUMa9LbPEuXaS7mAdONSTgmpe8wQg56iHg9R9+FgfrGQkJfiMiBlrz1Yz54y90cI+UEBUlBxtDAh6V9ReZAu4/1MAND46iZhUnIDnp0f19YHSJZd0Hem54GhLwKHJA/4ruL/Ycwuf2j6FRkMzJV7QhDiorYqa8yoOMIQGP4uoHPl08Mxdw9d0NPFEf90uxE41fg+TKCGxPF2eKYeIMDAnISTiaqUGS3ba3jg8+kGMBo/7vk3g99iZat4F0cs2QikMCOhGO0qm47B5YbOAjDzewewr+wOHEoy0j35gwPFozMCRgay7WnDPe3IlgOV/L7HlmETc9PYqDNo4KmWcmC99PB+5+TGtu7EQM0KXPQwJ2mZQjVQVYvOTyrBfU1+2e5XfFI5jjpZjvYxByRg4kIUWkIzMDnoYEPKoEILua8QIO1XM+kNSx+9CIPxWLfw3tgHxYaboNeGZIwGNIANFxz7MLuPo+cBccQYg3g2zRuFdSDBO/vBxOwjGdgcDr7oe/OY3331/ltyX8vFcMvClEZKAoioE+OCMDPf5jPHi9GQQWee1995453LdwCtszvwBTxfwwDQl4nDjwxGyO3/jCITwbNqKRi352nFp+fjczIAR87hch57735e/U8LYv1/hwMvrcd+h50oMhAY/bQmSY49ckn3l8Af+yl5fmMLz/09QPCahZOA7I+G5QzeydXsAdjx/gfqjSEEMCHicOpP1OG5/uAI9Ts8/7ZoYEPE5LlAg4fPRon/AhAdvn45iXEhGPeUMnSANDAp4gC3Wk3Xy+1/v/AAAA//95jNeRAAAABklEQVQDANXO4L5OfvToAAAAAElFTkSuQmCC" alt="TUSK mark" width="20" height="20">TUSK Innovations Global</span></div><div class="t2" style="line-height:1.65">EAK is an electronics engineering workspace where AI agents draft and route the design with you, and EAK itself checks every change before you accept it.<br><br>This page is a <b style="color:var(--t1);font-weight:560">product vision and interactive simulation</b>. The model providers, the LCSC catalogue, stock and prices are simulated with sample data; nothing here connects to a live service. Engineering numbers (impedance, rule checks, BOM totals) are computed in the page from the sample design.</div><div class="row"><span class="grow"></span><button class="btn" data-a="replay">Replay the launch film</button><button class="btn" data-a="guideOpen">Guided walkthrough</button><button class="btn pri" data-a="closeDlg">Close</button></div>`)},
  closeDlg(){closeDlg()}, palette(){palOpen()}, undo(){undo()}, redo(){redo()},
  replay(){closeDlg();startFilm()},
  guideOpen(){closeDlg();guideStart(U.gi||0)}, guideNext(){guideGo(U.gi+1)}, guidePrev(){guideGo(U.gi-1)}, guideClose(){U.guideOn=false;renderShell()},
@@ -2120,14 +2427,14 @@ const A={
  stopTask(){const t=U.tasks.find(x=>x.id===U.taskSel);clearTimeout(t.timer);t.st="stopped";t.log.push({who:"ai",text:"Stopped. Nothing in the design changed."});renderAll()},
  recheck(){const t=U.tasks.find(x=>x.id===U.taskSel);buildProposal(t)},
  applyProp(){const t=U.tasks.find(x=>x.id===U.taskSel);if(t.base!==D.rev){toast("Refused: the design changed since EAK checked this");return;}const r=RECIPES[t.key];
-  D.checkpoints.push({name:"Before: "+r.title,rev:D.rev});commit(r.title+` (${t.chTxt.length} changes)`,"agent · "+U.tools[t.tool].name+" (applied by you)",d=>r.apply(d,t.amps));t.st="applied";t.appliedRev=D.rev;renderAll();toast(`Applied as r${D.rev} · a checkpoint was saved first`)},
+  D.checkpoints.push({name:"Before: "+r.title,rev:D.rev});commit(r.title+` (${t.chTxt.length} changes)`,"agent · "+agentN(t)+" (applied by you)",d=>r.apply(d,t.amps));t.st="applied";t.appliedRev=D.rev;renderAll();toast(`Applied as r${D.rev} · a checkpoint was saved first`)},
  discardProp(){const t=U.tasks.find(x=>x.id===U.taskSel);t.st="discarded";renderAll();toast("Discarded · nothing changed")},
  toolSignin(a){U.tools[a].st="busy";R.agents();setTimeout(()=>{U.tools[a].st="connect";U.tools[a].ver="Signed in · not connected to Aurora S3";renderAll();toast(`${U.tools[a].name} signed in with its own account`)},RM?0:900)},
  toolConnect(a){U.tools[a].st="ready";U.tools[a].ver="Connected · own sign-in";renderAll();toast(`${U.tools[a].name} connected to Aurora S3 through EAK's tool server`)},
- toolInstall(a){dlg(`<h2>Install ${U.tools[a].name}</h2><div class="t2" style="line-height:1.6">EAK links to the tool's official installer and detects it when it is done. The tool signs in with its own account; EAK never stores its credentials.</div><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Close</button><button class="btn pri" data-a="toolInstalled" data-arg="${a}">Simulate install</button></div>`)},
- toolInstalled(a){closeDlg();U.tools[a].st="signin";U.tools[a].ver="Found · not signed in";R.agents()},
- addTool(){dlg(`<h2>Add a command-line agent</h2><div class="t2" style="font-size:12.5px">Any agent that speaks MCP can drive EAK. Give its command and EAK registers the project's tool server with it.</div><label class="col" style="gap:6px"><span class="lbl">Name</span><input id="ntName" value="Aider"></label><label class="col" style="gap:6px"><span class="lbl">Command</span><input id="ntCmd" class="mono" value="aider"></label><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Cancel</button><button class="btn pri" data-a="addToolOk">Add</button></div>`)},
- addToolOk(){const n=($("#ntName").value||"").trim()||"Custom agent";U.tools["c"+Date.now()]={name:n,st:"ready",ver:"Custom · "+(($("#ntCmd").value||"").trim()||"command")};closeDlg();R.agents();toast(n+" added")},
+ toolInstall(a){dlg(`<h2>Connect ${U.tools[a].name}</h2><div class="t2" style="line-height:1.6">Paste an API key. EAK keeps it in the OS keychain and never shows it to an agent. Providers are simulated in this vision; no key is sent anywhere.</div><label class="col" style="gap:6px"><span class="lbl">API key</span><input id="pvKey" class="mono" value="xai-••••••••••••••••" aria-label="API key"></label><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Cancel</button><button class="btn pri" data-a="toolInstalled" data-arg="${a}">Connect</button></div>`)},
+ toolInstalled(a){closeDlg();U.tools[a].st="ready";U.tools[a].ver="Connected · key in the OS keychain";renderAll();toast(`${U.tools[a].name} connected · ${U.models[a]} available`)},
+ addTool(){dlg(`<h2>Add a model provider</h2><div class="t2" style="font-size:12.5px">Any provider with an OpenAI-compatible API, including a model you host yourself. Simulated in this vision.</div><label class="col" style="gap:6px"><span class="lbl">Name</span><input id="ntName" value="Self-hosted"></label><label class="col" style="gap:6px"><span class="lbl">Model</span><input id="ntCmd" class="mono" value="local-model"></label><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Cancel</button><button class="btn pri" data-a="addToolOk">Add</button></div>`)},
+ addToolOk(){const n=($("#ntName").value||"").trim()||"Custom provider",m=($("#ntCmd").value||"").trim()||"model",k="c"+Date.now();U.tools[k]={name:n,st:"ready",ver:"Connected · custom endpoint"};U.models[k]=m;MODELS[k]=[m];closeDlg();R.agents();toast(n+" added")},
  cam(a){const C={iso:[-0.55,0.95],top:[0,0.05],front:[0,1.35],back:[Math.PI,1.2]}[a];U.auto=false;const s={...U.cam},t0=performance.now(),dur=RM?0:900;const ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
   const step=now=>{const k=dur?Math.min(1,(now-t0)/dur):1;U.cam.yaw=s.yaw+(C[0]-s.yaw)*ease(k);U.cam.tilt=s.tilt+(C[1]-s.tilt)*ease(k);if(k<1)requestAnimationFrame(step)};requestAnimationFrame(step);R.v3d()},
  autoRot(){U.auto=!U.auto;R.v3d()}, vis3(a){U.vis3[a]=U.vis3[a]?0:1;R.v3d()},
@@ -2162,22 +2469,110 @@ document.addEventListener("keydown",e=>{const typing=/INPUT|TEXTAREA|SELECT/.tes
  if(/^[0-9]$/.test(e.key)&&!e.ctrlKey&&!e.metaKey&&!e.altKey)go(VIEWS[(+e.key+9)%10][0]);});
 document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches&&e.target.matches(".proj,.tree .n")){e.preventDefault();e.target.click();}});
 
+/* launch film: board scenes, all drawn from window.EAKBoard (shared with the PCB module) */
+const EB=()=>window.EAKBoard;
+const EBC={L1:"#C98543",L4:"#6E9FD0",L2:"#5FA88A",L3:"#D07A8C",pad:"#D4B36A",via:"#C9A866",silk:"#E9E6DE",edge:"#E2B35C",mask:"#0E1512"};
+function ebPads(o){const B=EB();let s="";for(const c of B.components)for(const p of c.pads){const col=o.mono||EBC.pad;
+ if(p.shape==="round")s+=`<circle cx="${p.x}" cy="${p.y}" r="${p.w/2}" fill="${col}"/>`;
+ else s+=`<rect x="${(p.x-p.w/2).toFixed(3)}" y="${(p.y-p.h/2).toFixed(3)}" width="${p.w}" height="${p.h}" rx="${p.shape==="oval"?Math.min(p.w,p.h)/2:Math.min(p.w,p.h)*.12}" fill="${col}"/>`;
+ if(p.drill&&!o.mono)s+=`<circle cx="${p.x}" cy="${p.y}" r="${p.drill/2}" fill="#0A0A0B"/>`;}return s;}
+function ebTracks(layer,o){return EB().tracks.filter(t=>t.layer===layer).map(t=>`<polyline data-net="${t.net}" points="${t.pts.map(q=>q.join(",")).join(" ")}" fill="none" stroke="${o.mono||(o.hl&&o.hl.includes(t.net)?"#FFD9B0":EBC[layer])}" stroke-width="${t.w}" stroke-linecap="round" stroke-linejoin="round"/>`).join("");}
+function ebSvg(o={}){const B=EB(),W=B.outline.w,H=B.outline.h,r=B.outline.cornerRadius,L=o.layers||{L1:1,L4:1,silk:1};let s=`<rect width="${W}" height="${H}" rx="${r}" fill="${EBC.mask}"/>`;
+ if(L.L4)s+=`<g opacity=".55">${ebTracks("L4",o)}</g>`;
+ if(L.L1){s+=`<rect x=".3" y=".3" width="${W-.6}" height="${H-.6}" rx="${r}" fill="${EBC.L1}" fill-opacity=".09"/>`+ebTracks("L1",o);}
+ for(const k of B.outline.keepouts)s+=`<rect x="${k.x}" y="${k.y}" width="${k.w}" height="${k.h}" fill="#0A0D0C" stroke="${EBC.silk}" stroke-opacity=".35" stroke-width=".12" stroke-dasharray=".6 .45"/>`;
+ if(L.L1)s+=ebPads(o);
+ for(const v of B.vias)s+=`<circle cx="${v.x}" cy="${v.y}" r="${v.d/2}" fill="${EBC.via}"/><circle cx="${v.x}" cy="${v.y}" r="${v.drill/2}" fill="#0A0A0B"/>`;
+ for(const h of B.outline.holes)s+=`<circle cx="${h.x}" cy="${h.y}" r="${h.pad/2}" fill="${EBC.pad}"/><circle cx="${h.x}" cy="${h.y}" r="${h.drill/2}" fill="#0A0A0B"/>`;
+ if(L.silk){for(const b of B.silk.outlines)s+=`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="${EBC.silk}" stroke-opacity=".55" stroke-width=".12"/>`;
+  for(const t of B.silk.labels)s+=`<text x="${t.x}" y="${t.y}" font-size="${t.size}" fill="${EBC.silk}" fill-opacity=".75" font-family="ui-monospace,monospace">${t.ref}</text>`;
+  for(const t of B.silk.texts)s+=`<text x="${t.x}" y="${t.y}" font-size="${t.size}" font-weight="${t.weight}" fill="${EBC.silk}" fill-opacity=".8" font-family="system-ui,sans-serif" letter-spacing=".08">${esc(t.t)}</text>`;}
+ s+=`<rect width="${W}" height="${H}" rx="${r}" fill="none" stroke="${EBC.edge}" stroke-width=".15"/>`;return s;}
+function ebGerber(layer){const B=EB(),W=B.outline.w,H=B.outline.h,c="#F2F2F0";let s="";
+ if(layer==="L1")s=ebTracks("L1",{mono:c})+ebPads({mono:c});
+ else if(layer==="L4")s=ebTracks("L4",{mono:c});
+ else if(layer==="L2")s=`<rect x=".4" y=".4" width="${W-.8}" height="${H-.8}" fill="${c}"/>`;
+ else if(layer==="L3"){const z=B.zones.find(z=>z.layer==="L3"&&z.rect),k=B.zones.find(z=>z.layer==="L3"&&z.cutout);s=`<rect x=".4" y=".4" width="${W-.8}" height="${H-.8}" fill="${c}"/>`+(k?`<rect x="${k.cutout.x-.25}" y="${k.cutout.y-.25}" width="${k.cutout.w+.5}" height="${k.cutout.h+.5}" fill="#000"/>`:"")+(z?`<rect x="${z.rect.x}" y="${z.rect.y}" width="${z.rect.w}" height="${z.rect.h}" fill="${c}"/>`:"");}
+ if(layer!=="L1"&&layer!=="L4")for(const k of B.outline.keepouts)s+=`<rect x="${k.x}" y="${k.y}" width="${k.w}" height="${k.h}" fill="#000"/>`;
+ if(layer!=="Edge")for(const v of B.vias)s+=`<circle cx="${v.x}" cy="${v.y}" r="${layer==="L1"||layer==="L4"?v.d/2:.2}" fill="${layer==="L1"||layer==="L4"?c:"#000"}"/>`;
+ return`<svg viewBox="-2 -2 ${W+4} ${H+4}"><rect x="-2" y="-2" width="${W+4}" height="${H+4}" fill="#000"/>${s}<rect width="${W}" height="${H}" rx="${B.outline.cornerRadius}" fill="none" stroke="${layer==="Edge"?"#E2B35C":"#3A3A3F"}" stroke-width="${layer==="Edge"?.3:.12}"/></svg>`;}
+
+/* 3D: perspective canvas over the same geometry; real stack-up heights; explode separates the four copper layers */
+function eb3D(cv,cam,o={}){const B=EB(),W=B.outline.w,H=B.outline.h,dpr=Math.min(devicePixelRatio||1,2),cw=cv.clientWidth,ch=cv.clientHeight;if(!cw||!ch)return;
+ if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(ch*dpr)){cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);}
+ const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,cw,ch);
+ const e=o.explode||0,cy=Math.cos(cam.yaw),sy=Math.sin(cam.yaw),ct=Math.cos(cam.tilt),st=Math.sin(cam.tilt),Dd=210,f=Math.min(cw,ch)*1.6*cam.zoom,ox=cw*(o.cx||.5),oy=ch*(o.cy||.53);
+ const pr=(x,y,z)=>{const X=x-W/2,Y=y-H/2,x1=X*cy-Y*sy,y1=X*sy+Y*cy,y2=y1*ct-z*st,dz=Dd-(z*ct+y1*st);return[ox+x1*f/dz,oy+y2*f/dz,dz];};
+ const pg=(pts,fill,stroke,lw)=>{g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();if(fill){g.fillStyle=fill;g.fill();}if(stroke){g.strokeStyle=stroke;g.lineWidth=lw||1;g.stroke();}};
+ const quad=(x,y,w,h,z)=>[pr(x,y,z),pr(x+w,y,z),pr(x+w,y+h,z),pr(x,y+h,z)];
+ const shade=(hex,k)=>{const n=parseInt(hex.slice(1),16);return`rgb(${Math.min(255,(n>>16)*k)|0},${Math.min(255,((n>>8)&255)*k)|0},${Math.min(255,(n&255)*k)|0})`;};
+ const lines=(layer,z,col)=>{for(const t of B.tracks.filter(t=>t.layer===layer)){g.beginPath();t.pts.forEach((q,i)=>{const p=pr(q[0],q[1],z);i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]);});const m=pr(t.pts[0][0],t.pts[0][1],z);g.lineWidth=Math.max(.6,t.w*f/m[2]);g.strokeStyle=col;g.lineCap="round";g.lineJoin="round";g.stroke();}};
+ const lab=(z,t,c)=>{if(e<.08)return;const p=pr(W,H,z);g.globalAlpha=Math.min(1,(e-.08)*4);g.font="12px system-ui,sans-serif";g.fillStyle=c;g.fillText(t,p[0]+14,p[1]+4);g.globalAlpha=1;};
+ const S=B.stack,zc=id=>S.find(x=>x.id===id).z,z1=zc("L1")+e*20,z2=zc("L2")+e*7,z3=zc("L3")-e*7,z4=zc("L4")-e*20;
+ const ko=B.outline.keepouts[0];
+ if(e>.02){
+  pg(quad(0,0,W,H,z4),"#101814");lines("L4",z4,"#7E6A4E");lab(z4,"L4 · Bottom Cu · signal","#6E9FD0");
+  g.globalAlpha=.5;pg(quad(.4,.4,W-.8,H-.8,z3),"#5A3A2A");const zr=B.zones.find(z=>z.layer==="L3"&&z.rect);if(zr)pg(quad(zr.rect.x,zr.rect.y,zr.rect.w,zr.rect.h,z3),"#7A4A30");if(ko)pg(quad(ko.x,ko.y,ko.w,ko.h,z3),"#0A0A0B");g.globalAlpha=1;lab(z3,"L3 · PWR · VIN and +3V3 split","#D07A8C");
+  g.globalAlpha=.5;pg(quad(.4,.4,W-.8,H-.8,z2),"#6A4A30");if(ko)pg(quad(ko.x,ko.y,ko.w,ko.h,z2),"#0A0A0B");g.globalAlpha=1;lab(z2,"L2 · GND · solid plane","#5FA88A");
+  for(const v of B.vias){const a=pr(v.x,v.y,z1),b=pr(v.x,v.y,z4);g.globalAlpha=Math.min(.6,e);g.strokeStyle="#C9A866";g.lineWidth=.8;g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.stroke();g.globalAlpha=1;}
+  pg(quad(0,0,W,H,z1-.05),"#0E1512");lab(z1,"L1 · Top Cu · signal","#D8955C");}
+ else{const top=quad(0,0,W,H,1.6),bot=quad(0,0,W,H,0);const fc=[[0,1],[1,2],[2,3],[3,0]].map(([a,b])=>({p:[top[a],top[b],bot[b],bot[a]],z:(top[a][2]+top[b][2])/2}));fc.sort((a,b)=>b.z-a.z);for(const x of fc)pg(x.p,"#0A0E0C");pg(top,"#0E1512");}
+ lines("L1",z1,"#9A6538");
+ for(const c of B.components)for(const p of c.pads){const q=pr(p.x,p.y,z1);if(p.shape==="round"){g.beginPath();g.arc(q[0],q[1],Math.max(1,p.w/2*f/q[2]),0,7);g.fillStyle=EBC.pad;g.fill();}else pg(quad(p.x-p.w/2,p.y-p.h/2,p.w,p.h,z1),EBC.pad);}
+ for(const v of B.vias){const q=pr(v.x,v.y,z1);g.beginPath();g.arc(q[0],q[1],Math.max(.7,v.d/2*f/q[2]),0,7);g.fillStyle=EBC.via;g.fill();}
+ for(const h of B.outline.holes){const q=pr(h.x,h.y,z1);g.beginPath();g.arc(q[0],q[1],h.pad/2*f/q[2],0,7);g.fillStyle=EBC.pad;g.fill();g.beginPath();g.arc(q[0],q[1],h.drill/2*f/q[2],0,7);g.fillStyle="#050606";g.fill();}
+ if(e<.3)for(const b of B.silk.outlines){g.globalAlpha=.35*(1-e/.3);pg(quad(b.x,b.y,b.w,b.h,z1),null,EBC.silk,.7);g.globalAlpha=1;}
+ const COL={wroom:"#B7BBC0","usb-c":"#C5C8CC",barrel:"#1B1C1E",inductor:"#3A3B3D",tact:"#2A2B2D","lga-lid":"#BFC2C6","chip-cap":"#8B6E4E","chip-res":"#1E1F21"};const faces=[];
+ const box=(x0,y0,x1,y1,za,zb,c)=>{const v=[[x0,y0,za],[x1,y0,za],[x1,y1,za],[x0,y1,za],[x0,y0,zb],[x1,y0,zb],[x1,y1,zb],[x0,y1,zb]].map(q=>pr(...q));
+  for(const[ix,k] of [[[4,5,6,7],1],[[0,1,5,4],.62],[[1,2,6,5],.78],[[2,3,7,6],.7],[[3,0,4,7],.55]]){const pts=ix.map(i=>v[i]);faces.push({pts,z:pts.reduce((a,p)=>a+p[2],0)/4,c:shade(c,k),top:k===1});}};
+ for(const c of B.components){const x0=c.x-c.body.w/2,y0=c.y-c.body.h/2,x1=c.x+c.body.w/2,y1=c.y+c.body.h/2,base=COL[c.model]||"#1A1B1D";
+  if(c.model==="wroom"){box(x0,y0,x1,y0+6.3,z1,z1+.8,"#16241E");box(x0+.6,y0+6.6,x1-.6,y1-.4,z1,z1+c.body.z,base);continue;}
+  if(c.model==="tact"){box(x0,y0,x1,y1,z1,z1+c.body.z*.7,base);const r=c.body.w*.22;box(c.x-r,c.y-r,c.x+r,c.y+r,z1,z1+c.body.z,"#3C3D40");continue;}
+  box(x0,y0,x1,y1,z1,z1+c.body.z,base);}
+ faces.sort((a,b)=>b.z-a.z);for(const x of faces)pg(x.pts,x.c,x.top?"rgba(255,255,255,.06)":null,.6);
+ if(o.labels&&e<.05){g.font="11px ui-monospace,monospace";g.fillStyle="rgba(242,242,240,.7)";for(const r of ["U1","J1","J2","L1"]){const c=B.components.find(x=>x.ref===r);if(!c)continue;const q=pr(c.x,c.y,z1+c.body.z+.6);g.fillText(r,q[0]-8,q[1]);}}}
+
+/* scenes */
+function sPcb(p){const B=EB(),sv=$("#fPcbSvg");if(!sv.dataset.built){sv.innerHTML=ebSvg({hl:["USB_DP","USB_DN"]});sv.dataset.built=1;}
+ const pts=B.tracks.filter(t=>t.net==="USB_DP"||t.net==="USB_DN").flatMap(t=>t.pts),xs=pts.map(q=>q[0]),ys=pts.map(q=>q[1]);
+ const cx=(Math.min(...xs)+Math.max(...xs))/2,cyy=(Math.min(...ys)+Math.max(...ys))/2,W=B.outline.w,H=B.outline.h;
+ const k=ez(seg(p,.12,.85)),w=(W+6)+(24-(W+6))*k,h=w*(H+6)/(W+6),x=(-3)+((cx-w/2)-(-3))*k,y=(-3)+((cyy-h/2)-(-3))*k;sv.setAttribute("viewBox",`${x} ${y} ${w} ${h}`);
+ sv.querySelectorAll('[data-net="USB_DP"],[data-net="USB_DN"]').forEach(el=>el.setAttribute("stroke",p>.3?"#FFD9B0":EBC.L1));
+ $("#fPcbDof").style.opacity=seg(p,.35,.6);$("#fPcbCap").style.opacity=seg(p,.4,.6);}
+function sB3d(p){const cv=$("#fB3d");const k=ez(seg(p,0,.4));const cam={yaw:-1.0+.55*ez(p)+FILM.uy,tilt:Math.max(.05,Math.min(1.45,1.12-.3*k+FILM.ut)),zoom:.92+.12*k};
+ const ex=ez(seg(p,.3,.6))*(1-ez(seg(p,.86,1)));eb3D(cv,cam,{explode:ex,labels:true,cx:.5,cy:.58});
+ $("#fB3dCap1").style.opacity=seg(p,.05,.15)*(1-seg(p,.28,.34));$("#fB3dCap2").style.opacity=seg(p,.36,.46)*(1-seg(p,.84,.9));}
+function sFab(p){document.querySelectorAll("#fBom tr").forEach((el,i)=>el.style.opacity=ez(seg(p,.04+i*.04,.12+i*.04)));
+ document.querySelectorAll("#fGerb .gl").forEach((el,i)=>{const k=ez(seg(p,.3+i*.06,.4+i*.06));el.style.opacity=k;el.style.transform=`translateY(${(1-k)*8}px)`;});
+ $("#fPrep").style.opacity=ez(seg(p,.66,.8));document.querySelector("#fs-fab .cam").style.transform=`scale(${1.02-.02*ez(p)})`;}
+function filmBuildBoard(){const B=EB();if(!B||$("#fBom").dataset.built)return;$("#fBom").dataset.built=1;
+ const qty={};for(const c of B.components)qty[c.bom]=(qty[c.bom]||[]).concat(c.ref);
+ const rows=Object.entries(B.bom).filter(([k])=>qty[k]).sort((a,b)=>b[1].price[0]*qty[b[0]].length-a[1].price[0]*qty[a[0]].length).slice(0,8);
+ $("#fBom").innerHTML=`<table><tbody>${rows.map(([k,b])=>`<tr><td class="mono" style="font-size:12px;color:#A9A9A6">${qty[k].slice(0,3).join(", ")}${qty[k].length>3?" +"+(qty[k].length-3):""}</td><td><div class="mono" style="font-size:12.5px">${esc(b.mpn)}</div><div style="font-size:11.5px;color:#6E6E6B">${esc(b.mfr)} · ${esc(b.lcsc)}</div></td><td class="num">${qty[k].length}</td></tr>`).join("")}</tbody></table>`;
+ const per=Object.entries(B.bom).reduce((a,[k,b])=>a+(qty[k]?b.price[1]*qty[k].length:0),0);
+ $("#fGerb").innerHTML=[["L1","Top Cu"],["L2","GND"],["L3","PWR"],["L4","Bottom Cu"],["Edge","Outline"]].map(l=>`<div class="gl">${ebGerber(l[0])}<span>${l[0]} · ${l[1]}</span></div>`).join("");
+ $("#fPrep").innerHTML=`<dl class="kv"><dt>Board</dt><dd>${B.outline.w} × ${B.outline.h} mm · 4 layers · ${B.outline.thickness} mm</dd><dt>Parts</dt><dd>${B.components.length} placed · ${Object.keys(qty).length} BOM lines</dd><dt>Parts per board</dt><dd>$${per.toFixed(2)} <span class="t3">sample</span></dd><dt>Status</dt><dd style="color:var(--ok)">Prepared for review</dd></dl>`;
+ const d=B.diffPairs[0];$("#fPcbCap").innerHTML=`Routed on ${d.layer} over the ${B.stack.find(s=>s.id===d.ref).name} plane.<small>USB_DP / USB_DN · ${d.width} / ${d.gap} mm · ${d.computed} Ω · lengths ${B.lengths.USB_DP} / ${B.lengths.USB_DN} mm</small>`;
+ const cv=$("#fB3d");let dr=null;cv.addEventListener("pointerdown",e=>{dr={x:e.clientX,y:e.clientY,uy:FILM.uy,ut:FILM.ut};cv.setPointerCapture(e.pointerId);cv.style.cursor="grabbing";});
+ cv.addEventListener("pointermove",e=>{if(!dr)return;FILM.uy=dr.uy+(e.clientX-dr.x)*.008;FILM.ut=dr.ut+(e.clientY-dr.y)*.006;});
+ cv.addEventListener("pointerup",()=>{dr=null;cv.style.cursor="grab";});}
+
 /* launch film: autoplay timeline, deterministic in time so it can be scrubbed */
-let filmOn=false;const FILM={t:0,playing:false,last:0,raf:0,scenes:[],built:false,fsx:null,hl:false};
+let filmOn=false;const FILM={uy:0,ut:0,t:0,playing:false,last:0,raf:0,scenes:[],built:false,fsx:null,hl:false};
 const clamp01=x=>Math.max(0,Math.min(1,x)),seg=(p,a,b)=>clamp01((p-a)/(b-a)),ez=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
 const FILM_INTENT="A 12–24 V ESP32-S3 sensor node: USB-C for programming, BME280 and SHT40 on I²C, reporting over Wi-Fi.";
 const FILM_BRIEF=[["Power","12–24 V in, TPS62933 buck to 3.3 V"],["USB","USB-C 2.0, ESD protected, 90 Ω pair"],["Sensors","BME280 and SHT40 on I²C"],["Board","4 layers: Top, GND, PWR, Bottom"]];
 const FILM_PARTS=["TPS62933DRLR","TPS2051BDBVR","USBLC6-2SC6","ESP32-S3-WROOM-1-N8R8","BME280","SHT40-AD1B","USB4105-GF-A"];
-function filmScenes(){const M=window.EAKModules&&window.EAKModules.schematic;return[{id:"brand",label:"EAK",d:4200,r:sBrand},{id:"intent",label:"Intent",d:6800,r:sIntent},{id:"agents",label:"Agents",d:7200,r:sAgents},...(M&&M.data&&document.getElementById("tpl-sx")?[{id:"sch",label:"Schematic",d:7400,r:sSch}]:[]),{id:"final",label:"One environment",d:5600,r:sFinal}];}
+function filmScenes(){const M=window.EAKModules&&window.EAKModules.schematic;return[{id:"brand",label:"EAK",d:4200,r:sBrand},{id:"intent",label:"Intent",d:6800,r:sIntent},{id:"agents",label:"Agents",d:7200,r:sAgents},...(M&&M.data&&document.getElementById("tpl-sx")?[{id:"sch",label:"Schematic",d:7400,r:sSch}]:[]),...(window.EAKBoard?[{id:"pcb",label:"PCB",d:7000,r:sPcb},{id:"b3d",label:"3D",d:9500,r:sB3d},{id:"fab",label:"Fabrication",d:7200,r:sFab}]:[]),{id:"final",label:"One environment",d:5600,r:sFinal}];}
 const filmTotal=()=>FILM.scenes.reduce((a,x)=>a+x.d,0);
 function filmBuild(){if(FILM.built)return;FILM.built=true;
  $("#fiBrief").innerHTML=FILM_BRIEF.map(b=>`<span class="k">${b[0]}</span><span>${esc(b[1])}</span>`).join("");
- $("#faLanes").innerHTML=[["Claude Code","Reading the brief","Rails and currents checked against datasheets"],["Codex","Searching the library","7 parts proposed, each with a cited value"]].map(l=>`<div class="flane">${av(l[0])}<div class="col"><span style="font-weight:560">${l[0]}</span><span class="st" data-a1="${esc(l[1])}" data-a2="${esc(l[2])}">${esc(l[1])}</span></div></div>`).join("");
+ $("#faLanes").innerHTML=[["Schematic agent · Claude Opus 5.5","Reading the brief","Rails and currents checked against datasheets"],["Parts agent · GPT-6.1 Sol","Searching the library","7 parts proposed, each with a cited value"]].map(l=>`<div class="flane">${av(l[0])}<div class="col"><span style="font-weight:560">${l[0]}</span><span class="st" data-a1="${esc(l[1])}" data-a2="${esc(l[2])}">${esc(l[1])}</span></div></div>`).join("");
  const cat=(window.EAKModules&&EAKModules.schematic&&EAKModules.schematic.data&&EAKModules.schematic.data.catalogue)||[];
  $("#faParts").innerHTML=FILM_PARTS.map(m=>{const c=cat.find(x=>x.mpn===m)||{};return`<div class="fpart"><span class="m">${m}</span><span class="l">${c.lcsc||""}</span><span class="d">${esc(c.desc||"")}</span><span class="l">${c.mfr?esc(c.mfr):""}</span></div>`}).join("");
  $("#fAreas").innerHTML=["Schematic","Board","3D","Agents","Checks","Fabrication","Terminal"].map(a=>`<span>${a}</span>`).join("");}
-function sBrand(p){const tm=document.querySelector("#fs-brand .tm path");tm.style.strokeDashoffset=90*(1-ez(seg(p,.05,.4)));tm.style.fillOpacity=seg(p,.3,.5);
- const c=document.querySelectorAll("#fs-brand .cam > div");[[.35,.6],[.55,.8],[.65,.9]].forEach((w,i)=>{const k=ez(seg(p,w[0],w[1]));c[i].style.opacity=k;c[i].style.transform=`translateY(${(1-k)*10}px)`;});
+function sBrand(p){
+ const c=document.querySelectorAll("#fs-brand .cam > div");[[.04,.3],[.22,.46],[.42,.66],[.6,.84]].forEach((w,i)=>{const k=ez(seg(p,w[0],w[1]));c[i].style.opacity=k;c[i].style.transform=`translateY(${(1-k)*10}px)`;});
  document.querySelector("#fs-brand .cam").style.transform=`scale(${1.04-.04*ez(p)})`;}
 function sIntent(p){const n=Math.round(FILM_INTENT.length*seg(p,.06,.5));$("#fiText").textContent=FILM_INTENT.slice(0,n);
  [...$("#fiBrief").children].forEach((el,i)=>{const k=ez(seg(p,.56+Math.floor(i/2)*.08,.66+Math.floor(i/2)*.08));el.style.opacity=k;el.style.transform=`translateY(${(1-k)*6}px)`;});
@@ -2203,7 +2598,7 @@ function filmRender(){const T=filmTotal();let acc=0;FILM.scenes.forEach((x,i)=>{
  $("#fPlayBtn").innerHTML=FILM.playing?'<svg class="ico" viewBox="0 0 20 20"><path d="M7 4.5v11M13 4.5v11"/></svg>':'<svg class="ico" viewBox="0 0 20 20"><path d="M6.5 4.5l9 5.5-9 5.5z"/></svg>';$("#fPlayBtn").setAttribute("aria-label",FILM.playing?"Pause":"Play");}
 function filmTick(now){if(!filmOn)return;if(FILM.playing){FILM.t+=Math.min(100,now-FILM.last);if(FILM.t>=filmTotal()){FILM.t=filmTotal();filmRender();enterApp();return;}}FILM.last=now;filmRender();FILM.raf=requestAnimationFrame(filmTick);}
 function filmSeek(ms){FILM.t=Math.max(0,Math.min(filmTotal()-1,ms));filmRender();}
-function startFilm(){filmOn=true;FILM.scenes=filmScenes();filmBuild();const T=filmTotal();let acc=0;
+function startFilm(){filmOn=true;FILM.scenes=filmScenes();filmBuild();filmBuildBoard();FILM.uy=0;FILM.ut=0;const T=filmTotal();let acc=0;
  $("#fMarks").innerHTML=FILM.scenes.map((x,i)=>{const m=`<button class="fmk" data-i="${i}" data-a="fSeek" data-arg="${acc}" style="left:${acc/T*100}%"><span>${x.label}</span></button>`;acc+=x.d;return m;}).join("");
  $("#film").classList.remove("gone");$("#film").style.opacity=1;$("#app").classList.remove("on");$("#app").setAttribute("aria-hidden","true");closeDlg();
  FILM.t=0;FILM.playing=true;FILM.last=performance.now();cancelAnimationFrame(FILM.raf);FILM.raf=requestAnimationFrame(filmTick);}

@@ -1,6 +1,6 @@
 # EAK product vision
 
-`eak-product-vision.html` is the long-term product vision for EAK: an electronics engineering
+`eak-product-vision.html` is the long-term product vision for EAK (Electronics Agent Kit), by TUSK Innovations Global: an electronics engineering
 workspace where AI agents draft the design with you, and EAK checks every change before you
 accept it. Open it in any browser. It is one self-contained file: no network, no fonts or
 libraries fetched, no build step.
@@ -13,7 +13,7 @@ the EAK application.
 
 ### Identity
 - **Idea:** an engineering instrument, not a website: calm, precise and bench-grade. Near-black and white carry the identity, as in the TUSK (Tusk Innovations Global) mark.
-- **Brand mark:** the TUSK "T" in its orange, drawn inline as SVG. Orange is a restrained accent: the mark, the focus ring, the primary action and current progress. It never fills large areas.
+- **Wordmark and credit:** EAK stands alone as a wordmark, with its full name, Electronics Agent Kit, where it is introduced. TUSK is credited as "by TUSK Innovations Global" with the exact TUSK mark, embedded from the supplied artwork (never redrawn). Orange is a restrained accent: focus, the primary action and current progress. It never fills large areas.
 - **Materials stay physical:** board copper, ENIG gold and soldermask keep their real colours. Brand orange is never used for copper.
 
 ### CMF (colour, material, finish)
@@ -71,20 +71,20 @@ Separation between levels comes from tone steps. A hairline (`rgba(255,255,255,.
 
 ## 2. Storyline: storyboard frame → product screen
 
-The storyline is the existing 15-frame storyboard: the engineer's view, the 12-stage workflow and its loops, the product architecture, and the AI tool integration (Traycer review report §3, §8, §10 and §11). A launch film introduces it: brand reveal, intent, agents interpreting the brief and picking parts, the real schematic in macro, and the final reveal of EAK as one environment. It autoplays on the same data as the product, with play, pause, replay, skip, a scrubbable timeline with scene markers, and a seamless hand-off into the workspace. The frames then play in order as a guided walkthrough through the product: the presenter advances with → / ← or **Next**, and every screen stays freely explorable.
+The storyline is the existing 15-frame storyboard: the engineer's view, the 12-stage workflow and its loops, the product architecture, and the AI tool integration (Traycer review report §3, §8, §10 and §11). A launch film introduces it: brand reveal, intent, agents interpreting the brief and picking parts, the real schematic in macro, and the final reveal of EAK as one environment. Scenes: brand reveal, intent, agents and parts, the real schematic in macro, the routed PCB in macro, the physical board in 3D with the real four-layer explode (grab to rotate), BOM, Gerber and fab prep, and the final reveal. It autoplays on the same data as the product, with play, pause, replay, skip, a scrubbable timeline with scene markers, and a seamless hand-off into the workspace. The frames then play in order as a guided walkthrough through the product: the presenter advances with → / ← or **Next**, and every screen stays freely explorable.
 
-1 First launch → Home · 2 Describe the design goal → Home, draft brief with question cards · 3 Continue next day → Home, Continue and Needs attention · 4 Workspace and journey → Schematic, journey in the top bar · 5 Choose components → Parts: symbol, footprint, datasheet values, LCSC (sample) · 6 Schematic capture → Schematic, Power sheet · 7 ERC with guided fixes → Checks · 8 Review a proposed change → Agents, Claude Code proposal, ERC re-run on a copy · 9 Update PCB → Board, update dialog · 10 Placement, routing, DRC → Agents, orchestrated Codex and Claude Code lanes with live tool calls on the canvas · 11 3D check → 3D, enclosure height check · 12 Outputs and release check → Fabricate: BOM, Gerber, assembly, release check · 13 Checkpoint, come back tomorrow → Project history and checkpoints · 14 Connect an AI tool, no terminal → Agents, AI tools · 15 Terminal → Terminal, a detected agent session.
+1 First launch → Home · 2 Describe the design goal → Home, draft brief with question cards · 3 Continue next day → Home, Continue and Needs attention · 4 Workspace and journey → Schematic, journey in the top bar · 5 Choose components → Parts: symbol, footprint, datasheet values, LCSC (sample) · 6 Schematic capture → Schematic, Power sheet · 7 ERC with guided fixes → Checks · 8 Review a proposed change → Agents, the schematic agent's proposal, ERC re-run on a copy · 9 Update PCB → Board, update dialog · 10 Placement, routing, DRC → Agents, two orchestrated agent lanes (layout and power) with live tool calls on the canvas · 11 3D check → 3D, enclosure height check · 12 Outputs and release check → Fabricate: BOM, Gerber, assembly, release check · 13 Checkpoint, come back tomorrow → Project history and checkpoints · 14 Connect an AI tool, no terminal → Agents, model providers and model selection · 15 Terminal → Terminal, a detected agent session.
 
 ## 3. The product
 
-Ten areas of one shell around one flagship board, **ATMOS-1**: a four-layer air-quality node with an ESP32-S3, a TPS62933 buck, USB-C, SCD41, SHT40 and BME280.
+Ten areas of one shell around one flagship board, **Aurora S3**: a four-layer ESP32-S3 environmental sensor node with a 12–24 V input, a TPS62933 buck, USB-C (TPS2051 switch, USBLC6 ESD), BME280 and SHT40. The board geometry (`window.EAKBoard`) is shared by the PCB views, the 3D views and the film.
 
 1. **Home:** projects, new design, KiCad import, continue, and attention items (ERC errors, stock risk, proposals to review).
 2. **Project:** file explorer, brief and rail currents, design history, checkpoints.
 3. **Schematic:** three sheets with symbols, pins, wires, junctions, a bus, power flags and net labels; hover traces a net.
 4. **Board:** layer toggles, footprints, routed tracks, vias, a GND pour with thermal reliefs, keep-out, silkscreen, stack-up, impedance and design rules.
 5. **Parts:** search, symbol and footprint previews, datasheet viewer, parameters, LCSC number, stock and price breaks (sample data).
-6. **Agents:** Claude Code, Codex, Gemini CLI and OpenCode with status. Orchestrated tasks split across agents, the context each one sees, live tool calls on a copy, proposals with a check delta, then apply or undo.
+6. **Agents:** model providers (Anthropic, OpenAI, Google, xAI) with their connection state, and model selection per provider and per agent role (Claude Opus 5.5, Fable 5.2 and Sonnet 5.5; GPT-6.1 Sol and Terra; Gemini 4 Carbon and Neon; Grok 4.7 and 4.6). Orchestrated tasks split across agents, the context each sees, live tool calls on a copy, proposals with a check delta, then apply or undo. Providers are simulated.
 7. **Checks:** ERC and DRC findings that locate on the canvas; UNKNOWN is never a pass; editable rules.
 8. **3D:** perspective canvas render with rotate, view presets, layer explode, layer visibility and a height check.
 9. **Fabricate:** BOM with sample pricing, Gerber layer viewer, assembly (CPL), order preparation and the release check.
