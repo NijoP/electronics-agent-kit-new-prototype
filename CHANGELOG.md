@@ -12,18 +12,24 @@ docs/RELEASE_STATUS_v0.2.0.md.
 - Agents:
   - Settings › AI tools detects Claude Code and Codex and starts AI sessions in propose mode, with a live log and
     Restart (#125, #131). There are no OpenCode or Gemini adapters, and Restart starts a fresh session.
-  - Propose mode: proposals are checked on a copy and applied by a person (#106). The in-app review dialog has not
-    landed.
-  - WEFT agent-to-agent orchestration over the CLI and `eak-mcp` (#117). It has no in-app view yet.
+  - Propose mode: proposals are checked on a copy and applied by a person (#106), and reviewed in the app with Review
+    agent proposals… (#111).
+  - WEFT agent-to-agent orchestration over the CLI and `eak-mcp` (#117). It has no in-app view yet: the activity view
+    (#126, #129, #130) was not merged before the freeze.
+  - Known gap: Settings › AI tools is reached only from the EDA workspace rail's Preferences item.
 - Library:
   - In the app: footprint verification FP-001..FP-010 (#113) and pin-to-pad verification are shown in the Parts dock
-    and the Library panel, and components can be created and edited in the personal library (#128).
+    and the Library panel, and components can be created and edited in the personal library (#128). KiCad library
+    folders can be imported, and the library database searched, from the Library (#122).
   - Engine only, no UI yet:
     - the new `eak-library` crate: part model, part sources and KiCad export (#109);
     - MPN discovery and manufacturer identification (#114);
-    - KiCad library folder import (#115);
+    - KiCad library folder import, the engine half of #122 (#115);
     - datasheet references and typed specs (#116);
-    - the library database and portable export/import (#119).
+    - portable library export/import (#119);
+    - a CSV/JSON part-list source and an LCSC slot marked not connected (#120).
+- Manufacturing: release integrity. Unverified footprints block release, packaging is bound to the revision, and
+  Gerber and drill files are parsed back (#123).
 - QA: a real-window PCB workflow scenario (#99) and the definition-of-done fixes F3 to F11.
 - The app version is 0.2.0 (#112). Every build is unsigned and not notarized.
 
