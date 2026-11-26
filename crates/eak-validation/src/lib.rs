@@ -15,6 +15,7 @@ pub mod pin_pad;
 pub mod report;
 pub mod sourcing;
 pub mod state;
+pub mod stress;
 
 pub use gates::{GateReport, GateState};
 pub use report::{Bound, Finding, Limit, Outcome, Quantity, Report, Severity};

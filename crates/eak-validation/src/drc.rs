@@ -118,7 +118,9 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
             // The copper weight of the layer this track is on; a layer missing from the
             // stackup yields 0 oz, which the sizing rejects as an error (never a pass).
             let oz = p.pcb.board.stackup.copper_oz(t.layer).unwrap_or(0.0);
-            match ipc::trace_width_mm(amps, false, oz, c.temp_rise_c) {
+            // Inner layers are buried in laminate: IPC-2221 halves the constant for them.
+            let inner = !t.layer.is_outer();
+            match ipc::trace_width_mm(amps, inner, oz, c.temp_rise_c) {
                 Ok(req) => {
                     if to_mm(t.width) + 1e-9 < req {
                         f.push(
@@ -941,7 +943,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         rule("DRC-005", "Board edge clearance", format!("{} from the outline (arc edges flattened, chord error ≤ 10 µm) and from every board cut-out", mm(c.board_edge_clearance as f64)), "Project constraints"),
         rule("DRC-006", "Drill size / annular ring", format!("drill ≥ {}, ring ≥ {}", mm(c.min_drill as f64), mm(c.min_annular_ring as f64)), "Project constraints"),
         rule("DRC-007", "Courtyard overlap", "", "EAK"),
-        rule("DRC-008", "Track current capacity", format!("ΔT {} °C, copper weight of each track's own layer ({})", c.temp_rise_c, p.pcb.board.stackup.layers.iter().map(|l| format!("{} {} oz", l.layer.name(), l.copper_oz)).collect::<Vec<_>>().join(", ")), "IPC-2221 (via DESK audit; verified_against_standard = false)"),
+        rule("DRC-008", "Track current capacity", format!("ΔT {} °C, IPC-2221 k 0.048 on outer / 0.024 on inner layers, copper weight of each track's own layer ({})", c.temp_rise_c, p.pcb.board.stackup.layers.iter().map(|l| format!("{} {} oz", l.layer.name(), l.copper_oz)).collect::<Vec<_>>().join(", ")), "IPC-2221 (via DESK audit; verified_against_standard = false)"),
         rule("DRC-009", "Board outline", "closed simple polygon", "EAK"),
         rule("DRC-010", "Schematic/PCB net consistency", "", "EAK"),
         rule("DRC-011", "Missing footprints", "", "EAK"),
@@ -1222,7 +1224,7 @@ fn thermal_reliefs(p: &Project, fill: &copper::ZoneFill) -> Vec<Finding> {
         }
         match ipc::trace_width_mm(
             amps,
-            false,
+            !fill.layer.is_outer(),
             p.pcb.board.stackup.copper_oz(fill.layer).unwrap_or(0.0),
             c.temp_rise_c,
         ) {
@@ -1338,6 +1340,39 @@ mod tests {
             },
         );
         p
+    }
+
+    /// Regression: DRC-008 sized inner-layer tracks with the external IPC-2221 constant, passing a
+    /// buried 0.5 mm track at 1 A / 1 oz / 10 °C that needs about 0.78 mm.
+    #[test]
+    fn inner_layer_track_current_uses_the_internal_constant() {
+        let mut p = Project::new("inner");
+        let four = eak_core::Stackup::multilayer(4, 1_600_000, 1.0, 1.0, "FR-4", 4.5);
+        p.pcb.board.stackup = four;
+        p.constraints.temp_rise_c = 10.0;
+        p.constraints.net_currents_a.insert("PWR".into(), 1.0);
+        let drc008 = |layer: CopperLayer| {
+            let mut q = p.clone();
+            q.pcb.tracks.insert(
+                "t".into(),
+                eak_core::Track {
+                    id: "t".into(),
+                    layer,
+                    width: 500_000,
+                    a: Point::mm(2.0, 2.0),
+                    b: Point::mm(12.0, 2.0),
+                    net: "PWR".into(),
+                    arc_deg: None,
+                },
+            );
+            run(&q)
+                .findings
+                .into_iter()
+                .filter(|f| f.rule_id == "DRC-008" && f.severity == Error)
+                .count()
+        };
+        assert_eq!(drc008(CopperLayer::Top), 0);
+        assert_eq!(drc008(CopperLayer::Inner(1)), 1);
     }
 
     #[test]

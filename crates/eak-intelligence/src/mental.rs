@@ -11,6 +11,7 @@
 //!
 //! Nothing here evaluates a design; the harness design flow and the validators do.
 
+pub use eak_engineering::rating::{derating, Derating, CURRENT_RATINGS, DERATING, VOLTAGE_RATINGS};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -43,82 +44,6 @@ pub struct MentalModel {
     pub constraints: Vec<HardConstraint>,
     pub guidance: Vec<&'static str>,
 }
-
-/// A derating fact: use at most `max_fraction` of the rating.
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct Derating {
-    /// Reference-designator prefix the fact applies to (`*` = any part).
-    pub refdes_prefix: &'static str,
-    /// `voltage` or `current`.
-    pub quantity: &'static str,
-    pub max_fraction: f64,
-    pub source: &'static str,
-}
-
-/// Derating facts. Most specific first; `derating` picks the first match.
-pub const DERATING: &[Derating] = &[
-    Derating {
-        refdes_prefix: "C",
-        quantity: "voltage",
-        max_fraction: 0.5,
-        source: "DESK component-selection skill: 50 % voltage derating for ceramic capacitors (DC-bias loss); assumes MLCC",
-    },
-    Derating {
-        refdes_prefix: "L",
-        quantity: "current",
-        max_fraction: 0.75,
-        source: "DESK component-selection skill: 25 % current derating for power inductors",
-    },
-    Derating {
-        refdes_prefix: "Q",
-        quantity: "current",
-        max_fraction: 0.75,
-        source: "DESK component-selection skill: 25 % current derating for MOSFETs",
-    },
-    Derating {
-        refdes_prefix: "D",
-        quantity: "current",
-        max_fraction: 0.75,
-        source: "DESK component-selection skill: 25 % current derating for diodes",
-    },
-    Derating {
-        refdes_prefix: "*",
-        quantity: "voltage",
-        max_fraction: 0.8,
-        source: "DESK ipc.py default derating 0.8",
-    },
-];
-
-/// The derating fact for a part and quantity, if any.
-pub fn derating(refdes: &str, quantity: &str) -> Option<&'static Derating> {
-    let prefix: String = refdes
-        .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .collect();
-    DERATING
-        .iter()
-        .find(|d| d.quantity == quantity && (d.refdes_prefix == "*" || d.refdes_prefix == prefix))
-}
-
-/// Rating names EAK libraries use for a voltage limit.
-pub const VOLTAGE_RATINGS: &[&str] = &[
-    "voltage",
-    "voltage_max",
-    "vds_max",
-    "vce_max",
-    "reverse_voltage_max",
-    "input_voltage_max",
-    "supply_voltage_max",
-];
-
-/// Rating names EAK libraries use for a current limit of a series (rail-current) part.
-pub const CURRENT_RATINGS: &[&str] = &[
-    "saturation_current",
-    "current",
-    "current_max",
-    "drain_current_max",
-    "forward_current_max",
-];
 
 fn step(
     id: &'static str,
