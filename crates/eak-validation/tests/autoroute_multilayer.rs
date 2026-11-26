@@ -249,3 +249,54 @@ fn constrained_four_layer_design_routes_with_every_rule_kept() {
     assert_all_connected(p);
     assert_drc_clean(p);
 }
+
+/// Route fingerprint: track and via count plus an FNV-1a hash of the sorted geometry (layer,
+/// end points, width, net; via position, drill, size, span). Object ids are excluded: they are
+/// random per run.
+fn fingerprint(p: &Project) -> (usize, usize, u64) {
+    let mut rows: Vec<String> = p
+        .pcb
+        .tracks
+        .values()
+        .map(|t| {
+            let (a, b) = if t.a <= t.b {
+                (t.a, t.b)
+            } else {
+                (t.b, t.a)
+            };
+            format!("T {:?} {a:?} {b:?} {} {}", t.layer, t.width, t.net)
+        })
+        .chain(p.pcb.vias.values().map(|v| {
+            format!(
+                "V {:?} {} {} {:?} {:?} {}",
+                v.position, v.drill, v.diameter, v.from, v.to, v.net
+            )
+        }))
+        .collect();
+    rows.sort();
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in rows.join("\n").bytes() {
+        h = (h ^ b as u64).wrapping_mul(0x0100_0000_01b3);
+    }
+    (p.pcb.tracks.len(), p.pcb.vias.len(), h)
+}
+
+/// The same design routes to the same copper on every run and platform (undo/replay and
+/// reviewable diffs depend on it). Two builds in one process get different random object ids,
+/// which used to reorder the ratsnest and change the routes.
+#[test]
+fn the_same_board_routes_to_the_same_copper_every_run() {
+    use std::io::Write;
+    for board in ["route_inner_keepout", "route_ref4", "route_constrained4"] {
+        let first = fingerprint(build(board, 0).0.project());
+        let second = fingerprint(build(board, 0).0.project());
+        assert_eq!(first, second, "{board}: two runs routed differently");
+        let _ = writeln!(
+            std::io::stderr(),
+            "ROUTER-FINGERPRINT {board}: tracks={} vias={} hash={:016x}",
+            first.0,
+            first.1,
+            first.2
+        );
+    }
+}
