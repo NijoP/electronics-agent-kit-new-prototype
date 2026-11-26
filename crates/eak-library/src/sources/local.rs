@@ -344,7 +344,7 @@ const FIELDS: [&str; 8] = [
 fn column(header: &str) -> Column {
     let h = header.trim();
     if let Some(f) = FIELDS.iter().find(|f| f.eq_ignore_ascii_case(h)) {
-        return Column::Field(*f);
+        return Column::Field(f);
     }
     if !h.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("spec:")) {
         return Column::Ignored;
