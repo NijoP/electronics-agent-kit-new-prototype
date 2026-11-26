@@ -934,8 +934,10 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         .matrix_cell(ObjectClass::Silk, ObjectClass::Outline)
         .map_or(SILK_TO_EDGE_MIN, |m| m.max(SILK_TO_EDGE_MIN));
     f.extend(holes::silk_to_edge(geo, silk_min));
+    // DRC-024..026: declared differential pairs.
+    let pair_unknown = crate::pairs::check(p, &mut f);
 
-    let rules = vec![
+    let mut rules = vec![
         rule("DRC-001", "Minimum / net-class track width", format!("min {}", mm(c.min_track_width as f64)), "Project constraints"),
         rule("DRC-002", "Copper clearance", format!("min {}, net classes, declared net voltages, clearance-matrix cells, net-pair rules", mm(c.min_clearance as f64)), "Project constraints; IPC-2221B Table 6-1 B2 for declared voltages (table unverified against standard text)"),
         rule("DRC-003", "Shorts between nets", "", "EAK"),
@@ -960,9 +962,9 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         rule("DRC-022", "Constraint-region track width", "tracks touching a region must be within its min/max track width", "EAK (ADR-0042)"),
         rule("DRC-023", "Silkscreen text and dimensions", format!("silk text and dimension labels ≥ {} high and drawable by the stroke font", mm(MIN_SILK_TEXT as f64)), "EAK default (common fabricator practice; unverified)"),
     ];
+    rules.extend(crate::pairs::rules());
     let not_implemented = vec![
-        "Controlled impedance and signal integrity".into(),
-        "Differential-pair length/skew matching".into(),
+        "Single-ended controlled impedance (net-class target Z0) and signal integrity beyond the declared differential pairs".into(),
         "Thermal analysis and copper current density in zones (only relief-spoke width vs declared net current is checked)".into(),
         "Creepage (surface path) analysis — only voltage-based clearance (air gap) is checked"
             .into(),
@@ -982,6 +984,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         "Arc tracks and arc board edges are checked as chords with at most 10 µm error; the autorouter and auto-placer do not avoid keep-out regions (DRC-021 reports what they put there)".into(),
         "Text and dimensions on the documentation layer are not fabricated and not checked; silk text is not checked against other silk or the courtyards".into(),
         "Clearance-matrix cells are checked by DRC only: the interactive router keeps net classes, declared voltages and net-pair rules but not the matrix, and the autorouter keeps neither the matrix nor net-pair rules (ADR-0046)".into(),
+        "Differential pairs: skew counts track length only (no via barrels); the gap rule checks only the closest approach, not where the members run apart; impedance uses the positive member's width and is not checked on uncoupled segments".into(),
     ];
     limitations.extend(undeclared_nets_not_evaluated(p));
     let (no_current, no_voltage) = undeclared_nets(p, items);
@@ -1000,6 +1003,9 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
             no_voltage.join(", ")
         );
         report = report.degrade("DRC-002", CheckState::Unknown, &why);
+    }
+    for (rule, why) in pair_unknown {
+        report = report.degrade(rule, CheckState::Unknown, &why);
     }
     // A configured clearance-matrix cell no rule enforces is reported, never assumed met.
     let unchecked: Vec<String> = c
