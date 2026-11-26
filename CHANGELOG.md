@@ -31,6 +31,15 @@ docs/RELEASE_STATUS_v0.2.0.md.
 - Manufacturing: release integrity. Unverified footprints block release, packaging is bound to the revision, and
   Gerber and drill files are parsed back (#123).
 - QA: a real-window PCB workflow scenario (#99) and the definition-of-done fixes F3 to F11.
+- Fix: main compiles again after #111, #122 and #123 each changed the IPC command count (#132).
+- Limitations (in full in docs/RELEASE_STATUS_v0.2.0.md):
+  - no complete multilayer autorouter;
+  - no complete electrical, thermal, HV, RF or mechanical verification suite (missing inputs give UNKNOWN or
+    BLOCKED, never PASS);
+  - packages stay draft;
+  - AI tools have not been tested against real installed Claude Code or Codex;
+  - no live distributor.
+  Not tested on real hardware.
 - The app version is 0.2.0 (#112). Every build is unsigned and not notarized.
 
 ## Unreleased - Distributor parts search and Fabricator preparation

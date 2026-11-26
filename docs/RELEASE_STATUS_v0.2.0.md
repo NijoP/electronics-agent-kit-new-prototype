@@ -44,9 +44,10 @@ cargo test and vitest on Linux, plus builds and tests on Windows, macOS arm64 an
 | Datasheet references and typed specs per part | partial: engine only; no UI | #116 | ci: `eak-library` unit tests |
 | Local SQLite library database with prefix search (A2) and portable user library export/import (A3) | partial: the database is searched in the app through #122; export/import is engine only | #119 (A2 was first opened as #118) | ci: `db` and `portable` unit tests |
 | CSV/JSON part-list source and the LCSC not-connected slot (B.3) | partial: engine only; the LCSC source is a slot marked not connected | #120 | ci (Linux, Windows, macOS arm64 and x64 all green on the PR) |
+| IPC command count fix after #111, #122 and #123 (main compiles again) | landed | #132 | ci on the PR (all six checks) |
 | App version 0.2.0 | landed | #112 | ci; `scripts/check-release-docs.sh` (versions agree) |
 
-## Open at the last update of this page (not in this release unless merged and green before the freeze)
+## Not merged: finished, planned for the next release
 
 | Feature | PR |
 |---|---|
@@ -54,13 +55,27 @@ cargo test and vitest on Linux, plus builds and tests on Windows, macOS arm64 an
 | WEFT launch integration (launched sessions self-register): finished, not merged | #129 |
 | WEFT conflicts and engineer review in the activity view: finished, not merged | #130 |
 
+## Limitations
+
+- **Routing:** there is no complete multilayer autorouter; the autorouter does no via or layer-transition routing.
+- **Verification:** there is no complete electrical, thermal, high-voltage, RF or mechanical verification suite. A check
+  whose inputs are missing reports UNKNOWN or BLOCKED, never PASS, and the report lists `not_implemented` and its
+  limitations.
+- **Manufacturing packages:** packages stay draft, because land-pattern tables are not in the release gate. BOM and CPL
+  are bound to the package only through its manifest. Gerber and drill read-back runs only in CI.
+- **AI tools:**
+  - The adapters have not been tested against a real installed Claude Code or Codex: CI uses fake binaries, and the
+    captain will test the real tools by hand.
+  - There are no OpenCode or Gemini adapters.
+  - Restart starts a fresh session.
+  - Settings › AI tools is reached only from Preferences in the schematic and PCB workspace; see Known bugs.
+- **Library:** there is no live distributor connection; LCSC is a slot marked not connected.
+
 ## What is not done
 
 - **Signing:** nothing is code-signed or notarized; the repository has no signing secrets. Windows SmartScreen and
   macOS Gatekeeper will warn, and `provenance.json` records `"signing": "unsigned (no signing secrets exist)"`.
-- **Installers:** the one-line installers (`install.sh`, `install.ps1`) are code-reviewed only and have never been run
-  (docs/PLATFORM_SUPPORT.md). The release workflow smoke-tests the built bundles on its runners; nobody has tested them
-  on real hardware.
+- **Installers:** see the Installers section below. No real-hardware testing has happened.
 - **Platforms:** there are no Linux arm64 or Windows arm64 builds.
 - **Product decisions:** the rail's Agents item opens Model settings, because no agent panel exists in the EDA workspace
   yet; agent sessions run in the Terminal.
@@ -80,6 +95,17 @@ cargo test and vitest on Linux, plus builds and tests on Windows, macOS arm64 an
   Preferences › AI tools. There is no fix in this release.
 
 There are no open GitHub issues. Known limitations are listed per feature in STATUS.md and docs/FEATURE_MATRIX.md.
+
+## Installers
+
+Every build is **unsigned** and not notarized. Windows SmartScreen and macOS Gatekeeper warn on first launch, and the
+README says how to get past the warning after checking the SHA-256 checksum. No real-hardware testing has happened.
+
+| Tier | What | State |
+|---|---|---|
+| 1. Built and smoke-tested on GitHub runners | `.deb`, AppImage, NSIS `setup.exe`, `.dmg` for arm64 and Intel, CLI archives: `release.yml` builds each one from a CI-green commit, checksums it, and installs and uninstalls the package on its runner (Linux, macOS, Windows) | done for every release build |
+| 2. Manual testing by the founder on their own machines | launch, open a project, the main flows, per platform | pending |
+| 3. Not implemented or not fully verified | the one-line installers `install.sh` and `install.ps1` are code-reviewed only and have never been run (docs/PLATFORM_SUPPORT.md); no Linux arm64 or Windows arm64 build; no signing or notarization | not done |
 
 ## Artifacts
 
