@@ -197,8 +197,11 @@ struct Grid {
     rows: usize,
     /// One plane per stack-up layer, top to bottom.
     owner: Vec<Vec<u32>>,
-    /// Cells where no via may be drilled (keep-outs, hole-to-hole spacing).
+    /// Cells where no via may be drilled (all-layer keep-outs, hole-to-hole spacing).
     no_via: Vec<bool>,
+    /// Per plane: cells a via may not touch there (keep-outs limited to some layers), so a
+    /// blind/buried via that does not reach those layers may still sit there.
+    no_via_on: Vec<Vec<bool>>,
     /// Allowed blind/buried spans, shortest first (empty = through vias only).
     spans: Vec<SpanRule>,
 }
@@ -232,6 +235,7 @@ impl Grid {
             rows: self.rows,
             owner: vec![vec![FREE; n]; self.owner.len()],
             no_via: vec![false; n],
+            no_via_on: vec![vec![false; n]; self.owner.len()],
             spans: self.spans.clone(),
         }
     }
@@ -278,7 +282,9 @@ impl Grid {
     }
     /// As `via_ok`, for a via that only spans planes `lo..=hi`.
     fn via_ok_on(&self, c: usize, r: usize, net: u32, lo: usize, hi: usize) -> bool {
-        !self.no_via[self.idx(c, r)]
+        let i = self.idx(c, r);
+        !self.no_via[i]
+            && (lo..=hi).all(|l| !self.no_via_on[l][i])
             && (-1i64..=1).all(|dr| {
                 (-1i64..=1).all(|dc| {
                     let (x, y) = (c as i64 + dc, r as i64 + dr);
@@ -466,6 +472,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         rows,
         owner: vec![vec![FREE; n]; nl],
         no_via: vec![false; n],
+        no_via_on: vec![vec![false; n]; nl],
         spans: spans.clone(),
     };
 
@@ -592,7 +599,16 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         }
         if reg.forbids(RegionObject::Vias) {
             let k = ko();
-            base.forbid_via(&k.shape, max_via_d / 2.0 + margin);
+            let grow = max_via_d / 2.0 + margin;
+            if k.layers.iter().all(|on| *on) {
+                base.forbid_via(&k.shape, grow);
+            } else {
+                for (l, on) in k.layers.iter().enumerate().filter(|(_, on)| **on) {
+                    for i in base.cells(&k.shape, grow) {
+                        base.no_via_on[l][i] = true;
+                    }
+                }
+            }
             via_keepouts.push(k);
         }
     }
@@ -1994,6 +2010,7 @@ mod tests {
             rows,
             owner: vec![vec![FREE; cols * rows]; layers],
             no_via: vec![false; cols * rows],
+            no_via_on: vec![vec![false; cols * rows]; layers],
             spans: vec![],
         }
     }
@@ -2154,6 +2171,23 @@ mod tests {
                 "the span does not reach In2"
             );
         }
+    }
+
+    #[test]
+    fn a_via_keepout_on_some_layers_only_blocks_vias_that_reach_them() {
+        let mut g = grid(3, 3, 4);
+        let i = g.idx(1, 1);
+        g.no_via_on[3][i] = true;
+        assert!(
+            !g.via_ok(1, 1, 1),
+            "a through via reaches the bottom keep-out"
+        );
+        assert!(g.via_ok_on(1, 1, 1, 0, 1), "a Top-In1 blind via does not");
+        g.no_via[i] = true;
+        assert!(
+            !g.via_ok_on(1, 1, 1, 0, 1),
+            "an all-layer keep-out blocks every via"
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
 [
-  {"type": "SetProjectName", "name": "Autoroute: blind Top-In1 span where no through via fits"},
+  {"type": "SetProjectName", "name": "Autoroute: blind Top-In1 span where a bottom via keep-out forbids through vias"},
   {"type": "SetStackup", "stackup": {
     "layers": [
       {"layer": "top", "kind": "signal", "copper_oz": 1.0, "dielectric_after_um": 200, "er": 4.5},
@@ -22,8 +22,8 @@
   {"type": "SyncSchematicToPcb"},
   {"type": "MoveFootprint", "footprint_id": "@R1", "position": {"x": 5000000, "y": 10000000}},
   {"type": "MoveFootprint", "footprint_id": "@R2", "position": {"x": 25000000, "y": 10000000}},
-  {"type": "AddZone", "layer": "bottom", "net": "GND", "clearance": 300000, "outline": [
-    {"x": 500000, "y": 500000}, {"x": 29500000, "y": 500000}, {"x": 29500000, "y": 19500000}, {"x": 500000, "y": 19500000}
+  {"type": "AddRegion", "name": "no vias on bottom", "layers": ["bottom"], "forbid": ["vias"], "outline": [
+    {"x": 0, "y": 0}, {"x": 30000000, "y": 0}, {"x": 30000000, "y": 20000000}, {"x": 0, "y": 20000000}
   ]},
   {"type": "AddRegion", "name": "top wall", "layers": ["top"], "forbid": ["tracks"], "outline": [
     {"x": 13000000, "y": 500000}, {"x": 17000000, "y": 500000}, {"x": 17000000, "y": 19500000}, {"x": 13000000, "y": 19500000}

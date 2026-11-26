@@ -331,9 +331,10 @@ fn the_same_board_routes_to_the_same_copper_every_run() {
     }
 }
 
-/// Blind via span (schema v8 `SetViaSpans`): the bottom layer is one GND pour, so no SIG through
-/// via fits anywhere, and a top-layer wall stands between the parts. The only way across is
-/// In1, reached by the allowed Top-In1 blind span; without that rule SIG stays open.
+/// Blind via span (schema v8 `SetViaSpans`): a via keep-out on the bottom layer covers the board,
+/// so no through via may be placed (it would reach the bottom), and a top-layer wall stands
+/// between the parts. The only way across is In1, reached by the allowed Top-In1 blind span;
+/// without that rule SIG stays open.
 #[test]
 fn a_blind_span_is_used_where_no_through_via_fits() {
     let (e, warnings) = build("route_blind_span", 0);
