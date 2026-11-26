@@ -8,6 +8,7 @@ import { api } from "./api";
 import { ExternalUrl } from "./ExternalUrl";
 import { setDraggedComponent, EAK_COMPONENT_MIME } from "./dragState";
 import { KicadImport } from "./KicadImport";
+import { VerificationReport } from "./library/VerificationReport";
 import { BUSY, FootprintPreview, SymbolPreview } from "./shell/LibraryPanel";
 import type { Facet, LibraryBrowse, LibraryBrowseQuery, LibraryEntry2 } from "./types";
 
@@ -72,6 +73,7 @@ function Detail({ e }: { e: LibraryEntry2 }) {
           ))}
         </tbody>
       </table>
+      <VerificationReport id={e.id} />
       <ul>
         <li>
           Datasheet:{" "}

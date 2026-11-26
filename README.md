@@ -176,7 +176,7 @@ Checks to run before a pull request: `cargo fmt --all -- --check`, `cargo clippy
 
 EAK is an early prototype. **Phase 1, the EDA workspace inside the IDE shell, has landed on `main`.** It
 covers the schematic and PCB editors, routing, design rules with ERC/DRC, library and part editors,
-outputs, 3D, layers and panels. CI builds and tests it on Linux, Windows and macOS, and 34 scenarios drive
+outputs, 3D, layers and panels. CI builds and tests it on Linux, Windows and macOS, and 35 scenarios drive
 the app in a real window (Linux, Xvfb) ([docs/qa/UI_EVIDENCE.md](docs/qa/UI_EVIDENCE.md)). It has **not** been used to
 make a real board, and EAK is not yet ready for professional hardware work.
 

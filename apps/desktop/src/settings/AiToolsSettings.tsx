@@ -75,6 +75,14 @@ export function AiToolsSettings() {
     }
   }, []);
 
+  const shownState = sessions.find((s) => s.id === logFor)?.state;
+  // Live tail: while the shown session runs, its log refreshes with the session list.
+  useEffect(() => {
+    if (!logFor || shownState !== "running") return undefined;
+    const t = window.setInterval(() => void showLog(logFor), SESSION_POLL_MS);
+    return () => window.clearInterval(t);
+  }, [logFor, shownState, showLog]);
+
   /** Run one action; a returned row replaces the tool's row, a session refreshes the list. */
   const act = async (key: string, run: () => Promise<string | ToolStatus | AgentSession>) => {
     setBusy(key);
@@ -193,6 +201,7 @@ export function AiToolsSettings() {
         <label className="inline">
           <input type="radio" name="ai-surface" checked={surface === "headless"} onChange={() => setSurface("headless")} /> Headless (log shown here)
         </label>
+        <p className="muted">Sessions started here run EAK's harness in propose mode: design changes come back as proposals for you to review and apply.</p>
         <label>
           First message (optional in a terminal tab)
           <input type="text" aria-label="First message" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g. Review the power rails" />
@@ -206,6 +215,7 @@ export function AiToolsSettings() {
           <thead>
             <tr>
               <th>Tool</th>
+              <th>Task</th>
               <th>Where</th>
               <th>Status</th>
               <th>Last activity</th>
@@ -219,6 +229,9 @@ export function AiToolsSettings() {
               return (
                 <tr key={s.id} data-session={s.id}>
                   <th scope="row">{s.label}</th>
+                  <td>
+                    <code>{s.id}</code>
+                  </td>
                   <td>{s.surface === "terminal" ? "Terminal tab" : "Headless"}</td>
                   <td title={s.detail}>
                     {SESSION_STATE_LABEL[s.state]}
@@ -237,6 +250,14 @@ export function AiToolsSettings() {
                     >
                       Stop
                     </button>
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      title={s.state === "running" ? "Stop it and start it again with the same first message" : "Start it again with the same first message"}
+                      onClick={() => void act(`restart:${s.id}`, () => api.agentSessionRestart(s.id))}
+                    >
+                      Restart
+                    </button>
                   </td>
                 </tr>
               );
@@ -253,6 +274,7 @@ export function AiToolsSettings() {
           <button type="button" onClick={() => void showLog(shownSession.id)}>
             Refresh log
           </button>
+          {shownSession.state === "running" && <span className="muted"> Updates every {SESSION_POLL_MS / 1000} s while the session runs.</span>}
           <pre className="ai-tools-log" style={{ maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap" }}>{log || "(no output yet)"}</pre>
         </section>
       )}

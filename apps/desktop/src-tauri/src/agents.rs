@@ -247,6 +247,30 @@ pub fn stop(state: &AgentsState, manager: &Manager, id: &str) -> Result<SessionV
         .ok_or_else(|| format!("no agent session {id}"))
 }
 
+/// Start a session again with the same tool, surface, project and first message (a new session
+/// id); a session that is still running is stopped first.
+pub fn restart(
+    state: &AgentsState,
+    manager: &Arc<Manager>,
+    id: &str,
+) -> Result<SessionView, String> {
+    let v = state
+        .sessions
+        .get(id)
+        .ok_or_else(|| format!("no agent session {id}"))?;
+    if v.state == SessionState::Running {
+        stop(state, manager, id)?;
+    }
+    launch(
+        state,
+        manager,
+        &v.tool,
+        Some(Path::new(&v.project)),
+        v.surface,
+        v.prompt.as_deref(),
+    )
+}
+
 pub mod cmd {
     use super::*;
     use crate::terminal::TerminalState;
@@ -338,6 +362,15 @@ pub mod cmd {
         )
     }
     #[tauri::command(async)]
+    pub fn agent_session_restart(
+        state: State<'_, AgentsState>,
+        terminal: State<'_, TerminalState>,
+        id: String,
+    ) -> R<SessionView> {
+        restart(&state, &terminal.manager, &id)
+    }
+
+    #[tauri::command(async)]
     pub fn agent_tool_stop(
         state: State<'_, AgentsState>,
         terminal: State<'_, TerminalState>,
@@ -348,7 +381,7 @@ pub mod cmd {
 }
 
 /// IPC command names this module registers (kept in sync with `AGENT_IPC` in `api.ts`).
-pub const AGENT_COMMANDS: [&str; 8] = [
+pub const AGENT_COMMANDS: [&str; 9] = [
     "agent_tools",
     "agent_tool_connect",
     "agent_tool_disconnect",
@@ -357,4 +390,5 @@ pub const AGENT_COMMANDS: [&str; 8] = [
     "agent_sessions",
     "agent_session_log",
     "agent_tool_stop",
+    "agent_session_restart",
 ];
