@@ -28,6 +28,7 @@ COMMANDS:
   guide                         print the agent guide
   new <DIR> <NAME>              create a project
   info                          project id, revision, counts
+  requirements                  requirement record, completeness, blocked operations
   call <TOOL> [ARGS_JSON|-]     invoke any tool with a JSON object of arguments
   exec <REV> <COMMAND_JSON|->   execute one typed command ({\"type\":\"PlaceSymbol\",...}) at revision REV
   check <erc|drc|mech|dfm|all>  run verification; findings + evidence
@@ -180,6 +181,7 @@ pub fn main_with(args: Vec<String>) -> i32 {
         "tools" => ("list_tools".into(), json!({})),
         "proposals" => ("proposal_list".into(), json!({})),
         "info" => ("project_info".into(), json!({})),
+        "requirements" => ("get_requirements".into(), json!({})),
         "new" => match (a(1), a(2)) {
             (Some(d), Some(n)) => {
                 let d = std::path::absolute(&d).unwrap_or_else(|_| PathBuf::from(&d));

@@ -288,6 +288,30 @@ async function closeMenu(label) {
  * One request to the app's harness endpoint (`<project>/.harness.json`), as the `eak` CLI sends
  * it: one JSON line with the token, one JSON line back (crates/eak-harness/src/endpoint.rs).
  */
+// Values saved by fixture-agent-* steps for later steps ("$saved:<name>").
+const saved = {};
+
+// A scripted agent session on the open fixture through the app's harness endpoint
+// (`<project>/.harness.json` and its token), with the context `eak` / `eak-mcp` would send.
+async function agentSession(s, mode) {
+  const dir = path.join(OUT, "fixture", s.folder);
+  const recFile = path.join(dir, ".harness.json");
+  const t0 = Date.now();
+  while (!fs.existsSync(recFile) && Date.now() - t0 < 15000) await sleep(200);
+  if (!fs.existsSync(recFile)) throw new Error(`no harness endpoint record ${recFile} (the app advertises it for the open project)`);
+  const rec = JSON.parse(fs.readFileSync(recFile, "utf8"));
+  const token = fs.readFileSync(rec.token_file, "utf8").trim();
+  const snap = await ipc("current_project");
+  const revision = snap.project.revision;
+  const context = { project: { dir, id: snap.project.id }, session_id: s.session ?? "ui-evidence-agent", agent: s.agent ?? "ui-evidence", max_class: "engineering_impacting", apply_mode: mode };
+  const call = async (tool, args) => {
+    const out = await harness(rec.endpoint, { token, tool, args, context });
+    if (!out?.ok) throw new Error(`${tool} refused: ${JSON.stringify(out?.error ?? out)}`);
+    return out.result;
+  };
+  return { call, context, revision };
+}
+
 function harness(endpoint, request) {
   return new Promise((resolve, reject) => {
     const where = endpoint.startsWith("tcp:")
@@ -389,21 +413,7 @@ const handlers = {
   // command, "$created:N" is replaced by the first id the Nth command created. The project must not
   // move; the step fails if it does or if any call is refused.
   async "fixture-agent-propose"(s) {
-    const dir = path.join(OUT, "fixture", s.folder);
-    const recFile = path.join(dir, ".harness.json");
-    const t0 = Date.now();
-    while (!fs.existsSync(recFile) && Date.now() - t0 < 15000) await sleep(200);
-    if (!fs.existsSync(recFile)) throw new Error(`no harness endpoint record ${recFile} (the app advertises it for the open project)`);
-    const rec = JSON.parse(fs.readFileSync(recFile, "utf8"));
-    const token = fs.readFileSync(rec.token_file, "utf8").trim();
-    const snap = await ipc("current_project");
-    const revision = snap.project.revision;
-    const context = { project: { dir, id: snap.project.id }, session_id: s.session ?? "ui-evidence-agent", agent: s.agent ?? "ui-evidence", max_class: "engineering_impacting", apply_mode: "propose" };
-    const call = async (tool, args) => {
-      const out = await harness(rec.endpoint, { token, tool, args, context });
-      if (!out?.ok) throw new Error(`${tool} refused: ${JSON.stringify(out?.error ?? out)}`);
-      return out.result;
-    };
+    const { call, context, revision } = await agentSession(s, "propose");
     await call("proposal_begin", { title: s.proposalTitle ?? "", rationale: s.rationale ?? "" });
     const created = [];
     let id = null;
@@ -415,9 +425,32 @@ const handlers = {
       id = r.proposal_id;
     }
     if (s.submit !== false) await call("proposal_submit", { proposal_id: id });
+    if (s.save) saved[s.save] = id;
     const after = (await ipc("current_project")).project.revision;
     if (after !== revision) throw new Error(`the project moved from revision ${revision} to ${after} while proposing`);
     return `SETUP (agent session "${context.agent}" in propose mode through the app harness endpoint: ${s.commands.map((c) => c.type).join(", ")} → proposal ${id}; project still at revision ${after}; not a UI action)`;
+  },
+  // SETUP: harness tool calls of one scripted agent session through the app's endpoint (for
+  // example WEFT messages), exactly as `eak-mcp` sends them. "$saved:<name>" in the arguments is
+  // a value an earlier step saved; `save: "<name>=<dotted.path>"` saves one from a result.
+  async "fixture-agent-calls"(s) {
+    const { call, context } = await agentSession(s, s.mode ?? "propose");
+    const done = [];
+    for (const c of s.calls) {
+      const args = JSON.parse(JSON.stringify(c.args ?? {}).replace(/"\$saved:([\w-]+)"/g, (_, k) => {
+        if (!(k in saved)) throw new Error(`nothing saved as ${k}`);
+        return JSON.stringify(saved[k]);
+      }));
+      const r = await call(c.tool, args);
+      if (c.save) {
+        const [k, p] = c.save.split("=");
+        const v = p.split(".").reduce((o, x) => o?.[x], r);
+        if (v === undefined || v === null) throw new Error(`${c.tool}: no ${p} in ${JSON.stringify(r)}`);
+        saved[k] = v;
+      }
+      done.push(c.args?.kind ? `${c.tool}(${c.args.kind})` : c.tool);
+    }
+    return `SETUP (agent session "${context.agent}" through the app harness endpoint: ${done.join(", ")}; not a UI action)`;
   },
   // SETUP: one typed engine command on the active project through the same IPC the UI's
   // api.execute uses (for example a fixture board outline). Run it before the project is opened
@@ -683,7 +716,12 @@ try {
     logLevel: "error",
     capabilities: { "tauri:options": { application: APP } },
   });
-  for (const st of scenario.steps) {
+  for (const raw of scenario.steps) {
+    // "$saved:<name>" in a selector or expected text is a value an earlier SETUP step saved
+    // (for example a proposal id), so a step can address one proposal's row.
+    const st = { ...raw };
+    for (const k of ["selector", "expect", "gone", "text", "expectText"])
+      if (typeof st[k] === "string") st[k] = st[k].replace(/\$saved:([\w-]+)/g, (m, n) => (n in saved ? String(saved[n]) : m));
     const h = handlers[st.do];
     if (!h) {
       await run({ ...st, shot: false }, () => {

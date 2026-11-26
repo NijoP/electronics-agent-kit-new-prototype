@@ -22,6 +22,7 @@
 //!   messages and review verdicts in one journal; proposal conflict detection.
 //! * `cli`      – the `eak` command line.
 
+pub mod activity;
 pub mod agent_task;
 pub mod cli;
 pub mod context;

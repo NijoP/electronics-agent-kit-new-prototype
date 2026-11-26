@@ -278,6 +278,92 @@ pub fn net_class() -> Value {
     )
 }
 
+/// Requirement status (schema v9, ADR-0057).
+pub fn req_status() -> Value {
+    let names: Vec<&str> = eak_core::ReqStatus::ALL
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
+    enumeration(
+        &names,
+        "UNKNOWN (no value; a recorded one names the owner who must answer it), NEEDS_CONFIRMATION (working value with a source, the owner who must confirm it and risk_if_wrong), CONFIRMED (a person confirmed it: owner and source required; never an agent), DERIVED (written only by a deterministic evaluator with a calculation source; none exists yet, so commands refuse it), NOT_APPLICABLE (no value, reason in the note; never an agent)",
+    )
+}
+
+/// A requirement value (`ReqValue`, tagged by `kind`).
+pub fn req_value() -> Value {
+    let kind = |k: &str| enumeration(&[k], "value kind");
+    let units: Vec<&str> = eak_core::ReqUnit::ALL.iter().map(|u| u.symbol()).collect();
+    let unit = || {
+        enumeration(
+            &units,
+            "unit symbol; it must measure what the field asks for",
+        )
+    };
+    json!({
+        "description": "requirement value: a number, a range (at least one of min, nom, max, in order), text or a flag; quantities always carry a unit",
+        "anyOf": [
+            obj(
+                &[
+                    ("kind", kind("number")),
+                    ("value", number("the figure")),
+                    ("unit", unit()),
+                    ("tolerance_pct", nullable(number("symmetric tolerance, percent"))),
+                ],
+                &["kind", "value", "unit"],
+            ),
+            obj(
+                &[
+                    ("kind", kind("range")),
+                    ("min", nullable(number("lower limit"))),
+                    ("nom", nullable(number("nominal"))),
+                    ("max", nullable(number("upper limit"))),
+                    ("unit", unit()),
+                ],
+                &["kind", "unit"],
+            ),
+            obj(&[("kind", kind("text")), ("text", string("the text"))], &["kind", "text"]),
+            obj(&[("kind", kind("flag")), ("value", boolean("yes or no"))], &["kind", "value"]),
+        ],
+    })
+}
+
+/// Where a requirement value comes from (`ReqSource`).
+pub fn req_source() -> Value {
+    obj(
+        &[
+            (
+                "kind",
+                enumeration(
+                    &[
+                        "client",
+                        "engineer",
+                        "document",
+                        "standard",
+                        "datasheet",
+                        "measurement",
+                        "assumption",
+                        "calculation",
+                        "agent_proposal",
+                    ],
+                    "source kind",
+                ),
+            ),
+            (
+                "reference",
+                string(
+                    "exactly where: person, document and section, standard clause, datasheet table",
+                ),
+            ),
+        ],
+        &["kind", "reference"],
+    )
+}
+
+pub fn req_item_kind() -> Value {
+    enumeration(&["rail", "interface"], "requirement item kind")
+}
+
 /// `BTreeMap<String, f64>`.
 fn number_map(desc: &str) -> Value {
     json!({"type": "object", "additionalProperties": number(desc), "description": desc})

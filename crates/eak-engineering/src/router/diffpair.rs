@@ -360,6 +360,21 @@ fn check(
             }
         }
     }
+    // Hole-to-hole spacing between the members' vias (`violation` only sees placed copper).
+    let (rp, rn) = (
+        env.specs[&rule.positive].via_drill as f64 / 2.0,
+        env.specs[&rule.negative].via_drill as f64 / 2.0,
+    );
+    for vp in &vias[0] {
+        for vn in &vias[1] {
+            if vp.dist(*vn) - rp - rn < env.hole_min - 1.0 {
+                return Err(format!(
+                    "CLEARANCE_CONFLICT: the members' vias would be closer than the {:.3} mm hole-to-hole spacing [DRC-019]",
+                    env.hole_min / 1e6
+                ));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -455,9 +470,13 @@ pub(super) fn attempt(
     let pitch = env.opts.pitch as f64;
     let specs = [&env.specs[&cp.net], &env.specs[&cn.net]];
     let c_pair = clearance::required(&env.p.constraints, &cp.net, &cn.net, CopperLayer::Top);
-    // Vias side by side need their own clearance, so the members spread at a layer change.
+    // Vias side by side need their pad clearance and the hole-to-hole spacing (DRC-019), so the
+    // members spread at a layer change.
     let via_d = specs[0].via_diameter.max(specs[1].via_diameter) as f64;
-    let via_half = o.max((via_d + c_pair) / 2.0 + 1_000.0);
+    let drill = specs[0].via_drill.max(specs[1].via_drill) as f64;
+    let via_half = o
+        .max((via_d + c_pair) / 2.0 + 1_000.0)
+        .max((drill + env.hole_min) / 2.0 + 1_000.0);
     // Break out of each end perpendicular to its pad axis, towards the other end: the members
     // then leave their pads side by side instead of one running over its partner's pad.
     let reach = 2.0 * o + 2.0 * pitch;

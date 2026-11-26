@@ -197,6 +197,10 @@ export const IPC_COMMANDS = [
   "proposal_apply",
   "proposal_discard",
   "proposal_export",
+  "activity_timeline",
+  "weft_conflicts",
+  "weft_engineer_queue",
+  "weft_engineer_verdict",
   "project_files",
   "project_file_read",
   "project_file_create",
@@ -437,6 +441,14 @@ export const api = {
   proposalApply: (id: string, revision: number, steps: number[] | null) => call<ApplyOutcome>("proposal_apply", { id, expected_revision: revision, steps }),
   proposalDiscard: (id: string) => call<ProposalSummary>("proposal_discard", { id }),
   proposalExport: (id: string, steps: number[] | null) => call<string>("proposal_export", { id, steps }),
+  // Agent activity (ADR-0053): revisions, proposal events, WEFT messages and saved checks, read from the project journals.
+  activityTimeline: () => call<import("./shell/activity").ActivityItem[]>("activity_timeline"),
+  // WEFT, the engineer's side (ADR-0053): conflicts among open proposals, review requests routed to
+  // the engineer, and the engineer's verdict sent to the author (then discarding, when asked).
+  weftConflicts: () => call<import("./shell/activity").WeftConflict[]>("weft_conflicts"),
+  weftEngineerQueue: () => call<import("./shell/activity").EngineerRequest[]>("weft_engineer_queue"),
+  weftEngineerVerdict: (proposalId: string, verdict: "approve" | "request_changes" | "reject", body: string, discard: boolean) =>
+    call<unknown>("weft_engineer_verdict", { proposal_id: proposalId, verdict, body, discard }),
   projectFiles: (projectId: string, rel: string) => call<FileEntry[]>("project_files", { project_id: projectId, rel }),
   projectFileRead: (projectId: string, rel: string) => call<FileContent>("project_file_read", { project_id: projectId, rel }),
   projectFileCreate: (projectId: string, rel: string, isDir: boolean) =>

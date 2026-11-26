@@ -5,11 +5,12 @@
 
 use crate::geom::{Nm, Point, Rotation};
 use crate::library::ComponentDef;
+use crate::requirements::RequirementSet;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 8;
+pub const SCHEMA_VERSION: u32 = 9;
 
 pub type Id = String;
 
@@ -97,8 +98,13 @@ pub struct Project {
     pub name: String,
     /// Monotonic revision; every committed command increments it by one.
     pub revision: u64,
+    /// Free-text requirement notes (`AddRequirement`).
     #[serde(default)]
     pub requirements: Vec<Requirement>,
+    /// The structured requirement record (schema v9, ADR-0057): values with unit, status,
+    /// source, owner and timestamp. Omitted from the file when nothing is recorded.
+    #[serde(default, skip_serializing_if = "RequirementSet::is_empty")]
+    pub requirement_set: RequirementSet,
     /// Project-local copy of every component definition used (self-contained project).
     #[serde(default)]
     pub library: BTreeMap<String, ComponentDef>,
@@ -1429,6 +1435,7 @@ impl Project {
             name: name.to_string(),
             revision: 0,
             requirements: vec![],
+            requirement_set: RequirementSet::default(),
             library: BTreeMap::new(),
             schematic: Schematic {
                 sheets,

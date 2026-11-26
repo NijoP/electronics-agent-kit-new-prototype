@@ -28,6 +28,33 @@ pub const JOURNAL: &str = "journal.jsonl";
 pub const ENGINEER: &str = "engineer";
 /// Recipient meaning every registered agent (context, findings, status, blockers).
 pub const EVERYONE: &str = "*";
+
+/// Launch contract (ADR-0053 addendum): a session started by EAK's AI tools (or any launcher)
+/// sets these next to `EAK_AGENT_NAME` and `EAK_SESSION_ID`, and `eak-mcp` then registers the
+/// session on the bus itself, as if it had called `weft_register`.
+pub const ENV_AGENT_TOOL: &str = "EAK_AGENT_TOOL";
+pub const ENV_AGENT_MODEL: &str = "EAK_AGENT_MODEL";
+/// Comma-separated.
+pub const ENV_AGENT_CAPABILITIES: &str = "EAK_AGENT_CAPABILITIES";
+
+/// What a launcher said about the session it started; `None` when `EAK_AGENT_TOOL` is not set
+/// (a session started by hand registers with `weft_register` when it wants to).
+pub fn launch_registration(get: impl Fn(&str) -> Option<String>) -> Option<Value> {
+    let tool = get(ENV_AGENT_TOOL)
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())?;
+    let capabilities: Vec<String> = get(ENV_AGENT_CAPABILITIES)
+        .unwrap_or_default()
+        .split(',')
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .collect();
+    Some(json!({
+        "tool": tool,
+        "model": get(ENV_AGENT_MODEL).unwrap_or_default().trim(),
+        "capabilities": capabilities,
+    }))
+}
 const MAX_TEXT: usize = 8000;
 
 /// A registered agent. `id` is the journal actor label (`agent:<name>@<session>`), so the
@@ -358,6 +385,109 @@ pub(crate) fn conflicts(engine: &Engine) -> Result<Vec<Value>, Fail> {
     Ok(out)
 }
 
+// ------------------------------------------------- the engineer's side (desktop, ADR-0053)
+
+/// The conflicts among open proposals, for the activity view.
+pub fn conflict_list(engine: &Engine) -> Result<Vec<Value>, String> {
+    conflicts(engine).map_err(|f| f.1)
+}
+
+/// Review requests routed to the engineer that the engineer has not answered yet, for proposals
+/// that can still be applied (oldest first, one per proposal).
+pub fn engineer_queue(engine: &Engine) -> Vec<Value> {
+    let Some(dir) = engine.dir() else {
+        return vec![];
+    };
+    let state = read(dir);
+    let answered: BTreeSet<String> = state
+        .messages
+        .iter()
+        .filter(|(_, m)| m.from == ENGINEER && m.kind == MessageKind::ReviewVerdict)
+        .filter_map(|(_, m)| m.proposal_id.clone())
+        .collect();
+    let mut seen = BTreeSet::new();
+    let mut out = vec![];
+    for (seq, m) in &state.messages {
+        if m.kind != MessageKind::ReviewRequest || m.to != ENGINEER {
+            continue;
+        }
+        let Some(pid) = m.proposal_id.clone() else {
+            continue;
+        };
+        if answered.contains(&pid) || !seen.insert(pid.clone()) {
+            continue;
+        }
+        let Ok(p) = proposal::load(dir, &pid) else {
+            continue;
+        };
+        if !p.status.reviewable() {
+            continue;
+        }
+        out.push(json!({
+            "seq": seq, "proposal_id": pid, "from": m.from, "body": m.body,
+            "title": p.title, "base_revision": p.base_revision,
+        }));
+    }
+    out
+}
+
+/// The engineer answers a proposal on the bus: a review verdict sent to its author. With
+/// `discard` (Reject, Re-propose) the proposal is then discarded, by the person, so it can no
+/// longer be applied. The verdict is sent first: if sending fails, nothing is discarded and the
+/// proposal stays open; if the discard then fails, the error says the verdict was sent. Approve
+/// with discard is refused. A verdict never applies anything: Apply stays in the review dialog.
+pub fn engineer_verdict(
+    engine: &Engine,
+    proposal_id: &str,
+    verdict: Verdict,
+    body: &str,
+    discard: bool,
+) -> Result<Value, String> {
+    let dir = engine
+        .dir()
+        .ok_or("WEFT needs a saved project folder")?
+        .to_path_buf();
+    let p = proposal::load(&dir, proposal_id).map_err(|e| e.to_string())?;
+    if !p.status.reviewable() {
+        return Err(format!(
+            "proposal {} is no longer open: nothing to answer",
+            p.id
+        ));
+    }
+    if discard && verdict == Verdict::Approve {
+        return Err("approve keeps the proposal open for Apply: it cannot discard it".into());
+    }
+    let message = Message {
+        id: eak_core::new_id("msg"),
+        kind: MessageKind::ReviewVerdict,
+        from: ENGINEER.to_string(),
+        to: author(&p),
+        task_id: None,
+        proposal_id: Some(p.id.clone()),
+        body: clip(body),
+        verdict: Some(verdict),
+        status: None,
+    };
+    append(
+        &dir,
+        ENGINEER,
+        engine.project().revision,
+        vec![Event::Message {
+            message: message.clone(),
+        }],
+    )
+    .map_err(|f| format!("verdict not sent, nothing discarded: {}", f.1))?;
+    if discard {
+        proposal::discard(engine, proposal_id, &Actor::human(), None).map_err(|e| {
+            format!(
+                "verdict sent to {}, but the discard failed: {e}",
+                message.to
+            )
+        })?;
+    }
+    Ok(json!({"sent": message, "discarded": discard}))
+}
+
 /// `weft_send`: check one typed message against the journal state and append it, with the task
 /// it creates or the status it sets.
 fn send(engine: &Engine, dir: &Path, ctx: &CallContext, args: &Value) -> Result<Value, Fail> {
@@ -625,6 +755,28 @@ pub(crate) fn dispatch(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launch_registration_comes_only_from_a_launcher_that_named_the_tool() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                pairs
+                    .iter()
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, v)| v.to_string())
+            }
+        };
+        assert_eq!(launch_registration(env(&[])), None);
+        assert_eq!(launch_registration(env(&[(ENV_AGENT_TOOL, " ")])), None);
+        assert_eq!(
+            launch_registration(env(&[
+                (ENV_AGENT_TOOL, "codex"),
+                (ENV_AGENT_MODEL, "m1"),
+                (ENV_AGENT_CAPABILITIES, "schematic, review,,"),
+            ])),
+            Some(json!({"tool": "codex", "model": "m1", "capabilities": ["schematic", "review"]}))
+        );
+    }
 
     fn card(id: &str) -> AgentCard {
         AgentCard {
