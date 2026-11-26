@@ -22,8 +22,12 @@ fn track(id: &str, net: &str, y: f64, len: f64) -> Track {
 fn board(n_len: f64, rule: DiffPairRule) -> Project {
     let mut p = Project::new("pairs");
     p.pcb.board.stackup = Stackup::multilayer(4, 1_600_000, 1.0, 0.5, "FR-4", FR4_ER);
-    p.pcb.tracks.insert("tp".into(), track("tp", "P", 0.0, 20.0));
-    p.pcb.tracks.insert("tn".into(), track("tn", "N", 0.3, n_len));
+    p.pcb
+        .tracks
+        .insert("tp".into(), track("tp", "P", 0.0, 20.0));
+    p.pcb
+        .tracks
+        .insert("tn".into(), track("tn", "N", 0.3, n_len));
     p.constraints.diff_pairs = vec![rule];
     p
 }

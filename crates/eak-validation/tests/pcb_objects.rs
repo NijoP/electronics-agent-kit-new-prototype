@@ -261,14 +261,34 @@ fn filled_inside(p: &Project, outline: &[Point]) -> usize {
     n
 }
 
+/// Centre of the first filled pour cell (fixture layouts differ between builds).
+fn a_filled_cell(p: &Project) -> Point {
+    let geo = BoardGeometry::build(p);
+    let fill = geo.fills.iter().find(|f| f.cells.iter().any(|&k| k != 0));
+    let fill = fill.expect("the reference board has a pour");
+    let i = fill.cells.iter().position(|&k| k != 0).unwrap();
+    fill.cell_center(i % fill.cols, i / fill.cols)
+}
+
 /// RF / antenna keep-out: a region on every layer forbidding tracks, vias, components and zones
 /// leaves no pour copper inside it and reports the copper that remains (DRC-021).
 #[test]
 fn rf_keepout_on_all_layers_clears_pours_and_flags_copper() {
-    let base = reference();
-    let (t, m) = long_top_track(&base);
+    let mut base = reference();
+    let m = a_filled_cell(&base);
     let area = square(m, 2_000_000);
-    assert!(filled_inside(&base, &area) > 0, "the pour must reach the test area");
+    assert!(filled_inside(&base, &area) > 0);
+    // A top track straight through the area.
+    let t = Track {
+        id: "rf-track".into(),
+        layer: CopperLayer::Top,
+        width: 200_000,
+        a: Point::new(m.x - 1_500_000, m.y),
+        b: Point::new(m.x + 1_500_000, m.y),
+        net: "RF".into(),
+        arc_deg: None,
+    };
+    base.pcb.tracks.insert(t.id.clone(), t.clone());
     let mut keep = region("rgn-rf", area.clone(), vec![]);
     for o in [
         RegionObject::Tracks,
@@ -278,7 +298,7 @@ fn rf_keepout_on_all_layers_clears_pours_and_flags_copper() {
     ] {
         keep.forbid.insert(o);
     }
-    let mut p = base.clone();
+    let mut p = base;
     p.pcb.regions.insert(keep.id.clone(), keep);
     assert_eq!(filled_inside(&p, &area), 0);
     let r = drc::run(&p);

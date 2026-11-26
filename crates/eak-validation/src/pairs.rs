@@ -119,7 +119,9 @@ fn check_pair(
                 finding("DRC-025", Error, msg, objs, Some(a.a))
                     .key(&name)
                     .mm_min(to_mm(g as Nm), want_mm)
-                    .fix(format!("Space {ta} and {tb} {want_mm:.3} mm apart (edge to edge).")),
+                    .fix(format!(
+                        "Space {ta} and {tb} {want_mm:.3} mm apart (edge to edge)."
+                    )),
             )
         }
         (Some(_), Some(_)) => {}
