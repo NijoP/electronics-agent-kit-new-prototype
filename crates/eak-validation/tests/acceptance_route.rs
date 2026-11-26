@@ -15,6 +15,7 @@
 
 use eak_core::{CopperLayer, DiffPairRule, Id, LabelKind, NetClass, Point, Project, Rotation};
 use eak_engineering::copper::{self, ItemKind};
+use eak_engineering::ipc;
 use eak_engineering::router::{self, RouterOptions};
 use eak_runtime::command::Command as C;
 use eak_runtime::engine::*;
@@ -307,17 +308,43 @@ fn constrained_usb_device_is_auto_routed_complete_coupled_and_drc_clean() {
         (lp - ln).abs()
     );
 
-    // Power nets got current-sized tracks wider than the 0.25 mm default (a neck-down to the class
-    // width at a fine-pitch pad is allowed).
-    for net in ["+5V", "+3V3"] {
-        assert!(
-            p.pcb
-                .tracks
-                .values()
-                .filter(|t| t.net == net)
-                .any(|t| t.width > 250_000),
-            "{net} has no current-sized track"
+    // Every routed segment of every power net is at least the IPC-2221 width its declared current
+    // needs on that segment's layer (the DRC-008 calculation: `ipc::trace_width_mm` with the
+    // layer's copper weight and the board's temperature rise), and the 1 A +5V rail is wider
+    // than the 0.25 mm default everywhere.
+    let c = &p.constraints;
+    for (net, amps) in [("+5V", 1.0), ("+3V3", 0.5)] {
+        assert_eq!(
+            c.net_currents_a.get(net),
+            Some(&amps),
+            "{net} current declared"
         );
+        let tracks: Vec<_> = p.pcb.tracks.values().filter(|t| t.net == net).collect();
+        assert!(!tracks.is_empty(), "{net} has no routed track");
+        for t in tracks {
+            let oz = p
+                .pcb
+                .board
+                .stackup
+                .copper_oz(t.layer)
+                .expect("track layer in stack-up");
+            let need = ipc::trace_width_mm(amps, !t.layer.is_outer(), oz, c.temp_rise_c)
+                .expect("IPC-2221 width computable");
+            let have = t.width as f64 / 1e6;
+            assert!(
+                have + 1e-9 >= need,
+                "{net} segment {} on {} is {have:.3} mm, below the {need:.3} mm IPC-2221 needs for {amps} A",
+                t.id,
+                t.layer.name()
+            );
+            if net == "+5V" {
+                assert!(
+                    t.width > 250_000,
+                    "+5V segment {} is not wider than 0.25 mm",
+                    t.id
+                );
+            }
+        }
     }
 
     let errors: Vec<String> = drc::run(p)
