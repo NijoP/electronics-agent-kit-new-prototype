@@ -157,7 +157,7 @@ async function bench() {
   const scene = sceneOf(snap, "benchmark");
   const t2 = performance.now();
   const view = canvas(size);
-  view.el.style.cssText = "position:fixed;left:0;top:0;width:1600px;height:1000px;z-index:10;background:#0d0f11";
+  view.el.style.cssText = "position:fixed;left:0;top:0;width:1600px;height:1000px;z-index:10;background:var(--bg-canvas)";
   document.body.appendChild(view.el);
   const r = new Canvas2DRenderer(view.ctx);
   r.setScene(scene);
