@@ -51,6 +51,7 @@ import { buildPcbScene, fillPath } from "./render/pcbScene";
 import { dimensionDrawing, outlinePath, trackPath } from "./render/pcbObjects";
 import { PcbSceneCanvas } from "./render/PcbSceneCanvas";
 import { ATTR_KIND, PickIndex } from "./render/pick";
+import { whenConfirmed } from "./confirm";
 import type { OverlayItem, OverlayScene, RenderObject } from "./render/types";
 
 /** Canvas picking tolerance in screen pixels. */
@@ -482,12 +483,15 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     const { cmd, footprints, locked } = deletion();
     if (!edit) return;
     if (!cmd) return edit.notify(locked ? `${fps(locked)} locked; unlock to delete.` : "Nothing is selected on the PCB.");
-    if (footprints && !window.confirm(`Delete ${fps(footprints)} from the PCB? This is a destructive change.`)) return;
-    if (locked) edit.notify(`${fps(locked)} locked; left in place.`);
-    setTrackSel(null);
-    setCopperSel(null);
-    setSel([]);
-    void edit.execute(cmd);
+    const go = () => {
+      if (locked) edit.notify(`${fps(locked)} locked; left in place.`);
+      setTrackSel(null);
+      setCopperSel(null);
+      setSel([]);
+      void edit.execute(cmd);
+    };
+    if (footprints) void whenConfirmed(`Delete ${fps(footprints)} from the PCB? This is a destructive change.`, go);
+    else go();
   };
   // EditTrack keeps the track's id, so the edited track stays selected.
   const applyTrackEdit = (change: { width?: number; layer?: CopperLayer }) => {

@@ -449,33 +449,6 @@ const handlers = {
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
     return { evidence: `native window "${s.window}" shown (screenshot), XTest ${keys} closed it${s.expect ? `; then visible: ${s.expect}` : ""}`, file };
   },
-  // A native JavaScript dialog (window.confirm, e.g. a destructive menu entry asking first) is
-  // held by WebKit's automation session and drawn as no X window, so XTest cannot reach it: this
-  // step reads its text through WebDriver (it must start with `text`) and accepts it. Run it
-  // straight after the step that opened the dialog, with no `expect` on that step (any other
-  // WebDriver call would dismiss the dialog).
-  async "accept-dialog"(s) {
-    let text = null;
-    await browser.waitUntil(
-      async () => {
-        try {
-          text = await browser.getAlertText();
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      { timeout: s.timeout ?? 5000, interval: 200, timeoutMsg: "no native JavaScript dialog is open" },
-    );
-    if (s.text && !String(text).startsWith(s.text)) {
-      await browser.dismissAlert();
-      throw new Error(`dialog says "${text}", expected it to start with "${s.text}" (dismissed)`);
-    }
-    await browser.acceptAlert();
-    await sleep(300);
-    if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
-    return `WebDriver accepted the native confirm "${text}" (no X window to click)${s.expect ? `; then visible: ${s.expect}` : ""}`;
-  },
   async click(s) {
     const how = await xclick(s.selector, s.text, s.dx ?? 0, s.dy ?? 0, s.button === "right" ? 3 : 1, s.at ?? null);
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);

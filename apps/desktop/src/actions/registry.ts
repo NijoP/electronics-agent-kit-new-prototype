@@ -7,6 +7,7 @@ import { effectiveKeys } from "../settings/keymap";
 import type { Menu } from "../shell/MenuBar";
 import type { ToolbarGroup, ToolbarGroupId } from "../shell/Toolbar";
 import { MENU_ORDER, type Action, type CanvasTarget, type DocContext } from "./types";
+import { nativeConfirm, whenConfirmed, type Confirm } from "../confirm";
 
 /** Toolbar groups, left to right. */
 export const TOOLBAR_ORDER: readonly ToolbarGroupId[] = ["file", "edit", "view", "checks", "mfg", "app"];
@@ -53,12 +54,15 @@ export function actionForKey(actions: readonly Action[], ctx: DocContext, e: Key
   return visibleIn(actions, ctx).find((a) => (!typing || a.whileTyping) && keysOf(a).some((k) => matches(e, k)));
 }
 
-/** Runs an action the way the menu does: only when enabled, confirming destructive ones. */
-export function runAction(a: Action, confirm: (m: string) => boolean = (m) => window.confirm(m)): boolean {
+/** Runs an action the way the menu does: only when enabled, confirming destructive ones (after
+ *  the answer: the app's confirm is asynchronous, see confirm.ts). */
+export function runAction(a: Action, confirm: Confirm = nativeConfirm): boolean | Promise<boolean> {
   if (a.enabled() !== true) return false;
-  if (a.destructive && !confirm(`${a.label}: this is a destructive change. Continue?`)) return false;
-  a.run();
-  return true;
+  if (!a.destructive) {
+    a.run();
+    return true;
+  }
+  return whenConfirmed(`${a.label}: this is a destructive change. Continue?`, () => a.run(), confirm);
 }
 
 /** One entry of the canvas context menu. */
@@ -79,7 +83,7 @@ export interface ContextItem {
  * the context that list that target, in registry order. Nothing else can appear in it, so it
  * never offers an operation the menus, palette and keys do not have.
  */
-export function contextMenuFor(actions: readonly Action[], ctx: DocContext, target: CanvasTarget, confirm?: (m: string) => boolean): ContextItem[] {
+export function contextMenuFor(actions: readonly Action[], ctx: DocContext, target: CanvasTarget, confirm?: Confirm): ContextItem[] {
   return visibleIn(actions, ctx)
     .filter((a) => a.context?.includes(target))
     .map((a) => ({ id: a.id, label: a.label, shortcut: keysOf(a)[0] ?? a.hint, disabled: reason(a), destructive: a.destructive, sep: a.contextSep, run: () => void runAction(a, confirm) }));

@@ -75,6 +75,7 @@ import { acceptsSnapshot, exactChange, isStale, needsRefetch, onRevisionChange, 
 import { currentTask, taskSummary, taskTitle, useAgentTasks } from "./agentTasks";
 import { requestFindPick, useFindReveal } from "./shell/findResults";
 import type { FindHit } from "./tools/schematic/find";
+import { whenConfirmed } from "./confirm";
 import type { OpenProject, RecentProject, Check, CheckResult, Command, ComponentDef, ConnectivityReport, Finding, CommandResponse, CopperLayer, DomainReport, EngineEvent, ExportResult, Id, LibraryEntry, Snapshot, SyncChange } from "./types";
 
 interface Props {
@@ -649,12 +650,14 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     // The engine writes every accepted command before it returns, so "unsaved" only means a
     // command is in flight or writes are blocked; closing then needs an explicit yes.
     const why = docMarker(d);
-    if (why && !window.confirm(`${d?.title ?? "Document"}: ${why}. Close anyway?`)) return;
-    setDocState(closeDoc({ open: openIds, active: activeId }, id));
+    const close = () => setDocState(closeDoc({ open: openIds, active: activeId }, id));
+    if (why) void whenConfirmed(`${d?.title ?? "Document"}: ${why}. Close anyway?`, close);
+    else close();
   };
   const closeAll = () => {
-    if (openDocs.some((d) => docMarker(d)) && !window.confirm("The engine has not confirmed the latest change. Close all documents anyway?")) return;
-    setDocState({ open: [], active: null });
+    const close = () => setDocState({ open: [], active: null });
+    if (openDocs.some((d) => docMarker(d))) void whenConfirmed("The engine has not confirmed the latest change. Close all documents anyway?", close);
+    else close();
   };
   const resetLayout = () => docks.reset(ctx);
   // Open the schematic sheet a target is on, select it there (through the editor's pick) and zoom
@@ -805,7 +808,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       const a = actionForKey(keys.current.actions, keys.current.ctx, e, typing);
       if (!a) return;
       if (a.id !== "deselect") e.preventDefault();
-      runAction(a);
+      void runAction(a);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

@@ -31,3 +31,16 @@ it("folds pointer moves within a frame and flushes the last one on release", () 
   // The folded move is the last position, not an intermediate one.
   expect(move.mock.calls[1][0]).toBeCloseTo(end.mock.calls[0][0]);
 });
+
+// Regression (F6 `f6-canvas-fits`): without a scene renderer the SVG is still wrapped in the
+// grid-sized `.canvas-stack` box, never a bare grid item of the view.
+it("wraps the SVG canvas in the canvas box when there is no scene renderer", () => {
+  const { container } = render(
+    <Canvas label="test" bounds={{ minX: 0, minY: 0, maxX: 100, maxY: 100 }}>
+      <g />
+    </Canvas>,
+  );
+  const box = container.firstElementChild!;
+  expect(box.className).toBe("canvas-stack");
+  expect(box.querySelector(':scope > svg.canvas[aria-label="test"]')).toBeTruthy();
+});

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main window: core defaults only. Project access goes through the EAK IPC commands.",
+  "description": "Main window: core defaults, the folder/file picker and the OK/Cancel message dialog (window.confirm). Project access goes through the EAK IPC commands.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-message"]
 }
