@@ -371,3 +371,45 @@ fn discovery_tools_answer_while_a_project_is_open() {
         assert_eq!(v["ok"], true, "{tool}: {v}");
     }
 }
+
+/// Schema v9 (ADR-0057) through the real CLI: `eak requirements` reads the record and its
+/// evaluation, an agent records a working value with `exec`, and the engine refuses the agent's
+/// attempt to confirm it.
+#[test]
+fn cli_records_requirements_and_an_agent_never_confirms_them() {
+    let root = temp_dir("req");
+    let dir = root.join("req.eak");
+    let (code, v) = eak(&dir, &["new", dir.to_str().unwrap(), "Requirements"]);
+    assert_eq!(code, 0, "{v}");
+    let (code, r) = eak(&dir, &["requirements"]);
+    assert_eq!(code, 0, "{r}");
+    let c = &r["result"]["report"]["completeness"];
+    assert_eq!(c["unknown"], c["total"], "nothing recorded is all UNKNOWN");
+
+    let set = |status: &str| {
+        json!({
+            "type": "SetRequirementField",
+            "path": "supply.input_voltage",
+            "status": status,
+            "value": {"kind": "range", "min": 4.5, "nom": 5.0, "max": 5.5, "unit": "V"},
+            "source": {"kind": "client", "reference": "kick-off call"},
+            "owner": "Client PM",
+        })
+    };
+    exec(&dir, 0, set("NEEDS_CONFIRMATION"));
+    let (code, v) = eak(&dir, &["exec", "1", &set("CONFIRMED").to_string()]);
+    assert_ne!(code, 0, "{v}");
+    assert_eq!(v["error"]["code"], "precondition", "{v}");
+
+    let (_, r) = eak(&dir, &["requirements"]);
+    assert_eq!(r["result"]["revision"], 1);
+    let fields = r["result"]["report"]["fields"].as_array().unwrap();
+    let f = fields
+        .iter()
+        .find(|f| f["path"] == "supply.input_voltage")
+        .unwrap();
+    assert_eq!(f["status"], "NEEDS_CONFIRMATION");
+    assert_eq!(f["level"], "provisional");
+    assert_eq!(f["value"]["unit"], "V");
+    let _ = std::fs::remove_dir_all(root);
+}

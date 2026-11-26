@@ -26,6 +26,43 @@ pub enum Command {
         #[serde(default)]
         value: Option<String>,
     },
+    // ---- structured requirements (schema v9, ADR-0057)
+    /// Record one requirement field. `path` is a catalogue key (`supply.input_voltage`) or
+    /// `<item id>/<field>` (`rail_1a2b/voltage`). The whole entry is replaced and stamped with the
+    /// time and the new revision. An agent can never record CONFIRMED or NOT_APPLICABLE.
+    SetRequirementField {
+        path: String,
+        status: ReqStatus,
+        #[serde(default)]
+        value: Option<ReqValue>,
+        #[serde(default)]
+        source: Option<ReqSource>,
+        /// Paths a DERIVED value is computed from.
+        #[serde(default)]
+        derived_from: Vec<String>,
+        #[serde(default)]
+        owner: Option<String>,
+        #[serde(default)]
+        note: Option<String>,
+    },
+    /// Remove the entry at `path`: the field is UNKNOWN again.
+    ClearRequirementField {
+        path: String,
+    },
+    /// Add a rail or interface (no `item_id`), or rename / re-parent one. Only a rail has a
+    /// parent: the rail it is generated from.
+    UpsertRequirementItem {
+        #[serde(default)]
+        item_id: Option<Id>,
+        kind: ReqItemKind,
+        name: String,
+        #[serde(default)]
+        parent: Option<Id>,
+    },
+    /// Remove a rail or interface and its recorded fields.
+    DeleteRequirementItem {
+        item_id: Id,
+    },
     // ---- library
     /// Copy a built-in library component definition into the project library.
     ImportLibraryComponent {
@@ -665,6 +702,9 @@ impl Command {
         match self {
             SetProjectName { .. }
             | AddRequirement { .. }
+            | SetRequirementField { .. }
+            | ClearRequirementField { .. }
+            | UpsertRequirementItem { .. }
             | ImportLibraryComponent { .. }
             | SetComponentProperties { .. }
             | AddSheet { .. }
@@ -752,7 +792,10 @@ impl Command {
             | SetViaSpans { .. }
             | SetEngineeringInputs { .. }
             | SetManufacturing { .. } => EngineeringImpacting,
-            DeleteSymbol { .. } | DeleteSheet { .. } | ClearRouting { .. } => Destructive,
+            DeleteSymbol { .. }
+            | DeleteSheet { .. }
+            | ClearRouting { .. }
+            | DeleteRequirementItem { .. } => Destructive,
             // A batch carries the risk of its riskiest step, so approval covers every step.
             Batch { commands, .. } => commands
                 .iter()
@@ -875,6 +918,29 @@ pub fn sync_changes(before: &Project, after: &Project) -> Vec<SyncChange> {
 pub struct Applied {
     pub created: Vec<Id>,
     pub warnings: Vec<String>,
+}
+
+/// Why an agent may not submit `cmd`, looking inside batches: only a person confirms a
+/// requirement or declares one not applicable (ADR-0057; the AI never self-certifies).
+pub fn human_only(cmd: &Command) -> Option<String> {
+    match cmd {
+        Command::SetRequirementField { path, status, .. } if status.human_only() => Some(format!(
+            "only a person can record {} for requirement {path}; an agent records NEEDS_CONFIRMATION for a person to confirm",
+            status.as_str()
+        )),
+        Command::Batch { commands, .. } => commands.iter().find_map(human_only),
+        _ => None,
+    }
+}
+
+fn requirement_error(e: eak_core::requirements::ReqEditError) -> CommandError {
+    use eak_core::requirements::ReqEditError as E;
+    match e {
+        E::NotFound(m) => CommandError::NotFound(m),
+        E::Invalid(m) => CommandError::Invalid(m),
+        E::Precondition(m) => CommandError::Precondition(m),
+        E::Unchanged(m) => CommandError::NothingTo(m),
+    }
 }
 
 /// Refuse a layer the board's stackup does not have.
@@ -1311,6 +1377,51 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 text: text.clone(),
             });
             created.push(id);
+        }
+        // Schema-v9 requirement record (ADR-0057): eak-core checks the status rules; the
+        // integrity pass after apply checks the whole record again.
+        SetRequirementField {
+            path,
+            status,
+            value,
+            source,
+            derived_from,
+            owner,
+            note,
+        } => {
+            let entry = ReqEntry {
+                status: *status,
+                value: value.clone(),
+                source: source.clone(),
+                derived_from: derived_from.clone(),
+                owner: owner.clone(),
+                note: note.clone(),
+                updated_at_ms: u64::try_from(crate::store::now_ms()).unwrap_or(u64::MAX),
+                updated_revision: p.revision + 1,
+            };
+            p.requirement_set
+                .set(path, entry)
+                .map_err(requirement_error)?;
+        }
+        ClearRequirementField { path } => {
+            p.requirement_set.clear(path).map_err(requirement_error)?;
+        }
+        UpsertRequirementItem {
+            item_id,
+            kind,
+            name,
+            parent,
+        } => {
+            let new = p
+                .requirement_set
+                .upsert_item(item_id.as_deref(), *kind, name, parent.as_deref())
+                .map_err(requirement_error)?;
+            created.extend(new);
+        }
+        DeleteRequirementItem { item_id } => {
+            p.requirement_set
+                .delete_item(item_id)
+                .map_err(requirement_error)?;
         }
         SetProjectProperty { key, value } => {
             let key = key.trim();
