@@ -228,7 +228,8 @@ impl LocalListSource {
             } else {
                 Spec::number(&s.name, &s.value, unit, origin.clone())
             };
-            r.specs.push(spec.map_err(|e| format!("spec {:?}: {e}", s.name))?);
+            r.specs
+                .push(spec.map_err(|e| format!("spec {:?}: {e}", s.name))?);
         }
         Ok(r)
     }
@@ -325,10 +326,7 @@ fn parse_csv(text: &str) -> Result<Vec<(usize, Vec<String>)>, String> {
 /// What a CSV column holds.
 enum Column {
     Field(&'static str),
-    Spec {
-        name: String,
-        unit: Option<String>,
-    },
+    Spec { name: String, unit: Option<String> },
     Ignored,
 }
 
