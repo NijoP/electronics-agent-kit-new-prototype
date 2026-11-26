@@ -32,7 +32,11 @@ pub struct ManufacturerAlias {
 pub const MANUFACTURERS: &[ManufacturerAlias] = &[
     ManufacturerAlias {
         canonical: "Texas Instruments",
-        aliases: &["TI", "Texas Instruments Incorporated", "Texas Instruments Inc"],
+        aliases: &[
+            "TI",
+            "Texas Instruments Incorporated",
+            "Texas Instruments Inc",
+        ],
         source: "https://www.ti.com",
     },
     ManufacturerAlias {
@@ -335,8 +339,8 @@ mod tests {
     use super::*;
     use crate::part::{Provenance, SourceId};
     use crate::source::{Capabilities, SourceAnswer, SourceError, SourceKind};
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::collections::BTreeMap;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     struct Fixed {
         id: &'static str,
@@ -490,7 +494,10 @@ mod tests {
         assert_eq!(d.not_mpn_matches, 1);
         assert_eq!(d.sources.len(), 1);
         assert_eq!(d.sources[0].source, SourceId::new("remote"));
-        assert!(matches!(d.hits[2].manufacturer, ManufacturerId::Unknown { .. }));
+        assert!(matches!(
+            d.hits[2].manufacturer,
+            ManufacturerId::Unknown { .. }
+        ));
 
         let d = discover(&[&ready], "TPS2051", Some("TI"), 50);
         assert_eq!(d.hits.len(), 2);
