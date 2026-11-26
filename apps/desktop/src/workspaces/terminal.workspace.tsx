@@ -1,7 +1,9 @@
-// Registers the Terminal Workspace as a top-level app workspace (see ../shell/registry.ts).
+// Registers the Terminal Workspace as a top-level app workspace (see ../shell/registry.ts); the
+// navigation rail lists it as "Terminal".
 // The "+" in the app bar bumps a nonce that the workspace turns into "open or create the current
 // project's space".
 import { useSyncExternalStore } from "react";
+import { Icons } from "../shell/icons";
 import { registerWorkspace } from "../shell/registry";
 import { TerminalWorkspace } from "../terminal/TerminalWorkspace";
 
@@ -26,6 +28,8 @@ function Terminal({ active, project }: { active: boolean; project: { dir: string
 registerWorkspace({
   id: "terminal",
   label: "Terminal Workspace",
+  navLabel: "Terminal",
+  icon: Icons.terminal,
   order: 10,
   shortcut: "Mod+Shift+T",
   newLabel: "New terminal space",

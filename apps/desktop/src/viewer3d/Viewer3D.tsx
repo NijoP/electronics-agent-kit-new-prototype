@@ -21,6 +21,7 @@ import { modelToWorld } from "./modelTransform";
 import { publishView3d } from "./controls";
 import { appearance, FINISHES, MASK_COLOURS, measure, measureText, orthoHalfHeight, placeholderReason, presetPose, PRESETS, stackTable, type Projection, type View3dPreset } from "./view";
 import { onProfile, profileNow, type ResourceProfile } from "../resourceProfile";
+import { documentColour } from "../render/canvas2d";
 
 interface Props {
   projectId: string | null;
@@ -312,7 +313,8 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
     }
     const pixelRatio = (p: ResourceProfile) => Math.min(window.devicePixelRatio || 1, Math.max(p.pixel_ratio_cap, 0.5));
     renderer.setPixelRatio(pixelRatio(tier));
-    renderer.setClearColor(0x14181d);
+    // The 3D stage is elevation 0, like the 2D canvases: its background is the canvas token.
+    renderer.setClearColor(documentColour("--bg-canvas"));
     el.appendChild(renderer.domElement);
     renderer.domElement.style.display = "block";
     // Placeholder labels are DOM text over the canvas (readable, and visible to UI tests).

@@ -20,7 +20,7 @@ import { APP_VERSION } from "./version";
 import { useEscape } from "./shell/useEscape";
 import { docContext, type Action, type DocContext } from "./actions/types";
 import type { Theme } from "./design/theme";
-import { ActivityBar, SIDE_VIEWS, type SideView } from "./shell/ActivityBar";
+import { ActivityBar, SIDE_VIEWS, type RailDockTab, type ShellArea, type SideView } from "./shell/ActivityBar";
 import { BottomPanel, type BottomTab } from "./shell/BottomPanel";
 import { ManufacturingPanel } from "./shell/panels";
 import { ProjectOverview } from "./shell/ProjectOverview";
@@ -92,6 +92,12 @@ interface Props {
   /** Every project open in the window (the engine keeps them all; one is active). */
   projects: OpenProject[];
   onProjectsChanged: () => void;
+  /** Home in the navigation rail, given by the app shell (absent when shown on its own). */
+  home?: ShellArea;
+  /** The app shell's other top-level workspaces (the Terminal) for the navigation rail. */
+  apps?: ShellArea[];
+  /** An area chosen in the app shell's rail while another workspace was shown; a new seq applies it. */
+  navRequest?: { area: string; seq: number } | null;
   /** Where to land on opening, when Project Home asked for a place (Continue, Needs attention). Applied once. */
   landing?: HomeTarget | null;
   /** Help › Replay first-run tour. */
@@ -120,7 +126,7 @@ const writeFlag = (key: string, on: boolean) => {
   }
 };
 
-export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged, landing = null, onTour }: Props) {
+export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged, landing = null, onTour, home, apps, navRequest }: Props) {
   const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate" | "release">(null);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [snapshot, setSnapshot] = useState(initial);
@@ -629,6 +635,21 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       if (same) open(same.id);
     } else if (edaViews.some((w) => w.id === id)) open(viewDocId(id));
   };
+  // Navigation rail: Library and Checks are the bottom dock's Library and Findings tabs; pressing
+  // the shown one collapses the dock, like the side views.
+  const toggleBottomTab = (tab: RailDockTab) => (bottomOpen && bottomTab === tab ? setBottomOpen(false) : setBottomTab(tab));
+  // An area picked in the app shell's rail while this workspace was hidden: always shows it.
+  const goArea = (area: string) => {
+    if (area === "library" || area === "checks") setBottomTab(area === "checks" ? "findings" : "library");
+    else if (area === "manufacturing") showSide("manufacturing");
+    else showWorkspace(area);
+  };
+  const navSeq = useRef(navRequest?.seq ?? 0);
+  useEffect(() => {
+    if (!navRequest || navRequest.seq === navSeq.current) return;
+    navSeq.current = navRequest.seq;
+    goArea(navRequest.area);
+  });
   // Project Home (S1) opened the project for one item: show the place that acts on it, once.
   // A check target re-runs that read-only check so its findings are listed for this revision.
   const landed = useRef(false);
@@ -941,6 +962,23 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
 
   return (
     <div className="workspace">
+      <ActivityBar
+        sideView={sideView}
+        sideOpen={sideOpen}
+        onSide={toggleSideView}
+        workspace={activeKind === "view" ? (docs.find((d) => d.id === activeId)?.ref ?? "") : activeKind === "schematic" || activeKind === "pcb" ? activeKind : ""}
+        onWorkspace={showWorkspace}
+        registered={edaViews}
+        bottomTab={bottomOpen ? bottomTab : null}
+        onBottom={toggleBottomTab}
+        onSettings={onSettings}
+        onPreferences={() => setPrefs(true)}
+        home={home}
+        apps={apps}
+        theme={theme}
+        onTheme={onTheme}
+      />
+      <div className="workspace-body">
       <MenuBar menus={menus} />
       <Toolbar
         groups={shownToolbar}
@@ -976,19 +1014,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       )}
       <div
         className="main"
-        style={{ gridTemplateColumns: `48px ${sideOpen ? layout.left.size : 0}px ${sideOpen ? 4 : 0}px minmax(0, 1fr) ${rightOpen ? 4 : 0}px ${rightOpen ? layout.right.size : 0}px` }}
+        style={{ gridTemplateColumns: `${sideOpen ? layout.left.size : 0}px ${sideOpen ? 4 : 0}px minmax(0, 1fr) ${rightOpen ? 4 : 0}px ${rightOpen ? layout.right.size : 0}px` }}
       >
-        <ActivityBar
-          sideView={sideView}
-          sideOpen={sideOpen}
-          onSide={toggleSideView}
-          workspace={activeKind === "view" ? (docs.find((d) => d.id === activeId)?.ref ?? "") : activeKind === "schematic" || activeKind === "pcb" ? activeKind : ""}
-          onWorkspace={showWorkspace}
-          registered={edaViews}
-          onSettings={onSettings}
-          theme={theme}
-          onTheme={onTheme}
-        />
         <aside className={sideOpen ? "side open" : "side"} aria-label="Side panel" aria-hidden={!sideOpen}>
           <header className="panel-head">
             <span className="title">{SIDE_VIEWS.find((v) => v.id === sideView)?.label}</span>
@@ -1172,6 +1199,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
         busy={busy}
         message={message}
       />
+      </div>
       {dialog === "new" && <NewProjectDialog onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
       {dialog === "open" && <OpenProjectDialog recent={recent} onOpened={onOpened} onLost={onClosed} onClose={() => setDialog(null)} />}
       {dialog === "rules" && (
