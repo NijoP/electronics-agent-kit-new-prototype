@@ -418,7 +418,8 @@ struct Env<'a> {
     via_keepouts: &'a [KeepOut],
     /// Grid inflation per plane: largest clearance + half the widest track on that layer + margin.
     inflate: Vec<f64>,
-    /// Per-plane inflation of the nets that need less than `inflate` (own spacing and width).
+    /// Per-plane own half width + margin of the nets whose pairwise retry grid (`own_grid`) is
+    /// tighter than `inflate` somewhere.
     own_inflate: &'a BTreeMap<String, Vec<f64>>,
     /// Discretisation margin added to every inflation.
     margin: f64,
@@ -585,25 +586,32 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         .iter()
         .map(|w| max_clear + w / 2.0 + margin)
         .collect();
-    // Nets that need less than the shared inflation on some layer: their own clearance and width.
+    // Nets whose retry grid can be tighter than the shared one on some layer: each obstacle is
+    // then kept at the pairwise rule with its own net (`pair_clearance`), so a fine-pitch net is
+    // not held off GND by another net's wider class. Stored: own half width + margin per layer.
     let own_inflate: BTreeMap<String, Vec<f64>> = specs
         .iter()
         .filter_map(|(net, s)| {
-            let clear = clear_of.get(net)?;
-            let own: Vec<f64> = layers
+            let reach: Vec<f64> = layers
                 .iter()
-                .enumerate()
-                .map(|(l, layer)| {
+                .map(|layer| {
                     let w = if layer.is_outer() {
                         s.track_width
                     } else {
                         s.inner_track_width
                     };
-                    clear[l] + w as f64 / 2.0 + margin
+                    w as f64 / 2.0 + margin
                 })
                 .collect();
-            let smaller = own.iter().zip(&inflate).any(|(o, sh)| *o < sh - 1.0);
-            smaller.then(|| (net.clone(), own))
+            let smaller = layers.iter().enumerate().any(|(l, &layer)| {
+                let tightest = nets
+                    .iter()
+                    .filter(|&&m| m != net)
+                    .map(|m| pair_clearance(c, net, m, layer))
+                    .fold(pair_clearance(c, net, "", layer), f64::min);
+                tightest + reach[l] < inflate[l] - 1.0
+            });
+            smaller.then(|| (net.clone(), reach))
         })
         .collect();
 
@@ -1128,10 +1136,32 @@ fn grid_with<'a>(env: &Env, placed: impl Iterator<Item = &'a Placed>) -> Grid {
     g
 }
 
-/// The grid `net` sees when its own spacing and width (`inflate`, per plane) are below the shared
-/// inflation: the same board edge, keep-outs, drills and via rules, with fixed copper and the
-/// `placed` routes grown for this net only. Pre-existing tracks a shove moved are left out.
-fn own_grid(env: &Env, net: &str, inflate: &[f64], placed: &[Placed]) -> Grid {
+/// The spacing (nm) copper of net `a` keeps from copper of net `b` on `layer` when routing: the
+/// DRC-002 rule between the two (`clearance::required`: board minimum, both classes, net pairs,
+/// voltages, insulation) and no less than any clearance-matrix cell.
+fn pair_clearance(c: &Constraints, a: &str, b: &str, layer: CopperLayer) -> f64 {
+    let matrix = c
+        .clearance_matrix
+        .iter()
+        .map(|m| m.clearance)
+        .max()
+        .unwrap_or(0);
+    clearance::required(c, a, b, layer).max(matrix as f64)
+}
+
+/// The grid `net` retries on when the shared one has no path: the same board edge, keep-outs,
+/// drills and via rules, with each fixed copper item and `placed` route grown by the pairwise
+/// rule between `net` and its net (`pair_clearance`) plus `reach` (`net`'s own half width +
+/// margin, per plane). Pre-existing tracks a shove moved are left out.
+fn own_grid(env: &Env, net: &str, reach: &[f64], placed: &[Placed]) -> Grid {
+    let c = &env.p.constraints;
+    let around = |other: &str| -> Vec<f64> {
+        env.layers
+            .iter()
+            .enumerate()
+            .map(|(l, &layer)| pair_clearance(c, net, other, layer) + reach[l])
+            .collect()
+    };
     let mut g = env.base.blank();
     g.no_via.clone_from(&env.base.no_via);
     g.no_via_on.clone_from(&env.base.no_via_on);
@@ -1156,11 +1186,12 @@ fn own_grid(env: &Env, net: &str, inflate: &[f64], placed: &[Placed]) -> Grid {
     for it in env.geo.copper.iter().filter(|it| !is_hidden(it, &hidden)) {
         let id = env.net_ids.get(&it.net).copied().unwrap_or(MULTI);
         if let Some(l) = stack.index_of(it.layer) {
-            g.mark(l, &it.shape, inflate[l], id);
+            let inf = pair_clearance(c, net, &it.net, it.layer) + reach[l];
+            g.mark(l, &it.shape, inf, id);
         }
     }
     for pl in placed {
-        mark_placed_at(&mut g, pl, env, inflate);
+        mark_placed_at(&mut g, pl, env, &around(&pl.net));
     }
     g
 }
