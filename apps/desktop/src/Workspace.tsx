@@ -1197,7 +1197,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           busy={busy}
           onApplied={(out) => {
             setDialog(null);
-            setMessage(`Proposal ${out.proposal.id} applied → revision ${out.response.revision_after} as one undo step (checkpoint ${out.checkpoint})${out.response.warnings.length ? ` (${out.response.warnings.length} warning(s))` : ""}`);
+            setMessage(`Applied as one undo step: proposal ${out.proposal.id} → revision ${out.response.revision_after} (checkpoint ${out.checkpoint})${out.response.warnings.length ? ` (${out.response.warnings.length} warning(s))` : ""}`);
             void refresh();
           }}
           onClose={() => setDialog(null)}
