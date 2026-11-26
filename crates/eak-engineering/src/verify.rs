@@ -4,6 +4,7 @@
 //! result carries the formula or standard it rests on.
 
 use crate::ipc;
+use eak_core::{Insulation, InsulationStandard};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,28 +188,6 @@ pub fn part_rating(
         return Check::blocked(why, b, unit, s);
     }
     Check::compare(a.abs(), r * max_fraction, b, unit, s)
-}
-
-/// Insulation standard a spacing rule is declared against.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum InsulationStandard {
-    /// IPC-2221B Table 6-1 conductor spacing (clearance).
-    Ipc2221b,
-    /// IEC 60664-1 creepage (Table F.4 as transcribed); its clearance table is not implemented.
-    Iec60664_1,
-}
-
-/// The declared standard and environment for voltage spacing.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Insulation {
-    pub standard: InsulationStandard,
-    pub pollution_degree: u8,
-    /// IEC 60664-1 material group: I, II, IIIa or IIIb.
-    pub material_group: String,
-    pub altitude_m: f64,
-    /// Permanent polymer coating (IPC-2221B condition B4).
-    pub coated: bool,
 }
 
 /// Sources of the spacing [`voltage_spacing`] requires.
