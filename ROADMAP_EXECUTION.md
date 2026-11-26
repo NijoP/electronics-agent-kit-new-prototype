@@ -25,7 +25,7 @@ verification labels. Then fix the stale one.
 
 | | Items |
 |---|---|
-| **Now** | M0.1, M0.2, M0.5 and M0.6: this roadmap, IN REVIEW. M7.4/M7.5: [PR #142](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/142), the constrained acceptance board. It is red by design, and the electronics lead is fixing the router rather than the test. M8.3: [PR #143](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/143), DC voltage drop. It is red because the rule-ID registry test `rule_config.rs::known_rule_ids_are_the_rules_the_checks_declare` does not know DRC-028. M3.3/M3.4: WEFT activity view, launch and review ([#126](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/126), [#129](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/129), [#130](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/130)), being landed by `eak-v2-proposal`. M1.3: DESK study (scout `eak-desk-study`). M4.1: requirements model (worker `eak-req-model`). |
+| **Now** | M0.1, M0.2, M0.5 and M0.6: this roadmap, IN REVIEW in [#144](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/144). M7.4/M7.5: [PR #142](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/142), the constrained acceptance board. It is red by design, and the electronics lead is fixing the router rather than the test. M8.3: [PR #143](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/143), DC voltage drop. It is red because the rule-ID registry test `rule_config.rs::known_rule_ids_are_the_rules_the_checks_declare` does not know DRC-028. M3.3/M3.4: WEFT activity view, launch and review ([#126](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/126), [#129](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/129), [#130](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/130)), being landed by `eak-v2-proposal`. M1.3: DESK study (scout `eak-desk-study`). M4.1: requirements model (worker `eak-req-model`). |
 | **Next** | M0.3 task contracts and M0.4 mutation authority (firstmate). M1.1 Traycer/REA and M1.2 Firstmate research. M1.4 surface map. M2.1 Agents workspace entry point (needs M1.5 UX spec). M7.11 diverse acceptance suite (after M7.4). |
 | **Blocked** | M9.6 fabricate a prototype and M9.7 assemble/test it: **BLOCKED, awaiting captain authorization** (standing restriction: no PCB fabrication, ordering or hardware testing until the captain allows it). M9.8 waits on M9.6/M9.7. Old hardware-board PRs [#9](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/9), [#10](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/10) and [#53](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/53) are held for the same reason. |
 | **Recently completed** | Nothing reached `*`. Merged and CI-green on `main` today: #133, #134, #135, #136, #137, #138, #139, #140, #141 (§7). Released: [v0.2.0-rc.1](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/tag/v0.2.0-rc.1) at 6b71bb2 (unsigned pre-release). |
@@ -211,7 +211,7 @@ completion.
 
 ### M0 — Baseline, safety and project execution control
 - [ ] M0.1 — Audit repository, branches, open PRs, CI, working tree, Firstmate workers and current product baseline · `IN REVIEW` · eak-roadmap · deps: none
-  - landed: this roadmap's PR (branch `fm/eak-roadmap`); baseline in §4
+  - landed: [#144](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/144) (branch `fm/eak-roadmap`); baseline in §4
   - limits: the worker list is as briefed by firstmate and was not inspected independently
   - next: merge; re-audit at every roadmap event
 - [ ] M0.2 — Create `ROADMAP_EXECUTION.md` with the entire roadmap, dependencies, owners, evidence fields and `*` rules · `IN REVIEW` · eak-roadmap · deps: M0.1
@@ -524,3 +524,4 @@ explicit, and the product completes its supported workflow reliably. Gate state:
   success). Baseline audit recorded in §4. M0.1, M0.2, M0.5 and M0.6 set to IN REVIEW. Router PRs
   #133–#143 mapped in §7. M9.6 and M9.7 set to BLOCKED (awaiting captain authorization). No goal
   starred.
+- 2026-11-26T16:45Z — eak-roadmap — Opened [#144](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/144) for M0.1/M0.2/M0.5/M0.6.
