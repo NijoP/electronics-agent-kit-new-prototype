@@ -141,7 +141,7 @@ export function VerificationReport({ id }: { id: string }) {
         {" · "}
         <strong aria-label="Pin to pad status">{ppText}</strong>
       </p>
-      {error && <p role="alert">Verification could not run: {error}</p>}
+      {error && <p className="muted">Verification could not run: {error}</p>}
       {fp && (
         <>
           <Rules label="Footprint rules" results={fp.rule_results} />

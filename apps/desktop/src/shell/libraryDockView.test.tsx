@@ -111,6 +111,32 @@ beforeEach(() => {
         return { favourites: [], tags: {}, recent: [] };
       case "part_standardisation":
         return report;
+      case "footprint_verify":
+        return {
+          check: "footprint",
+          definition_id: String(args.id),
+          footprint: "R_0603",
+          spec_source: null,
+          tolerance_nm: 50_000,
+          rule_results: [
+            { rule_id: "FP-001", state: "PASS", reason: "" },
+            { rule_id: "FP-002", state: "UNKNOWN", reason: "no land-pattern table" },
+          ],
+          overall: "UNKNOWN",
+          not_implemented: ["FP-010 3D model bounding box against the footprint body"],
+          limitations: [],
+        };
+      case "pin_pad_verify":
+        return {
+          check: "pin_pad",
+          definition_id: String(args.id),
+          footprint: "R_0603",
+          exposed_pads: [],
+          rule_results: [{ rule_id: "PP-001", state: "FAIL", reason: "pin 1 maps to missing pad 9" }],
+          overall: "FAIL",
+          not_implemented: [],
+          limitations: [],
+        };
       default:
         throw new Error(`unmocked ${cmd}`);
     }
@@ -178,6 +204,21 @@ describe("Library dock (D1)", () => {
     fireEvent.click(within(preview).getByRole("button", { name: "Place on schematic" }));
     expect(onPlace).toHaveBeenCalledWith(expect.objectContaining({ id: "R_0603", name: "Part R_0603", refdes_prefix: "R" }));
     await waitFor(() => expect(calls.some((c) => c.cmd === "library_meta" && c.args.touch === true && c.args.id === "R_0603")).toBe(true));
+  });
+
+  it("the selected part shows its verification report: an unknown footprint rule reads as footprint unverified", async () => {
+    dock();
+    const g = await grid();
+    fireEvent.click(within(g).getByRole("button", { name: "Part R_0603" }));
+    const report = await screen.findByRole("region", { name: "Verification of R_0603" });
+    const rules = await within(report).findByRole("table", { name: "Footprint rules" });
+    expect(rules.textContent).toContain("no land-pattern table");
+    const status = within(report).getByLabelText("Footprint status");
+    expect(status.textContent).toBe("Footprint unverified");
+    expect(status.getAttribute("data-verified")).toBe("false");
+    expect(within(report).getByLabelText("Pin to pad status").textContent).toBe("Pin-to-pad unverified");
+    expect(within(report).getByRole("table", { name: "Pin to pad rules" }).textContent).toContain("missing pad 9");
+    expect(within(report).getByText(/Not implemented: FP-010/)).toBeTruthy();
   });
 
   it("Footprint and 3D kinds show footprints with their parts and the generated body", async () => {

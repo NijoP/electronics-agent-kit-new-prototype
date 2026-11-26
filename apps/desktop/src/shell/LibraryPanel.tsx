@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, pickModelFile } from "../api";
 import { setDraggedComponent, EAK_COMPONENT_MIME } from "../dragState";
+import { VerificationReport } from "../library/VerificationReport";
 import { LibraryManager } from "./LibraryManager";
 import { newPartDefinition, newPartIdProblem } from "../partEditor/model";
 import type { Command, ComponentDef, FootprintCandidate, FootprintDef, LibraryEntry, LibraryPart, ModelFormat, ModelQuality, ModelRef } from "../types";
@@ -357,6 +358,7 @@ export function LibraryPanel({ revision, busy, execute, onPlace, onEdit }: Props
             <dt>Ratings</dt>
             <dd>{sel.def.ratings.length === 0 ? "none" : `${sel.def.ratings.length - sel.unverified_ratings} verified, ${sel.unverified_ratings} unverified`}</dd>
           </dl>
+          <VerificationReport id={sel.id} />
           <div className="row">
             <button type="button" className="primary" disabled={busy} onClick={() => onPlace(entryOf(sel.def))} title={busy ? BUSY : "Arm the schematic place tool with this part; the footprint is created by Sync to PCB"}>
               Place on schematic
