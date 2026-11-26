@@ -60,6 +60,7 @@ mod tests {
             via_drill: 400_000,
             via_diameter: 800_000,
             nets: vec!["HV".into()],
+            target_z0_ohm: None,
         });
         c
     }

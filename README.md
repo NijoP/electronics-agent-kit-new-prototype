@@ -39,6 +39,10 @@ release on GitHub-hosted runners from one commit whose CI run is green. The comm
 pre-release; for another release, replace `v0.1.5-rc.1` in the URLs with its tag from the
 [releases page](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases).
 
+**v0.2.0-rc.1 is in preparation** (app version 0.2.0). What it contains, what is partial or unavailable, its
+limitations and its installer test status are in [docs/RELEASE_STATUS_v0.2.0.md](docs/RELEASE_STATUS_v0.2.0.md).
+The commands below switch to it once it is published.
+
 > **Unsigned builds.** Nothing is code-signed or notarized yet. Windows SmartScreen and macOS Gatekeeper
 > will warn; the steps below say how to get past the warning. Check the SHA-256 checksum first (each block
 > does). The workflow installs and uninstalls every package on its runner, but the apps have **not been
