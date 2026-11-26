@@ -9,21 +9,22 @@
 //! Status semantics. Nothing is inferred and nothing is defaulted:
 //! * `UNKNOWN` – nobody knows the value yet. It carries no value. A field with no entry at all is
 //!   UNKNOWN too: a missing value is never zero and never a default.
-//! * `NEEDS_CONFIRMATION` – a working value (a client statement not yet played back, or an
-//!   engineer's assumption) with its source. Good enough for provisional work such as the block
+//! * `NEEDS_CONFIRMATION` – a working value (a client statement not yet played back, an
+//!   engineer's assumption, or an agent's proposal) with its source, the owner who must confirm
+//!   it, and the risk if it is wrong. Good enough for provisional work such as the block
 //!   plan or part candidates, never for sizing, safety spacing or release.
 //! * `CONFIRMED` – a value confirmed by a named owner, with its source. Only a person sets it
 //!   (the engine refuses it from an agent).
 //! * `DERIVED` – computed from other requirement fields, which it names. It is firm only while
-//!   every input is firm; an UNKNOWN input is reported as an issue.
+//!   every input is firm and none changed after it was derived (otherwise it is stale); an UNKNOWN
+//!   input is reported as an issue. An agent never records it.
 //! * `NOT_APPLICABLE` – the field does not apply to this product. It carries no value and needs a
 //!   reason. Only fields the catalogue allows may be not applicable, and only a person says so.
 //!
 //! [`evaluate`] is a pure, deterministic function of the record: completeness per section, the
 //! downstream operations each missing or unconfirmed value blocks, and targeted questions for
 //! the missing values that materially change architecture or safety. The DESK requirement
-//! taxonomy (`docs/00_REQUIREMENTS.md`, ten dimensions) is covered by the nine sections of
-//! [`Section`]: DESK's "supply" and "budget" dimensions are both [`Section::Supply`].
+//! taxonomy (`docs/00_REQUIREMENTS.md`, ten dimensions) is the ten sections of [`Section`].
 
 use crate::ir::{new_id, Id};
 use serde::{Deserialize, Serialize};
@@ -64,10 +65,14 @@ impl ReqStatus {
         }
     }
 
-    /// Statuses only a person may record: an agent never confirms a requirement or declares one
-    /// not applicable (the AI never self-certifies).
+    /// Statuses an agent may never record: it never confirms a requirement, declares one not
+    /// applicable, or certifies its own computation as DERIVED (the AI never self-certifies; an
+    /// agent's computed value is NEEDS_CONFIRMATION with source `calculation` or `agent_proposal`).
     pub fn human_only(self) -> bool {
-        matches!(self, ReqStatus::Confirmed | ReqStatus::NotApplicable)
+        matches!(
+            self,
+            ReqStatus::Confirmed | ReqStatus::NotApplicable | ReqStatus::Derived
+        )
     }
 }
 
@@ -325,6 +330,10 @@ pub enum SourceKind {
     Datasheet,
     Measurement,
     Assumption,
+    /// A calculation by a person or a deterministic evaluator (name it in the reference).
+    Calculation,
+    /// A value an agent proposed; it stays NEEDS_CONFIRMATION until a person confirms it.
+    AgentProposal,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -348,7 +357,11 @@ pub struct ReqEntry {
     /// The person responsible for the value (who answers or confirms it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner: Option<String>,
-    /// Rationale, risk if wrong, the question still open, or why it is not applicable.
+    /// What goes wrong if a NEEDS_CONFIRMATION value turns out wrong (required for that status:
+    /// DESK's "PROVISIONAL, risk noted").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk_if_wrong: Option<String>,
+    /// Rationale, the question still open, or why it is not applicable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     /// When the entry was recorded, in milliseconds since the Unix epoch.
@@ -365,6 +378,7 @@ impl ReqEntry {
             && self.source == o.source
             && self.derived_from == o.derived_from
             && self.owner == o.owner
+            && self.risk_if_wrong == o.risk_if_wrong
             && self.note == o.note
     }
 }
@@ -433,36 +447,39 @@ pub struct RequirementSet {
 pub enum Section {
     Function,
     Supply,
+    PowerBudget,
     Interfaces,
     Mechanical,
-    Environment,
-    Safety,
-    Manufacturing,
+    Environmental,
+    SafetyRegulatory,
+    ManufacturingTest,
     CostSupply,
     LifecycleFirmware,
 }
 
 impl Section {
-    pub const ALL: [Section; 9] = [
+    pub const ALL: [Section; 10] = [
         Section::Function,
         Section::Supply,
+        Section::PowerBudget,
         Section::Interfaces,
         Section::Mechanical,
-        Section::Environment,
-        Section::Safety,
-        Section::Manufacturing,
+        Section::Environmental,
+        Section::SafetyRegulatory,
+        Section::ManufacturingTest,
         Section::CostSupply,
         Section::LifecycleFirmware,
     ];
     pub fn label(self) -> &'static str {
         match self {
             Section::Function => "Function and performance",
-            Section::Supply => "Supplies and power budget",
+            Section::Supply => "Supplies and rail tree",
+            Section::PowerBudget => "Power budget",
             Section::Interfaces => "Interfaces and connectors",
             Section::Mechanical => "Outline, height, mounting and enclosure",
-            Section::Environment => "Environment",
-            Section::Safety => "Safety, regulatory and isolation",
-            Section::Manufacturing => "Quantity, fabrication, assembly, test and programming",
+            Section::Environmental => "Environment",
+            Section::SafetyRegulatory => "Safety, regulatory and isolation",
+            Section::ManufacturingTest => "Quantity, fabrication, assembly, test and programming",
             Section::CostSupply => "BOM target, lifecycle and second source",
             Section::LifecycleFirmware => "Firmware, serviceability and expansion",
         }
@@ -548,15 +565,16 @@ pub const FIELDS: &[FieldDef] = &[
         "Is the supply connected or disconnected while powered?"),
     def("supply.rails", S::Supply, "Rail tree", K::Items(ReqItemKind::Rail), None, false, true,
         "Which supply rails does the board need, and which rail is each one generated from?"),
-    def("supply.peak_current", S::Supply, "Peak input current", K::Number, Some(M::Current), false, true,
+    // Power budget
+    def("power_budget.peak_current", S::PowerBudget, "Peak input current", K::Number, Some(M::Current), false, true,
         "What is the peak input current in the worst operating mode?"),
-    def("supply.average_current", S::Supply, "Average input current", K::Number, Some(M::Current), false, true,
+    def("power_budget.average_current", S::PowerBudget, "Average input current", K::Number, Some(M::Current), false, true,
         "What is the average input current over a typical duty cycle?"),
-    def("supply.sleep_current", S::Supply, "Sleep current", K::Number, Some(M::Current), true, false,
+    def("power_budget.sleep_current", S::PowerBudget, "Sleep current", K::Number, Some(M::Current), true, false,
         "What is the allowed current in sleep or standby?"),
-    def("supply.power_budget", S::Supply, "Power budget", K::Number, Some(M::Power), false, true,
+    def("power_budget.total_power", S::PowerBudget, "Power budget", K::Number, Some(M::Power), false, true,
         "What total power may the board draw?"),
-    def("supply.battery_life", S::Supply, "Battery life target", K::Number, Some(M::Time), true, true,
+    def("power_budget.battery_life", S::PowerBudget, "Battery life target", K::Number, Some(M::Time), true, true,
         "How long must the board run on one battery charge?"),
     // Interfaces and connectors
     def("interfaces.list", S::Interfaces, "External interfaces", K::Items(ReqItemKind::Interface), None, true, true,
@@ -581,47 +599,47 @@ pub const FIELDS: &[FieldDef] = &[
     def("mechanical.max_weight", S::Mechanical, "Maximum weight", K::Number, Some(M::Mass), true, false,
         "Is there a weight limit for the assembled board?"),
     // Environment
-    def("environment.operating_temp", S::Environment, "Operating temperature", K::Range, Some(M::Temperature), false, true,
+    def("environment.operating_temp", S::Environmental, "Operating temperature", K::Range, Some(M::Temperature), false, true,
         "What ambient temperature range must the board operate in?"),
-    def("environment.storage_temp", S::Environment, "Storage temperature", K::Range, Some(M::Temperature), false, false,
+    def("environment.storage_temp", S::Environmental, "Storage temperature", K::Range, Some(M::Temperature), false, false,
         "What temperature range must it survive unpowered?"),
-    def("environment.humidity", S::Environment, "Relative humidity", K::Range, Some(M::Ratio), false, false,
+    def("environment.humidity", S::Environmental, "Relative humidity", K::Range, Some(M::Ratio), false, false,
         "What relative humidity range does it see?"),
-    def("environment.condensation", S::Environment, "Condensation possible", K::Flag, None, false, true,
+    def("environment.condensation", S::Environmental, "Condensation possible", K::Flag, None, false, true,
         "Can condensation form on the board?"),
-    def("environment.ingress", S::Environment, "Dust and water ingress", K::Text, None, true, true,
+    def("environment.ingress", S::Environmental, "Dust and water ingress", K::Text, None, true, true,
         "What dust and water exposure (IP rating) must it withstand?"),
-    def("environment.vibration", S::Environment, "Vibration and shock", K::Text, None, true, false,
+    def("environment.vibration", S::Environmental, "Vibration and shock", K::Text, None, true, false,
         "What vibration or shock must it survive?"),
-    def("environment.altitude", S::Environment, "Maximum altitude", K::Number, Some(M::Length), false, true,
+    def("environment.altitude", S::Environmental, "Maximum altitude", K::Number, Some(M::Length), false, true,
         "What is the highest altitude it operates at (clearances grow above 2000 m)?"),
     // Safety, regulatory and isolation
-    def("safety.markets", S::Safety, "Markets and marks", K::Text, None, false, true,
+    def("safety.markets", S::SafetyRegulatory, "Markets and marks", K::Text, None, false, true,
         "Which markets and marks apply (CE, UKCA, FCC, ...)?"),
-    def("safety.sector", S::Safety, "Product sector", K::Text, None, false, true,
+    def("safety.sector", S::SafetyRegulatory, "Product sector", K::Text, None, false, true,
         "Is it consumer, industrial, medical, automotive or another regulated sector?"),
-    def("safety.max_working_voltage", S::Safety, "Highest working voltage", K::Number, Some(M::Voltage), false, true,
+    def("safety.max_working_voltage", S::SafetyRegulatory, "Highest working voltage", K::Number, Some(M::Voltage), false, true,
         "What is the highest working voltage anywhere on the board, including mains or high-voltage parts?"),
-    def("safety.isolation", S::Safety, "Isolation", K::Text, None, false, true,
+    def("safety.isolation", S::SafetyRegulatory, "Isolation", K::Text, None, false, true,
         "What isolation is required between circuits (none, functional, basic, reinforced), and between which?"),
-    def("safety.standards", S::Safety, "Safety standards", K::Text, None, true, true,
+    def("safety.standards", S::SafetyRegulatory, "Safety standards", K::Text, None, true, true,
         "Which safety standards must the product meet?"),
-    def("safety.radio_certification", S::Safety, "Radio certification", K::Text, None, true, false,
+    def("safety.radio_certification", S::SafetyRegulatory, "Radio certification", K::Text, None, true, false,
         "Does the product transmit, and with which radio certification (or a pre-certified module)?"),
-    def("safety.battery_transport", S::Safety, "Battery transport", K::Text, None, true, false,
+    def("safety.battery_transport", S::SafetyRegulatory, "Battery transport", K::Text, None, true, false,
         "Does a battery ship with it, and under which transport rules (UN 38.3)?"),
     // Quantity, fabrication, assembly, test and programming
-    def("manufacturing.quantity", S::Manufacturing, "Build quantity", K::Number, Some(M::Count), false, true,
+    def("manufacturing.quantity", S::ManufacturingTest, "Build quantity", K::Number, Some(M::Count), false, true,
         "How many boards per build (prototype, pilot, production volume)?"),
-    def("manufacturing.fabricator", S::Manufacturing, "PCB fabricator", K::Text, None, false, false,
+    def("manufacturing.fabricator", S::ManufacturingTest, "PCB fabricator", K::Text, None, false, false,
         "Which fabricator makes the bare board?"),
-    def("manufacturing.assembler", S::Manufacturing, "Assembler", K::Text, None, false, true,
+    def("manufacturing.assembler", S::ManufacturingTest, "Assembler", K::Text, None, false, true,
         "Who assembles the board, and with which part library (basic or preferred parts)?"),
-    def("manufacturing.assembly_process", S::Manufacturing, "Assembly process", K::Text, None, false, true,
+    def("manufacturing.assembly_process", S::ManufacturingTest, "Assembly process", K::Text, None, false, true,
         "One- or two-sided assembly, SMT only or with through-hole?"),
-    def("manufacturing.test_method", S::Manufacturing, "Test method", K::Text, None, false, false,
+    def("manufacturing.test_method", S::ManufacturingTest, "Test method", K::Text, None, false, false,
         "How is each board tested (test pads, fixture, functional test)?"),
-    def("manufacturing.programming_method", S::Manufacturing, "Programming method", K::Text, None, true, false,
+    def("manufacturing.programming_method", S::ManufacturingTest, "Programming method", K::Text, None, true, false,
         "How is firmware loaded (header, pogo pads, pre-programmed parts)?"),
     // BOM target, lifecycle and second source
     def("cost.bom_target", S::CostSupply, "BOM cost target", K::Number, Some(M::Money), false, true,
@@ -805,10 +823,11 @@ impl RequirementSet {
             })
     }
 
-    /// Record an entry at a path. The owner and note are trimmed (blank = none).
+    /// Record an entry at a path. The owner, risk and note are trimmed (blank = none).
     pub fn set(&mut self, path: &str, mut entry: ReqEntry) -> Result<(), ReqEditError> {
         let d = self.def_of(path)?;
         entry.owner = clean(entry.owner.as_deref());
+        entry.risk_if_wrong = clean(entry.risk_if_wrong.as_deref());
         entry.note = clean(entry.note.as_deref());
         let mut problems = entry_problems(d, path, &entry);
         if let ValueKind::Items(kind) = d.kind {
@@ -1183,6 +1202,19 @@ pub fn entry_problems(d: &FieldDef, path: &str, e: &ReqEntry) -> Vec<String> {
         ReqStatus::Confirmed if e.owner.is_none() => {
             found.push("CONFIRMED needs the owner who confirmed it".into())
         }
+        ReqStatus::NeedsConfirmation if e.owner.is_none() => {
+            found.push("NEEDS_CONFIRMATION needs the owner who must confirm it".into())
+        }
+        _ => {}
+    }
+    match (e.status, &e.risk_if_wrong) {
+        (ReqStatus::NeedsConfirmation, None) => found.push(
+            "NEEDS_CONFIRMATION needs risk_if_wrong: what goes wrong if the value is wrong".into(),
+        ),
+        (ReqStatus::NeedsConfirmation, Some(_)) | (_, None) => {}
+        (_, Some(_)) => found.push("only a NEEDS_CONFIRMATION value carries risk_if_wrong".into()),
+    }
+    match e.status {
         ReqStatus::NotApplicable if !d.na_allowed => {
             found.push("this field always applies; it cannot be NOT_APPLICABLE".into())
         }
@@ -1205,6 +1237,11 @@ pub fn entry_problems(d: &FieldDef, path: &str, e: &ReqEntry) -> Vec<String> {
         found.extend(text_problem("source reference", &s.reference));
     }
     found.extend(e.owner.as_deref().and_then(|s| text_problem("owner", s)));
+    found.extend(
+        e.risk_if_wrong
+            .as_deref()
+            .and_then(|s| text_problem("risk_if_wrong", s)),
+    );
     found.extend(e.note.as_deref().and_then(|s| text_problem("note", s)));
     found.into_iter().map(|m| format!("{path}: {m}")).collect()
 }
@@ -1281,8 +1318,8 @@ pub const OPERATIONS: &[OperationDef] = &[
             ("function.description", PROV),
             ("supply.input_voltage", PROV),
             ("supply.rails", PROV),
-            ("supply.peak_current", PROV),
-            ("supply.average_current", PROV),
+            ("power_budget.peak_current", PROV),
+            ("power_budget.average_current", PROV),
             ("environment.operating_temp", PROV),
             ("mechanical.max_height_top", PROV),
             ("mechanical.max_height_bottom", PROV),
@@ -1326,7 +1363,7 @@ pub const OPERATIONS: &[OperationDef] = &[
         needs: &[
             ("supply.input_voltage", FIRM),
             ("supply.rails", FIRM),
-            ("supply.peak_current", FIRM),
+            ("power_budget.peak_current", FIRM),
             ("environment.operating_temp", FIRM),
         ],
         item_needs: &[
@@ -1477,6 +1514,8 @@ pub struct FieldReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub risk_if_wrong: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_revision: Option<u64>,
@@ -1530,6 +1569,10 @@ pub const NOT_IMPLEMENTED: &[&str] = &[
     "cross-field consistency (rail currents against the power budget, rail voltages against the input range, battery life against capacity)",
     "enforcement: no engine refuses an operation on this report yet; operation readiness is advisory",
     "requirement-to-constraint compilation (design profile) and requirement-to-block-to-net traceability",
+    "scoped gates (a gate that passes for one variant or scope, such as a low-voltage prototype, while another stays blocked)",
+    "domain-required fields from the classification (for example, NOT_APPLICABLE refused for safety under a mains or high-voltage classification)",
+    "a deterministic evaluator that writes DERIVED values; today a person records them with their inputs",
+    "folding the harness design-flow spec (design-flow/spec.json) into this record",
 ];
 
 pub const LIMITATIONS: &[&str] = &[
@@ -1587,6 +1630,17 @@ impl<'a> Ctx<'a> {
             if l < Level::Firm {
                 level = Level::Provisional;
             }
+            // Stale: an input was recorded after the derived value, so it must be derived again.
+            if let Some(changed) = set
+                .entry(input)
+                .filter(|i| i.updated_revision > e.updated_revision)
+            {
+                self.issues.insert(format!(
+                    "{path} is stale: {input} changed at revision {} after it was derived at revision {}; derive it again",
+                    changed.updated_revision, e.updated_revision
+                ));
+                level = Level::Provisional;
+            }
         }
         stack.pop();
         level
@@ -1619,6 +1673,7 @@ impl<'a> Ctx<'a> {
             source: e.and_then(|e| e.source.clone()),
             derived_from,
             owner: e.and_then(|e| e.owner.clone()),
+            risk_if_wrong: e.and_then(|e| e.risk_if_wrong.clone()),
             note: e.and_then(|e| e.note.clone()),
             updated_revision: e.map(|e| e.updated_revision),
             updated_at_ms: e.map(|e| e.updated_at_ms),
@@ -1760,7 +1815,10 @@ mod tests {
             value,
             source,
             derived_from: vec![],
-            owner: (status == ReqStatus::Confirmed).then(|| "A. Engineer".to_string()),
+            owner: matches!(status, ReqStatus::NeedsConfirmation | ReqStatus::Confirmed)
+                .then(|| "A. Engineer".to_string()),
+            risk_if_wrong: (status == ReqStatus::NeedsConfirmation)
+                .then(|| "the regulator is re-selected".to_string()),
             note: (status == ReqStatus::NotApplicable).then(|| "no battery".to_string()),
             updated_at_ms: 1,
             updated_revision: 1,
@@ -1820,6 +1878,26 @@ mod tests {
         for s in Section::ALL {
             assert!(FIELDS.iter().any(|d| d.section == s), "{s:?} has no field");
         }
+        // The sections are DESK's ten requirement dimensions (ADR-0057).
+        let names: Vec<_> = Section::ALL
+            .iter()
+            .map(|s| serde_json::to_value(s).unwrap())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "function",
+                "supply",
+                "power_budget",
+                "interfaces",
+                "mechanical",
+                "environmental",
+                "safety_regulatory",
+                "manufacturing_test",
+                "cost_supply",
+                "lifecycle_firmware"
+            ]
+        );
         for o in OPERATIONS {
             for (k, _) in o.needs {
                 assert!(
@@ -1892,6 +1970,20 @@ mod tests {
                 ..entry(ReqStatus::Confirmed, Some(volts(4.5, 5.0, 5.5)))
             },
             entry(ReqStatus::Confirmed, None),
+            // A working value without the owner who confirms it or its risk if wrong; a risk on
+            // a value that is not provisional.
+            ReqEntry {
+                owner: None,
+                ..entry(ReqStatus::NeedsConfirmation, Some(volts(4.5, 5.0, 5.5)))
+            },
+            ReqEntry {
+                risk_if_wrong: None,
+                ..entry(ReqStatus::NeedsConfirmation, Some(volts(4.5, 5.0, 5.5)))
+            },
+            ReqEntry {
+                risk_if_wrong: Some("none".into()),
+                ..entry(ReqStatus::Confirmed, Some(volts(4.5, 5.0, 5.5)))
+            },
             // Wrong unit, wrong shape, disordered range.
             entry(ReqStatus::NeedsConfirmation, Some(wrong_unit)),
             entry(
@@ -2003,7 +2095,10 @@ mod tests {
     fn derived_values_are_only_as_firm_as_their_inputs() {
         let mut s = RequirementSet::default();
         let derived = ReqEntry {
-            derived_from: vec!["supply.peak_current".into(), "supply.input_voltage".into()],
+            derived_from: vec![
+                "power_budget.peak_current".into(),
+                "supply.input_voltage".into(),
+            ],
             ..entry(
                 ReqStatus::Derived,
                 Some(ReqValue::Number {
@@ -2013,13 +2108,13 @@ mod tests {
                 }),
             )
         };
-        s.set("supply.power_budget", derived).unwrap();
+        s.set("power_budget.total_power", derived).unwrap();
         let level = |s: &RequirementSet| {
             let r = evaluate(s);
             let f = r
                 .fields
                 .iter()
-                .find(|f| f.path == "supply.power_budget")
+                .find(|f| f.path == "power_budget.total_power")
                 .unwrap()
                 .level;
             (f, r.issues)
@@ -2033,10 +2128,27 @@ mod tests {
         )
         .unwrap();
         s.set(
-            "supply.peak_current",
+            "power_budget.peak_current",
             entry(ReqStatus::Confirmed, Some(amps(0.5))),
         )
         .unwrap();
+        let (l, issues) = level(&s);
+        assert_eq!(l, Level::Firm);
+        assert!(issues.is_empty(), "{issues:?}");
+        // An input recorded after the derived value makes it stale until it is derived again.
+        let later = ReqEntry {
+            updated_revision: 2,
+            ..entry(ReqStatus::Confirmed, Some(amps(0.6)))
+        };
+        s.set("power_budget.peak_current", later).unwrap();
+        let (l, issues) = level(&s);
+        assert_eq!(l, Level::Provisional);
+        assert!(issues.iter().any(|i| i.contains("is stale")), "{issues:?}");
+        let again = ReqEntry {
+            updated_revision: 3,
+            ..s.entry("power_budget.total_power").unwrap().clone()
+        };
+        s.fields.insert("power_budget.total_power".into(), again);
         let (l, issues) = level(&s);
         assert_eq!(l, Level::Firm);
         assert!(issues.is_empty(), "{issues:?}");
@@ -2049,7 +2161,7 @@ mod tests {
             derived_from: vec!["rail_gone/voltage".into()],
             ..entry(ReqStatus::Derived, Some(amps(1.0)))
         };
-        assert!(s.set("supply.average_current", bad).is_err());
+        assert!(s.set("power_budget.average_current", bad).is_err());
     }
 
     #[test]
@@ -2059,9 +2171,12 @@ mod tests {
             note: None,
             ..entry(ReqStatus::NotApplicable, None)
         };
-        assert!(s.set("supply.battery_life", no_reason).is_err());
-        s.set("supply.battery_life", entry(ReqStatus::NotApplicable, None))
-            .unwrap();
+        assert!(s.set("power_budget.battery_life", no_reason).is_err());
+        s.set(
+            "power_budget.battery_life",
+            entry(ReqStatus::NotApplicable, None),
+        )
+        .unwrap();
         s.set("interfaces.list", entry(ReqStatus::NotApplicable, None))
             .unwrap();
         // No interface can be added while the list is declared not applicable.

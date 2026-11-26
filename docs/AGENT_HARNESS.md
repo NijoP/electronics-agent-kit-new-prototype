@@ -110,13 +110,15 @@ part selection, schematic capture, power sizing, board outline, placement, routi
 spacing, manufacturing release) each missing or unconfirmed value blocks, and targeted questions.
 A field with nothing recorded is `UNKNOWN`. Never put a number where nobody gave one.
 
-- Record a value: `{"type":"SetRequirementField","path":"supply.input_voltage","status":"NEEDS_CONFIRMATION","value":{"kind":"range","min":4.5,"nom":5.0,"max":5.5,"unit":"V"},"source":{"kind":"client","reference":"kick-off call 2026-11-20"}}`.
+- Record a value: `{"type":"SetRequirementField","path":"supply.input_voltage","status":"NEEDS_CONFIRMATION","value":{"kind":"range","min":4.5,"nom":5.0,"max":5.5,"unit":"V"},"source":{"kind":"client","reference":"kick-off call 2026-11-20"},"owner":"Client PM","risk_if_wrong":"the input protection and regulator are re-selected"}`.
+  NEEDS_CONFIRMATION needs a source, the `owner` who must confirm it and `risk_if_wrong`.
   A rail or interface field is `<item id>/<field>`. Add the item first with
   `UpsertRequirementItem` (`kind` `rail` or `interface`; a rail's `parent` is the rail it is
   generated from).
-- As an agent you record `UNKNOWN`, `NEEDS_CONFIRMATION` or `DERIVED` (with `derived_from`). Only a
-  person records `CONFIRMED` or `NOT_APPLICABLE`: the engine refuses them from an agent
-  (`precondition`). Ask the person, and quote the report's question for the field.
+- As an agent you record `UNKNOWN` or `NEEDS_CONFIRMATION`; give a value you computed or proposed
+  the source kind `calculation` or `agent_proposal`. Only a person records `CONFIRMED`, `DERIVED` or
+  `NOT_APPLICABLE`: the engine refuses them from an agent (`precondition`). A DERIVED value whose
+  input changed later is reported stale. Ask the person, and quote the report's question for the field.
 - Readiness is advisory: no tool refuses an operation on it yet. Say which operations are
   still blocked when you report.
 

@@ -102,7 +102,7 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
         ),
         SetRequirementField { .. } => (
             D::Project,
-            "Record one structured requirement field (schema v9): `path` is a catalogue key such as supply.input_voltage, or `<item id>/<field>` for a rail or interface (see get_requirements for the catalogue and paths). The whole entry is replaced; quantities carry a unit, a value never stands in for a missing one, and EAK stamps the time and revision. An agent may record UNKNOWN, NEEDS_CONFIRMATION or DERIVED; only a person records CONFIRMED or NOT_APPLICABLE.",
+            "Record one structured requirement field (schema v9): `path` is a catalogue key such as supply.input_voltage, or `<item id>/<field>` for a rail or interface (see get_requirements for the catalogue and paths). The whole entry is replaced; quantities carry a unit, a value never stands in for a missing one, and EAK stamps the time and revision. An agent records UNKNOWN or NEEDS_CONFIRMATION (source kind agent_proposal or calculation for its own values); only a person records CONFIRMED, DERIVED or NOT_APPLICABLE. NEEDS_CONFIRMATION needs a source, the owner who must confirm it and risk_if_wrong.",
             obj(
                 &[
                     ("path", string("requirement path")),
@@ -110,8 +110,9 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                     ("value", nullable(req_value())),
                     ("source", nullable(req_source())),
                     ("derived_from", array(string("requirement path"), "inputs of a DERIVED value")),
-                    ("owner", nullable(string("person responsible for the value"))),
-                    ("note", nullable(string("rationale, risk if wrong, open question, or why not applicable"))),
+                    ("owner", nullable(string("person responsible for the value: who must confirm it, or who confirmed it"))),
+                    ("risk_if_wrong", nullable(string("what goes wrong if the value is wrong (NEEDS_CONFIRMATION only, and required there)"))),
+                    ("note", nullable(string("rationale, open question, or why not applicable"))),
                 ],
                 &["path", "status"],
             ),
@@ -939,7 +940,8 @@ pub fn command_samples() -> Vec<Command> {
                 reference: "kick-off notes".into(),
             }),
             derived_from: vec![],
-            owner: None,
+            owner: Some("Client PM".into()),
+            risk_if_wrong: Some("the input protection and regulator are re-selected".into()),
             note: Some("USB bus power".into()),
         },
         ClearRequirementField {

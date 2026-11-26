@@ -1,6 +1,6 @@
 //! Schema v9 (ADR-0057) through the engine: the requirement commands are the only write path
 //! into the structured requirement record. Each is one undo step, a refusal changes nothing, an
-//! agent never confirms a requirement, and the record survives a save and load. Written without
+//! agent never confirms or derives a requirement, and the record survives a save and load. Written without
 //! running (no local builds): CI decides.
 
 use eak_core::requirements::{evaluate, Level, Operation, SourceKind};
@@ -59,6 +59,8 @@ fn set(path: &str, status: ReqStatus, value: Option<ReqValue>) -> C {
         source: client(),
         derived_from: vec![],
         owner: Some("Client PM".into()),
+        risk_if_wrong: (status == ReqStatus::NeedsConfirmation)
+            .then(|| "the input protection is re-selected".to_string()),
         note: None,
     }
 }
@@ -156,7 +158,11 @@ fn an_agent_proposes_values_but_never_confirms_them() {
         set(path, ReqStatus::NeedsConfirmation, temp.clone()),
     );
     assert!(r.accepted, "{:?}", r.error);
-    for status in [ReqStatus::Confirmed, ReqStatus::NotApplicable] {
+    for status in [
+        ReqStatus::Confirmed,
+        ReqStatus::Derived,
+        ReqStatus::NotApplicable,
+    ] {
         let r = refused_as(&mut e, agent.clone(), set(path, status, temp.clone()));
         assert!(
             matches!(r.error, Some(CommandError::Precondition(_))),

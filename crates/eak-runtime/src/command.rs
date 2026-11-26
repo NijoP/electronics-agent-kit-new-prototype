@@ -29,7 +29,7 @@ pub enum Command {
     // ---- structured requirements (schema v9, ADR-0057)
     /// Record one requirement field. `path` is a catalogue key (`supply.input_voltage`) or
     /// `<item id>/<field>` (`rail_1a2b/voltage`). The whole entry is replaced and stamped with the
-    /// time and the new revision. An agent can never record CONFIRMED or NOT_APPLICABLE.
+    /// time and the new revision. An agent can never record CONFIRMED, DERIVED or NOT_APPLICABLE.
     SetRequirementField {
         path: String,
         status: ReqStatus,
@@ -42,6 +42,9 @@ pub enum Command {
         derived_from: Vec<String>,
         #[serde(default)]
         owner: Option<String>,
+        /// What goes wrong if a NEEDS_CONFIRMATION value is wrong (required for that status).
+        #[serde(default)]
+        risk_if_wrong: Option<String>,
         #[serde(default)]
         note: Option<String>,
     },
@@ -925,7 +928,7 @@ pub struct Applied {
 pub fn human_only(cmd: &Command) -> Option<String> {
     match cmd {
         Command::SetRequirementField { path, status, .. } if status.human_only() => Some(format!(
-            "only a person can record {} for requirement {path}; an agent records NEEDS_CONFIRMATION for a person to confirm",
+            "only a person can record {} for requirement {path}; an agent records NEEDS_CONFIRMATION (source agent_proposal or calculation) for a person to confirm",
             status.as_str()
         )),
         Command::Batch { commands, .. } => commands.iter().find_map(human_only),
@@ -1387,6 +1390,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             source,
             derived_from,
             owner,
+            risk_if_wrong,
             note,
         } => {
             let entry = ReqEntry {
@@ -1395,6 +1399,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 source: source.clone(),
                 derived_from: derived_from.clone(),
                 owner: owner.clone(),
+                risk_if_wrong: risk_if_wrong.clone(),
                 note: note.clone(),
                 updated_at_ms: u64::try_from(crate::store::now_ms()).unwrap_or(u64::MAX),
                 updated_revision: p.revision + 1,

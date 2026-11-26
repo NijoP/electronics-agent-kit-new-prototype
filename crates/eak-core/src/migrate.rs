@@ -809,6 +809,7 @@ mod tests {
             }),
             derived_from: vec![],
             owner: Some("Client PM".into()),
+            risk_if_wrong: None,
             note: None,
             updated_at_ms: 1_795_000_000_000,
             updated_revision: 4,

@@ -394,6 +394,7 @@ fn cli_records_requirements_and_an_agent_never_confirms_them() {
             "value": {"kind": "range", "min": 4.5, "nom": 5.0, "max": 5.5, "unit": "V"},
             "source": {"kind": "client", "reference": "kick-off call"},
             "owner": "Client PM",
+            "risk_if_wrong": "the input protection is re-selected",
         })
     };
     exec(&dir, 0, set("NEEDS_CONFIRMATION"));

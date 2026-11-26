@@ -286,7 +286,7 @@ pub fn req_status() -> Value {
         .collect();
     enumeration(
         &names,
-        "UNKNOWN (no value), NEEDS_CONFIRMATION (working value with a source), CONFIRMED (a person confirmed it: owner and source required; never an agent), DERIVED (computed from derived_from), NOT_APPLICABLE (no value, reason in the note; never an agent)",
+        "UNKNOWN (no value), NEEDS_CONFIRMATION (working value with a source, the owner who must confirm it and risk_if_wrong), CONFIRMED (a person confirmed it: owner and source required; never an agent), DERIVED (computed from derived_from; stale when an input changes later; never an agent), NOT_APPLICABLE (no value, reason in the note; never an agent)",
     )
 }
 
@@ -343,6 +343,8 @@ pub fn req_source() -> Value {
                         "datasheet",
                         "measurement",
                         "assumption",
+                        "calculation",
+                        "agent_proposal",
                     ],
                     "source kind",
                 ),
