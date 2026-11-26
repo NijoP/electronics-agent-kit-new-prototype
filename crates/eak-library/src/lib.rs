@@ -25,8 +25,8 @@
 
 pub mod db;
 pub mod kicad;
-pub mod mpn;
 pub mod kicad_lib;
+pub mod mpn;
 pub mod part;
 pub mod source;
 pub mod sources;
