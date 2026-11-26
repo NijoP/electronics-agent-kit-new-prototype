@@ -895,7 +895,9 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
             <section aria-label="Continue" className="home-card">
               <span className="home-label-caps">Continue</span>
               <p className="muted home-note">
-                Nothing to continue yet. A project you open or create appears here with its check results on the current revision, unrouted nets, BOM risk and release gates, read from its folder.
+                {loaded
+                  ? "Nothing to continue yet. A project you open or create appears here with its check results on the current revision, unrouted nets, BOM risk and release gates, read from its folder."
+                  : "Reading recent projects…"}
               </p>
             </section>
           )}

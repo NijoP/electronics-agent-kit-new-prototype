@@ -88,6 +88,15 @@ afterEach(() => {
 
 const ran = (cmd: string) => calls.filter((c) => c.cmd === cmd);
 const tour = () => screen.queryByRole("region", { name: "First-run tour" });
+// The Continue card once the recent list has loaded (before that it is the empty card, replaced).
+const continueCard = async () =>
+  within(
+    await waitFor(() => {
+      const r = screen.getByRole("region", { name: "Continue" });
+      if (!r.querySelector(".home-card-name")) throw new Error("Continue card still empty");
+      return r;
+    }),
+  );
 
 describe("first-run tour", () => {
   it("shows on first launch, steps, can be skipped, and is replayed from Home's Help menu", async () => {
@@ -133,7 +142,7 @@ describe("Continue and Needs attention", () => {
   it("shows facts read from the folder and opens the project where an item points", async () => {
     localStorage.setItem(TOUR_KEY, "done");
     render(<App />);
-    const card = within(await screen.findByRole("region", { name: "Continue" }));
+    const card = await continueCard();
     await card.findByText("1 of 6 release gates pass · Draft · current reports: ERC");
     expect(ran("home_project_facts")[0].args).toEqual({ path: "/projects/fixture" });
     const list = within(card.getByRole("list", { name: "Needs attention" }));
@@ -157,7 +166,7 @@ describe("Continue and Needs attention", () => {
       throw new Error(`unmocked ${cmd}`);
     });
     render(<App />);
-    const card = within(await screen.findByRole("region", { name: "Continue" }));
+    const card = await continueCard();
     await card.findByText(/Facts unavailable: the project folder cannot be read/);
     expect(card.queryByRole("list", { name: "Needs attention" })).toBeNull();
   });

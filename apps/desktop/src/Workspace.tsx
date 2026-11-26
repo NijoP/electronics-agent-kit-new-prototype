@@ -387,7 +387,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       const r = await f();
       setMessage(
         r.accepted
-          ? `${r.command} â revision ${r.revision_after}${r.warnings.length ? ` (${r.warnings.length} warning(s))` : ""}. ${r.validation_note}`
+          ? `${r.command} → revision ${r.revision_after}${r.warnings.length ? ` (${r.warnings.length} warning(s))` : ""}. ${r.validation_note}`
           : `${r.command} rejected: ${r.error ? describeError(r.error) : "unknown error"}`,
       );
       await refresh();
@@ -429,7 +429,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       if (last)
         setMessage(
           last.accepted
-            ? `${last.command} â revision ${last.revision_after}, saved${last.warnings.length ? ` (${last.warnings.join("; ")})` : ""}`
+            ? `${last.command} → revision ${last.revision_after}, saved${last.warnings.length ? ` (${last.warnings.join("; ")})` : ""}`
             : `${last.command} rejected: ${last.error ? describeError(last.error) : "unknown error"}`,
         );
       await refresh();
@@ -886,7 +886,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     const o = editorContext(editorDoc)?.ops?.[op];
     return o ? { enabled: () => editorContext(editorDoc)?.ops?.[op]?.state ?? o.state, run: () => (editorContext(editorDoc)?.ops?.[op] ?? o).run() } : null;
   };
-  // The Power port split button follows Settings âº Power ports.
+  // The Power port split button follows Settings › Power ports.
   const powerPortList = usePowerPorts();
   const allActions = workspaceActions({
     editorOp,
@@ -952,15 +952,15 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
             <span className="muted">revision {revision}</span>
             {snapshot.blocked ? (
               <span className="saved bad" data-state="blocked" title={`Writes are blocked: ${snapshot.blocked}`}>
-                Writes blocked Â· r{revision}
+                Writes blocked · r{revision}
               </span>
             ) : busy ? (
               <span className="saved busy" data-state="busy" title="A command is in flight; the engine has not confirmed it yet">
-                Writingâ¦ Â· r{revision}
+                Writing… · r{revision}
               </span>
             ) : (
               <span className="saved" data-state="saved" title="Every accepted command is written to disk atomically before it returns">
-                Saved Â· r{revision}
+                Saved · r{revision}
               </span>
             )}
           </div>
@@ -1231,7 +1231,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           onClose={() => setQuickOpen(false)}
           title="Quick open"
           searchLabel="Search parts, nets and sheets"
-          placeholder="Go to part, net or sheetâ¦"
+          placeholder="Go to part, net or sheet…"
           empty="Nothing matches"
         />
       )}
