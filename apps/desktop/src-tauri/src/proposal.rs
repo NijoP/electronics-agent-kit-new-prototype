@@ -1,0 +1,147 @@
+//! Proposal review IPC (slice S9, ADR-0051): the desktop side of propose mode.
+//!
+//! An agent session in propose mode stores its edits as a proposal under
+//! `<project>/proposals/` (`eak_harness::proposal`); nothing in the project changes. These
+//! commands let the person at the window list proposals, review one (EAK recomputes the delta and
+//! the ERC/DRC check delta on a copy every time), apply it, discard it or export the review as
+//! evidence. Apply is the person's: it goes through `eak_harness::proposal::apply` with the Human
+//! actor, which refuses a stale revision, saves a checkpoint and executes the chosen steps as one
+//! `Batch` through `Engine::execute` (one revision, one undo step). There is no other write path.
+
+use crate::Session;
+use eak_harness::proposal::{self, ApplyOutcome, Review};
+use eak_runtime::Actor;
+use serde_json::Value;
+
+fn checked(steps: Option<Vec<usize>>) -> Result<Option<Vec<usize>>, String> {
+    match &steps {
+        Some(s) if s.len() > proposal::MAX_STEPS => Err("too many steps selected".into()),
+        _ => Ok(steps),
+    }
+}
+
+/// Every proposal of the active project (oldest first), one summary each.
+pub fn proposal_list(s: &Session) -> Result<Vec<Value>, String> {
+    s.with_engine(|e| {
+        let current = e.project().revision;
+        let id = e.project().id.clone();
+        e.dir()
+            .map(|d| {
+                proposal::list(d)
+                    .iter()
+                    .filter(|p| p.project_id == id)
+                    .map(|p| proposal::summary(p, current))
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
+/// EAK's review of one proposal for the selected steps (all when `None`). Read-only.
+pub fn proposal_review(s: &Session, id: &str, steps: Option<Vec<usize>>) -> Result<Review, String> {
+    let steps = checked(steps)?;
+    s.with_engine(|e| proposal::review(e, id, steps.as_deref()).map_err(|err| err.to_string()))?
+}
+
+/// Apply the selected steps (all when `None`) as the person at the window.
+pub fn proposal_apply(
+    s: &Session,
+    id: &str,
+    expected_revision: u64,
+    steps: Option<Vec<usize>>,
+) -> Result<ApplyOutcome, String> {
+    let steps = checked(steps)?;
+    s.with_engine(|e| {
+        proposal::apply(e, id, expected_revision, steps.as_deref(), &Actor::human())
+            .map_err(|err| err.to_string())
+    })?
+}
+
+/// Discard a proposal (the person may discard any).
+pub fn proposal_discard(s: &Session, id: &str) -> Result<Value, String> {
+    s.with_engine(|e| {
+        let current = e.project().revision;
+        proposal::discard(e, id, &Actor::human(), None)
+            .map(|p| proposal::summary(&p, current))
+            .map_err(|err| err.to_string())
+    })?
+}
+
+/// Save EAK's review of the selection as `evidence/proposal-<id>-rNNNNNN.json` and return the
+/// path. The review is recomputed here, so the file is the engine's, not the UI's.
+pub fn proposal_export(s: &Session, id: &str, steps: Option<Vec<usize>>) -> Result<String, String> {
+    let steps = checked(steps)?;
+    s.with_engine(|e| {
+        let review = proposal::review(e, id, steps.as_deref()).map_err(|err| err.to_string())?;
+        if e.dir().is_none() {
+            return Err("this project has no folder, so the review cannot be saved".to_string());
+        }
+        let report = serde_json::json!({
+            "kind": "proposal_review",
+            "review": review,
+            "note": "EAK's review of an agent proposal; nothing was applied by exporting it",
+        });
+        let json = serde_json::to_string_pretty(&report).map_err(|err| err.to_string())?;
+        e.save_evidence(&format!("proposal-{id}"), &json)
+            .map(|p| p.display().to_string())
+            .ok_or_else(|| "the review could not be saved".to_string())
+    })?
+}
+
+/// Tauri command wrappers: argument decoding only, no logic. Listing is an interactive read
+/// (P0); a review runs ERC and DRC on copies (P2, like a check); apply, discard and export write
+/// (P1, never queued behind checks).
+pub mod cmd {
+    use crate::cmd::blocking;
+    use crate::resources::Priority;
+    use eak_harness::proposal::{ApplyOutcome, Review};
+    use serde_json::Value;
+    use tauri::AppHandle;
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn proposal_list(app: AppHandle) -> Result<Vec<Value>, String> {
+        blocking(app, Priority::P0, super::proposal_list).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn proposal_review(
+        app: AppHandle,
+        id: String,
+        steps: Option<Vec<usize>>,
+    ) -> Result<Review, String> {
+        blocking(app, Priority::P2, move |s| {
+            super::proposal_review(s, &id, steps)
+        })
+        .await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn proposal_apply(
+        app: AppHandle,
+        id: String,
+        expected_revision: u64,
+        steps: Option<Vec<usize>>,
+    ) -> Result<ApplyOutcome, String> {
+        blocking(app, Priority::P1, move |s| {
+            super::proposal_apply(s, &id, expected_revision, steps)
+        })
+        .await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn proposal_discard(app: AppHandle, id: String) -> Result<Value, String> {
+        blocking(app, Priority::P1, move |s| super::proposal_discard(s, &id)).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn proposal_export(
+        app: AppHandle,
+        id: String,
+        steps: Option<Vec<usize>>,
+    ) -> Result<String, String> {
+        blocking(app, Priority::P1, move |s| {
+            super::proposal_export(s, &id, steps)
+        })
+        .await
+    }
+}

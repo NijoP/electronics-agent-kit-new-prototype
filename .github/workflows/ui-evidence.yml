@@ -120,6 +120,17 @@ jobs:
           UI_SCENARIO: scenarios/c2-eco.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # G4 (S9, ADR-0051): an agent proposal made through the app harness endpoint in propose mode,
+      # reviewed (rows by object, ERC/DRC on a copy), partly applied as one undo step, then discarded.
+      - name: Run G4 agent proposal scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/g4
+          UI_SCENARIO: scenarios/g4-proposal.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # C3 (routing experience): the Route tool's routing options in the inspector.
       - name: Run C3 routing scenario under Xvfb
         if: always()

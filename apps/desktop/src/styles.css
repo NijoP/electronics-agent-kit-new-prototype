@@ -477,6 +477,9 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .eco-preview { width: min(860px, 94vw); padding: var(--s-2); }
 .eco-bar { display: flex; gap: var(--s-2); align-items: center; margin: var(--s-1) 0; font-size: var(--fs-sm); }
 .eco-table-wrap { max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-1); }
+.proposal-review { max-height: 92vh; overflow: auto; }
+.proposal-review section h4 { margin: var(--s-1) 0 var(--s-half); }
+.proposal-rationale, .proposal-findings { font-size: var(--fs-sm); }
 .eco-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .eco-table th, .eco-table td { text-align: left; padding: var(--s-quarter) var(--s-1); border-bottom: 1px solid var(--line); }
 .eco-table thead th { position: sticky; top: 0; background: var(--bg-raised); color: var(--fg-dim); font-weight: var(--fw-medium); }

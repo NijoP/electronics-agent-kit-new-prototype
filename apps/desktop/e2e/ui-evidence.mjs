@@ -11,6 +11,7 @@
 // Usage and step reference: docs/qa/UI_EVIDENCE.md. Configuration is by environment variable.
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -278,6 +279,35 @@ async function closeMenu(label) {
   return "Escape did not close it; closed with a second click on the menu button";
 }
 
+/**
+ * One request to the app's harness endpoint (`<project>/.harness.json`), as the `eak` CLI sends
+ * it: one JSON line with the token, one JSON line back (crates/eak-harness/src/endpoint.rs).
+ */
+function harness(endpoint, request) {
+  return new Promise((resolve, reject) => {
+    const where = endpoint.startsWith("tcp:")
+      ? { host: endpoint.slice(4).replace(/:\d+$/, ""), port: Number(endpoint.slice(endpoint.lastIndexOf(":") + 1)) }
+      : { path: endpoint.replace(/^unix:/, "") };
+    const sock = net.createConnection(where);
+    let buf = "";
+    sock.setTimeout(30000, () => sock.destroy(new Error("harness endpoint timed out")));
+    sock.on("connect", () => sock.write(JSON.stringify(request) + "\n"));
+    sock.on("data", (d) => {
+      buf += d;
+      const nl = buf.indexOf("\n");
+      if (nl >= 0) {
+        sock.end();
+        try {
+          resolve(JSON.parse(buf.slice(0, nl)));
+        } catch (e) {
+          reject(e);
+        }
+      }
+    });
+    sock.on("error", reject);
+  });
+}
+
 // The same IPC entry point the UI's api.ts uses (async callback: WebKitWebDriver cannot return promises).
 async function ipc(cmd, args = {}) {
   const raw = await browser.executeAsync(
@@ -347,6 +377,42 @@ const handlers = {
     }
     if (s.expect) await waitRect(s.expect, s.expectText, s.timeout ?? 20000);
     return `SETUP (IPC execute_command: ${s.commands.map((c) => c.type).join(", ")}; not a UI action)${s.expect ? `; then visible: ${s.expect}` : ""}`;
+  },
+  // SETUP: an agent session in propose mode (ADR-0051) reaching the app through its harness
+  // endpoint, exactly as `eak --propose` in the Terminal workspace would: proposal_begin (`proposalTitle`,
+  // rationale), one design call per command at the project revision, then proposal_submit. In a
+  // command, "$created:N" is replaced by the first id the Nth command created. The project must not
+  // move; the step fails if it does or if any call is refused.
+  async "fixture-agent-propose"(s) {
+    const dir = path.join(OUT, "fixture", s.folder);
+    const recFile = path.join(dir, ".harness.json");
+    const t0 = Date.now();
+    while (!fs.existsSync(recFile) && Date.now() - t0 < 15000) await sleep(200);
+    if (!fs.existsSync(recFile)) throw new Error(`no harness endpoint record ${recFile} (the app advertises it for the open project)`);
+    const rec = JSON.parse(fs.readFileSync(recFile, "utf8"));
+    const token = fs.readFileSync(rec.token_file, "utf8").trim();
+    const snap = await ipc("current_project");
+    const revision = snap.project.revision;
+    const context = { project: { dir, id: snap.project.id }, session_id: s.session ?? "ui-evidence-agent", agent: s.agent ?? "ui-evidence", max_class: "engineering_impacting", apply_mode: "propose" };
+    const call = async (tool, args) => {
+      const out = await harness(rec.endpoint, { token, tool, args, context });
+      if (!out?.ok) throw new Error(`${tool} refused: ${JSON.stringify(out?.error ?? out)}`);
+      return out.result;
+    };
+    await call("proposal_begin", { title: s.proposalTitle ?? "", rationale: s.rationale ?? "" });
+    const created = [];
+    let id = null;
+    for (const raw of s.commands) {
+      const { type, ...fields } = JSON.parse(JSON.stringify(raw).replace(/"\$created:(\d+)"/g, (_, i) => JSON.stringify(created[Number(i)] ?? "")));
+      const r = await call(type, { expected_revision: revision, ...fields });
+      if (r?.proposed !== true) throw new Error(`${type} was not proposed: ${JSON.stringify(r)}`);
+      created.push(r.created?.[0] ?? null);
+      id = r.proposal_id;
+    }
+    if (s.submit !== false) await call("proposal_submit", { proposal_id: id });
+    const after = (await ipc("current_project")).project.revision;
+    if (after !== revision) throw new Error(`the project moved from revision ${revision} to ${after} while proposing`);
+    return `SETUP (agent session "${context.agent}" in propose mode through the app harness endpoint: ${s.commands.map((c) => c.type).join(", ")} → proposal ${id}; project still at revision ${after}; not a UI action)`;
   },
   // SETUP: one typed engine command on the active project through the same IPC the UI's
   // api.execute uses (for example a fixture board outline). Run it before the project is opened

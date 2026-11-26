@@ -6,6 +6,7 @@
 import { useMemo, useState } from "react";
 import type { SyncChange } from "../types";
 import { applyState, buildEcoRows, groupRows, toggleRow, type EcoGroupBy, type SyncPreview } from "./ecoPreview";
+import { ReviewTable } from "./ReviewTable";
 import { useEscape } from "./useEscape";
 
 interface Props {
@@ -52,41 +53,16 @@ export function EcoPreviewDialog({ preview, busy, onApply, onExport, onClose }: 
             <input type="checkbox" aria-label="Select all changes" checked={all} disabled={rows.length === 0} onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} /> All
           </label>
         </div>
-        <div className="eco-table-wrap">
-          <table className="eco-table" aria-label="Changes to apply">
-            <thead>
-              <tr>
-                <th scope="col">Apply</th>
-                <th scope="col">Action</th>
-                <th scope="col">Object</th>
-                <th scope="col">Name</th>
-                <th scope="col">Before</th>
-                <th scope="col">After</th>
-              </tr>
-            </thead>
-            {groups.map((g) => (
-              <tbody key={g.group} aria-label={`${g.group} (${g.rows.length})`}>
-                <tr className="eco-group">
-                  <th scope="rowgroup" colSpan={6}>
-                    {g.group} <span className="count">{g.rows.length}</span>
-                  </th>
-                </tr>
-                {g.rows.map((r) => (
-                  <tr key={r.id} data-eco-row={r.id} className={selected.has(r.id) ? undefined : "off"}>
-                    <td>
-                      <input type="checkbox" aria-label={`Apply ${r.action} ${r.object} ${r.name}`} checked={selected.has(r.id)} onChange={(e) => setSelected((s) => toggleRow(rows, s, r.id, e.target.checked))} />
-                    </td>
-                    <td>{r.action}</td>
-                    <td>{r.object}</td>
-                    <td>{r.name}</td>
-                    <td>{r.before}</td>
-                    <td>{r.after}</td>
-                  </tr>
-                ))}
-              </tbody>
-            ))}
-          </table>
-        </div>
+        <ReviewTable
+          label="Changes to apply"
+          columns={["Action", "Object", "Name", "Before", "After"]}
+          rowAttr="data-eco-row"
+          groups={groups.map((g) => ({
+            group: g.group,
+            rows: g.rows.map((r) => ({ id: r.id, cells: [r.action, r.object, r.name, r.before, r.after], checkLabel: `Apply ${r.action} ${r.object} ${r.name}`, checked: selected.has(r.id) })),
+          }))}
+          onToggle={(id, on) => setSelected((s) => toggleRow(rows, s, id, on))}
+        />
         {preview.warnings.length > 0 && (
           <section className="eco-warnings" aria-label="Sync notes">
             <h4>Notes from the engine</h4>
