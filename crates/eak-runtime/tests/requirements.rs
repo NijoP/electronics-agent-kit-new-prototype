@@ -313,9 +313,9 @@ fn rails_and_interfaces_are_items_with_their_own_fields() {
 
 fn input(nom: f64) -> Option<ReqValue> {
     Some(ReqValue::Range {
-        min: Some(nom * 0.9),
+        min: Some(nom - 1.0),
         nom: Some(nom),
-        max: Some(nom * 1.1),
+        max: Some(nom + 1.0),
         unit: ReqUnit::Volt,
     })
 }

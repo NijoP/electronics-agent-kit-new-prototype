@@ -314,7 +314,8 @@ function EditForm({ f, def, units, ctx }: { f: ReqFieldReport; def: ReqFieldDef;
   const { busy, person, setEditing, run } = ctx;
   const v = f.value;
   const num = (x?: number) => (x == null ? "" : String(x));
-  const [status, setStatus] = useState<ReqStatus>(f.status && f.status !== "DERIVED" ? f.status : "NEEDS_CONFIRMATION");
+  // An unanswered (UNKNOWN) or derived field is edited to give it a value: start at NEEDS_CONFIRMATION.
+  const [status, setStatus] = useState<ReqStatus>(f.status === "CONFIRMED" || f.status === "NOT_APPLICABLE" ? f.status : "NEEDS_CONFIRMATION");
   const [text, setText] = useState(v?.kind === "text" ? v.text : "");
   const [flag, setFlag] = useState<boolean | null>(v?.kind === "flag" ? v.value : null);
   const [min, setMin] = useState(v?.kind === "range" ? num(v.min) : "");
