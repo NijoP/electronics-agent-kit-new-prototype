@@ -13,6 +13,7 @@
 //! * ERC/DRC run in `eak-validation`, and their revision-bound reports are stored as
 //!   evidence by the engine.
 
+pub mod agents;
 pub mod ai;
 pub mod catalogue;
 pub mod eco;
@@ -1813,6 +1814,14 @@ pub fn run() {
             }
             app.manage(ai::AiState::default());
             app.manage(terminal_state(app));
+            // Settings › AI tools: locally installed coding-agent CLIs; headless session logs go to
+            // the app data folder.
+            app.manage(agents::AgentsState::system(
+                app.path()
+                    .app_data_dir()
+                    .ok()
+                    .map(|d| d.join("agent-sessions")),
+            ));
             // Non-secret Distributor connection status lives beside the model settings; the Distributor API
             // key and secret go to the OS credential store only.
             if let Ok(dir) = app.path().app_config_dir() {
@@ -1954,6 +1963,14 @@ pub fn run() {
             home::cmd::home_suggest_folder,
             home::cmd::create_project_with_brief,
             home::cmd::create_sample_project,
+            agents::cmd::agent_tools,
+            agents::cmd::agent_tool_connect,
+            agents::cmd::agent_tool_disconnect,
+            agents::cmd::agent_tool_login,
+            agents::cmd::agent_tool_launch,
+            agents::cmd::agent_sessions,
+            agents::cmd::agent_session_log,
+            agents::cmd::agent_tool_stop,
         ])
         .build(tauri::generate_context!())
         .expect("EAK desktop failed to start")

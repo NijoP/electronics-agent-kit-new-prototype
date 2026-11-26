@@ -2,6 +2,8 @@
 //!
 //! * `part`    – MPN-keyed part records: identity is (manufacturer, MPN) after normalisation;
 //!   a merged part keeps every source's record and names disagreements instead of picking one.
+//!   Each record carries datasheet references (URL and/or hashed local copy, revision, retrieval
+//!   time) and typed specifications whose origin is a source, a person, or an AI needing review.
 //! * `source`  – the provider-independent [`source::PartSource`] trait and the resolver that
 //!   merges exact hits by key, keeps fuzzy hits as suggestions, and never calls a source that
 //!   is not ready.
@@ -14,11 +16,14 @@
 //!   manufacturer identification from a sourced alias table, with an explicit unknown result.
 //! * `kicad`   – KiCad `.kicad_sym` / `.kicad_mod` export, the inverse of the clean-room reader
 //!   in `eak_core::kicad_import`, with every loss reported.
+//! * `db`     – local SQLite library database: items with a token index for prefix search, and
+//!   a cache of source answers that keeps each retrieval time.
 //!
 //! Nothing here mutates a design: a part enters a project only through `Engine::execute`
 //! (`UpsertComponentDefinition`) in the layers above. Nothing here is verified by import or by
 //! being stored.
 
+pub mod db;
 pub mod kicad;
 pub mod mpn;
 pub mod part;
@@ -27,5 +32,5 @@ pub mod sources;
 
 pub use eak_validation::footprint::{LandPatternSpec, PadSpec};
 pub use mpn::{discover, identify_manufacturer, Discovery, ManufacturerId, MpnMatch};
-pub use part::{Part, PartKey, PartKeyError, PartRecord, SourceId};
+pub use part::{Part, PartKey, PartKeyError, PartRecord, SourceId, Spec, SpecOrigin, SpecValue};
 pub use source::{resolve, PartQuery, PartSource, Resolution, SourceStatus};

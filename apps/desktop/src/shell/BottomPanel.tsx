@@ -1,6 +1,7 @@
 // Bottom panel: the component library (Phase 1 A3 moved it here from the side panel), ERC/DRC/DFM
 // findings, a BOM derived from the schematic, simulation, the engine log, this session's tasks,
-// and (slice E4) the Property List grid, the Find Results of the B3 find bar and Diagnostics.
+// and (slice E4) the Property List grid, the Find Results of the B3 find bar and Diagnostics;
+// Problems (report §10 S3) lists findings, UNKNOWN rules, release blockers and agent tasks in one.
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
 import { EngineeringMonitor, type FindingsFormat } from "../EngineeringMonitor";
@@ -14,7 +15,7 @@ import { FindResultsTab } from "./FindResultsTab";
 import { PropertyList } from "./PropertyList";
 import type { Task } from "./tasks";
 
-export type BottomTab = "library" | "findings" | "proplist" | "find" | "bom" | "sim" | "log" | "tasks" | "diagnostics" | (string & {});
+export type BottomTab = "library" | "findings" | "problems" | "proplist" | "find" | "bom" | "sim" | "log" | "tasks" | "diagnostics" | (string & {});
 
 interface Props {
   tab: BottomTab;
@@ -38,6 +39,9 @@ interface Props {
   onClearTasks?: () => void;
   /** Content of the Library tab (the library and distributor search, owned by the workspace). */
   library?: ReactNode;
+  /** Content of the Problems tab (ProblemsPanel, fed by the workspace) and its row count. */
+  problems?: ReactNode;
+  problemCount?: number;
   /** Engine command execution for the Property List's batch edits (absent: the grid is read-only). */
   execute?: (c: Command) => Promise<void>;
   busy?: boolean;
@@ -126,6 +130,7 @@ function NetlistTab({ revision }: { revision: number }) {
 const TABS: [BottomTab, string][] = [
   ["library", "Library"],
   ["findings", "Findings"],
+  ["problems", "Problems"],
   ["proplist", "Property List"],
   ["find", "Find Results"],
   ["netlist", "Netlist"],
@@ -178,7 +183,7 @@ function SearchTab({ snapshot, onProbe }: { snapshot: Snapshot; onProbe: (id: Id
   );
 }
 
-export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, onObject, onExport, exportBlocked, realtimeDrc, onRealtimeDrc, activeFinding, tasks = [], onClearTasks, library, execute, busy = false, onFindPick }: Props) {
+export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, onClose, height, onNavigate, onObject, onExport, exportBlocked, realtimeDrc, onRealtimeDrc, activeFinding, tasks = [], onClearTasks, library, problems, problemCount = 0, execute, busy = false, onFindPick }: Props) {
   const hideKey = useActionKey("toggle-bottom");
   const bom = bomLines(snapshot);
   const running = tasks.filter((t) => t.status === "running").length;
@@ -189,6 +194,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
           <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "tab on" : "tab"} disabled={!!DISABLED[id]} title={DISABLED[id]} onClick={() => onTab(id)}>
             {label}
             {id === "tasks" && running > 0 && <span className="count">{running}</span>}
+            {id === "problems" && problemCount > 0 && <span className="count">{problemCount}</span>}
           </button>
         ))}
         <span className="spacer" />
@@ -196,6 +202,7 @@ export function BottomPanel({ tab, onTab, snapshot, results, events, onProbe, on
       </div>
       <div className="bottom-body">
         {tab === "library" && <div className="bottom-library">{library}</div>}
+        {tab === "problems" && (problems ?? <p className="empty-state">Problems are listed when a project is open in the workspace.</p>)}
         {tab === "findings" && <EngineeringMonitor snapshot={snapshot} results={results} onProbe={onProbe} onNavigate={onNavigate} onObject={onObject} activeFinding={activeFinding} onExport={onExport} exportBlocked={exportBlocked} realtimeDrc={realtimeDrc} onRealtimeDrc={onRealtimeDrc} />}
         {tab === "bom" &&
           (bom.length === 0 ? (

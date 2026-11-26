@@ -1,0 +1,40 @@
+{
+  "name": "G2 journey bar and Problems panel",
+  "description": "Report §10 slices S2 and S3 on an isolated fixture with one unconnected resistor (fixture-command, SETUP). The journey bar in the menu row shows ERC not done while no ERC report exists for the revision (never done). The bottom dock's Problems tab names ERC, DRC and DFM as not run (unknown, not absent) and lists the release gate's blockers before any check. After a board outline and a via on the signal net SIG, which has no declared voltage (fixture-commands, SETUP), Run ERC in the Problems tab lists the resistor's ERC findings and turns the journey's ERC stage to has-errors; a click on the finding goes through the F7 navigation (the resistor is selected on its sheet) and the Problems tab stays shown. Run DRC lists DRC-002 as UNKNOWN with the missing input named (no declared voltage for: SIG). The source chip hides and shows the release blockers, the text filter keeps only rows that mention SIG, and the UNKNOWN row opens Design rules, where net voltages are declared. Journey stages open their views: Layout opens the PCB editor and Release opens the read-only release check. The Findings tab itself is unchanged (b5-findings.json, f7-navigation.json).",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "G2 Problems Fixture", "folder": "g2-problems-fixture" },
+    { "id": "fixture-part", "do": "fixture-command", "title": "Fixture: one resistor, unconnected", "command": { "type": "PlaceSymbol", "sheet_id": null, "component_id": "R_0603", "position": { "x": 50000000, "y": 50000000 }, "rotation": "R0", "refdes": null, "value": null } },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "G2 Problems Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]", "shot": false },
+    { "id": "g2-journey", "do": "wait", "title": "S2: the journey bar shows ERC not done: no ERC report for this revision is never done", "selector": "nav[aria-label=\"Design journey\"] button[data-stage=\"erc\"][data-state=\"open\"]" },
+    { "id": "g2-journey-release", "do": "wait", "title": "S2: Release is not done either (the release check of this revision is DRAFT)", "selector": "nav[aria-label=\"Design journey\"] button[data-stage=\"release\"]:not([data-state=\"done\"])", "shot": false },
+    { "id": "g2-tab", "do": "click", "title": "S3: the bottom dock's Problems tab", "selector": "section[aria-label=\"Bottom panel\"] [role=\"tab\"]", "text": "Problems", "expect": "section[aria-label=\"Problems\"]" },
+    { "id": "g2-unchecked", "do": "wait", "title": "S3: ERC, DRC and DFM are named as not run for this revision: unknown, not absent", "selector": "section[aria-label=\"Problems\"] p[data-unchecked=\"ERC DRC DFM\"]", "text": "Not run for r", "shot": false },
+    { "id": "g2-release-blockers", "do": "wait", "title": "S3: the release gate's blockers are listed before any check", "selector": "section[aria-label=\"Problems\"] li.problem[data-source=\"release\"] > button", "text": "error Release blockers ERC report not supplied", "timeout": 30000 },
+    {
+      "id": "g2-setup",
+      "do": "fixture-commands",
+      "title": "Fixture: a board outline and a via on the signal net SIG, which has no declared voltage (engine commands, SETUP)",
+      "commands": [
+        { "type": "SetBoardOutline", "points": [{ "x": 0, "y": 0 }, { "x": 40000000, "y": 0 }, { "x": 40000000, "y": 30000000 }, { "x": 0, "y": 30000000 }] },
+        { "type": "AddVia", "position": { "x": 10000000, "y": 15000000 }, "net": "SIG" }
+      ],
+      "shot": false
+    },
+    { "id": "g2-run-erc", "do": "click", "title": "S3: Run ERC in the Problems tab lists the resistor's ERC findings there", "selector": "section[aria-label=\"Problems\"] [role=\"group\"][aria-label=\"Problem checks\"] button", "text": "Run ERC", "expect": "section[aria-label=\"Problems\"] li.problem[data-source=\"erc\"] > button", "timeout": 60000 },
+    { "id": "g2-journey-erc", "do": "wait", "title": "S2: the journey's ERC stage has errors, from the current ERC report", "selector": "nav[aria-label=\"Design journey\"] button[data-stage=\"erc\"][data-state=\"fail\"]", "shot": false },
+    { "id": "g2-goto", "do": "click", "title": "S3: a click on the ERC problem uses the F7 navigation: the resistor is selected on its sheet", "selector": "section[aria-label=\"Problems\"] li.problem[data-source=\"erc\"] > button", "expect": "section[aria-label=\"Schematic view\"] g.symbol.selected" },
+    { "id": "g2-goto-stays", "do": "wait", "title": "S3: the Problems tab stays shown after go-to", "selector": "section[aria-label=\"Bottom panel\"] [role=\"tab\"][aria-selected=\"true\"]", "text": "Problems", "shot": false },
+    { "id": "g2-run-drc", "do": "click", "title": "S3: Run DRC lists DRC-002 as UNKNOWN with the missing input named", "selector": "section[aria-label=\"Problems\"] [role=\"group\"][aria-label=\"Problem checks\"] button", "text": "Run DRC", "expect": "section[aria-label=\"Problems\"] li.problem[data-source=\"unknown\"] .problem-detail", "expectText": "Missing input: no declared voltage for: SIG", "timeout": 60000 },
+    { "id": "g2-filter-hide", "do": "click", "title": "S3: the Release blockers chip hides those rows", "selector": "section[aria-label=\"Problems\"] [role=\"group\"][aria-label=\"Problem sources\"] button[data-source=\"release\"]", "gone": "section[aria-label=\"Problems\"] li.problem[data-source=\"release\"]" },
+    { "id": "g2-filter-show", "do": "click", "title": "S3: a second click shows them again", "selector": "section[aria-label=\"Problems\"] [role=\"group\"][aria-label=\"Problem sources\"] button[data-source=\"release\"]", "expect": "section[aria-label=\"Problems\"] li.problem[data-source=\"release\"] > button", "shot": false },
+    { "id": "g2-filter-text", "do": "type", "title": "S3: the text filter keeps the rows that mention SIG", "selector": "section[aria-label=\"Problems\"] input[aria-label=\"Filter problems\"]", "value": "SIG", "expect": "section[aria-label=\"Problems\"] li.problem[data-source=\"unknown\"] > button" },
+    { "id": "g2-filter-text-erc", "do": "absent", "title": "S3: the resistor's ERC rows, which do not mention SIG, are filtered out", "selector": "section[aria-label=\"Problems\"] li.problem[data-source=\"erc\"]", "shot": false },
+    { "id": "g2-filter-clear", "do": "key", "title": "S3: clearing the text filter shows every row again", "keys": "ctrl+a BackSpace", "expect": "section[aria-label=\"Problems\"] li.problem[data-source=\"erc\"] > button", "shot": false },
+    { "id": "g2-unknown-goto", "do": "click", "title": "S3: the UNKNOWN row opens Design rules, where the net voltage is declared", "selector": "section[aria-label=\"Problems\"] li.problem[data-source=\"unknown\"] > button", "text": "warning Unknown rules DRC-002", "expect": "[role=\"dialog\"][aria-label=\"Design rules\"]" },
+    { "id": "g2-rules-close", "do": "click", "title": "Close Design rules", "selector": "[role=\"dialog\"][aria-label=\"Design rules\"] button", "text": "Close", "gone": "[role=\"dialog\"][aria-label=\"Design rules\"]", "shot": false },
+    { "id": "g2-stage-layout", "do": "click", "title": "S2: the Layout stage opens the PCB editor", "selector": "nav[aria-label=\"Design journey\"] button[data-stage=\"layout\"]", "expect": "section[aria-label=\"PCB view\"]" },
+    { "id": "g2-stage-release", "do": "click", "title": "S2: the Release stage opens the read-only release check", "selector": "nav[aria-label=\"Design journey\"] button[data-stage=\"release\"]", "expect": "[role=\"dialog\"][aria-label=\"Release check\"] section[aria-label=\"Release status\"] strong", "expectText": "DRAFT", "timeout": 60000 }
+  ]
+}

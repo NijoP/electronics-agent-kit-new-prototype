@@ -1,0 +1,13 @@
+[package]
+name = "eak-agents"
+description = "EAK AI tool adapters: find locally installed coding-agent CLIs (Claude Code, Codex, ...), read their real sign-in state, register EAK's MCP server with them through their own CLI, and run headless sessions with captured logs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
