@@ -1,4 +1,4 @@
-// Journey bar (report §10 S2): one row above the documents with the stages of the design journey,
+// Journey bar (report §10 S2): in the menu row (MenuBar aside), the stages of the design journey,
 // each coloured from the facts of the revision on screen (journey.ts), and "Next" naming the first
 // stage that is not done. A click on a stage goes to the view that acts on it.
 import { nextStage, STATE_TEXT, type Stage, type StageId } from "./journey";

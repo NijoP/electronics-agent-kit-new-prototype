@@ -886,6 +886,8 @@ button.danger { color: var(--err); border-color: var(--err); }
 .journey-stage[data-state="open"] .journey-mark { box-shadow: inset 0 0 0 var(--border) var(--warn); }
 .journey-stage.next { color: var(--fg); }
 .journey-stage.next .journey-mark { outline: var(--border) solid var(--accent); outline-offset: var(--s-quarter); }
+/* In the menu row (MenuBar aside): no own row, so the editors keep their height. */
+.menubar .journey { flex: 0 1 auto; margin-left: auto; height: 100%; padding: 0 var(--s-1); border-bottom: 0; background: transparent; }
 .journey-next { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-dim); font-size: var(--fs-sm); }
 
 /* Problems tab (report §10 S3): one list over findings, UNKNOWN rules, release blockers, agent tasks. */

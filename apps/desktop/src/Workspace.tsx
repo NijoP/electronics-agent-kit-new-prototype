@@ -997,7 +997,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
 
   return (
     <div className="workspace">
-      <MenuBar menus={menus} />
+      <MenuBar menus={menus} aside={<JourneyBar stages={stages} onStage={goStage} blocked={(id) => (id === "3d" && !has3d ? "Unavailable: no 3D view is registered in this window" : null)} />} />
       <Toolbar
         groups={shownToolbar}
         labels={tbLabels}
@@ -1105,7 +1105,6 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           <div />
         )}
         <div className="center">
-          <JourneyBar stages={stages} onStage={goStage} blocked={(id) => (id === "3d" && !has3d ? "Unavailable: no 3D view is registered in this window" : null)} />
           {projects.length > 1 && (
             <ProjectTabs projects={projects} onSwitch={switchTo} onClose={closeProjectTab} onOpen={() => setDialog("open")} disabled={busy ? "An engine command is running" : undefined} />
           )}
