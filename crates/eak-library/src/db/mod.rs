@@ -6,6 +6,8 @@
 //! and a source is refused. A cached answer is returned with its age; whether it is still fresh
 //! is the caller's stated maximum age, never assumed.
 
+pub mod portable;
+
 use eak_core::libmeta::LibraryMaturity;
 use rusqlite::{params, Connection, OptionalExtension, ToSql};
 use serde::{Deserialize, Serialize};
