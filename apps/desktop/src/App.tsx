@@ -16,10 +16,13 @@ import { api } from "./api";
 import { matches, SHORTCUTS } from "./design/shortcuts";
 import { applyTheme, loadTheme, type Theme } from "./design/theme";
 import { ModelSettings } from "./ModelSettings";
+import type { HomeTarget } from "./home/homeFacts";
 import { ProjectHome, saveSession } from "./ProjectHome";
 import { AGENTS_TITLE, HOME_TITLE, type ShellArea } from "./shell/ActivityBar";
 import { Icons } from "./shell/icons";
 import { NavRail, type NavItem } from "./shell/NavRail";
+import { Tour } from "./shell/onboarding/Tour";
+import { setTourState, tourState } from "./shell/onboarding/tourState";
 import { listWorkspaces, useRegistryVersion, type WorkspaceContext } from "./shell/registry";
 import { TopBar } from "./shell/TopBar";
 import { modalOpen } from "./shell/viewState";
@@ -31,7 +34,20 @@ import { Workspace } from "./Workspace";
 const NO_PROJECT = "Open or create a project first";
 
 export function App() {
-  const [opened, setOpened] = useState<Snapshot | null>(null);
+  const [opened, setOpenedState] = useState<Snapshot | null>(null);
+  // Where a project opened from Home lands first (a Needs attention item, Continue); used once.
+  const [landing, setLanding] = useState<HomeTarget | null>(null);
+  const setOpened = (s: Snapshot | null, to?: HomeTarget) => {
+    setLanding(to ?? null);
+    setOpenedState(s);
+  };
+  // First-run tour (slice S1): shown in Home at first launch until finished or skipped; replayed
+  // from Help, in Home or (from the workspace Help menu) as a corner panel over the workspace.
+  const [tour, setTour] = useState<null | "home" | "floating">(() => (tourState() === "unseen" ? "home" : null));
+  const closeTour = (how: "done" | "skipped") => {
+    setTourState(how);
+    setTour(null);
+  };
   const [settings, setSettings] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   // "eda" (the project workspace, or Home while nothing is open), "home", or a registered app id.
@@ -86,8 +102,8 @@ export function App() {
     }
   };
   // Opening a project from Home shows it in the EDA workspace.
-  const openedFromHome = (s: Snapshot) => {
-    setOpened(s);
+  const openedFromHome = (s: Snapshot, to?: HomeTarget) => {
+    setOpened(s, to);
     setCurrent("eda");
   };
   // An EDA area picked in the shell's rail: show the workspace, which then shows the area.
@@ -154,6 +170,8 @@ export function App() {
               visible={active === "eda"}
               onClosed={onClosed}
               onOpened={setOpened}
+              landing={landing}
+              onTour={() => setTour("floating")}
               onSettings={() => setSettings(true)}
               theme={theme}
               onTheme={toggleTheme}
@@ -169,7 +187,16 @@ export function App() {
           <div className="ws-host rail-host" hidden={!homeShown}>
             {rail}
             <div className="rail-content">
-              <ProjectHome onOpened={openedFromHome} active={homeShown} theme={theme} onTheme={toggleTheme} onSettings={() => setSettings(true)} />
+              <ProjectHome
+                onOpened={openedFromHome}
+                active={homeShown}
+                theme={theme}
+                onTheme={toggleTheme}
+                onSettings={() => setSettings(true)}
+                tourOpen={tour !== null}
+                onTourClose={closeTour}
+                onTourReplay={() => setTour("home")}
+              />
             </div>
           </div>
         )}
@@ -182,6 +209,7 @@ export function App() {
             </div>
           ))}
       </div>
+      {tour === "floating" && opened && active === "eda" && <Tour floating onClose={closeTour} />}
       {settings && <ModelSettings onClose={() => setSettings(false)} />}
     </div>
   );
