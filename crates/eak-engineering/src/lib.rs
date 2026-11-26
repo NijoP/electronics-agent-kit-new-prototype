@@ -3,6 +3,8 @@
 //! * `ipc`     – trace ampacity, clearance, creepage, via current (provenance: DESK audit).
 //! * `calc`    – circuit calculations and engineering value parsing.
 //! * `netlist` – schematic connectivity → canonical nets.
+//! * `board`   – the one derived board geometry (outline, copper, fills, holes, silk) that DRC,
+//!   connectivity, the 3D scene and the desktop views all read (ADR-0051).
 //! * `copper`  – PCB copper shapes, zone fill with thermal reliefs, physical connectivity.
 //! * `stitch`  – zone stitching: escape vias for orphan SMD pads, stitching vias for pour islands (DESK).
 //! * `silk`    – silkscreen legend: stroke-font reference designators, mask-opening clip.
@@ -14,6 +16,7 @@
 //! * `power`   – unit-aware trace width, voltage drop, rail drop, return-path continuity.
 //! * `scene3d` – board/component geometry for the 3D workspace and mechanical checks.
 
+pub mod board;
 pub mod calc;
 pub mod clearance;
 pub mod copper;

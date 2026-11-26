@@ -4,9 +4,9 @@
 
 use crate::report::{finding, Finding, Severity::*};
 use eak_core::geom::{point_in_polygon, to_mm};
-use eak_core::{CopperLayer, Id, Nm, ObjectClass, PadKind, Point, Project, Side};
+use eak_core::{CopperLayer, Nm, ObjectClass, PadKind, Point, Project, Side};
+use eak_engineering::board::BoardGeometry;
 use eak_engineering::copper::{self, distance, Core, ItemKind, Shape};
-use eak_engineering::silk;
 use std::collections::BTreeSet;
 
 /// Clearance-matrix class of a copper item (Phase 1 C5): pads are SMD or TH by their footprint
@@ -33,70 +33,8 @@ pub fn object_class(p: &Project, it: &copper::CopperItem) -> ObjectClass {
     }
 }
 
-/// One drilled hole: a via barrel or a plated through-hole pad.
-#[derive(Debug, Clone)]
-pub struct Hole {
-    /// Owning object: the via id or the footprint id.
-    pub object_id: Id,
-    /// Pad number for pad holes, empty for vias.
-    pub pad: String,
-    /// Human-readable name for messages (`via v1`, `J1.2`).
-    pub label: String,
-    pub center: Point,
-    pub drill: Nm,
-    pub net: String,
-}
-
-impl Hole {
-    pub fn shape(&self) -> Shape {
-        Shape {
-            core: Core::Segment(self.center, self.center),
-            radius: self.drill as f64 / 2.0,
-        }
-    }
-    fn is_owner(&self, it: &copper::CopperItem) -> bool {
-        it.object_id == self.object_id
-            && match it.kind {
-                ItemKind::Via => self.pad.is_empty(),
-                ItemKind::Pad => it.sub == self.pad,
-                _ => false,
-            }
-    }
-}
-
-/// Every drilled hole of the board (vias, then THT pads), in a deterministic order.
-pub fn holes(p: &Project) -> Vec<Hole> {
-    let mut out: Vec<Hole> = p
-        .pcb
-        .vias
-        .values()
-        .map(|v| Hole {
-            object_id: v.id.clone(),
-            pad: String::new(),
-            label: format!("via {}", v.id),
-            center: v.position,
-            drill: v.drill,
-            net: v.net.clone(),
-        })
-        .collect();
-    for fp in p.pcb.footprints.values() {
-        let Some(def) = p.library.get(&fp.component_id) else {
-            continue;
-        };
-        for pad in def.footprint.pads.iter().filter(|p| p.kind == PadKind::Tht) {
-            let Some(drill) = pad.drill else { continue };
-            out.push(Hole {
-                object_id: fp.id.clone(),
-                pad: pad.number.clone(),
-                label: format!("{}.{}", fp.refdes, pad.number),
-                center: p.pad_position(fp, pad),
-                drill,
-                net: fp.pad_nets.get(&pad.number).cloned().unwrap_or_default(),
-            });
-        }
-    }
-    out
-}
+// The hole list is part of the one board geometry (ADR-0051); re-exported for DFM and tests.
+pub use eak_engineering::board::{holes, Hole};
 
 fn mm(v: f64) -> String {
     format!("{:.3} mm", v / 1e6)
@@ -105,15 +43,15 @@ fn mm(v: f64) -> String {
 /// DRC-018: copper of another net (or unconnected copper) closer than `min` to the edge of a
 /// drilled hole, on the layers the hole's own copper spans. The clearance-matrix cell between
 /// holes and the copper item's class raises `min` for that item (Phase 1 C5, ADR-0046).
-pub fn copper_to_hole(p: &Project, min: Nm) -> Vec<Finding> {
-    let items = copper::items(p);
+pub fn copper_to_hole(p: &Project, g: &BoardGeometry, min: Nm) -> Vec<Finding> {
+    let items = &g.copper;
     let cells = &p.constraints;
     let reach_min = ObjectClass::ALL
         .iter()
         .filter_map(|k| cells.matrix_cell(ObjectClass::Hole, *k))
         .fold(min, Nm::max);
     let mut f = Vec::new();
-    for h in holes(p) {
+    for h in &g.holes {
         let layers: BTreeSet<CopperLayer> = items
             .iter()
             .filter(|it| h.is_owner(it))
@@ -122,7 +60,7 @@ pub fn copper_to_hole(p: &Project, min: Nm) -> Vec<Finding> {
         let hs = h.shape();
         let reach = hs.bbox().inflate(reach_min);
         let mut seen = BTreeSet::new();
-        for it in &items {
+        for it in items {
             if h.is_owner(it) || !layers.contains(&it.layer) {
                 continue;
             }
@@ -169,8 +107,7 @@ pub fn copper_to_hole(p: &Project, min: Nm) -> Vec<Finding> {
 }
 
 /// Hole-to-hole edge spacing below `min`; `rule_id` lets DRC and DFM share the geometry.
-pub fn hole_to_hole(p: &Project, min: Nm, rule_id: &str, basis: &str) -> Vec<Finding> {
-    let hs = holes(p);
+pub fn hole_to_hole(hs: &[Hole], min: Nm, rule_id: &str, basis: &str) -> Vec<Finding> {
     let mut f = Vec::new();
     for (i, a) in hs.iter().enumerate() {
         for b in &hs[i + 1..] {
@@ -237,9 +174,8 @@ pub fn hole_to_hole(p: &Project, min: Nm, rule_id: &str, basis: &str) -> Vec<Fin
 
 /// DRC-020: generated silkscreen legend closer than `min` to the board outline, or outside
 /// it. One finding per side, at the worst stroke.
-pub fn silk_to_edge(p: &Project, min: Nm) -> Vec<Finding> {
-    let path = p.pcb.board.outline_path();
-    let o = &path;
+pub fn silk_to_edge(g: &BoardGeometry, min: Nm) -> Vec<Finding> {
+    let o = &g.outline;
     if o.len() < 3 {
         return vec![];
     }
@@ -252,7 +188,7 @@ pub fn silk_to_edge(p: &Project, min: Nm) -> Vec<Finding> {
     let mut f = Vec::new();
     for side in [Side::Top, Side::Bottom] {
         let mut worst: Option<(f64, Point)> = None;
-        for s in silk::legend(p, side) {
+        for s in g.legend(side) {
             let sh = s.shape();
             let d = if point_in_polygon(s.a, o) && point_in_polygon(s.b, o) {
                 edges

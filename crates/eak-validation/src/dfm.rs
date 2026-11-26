@@ -203,7 +203,7 @@ pub fn run(p: &Project, fab: &FabProfile) -> Report {
     }
     // DFM-005: hole-to-hole spacing.
     f.extend(holes::hole_to_hole(
-        p,
+        &holes::holes(p),
         nm(fab.min_hole_to_hole_mm),
         "DFM-005",
         &fab.name,

@@ -2,6 +2,7 @@
 //! The frontend renders this; it is never electrical truth. Components with unknown
 //! body height are listed explicitly rather than drawn with an invented height.
 
+use crate::board::BoardGeometry;
 use eak_core::{geom::to_mm, Id, Project, Rect, Side};
 use serde::{Deserialize, Serialize};
 
@@ -48,8 +49,10 @@ pub fn body_rect(p: &Project, fp_id: &str) -> Option<(Rect, f64)> {
     Some((Rect::centered(fp.position, w * 85 / 100, d * 85 / 100), h))
 }
 
-pub fn build(p: &Project) -> Scene {
-    let t = to_mm(p.pcb.board.stackup.board_thickness);
+/// The 3D scene of `g` (the board geometry DRC checks): its outline and thickness, plus a body
+/// per footprint whose library part declares a height.
+pub fn build(p: &Project, g: &BoardGeometry) -> Scene {
+    let t = to_mm(g.thickness);
     let mut bodies = vec![];
     let mut missing = vec![];
     for fp in p.pcb.footprints.values() {
@@ -84,13 +87,7 @@ pub fn build(p: &Project) -> Scene {
         }
     }
     Scene {
-        outline_mm: p
-            .pcb
-            .board
-            .outline
-            .iter()
-            .map(|q| (to_mm(q.x), to_mm(q.y)))
-            .collect(),
+        outline_mm: g.outline.iter().map(|q| (to_mm(q.x), to_mm(q.y))).collect(),
         thickness_mm: t,
         bodies,
         missing_models: missing,
