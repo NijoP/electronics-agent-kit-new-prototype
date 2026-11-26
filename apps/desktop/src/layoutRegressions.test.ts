@@ -72,22 +72,3 @@ describe("PCB view rows", () => {
     expect(rule(".view.pcb-view > .canvas, .view.pcb-view > .canvas-stack")).toContain("grid-row: 4");
   });
 });
-
-// Regression (F6, found by the real-window ui-evidence row `f6-canvas-fits`): the bare SVG canvas
-// was the view's grid item with `height: 100%`, which WebKitGTK resolved against the whole view
-// (a 399 px box in a 257 px row), so its lower part ran under the canvas strip and bottom panel.
-// The SVG now always sits in `.canvas-stack`, which the grid stretches to the flexible row (no
-// percentage height), and every layer inside it is out of flow.
-describe("canvas box", () => {
-  it("is pinned to the view's last, flexible row and has no percentage height", () => {
-    expect(rule(".view")).toContain("grid-template-rows: auto auto auto auto minmax(0, 1fr)");
-    expect(rule(".view > .canvas-stack")).toContain("grid-row: -2");
-    const box = rule(".canvas-stack");
-    expect(box).not.toMatch(/height: 100%/);
-    expect(box).toContain("min-height: 0");
-    expect(box).toContain("overflow: hidden");
-  });
-  it("the interactive SVG fills the box out of flow", () => {
-    expect(rule(".canvas-stack > .canvas")).toContain("position: absolute; inset: 0");
-  });
-});

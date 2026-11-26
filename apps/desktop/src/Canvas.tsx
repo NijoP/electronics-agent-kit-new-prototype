@@ -285,10 +285,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
       {overlay?.(visible)}
     </svg>
   );
-  // The SVG always sits in a box that the view grid sizes to its row: a bare SVG grid item with
-  // `height: 100%` took the whole view's height in WebKitGTK (399 px in a 257 px row) and ran
-  // under the canvas strip and bottom panel (F6 ui-evidence `f6-canvas-fits`).
-  if (!scene) return <div className="canvas-stack">{svg}</div>;
+  if (!scene) return svg;
   return (
     <div className="canvas-stack" style={flipStyle}>
       <svg className="canvas-under" aria-hidden="true" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} preserveAspectRatio="xMidYMid meet">
