@@ -32,7 +32,8 @@
   - A board can still reach `INTERNALLY_VERIFIED_RELEASE_CANDIDATE`, but only when every net on it
     has a declared voltage and current. `eak_runtime::fixtures::declare_undeclared_nets` declares
     fixture ratings (GND 0 V / 0.3 A, other nets 3.3 V / 0.02 A) through `SetNetVoltage` and
-    `SetNetCurrent`, so the reference-design release tests still release. The sample project and the
+    `SetNetCurrent` (2026-11-26: renamed `declare_check_inputs`; it now also declares the part
+    ratings and enclosure the part-stress and mounting-hole checks need, and signal nets at 0.01 A), so the reference-design release tests still release. The sample project and the
     `build_pcb` fixture are unchanged: they stay DRAFT, which is the honest state.
 - **Consequences:** no IR, `Command` or schema change, and no migration. The report and gate
   semantics are stricter: a project that released before with undeclared signal-net voltages or

@@ -270,5 +270,110 @@ pub fn check(p: &Project) -> Vec<String> {
             ));
         }
     }
+    e.extend(engineering_inputs(c));
+    e
+}
+
+/// Schema-v8 constraint data (ADR-0055): declared values must be usable; absent ones are fine.
+fn engineering_inputs(c: &crate::ir::Constraints) -> Vec<String> {
+    let mut e = Vec::new();
+    let pos = |v: f64| v.is_finite() && v > 0.0;
+    for class in std::iter::once(&c.default_class).chain(&c.net_classes) {
+        if class.target_z0_ohm.is_some_and(|z| !pos(z)) {
+            e.push(format!(
+                "net class {} target impedance must be positive",
+                class.name
+            ));
+        }
+    }
+    for (i, d) in c.diff_pairs.iter().enumerate() {
+        let name = format!("differential pair {}/{}", d.positive, d.negative);
+        if d.positive.is_empty() || d.negative.is_empty() || d.positive == d.negative {
+            e.push(format!("{name} must name two different nets"));
+        }
+        if c.diff_pairs[..i]
+            .iter()
+            .any(|o| o.has(&d.positive) || o.has(&d.negative))
+        {
+            e.push(format!("{name}: a net belongs to at most one pair"));
+        }
+        if d.width.is_some_and(|w| w <= 0) || d.gap.is_some_and(|g| g <= 0) {
+            e.push(format!("{name} width and gap must be positive"));
+        }
+        if d.target_zdiff_ohm.is_some_and(|z| !pos(z))
+            || d.zdiff_tolerance_pct.is_some_and(|t| !pos(t))
+        {
+            e.push(format!(
+                "{name} target impedance and tolerance must be positive"
+            ));
+        }
+        if d.max_skew.is_some_and(|s| s < 0) {
+            e.push(format!("{name} skew limit must not be negative"));
+        }
+    }
+    for (i, s) in c.via_spans.iter().enumerate() {
+        if s.from == s.to || s.drill <= 0 || s.diameter <= s.drill {
+            e.push(format!(
+                "via span {}-{} must join two layers with a diameter larger than a positive drill",
+                s.from.name(),
+                s.to.name()
+            ));
+        }
+        if c.via_spans[..i]
+            .iter()
+            .any(|o| (o.from, o.to) == (s.from, s.to))
+        {
+            e.push(format!(
+                "via span {}-{} appears twice",
+                s.from.name(),
+                s.to.name()
+            ));
+        }
+    }
+    if c.ambient_temp_c
+        .is_some_and(|t| !(-273.0..=1_000.0).contains(&t))
+    {
+        e.push("ambient temperature must be a real temperature in °C".into());
+    }
+    if c.via_plating_um.is_some_and(|t| !pos(t)) {
+        e.push("via plating thickness must be positive".into());
+    }
+    for (net, v) in &c.net_max_drop_v {
+        if !pos(*v) {
+            e.push(format!("allowed voltage drop of {net} must be positive"));
+        }
+    }
+    for (part, w) in &c.part_dissipation_w {
+        if !(w.is_finite() && *w >= 0.0) {
+            e.push(format!("dissipation of {part} must not be negative"));
+        }
+    }
+    if let Some(ins) = &c.insulation {
+        if !(1..=4).contains(&ins.pollution_degree) {
+            e.push("pollution degree must be 1 to 4".into());
+        }
+        if !crate::ir::MATERIAL_GROUPS.contains(&ins.material_group.as_str()) {
+            e.push(format!(
+                "material group must be one of {:?}",
+                crate::ir::MATERIAL_GROUPS
+            ));
+        }
+        if !(ins.altitude_m.is_finite() && ins.altitude_m >= 0.0) {
+            e.push("altitude must not be negative".into());
+        }
+    }
+    if let Some(enc) = &c.enclosure {
+        if enc.max_height_bottom.is_some_and(|h| h <= 0) {
+            e.push("bottom-side height limit must be positive".into());
+        }
+        for h in &enc.mounting_holes {
+            if h.drill <= 0 || h.tolerance < 0 || h.keepout_radius < 0 {
+                e.push(
+                    "mounting hole needs a positive drill and non-negative tolerance and keep-out"
+                        .into(),
+                );
+            }
+        }
+    }
     e
 }

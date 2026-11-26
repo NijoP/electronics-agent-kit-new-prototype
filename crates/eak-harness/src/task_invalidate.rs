@@ -58,7 +58,11 @@ pub fn classify_command(command_type: &str) -> Option<Change> {
         | "UpsertNetClass"
         | "SetRuleConfig"
         | "SetClearanceCell"
-        | "SetNetPairClearance" => Some(Change::Rules),
+        | "SetNetPairClearance"
+        | "SetDiffPair"
+        | "DeleteDiffPair"
+        | "SetViaSpans" => Some(Change::Rules),
+        "SetEngineeringInputs" => Some(Change::Constraints),
         "SetBoardOutline" | "SetStackup" | "SetLayerCount" | "SetOutlineArc" | "AddBoardCutout"
         | "DeleteBoardCutout" => Some(Change::BoardOutline),
         // Keep-out and constraint regions are design rules for placement and routing (ADR-0042).

@@ -293,7 +293,11 @@ pub fn build(p: &Project) -> Netlist {
             }
             continue;
         }
-        pins.sort();
+        // By refdes and pin, not by the derived order (symbol id first): ids are random per
+        // run, so an unlabelled net would be named after a different pin each time.
+        pins.sort_by(|a, b| {
+            (&a.refdes, &a.pin, &a.symbol_id).cmp(&(&b.refdes, &b.pin, &b.symbol_id))
+        });
         let base = match names.iter().next() {
             Some(n) if global_name => n.clone(),
             Some(n) => {

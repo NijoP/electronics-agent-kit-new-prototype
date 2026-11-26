@@ -576,15 +576,15 @@ fn part_of(o: &CopperItem, id: &str) -> bool {
 /// track moves the tracks it then crowds (level 2), and so on.
 pub const MAX_SHOVE_LEVELS: usize = 3;
 /// Most tracks one step may move (keeps a step interactive and its undo step readable).
-const MAX_SHOVED: usize = 24;
+pub(crate) const MAX_SHOVED: usize = 24;
 
 /// A segment of copper that pushes tracks: the route's, or a moved track's new place.
-struct Pusher {
-    a: Point,
-    b: Point,
-    half_width: f64,
-    layer: CopperLayer,
-    net: String,
+pub(crate) struct Pusher {
+    pub(crate) a: Point,
+    pub(crate) b: Point,
+    pub(crate) half_width: f64,
+    pub(crate) layer: CopperLayer,
+    pub(crate) net: String,
 }
 
 fn seg(a: Point, b: Point, hw: f64) -> Shape {
@@ -786,7 +786,7 @@ fn shove(
 /// keeping both of its ends. `None` when the track is missing (the route's own pending copper)
 /// or an arc, the pushers lie on both sides of its line or cross it, the bump would reach one of
 /// its ends, or copper of its own net joins it inside the bump.
-fn bump(
+pub(crate) fn bump(
     committed: &Project,
     c: &Constraints,
     copper: &[CopperItem],

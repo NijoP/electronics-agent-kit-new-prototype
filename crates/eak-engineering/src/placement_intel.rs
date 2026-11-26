@@ -124,12 +124,16 @@ pub fn plan(p: &Project) -> Plan {
             .map(|f| f.pad_nets.clone())
             .unwrap_or_default()
     };
+    // In refdes order, not id order: ids are random per run and the anchor candidates built from
+    // these lists break placement ties, so the same board would place differently each run.
     let ids_of = |r: Role, roles: &BTreeMap<Id, Role>| -> Vec<Id> {
-        roles
+        let mut v: Vec<Id> = roles
             .iter()
             .filter(|(_, x)| **x == r)
             .map(|(id, _)| id.clone())
-            .collect()
+            .collect();
+        v.sort_by_key(|id| p.pcb.footprints[id].refdes.clone());
+        v
     };
     let ics = ids_of(Role::Ic, &out.roles);
     let crystals = ids_of(Role::Crystal, &out.roles);

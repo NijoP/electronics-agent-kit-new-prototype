@@ -49,7 +49,7 @@ fn reference_design_end_to_end() {
     let notes = fixtures::build_pcb(&mut e).expect("pcb");
     set_height_limit(&mut e);
     // ADR-0048: every net rated, so no voltage or current rule is UNKNOWN (that blocks release).
-    fixtures::declare_undeclared_nets(&mut e).expect("net ratings");
+    fixtures::declare_check_inputs(&mut e).expect("check inputs");
     eprintln!("{notes:#?}");
     let erc_r = erc::run(e.project());
     assert_eq!(erc_r.errors, 0);
