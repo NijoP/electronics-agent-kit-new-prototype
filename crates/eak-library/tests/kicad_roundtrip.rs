@@ -42,7 +42,10 @@ fn fixture_symbols_import_as_expected() {
     assert_eq!(vplus.electrical_type, PinType::PowerIn);
     assert_eq!(vplus.orientation, PinOrientation::Down);
     assert_eq!(vplus.position, Point::mm(0.0, 7.62));
-    assert!(matches!(op.def.graphics[0], Graphic::Polygon { fill: true, .. }));
+    assert!(matches!(
+        op.def.graphics[0],
+        Graphic::Polygon { fill: true, .. }
+    ));
     assert!(matches!(op.def.graphics[2], Graphic::Arc { .. }));
     assert!(matches!(op.def.graphics[3], Graphic::Line { .. }));
 
@@ -104,9 +107,17 @@ fn through_hole_footprint_round_trips_with_rotation_and_drills_normalised() {
     assert_eq!(a.def.pads.len(), 3);
     let p2 = &a.def.pads[1];
     assert_eq!((p2.kind, p2.shape), (PadKind::Tht, PadShape::Oval));
-    assert_eq!(p2.drill, Some(1_000_000), "slot imported by its smaller size");
+    assert_eq!(
+        p2.drill,
+        Some(1_000_000),
+        "slot imported by its smaller size"
+    );
     let p3 = &a.def.pads[2];
-    assert_eq!((p3.size_x, p3.size_y), (2_000_000, 1_700_000), "90° turn applied");
+    assert_eq!(
+        (p3.size_x, p3.size_y),
+        (2_000_000, 1_700_000),
+        "90° turn applied"
+    );
     assert_eq!(a.def.courtyard_half_h, 6_880_000);
     let out = export_footprint(&a);
     assert!(out.losses.is_empty(), "{:?}", out.losses);

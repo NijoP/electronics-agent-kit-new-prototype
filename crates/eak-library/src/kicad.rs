@@ -112,10 +112,7 @@ fn pin_angle(o: PinOrientation) -> u32 {
 }
 
 fn pts(points: &[Point]) -> String {
-    let xys: Vec<String> = points
-        .iter()
-        .map(|p| format!("(xy {})", xy(*p)))
-        .collect();
+    let xys: Vec<String> = points.iter().map(|p| format!("(xy {})", xy(*p))).collect();
     format!("(pts {})", xys.join(" "))
 }
 
@@ -287,7 +284,11 @@ pub fn export_symbol_lib(symbols: &[SymbolImport]) -> Export {
                     p.number
                 ));
             }
-            let pname = if p.name.is_empty() { "~" } else { p.name.as_str() };
+            let pname = if p.name.is_empty() {
+                "~"
+            } else {
+                p.name.as_str()
+            };
             let _ = write!(
                 t,
                 "      (pin {} line (at {} {}) (length {})",
@@ -297,7 +298,10 @@ pub fn export_symbol_lib(symbols: &[SymbolImport]) -> Export {
                 mm_text(p.length)
             );
             let (pname, number) = (quote(pname), quote(&p.number));
-            let _ = writeln!(t, " (name {pname} {PIN_FONT}) (number {number} {PIN_FONT}))");
+            let _ = writeln!(
+                t,
+                " (name {pname} {PIN_FONT}) (number {number} {PIN_FONT}))"
+            );
         }
         t.push_str("    )\n  )\n");
     }
@@ -347,7 +351,9 @@ pub fn export_footprint(fp: &FootprintImport) -> Export {
     for p in &d.pads {
         let n = &p.number;
         if p.mask_expansion.is_some() || p.paste_expansion.is_some() {
-            losses.push(format!("{name}: pad {n} mask/paste expansion is not written"));
+            losses.push(format!(
+                "{name}: pad {n} mask/paste expansion is not written"
+            ));
         }
         let (kind, layers) = match p.kind {
             PadKind::Smd => ("smd", "\"F.Cu\" \"F.Paste\" \"F.Mask\""),

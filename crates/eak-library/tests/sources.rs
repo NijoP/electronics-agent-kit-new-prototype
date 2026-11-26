@@ -52,9 +52,17 @@ fn counting_supplier(status: SourceStatus, calls: Arc<AtomicUsize>) -> SupplierR
         Box::new(move |_q: &PartQuery| {
             calls.fetch_add(1, Ordering::SeqCst);
             Ok::<_, SourceError>(vec![
-                listing("C1", Some("AMS1117-3.3"), Some("Advanced Monolithic Systems")),
+                listing(
+                    "C1",
+                    Some("AMS1117-3.3"),
+                    Some("Advanced Monolithic Systems"),
+                ),
                 listing("C2", Some("AMS1117-3.3"), Some("Other Maker Co")),
-                listing("C3", Some("AMS1117-5.0"), Some("Advanced Monolithic Systems")),
+                listing(
+                    "C3",
+                    Some("AMS1117-5.0"),
+                    Some("Advanced Monolithic Systems"),
+                ),
                 listing("C4", Some("AMS1117-3.3"), None),
             ])
         }),
@@ -70,16 +78,26 @@ fn a_source_that_needs_setup_is_reported_and_never_called() {
     );
     let builtin = BuiltinSource::new();
     let r = resolve(&[&builtin, &supplier], &PartQuery::new("AMS1117-3.3"));
-    assert_eq!(calls.load(Ordering::SeqCst), 0, "zero requests without setup");
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        0,
+        "zero requests without setup"
+    );
     let skipped = r
         .sources
         .iter()
         .find(|s| s.source == SourceId::new("supplier:test"))
         .expect("the unready source is listed");
-    assert_eq!(skipped.status, SourceStatus::NeedsSetup("no credentials".into()));
+    assert_eq!(
+        skipped.status,
+        SourceStatus::NeedsSetup("no credentials".into())
+    );
     // The builtin still answers on its own.
     assert_eq!(r.parts.len(), 1);
-    assert_eq!(r.parts[0].part.sources(), vec![SourceId::new("eak-builtin")]);
+    assert_eq!(
+        r.parts[0].part.sources(),
+        vec![SourceId::new("eak-builtin")]
+    );
     // Calling the source directly is refused too.
     assert!(matches!(
         supplier.search(&PartQuery::new("x")),
@@ -149,7 +167,10 @@ fn the_builtin_source_links_definitions_without_claiming_verification() {
     assert_eq!(d.content_hash.as_ref().map(String::len), Some(64));
     assert!(!b.capabilities().offers);
     let all = b.search(&PartQuery::new("a")).unwrap();
-    assert!(all.records.iter().all(|p| p.offers.is_empty()), "no offer is invented");
+    assert!(
+        all.records.iter().all(|p| p.offers.is_empty()),
+        "no offer is invented"
+    );
 }
 
 #[test]
@@ -160,5 +181,7 @@ fn the_resolver_caps_each_source_at_the_query_limit_and_says_so() {
     let r = resolve(&[&supplier], &q);
     assert_eq!(r.parts.len() + r.suggestions.len(), 1);
     let notes: Vec<&String> = r.sources.iter().flat_map(|s| &s.unkeyed).collect();
-    assert!(notes.iter().any(|n| n.contains("over the limit")), "{notes:?}");
+    assert!(
+        notes.iter().any(|n| n.contains("over the limit")),
+        "{notes:?}"
 }

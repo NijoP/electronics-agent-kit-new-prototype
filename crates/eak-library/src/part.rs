@@ -333,7 +333,10 @@ mod tests {
         assert_eq!(a, b);
         assert_eq!(a.mpn(), "TPS2051BDBVR");
         assert_eq!(PartKey::new("TI", " - "), Err(PartKeyError::EmptyMpn));
-        assert_eq!(PartKey::new("  ", "TPS2051"), Err(PartKeyError::EmptyManufacturer));
+        assert_eq!(
+            PartKey::new("  ", "TPS2051"),
+            Err(PartKeyError::EmptyManufacturer)
+        );
     }
 
     #[test]
