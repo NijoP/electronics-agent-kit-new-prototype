@@ -9,7 +9,10 @@
 //! Routing intelligence on top of that (`routing_intel`, DESK-derived mental models):
 //!
 //! * connections are routed most-constrained first (`priority`), differential-pair partners
-//!   back to back, and the second net of a pair prefers to stay near the first;
+//!   back to back. A declared pair (`Constraints::diff_pairs`, ADR-0055) with a known gap is
+//!   routed coupled (`diffpair`: one centreline, members offset at the gap, spread vias,
+//!   serpentine length matching within `max_skew`); a name-detected pair only prefers to stay
+//!   near its partner, and the report says spacing and length are not controlled;
 //! * step costs include a congestion penalty measured on the ownership grid;
 //! * routing is pass-based: a pass that leaves connections unrouted promotes them and routes
 //!   everything again; the best pass wins; passes stop on stagnation (no change in unrouted
@@ -34,6 +37,8 @@ use eak_core::{CopperLayer, Nm, Point, Project, Rect};
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, VecDeque};
+
+mod diffpair;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoutedTrack {
@@ -64,7 +69,8 @@ pub struct PassSummary {
     pub wire_length_mm: f64,
 }
 
-/// Routed state of one differential pair (name-based detection, see `routing_intel`).
+/// Routed state of one differential pair: a declared one (`Constraints::diff_pairs`) or one
+/// detected by name (`routing_intel`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PairReport {
     pub positive: String,
@@ -76,6 +82,33 @@ pub struct PairReport {
     pub vias_negative: usize,
     pub fully_routed: bool,
     pub note: String,
+    /// Declared in the project (only declared pairs are routed coupled).
+    #[serde(default)]
+    pub declared: bool,
+    /// Every connection of both members was routed coupled at `gap_mm`.
+    #[serde(default)]
+    pub coupled: bool,
+    #[serde(default)]
+    pub width_mm: Option<f64>,
+    #[serde(default)]
+    pub gap_mm: Option<f64>,
+    #[serde(default)]
+    pub max_skew_mm: Option<f64>,
+    /// `None` when no skew limit is declared or the pair is not fully routed (UNKNOWN).
+    #[serde(default)]
+    pub skew_within_tolerance: Option<bool>,
+    /// Differential impedance estimate per layer the pair uses (IPC-2141A, or UNKNOWN).
+    #[serde(default)]
+    pub impedance: Vec<LayerImpedance>,
+    /// `None` when the target or tolerance is undeclared or an estimate is UNKNOWN.
+    #[serde(default)]
+    pub impedance_within_tolerance: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayerImpedance {
+    pub layer: String,
+    pub zdiff: crate::impedance::Estimate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -243,6 +276,8 @@ struct Placed {
     vias: Vec<Point>,
     shapes: Vec<(usize, Shape)>,
     note: Option<String>,
+    /// Placed by the coupled pair router; never ripped up alone (its partner would lose it).
+    pair: bool,
 }
 
 struct PassOutcome {
@@ -251,6 +286,8 @@ struct PassOutcome {
     ripups: usize,
     wire_nm: i64,
     vias: usize,
+    /// Why a declared pair connection was not routed coupled, or how it was.
+    pair_notes: BTreeMap<usize, String>,
 }
 
 /// Everything a connection attempt needs that does not change during a run.
@@ -265,6 +302,10 @@ struct Env<'a> {
     /// Cells outside the board or inside the edge keep-out (not "congestion").
     outside: &'a [bool],
     inflate: f64,
+    /// Declared pairs by positive net: routable coupled, or why not.
+    coupled: &'a BTreeMap<String, Result<diffpair::Coupled, String>>,
+    /// For each connection, the partner connection it is routed coupled with (declared pairs).
+    mates: &'a [Option<usize>],
 }
 
 /// Per-cell extra step costs for one attempt.
@@ -379,7 +420,27 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
     }
     crate::priority::order_connections(p, &mut todo);
     let todo_nets: BTreeSet<String> = todo.iter().map(|(n, _, _)| n.clone()).collect();
-    let pairs = intel::diff_pairs(&todo_nets);
+    // Declared pairs come first; name detection only pairs nets no declared pair names.
+    let declared: Vec<&eak_core::DiffPairRule> = p
+        .constraints
+        .diff_pairs
+        .iter()
+        .filter(|d| todo_nets.contains(&d.positive) && todo_nets.contains(&d.negative))
+        .collect();
+    let undeclared: BTreeSet<String> = todo_nets
+        .iter()
+        .filter(|n| !p.constraints.diff_pairs.iter().any(|d| d.has(n)))
+        .cloned()
+        .collect();
+    let mut pairs: Vec<(String, String)> = declared
+        .iter()
+        .map(|d| (d.positive.clone(), d.negative.clone()))
+        .collect();
+    pairs.extend(intel::diff_pairs(&undeclared));
+    let coupled: BTreeMap<String, Result<diffpair::Coupled, String>> = declared
+        .iter()
+        .map(|d| (d.positive.clone(), diffpair::resolve(p, d)))
+        .collect();
     let conns = group_pairs(
         todo.into_iter()
             .map(|(net, a, b)| Conn { net, a, b })
@@ -388,6 +449,18 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
     );
     if conns.is_empty() {
         return result;
+    }
+    // A routable declared pair's connections were put back to back by `group_pairs`.
+    let mut mates: Vec<Option<usize>> = vec![None; conns.len()];
+    for i in 1..conns.len() {
+        let (x, y) = (&conns[i - 1].net, &conns[i].net);
+        let routable = |pos: &String| coupled.get(pos).is_some_and(|r| r.is_ok());
+        let is_pair = (routable(x) && intel::partner_of(x, &pairs) == Some(y.as_str()))
+            || (routable(y) && intel::partner_of(y, &pairs) == Some(x.as_str()));
+        if is_pair && mates[i - 1].is_none() {
+            mates[i - 1] = Some(i);
+            mates[i] = Some(i - 1);
+        }
     }
 
     let env = Env {
@@ -400,6 +473,8 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         base: &base,
         outside: &outside,
         inflate,
+        coupled: &coupled,
+        mates: &mates,
     };
 
     // Pass-based routing: failed connections are promoted and everything is routed again; the
@@ -486,7 +561,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
             .push((c.net.clone(), c.a, c.b, why.clone()));
     }
     result.notes = notes.into_iter().collect();
-    result.pairs = pair_reports(&pairs, &best.placed, &conns, &best.failed);
+    result.pairs = pair_reports(&env, &pairs, &best, &conns);
     let final_grid = grid_with(&env, best.placed.iter());
     let cong = congestion_map(&env, &final_grid);
     result.congestion = cong.hotspots(5, base.origin, pitch);
@@ -520,20 +595,21 @@ fn group_pairs(conns: Vec<Conn>, pairs: &[(String, String)]) -> Vec<Conn> {
 }
 
 fn pair_reports(
+    env: &Env,
     pairs: &[(String, String)],
-    placed: &[Placed],
+    out: &PassOutcome,
     conns: &[Conn],
-    failed: &BTreeMap<usize, String>,
 ) -> Vec<PairReport> {
-    let length_mm = |net: &str| -> f64 {
+    let (placed, failed) = (&out.placed, &out.failed);
+    let length_nm = |net: &str| -> f64 {
         placed
             .iter()
             .filter(|pl| pl.net == net)
             .flat_map(|pl| pl.segs.iter())
             .map(|(_, a, b)| a.dist(*b))
             .sum::<f64>()
-            / 1e6
     };
+    let length_mm = |net: &str| length_nm(net) / 1e6;
     let vias = |net: &str| -> usize {
         placed
             .iter()
@@ -549,7 +625,8 @@ fn pair_reports(
         .filter(|(a, b)| conns.iter().any(|c| &c.net == a || &c.net == b))
         .map(|(a, b)| {
             let (la, lb) = (length_mm(a), length_mm(b));
-            PairReport {
+            let fully_routed = complete(a) && complete(b);
+            let mut r = PairReport {
                 positive: a.clone(),
                 negative: b.clone(),
                 length_positive_mm: (la * 1e3).round() / 1e3,
@@ -557,9 +634,67 @@ fn pair_reports(
                 skew_mm: ((la - lb).abs() * 1e3).round() / 1e3,
                 vias_positive: vias(a),
                 vias_negative: vias(b),
-                fully_routed: complete(a) && complete(b),
+                fully_routed,
                 note: "routed adjacent (the second net prefers the first one's neighbourhood); spacing, coupled impedance and length matching are NOT controlled or verified".into(),
+                declared: false,
+                coupled: false,
+                width_mm: None,
+                gap_mm: None,
+                max_skew_mm: None,
+                skew_within_tolerance: None,
+                impedance: vec![],
+                impedance_within_tolerance: None,
+            };
+            let Some(rule) = env.coupled.get(a) else {
+                return r;
+            };
+            r.declared = true;
+            let rule = match rule {
+                Ok(rule) => rule,
+                Err(why) => {
+                    r.note = format!("declared pair NOT routed coupled: {why}; routed as two nets, so spacing, impedance and length matching are not controlled");
+                    return r;
+                }
+            };
+            let members: Vec<&Placed> =
+                placed.iter().filter(|pl| &pl.net == a || &pl.net == b).collect();
+            r.coupled = fully_routed && !members.is_empty() && members.iter().all(|pl| pl.pair);
+            r.width_mm = Some(rule.width as f64 / 1e6);
+            r.gap_mm = Some(rule.gap as f64 / 1e6);
+            r.max_skew_mm = rule.max_skew.map(|s| s as f64 / 1e6);
+            if fully_routed {
+                r.skew_within_tolerance = rule
+                    .max_skew
+                    .map(|s| (length_nm(a) - length_nm(b)).abs() <= s as f64 + 1.0);
             }
+            if r.coupled {
+                let layers: BTreeSet<usize> = members
+                    .iter()
+                    .flat_map(|pl| pl.segs.iter().map(|(l, _, _)| *l))
+                    .collect();
+                let (est, ok) = diffpair::impedance_on(env.p, rule, &layers);
+                r.impedance = est
+                    .into_iter()
+                    .map(|(layer, zdiff)| LayerImpedance { layer, zdiff })
+                    .collect();
+                r.impedance_within_tolerance = ok;
+            }
+            let mut notes = rule.notes.clone();
+            notes.extend(
+                conns
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, c)| &c.net == a)
+                    .filter_map(|(ci, _)| out.pair_notes.get(&ci).cloned()),
+            );
+            if rule.max_skew.is_none() {
+                notes.push("max_skew undeclared: length matching UNKNOWN".into());
+            }
+            if !r.coupled {
+                notes.push("not every connection could be routed coupled: those parts are routed as single nets".into());
+            }
+            r.note = notes.join("; ");
+            r
         })
         .collect()
 }
@@ -641,12 +776,55 @@ fn run_pass(env: &Env, conns: &[Conn], key: &[i64]) -> PassOutcome {
     let mut cong = congestion_map(env, &grid).step_penalties();
     let mut since_cong = 0usize;
 
+    let mut pair_notes: BTreeMap<usize, String> = BTreeMap::new();
     while let Some(ci) = queue.pop_front() {
+        if placed.iter().any(|pl| pl.conn == ci) {
+            continue; // routed with its pair partner
+        }
         if since_cong >= 8 {
             cong = congestion_map(env, &grid).step_penalties();
             since_cong = 0;
         }
         let conn = &conns[ci];
+        if let Some(cj) = env.mates[ci].filter(|cj| !placed.iter().any(|pl| pl.conn == *cj)) {
+            // The positive member is the one whose net keys the declared pair.
+            let (ip, inn) = if env.coupled.contains_key(&conn.net) {
+                (ci, cj)
+            } else {
+                (cj, ci)
+            };
+            if let Some(Ok(rule)) = env.coupled.get(&conns[ip].net) {
+                let costs = Costs {
+                    congestion: &cong,
+                    affinity: None,
+                };
+                match diffpair::attempt(
+                    env,
+                    rule,
+                    (&conns[ip], ip),
+                    (&conns[inn], inn),
+                    &placed,
+                    &costs,
+                ) {
+                    Ok(pr) => {
+                        pair_notes.insert(ip, pr.note);
+                        for pl in pr.placed {
+                            mark_placed(&mut grid, &pl, env.inflate);
+                            failed.remove(&pl.conn);
+                            placed.push(pl);
+                        }
+                        since_cong += 2;
+                        continue;
+                    }
+                    Err(why) => {
+                        pair_notes.insert(
+                            ip,
+                            format!("one connection routed as two single nets: {why}"),
+                        );
+                    }
+                }
+            }
+        }
         let aff = affinity(env, conn, &placed);
         let costs = Costs {
             congestion: &cong,
@@ -705,6 +883,7 @@ fn run_pass(env: &Env, conns: &[Conn], key: &[i64]) -> PassOutcome {
         ripups,
         wire_nm,
         vias,
+        pair_notes,
     }
 }
 
@@ -721,7 +900,11 @@ fn find_victims(
     costs: &Costs,
 ) -> Option<Vec<usize>> {
     let my_key = key[ci];
-    let ghost = grid_with(env, placed.iter().filter(|pl| key[pl.conn] <= my_key));
+    // Coupled pair copper is never a victim, so it stays in the way like higher-priority copper.
+    let ghost = grid_with(
+        env,
+        placed.iter().filter(|pl| pl.pair || key[pl.conn] <= my_key),
+    );
     let id = *env.net_ids.get(&conn.net)?;
     let la = pad_layers(env.copper, conn.a, &conn.net);
     let lb = pad_layers(env.copper, conn.b, &conn.net);
@@ -730,7 +913,7 @@ fn find_victims(
     for &(l, c, r) in &path {
         let pt = ghost.center(c, r);
         for (idx, pl) in placed.iter().enumerate() {
-            if pl.net == conn.net || key[pl.conn] <= my_key {
+            if pl.net == conn.net || pl.pair || key[pl.conn] <= my_key {
                 continue;
             }
             let covers = pl.shapes.iter().any(|(sl, s)| {
@@ -809,6 +992,7 @@ fn attempt(
                     vias,
                     shapes,
                     note,
+                    pair: false,
                 });
             }
             Some(v) => last = v,
@@ -847,7 +1031,8 @@ fn shapes_for(
         .collect()
 }
 
-/// Exact clearance of new shapes against all other-net copper (existing and placed).
+/// Exact clearance of new shapes against all other-net copper (existing and placed): at least
+/// `clearance` and the DRC-002 rule for each pair of nets (classes, net pairs, voltage).
 fn violation(
     env: &Env,
     shapes: &[(usize, Shape)],
@@ -855,20 +1040,24 @@ fn violation(
     clearance: f64,
     placed: &[Placed],
 ) -> Option<String> {
-    let clearance = clearance.max(env.p.constraints.min_clearance as f64);
+    let c = &env.p.constraints;
+    let clearance = clearance.max(c.min_clearance as f64);
+    let need = |other: &str, l: usize| {
+        clearance.max(crate::clearance::required(c, net, other, layer_of(l)))
+    };
     for (l, s) in shapes {
         for it in env
             .copper
             .iter()
             .filter(|i| layer_index(i.layer) == Some(*l) && i.net != net)
         {
-            if distance(s, &it.shape) < clearance - 1.0 {
+            if distance(s, &it.shape) < need(&it.net, *l) - 1.0 {
                 return Some(format!("clearance to {} would be violated", it.label()));
             }
         }
         for pl in placed.iter().filter(|pl| pl.net != net) {
             for (pl_l, ps) in &pl.shapes {
-                if pl_l == l && distance(s, ps) < clearance - 1.0 {
+                if pl_l == l && distance(s, ps) < need(&pl.net, *l) - 1.0 {
                     return Some("clearance to a newly routed track would be violated".into());
                 }
             }
