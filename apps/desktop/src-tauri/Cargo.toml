@@ -28,6 +28,7 @@ eak-manufacturing.workspace = true
 eak-simulation.workspace = true
 eak-harness.workspace = true
 eak-terminal.workspace = true
+eak-agents.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # Semaphore for the bounded job classes (resources.rs). Already in the tree via tauri; "sync" only.
