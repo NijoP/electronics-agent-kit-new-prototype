@@ -1,34 +1,49 @@
-// Application shell: the app bar with the top-level workspaces and the workspace hosts.
+// Application shell (product vision §1): the top bar, the navigation rail and the workspace hosts.
 //
-//   EAK  [ Project / EDA ]  [ Terminal Workspace ]  ...        [ + ]
+//   EAK  Electronics Agent Kit  /  <project>                                         [ + ]
+//   rail │ Home  ·  EDA workspace (schematic, PCB, 3D and their docks)  ·  Terminal Workspace
 //
-// "Project / EDA" is the electronics workspace (project, schematic, PCB, libraries, checks). Other
-// top-level workspaces (the Terminal Workspace) register themselves in shell/registry.ts; each one
-// fills the whole main area. Every workspace that has been opened stays mounted while another is
-// shown, so switching never kills a terminal process or loses EDA editor state. The "+" appears
-// only when a registered workspace provides a "new space" action; nothing is a placeholder.
+// The rail lists the areas: Home, Schematic, PCB, 3D, Library, Agents, Checks, Manufacturing and
+// Terminal. While the EDA workspace is shown it draws the rail itself, from its live document and
+// dock state (shell/ActivityBar.tsx). Beside Home and the registered top-level workspaces (the
+// Terminal Workspace, shell/registry.ts) the shell draws the same rail (shell/NavRail.tsx); an EDA
+// area picked there switches back to the workspace and asks it to show that area. Every workspace
+// that has been opened stays mounted while another is shown, so switching never kills a terminal
+// process or loses EDA editor state. The "+" appears only when a registered workspace provides a
+// "new space" action; nothing is a placeholder.
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
-import { formatShortcut, matches, SHORTCUTS, tip } from "./design/shortcuts";
+import { matches, SHORTCUTS } from "./design/shortcuts";
 import { applyTheme, loadTheme, type Theme } from "./design/theme";
 import { ModelSettings } from "./ModelSettings";
 import { ProjectHome, saveSession } from "./ProjectHome";
+import { AGENTS_TITLE, HOME_TITLE, type ShellArea } from "./shell/ActivityBar";
+import { Icons } from "./shell/icons";
+import { NavRail, type NavItem } from "./shell/NavRail";
 import { listWorkspaces, useRegistryVersion, type WorkspaceContext } from "./shell/registry";
+import { TopBar } from "./shell/TopBar";
 import { modalOpen } from "./shell/viewState";
 import "./shell/workspaces";
 import type { OpenProject, Snapshot } from "./types";
 import { Workspace } from "./Workspace";
 
+/** Why the EDA areas of the shell's rail are disabled while no project is open. */
+const NO_PROJECT = "Open or create a project first";
+
 export function App() {
   const [opened, setOpened] = useState<Snapshot | null>(null);
   const [settings, setSettings] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
+  // "eda" (the project workspace, or Home while nothing is open), "home", or a registered app id.
   const [current, setCurrent] = useState("eda");
   const [visited, setVisited] = useState<ReadonlySet<string>>(new Set());
   const [projects, setProjects] = useState<OpenProject[]>([]);
+  const [navRequest, setNavRequest] = useState<{ area: string; seq: number } | null>(null);
   useRegistryVersion();
   const apps = listWorkspaces("app");
-  const active = apps.some((a) => a.id === current) ? current : "eda";
+  const edaViews = listWorkspaces("eda");
+  const active = current === "home" || apps.some((a) => a.id === current) ? current : "eda";
+  const homeShown = active === "home" || (!opened && active === "eda");
   const creator = apps.find((a) => a.onNew);
   useEffect(() => {
     applyTheme(theme);
@@ -55,7 +70,7 @@ export function App() {
 
   const show = (id: string) => {
     setCurrent(id);
-    if (id !== "eda") setVisited((v) => new Set(v).add(id));
+    if (id !== "eda" && id !== "home") setVisited((v) => new Set(v).add(id));
   };
   const newSpace = () => {
     if (!creator) return;
@@ -69,6 +84,16 @@ export function App() {
     } catch {
       setOpened(null);
     }
+  };
+  // Opening a project from Home shows it in the EDA workspace.
+  const openedFromHome = (s: Snapshot) => {
+    setOpened(s);
+    setCurrent("eda");
+  };
+  // An EDA area picked in the shell's rail: show the workspace, which then shows the area.
+  const toEda = (area: string) => {
+    show("eda");
+    setNavRequest((r) => ({ area, seq: (r?.seq ?? 0) + 1 }));
   };
 
   useEffect(() => {
@@ -92,49 +117,37 @@ export function App() {
     active: isActive,
   });
 
+  // Rail entries the shell owns (Home and the top-level workspaces), shared with the EDA rail.
+  const homeArea: ShellArea = { id: "home", label: "Home", icon: Icons.home, title: HOME_TITLE, run: () => show("home") };
+  const appAreas: ShellArea[] = apps.map((a) => ({ id: a.id, label: a.navLabel ?? a.label, icon: a.icon, title: a.label, shortcut: a.shortcut, run: () => show(a.id) }));
+  // The rail beside Home and the Terminal Workspace. EDA areas need an open project.
+  const eda = (id: string, label: string, icon: NavItem["icon"], title: string): NavItem => ({ id, label, icon, title, run: () => toEda(id), unavailable: opened ? undefined : NO_PROJECT });
+  const railAreas: NavItem[] = [
+    { ...homeArea, current: homeShown },
+    eda("schematic", "Schematic", Icons.schematic, "Schematic workspace"),
+    eda("pcb", "PCB", Icons.pcb, "PCB workspace"),
+    ...edaViews.map((w) => eda(w.id, w.label, w.icon, `${w.label} workspace`)),
+    eda("library", "Library", Icons.parts, "Library: parts, symbols and footprints"),
+    { id: "agents", label: "Agents", icon: Icons.sparkle, title: AGENTS_TITLE, run: () => setSettings(true) },
+    eda("checks", "Checks", Icons.checks, "Checks: ERC and DRC findings"),
+    eda("manufacturing", "Manufacturing", Icons.manufacturing, "Manufacturing"),
+    ...appAreas.map((a) => ({ ...a, current: active === a.id })),
+  ];
+  const railFooter: NavItem[] = [
+    { id: "theme", label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", icon: theme === "dark" ? Icons.sun : Icons.moon, title: "Toggle light/dark theme", run: toggleTheme },
+  ];
+  const rail = <NavRail areas={railAreas} footer={railFooter} />;
+  const activeProject = projects.find((p) => p.active);
+
   return (
     <div className="app">
-      <header className="appbar">
-        <span className="brand">EAK</span>
-        <div
-          className="app-tabs"
-          role="tablist"
-          aria-label="Workspaces"
-          onKeyDown={(e) => {
-            // Arrow / Home / End move between workspaces (roving tabindex, automatic activation).
-            const ids = ["eda", ...apps.map((a) => a.id)];
-            const i = ids.indexOf(active);
-            const next = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? ids.length - 1 : null;
-            if (next === null) return;
-            e.preventDefault();
-            const id = ids[(next + ids.length) % ids.length];
-            show(id);
-            requestAnimationFrame(() => document.getElementById(`app-tab-${id}`)?.focus());
-          }}
-        >
-        <button type="button" role="tab" id="app-tab-eda" tabIndex={active === "eda" ? 0 : -1} aria-selected={active === "eda"} className={active === "eda" ? "app-tab on" : "app-tab"} onClick={() => show("eda")} title="Electronics workspace: project, schematic, PCB">
-          Project / EDA
-        </button>
-        {apps.map((a) => (
-          <button key={a.id} type="button" role="tab" id={`app-tab-${a.id}`} tabIndex={active === a.id ? 0 : -1} aria-selected={active === a.id} className={active === a.id ? "app-tab on" : "app-tab"} onClick={() => show(a.id)} title={tip(a.label, a.shortcut)}>
-            {a.label}
-          </button>
-        ))}
-        </div>
-        {creator && (
-          <button type="button" className="app-new" aria-label={creator.newLabel ?? `New ${creator.label} space`} title={`${creator.newLabel ?? `New ${creator.label} space`} (${formatShortcut(SHORTCUTS.newTerminalSpace)})`} onClick={newSpace}>
-            +
-          </button>
-        )}
-        {opened && (
-          <span className="appbar-project" title={(projects.find((p) => p.active)?.dir ?? opened.dir) || undefined}>
-            {projects.find((p) => p.active)?.name ?? opened.project.name}
-          </span>
-        )}
-      </header>
+      <TopBar
+        project={opened ? { name: activeProject?.name ?? opened.project.name, dir: (activeProject?.dir ?? opened.dir) || null } : null}
+        create={creator ? { label: creator.newLabel ?? `New ${creator.label} space`, shortcut: SHORTCUTS.newTerminalSpace, run: newSpace } : null}
+      />
       <div className="app-main">
-        <div className="ws-host" hidden={active !== "eda"}>
-          {opened ? (
+        <div className="ws-host" hidden={active !== "eda" || !opened}>
+          {opened && (
             <Workspace
               key={opened.project.id}
               initial={opened}
@@ -146,16 +159,26 @@ export function App() {
               onTheme={toggleTheme}
               projects={projects}
               onProjectsChanged={() => void refreshProjects()}
+              home={homeArea}
+              apps={appAreas}
+              navRequest={navRequest}
             />
-          ) : (
-            <ProjectHome onOpened={setOpened} active={active === "eda"} theme={theme} onTheme={toggleTheme} onSettings={() => setSettings(true)} />
           )}
         </div>
+        {(!opened || active === "home") && (
+          <div className="ws-host rail-host" hidden={!homeShown}>
+            {rail}
+            <div className="rail-content">
+              <ProjectHome onOpened={openedFromHome} active={homeShown} theme={theme} onTheme={toggleTheme} onSettings={() => setSettings(true)} />
+            </div>
+          </div>
+        )}
         {apps
           .filter((a) => a.id === active || visited.has(a.id))
           .map((a) => (
-            <div key={a.id} className="ws-host" hidden={active !== a.id}>
-              {a.render(ctx(active === a.id))}
+            <div key={a.id} className="ws-host rail-host" hidden={active !== a.id}>
+              {rail}
+              <div className="rail-content">{a.render(ctx(active === a.id))}</div>
             </div>
           ))}
       </div>
