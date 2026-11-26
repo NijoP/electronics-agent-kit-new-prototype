@@ -611,7 +611,12 @@ pub fn footprint_verify_in(
     id: &str,
 ) -> Result<footprint::FootprintReport, String> {
     let found = find_def(store, project, id)?;
-    Ok(footprint::verify(&found.def, None, None, footprint::DEFAULT_TOLERANCE))
+    Ok(footprint::verify(
+        &found.def,
+        None,
+        None,
+        footprint::DEFAULT_TOLERANCE,
+    ))
 }
 
 /// Pin-to-pad compatibility (PP-001..PP-005) of one library part.
@@ -650,7 +655,10 @@ pub fn component_save_in(
         .iter()
         .find(|r| r.rule_id == "PP-001" && r.state == CheckState::Fail)
     {
-        return Err(format!("the pin map is wrong and was not saved: {}", r.reason));
+        return Err(format!(
+            "the pin map is wrong and was not saved: {}",
+            r.reason
+        ));
     }
     let replaced = store.personal().0.iter().any(|d| d.id == def.id);
     let fp = footprint::verify(&def, None, None, footprint::DEFAULT_TOLERANCE);
