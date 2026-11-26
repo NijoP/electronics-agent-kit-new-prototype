@@ -20,6 +20,7 @@ pub mod eco;
 pub mod home;
 pub mod kicad;
 pub mod libcatalog;
+pub mod library_import;
 pub mod libstore;
 pub mod models;
 pub mod parts;
@@ -1349,6 +1350,8 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
 pub const IPC_COMMANDS: [&str; 95] = [
+pub const IPC_COMMANDS: [&str; 92] = [
+pub const IPC_COMMANDS: [&str; 96] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -1379,6 +1382,11 @@ pub const IPC_COMMANDS: [&str; 95] = [
     "library_personal_remove",
     "library_import_open_source",
     "library_imported_remove",
+    "kicad_library_scan",
+    "kicad_library_import",
+    "library_db_search",
+    "user_library_export",
+    "user_library_import",
     "assembly_attest",
     "assembly_import_parts_file",
     "manufacturing_preview",
@@ -1823,6 +1831,7 @@ pub fn run() {
             if let Ok(dir) = app.path().app_config_dir() {
                 catalogue::init(&dir);
                 libstore::init(&dir);
+                library_import::init(&dir);
             }
             // Profiles are plain JSON in the config dir; keys go to the OS credential store.
             let profiles = app
@@ -1909,6 +1918,11 @@ pub fn run() {
             libstore::cmd::library_personal_remove,
             libstore::cmd::library_import_open_source,
             libstore::cmd::library_imported_remove,
+            library_import::cmd::kicad_library_scan,
+            library_import::cmd::kicad_library_import,
+            library_import::cmd::library_db_search,
+            library_import::cmd::user_library_export,
+            library_import::cmd::user_library_import,
             parts::cmd::assembly_attest,
             parts::cmd::assembly_import_parts_file,
             parts::cmd::manufacturing_preview,
