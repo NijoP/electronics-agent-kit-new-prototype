@@ -14,8 +14,9 @@
 use crate::dfm::{self, FabProfile};
 use crate::drc;
 use crate::erc;
-use crate::state::CheckState;
+use crate::mech;
 use crate::report::{project_hash, Finding, Report, Severity};
+use crate::state::CheckState;
 use eak_core::{PinType, Project};
 use eak_engineering::{copper, netlist, power};
 use serde::{Deserialize, Serialize};
@@ -140,6 +141,20 @@ fn from_findings(
         .collect();
     let rule_ids = rules.iter().map(|(rule, _)| rule.to_string()).collect();
     gate_from(id, title, r, rule_ids, hits, required)
+}
+
+/// Required gate over `rules` of `r`: `FAIL` on an error finding, else `UNKNOWN` when any of the
+/// rules could not be evaluated.
+fn rules_gate(id: &str, title: &str, r: &Report, rules: &[&str]) -> Gate {
+    let at_error: Vec<_> = rules.iter().map(|&rule| (rule, Severity::Error)).collect();
+    let mut g = from_findings(id, title, r, &at_error, true);
+    for rr in &r.rule_results {
+        if rules.contains(&rr.rule_id.as_str()) && rr.state == CheckState::Unknown {
+            let why = format!("{} is UNKNOWN: {}", rr.rule_id, rr.reason);
+            unknown_unless_failed(&mut g, why);
+        }
+    }
+    g
 }
 
 /// `UNKNOWN` unless the gate already failed: a deterministic violation outranks missing data.
@@ -433,21 +448,21 @@ pub fn evaluate(p: &Project, fab: Option<&FabProfile>) -> GateReport {
 
     // Part stress (ERC-011, ERC-022..024): an exceeded rating fails; a part that could not be
     // evaluated (no rating, an undeclared net, only an upper bound) leaves the gate UNKNOWN.
-    let erc = erc::run(&at_defaults);
-    let stress = ["ERC-011", "ERC-022", "ERC-023", "ERC-024"];
-    let mut g = from_findings(
+    gates.push(rules_gate(
         "part_ratings",
         "Part voltage, current and power ratings hold under the declared net conditions",
-        &erc,
-        &stress.map(|r| (r, Error)),
-        true,
-    );
-    for rr in &erc.rule_results {
-        if stress.contains(&rr.rule_id.as_str()) && rr.state == CheckState::Unknown {
-            unknown_unless_failed(&mut g, format!("{} is UNKNOWN: {}", rr.rule_id, rr.reason));
-        }
-    }
-    gates.push(g);
+        &erc::run(&at_defaults),
+        &["ERC-011", "ERC-022", "ERC-023", "ERC-024"],
+    ));
+
+    // Mechanical fit (MECH-001..004): height limits, body collisions, 3D data and the declared
+    // enclosure mounting holes; UNKNOWN when a limit, the enclosure or body data is missing.
+    gates.push(rules_gate(
+        "mechanical_fit",
+        "Part heights, body collisions and enclosure mounting holes within the declared limits",
+        &mech::run(&at_defaults),
+        &["MECH-001", "MECH-002", "MECH-003", "MECH-004"],
+    ));
 
     // Return-path continuity: advisory (a signal-integrity concern, not a fabrication fault),
     // reported with the same fail-closed states.

@@ -9,7 +9,7 @@ use eak_engineering::calc::parse_value;
 use eak_engineering::netlist::Netlist;
 use eak_engineering::rating::{derating, CURRENT_RATINGS, POWER_RATINGS, VOLTAGE_RATINGS};
 use eak_engineering::verify::{part_rating, Verdict};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Parts whose rated current is a series (through) current: inductors, diodes, transistors, fuses.
 const SERIES_PREFIXES: [&str; 4] = ["L", "D", "Q", "F"];
@@ -26,7 +26,7 @@ pub(crate) fn rules() -> Vec<RuleInfo> {
         rule(
             "ERC-023",
             "Part current rating",
-            "L, D, Q and F parts: highest declared current on any pin net (upper bound: the part may carry less) vs its derated current rating: within it is a pass, above it UNKNOWN (never FAIL, the part current is not known)",
+            "L, D, Q and F parts: the smaller declared current of a two-net part's nets, else the largest on any pin net (an upper bound: the part may carry less; no-connect pins excluded) vs its derated current rating: within it is a pass, above it UNKNOWN (never FAIL, the part current is not known)",
             src,
         ),
         rule(
@@ -41,9 +41,16 @@ pub(crate) fn rules() -> Vec<RuleInfo> {
 /// The lowest rating of `names` in `unit`; `Err` names a matching rating in another unit.
 fn lowest(def: &ComponentDef, names: &[&str], unit: &str) -> Result<Option<f64>, String> {
     let mut best: Option<f64> = None;
-    for r in def.ratings.iter().filter(|r| names.contains(&r.name.as_str())) {
+    for r in def
+        .ratings
+        .iter()
+        .filter(|r| names.contains(&r.name.as_str()))
+    {
         if r.unit != unit {
-            return Err(format!("rating {} is in {}, expected {unit}", r.name, r.unit));
+            return Err(format!(
+                "rating {} is in {}, expected {unit}",
+                r.name, r.unit
+            ));
         }
         best = Some(best.map_or(r.value, |b| b.min(r.value)));
     }
@@ -163,6 +170,13 @@ pub(crate) fn check(
     let volts = &p.constraints.net_voltages_v;
     let amps = &p.constraints.net_currents_a;
     let mut unknown: BTreeMap<&'static str, Vec<String>> = BTreeMap::new();
+    // A pin marked no-connect is driven by nothing outside the part, so it stresses nothing.
+    let nc: BTreeSet<(&str, &str)> = p
+        .schematic
+        .no_connects
+        .values()
+        .map(|n| (n.symbol_id.as_str(), n.pin.as_str()))
+        .collect();
     for s in p.schematic.symbols.values() {
         let Some(def) = p.library.get(&s.component_id) else {
             continue;
@@ -171,6 +185,7 @@ pub(crate) fn check(
             .symbol
             .pins
             .iter()
+            .filter(|pin| !nc.contains(&(s.id.as_str(), pin.number.as_str())))
             .filter_map(|pin| nl.pin_net.get(&(s.id.clone(), pin.number.clone())))
             .map(String::as_str)
             .collect();
@@ -215,11 +230,16 @@ pub(crate) fn check(
             .take_while(char::is_ascii_alphabetic)
             .collect();
         if SERIES_PREFIXES.contains(&prefix.as_str()) {
-            let current = nets
-                .iter()
-                .filter_map(|n| amps.get(*n).copied())
-                .reduce(f64::max)
-                .ok_or_else(|| format!("no declared current on {}", nets.join(", ")));
+            // A two-terminal part's current flows through both nets, so the smaller declared
+            // net current bounds it; with more nets only the largest does.
+            let declared = nets.iter().filter_map(|n| amps.get(*n).copied());
+            let bound = if exact {
+                declared.reduce(f64::min)
+            } else {
+                declared.reduce(f64::max)
+            };
+            let none = || format!("no declared current on {}", nets.join(", "));
+            let current = bound.ok_or_else(none);
             let i = evaluate(s, def, &CURRENT, current, false, f);
             why.push(("ERC-023", i));
         }

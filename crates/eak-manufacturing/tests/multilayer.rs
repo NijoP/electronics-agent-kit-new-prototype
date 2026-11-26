@@ -39,7 +39,7 @@ fn board(layers: u8) -> Engine {
 fn four_layer_board_passes_drc_and_exports_every_layer() {
     let mut e = board(4);
     // ADR-0048: every net rated, so no voltage or current rule is UNKNOWN (that blocks release).
-    fixtures::declare_undeclared_nets(&mut e).expect("net ratings");
+    fixtures::declare_check_inputs(&mut e).expect("check inputs");
     let p = e.project();
     assert_eq!(p.pcb.board.stackup.copper_layers(), 4);
     let kinds: Vec<ViaKind> = p.pcb.vias.values().map(|v| v.kind()).collect();

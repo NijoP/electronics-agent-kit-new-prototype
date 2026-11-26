@@ -129,6 +129,21 @@ fn part_current_passes_within_the_bound_and_is_unknown_above_it() {
 }
 
 #[test]
+fn two_net_current_takes_the_smaller_net_and_no_connect_pins_add_no_stress() {
+    // D1 sits between the LED net and GND: the 0.3 A GND return does not flow through the LED.
+    let mut p = reference(3.3, 0.01);
+    p.constraints.net_currents_a.insert("GND".into(), 0.3);
+    let why = reason(&erc::run(&p), "ERC-023");
+    assert!(!why.contains("D1"), "{why}");
+    // U2's no-connect pins 2 and 3 are on nets of their own that need no declared voltage.
+    let before = p.constraints.net_voltages_v.len();
+    p.constraints.net_voltages_v.retain(|n, _| !n.starts_with("N_U2_"));
+    assert!(p.constraints.net_voltages_v.len() < before);
+    let why = reason(&erc::run(&p), "ERC-022");
+    assert!(!why.contains("U2"), "{why}");
+}
+
+#[test]
 fn capacitor_rating_is_unknown_until_its_nets_are_declared() {
     let mut p = reference(3.3, 0.01);
     assert_ne!(erc::run(&p).state_of("ERC-011"), CheckState::Unknown);
