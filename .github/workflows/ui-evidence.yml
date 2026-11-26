@@ -400,6 +400,18 @@ jobs:
           UI_SCENARIO: scenarios/g1-home-firstrun.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # G2 (report §10 S2, S3): the journey bar coloured from current reports only, a stage click
+      # opening its view; the Problems tab with not-run checks named, release blockers, ERC findings
+      # going through the F7 navigation, an UNKNOWN DRC rule naming its missing input, and filters.
+      - name: Run G2 journey bar and Problems scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/g2
+          UI_SCENARIO: scenarios/g2-problems.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # Fails the job when a scenario wrote no results file (it crashed or never ran); failing
       # rows already failed their own step. Runs before the upload, which still runs (always()).
       # The scenario list is every UI_OUT of this file, so a new scenario step is gated (and
