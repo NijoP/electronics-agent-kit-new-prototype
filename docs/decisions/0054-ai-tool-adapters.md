@@ -1,4 +1,4 @@
-# ADR-0053: AI tool adapters (`eak-agents`) and Settings › AI tools
+# ADR-0054: AI tool adapters (`eak-agents`) and Settings › AI tools
 - **Date:** 2026-11-26
 - **Context:** Wave-2 slice W2-E (`eak-v2-remap/report.md` §4.1; Traycer review §11.3). Engineers
   must be able to connect Claude Code or Codex to a project without a terminal, use the tools' own

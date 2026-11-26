@@ -49,7 +49,7 @@ close | report | release` (`eak-term --help`). Exit code 2 when `wait` times out
 - Extra agent CLIs: `terminal-agents.json` in the app config dir,
   `[{"name": "my-agent", "command": "my-agent --flag"}]`; installed ones are recognised in
   status (the desktop UI no longer shows launcher buttons; run the CLI yourself in a terminal).
-- Settings › AI tools (ADR-0053) can open Claude Code, Codex, OpenCode or Gemini CLI, or their
+- Settings › AI tools (ADR-0054) can open Claude Code, Codex, OpenCode or Gemini CLI, or their
   own sign-in, as a new tab here; such sessions also get `EAK_AGENT_NAME` and `EAK_TASK_ID`. The
   Terminal workspace itself still has no launcher buttons.
 
