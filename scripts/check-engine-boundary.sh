@@ -18,6 +18,7 @@ allowed="
 catalogue.rs:distributor catalogue cache in the app config folder
 kicad.rs:KiCad import into the user's library store (outside any project)
 libcatalog.rs:enabled/disabled state beside the library store
+library_import.rs:library database and user library files the user exports (outside any project)
 libstore.rs:personal and imported library store (outside any project)
 models.rs:model-provider settings in the app config folder
 resources.rs:resource-policy settings in the app config folder

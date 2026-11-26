@@ -172,6 +172,11 @@ export const IPC_COMMANDS = [
   "library_personal_remove",
   "library_import_open_source",
   "library_imported_remove",
+  "kicad_library_scan",
+  "kicad_library_import",
+  "library_db_search",
+  "user_library_export",
+  "user_library_import",
   "assembly_attest",
   "assembly_import_parts_file",
   "manufacturing_preview",
@@ -253,6 +258,50 @@ export interface KicadCommitResult {
 /** Native file picker for an optional KiCad interchange file. Resolves to the path, or null when cancelled. */
 export async function pickKicadFile(title: string): Promise<string | null> {
   const r = await openDialog({ directory: false, multiple: false, title, filters: [{ name: "KiCad symbol or footprint", extensions: ["kicad_sym", "kicad_mod"] }] });
+  return typeof r === "string" ? r : null;
+}
+
+/** One library found in a KiCad folder (from a lib table or by looking in the folder). */
+export interface KicadFoundLibrary {
+  name: string;
+  kind: "symbol" | "footprint";
+  path: string | null;
+  origin: "table" | "folder";
+  exists: boolean;
+  usable: boolean;
+  notes: string[];
+}
+export interface KicadFolderScan {
+  folder: string;
+  symbol_libs: KicadFoundLibrary[];
+  footprint_libs: KicadFoundLibrary[];
+  problems: string[];
+}
+export interface KicadFolderImportSummary {
+  folder: string;
+  symbols: number;
+  footprints: number;
+  stored: number;
+  unpaired: string[];
+  models_found: number;
+  models_missing: string[];
+  skipped_libraries: string[];
+  problems: string[];
+}
+export interface LibraryDbSearch {
+  libraries: { library: string; items: number }[];
+  items: { kind: string; library: string; name: string; description: string; maturity: string; licence: string; source: string }[];
+}
+export interface UserLibraryImportReport {
+  library: string;
+  imported: number;
+  rejected: [string, string][];
+  maturity_not_kept: string[];
+}
+
+/** Native file picker for a user library file (`*.eak-library.json`). */
+export async function pickUserLibraryFile(title: string): Promise<string | null> {
+  const r = await openDialog({ directory: false, multiple: false, title, filters: [{ name: "EAK user library", extensions: ["json"] }] });
   return typeof r === "string" ? r : null;
 }
 
@@ -344,6 +393,13 @@ export const api = {
   libraryPersonalRemove: (id: string) => call<void>("library_personal_remove", { id }),
   libraryImportOpenSource: (dir: string) => call<LibraryImportSummary>("library_import_open_source", { dir }),
   libraryImportedRemove: (name: string) => call<void>("library_imported_remove", { name }),
+  // KiCad library folders, the local library database and user library files (library_import.rs).
+  kicadLibraryScan: (folder: string) => call<KicadFolderScan>("kicad_library_scan", { folder }),
+  kicadLibraryImport: (folder: string, licence: string, source: string) =>
+    call<KicadFolderImportSummary>("kicad_library_import", { folder, licence, source }),
+  libraryDbSearch: (query: string, kind?: string) => call<LibraryDbSearch>("library_db_search", { query, kind: kind ?? null }),
+  userLibraryExport: (library: string, folder: string) => call<string>("user_library_export", { library, folder }),
+  userLibraryImport: (path: string, library?: string) => call<UserLibraryImportReport>("user_library_import", { path, library: library ?? null }),
   assemblyAttest: (distributor: string, cls: AssemblyClass) => call<unknown>("assembly_attest", { distributor, class: cls }),
   assemblyImportPartsFile: (path: string) =>
     call<{ file: string; recorded: number; unknown_class: number }>("assembly_import_parts_file", { path }),
