@@ -444,7 +444,7 @@ export const api = {
   // Agent activity (ADR-0053): revisions, proposal events, WEFT messages and saved checks, read from the project journals.
   activityTimeline: () => call<import("./shell/activity").ActivityItem[]>("activity_timeline"),
   // WEFT, the engineer's side (ADR-0053): conflicts among open proposals, review requests routed to
-  // the engineer, and the engineer's verdict sent to the author (discarding first when asked).
+  // the engineer, and the engineer's verdict sent to the author (then discarding, when asked).
   weftConflicts: () => call<import("./shell/activity").WeftConflict[]>("weft_conflicts"),
   weftEngineerQueue: () => call<import("./shell/activity").EngineerRequest[]>("weft_engineer_queue"),
   weftEngineerVerdict: (proposalId: string, verdict: "approve" | "request_changes" | "reject", body: string, discard: boolean) =>

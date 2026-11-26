@@ -28,8 +28,11 @@ export function ActivityDialog({ revision, busy, onReview, onUndo, onShow, onClo
   useEscape(onClose);
   const [items, setItems] = useState<ActivityItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // null until the first read returns; a failed read is shown as an error, never as "none".
   const [conflicts, setConflicts] = useState<WeftConflict[] | null>(null);
-  const [queue, setQueue] = useState<EngineerRequest[]>([]);
+  const [conflictsError, setConflictsError] = useState<string | null>(null);
+  const [queue, setQueue] = useState<EngineerRequest[] | null>(null);
+  const [queueError, setQueueError] = useState<string | null>(null);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [working, setWorking] = useState(false);
   const [reload, setReload] = useState(0);
@@ -48,14 +51,26 @@ export function ActivityDialog({ revision, busy, onReview, onUndo, onShow, onClo
         .catch((e) => live && setError(message(e)));
       api
         .weftEngineerQueue()
-        .then((q) => live && setQueue(q))
-        .catch(() => undefined);
+        .then((q) => {
+          if (!live) return;
+          setQueue(q);
+          setQueueError(null);
+        })
+        .catch((e) => live && setQueueError(message(e)));
       if (checking) return;
       checking = true;
       api
         .weftConflicts()
-        .then((c) => live && setConflicts(c))
-        .catch(() => live && setConflicts(null))
+        .then((c) => {
+          if (!live) return;
+          setConflicts(c);
+          setConflictsError(null);
+        })
+        .catch((e) => {
+          if (!live) return;
+          setConflicts(null);
+          setConflictsError(message(e));
+        })
         .finally(() => {
           checking = false;
         });
@@ -69,7 +84,8 @@ export function ActivityDialog({ revision, busy, onReview, onUndo, onShow, onClo
   }, [revision, reload]);
 
   // The engineer's answer goes on the WEFT bus to the proposal's author; Reject and Re-propose
-  // discard the proposal first. Nothing here applies a proposal (Approve opens the review).
+  // then discard the proposal, only once the verdict is sent; a failure after sending says so
+  // ("verdict sent to ..., but"). Nothing here applies a proposal (Approve opens the review).
   const answer = async (id: string, verdict: "approve" | "request_changes" | "reject", body: string, discard: boolean, done: string) => {
     setWorking(true);
     try {
@@ -77,7 +93,8 @@ export function ActivityDialog({ revision, busy, onReview, onUndo, onShow, onClo
       setNote({ ok: true, text: done });
       if (verdict === "approve") onReview(id);
     } catch (e) {
-      setNote({ ok: false, text: `Not sent: ${message(e)}` });
+      const m = message(e);
+      setNote({ ok: false, text: /^verdict (sent|not sent)/.test(m) ? m : `Not sent: ${m}` });
     } finally {
       setWorking(false);
       setReload((n) => n + 1);
@@ -88,6 +105,8 @@ export function ActivityDialog({ revision, busy, onReview, onUndo, onShow, onClo
     answer(id, "request_changes", `Propose again on revision ${revision}.`, true, `Proposal ${id} sent back: discarded, and its agent was asked on the WEFT bus to propose again on revision ${revision}.`);
   const off = busy || working;
 
+  // A failed read shows its error only, never the last list as if it were current.
+  const requests = queueError ? [] : (queue ?? []);
   const all = items ?? [];
   const latest = latestRevision(all, revision);
   const groups = groupByActor(all);
@@ -109,7 +128,12 @@ export function ActivityDialog({ revision, busy, onReview, onUndo, onShow, onClo
           )}
           <section className="activity-conflicts" aria-label="Conflicts">
             <h4>Conflicts among open proposals</h4>
-            {conflicts === null && <p className="muted">Conflicts could not be checked.</p>}
+            {conflictsError && (
+              <p role="alert" className="explorer-error">
+                Conflicts could not be checked: {conflictsError}
+              </p>
+            )}
+            {conflicts === null && !conflictsError && <p className="muted">Checking open proposals for conflicts…</p>}
             {conflicts && conflicts.length === 0 && <p className="muted">None: no open proposal is stale or touches what another one touches.</p>}
             {conflicts?.map((c, i) => (
               <div key={`${c.kind}-${c.proposals.join("-")}-${i}`} className="activity-conflict" data-conflict={c.kind}>
@@ -138,8 +162,14 @@ export function ActivityDialog({ revision, busy, onReview, onUndo, onShow, onClo
           </section>
           <section className="activity-requests" aria-label="Review requests for you">
             <h4>Review requests for you</h4>
-            {queue.length === 0 && <p className="muted">No agent is waiting for your review.</p>}
-            {queue.map((r) => (
+            {queueError && (
+              <p role="alert" className="explorer-error">
+                Review requests could not be read: {queueError}
+              </p>
+            )}
+            {queue === null && !queueError && <p className="muted">Reading review requests…</p>}
+            {!queueError && queue?.length === 0 && <p className="muted">No agent is waiting for your review.</p>}
+            {requests.map((r) => (
               <div key={r.proposal_id} className="activity-actions" data-review-request={r.proposal_id}>
                 <span>
                   {actorName(r.from)} asks you to review <strong>{r.title || r.proposal_id}</strong>

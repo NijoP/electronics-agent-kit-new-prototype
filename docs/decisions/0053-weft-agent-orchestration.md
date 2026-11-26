@@ -123,8 +123,12 @@
     meet a stale-revision conflict; a session started by hand stays unregistered.
 - **Addendum, conflict and approval UI (2026-11-26):**
   - The engineer is a party on the bus without registering: `weft::engineer_verdict` appends a
-    `review_verdict` from `engineer` to the proposal's author. With `discard`, it first discards
-    the proposal as the person.
+    `review_verdict` from `engineer` to the proposal's author. With `discard`, it then discards
+    the proposal as the person, only once the verdict is appended: a verdict that cannot be sent
+    discards nothing, and a discard that fails after sending is reported as such. Approve with
+    `discard` is refused.
+  - The activity view shows a failed review-queue or conflict read as an error and a loading
+    state before the first conflict check returns, never as an empty list.
   - `weft::engineer_queue` lists the review requests routed to `engineer` that are not answered,
     for proposals that are still open.
   - Desktop IPC: `weft_conflicts`, `weft_engineer_queue` and `weft_engineer_verdict`.

@@ -249,3 +249,31 @@ fn the_engineer_answers_review_requests_and_conflicts_on_the_weft_bus() {
         .any(|i| i.source == "weft" && i.actor == "engineer" && i.kind == "review_verdict"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Review fix (#130): the verdict is sent before anything is discarded. When the WEFT journal
+/// cannot be written, Reject reports that nothing was sent and the proposal stays open (it can
+/// still be applied); an approval that would also discard is refused.
+#[test]
+fn a_verdict_that_cannot_be_sent_discards_nothing() {
+    use eak_desktop::proposal::weft_engineer_verdict;
+    let dir = temp("weft-fail");
+    let s = Session::new(Index::in_memory());
+    let snap = create_project(&s, &dir.display().to_string(), "WEFT fail").expect("create");
+    let pid = proposed(&s, &dir, &snap.project.id);
+
+    let e = weft_engineer_verdict(&s, &pid, "approve", "", true).unwrap_err();
+    assert!(e.contains("cannot discard"), "{e}");
+
+    // A directory where the journal file should be: every append fails, on every platform.
+    let journal = dir.join(eak_harness::weft::DIR).join(eak_harness::weft::JOURNAL);
+    let _ = std::fs::remove_file(&journal);
+    std::fs::create_dir_all(&journal).unwrap();
+    let e = weft_engineer_verdict(&s, &pid, "reject", "no", true).unwrap_err();
+    assert!(e.starts_with("verdict not sent, nothing discarded"), "{e}");
+
+    assert!(
+        proposal_apply(&s, &pid, 0, None).unwrap().response.accepted,
+        "the proposal was not discarded"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

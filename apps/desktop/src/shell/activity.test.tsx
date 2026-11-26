@@ -47,18 +47,29 @@ let calls: string[];
 let verdicts: unknown[];
 let conflicts: unknown[];
 let queue: unknown[];
+// Failure and loading controls: a read that throws, or a conflict check that has not returned yet.
+let queueFails: string | null;
+let conflictsPending: Promise<unknown> | null;
+let verdictFails: string | null;
 beforeEach(() => {
   calls = [];
   verdicts = [];
   conflicts = [];
   queue = [];
+  queueFails = null;
+  conflictsPending = null;
+  verdictFails = null;
   mockIPC((cmd, args) => {
     if (!(IPC_COMMANDS as readonly string[]).includes(cmd)) throw new Error(`unknown ${cmd}`);
     calls.push(cmd);
     if (cmd === "activity_timeline") return items;
-    if (cmd === "weft_conflicts") return conflicts;
-    if (cmd === "weft_engineer_queue") return queue;
+    if (cmd === "weft_conflicts") return conflictsPending ?? conflicts;
+    if (cmd === "weft_engineer_queue") {
+      if (queueFails) throw new Error(queueFails);
+      return queue;
+    }
     if (cmd === "weft_engineer_verdict") {
+      if (verdictFails) throw new Error(verdictFails);
       verdicts.push(args);
       return { sent: {} };
     }
@@ -130,5 +141,44 @@ describe("conflicts and review requests", () => {
     fireEvent.click(btn(req, "Approve"));
     await waitFor(() => expect(onReview).toHaveBeenCalledWith("prop-b"));
     expect(verdicts[2]).toMatchObject({ proposal_id: "prop-b", verdict: "approve", discard: false });
+  });
+});
+
+describe("honest read and send failures (review of #130)", () => {
+  const open = (onReview = vi.fn()) => render(<ActivityDialog revision={1} busy={false} onReview={onReview} onUndo={() => {}} onShow={() => {}} onClose={() => {}} />);
+
+  it("a failed review-queue read shows its error, never 'No agent is waiting'", async () => {
+    queueFails = "weft journal: permission denied";
+    open();
+    await waitFor(() => expect(screen.getByText(/Review requests could not be read: weft journal: permission denied/)).toBeTruthy());
+    expect(screen.queryByText("No agent is waiting for your review.")).toBeNull();
+  });
+
+  it("conflicts show a loading state until the first check returns, then 'none'", async () => {
+    let finish: (v: unknown) => void = () => {};
+    conflictsPending = new Promise((r) => (finish = r));
+    open();
+    await waitFor(() => expect(screen.getByText("Checking open proposals for conflicts…")).toBeTruthy());
+    expect(screen.queryByText(/Conflicts could not be checked/)).toBeNull();
+    finish([]);
+    await waitFor(() => expect(screen.getByText(/None: no open proposal is stale/)).toBeTruthy());
+    expect(screen.queryByText("Checking open proposals for conflicts…")).toBeNull();
+  });
+
+  it("a verdict that could not be sent says so, and Approve then opens nothing", async () => {
+    queue = [{ seq: 4, proposal_id: "prop-b", from: AGENT, body: "", title: "Input stage", base_revision: 1 }];
+    verdictFails = "verdict not sent, nothing discarded: weft journal: permission denied";
+    const onReview = vi.fn();
+    open(onReview);
+    const req = await waitFor(() => {
+      const el = document.querySelector('[data-review-request="prop-b"]');
+      if (!el) throw new Error("no review request yet");
+      return el;
+    });
+    const approve = [...req.querySelectorAll("button")].find((b) => b.textContent === "Approve")!;
+    await waitFor(() => expect(approve.disabled).toBe(false));
+    fireEvent.click(approve);
+    await waitFor(() => expect(screen.getByText("verdict not sent, nothing discarded: weft journal: permission denied")).toBeTruthy());
+    expect(onReview).not.toHaveBeenCalled();
   });
 });

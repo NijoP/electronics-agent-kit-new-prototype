@@ -180,7 +180,8 @@ pub fn weft_engineer_queue(s: &Session) -> Result<Vec<Value>, String> {
 }
 
 /// The engineer's verdict on a proposal, sent to its author on the WEFT bus (approve,
-/// request_changes, reject); with `discard` the proposal is discarded first. Applies nothing.
+/// request_changes, reject); with `discard` the proposal is then discarded, only once the verdict
+/// is sent. Applies nothing.
 pub fn weft_engineer_verdict(
     s: &Session,
     proposal_id: &str,

@@ -432,8 +432,10 @@ pub fn engineer_queue(engine: &Engine) -> Vec<Value> {
 }
 
 /// The engineer answers a proposal on the bus: a review verdict sent to its author. With
-/// `discard` (Reject, Re-propose) the proposal is discarded first, by the person, so it can no
-/// longer be applied. A verdict never applies anything: Apply stays in the review dialog.
+/// `discard` (Reject, Re-propose) the proposal is then discarded, by the person, so it can no
+/// longer be applied. The verdict is sent first: if sending fails, nothing is discarded and the
+/// proposal stays open; if the discard then fails, the error says the verdict was sent. Approve
+/// with discard is refused. A verdict never applies anything: Apply stays in the review dialog.
 pub fn engineer_verdict(
     engine: &Engine,
     proposal_id: &str,
@@ -452,8 +454,8 @@ pub fn engineer_verdict(
             p.id
         ));
     }
-    if discard {
-        proposal::discard(engine, proposal_id, &Actor::human(), None).map_err(|e| e.to_string())?;
+    if discard && verdict == Verdict::Approve {
+        return Err("approve keeps the proposal open for Apply: it cannot discard it".into());
     }
     let message = Message {
         id: eak_core::new_id("msg"),
@@ -474,7 +476,11 @@ pub fn engineer_verdict(
             message: message.clone(),
         }],
     )
-    .map_err(|f| f.1)?;
+    .map_err(|f| format!("verdict not sent, nothing discarded: {}", f.1))?;
+    if discard {
+        proposal::discard(engine, proposal_id, &Actor::human(), None)
+            .map_err(|e| format!("verdict sent to {}, but the discard failed: {e}", message.to))?;
+    }
     Ok(json!({"sent": message, "discarded": discard}))
 }
 
