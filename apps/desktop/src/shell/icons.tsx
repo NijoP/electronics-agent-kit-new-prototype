@@ -23,4 +23,8 @@ export const Icons = {
   pcb: svg(<><rect x="4" y="4" width="16" height="16" rx="2" /><circle cx="8.5" cy="8.5" r="1.3" /><circle cx="15.5" cy="15.5" r="1.3" /><path d="M9.8 8.5H13v7h1.2" /></>),
   viewer3d: svg(<><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" /><path d="M4 7.5l8 4.5 8-4.5M12 12v9" /></>),
   moon: svg(<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" />),
+  // Navigation rail areas (v2 shell): a bench outline, a probe tip on a pin, a prompt in a frame.
+  home: svg(<><path d="M4 11l8-6.5 8 6.5" /><path d="M6 9.5V19.5h12V9.5" /><path d="M10 19.5v-5h4v5" /></>),
+  checks: svg(<><path d="M5 19l5.5-5.5" /><path d="M10.5 13.5l2-2 3 3-2 2z" /><path d="M14 10l4.5-4.5" /><circle cx="19" cy="5" r="1.2" /><path d="M4 7.5l1.5 1.5L8.5 6" /></>),
+  terminal: svg(<><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M7.5 9.5l3 2.5-3 2.5M12.5 15h4" /></>),
 };

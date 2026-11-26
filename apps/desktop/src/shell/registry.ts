@@ -1,9 +1,9 @@
 // Workspace registry: how a feature adds a whole workspace without editing the shell. Two places:
-//  * placement "app" (default): a top-level environment next to "Project / EDA" in the app bar,
-//    such as the Terminal Workspace. It fills the whole main area and stays mounted (hidden) while
-//    another workspace is shown, so switching never kills its processes;
+//  * placement "app" (default): a top-level area of the navigation rail, after the EDA areas, such
+//    as the Terminal Workspace. It fills the main area beside the rail and stays mounted (hidden)
+//    while another workspace is shown, so switching never kills its processes;
 //  * placement "eda": a document of the EDA workspace next to Schematic and PCB, such as the 3D
-//    board viewer: an activity-bar entry that opens it as a document tab (slice C6).
+//    board viewer: a navigation-rail entry that opens it as a document tab (slice C6).
 // A module in `src/workspaces/` named `*.workspace.ts(x)` is imported at start-up (workspaces.ts)
 // and calls `registerWorkspace`. Nothing is registered by default: an entry exists only when a
 // module that opens something real registers it, so there are no placeholder controls.
@@ -40,8 +40,10 @@ export interface WorkspaceEntry {
   /** Stable id, e.g. "terminal" or "viewer3d". Must not collide with built-in ids. */
   id: string;
   label: string;
+  /** Shorter name for the navigation rail (e.g. "Terminal" for "Terminal Workspace"); `label` when absent. */
+  navLabel?: string;
   placement?: "app" | "eda";
-  /** 20 px icon (placement "eda" only: it is the activity-bar button), drawn with `currentColor`. */
+  /** 20 px icon for the navigation rail button, drawn with `currentColor`. */
   icon?: ReactNode;
   /** Position among registered entries (lower first). */
   order?: number;

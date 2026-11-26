@@ -1,11 +1,14 @@
-/* EAK design tokens — the one scale every screen draws from (docs/design-system.md).
-   Dark is the default; light overrides the same names. One accent (EAK amber); red/amber/green/
-   blue are status colours, never decoration. A new size, gap or colour is a change here, not a
+/* EAK design tokens — the one scale every screen draws from (docs/design-system.md), ported from
+   the accepted product vision (docs/product/README.md §1). Dark is the default; light overrides
+   the same names. CMF: near-black graphite and white carry the identity; TUSK orange is the one
+   restrained accent (focus, the primary action, current progress) and never fills large areas or
+   stands in for copper. Physical materials (copper, ENIG, soldermask, silk, board edge) keep their
+   own tokens. Status colours are only for status. A new size, gap or colour is a change here, not a
    literal in a component (design/tokens.test.ts walks the styles and fails on raw colours). */
 :root {
   color-scheme: dark;
 
-  /* Spacing: 8 px grid, half and quarter steps for dense engineering rows. */
+  /* Spacing: 4 px base, steps 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 (2 px only for dense rows). */
   --s-quarter: 2px;
   --s-half: 4px;
   --s-1: 8px;
@@ -13,31 +16,38 @@
   --s-2: 16px;
   --s-3: 24px;
   --s-4: 32px;
+  --s-6: 48px;
+  --s-8: 64px;
 
-  /* Corners: 4 rows/controls, 8 popovers/dialogs/cards, pill for status chips. */
-  --r-1: 4px;
+  /* Corners: 6 controls and rows, 8 popovers and cards, 12 dialogs and overlays, pill for chips. */
+  --r-1: 6px;
   --r-2: 8px;
+  --r-3: 12px;
   --r-pill: 999px;
   --border: 1px;
 
-  /* Type scale. 13 px is body; 11 px only for captions/badges in dense lists. */
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Type: system UI stack for the interface, system monospace for designators, nets and values;
+     tabular numbers everywhere. Scale 11 / 12 / 13 (body) / 15 / 20 / 28 (about 1.33). Uppercase
+     only for 11 px labels, with --tracking-caps. */
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   /* Schematic symbol text: the bundled JetBrains Mono NL (OFL-1.1), so pin names measure the
      same on every platform (slice B2; licence in third_party/licenses/JetBrainsMono). */
   --font-symbol: "EAK Symbol", ui-monospace, monospace;
-  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
   --fs-2xs: 10px;
   --fs-xs: 11px;
   --fs-sm: 12px;
   --fs-md: 13px;
   --fs-lg: 15px;
-  --fs-xl: 18px;
-  --fs-2xl: 22px;
+  --fs-xl: 20px;
+  --fs-2xl: 28px;
   --lh-tight: 1.25;
-  --lh: 1.45;
+  --lh: 1.5;
+  --fw-regular: 400;
   --fw-medium: 500;
   --fw-strong: 600;
-  --tracking-caps: 0.06em;
+  --fw-light: 300;
+  --tracking-caps: 0.08em;
 
   /* Control heights: sm for toolbars and list rows, md for buttons/fields, lg for a screen's main action. */
   --h-row: 22px;
@@ -47,12 +57,18 @@
   --h-bar: 34px;
   --h-xl: 40px;
   --h-tab: 42px;
+  /* Shell layout (vision §1 Space): the navigation rail, the top bar and the status bar. */
+  --w-rail: 56px;
+  --h-topbar: 46px;
+  --h-status: 26px;
 
-  /* Motion. */
-  --t-fast: 120ms;
-  --t-med: 160ms;
-  --t-slow: 200ms;
-  --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* Motion: 140 ms for a change of state, 240 ms for panels; camera moves use the slower curve.
+     One thing moves at a time, and only to show a change of state or place. */
+  --t-fast: 140ms;
+  --t-med: 180ms;
+  --t-slow: 240ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.1, 1);
+  --ease-camera: cubic-bezier(0.65, 0, 0.15, 1);
 
   /* Stacking. */
   --z-raised: 2;
@@ -61,35 +77,47 @@
   --z-popover: 20;
   --z-modal: 30;
 
-  /* Surfaces: canvas < app < panel < raised (fields, popovers); hover/active step up. */
-  --bg-canvas: #0d0f11;
-  --bg-app: #14161a;
-  --bg-panel: #181b1f;
-  --bg-raised: #1f2328;
-  --bg-hover: #262b31;
-  --bg-active: #2d333a;
-  --line: #262a30;
-  --line-strong: #363c44;
-  --fg: #e6e8eb;
-  --fg-dim: #9aa2ad;
-  --fg-faint: #6b727c;
-  --accent: #e8c35a;
-  --accent-fg: #1a1505;
-  --accent-soft: rgba(232, 195, 90, 0.14);
+  /* Surfaces (anodised graphite, matte). Elevation 0 canvas < 1 app/panels < 2 raised (fields,
+     selected rows) < 3 overlay (palette, dialogs: raised tone plus --shadow). Separation comes from
+     tone steps; --hairline only where two equal tones meet. */
+  --bg-deep: #0c0d0f;
+  --bg-canvas: #0c0d0f;
+  --bg-app: #121316;
+  --bg-panel: #17191c;
+  --bg-raised: #1e2024;
+  --bg-hover: #25282d;
+  --bg-active: #2e3237;
+  --hairline: rgba(255, 255, 255, 0.05);
+  --line: #24272b;
+  --line-strong: #34383e;
+  --fg: #f2f2f0;
+  --fg-dim: #a9a9a6;
+  --fg-faint: #6e6e6b;
+  /* Brand accent: TUSK orange. Focus, the primary action and current progress only. */
+  --accent: #ee5f1b;
+  --accent-hover: #f27a40;
+  --accent-fg: #120804;
+  --accent-soft: rgba(238, 95, 27, 0.13);
+  --accent-line: rgba(238, 95, 27, 0.55);
   --on-accent-edge: #ffffff;
-  --overlay: rgba(0, 0, 0, 0.5);
-  --shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  /* AI agent activity: signal cyan, never used for status. */
+  --ai: #86c5e0;
+  --ai-soft: rgba(134, 197, 224, 0.13);
+  --overlay: rgba(6, 7, 8, 0.55);
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
 
   /* Focus: a hairline in the accent plus a soft halo, on every focusable control. */
   --focus-ring: 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-soft);
 
-  /* Status. err/warn/ok/info are the only signal colours. */
-  --err: #ff8a80;
-  --warn: #e8c35a;
-  --ok: #8fd694;
+  /* Status: pass (phosphor), warning (amber), fail (coral), unknown (slate), info. Only for status;
+     unknown is never shown as passing. */
+  --err: #ec7c6b;
+  --warn: #e2b35c;
+  --ok: #7fcb9b;
   --info: #79b8ff;
-  --neutral: #6b727c;
+  --neutral: #8a929e;
+  --unknown: #8a929e;
   --err-soft: color-mix(in srgb, var(--err) 18%, transparent);
   --warn-soft: color-mix(in srgb, var(--warn) 18%, transparent);
   --ok-soft: color-mix(in srgb, var(--ok) 16%, transparent);
@@ -110,6 +138,12 @@
   /* Terminal surface: darker than the canvas so output reads as process output. */
   --term-bg: #0a0b0d;
 
+  /* Physical materials (vision CMF): real colours, never the brand accent. */
+  --mat-copper: #c98543;
+  --mat-enig: #d4b36a;
+  --mat-mask: #111614;
+  --mat-silk: #e9e6de;
+
   /* Engineering visualisation: schematic. */
   --c-sheet: #12151a;
   --c-sheet-line: #363c44;
@@ -119,12 +153,14 @@
   --c-text: #c9d1d9;
   --c-sym-fill: #1e2a36;
   --c-sym-line: #9cc3e6;
-  --c-sym-sel-fill: #3a3218;
+  --c-sym-sel-fill: #3a2216;
   --c-grid-minor: color-mix(in srgb, var(--fg) 9%, transparent);
   --c-grid-major: color-mix(in srgb, var(--fg) 22%, transparent);
   /* Engineering visualisation: PCB. Per-layer copper defaults live in src/layers.ts because the
      colour inputs and the 3D viewer need concrete hex values; top/bottom there mirror these. */
   --c-board: #10301f;
+  /* Board edge (Edge.Cuts) is a material line, not focus: it keeps its own colour. */
+  --c-edge: #e8c35a;
   --c-copper-top: #c0392b;
   --c-copper-bottom: #2e86de;
   --c-pad: #c8a24a;
@@ -146,30 +182,42 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg-canvas: #fbfbfc;
-  --bg-app: #eceef1;
-  --bg-panel: #f4f5f7;
+  --bg-deep: #e4e4e1;
+  --bg-canvas: #fbfbfa;
+  --bg-app: #eeeeec;
+  --bg-panel: #f5f5f3;
   --bg-raised: #ffffff;
-  --bg-hover: #e4e7eb;
-  --bg-active: #d9dde3;
-  --line: #d8dce2;
-  --line-strong: #bcc2cb;
-  --fg: #1d2127;
-  --fg-dim: #566070;
-  --fg-faint: #8a93a0;
-  --accent: #a87400;
+  --bg-hover: #e6e6e3;
+  --bg-active: #dcdcd8;
+  --hairline: rgba(0, 0, 0, 0.06);
+  --line: #dadad6;
+  --line-strong: #c0c0bb;
+  --fg: #18191b;
+  --fg-dim: #55565a;
+  --fg-faint: #8a8a86;
+  --accent: #c2470c;
+  --accent-hover: #a83d0a;
   --accent-fg: #ffffff;
-  --accent-soft: rgba(168, 116, 0, 0.12);
+  --accent-soft: rgba(194, 71, 12, 0.12);
+  --accent-line: rgba(194, 71, 12, 0.5);
   --on-accent-edge: #ffffff;
-  --overlay: rgba(20, 24, 30, 0.35);
-  --shadow: 0 16px 48px rgba(20, 24, 30, 0.22);
-  --shadow-sm: 0 4px 16px rgba(20, 24, 30, 0.14);
-  --err: #c62828;
+  --ai: #2f7fa3;
+  --ai-soft: rgba(47, 127, 163, 0.12);
+  --overlay: rgba(20, 22, 26, 0.35);
+  --shadow: 0 24px 64px rgba(20, 22, 26, 0.22), 0 2px 8px rgba(20, 22, 26, 0.12);
+  --shadow-sm: 0 4px 16px rgba(20, 22, 26, 0.14);
+  --err: #c0392b;
   --warn: #9a6a00;
-  --ok: #2e7d32;
+  --ok: #2e7d4f;
   --info: #1f6fc2;
-  --neutral: #8a93a0;
+  --neutral: #737a85;
+  --unknown: #737a85;
   --term-bg: #101215;
+
+  --mat-copper: #b06f2e;
+  --mat-enig: #b8963f;
+  --mat-mask: #1c2420;
+  --mat-silk: #6b675d;
 
   --c-sheet: #ffffff;
   --c-sheet-line: #bcc2cb;
@@ -178,8 +226,9 @@
   --c-text: #1d2127;
   --c-sym-fill: #e8f1fa;
   --c-sym-line: #1f5a93;
-  --c-sym-sel-fill: #fbefc7;
+  --c-sym-sel-fill: #fbe2d3;
   --c-board: #cfe8d8;
+  --c-edge: #a87400;
   --c-copper-top: #c0392b;
   --c-copper-bottom: #1f6fc2;
   --c-pad: #a67c14;

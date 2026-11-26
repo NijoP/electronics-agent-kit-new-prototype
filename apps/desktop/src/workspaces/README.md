@@ -5,11 +5,12 @@ registers a workspace through `../shell/registry.ts`; nobody edits the shell.
 
 Two placements:
 
-* **`placement: "app"` (default)** — a top-level environment in the app bar next to
-  `Project / EDA` (the Terminal Workspace). It fills the whole main area. Give it `onNew` and the
-  app bar shows the `+` button (and `Ctrl/Cmd+Shift+T`) that creates a new space in it.
+* **`placement: "app"` (default)** — a top-level area of the navigation rail, after the EDA
+  areas (the Terminal Workspace; `navLabel` gives the rail a shorter name and `icon` its button).
+  It fills the main area beside the rail. Give it `onNew` and the top bar shows the `+` button (and
+  `Ctrl/Cmd+Shift+T`) that creates a new space in it.
 * **`placement: "eda"`** — an independent view inside the EDA workspace next to Schematic and PCB
-  (the 3D board viewer). It gets an activity-bar button (`icon`) and fills the editor area.
+  (the 3D board viewer). It gets a navigation-rail button (`icon`) and fills the editor area.
 
 ```tsx
 import { registerWorkspace } from "../shell/registry";
