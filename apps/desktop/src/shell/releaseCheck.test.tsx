@@ -150,4 +150,17 @@ describe("E7 release check dialog", () => {
     expect(dlg.textContent).toContain("internally verified release candidate");
     expect(dlg.textContent).not.toMatch(READY);
   });
+
+  it("every gate passing is still DRAFT when the engine blocks on an unverified footprint (ADR-0054)", async () => {
+    const footprint = "footprint R_0805 of R1,R2 is not verified (3 of 9 rules do not certify): FP-002 is Unknown: no land-pattern table";
+    reply = () => ({ ...allPass, blocking: [footprint], status: "DRAFT" });
+    render(<ReleaseCheckDialog revision={4} busy={false} onClose={() => {}} />);
+    const dlg = await screen.findByRole("dialog", { name: "Release check" });
+    const blocking = await within(dlg).findByRole("list", { name: "Blocking reasons" });
+    expect(blocking.textContent).toContain(footprint);
+    within(dlg).getByText("All 2 required gates pass, but 1 other blocking reason(s) keep revision 4 DRAFT.");
+    expect(within(dlg).getByRole("region", { name: "Release status" }).textContent).toMatch(/DRAFT/);
+    expect(dlg.textContent).not.toContain("internally verified release candidate");
+    expect(dlg.textContent).not.toMatch(READY);
+  });
 });
