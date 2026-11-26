@@ -137,3 +137,131 @@ fn packaging_refuses_a_package_from_another_revision() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+mod footprint_inputs {
+    use eak_core::datasheet::{DatasheetSource, DatasheetValue, Extraction, LimitClass, PartScope};
+    use eak_core::geom::mm;
+    use eak_core::{PadShape, Point, Project};
+    use eak_manufacturing::{footprint_blockers, footprint_blockers_with, FootprintInputs};
+    use eak_validation::footprint::{FabLimits, LandPatternSpec, PadSpec};
+
+    const LDO: &str = "LDO_SOT-23-5";
+
+    fn source() -> DatasheetSource {
+        DatasheetSource {
+            manufacturer: "Example".into(),
+            document_sha256: "0".repeat(64),
+            document_revision: Some("Rev. A".into()),
+            page: Some(12),
+            section: Some("Recommended land pattern".into()),
+            table: None,
+        }
+    }
+
+    fn val(parameter: &str, value: f64) -> DatasheetValue {
+        DatasheetValue {
+            parameter: parameter.into(),
+            class: LimitClass::Characteristic,
+            statistic: None,
+            value,
+            unit: "mm".into(),
+            conditions: String::new(),
+            scope: PartScope::default(),
+            source: source(),
+            extraction: Extraction::HumanVerified {
+                reviewer: "A. Reviewer".into(),
+                at_unix_s: 1_790_000_000,
+            },
+        }
+    }
+
+    /// The reviewed land pattern the builtin SOT-23-5 was drawn from (as in ADR-0052's tests).
+    fn spec() -> LandPatternSpec {
+        let pads = [
+            ("1", -0.95, -1.1),
+            ("2", 0.0, -1.1),
+            ("3", 0.95, -1.1),
+            ("4", 0.95, 1.1),
+            ("5", -0.95, 1.1),
+        ];
+        LandPatternSpec {
+            source: source(),
+            entered_by: "A. Reviewer".into(),
+            pads: pads
+                .iter()
+                .map(|(n, x, y)| PadSpec {
+                    number: (*n).into(),
+                    x: val("x", *x),
+                    y: val("y", *y),
+                    size_x: val("pad width", 0.6),
+                    size_y: val("pad length", 1.1),
+                    shape: Some(PadShape::Rect),
+                    drill: None,
+                    lead: None,
+                })
+                .collect(),
+            pitch: Some(val("pitch", 0.95)),
+            body: Some((val("body length", 2.9), val("body width", 1.6))),
+            height_max: Some(val("height max", 1.45)),
+            pin1: Some(Point::mm(-0.95, -1.1)),
+        }
+    }
+
+    fn limits() -> FabLimits {
+        FabLimits {
+            min_clearance: mm(0.15),
+            min_mask_web: mm(0.1),
+            mask_expansion: mm(0.05),
+            min_annular_ring: mm(0.15),
+            drill_allowance: mm(0.2),
+            courtyard_excess: Some(mm(0.25)),
+        }
+    }
+
+    /// A project whose schematic uses only the SOT-23-5 regulator (one symbol of the reference
+    /// design re-pointed at it; the gate reads only the symbol's definition and reference).
+    fn ldo_project() -> Project {
+        let mut e = eak_runtime::Engine::in_memory(Project::new("ldo"));
+        eak_runtime::fixtures::build_schematic(&mut e).expect("schematic");
+        let mut p = e.project().clone();
+        let def = eak_core::builtin::components()
+            .into_iter()
+            .find(|c| c.id == LDO)
+            .expect("builtin SOT-23-5");
+        p.library.insert(LDO.into(), def);
+        let keep = p
+            .schematic
+            .symbols
+            .keys()
+            .next()
+            .cloned()
+            .expect("a symbol");
+        p.schematic.symbols.retain(|k, _| *k == keep);
+        for s in p.schematic.symbols.values_mut() {
+            s.component_id = LDO.into();
+            s.refdes = "U1".into();
+        }
+        p
+    }
+
+    #[test]
+    fn a_reviewed_land_pattern_on_record_lifts_the_footprint_blocker() {
+        let p = ldo_project();
+        let without = footprint_blockers(&p);
+        assert_eq!(without.len(), 1, "{without:?}");
+        assert!(without[0].contains("of U1 is not verified"), "{without:?}");
+        let mut inputs = FootprintInputs {
+            limits: Some(limits()),
+            ..Default::default()
+        };
+        inputs.specs.insert(LDO.into(), spec());
+        assert!(footprint_blockers_with(&p, &inputs).is_empty());
+        // A table that no longer matches the footprint blocks again.
+        let mut wrong = spec();
+        wrong.pads[0].size_x = val("pad width", 0.9);
+        inputs.specs.insert(LDO.into(), wrong);
+        let blocked = footprint_blockers_with(&p, &inputs);
+        assert_eq!(blocked.len(), 1, "{blocked:?}");
+        assert!(blocked[0].contains("FP-002"), "{blocked:?}");
+    }
+}

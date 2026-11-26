@@ -158,6 +158,22 @@ pub fn compile(p: &Project, reports: &[&Report], out_dir: &Path) -> Result<Manif
     files_and_manifest(p, input, gates, blocking, out_dir)
 }
 
+/// [`compile`] with the land-pattern tables and fabrication limits on record (ADR-0054).
+pub fn compile_with_footprints(
+    p: &Project,
+    reports: &[&Report],
+    footprints: &FootprintInputs,
+    out_dir: &Path,
+) -> Result<Manifest, String> {
+    std::fs::create_dir_all(out_dir).map_err(|e| e.to_string())?;
+    let input = project_hash(p);
+    if p.pcb.board.outline.len() < 3 {
+        return Err("cannot compile manufacturing outputs without a board outline".into());
+    }
+    let (gates, blocking, _) = release_gates_with_footprints(p, reports, footprints);
+    files_and_manifest(p, input, gates, blocking, out_dir)
+}
+
 /// The release gate of a package for this revision: the supplied ERC, DRC, MECH and DFM
 /// reports (each must be bound to this revision and input hash and have no errors), the
 /// mechanical-fit unknowns and the fail-closed engineering gates. Returns the per-report gate
@@ -172,6 +188,24 @@ pub fn release_gates(p: &Project, reports: &[&Report]) -> (Vec<GateResult>, Vec<
 pub fn release_gates_with_report(
     p: &Project,
     reports: &[&Report],
+) -> (Vec<GateResult>, Vec<String>, eak_validation::GateReport) {
+    release_gates_with_footprints(p, reports, &FootprintInputs::default())
+}
+
+/// Land-pattern tables (by component definition id) and fabrication limits that a caller has on
+/// record, for footprint verification at the release gate (ADR-0054). Library data, not EAK-IR.
+#[derive(Debug, Clone, Default)]
+pub struct FootprintInputs {
+    pub specs: BTreeMap<String, eak_validation::footprint::LandPatternSpec>,
+    pub limits: Option<eak_validation::footprint::FabLimits>,
+}
+
+/// [`release_gates_with_report`] with the land-pattern tables and fabrication limits on record,
+/// so a part whose footprint matches its reviewed datasheet table no longer blocks.
+pub fn release_gates_with_footprints(
+    p: &Project,
+    reports: &[&Report],
+    footprints: &FootprintInputs,
 ) -> (Vec<GateResult>, Vec<String>, eak_validation::GateReport) {
     let input = project_hash(p);
     let mut blocking = vec![];
@@ -248,7 +282,7 @@ pub fn release_gates_with_report(
         }
     }
     // ADR-0054: a part whose footprint does not verify blocks release (recomputed here).
-    blocking.extend(footprint_blockers(p));
+    blocking.extend(footprint_blockers_with(p, footprints));
     // Fail-closed engineering gates, evaluated independently on this revision: every required
     // gate must be PASS (FAIL and UNKNOWN both block). Fabricator capability is covered by the
     // supplied, revision-bound DFM report above, so that gate is skipped here.
@@ -275,6 +309,11 @@ pub fn release_gates_with_report(
 /// land-pattern table or fabrication limits on record the dimension rules are UNKNOWN, and
 /// UNKNOWN is never a pass: such a part blocks, naming the first rule that does not certify.
 pub fn footprint_blockers(p: &Project) -> Vec<String> {
+    footprint_blockers_with(p, &FootprintInputs::default())
+}
+
+/// [`footprint_blockers`] with the land-pattern tables and fabrication limits on record.
+pub fn footprint_blockers_with(p: &Project, inputs: &FootprintInputs) -> Vec<String> {
     let mut refs: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for s in p.schematic.symbols.values() {
         refs.entry(s.component_id.as_str())
@@ -293,8 +332,8 @@ pub fn footprint_blockers(p: &Project) -> Vec<String> {
         };
         let report = eak_validation::footprint::verify(
             def,
-            None,
-            None,
+            inputs.specs.get(id),
+            inputs.limits.as_ref(),
             eak_validation::footprint::DEFAULT_TOLERANCE,
         );
         let not = report.blocking();

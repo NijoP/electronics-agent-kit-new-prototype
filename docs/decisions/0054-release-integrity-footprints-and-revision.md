@@ -24,6 +24,9 @@
   - `verify_package_for(dir, p)` checks a package on disk against the project: same project id,
     revision and EAK-IR hash, plus every per-file hash and syntax check of `verify_package`.
     `fabricator::prepare_with` refuses (returns an error, writes no bundle) when it finds a problem.
-- **Consequences:** No design reaches `INTERNALLY_VERIFIED_RELEASE_CANDIDATE` until land-pattern
-  specs and fabrication limits are passed to the gate (follow-up: pass them from `eak-library` via
-  the desktop/harness callers). The status is never worded "manufacturing-ready" (tested).
+  - `FootprintInputs` (land-pattern tables by definition id, fabrication limits) reach the gate
+    through `release_gates_with_footprints` and `compile_with_footprints`; a part whose footprint
+    matches its reviewed table no longer blocks, and one that no longer matches blocks again (tested).
+- **Consequences:** No design reaches `INTERNALLY_VERIFIED_RELEASE_CANDIDATE` until its callers pass
+  the land-pattern tables and fabrication limits on record (follow-up: the desktop and harness
+  callers read them from `eak-library` once it stores them). The status is never worded "manufacturing-ready" (tested).
