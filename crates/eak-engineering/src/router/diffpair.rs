@@ -9,10 +9,9 @@
 //! and via is then checked with exact geometry against all other copper and against the
 //! partner (the DRC-002 rule for each pair of nets); nothing that fails is returned.
 //!
-//! Length matching: when the pair declares `max_skew` and the members differ by more, the
-//! shorter member gets a serpentine (rectangular bumps on its outer side, away from the
-//! partner) that adds exactly the difference, again checked exactly; larger bumps are tried
-//! first. Width and gap come from the rule, or the gap is derived from the target impedance with
+//! The two ends break out perpendicular to their pad axis, so each member reaches its own pad
+//! without running over its partner's. Length matching is not done yet: the report gives the
+//! skew and whether it is within `max_skew`. Width and gap come from the rule, or the gap is derived from the target impedance with
 //! `impedance` (IPC-2141A); a gap that is neither declared nor derivable means the pair is not
 //! routed coupled, and the reason names the missing input.
 
@@ -176,20 +175,66 @@ fn dilate(m: &[bool], cols: usize, rows: usize, k: usize) -> Vec<bool> {
     v
 }
 
-/// Router grid for the pair's centreline: both members' copper counts as `idp`, every other
-/// net's blocked cells are grown by `k` cells, except within `keep` of the two ends (where the
-/// members fan out to their pads, which the exact check judges).
+/// Router grid for the pair's centreline: both members' copper counts as `idp` (cells their
+/// pads made shared become the pair's again unless other copper, the board edge or a keep-out
+/// also covers them), every other net's blocked cells are grown by `k` cells, except within
+/// `keep` of the two ends (where the members fan out to their pads, which the exact check
+/// judges).
 fn pair_grid(
     env: &Env,
     placed: &[Placed],
+    rule: &Coupled,
     (idp, idn): (u32, u32),
     k: usize,
     ends: [Point; 2],
     keep: f64,
 ) -> Grid {
-    let refs: Vec<&Placed> = placed.iter().collect();
-    let hidden = moved_ids(placed.iter());
-    let mut g = fresh_grid(env, &refs, &hidden, |id| if id == idn { idp } else { id });
+    let mut g = grid_with(env, placed.iter());
+    let stack = &env.p.pcb.board.stackup;
+    let member = |net: &str| net == rule.positive || net == rule.negative;
+    let near = |s: &Shape, grow: f64, pt: Point| {
+        Shape {
+            core: s.core.clone(),
+            radius: s.radius + grow,
+        }
+        .contains(pt)
+    };
+    for it in env.geo.copper.iter().filter(|i| member(&i.net)) {
+        let Some(l) = stack.index_of(it.layer) else {
+            continue;
+        };
+        let inflate = env.inflate[l];
+        for i in g.cells(&it.shape, inflate) {
+            if g.owner[l][i] != MULTI || env.outside[i] {
+                continue;
+            }
+            let pt = g.center(i % g.cols, i / g.cols);
+            let foreign = env
+                .geo
+                .copper
+                .iter()
+                .any(|o| o.layer == it.layer && !member(&o.net) && near(&o.shape, inflate, pt))
+                || placed.iter().any(|pl| {
+                    !member(&pl.net)
+                        && pl
+                            .shapes
+                            .iter()
+                            .any(|(sl, s)| *sl == l && near(s, inflate, pt))
+                })
+                || env
+                    .track_keepouts
+                    .iter()
+                    .any(|ko| ko.layers[l] && near(&ko.shape, inflate, pt));
+            if !foreign {
+                g.owner[l][i] = idp;
+            }
+        }
+    }
+    for plane in g.owner.iter_mut() {
+        for o in plane.iter_mut().filter(|o| **o == idn) {
+            *o = idp;
+        }
+    }
     let near_end: Vec<bool> = (0..g.cols * g.rows)
         .map(|i| {
             let p = g.center(i % g.cols, i / g.cols);
@@ -214,8 +259,6 @@ fn pair_grid(
 struct Members {
     segs: [Vec<Seg>; 2],
     vias: [Vec<Point>; 2],
-    /// Segments that run coupled (not fan-outs or via spreads), by index into `segs`.
-    tunable: [Vec<usize>; 2],
     /// Side of the centreline each member is on (+1 left of travel, -1 right).
     side: [f64; 2],
 }
@@ -243,7 +286,6 @@ fn members(
     let mut out = Members {
         segs: [vec![], vec![]],
         vias: [vec![], vec![]],
-        tunable: [vec![], vec![]],
         side: [side_p, -side_p],
     };
     let push = |segs: &mut Vec<Seg>, l: usize, a: Point, b: Point| {
@@ -260,10 +302,7 @@ fn members(
             // Fan-out from the pad, or from the via on this layer, to the first offset point.
             push(&mut out.segs[m], *l, from, off[0]);
             for w in off.windows(2) {
-                if w[0] != w[1] {
-                    out.tunable[m].push(out.segs[m].len());
-                    out.segs[m].push((*l, w[0], w[1]));
-                }
+                push(&mut out.segs[m], *l, w[0], w[1]);
             }
             let last = *off.last().expect("a run has two points");
             if k + 1 < runs.len() {
@@ -284,23 +323,25 @@ fn length(segs: &[Seg]) -> f64 {
     segs.iter().map(|(_, a, b)| a.dist(*b)).sum()
 }
 
-/// Exact check of both members against all other copper and against each other.
+/// Exact check of both members against everything the router checks (`violation`: other-net
+/// copper, board edge, holes, keep-outs) and against each other.
 fn check(
     env: &Env,
     rule: &Coupled,
-    shapes: [&[(usize, Shape)]; 2],
+    shapes: &[Vec<(usize, Shape)>; 2],
+    vias: &[Vec<Point>; 2],
     placed: &[Placed],
 ) -> Result<(), String> {
     let c = &env.p.constraints;
     for (m, net) in [&rule.positive, &rule.negative].into_iter().enumerate() {
-        let own = env.specs[net].clearance as f64;
-        if let Some(v) = violation(env, shapes[m], net, own, placed) {
+        let drill = env.specs[net].via_drill;
+        if let Some(v) = violation(env, &shapes[m], &vias[m], drill, net, placed) {
             return Err(format!("CLEARANCE_CONFLICT: {net}: {v}"));
         }
     }
-    for (lp, sp) in shapes[0] {
-        for (ln, sn) in shapes[1] {
-            let need = clearance::required(c, &rule.positive, &rule.negative, layer_of(*lp));
+    for (lp, sp) in &shapes[0] {
+        for (ln, sn) in &shapes[1] {
+            let need = clearance::required(c, &rule.positive, &rule.negative, env.layers[*lp]);
             if lp == ln && distance(sp, sn) < need - 1.0 {
                 return Err(format!(
                     "CLEARANCE_CONFLICT: the members would come closer than the {:.3} mm clearance between them",
@@ -312,74 +353,14 @@ fn check(
     Ok(())
 }
 
-/// Rectangular bumps on the `tunable` segments (longest first) on the `outer` side, adding
-/// `extra` nm of length, at most `amp` nm high and `pitch` nm wide, with `pitch` between
-/// bumps and at both ends. `None` when they do not fit.
-fn serpentine(
-    segs: &[Seg],
-    tunable: &[usize],
-    outer: f64,
-    extra: f64,
-    amp: f64,
-    pitch: f64,
-) -> Option<Vec<Seg>> {
-    let len = |i: usize| segs[i].1.dist(segs[i].2);
-    let mut order: Vec<usize> = tunable.to_vec();
-    order.sort_by(|&a, &b| len(b).total_cmp(&len(a)));
-    let mut rest = extra;
-    // Per segment: (start along the segment, height) of each bump.
-    let mut bumps: BTreeMap<usize, Vec<(f64, f64)>> = BTreeMap::new();
-    for i in order {
-        let fit = ((len(i) - pitch) / (2.0 * pitch)).floor().max(0.0) as usize;
-        for j in 0..fit {
-            if rest < 1.0 {
-                break;
-            }
-            let h = amp.min(rest / 2.0);
-            bumps
-                .entry(i)
-                .or_default()
-                .push((pitch + 2.0 * pitch * j as f64, h));
-            rest -= 2.0 * h;
-        }
-    }
-    if rest >= 1.0 {
-        return None;
-    }
-    let mut out = Vec::with_capacity(segs.len() + 4 * bumps.values().map(Vec::len).sum::<usize>());
-    for (i, &(l, a, b)) in segs.iter().enumerate() {
-        let Some(list) = bumps.get(&i) else {
-            out.push((l, a, b));
-            continue;
-        };
-        let d = unit(a, b);
-        let n = left(d);
-        let n = (n.0 * outer, n.1 * outer);
-        let mut cur = a;
-        for &(s0, h) in list {
-            let (p0, p1) = (shift(a, d, s0), shift(a, d, s0 + pitch));
-            let (u0, u1) = (shift(p0, n, h), shift(p1, n, h));
-            for (x, y) in [(cur, p0), (p0, u0), (u0, u1), (u1, p1)] {
-                if x != y {
-                    out.push((l, x, y));
-                }
-            }
-            cur = p1;
-        }
-        if cur != b {
-            out.push((l, cur, b));
-        }
-    }
-    Some(out)
-}
-
-/// What a coupled attempt produced.
+/// The routed pair: one placed route per member (positive first) and what was done.
 pub(super) struct PairRoute {
     pub placed: [Placed; 2],
     pub note: String,
 }
 
-/// Route the pair connections `cp` (positive, index `ip`) and `cn` (negative, `inn`) coupled.
+/// Route a declared pair's matched connections (`cp` of the positive net, `cn` of the negative)
+/// coupled, or say why not.
 pub(super) fn attempt(
     env: &Env,
     rule: &Coupled,
@@ -401,16 +382,17 @@ pub(super) fn attempt(
     let w = rule.width as f64;
     let o = (rule.gap as f64 + w) / 2.0;
     let pitch = env.opts.pitch as f64;
-    let spec = &env.specs[&cp.net];
+    let specs = [&env.specs[&cp.net], &env.specs[&cn.net]];
     let c_pair = clearance::required(&env.p.constraints, &cp.net, &cn.net, CopperLayer::Top);
     // Vias side by side need their own clearance, so the members spread at a layer change.
-    let via_half = o.max((spec.via_diameter as f64 + c_pair) / 2.0 + 1_000.0);
+    let via_d = specs[0].via_diameter.max(specs[1].via_diameter) as f64;
+    let via_half = o.max((via_d + c_pair) / 2.0 + 1_000.0);
     // Break out of each end perpendicular to its pad axis, towards the other end: the members
     // then leave their pads side by side instead of one running over its partner's pad.
     let reach = 2.0 * o + 2.0 * pitch;
     let keep = cp.a.dist(ca).max(cp.b.dist(cb)) + o + reach + 2.0 * pitch;
     let k = (o / pitch).ceil() as usize;
-    let grid = pair_grid(env, placed, (idp, idn), k, [ca, cb], keep);
+    let grid = pair_grid(env, placed, rule, (idp, idn), k, [ca, cb], keep);
     let breakout = |m: Point, pad: Point, other: Point| -> Point {
         let n = left(unit(m, pad));
         let towards = (other.x - m.x) as f64 * n.0 + (other.y - m.y) as f64 * n.1;
@@ -420,18 +402,26 @@ pub(super) fn attempt(
     };
     let (ba, bb) = (breakout(ca, cp.a, cb), breakout(cb, cp.b, ca));
     let common = |x: Point, y: Point| -> Vec<usize> {
-        let ly = pad_layers(env.copper, y, &cn.net);
-        pad_layers(env.copper, x, &cp.net)
+        let ly = pad_layers(env, y, &cn.net);
+        pad_layers(env, x, &cp.net)
             .into_iter()
             .filter(|l| ly.contains(l))
             .collect()
     };
     let (la, lb) = (common(cp.a, na), common(cp.b, nb));
     if la.is_empty() || lb.is_empty() {
-        return Err("the members' pads share no layer at one end".into());
+        return Err("the members' pads share no routable layer at one end".into());
     }
-    let path = astar(&grid, idp, ba, &la, bb, &lb, env.opts, costs)
-        .ok_or("NO_LEGAL_PATH: no corridor wide enough for both members")?;
+    let path = astar(
+        &grid,
+        idp,
+        (ba, &la),
+        (bb, &lb),
+        env.routable,
+        env.opts,
+        costs,
+    )
+    .ok_or("NO_LEGAL_PATH: no corridor wide enough for both members")?;
     let (mut centre, cvias) = path_to_segments(&grid, &path, ba, bb);
     let (l0, l1) = (path[0].0, path[path.len() - 1].0);
     centre.insert(0, (l0, ca, ba));
@@ -444,7 +434,7 @@ pub(super) fn attempt(
     let n0 = left(unit(centre[0].1, centre[0].2));
     let toward = (cp.a.x - ca.x) as f64 * n0.0 + (cp.a.y - ca.y) as f64 * n0.1;
     let side_p = if toward >= 0.0 { 1.0 } else { -1.0 };
-    let mut m = members(
+    let m = members(
         &centre,
         &cvias,
         [[cp.a, cp.b], [na, nb]],
@@ -452,85 +442,34 @@ pub(super) fn attempt(
         via_half,
         side_p,
     )?;
-    let shapes =
-        |m: &Members, k: usize| shapes_for(&m.segs[k], &m.vias[k], rule.width, spec.via_diameter);
-    check(
-        env,
-        rule,
-        [shapes(&m, 0).as_slice(), shapes(&m, 1).as_slice()],
-        placed,
-    )?;
+    let nl = env.layers.len();
+    let widths = vec![rule.width; nl];
+    let shapes = |k: usize| shapes_for(&m.segs[k], &m.vias[k], &widths, specs[k].via_diameter, nl);
+    let member_shapes = [shapes(0), shapes(1)];
+    check(env, rule, &member_shapes, &m.vias, placed)?;
 
-    // Length matching on the shorter member.
     let (lp, ln) = (length(&m.segs[0]), length(&m.segs[1]));
-    let mut note = format!(
-        "coupled: width {:.3} mm, gap {:.3} mm",
+    let note = format!(
+        "coupled: width {:.3} mm, gap {:.3} mm, skew {:.3} mm (not length matched)",
         rule.width as f64 / 1e6,
-        rule.gap as f64 / 1e6
+        rule.gap as f64 / 1e6,
+        (lp - ln).abs() / 1e6
     );
-    if let Some(max) = rule.max_skew {
-        let skew = (lp - ln).abs();
-        if skew > max as f64 {
-            let short = usize::from(ln < lp);
-            let q = (3.0 * w).max(w + 2.0 * rule.gap as f64);
-            let tuned = [4.0 * q, 3.0 * q, 2.0 * q, q].into_iter().find_map(|amp| {
-                let segs = serpentine(
-                    &m.segs[short],
-                    &m.tunable[short],
-                    m.side[short],
-                    skew,
-                    amp,
-                    q,
-                )?;
-                let mut cand = m.clone();
-                cand.segs[short] = segs;
-                check(
-                    env,
-                    rule,
-                    [shapes(&cand, 0).as_slice(), shapes(&cand, 1).as_slice()],
-                    placed,
-                )
-                .ok()
-                .map(|()| (cand, amp))
-            });
-            let member = if short == 0 {
-                &rule.positive
-            } else {
-                &rule.negative
-            };
-            match tuned {
-                Some((cand, amp)) => {
-                    note.push_str(&format!(
-                        "; length matched with a serpentine on {member} ({:.3} mm added, bumps up to {:.3} mm)",
-                        skew / 1e6,
-                        amp / 1e6
-                    ));
-                    m = cand;
-                }
-                None => note.push_str(&format!(
-                    "; skew {:.3} mm exceeds {:.3} mm and no serpentine on {member} fits clear of other copper",
-                    skew / 1e6,
-                    max as f64 / 1e6
-                )),
-            }
-        }
-    }
-    let make = |k: usize, ci: usize, conn: &Conn, id: u32| Placed {
+    let [sp, sn] = member_shapes;
+    let make = |k: usize, ci: usize, conn: &Conn, id: u32, shapes: Vec<(usize, Shape)>| Placed {
         conn: ci,
         net: conn.net.clone(),
         id,
-        width: rule.width,
-        via_drill: spec.via_drill,
-        via_diameter: spec.via_diameter,
+        widths: widths.clone(),
+        via_drill: specs[k].via_drill,
+        via_diameter: specs[k].via_diameter,
         segs: m.segs[k].clone(),
         vias: m.vias[k].clone(),
-        shapes: shapes(&m, k),
-        note: None,
+        shapes,
         pair: true,
-        moved: None,
     };
     Ok(PairRoute {
-        placed: [make(0, ip, cp, idp), make(1, inn, cn, idn)],
+        placed: [make(0, ip, cp, idp, sp), make(1, inn, cn, idn, sn)],
         note,
     })
 }
@@ -539,15 +478,15 @@ pub(super) fn attempt(
 /// one is within the declared target and tolerance (`None` when either is undeclared or a
 /// layer's impedance is UNKNOWN).
 pub(super) fn impedance_on(
-    p: &Project,
+    env: &Env,
     rule: &Coupled,
     layers: &BTreeSet<usize>,
 ) -> (Vec<(String, Estimate)>, Option<bool>) {
     let est: Vec<(String, Estimate)> = layers
         .iter()
         .map(|&l| {
-            let layer = layer_of(l);
-            let e = match impedance::geometry(&p.pcb.board.stackup, layer) {
+            let layer = env.layers[l];
+            let e = match impedance::geometry(&env.p.pcb.board.stackup, layer) {
                 Ok(g) => impedance::zdiff(g, rule.width, rule.gap),
                 Err(missing) => Estimate::Unknown { missing },
             };
@@ -585,20 +524,6 @@ mod tests {
         }
         // A reversal cannot be offset.
         assert!(offset(&[pts[0], pts[1], pts[0]], 100_000.0).is_none());
-    }
-
-    #[test]
-    fn serpentine_adds_exactly_the_missing_length() {
-        let segs = vec![(0, Point::new(0, 0), Point::new(10_000_000, 0))];
-        let out = serpentine(&segs, &[0], 1.0, 1_234_000.0, 400_000.0, 300_000.0).unwrap();
-        let added = length(&out) - length(&segs);
-        assert!((added - 1_234_000.0).abs() < 10.0, "{added}");
-        // Bumps go to the outer side only and keep both ends.
-        assert!(out.iter().all(|(_, a, b)| a.y >= 0 && b.y >= 0));
-        assert_eq!(out.first().unwrap().1, Point::new(0, 0));
-        assert_eq!(out.last().unwrap().2, Point::new(10_000_000, 0));
-        // More than the segment can take.
-        assert!(serpentine(&segs, &[0], 1.0, 1e9, 400_000.0, 300_000.0).is_none());
     }
 
     #[test]

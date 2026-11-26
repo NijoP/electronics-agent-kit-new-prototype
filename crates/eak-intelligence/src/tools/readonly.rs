@@ -394,6 +394,7 @@ fn analyze_routing(p: &Project, preview: bool) -> Value {
     priority::order_connections(p, &mut todo);
     let nets: std::collections::BTreeSet<String> = todo.iter().map(|(n, _, _)| n.clone()).collect();
     let terminals = priority::terminal_counts(p);
+    let fast = priority::high_speed_nets(p);
     let order: Vec<Value> = todo
         .iter()
         .take(40)
@@ -404,6 +405,7 @@ fn analyze_routing(p: &Project, preview: bool) -> Value {
                     n,
                     terminals.get(n).copied().unwrap_or(2),
                     p.constraints.net_currents_a.get(n).copied(),
+                    fast.contains(n),
                 ),
                 "length_mm": (a.dist(*b) / 1e3).round() / 1e3,
             })
@@ -419,7 +421,7 @@ fn analyze_routing(p: &Project, preview: bool) -> Value {
         "shorts": conn.shorts.len(),
         "limitations": [
             "differential pairs are detected by net name only",
-            "the router works on the two outer layers; inner-layer routing is not done",
+            "the router routes on every signal layer with through vias only (no blind or buried spans); plane layers are not routed on",
             "widths are IPC-2221 current sizing only; no impedance, no length matching, no return-path analysis",
             "a dry run is not applied: run AutoRoute, then verify_routing",
         ],

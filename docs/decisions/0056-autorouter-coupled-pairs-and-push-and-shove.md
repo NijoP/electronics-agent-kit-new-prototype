@@ -1,6 +1,8 @@
 # ADR-0056: Autorouter: coupled differential pairs and push-and-shove of existing tracks
 - **Date:** 2026-11-26
-- **Status:** Accepted (workstream A, eak-route-dp; builds on the schema v8 inputs of ADR-0055).
+- **Status:** Accepted (workstream A, eak-route-dp; builds on the schema v8 inputs of ADR-0055 and on
+  the multilayer router of the ADR-0023 addendum). Landed in increments: coupled pairs first, then
+  length matching, then push-and-shove.
 - **Context:** The autorouter routed pair members as two single nets that were only steered
   near each other, and it never touched copper that was already on the board. A connection
   blocked by a hand-routed, lower-priority track stayed unrouted, because rip-up only removes

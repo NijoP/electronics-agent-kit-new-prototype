@@ -23,3 +23,28 @@ external router and without reducing routing to shortest-path.
 The router reports a connection routed only after exact clearance checks; it certifies nothing.
 Pair coupling, length matching, impedance and inner-layer routing are not implemented and are
 listed in tool output. Heuristic constants (patience, ripup limits) are unmeasured.
+
+## Addendum 2026-11-26: multilayer routing (workstream A, `fm/eak-route-ml`)
+CI-verified on PR #135 (`eak-validation/tests/autoroute_multilayer.rs`); no IR change.
+
+* The grid has one plane per stack-up layer. A* routes on the signal layers only; plane layers
+  carry pours (plane nets reach them through `StitchZones`) and are obstacles for vias. A layer
+  change is one through via of the net-class size (drill and annular ring raised to the board
+  minimums) that must clear every layer it spans; vias exist only at layer changes. Blind and
+  buried spans wait for the allowed-span rule of the shared schema v8 migration.
+* Obstacles come from `BoardGeometry` (ADR-0052): copper on every layer, the flattened outline
+  and cut-outs, keep-out regions (tracks per layer, vias), hole-to-hole spacing around every drill.
+  The exact acceptance check applies the DRC's rules: `clearance::required` (DRC-002), matrix
+  cells, DRC-005, DRC-018, DRC-019, DRC-021, DRC-022. `HOLE_TO_HOLE_MIN` moved to
+  `eak_engineering::clearance` so the DRC and the router share one value.
+* Track width per layer: IPC-2221 external on outer layers, internal on inner signal layers, each at
+  the thinnest copper of its group (`NetSpec.inner_track_width`). The whole-connection neck-down
+  is removed: it undersized current-carrying tracks (DRC-008 errors). Grid inflation is per layer.
+* Net priority adds a high-speed class (name-based pairs and clock names) after power and ground.
+* A connection left unrouted is explained on the final board by dropping obstacle classes in turn
+  (keep-outs, earlier routes, fixed copper) and naming the objects and rule of the class that
+  closes the path. `AutoRoute` ends with a connectivity proof from the board geometry (each net
+  one copper group, no shorts, or the open nets and shorts named).
+* Not done here: diff-pair coupling, length matching, impedance-aware routing and push-and-shove
+  inside the autorouter (sibling workstream `eak-route-dp`); per-net grid inflation (one HV or
+  high-current net widens a layer's grid for every net).

@@ -1,0 +1,58 @@
+[
+  {"type": "SetProjectName", "name": "Autoroute: constrained 4-layer design"},
+  {"type": "SetStackup", "stackup": {
+    "layers": [
+      {"layer": "top", "kind": "signal", "copper_oz": 1.0, "dielectric_after_um": 200, "er": 4.5},
+      {"layer": {"inner": 1}, "kind": "plane", "copper_oz": 1.0, "dielectric_after_um": 1060, "er": 4.5},
+      {"layer": {"inner": 2}, "kind": "signal", "copper_oz": 1.0, "dielectric_after_um": 200, "er": 4.5},
+      {"layer": "bottom", "kind": "signal", "copper_oz": 1.0, "dielectric_after_um": 0, "er": 4.5}
+    ],
+    "board_thickness": 1600000,
+    "dielectric": "FR-4"
+  }},
+  {"type": "SetBoardOutline", "points": [
+    {"x": 0, "y": 0}, {"x": 50000000, "y": 0}, {"x": 50000000, "y": 30000000}, {"x": 0, "y": 30000000}
+  ]},
+  {"type": "PlaceSymbol", "component_id": "CONN_1x04_P2.54", "position": {"x": 20000000, "y": 40000000}, "refdes": "J1"},
+  {"type": "PlaceSymbol", "component_id": "CONN_1x04_P2.54", "position": {"x": 80000000, "y": 40000000}, "refdes": "J2"},
+  {"type": "PlaceSymbol", "component_id": "CONN_1x02_P2.54", "position": {"x": 20000000, "y": 80000000}, "refdes": "J3"},
+  {"type": "PlaceSymbol", "component_id": "C_0805", "position": {"x": 80000000, "y": 80000000}, "refdes": "C1", "value": "10u"},
+  {"type": "LabelPin", "symbol_id": "@J1", "pin": "1", "name": "A"},
+  {"type": "LabelPin", "symbol_id": "@J1", "pin": "2", "name": "B"},
+  {"type": "LabelPin", "symbol_id": "@J1", "pin": "3", "name": "C"},
+  {"type": "LabelPin", "symbol_id": "@J1", "pin": "4", "name": "D"},
+  {"type": "LabelPin", "symbol_id": "@J2", "pin": "4", "name": "A"},
+  {"type": "LabelPin", "symbol_id": "@J2", "pin": "3", "name": "B"},
+  {"type": "LabelPin", "symbol_id": "@J2", "pin": "2", "name": "C"},
+  {"type": "LabelPin", "symbol_id": "@J2", "pin": "1", "name": "D"},
+  {"type": "LabelPin", "symbol_id": "@J3", "pin": "1", "name": "+12V", "kind": "power"},
+  {"type": "LabelPin", "symbol_id": "@J3", "pin": "2", "name": "GND", "kind": "power"},
+  {"type": "LabelPin", "symbol_id": "@C1", "pin": "1", "name": "+12V"},
+  {"type": "LabelPin", "symbol_id": "@C1", "pin": "2", "name": "GND"},
+  {"type": "UpsertNetClass", "class": {
+    "name": "PWR", "track_width": 500000, "clearance": 250000, "via_drill": 400000, "via_diameter": 800000,
+    "nets": ["+12V", "GND"]
+  }},
+  {"type": "SetNetCurrent", "net": "+12V", "amps": 1.0},
+  {"type": "SetNetVoltage", "net": "+12V", "volts": 12.0},
+  {"type": "SetNetVoltage", "net": "GND", "volts": 0.0},
+  {"type": "SetNetPairClearance", "net_a": "A", "net_b": "B", "clearance": 500000},
+  {"type": "SyncSchematicToPcb"},
+  {"type": "MoveFootprint", "footprint_id": "@J1", "position": {"x": 5000000, "y": 15000000}},
+  {"type": "MoveFootprint", "footprint_id": "@J2", "position": {"x": 45000000, "y": 15000000}},
+  {"type": "MoveFootprint", "footprint_id": "@J3", "position": {"x": 25000000, "y": 26000000}},
+  {"type": "MoveFootprint", "footprint_id": "@C1", "position": {"x": 25000000, "y": 5000000}},
+  {"type": "AddBoardCutout", "outline": [
+    {"x": 23000000, "y": 13000000}, {"x": 27000000, "y": 13000000}, {"x": 27000000, "y": 17000000}, {"x": 23000000, "y": 17000000}
+  ]},
+  {"type": "AddRegion", "name": "top keep-out band", "layers": ["top"], "forbid": ["tracks"], "outline": [
+    {"x": 32000000, "y": 500000}, {"x": 35000000, "y": 500000}, {"x": 35000000, "y": 29500000}, {"x": 32000000, "y": 29500000}
+  ]},
+  {"type": "AddRegion", "name": "no-via band", "forbid": ["vias"], "outline": [
+    {"x": 15000000, "y": 500000}, {"x": 19000000, "y": 500000}, {"x": 19000000, "y": 29500000}, {"x": 15000000, "y": 29500000}
+  ]},
+  {"type": "AddZone", "layer": {"inner": 1}, "net": "GND", "clearance": 300000, "outline": [
+    {"x": 500000, "y": 500000}, {"x": 49500000, "y": 500000}, {"x": 49500000, "y": 29500000}, {"x": 500000, "y": 29500000}
+  ]},
+  {"type": "AutoRoute"}
+]
