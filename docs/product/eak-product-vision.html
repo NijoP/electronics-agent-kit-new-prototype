@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EAK: electronics, engineered with agents</title>
+<!-- EAK product vision. Interactive simulation with sample data. Self-contained: no network, no build.
+     Design system and the storyboard-to-screen map: docs/product/README.md -->
+<style>
+:root{
+  --h0:#0C0D0F;--h1:#121316;--h2:#17191C;--h3:#1E2024;--h4:#25282D;--h5:#2E3237;
+  --hair:rgba(255,255,255,.05);
+  --t1:#ECE8E1;--t2:#A7A29A;--t3:#6F6B65;
+  --cu:#D8955C;--cu-soft:rgba(216,149,92,.14);--cu-line:rgba(216,149,92,.55);
+  --ai:#86C5E0;--ai-soft:rgba(134,197,224,.13);
+  --ok:#7FCB9B;--warn:#E2B35C;--err:#EC7C6B;--unk:#8A929E;--gold:#D4B36A;
+  --lF:#D8955C;--lB:#6E9FD0;--l1:#5FA88A;--l2:#D07A8C;--edge:#E2B35C;--silk:#E9E6DE;
+  --ui:"Inter",ui-sans-serif,system-ui,-apple-system,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  --e-ui:cubic-bezier(.2,.7,.1,1);--e-cam:cubic-bezier(.65,0,.15,1);
+  --d1:140ms;--d2:240ms;
+  --sh3:0 24px 64px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.4);
+}
+@media (prefers-reduced-motion:reduce){:root{--d1:0ms;--d2:0ms}*{animation:none!important;transition:none!important}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--h0);color:var(--t1);font:400 13px/1.5 var(--ui);font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--t1);background:var(--h3);border:0;border-radius:6px;padding:0 10px;height:30px;outline:none}
+textarea{padding:10px 12px;height:auto;resize:none}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:none;box-shadow:0 0 0 1.5px var(--cu)}
+.mono{font-family:var(--mono)}
+.t2{color:var(--t2)}.t3{color:var(--t3)}
+.lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);font-weight:560}
+.row{display:flex;align-items:center;gap:8px;min-width:0}
+.col{display:flex;flex-direction:column;min-width:0}
+.grow{flex:1;min-width:0}
+.btn{height:30px;padding:0 14px;border-radius:6px;background:var(--h3);color:var(--t1);white-space:nowrap;transition:background var(--d1) var(--e-ui)}
+.btn:hover{background:var(--h4)}
+.btn.pri{background:var(--cu);color:#1A1006;font-weight:560}.btn.pri:hover{background:#E3A36B}
+.btn.ai{background:var(--ai-soft);color:var(--ai)}.btn.ai:hover{background:rgba(134,197,224,.2)}
+.btn.q{background:none;color:var(--t2)}.btn.q:hover{background:var(--h3);color:var(--t1)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.ico{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;display:inline-block}
+.pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:11px;background:var(--h3);font-size:12px;color:var(--t2);white-space:nowrap}
+.grain{position:fixed;inset:0;pointer-events:none;z-index:90;opacity:.035;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>")}
+
+/* film */
+#film{position:fixed;inset:0;z-index:50;background:var(--h0);transition:opacity 700ms var(--e-cam)}
+#film.gone{opacity:0;pointer-events:none}
+#film .layer{position:absolute;inset:0;opacity:0;transition:opacity 900ms var(--e-cam)}
+#film .layer.on{opacity:1}
+#film svg.scene{width:100%;height:100%;display:block}
+#fText{position:absolute;left:0;right:0;bottom:20%;text-align:center;pointer-events:none}
+#fText .t{font-weight:300;font-size:clamp(30px,3.4vw,56px);letter-spacing:-.01em;opacity:0;transform:translateY(8px);transition:opacity 900ms var(--e-cam),transform 900ms var(--e-cam)}
+#fText .s{margin-top:14px;font-size:clamp(14px,1.2vw,18px);color:var(--t2);opacity:0;transition:opacity 900ms var(--e-cam) 300ms}
+#fText.on .t{opacity:1;transform:none}#fText.on .s{opacity:1}
+#fText.small .t{font-size:clamp(20px,1.9vw,30px)}
+#fCtl{position:absolute;left:0;right:0;bottom:28px;display:flex;justify-content:center;align-items:center;gap:16px}
+#fActs{display:flex;gap:4px}
+#fActs button{width:34px;height:28px;display:flex;align-items:center;justify-content:center}
+#fActs button i{width:22px;height:2px;border-radius:1px;background:var(--h5);display:block;transition:background var(--d2)}
+#fActs button.on i{background:var(--cu)}#fActs button.done i{background:var(--t3)}
+#fBrand{position:absolute;left:32px;top:26px;display:flex;align-items:center;gap:12px;color:var(--t2);font-size:12px}
+#fEnter{position:absolute;right:28px;top:20px}
+#fHint{position:absolute;right:32px;bottom:34px;color:var(--t3);font-size:12px}
+.mark{font-weight:640;letter-spacing:.14em;color:var(--t1);font-size:14px}
+#fCanvas{position:absolute;inset:0;width:100%;height:100%}
+#fSide{position:absolute;right:7%;top:50%;transform:translateY(-50%);width:300px;display:flex;flex-direction:column;gap:14px}
+#fSide .it{opacity:0;transform:translateX(8px);transition:opacity 600ms var(--e-cam),transform 600ms var(--e-cam)}
+#fSide .it.on{opacity:1;transform:none}
+
+/* shell */
+#app{position:fixed;inset:0;display:grid;grid-template-columns:56px minmax(0,1fr);grid-template-rows:46px minmax(0,1fr) auto 26px;background:var(--h1);opacity:0;transform:scale(1.015);transition:opacity 700ms var(--e-cam),transform 900ms var(--e-cam)}
+#app.on{opacity:1;transform:none}
+#rail{grid-row:1/5;background:var(--h0);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px}
+#rail .brand{height:36px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;width:40px;border-radius:8px}
+#rail .brand:hover{background:var(--h2)}
+#rail .nav{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--t3);position:relative;transition:color var(--d1),background var(--d1)}
+#rail .nav:hover{color:var(--t1);background:var(--h2)}
+#rail .nav.on{color:var(--cu)}
+#rail .nav.on::before{content:"";position:absolute;left:-8px;top:10px;bottom:10px;width:2px;border-radius:1px;background:var(--cu)}
+#rail .nav .tip{position:absolute;left:50px;top:50%;transform:translateY(-50%) translateX(-4px);background:var(--h4);color:var(--t1);padding:4px 9px;border-radius:5px;font-size:12px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity var(--d1),transform var(--d1);z-index:20}
+#rail .nav:hover .tip,#rail .nav:focus-visible .tip{opacity:1;transform:translateY(-50%)}
+#rail .nav .tip kbd{color:var(--t3);font:11px var(--mono);margin-left:8px}
+#top{display:flex;align-items:center;gap:14px;padding:0 14px 0 18px;background:var(--h1);min-width:0}
+#top .crumb{display:flex;align-items:center;gap:8px;font-size:13px;white-space:nowrap}
+#top .crumb .rev{font:12px var(--mono);color:var(--t3)}
+#journey{display:flex;align-items:center;margin:0 auto;min-width:0}
+#journey i{width:10px;height:1.5px;background:var(--h5);display:block}
+.jd{width:18px;height:22px;display:flex;align-items:center;justify-content:center}
+.jd span{width:10px;height:10px;border-radius:2.5px;box-shadow:inset 0 0 0 1.5px var(--t3);transition:background var(--d2)}
+.jd.s2 span{background:var(--gold);box-shadow:none}.jd.s0 span{background:var(--err);box-shadow:none}.jd.s1 span{box-shadow:inset 0 0 0 1.5px var(--warn)}
+.jd.nx span{outline:1.5px solid var(--cu-line);outline-offset:2px}
+.jd:hover span{transform:scale(1.2)}
+#journey .jl{margin-left:12px;font-size:12px;color:var(--t2);white-space:nowrap}
+#search{height:30px;border-radius:7px;background:var(--h2);display:flex;align-items:center;gap:8px;padding:0 10px;color:var(--t3);font-size:12.5px;white-space:nowrap;transition:background var(--d1)}
+#search:hover{background:var(--h3)}
+#search kbd{font:11px var(--mono);color:var(--t3);margin-left:6px}
+.ibtn{width:30px;height:30px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--t2);transition:background var(--d1),color var(--d1)}
+.ibtn:hover{background:var(--h3);color:var(--t1)}
+.ibtn:disabled{opacity:.35;cursor:default}
+.ibtn .ico{width:18px;height:18px}
+#main{position:relative;min-height:0;overflow:hidden;background:var(--h1)}
+.view{position:absolute;inset:0;display:none;min-height:0}
+.view.on{display:flex;animation:vin var(--d2) var(--e-ui)}
+@keyframes vin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+#guide{grid-column:2;display:none;align-items:center;gap:14px;padding:8px 16px;min-height:52px;background:var(--h2)}
+#guide.on{display:flex}
+#guide .n{font:12px var(--mono);color:var(--t3);white-space:nowrap}
+#guide .ti{font-weight:560;white-space:nowrap}
+#guide .cap{color:var(--t2);font-size:12.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#guide .bar{width:120px;height:2px;background:var(--h5);border-radius:1px;overflow:hidden;flex:none}
+#guide .bar b{display:block;height:100%;background:var(--cu);transition:width var(--d2) var(--e-ui)}
+#foot{grid-column:2;display:flex;align-items:center;gap:16px;padding:0 14px;background:var(--h0);font-size:11.5px;color:var(--t3)}
+#foot .about{margin-left:auto}
+#foot button:hover{color:var(--t1)}
+
+/* panels */
+.side{width:264px;flex:none;background:var(--h2);display:flex;flex-direction:column;min-height:0}
+.insp{width:320px;flex:none;background:var(--h2);display:flex;flex-direction:column;min-height:0}
+.ph{height:40px;display:flex;align-items:center;gap:8px;padding:0 14px;flex:none}
+.pb{flex:1;overflow:auto;min-height:0;padding:4px 14px 16px}
+.canvas{flex:1;position:relative;min-width:0;background:var(--h0);overflow:hidden}
+.canvas svg.c{width:100%;height:100%;display:block;cursor:grab}
+.canvas svg.c.drag{cursor:grabbing}
+.float{position:absolute;display:flex;gap:4px;align-items:center;background:rgba(23,25,28,.88);backdrop-filter:blur(8px);border-radius:8px;padding:4px}
+.tabs{display:flex;gap:2px}
+.tabs button{height:28px;padding:0 12px;border-radius:6px;color:var(--t2);font-size:12.5px;white-space:nowrap;transition:background var(--d1),color var(--d1)}
+.tabs button:hover{color:var(--t1)}
+.tabs button.on{background:var(--h4);color:var(--t1)}
+.tree .n{display:flex;align-items:center;gap:6px;height:26px;padding:0 6px;border-radius:5px;color:var(--t2);font-size:12.5px;cursor:pointer;white-space:nowrap}
+.tree .n:hover{background:var(--h3);color:var(--t1)}
+.tree .n.on{background:var(--cu-soft);color:var(--t1)}
+.tree .n .ico{width:15px;height:15px;color:var(--t3)}
+.tree .n .car{width:12px;color:var(--t3);font-size:9px;text-align:center;transition:transform var(--d1)}
+.tree .n .car.open{transform:rotate(90deg)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:12.5px;margin:0}
+.kv dt{color:var(--t3)}.kv dd{margin:0;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.list .r{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;cursor:pointer;transition:background var(--d1)}
+.list .r:hover,.list .r.on{background:var(--h3)}
+.sec{margin-top:20px}
+.sec > .lbl{display:block;margin-bottom:8px}
+table{border-collapse:collapse;width:100%}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);font-weight:560;text-align:left;padding:8px 10px;position:sticky;top:0;background:var(--h1)}
+td{padding:8px 10px;font-size:12.5px;border-top:1px solid var(--hair)}
+td.num,th.num{text-align:right}
+tr.click{cursor:pointer}tr.click:hover td{background:var(--h2)}
+.toggle{width:28px;height:16px;border-radius:8px;background:var(--h5);position:relative;flex:none;transition:background var(--d1)}
+.toggle::after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--t2);transition:transform var(--d1) var(--e-ui),background var(--d1)}
+.toggle.on{background:var(--cu-soft)}.toggle.on::after{transform:translateX(12px);background:var(--cu)}
+.swatch{width:10px;height:10px;border-radius:2px;flex:none}
+#schSvg polyline.hov{stroke:#E3A36B;stroke-width:2.2}
+#schSvg text.hov{fill:#E3A36B}
+
+/* home */
+#v-home{overflow:auto}
+.home{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(380px,.9fr);width:100%;min-height:100%}
+.home .l{padding:52px 56px 40px 64px;display:flex;flex-direction:column;gap:34px}
+.home .r{background:var(--h2);padding:48px 48px 40px;display:flex;flex-direction:column;gap:26px}
+.hello{font-weight:300;font-size:34px;letter-spacing:-.01em;line-height:1.15}
+.intent{background:var(--h2);border-radius:12px;padding:6px 6px 6px 18px;display:flex;align-items:flex-end;gap:10px;transition:box-shadow var(--d2)}
+.intent:focus-within{box-shadow:0 0 0 1.5px var(--cu-line)}
+.intent textarea{flex:1;background:none;padding:12px 0;font-size:15px;min-height:52px;max-height:160px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{height:28px;padding:0 12px;border-radius:14px;background:var(--h2);color:var(--t2);font-size:12.5px;transition:background var(--d1),color var(--d1)}
+.chips button:hover{background:var(--h3);color:var(--t1)}
+.proj{display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:18px;align-items:center;padding:12px;border-radius:10px;cursor:pointer;transition:background var(--d1)}
+.proj:hover{background:var(--h2)}
+.proj .thumb{height:76px;border-radius:6px;background:var(--h0);overflow:hidden}
+.att{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:12px;align-items:start;padding:11px 10px;border-radius:8px;cursor:pointer;text-align:left;width:100%;transition:background var(--d1)}
+.att:hover{background:var(--h3)}
+.att .dot{margin-top:6px}
+.big{font-weight:300;font-size:40px;line-height:1}
+
+/* overlays */
+#scrim{position:fixed;inset:0;background:rgba(6,7,8,.55);z-index:60;display:none;align-items:center;justify-content:center}
+#scrim.on{display:flex}
+#dlg{background:var(--h3);border-radius:14px;box-shadow:var(--sh3);width:min(760px,92vw);max-height:84vh;overflow:auto;padding:26px 28px;display:flex;flex-direction:column;gap:16px;animation:pop var(--d2) var(--e-ui)}
+#dlg.wide{width:min(1040px,94vw)}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}
+#dlg h2{margin:0;font-weight:500;font-size:20px}
+#pal{position:fixed;left:50%;top:14vh;transform:translateX(-50%);width:min(620px,92vw);background:var(--h3);border-radius:12px;box-shadow:var(--sh3);z-index:70;display:none;overflow:hidden}
+#pal.on{display:block;animation:pop var(--d2) var(--e-ui)}
+#pal input{width:100%;height:50px;background:none;font-size:15px;padding:0 18px;border-radius:0}
+#pal .res{max-height:50vh;overflow:auto;padding:6px}
+#pal .it{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:7px;cursor:pointer;font-size:13px}
+#pal .it.on{background:var(--h4)}
+#pal .it .k{margin-left:auto;color:var(--t3);font-size:11.5px}
+#toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%) translateY(10px);background:var(--h4);padding:9px 16px;border-radius:8px;box-shadow:var(--sh3);font-size:12.5px;opacity:0;pointer-events:none;transition:opacity var(--d2),transform var(--d2) var(--e-ui);z-index:80;max-width:70vw}
+#toast.on{opacity:1;transform:translateX(-50%)}
+.qopt{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:8px;background:var(--h4);margin-top:6px;transition:background var(--d1),box-shadow var(--d1)}
+.qopt:hover{background:var(--h5)}
+.qopt.on{box-shadow:0 0 0 1.5px var(--cu)}
+.qrow{display:flex;gap:6px;flex-wrap:wrap}.qrow .qopt{width:auto;margin:0}
+
+/* agents */
+.thread{flex:1;overflow:auto;padding:26px 40px 20px;display:flex;flex-direction:column;gap:18px;min-height:0}
+.msg{max-width:760px}
+.msg.me{align-self:flex-end;background:var(--h3);padding:10px 14px;border-radius:12px 12px 4px 12px}
+.msg .who{font-size:11.5px;color:var(--t3);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.planl{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.planl .s{display:flex;gap:10px;align-items:center;color:var(--t3);transition:color var(--d2)}
+.planl .s.done{color:var(--t1)}.planl .s.run{color:var(--ai)}
+.planl .s .b{width:14px;height:14px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1.5px currentColor;display:flex;align-items:center;justify-content:center}
+.planl .s.done .b{background:var(--ok);box-shadow:none}
+.cmds{background:var(--h0);border-radius:8px;padding:10px 14px;font:12px/1.75 var(--mono);color:var(--t2);white-space:pre-wrap}
+.cmds b{color:var(--ai);font-weight:400}
+.composer{padding:12px 40px 20px}
+.composer .box{background:var(--h2);border-radius:12px;padding:6px 8px 8px 16px;transition:box-shadow var(--d2)}
+.composer .box:focus-within{box-shadow:0 0 0 1.5px var(--ai)}
+.composer textarea{width:100%;background:none;padding:10px 0 6px;font-size:14px;min-height:44px}
+.prop{background:var(--h2);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;max-width:760px}
+.delta{display:flex;gap:24px;flex-wrap:wrap}
+.delta .v{font-size:22px;font-weight:300}
+.live{background:var(--h0);border-radius:12px;padding:14px 16px;max-width:760px;width:100%}
+.ctx{display:flex;gap:6px;flex-wrap:wrap}
+.ctx span{font-size:11.5px;color:var(--t2);background:var(--h3);border-radius:10px;padding:2px 9px}
+.lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:760px;width:100%}
+.lane{background:var(--h2);border-radius:10px;padding:12px 14px;text-align:left;display:flex;flex-direction:column;gap:6px;transition:box-shadow var(--d1)}
+.lane.on{box-shadow:0 0 0 1.5px var(--ai)}
+.tool{display:flex;align-items:center;gap:10px;padding:10px 6px;border-radius:8px}
+.mono-av{width:28px;height:28px;border-radius:7px;background:var(--h4);display:flex;align-items:center;justify-content:center;font:600 11px var(--mono);color:var(--t2);flex:none}
+
+/* terminal, misc */
+.term{flex:1;background:#0A0B0C;font:12.5px/1.6 var(--mono);padding:14px 18px;overflow:auto;display:flex;flex-direction:column;min-width:0}
+.term .out{white-space:pre-wrap;color:#CFCBC4}
+.term input{background:none;height:auto;padding:0;width:100%;font:inherit;border-radius:0}
+.term input:focus-visible{box-shadow:none}
+#cv3d{width:100%;height:100%;display:block;cursor:grab}
+.slider{-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:var(--h5);padding:0;width:140px}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--cu);cursor:pointer}
+.slider::-moz-range-thumb{width:14px;height:14px;border:0;border-radius:50%;background:var(--cu);cursor:pointer}
+.ready .i{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 4px;font-size:13px;border-radius:6px;cursor:pointer}
+.ready .i:hover{background:var(--h3)}
+@media (max-width:1360px){.insp{width:290px}.side{width:236px}.home .l{padding:40px 40px 32px 44px}.home .r{padding:40px 34px}#search .lbl2{display:none}}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<section id="film" aria-label="EAK introduction">
+  <div class="layer" id="L-pad"><svg class="scene" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" id="padSvg"></svg></div>
+  <div class="layer" id="L-board"><svg class="scene" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid meet" id="boardFilmSvg"></svg></div>
+  <div class="layer" id="L-3d"><canvas id="fCanvas"></canvas><div id="fSide"></div></div>
+  <div id="fText"><div class="t"></div><div class="s"></div></div>
+  <div id="fBrand"><span class="mark">EAK</span><span>Product vision · interactive simulation</span></div>
+  <button class="btn" id="fEnter" data-a="enter">Enter EAK</button>
+  <div id="fCtl"><button class="ibtn" data-a="filmPrev" aria-label="Previous"><svg class="ico" viewBox="0 0 20 20"><path d="M12 5l-5 5 5 5"/></svg></button><div id="fActs"></div><button class="ibtn" data-a="filmNext" aria-label="Next"><svg class="ico" viewBox="0 0 20 20"><path d="M8 5l5 5-5 5"/></svg></button></div>
+  <div id="fHint">Space or → to continue</div>
+</section>
+
+<div id="app" aria-hidden="true">
+  <nav id="rail" aria-label="Areas"></nav>
+  <header id="top">
+    <div class="crumb"><span class="t2">Projects</span><span class="t3">/</span><button data-a="go" data-arg="home" style="font-weight:560">Aurora S3</button><span class="rev" id="revLbl"></span></div>
+    <div id="journey" aria-label="Design journey"></div>
+    <button id="search" data-a="palette" aria-label="Search and commands"><svg class="ico" viewBox="0 0 20 20" style="width:16px;height:16px"><circle cx="9" cy="9" r="5"/><path d="M13 13l4 4"/></svg><span class="lbl2">Search</span><kbd>Ctrl K</kbd></button>
+    <div class="row" id="topStatus"></div>
+    <div class="row" style="gap:2px">
+      <button class="ibtn" data-a="undo" id="bUndo" aria-label="Undo"><svg class="ico" viewBox="0 0 20 20"><path d="M7 4L3 8l4 4"/><path d="M3 8h9a5 5 0 010 10H9"/></svg></button>
+      <button class="ibtn" data-a="redo" id="bRedo" aria-label="Redo"><svg class="ico" viewBox="0 0 20 20"><path d="M13 4l4 4-4 4"/><path d="M17 8H8a5 5 0 000 10h3"/></svg></button>
+      <button class="ibtn" data-a="replay" aria-label="Replay the opening"><svg class="ico" viewBox="0 0 20 20"><path d="M7 5l8 5-8 5z"/></svg></button>
+    </div>
+  </header>
+  <main id="main">
+    <section class="view" id="v-home"></section><section class="view" id="v-project"></section><section class="view" id="v-sch"></section>
+    <section class="view" id="v-pcb"></section><section class="view" id="v-parts"></section><section class="view" id="v-agents"></section>
+    <section class="view" id="v-checks"></section><section class="view" id="v-v3d"></section><section class="view" id="v-fab"></section><section class="view" id="v-term"></section>
+  </main>
+  <div id="guide" role="region" aria-label="Guided walkthrough"></div>
+  <footer id="foot"><span id="footL"></span><span id="footM"></span><button class="about" id="footGuide" data-a="guideOpen">Guided walkthrough</button><button data-a="about">Product vision · interactive simulation · sample data</button></footer>
+</div>
+
+<div id="scrim"><div id="dlg" role="dialog" aria-modal="true"></div></div>
+<div id="pal" role="dialog" aria-label="Command palette"><input id="palIn" placeholder="Type a command, part or net…" aria-label="Search"><div class="res" id="palRes"></div></div>
+<div id="toast" role="status"></div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const clone=o=>JSON.parse(JSON.stringify(o));
+
+const IC={
+ home:'<path d="M3.5 9.5L10 4l6.5 5.5V16h-4.5v-4h-4v4H3.5z"/>',
+ project:'<path d="M3 5.5h5l1.6 1.7H17V15H3z"/>',
+ sch:'<path d="M2 10h3.2l1.4-3 2.6 6 2.6-6 2.6 6 1.4-3H18"/>',
+ pcb:'<rect x="3.5" y="3.5" width="13" height="13" rx="1.5"/><path d="M7 7h2.5v3.5H13"/><circle cx="13" cy="13" r="1.3"/><circle cx="7" cy="7" r="1.1"/>',
+ parts:'<rect x="6" y="6" width="8" height="8" rx="1"/><path d="M8 3.5V6M12 3.5V6M8 14v2.5M12 14v2.5M3.5 8H6M3.5 12H6M14 8h2.5M14 12h2.5"/>',
+ agents:'<circle cx="10" cy="10" r="2.2"/><path d="M10 3v3.2M10 13.8V17M3 10h3.2M13.8 10H17M5.2 5.2l2.2 2.2M12.6 12.6l2.2 2.2M14.8 5.2l-2.2 2.2M7.4 12.6l-2.2 2.2"/>',
+ checks:'<path d="M3.5 10.5l3.5 3.5 9-9"/>',
+ v3d:'<path d="M10 3l6.5 3.6v6.8L10 17l-6.5-3.6V6.6z"/><path d="M3.5 6.6L10 10.2l6.5-3.6M10 10.2V17"/>',
+ fab:'<path d="M10 3.5l7 3.8-7 3.8-7-3.8z"/><path d="M3 10.6l7 3.8 7-3.8"/><path d="M3 13.6l7 3.8 7-3.8"/>',
+ term:'<path d="M4 6l4 4-4 4M10 14.5h6"/>',
+ file:'<path d="M5.5 3h6l3 3v11h-9z"/><path d="M11.5 3v3h3"/>',
+ folder:'<path d="M3 5.5h5l1.6 1.7H17V15H3z"/>',
+ locate:'<circle cx="10" cy="10" r="5"/><path d="M10 2.5V5M10 15v2.5M2.5 10H5M15 10h2.5"/>',
+ plus:'<path d="M10 4v12M4 10h12"/>', minus:'<path d="M4 10h12"/>', fit:'<path d="M4 8V4h4M16 8V4h-4M4 12v4h4M16 12v4h-4"/>',
+ x:'<path d="M5 5l10 10M15 5L5 15"/>', l:'<path d="M12 5l-5 5 5 5"/>', r:'<path d="M8 5l5 5-5 5"/>',
+};
+const icon=(k,st="")=>`<svg class="ico" viewBox="0 0 20 20" style="${st}">${IC[k]}</svg>`;
+
+/* ===================================================== flagship board: Aurora S3 (sample data) */
+const P={
+ J2:{mpn:"PJ-002AH",mfr:"CUI Devices",val:"DC jack",desc:"DC barrel jack, 2.0 mm pin",cat:"Connector",fp:"BarrelJack_PJ-002AH",lcsc:null,pr:[0.62,0.55,0.41,0.33],h:11,sheet:"pwr",s:{x:50,y:170,w:90,h:70,k:"box",R:[["+","+12V_RAW"],["−","GND"]]},b:[5,7,9,11]},
+ D1:{mpn:"SS34",mfr:"MDD",val:"SS34",desc:"Schottky diode 40 V 3 A, SMA",cat:"Diode",fp:"D_SMA",lcsc:"C8678",pr:[0.06,0.045,0.028,0.019],h:2.3,sheet:"pwr",s:{x:220,y:140,w:70,h:34,k:"D",L:[["A","+12V_RAW"]],R:[["K","VIN"]]},b:[14,4,4.3,2.6]},
+ D2:{mpn:"SS34",mfr:"MDD",val:"SS34",desc:"Schottky diode 40 V 3 A, SMA",cat:"Diode",fp:"D_SMA",lcsc:"C8678",pr:[0.06,0.045,0.028,0.019],h:2.3,sheet:"pwr",s:{x:220,y:280,w:70,h:34,k:"D",L:[["A","VBUS"]],R:[["K","VIN"]]},b:[14,13,4.3,2.6]},
+ C1:{mpn:"CL21A106KAYNNNC",mfr:"Samsung",val:"10 µF 25 V",desc:"MLCC 10 µF 25 V X5R 0805",cat:"Capacitor",fp:"C_0805",lcsc:"C15850",pr:[0.012,0.009,0.006,0.004],h:1.25,sheet:"pwr",s:{x:360,y:330,w:40,h:60,k:"C",T:[["1","VIN"]],B:[["2","GND"]]},b:[19,12,2,1.25]},
+ U2:{mpn:"TPS62933DRLR",mfr:"Texas Instruments",val:"TPS62933",desc:"3.8–30 V, 3 A synchronous buck",cat:"Power IC",fp:"SOT-583-8",lcsc:null,pr:[0.92,0.81,0.62,0.49],h:1,sheet:"pwr",s:{x:430,y:120,w:150,h:150,k:"box",L:[["VIN","VIN"],["EN","VIN"],["GND","GND"]],R:[["BST","BST"],["SW","SW"],["FB","FB"],["PG",null]]},b:[22,6,3,2.5]},
+ C9:{mpn:"CL10B104KB8NNNC",mfr:"Samsung",val:"100 nF",desc:"MLCC 100 nF 50 V X7R 0603, bootstrap",cat:"Capacitor",fp:"C_0603",lcsc:"C14663",pr:[0.004,0.003,0.002,0.0013],h:0.8,sheet:"pwr",s:{x:640,y:40,w:40,h:60,k:"C",T:[["1","BST"]],B:[["2","SW"]]},b:[22,2.6,1.6,0.8]},
+ L1:{mpn:"XAL4030-332MEB",mfr:"Coilcraft",val:"3.3 µH",desc:"Power inductor 3.3 µH, Isat 5.5 A",cat:"Inductor",fp:"L_XAL4030",lcsc:null,pr:[0.88,0.79,0.61,0.52],h:3.1,sheet:"pwr",s:{x:650,y:170,w:80,h:34,k:"L",L:[["1","SW"]],R:[["2","+3V3"]]},b:[28,6,4,4]},
+ R7:{mpn:"0603WAF1003T5E",mfr:"UNI-ROYAL",val:"100 kΩ",desc:"Thick film 100 kΩ 1% 0603, feedback top",cat:"Resistor",fp:"R_0603",lcsc:"C25803",pr:[0.002,0.0015,0.001,0.0006],h:0.5,sheet:"pwr",s:{x:780,y:250,w:40,h:60,k:"R",T:[["1","+3V3"]],B:[["2","FB"]]},b:[32,11,1.6,0.8]},
+ R8:{mpn:"0603WAF3162T5E",mfr:"UNI-ROYAL",val:"31.6 kΩ",desc:"Thick film 31.6 kΩ 1% 0603, feedback bottom",cat:"Resistor",fp:"R_0603",lcsc:null,pr:[0.002,0.0015,0.001,0.0006],h:0.5,sheet:"pwr",s:{x:780,y:390,w:40,h:60,k:"R",T:[["1","FB"]],B:[["2","GND"]]},b:[32,13,1.6,0.8]},
+ C2:{mpn:"CL21A226MQQNNNE",mfr:"Samsung",val:"22 µF",desc:"MLCC 22 µF 6.3 V X5R 0805",cat:"Capacitor",fp:"C_0805",lcsc:"C45783",pr:[0.018,0.014,0.009,0.006],h:1.25,sheet:"pwr",s:{x:880,y:250,w:40,h:60,k:"C",T:[["1","+3V3"]],B:[["2","GND"]]},b:[34,5,2,1.25]},
+ C3:{mpn:"CL21A226MQQNNNE",mfr:"Samsung",val:"22 µF",desc:"MLCC 22 µF 6.3 V X5R 0805",cat:"Capacitor",fp:"C_0805",lcsc:"C45783",pr:[0.018,0.014,0.009,0.006],h:1.25,sheet:"pwr",s:{x:940,y:250,w:40,h:60,k:"C",T:[["1","+3V3"]],B:[["2","GND"]]},b:[34,7.5,2,1.25]},
+ J1:{mpn:"TYPE-C-31-M-12",mfr:"HRO",val:"USB-C",desc:"USB Type-C receptacle, 16 pin, SMD",cat:"Connector",fp:"USB_C_HRO_TYPE-C-31-M-12",lcsc:"C165948",pr:[0.22,0.19,0.14,0.11],h:3.2,sheet:"mcu",s:{x:50,y:130,w:100,h:180,k:"box",R:[["VBUS","VBUS"],["D+","USB_DP"],["D−","USB_DN"],["CC1","CC1"],["CC2","CC2"],["GND","GND"]]},b:[4.2,30,8,7.4]},
+ R5:{mpn:"0603WAF5101T5E",mfr:"UNI-ROYAL",val:"5.1 kΩ",desc:"Thick film 5.1 kΩ 1% 0603, CC1 pull-down",cat:"Resistor",fp:"R_0603",lcsc:"C23186",pr:[0.002,0.0015,0.001,0.0006],h:0.5,sheet:"mcu",s:{x:240,y:390,w:40,h:60,k:"R",T:[["1","CC1"]],B:[["2","GND"]]},b:[11,35,1.6,0.8]},
+ R6:{mpn:"0603WAF5101T5E",mfr:"UNI-ROYAL",val:"5.1 kΩ",desc:"Thick film 5.1 kΩ 1% 0603, CC2 pull-down",cat:"Resistor",fp:"R_0603",lcsc:"C23186",pr:[0.002,0.0015,0.001,0.0006],h:0.5,sheet:"mcu",s:{x:170,y:390,w:40,h:60,k:"R",T:[["1","CC2"]],B:[["2","GND"]]},b:[11,37,1.6,0.8]},
+ U6:{mpn:"USBLC6-2SC6",mfr:"STMicroelectronics",val:"USBLC6-2",desc:"ESD protection for USB 2.0, SOT-23-6",cat:"Protection",fp:"SOT-23-6",lcsc:"C7519",pr:[0.09,0.075,0.055,0.042],h:1.1,sheet:"mcu",s:{x:280,y:140,w:120,h:110,k:"box",L:[["I/O1","USB_DP"],["I/O2","USB_DN"],["GND","GND"]],R:[["VBUS","VBUS"]]},b:[13,30,3,1.6]},
+ U1:{mpn:"ESP32-S3-WROOM-1-N8R8",mfr:"Espressif",val:"ESP32-S3",desc:"Wi-Fi + BLE 5 module, 8 MB flash, 8 MB PSRAM, PCB antenna",cat:"MCU module",fp:"ESP32-S3-WROOM-1",lcsc:null,pr:[3.10,2.95,2.62,2.35],h:3.1,sheet:"mcu",s:{x:520,y:100,w:200,h:300,k:"box",L:[["3V3","+3V3"],["EN","EN"],["IO0","IO0"],["GND","GND"]],R:[["IO20","USB_DP"],["IO19","USB_DN"],["IO8","I2C_SDA"],["IO9","I2C_SCL"],["TXD0","UART_TX"],["RXD0","UART_RX"]]},b:[42,29,25.5,18]},
+ J3:{mpn:"PZ254V-11-05P",mfr:"XFCN",val:"Debug",desc:"2.54 mm 1×5 pin header",cat:"Connector",fp:"PinHeader_1x05_P2.54",lcsc:null,pr:[0.03,0.025,0.018,0.013],h:8.5,sheet:"mcu",s:{x:840,y:130,w:100,h:150,k:"box",L:[["3V3","+3V3"],["TX","UART_TX"],["RX","UART_RX"],["IO0","IO0"],["GND","GND"]]},b:[22,37,12.7,2.54]},
+ R3:{mpn:"0603WAF1002T5E",mfr:"UNI-ROYAL",val:"10 kΩ",desc:"Thick film 10 kΩ 1% 0603, EN pull-up",cat:"Resistor",fp:"R_0603",lcsc:"C25804",pr:[0.002,0.0015,0.001,0.0006],h:0.5,sheet:"mcu",s:{x:380,y:420,w:40,h:60,k:"R",T:[["1","+3V3"]],B:[["2","EN"]]},b:[27,25,1.6,0.8],fix:1},
+ C7:{mpn:"CL10A105KB8NNNC",mfr:"Samsung",val:"1 µF",desc:"MLCC 1 µF 50 V X5R 0603, EN delay",cat:"Capacitor",fp:"C_0603",lcsc:"C15849",pr:[0.006,0.0045,0.003,0.002],h:0.8,sheet:"mcu",s:{x:450,y:420,w:40,h:60,k:"C",T:[["1","EN"]],B:[["2","GND"]]},b:[27,27,1.6,0.8],fix:1},
+ U4:{mpn:"SHT40-AD1B",mfr:"Sensirion",val:"SHT40",desc:"Humidity and temperature sensor, I²C 0x44",cat:"Sensor",fp:"DFN-4_1.5x1.5",lcsc:null,pr:[1.45,1.33,1.12,0.96],h:0.5,sheet:"sen",s:{x:110,y:110,w:160,h:120,k:"box",L:[["VDD","+3V3"],["GND","GND"]],R:[["SDA","I2C_SDA"],["SCL","I2C_SCL"]]},b:[53.6,3.4,1.5,1.5]},
+ U5:{mpn:"BME280",mfr:"Bosch Sensortec",val:"BME280",desc:"Pressure, humidity, temperature; I²C 0x76",cat:"Sensor",fp:"LGA-8_2.5x2.5",lcsc:"C92489",pr:[2.95,2.78,2.41,2.12],h:0.93,sheet:"sen",s:{x:500,y:110,w:170,h:200,k:"box",L:[["SDA","I2C_SDA"],["SCL","I2C_SCL"],["CSB","+3V3"]],R:[["VDD","+3V3"],["VDDIO","+3V3"],["GND","GND"],["SDO","GND"]]},b:[53.8,9.5,2.5,2.5]},
+ R1:{mpn:"0603WAF4701T5E",mfr:"UNI-ROYAL",val:"4.7 kΩ",desc:"Thick film 4.7 kΩ 1% 0603, SDA pull-up",cat:"Resistor",fp:"R_0603",lcsc:"C23162",pr:[0.002,0.0015,0.001,0.0006],h:0.5,sheet:"sen",s:{x:780,y:110,w:40,h:60,k:"R",T:[["1","+3V3"]],B:[["2","I2C_SDA"]]},b:[38,15,1.6,0.8]},
+ R2:{mpn:"0603WAF4701T5E",mfr:"UNI-ROYAL",val:"4.7 kΩ",desc:"Thick film 4.7 kΩ 1% 0603, SCL pull-up",cat:"Resistor",fp:"R_0603",lcsc:"C23162",pr:[0.002,0.0015,0.001,0.0006],h:0.5,sheet:"sen",s:{x:850,y:110,w:40,h:60,k:"R",T:[["1","+3V3"]],B:[["2","I2C_SCL"]]},b:[38,17,1.6,0.8]},
+ C4:{mpn:"CL10B104KB8NNNC",mfr:"Samsung",val:"100 nF",desc:"MLCC 100 nF 50 V X7R 0603",cat:"Capacitor",fp:"C_0603",lcsc:"C14663",pr:[0.004,0.003,0.002,0.0013],h:0.8,sheet:"sen",s:{x:330,y:250,w:40,h:60,k:"C",T:[["1","+3V3"]],B:[["2","GND"]]},b:[39,6,1.6,0.8]},
+ C6:{mpn:"CL10B104KB8NNNC",mfr:"Samsung",val:"100 nF",desc:"MLCC 100 nF 50 V X7R 0603",cat:"Capacitor",fp:"C_0603",lcsc:"C14663",pr:[0.004,0.003,0.002,0.0013],h:0.8,sheet:"sen",s:{x:720,y:380,w:40,h:60,k:"C",T:[["1","+3V3"]],B:[["2","GND"]]},b:[53.8,12.4,1.6,0.8]},
+};
+const SHEETS=[["pwr","Power"],["mcu","MCU & USB"],["sen","Sensors"]];
+const STOCK={"SHT40-AD1B":640};
+const stockOf=mpn=>STOCK[mpn]!==undefined?STOCK[mpn]:([...mpn].reduce((a,c)=>a+c.charCodeAt(0),0)*137)%90000+4200;
+const CATALOG_EXTRA=[
+ {mpn:"LMR51430XDDCR",mfr:"Texas Instruments",desc:"4.5–36 V, 3 A synchronous buck, SOT-23-6",cat:"Power IC",lcsc:null,pr:[0.84,0.74,0.57,0.45],fp:"SOT-23-6",alt:"U2"},
+ {mpn:"AP63203WU-7",mfr:"Diodes Inc.",desc:"3.8–32 V, 2 A buck, fixed 3.3 V, TSOT-26",cat:"Power IC",lcsc:null,pr:[0.48,0.42,0.33,0.27],fp:"TSOT-26",alt:"U2"},
+ {mpn:"SHT45-AD1B",mfr:"Sensirion",desc:"Humidity and temperature sensor ±1 %RH, I²C",cat:"Sensor",lcsc:null,pr:[2.9,2.7,2.3,2.0],fp:"DFN-4_1.5x1.5",alt:"U4"},
+ {mpn:"ESP32-S3-WROOM-1-N16R8",mfr:"Espressif",desc:"Wi-Fi + BLE 5 module, 16 MB flash, 8 MB PSRAM",cat:"MCU module",lcsc:null,pr:[3.9,3.7,3.3,3.0],fp:"ESP32-S3-WROOM-1",alt:"U1"},
+];
+const DS={
+ U2:[["Input voltage","3.8 – 30 V"],["Output current","3 A"],["Switching frequency","200 kHz – 2.2 MHz"],["Reference voltage","0.8 V"],["Quiescent current","12 µA"],["Package","SOT-583, 1.6 × 2.1 mm"]],
+ U1:[["Supply","3.0 – 3.6 V"],["CPU","Dual-core Xtensa LX7, 240 MHz"],["Memory","8 MB flash, 8 MB PSRAM"],["Wireless","Wi-Fi 4, Bluetooth LE 5"],["USB","Full-speed USB 2.0 on IO19 / IO20"],["Size","18 × 25.5 × 3.1 mm"]],
+ U4:[["Humidity accuracy","±1.8 %RH"],["Temperature accuracy","±0.2 °C"],["Supply","1.08 – 3.6 V"],["Interface","I²C, address 0x44"],["Size","1.5 × 1.5 × 0.5 mm"]],
+ U5:[["Pressure","300 – 1100 hPa"],["Supply","1.71 – 3.6 V"],["Interface","I²C 0x76 (SDO low) or SPI"],["Size","2.5 × 2.5 × 0.93 mm"]],
+ U6:[["Channels","2 data lines + VBUS rail"],["Working voltage","5.25 V"],["Line capacitance","3.5 pF typ."],["ESD","±15 kV air, IEC 61000-4-2"]],
+ J1:[["Standard","USB Type-C, USB 2.0 data"],["Rating","5 A, 20 V"],["Mounting","SMD + through-hole shell"]],
+ L1:[["Inductance","3.3 µH ±20 %"],["Saturation current","5.5 A"],["DCR","18.2 mΩ typ."],["Size","4.0 × 4.0 × 3.1 mm"]],
+};
+const ENCL=12; // mm above the board, from the brief
+
+/* design state: every change is a revision (commit), undoable */
+const NETCLS={"+12V_RAW":"pwr",VIN:"pwr","+3V3":"pwr",VBUS:"pwr",GND:"gnd",SW:"pwr"};
+function initialDesign(){return{rev:128,ercFix:false,synced:true,usbRouted:false,usbW:0.26,usbS:0.15,currents:{"+12V_RAW":null,"+3V3":null},powerSized:false,clearFix:false,
+ rules:{clearance:0.15,track:0.15,via:0.30,annular:0.13,edge:0.30},lcsc:{},outputsRev:null,signoff:null,
+ history:[{rev:125,who:"you",what:"Placed SHT40 at the board edge, away from the buck"},{rev:126,who:"you",what:"Assigned 4-layer stack-up (7628 prepreg, 1.6 mm)"},{rev:127,who:"agent · Claude Code (applied by you)",what:"Added I²C pull-ups R1, R2"},{rev:128,who:"you",what:"Moved D1 to clear the jack body"}],
+ checkpoints:[{name:"Schematic review",rev:121},{name:"Before layout pass 2",rev:126}]}}
+let D=initialDesign(),UNDO=[],REDO=[];
+function commit(what,who,fn){UNDO.push(clone(D));REDO=[];fn(D);D.rev++;D.history.push({rev:D.rev,who,what});renderAll();}
+function undo(){if(!UNDO.length)return toast("Nothing to undo");REDO.push(clone(D));D=UNDO.pop();renderAll();toast("Undone · back to r"+D.rev)}
+function redo(){if(!REDO.length)return toast("Nothing to redo");UNDO.push(clone(D));D=REDO.pop();renderAll();toast("Redone · r"+D.rev)}
+const has=r=>!P[r].fix||D.ercFix;
+const onBoard=(r,d=D)=>!P[r].fix||(d.ercFix&&d.synced);
+
+/* engineering: stack-up, impedance, checks (computed here from the sample design) */
+const STACK=[{n:"L1",name:"Top signal",kind:"copper",t:0.035,cu:"1 oz",col:"var(--lF)"},{n:"",name:"Prepreg 7628",kind:"diel",t:0.2104,er:4.4},{n:"L2",name:"GND plane",kind:"copper",t:0.0152,cu:"0.5 oz",col:"var(--l1)"},{n:"",name:"Core FR-4",kind:"diel",t:1.065,er:4.6},{n:"L3",name:"+3V3 plane",kind:"copper",t:0.0152,cu:"0.5 oz",col:"var(--l2)"},{n:"",name:"Prepreg 7628",kind:"diel",t:0.2104,er:4.4},{n:"L4",name:"Bottom signal",kind:"copper",t:0.035,cu:"1 oz",col:"var(--lB)"}];
+function z0(w){const h=0.2104,er=4.4,t=0.035;return 87/Math.sqrt(er+1.41)*Math.log(5.98*h/(0.8*w+t));}
+function zdiff(w,s){return 2*z0(w)*(1-0.48*Math.exp(-0.96*s/0.2104));}
+function ercRun(d){const f=[];if(!d.ercFix){
+ f.push({sev:"err",where:"sch",ref:"U1",pin:"EN",msg:"U1 EN is an input with nothing driving it",hint:"Add a pull-up and delay capacitor (module guidance: 10 kΩ and 1 µF)",fix:"erc"});
+ f.push({sev:"err",where:"sch",ref:"U1",pin:"3V3",msg:"+3V3 has power inputs but no power output or power flag",hint:"The buck drives +3V3 through L1; add a power flag",fix:"erc"});
+ f.push({sev:"warn",where:"sch",ref:"U2",pin:"PG",msg:"U2 PG (open-drain output) is not connected",hint:"Mark as no-connect or route to a GPIO",fix:"erc"});}return f;}
+function drcRun(d){const f=[],r=d.rules;
+ if(d.ercFix&&!d.synced)f.push({sev:"warn",where:"pcb",ref:"U1",msg:"Board is behind the schematic: R3 and C7 are not placed",hint:"Update the board from the schematic",fix:"sync"});
+ if(!d.usbRouted)f.push({sev:"err",where:"pcb",ref:"U6",at:[20,31],msg:"2 unrouted connections: USB_DP, USB_DN",hint:"Route as a 90 Ω differential pair on L1",fix:"usb"});
+ else{const z=zdiff(d.usbW,d.usbS);if(Math.abs(z-90)>9)f.push({sev:"err",where:"pcb",ref:"U6",msg:`USB pair impedance ${z.toFixed(1)} Ω is outside 90 Ω ±10 %`,hint:"Adjust width or gap in the stack-up panel",fix:null});}
+ if(!d.clearFix&&r.clearance>0.12)f.push({sev:"err",where:"pcb",ref:"D1",at:[11.6,5.6],msg:`Clearance 0.12 mm < ${r.clearance.toFixed(2)} mm: +12V_RAW track to a GND via`,hint:"Move the via or nudge the track",fix:"power"});
+ if(r.track>0.2)f.push({sev:"err",where:"pcb",ref:"R1",msg:`6 I²C tracks at 0.20 mm are below the ${r.track.toFixed(2)} mm minimum`,hint:"Lower the rule or widen the tracks",fix:null});
+ if(r.via>0.3)f.push({sev:"err",where:"pcb",ref:"U1",msg:`14 vias with 0.30 mm drill are below the ${r.via.toFixed(2)} mm rule`,hint:"Lower the rule or enlarge the vias",fix:null});
+ if(r.annular>0.15)f.push({sev:"err",where:"pcb",ref:"U1",msg:`Annular ring 0.15 mm is below the ${r.annular.toFixed(2)} mm rule`,hint:"Enlarge the via pads",fix:null});
+ if(r.edge>0.5)f.push({sev:"err",where:"pcb",ref:"J1",msg:`J1 shell pads sit 0.40 mm from the edge; the rule is ${r.edge.toFixed(2)} mm`,hint:"Edge connectors usually need a rule exception",fix:null});
+ if(!d.powerSized&&(!d.currents["+12V_RAW"]||!d.currents["+3V3"]))f.push({sev:"unk",where:"pcb",ref:"U2",msg:"Track width vs current: no current declared for +12V_RAW and +3V3",hint:"Declare rail currents so EAK can check the copper width",fix:"power"});
+ return f;}
+const RULES_TOTAL=46;
+const counts=l=>({e:l.filter(x=>x.sev==="err").length,w:l.filter(x=>x.sev==="warn").length,u:l.filter(x=>x.sev==="unk").length});
+function bomLines(d){const g={};for(const r of Object.keys(P)){if(P[r].fix&&!d.ercFix)continue;const p=P[r];(g[p.mpn]=g[p.mpn]||{mpn:p.mpn,mfr:p.mfr,desc:p.desc,fp:p.fp,val:p.val,refs:[],pr:p.pr,lcsc:d.lcsc[p.mpn]!==undefined?d.lcsc[p.mpn]:p.lcsc}).refs.push(r)}return Object.values(g)}
+function bomCost(q){const i=q>=1000?3:q>=100?2:q>=10?1:0;return bomLines(D).reduce((a,l)=>a+l.pr[i]*l.refs.length,0);}
+function readiness(d){const e=counts(ercRun(d)),r=counts(drcRun(d)),un=bomLines(d).filter(x=>!x.lcsc).length;return[
+ {k:"ERC",ok:e.e+e.w===0,txt:e.e+e.w?`${e.e} errors, ${e.w} warning`:"Clean",go:"checks"},
+ {k:"DRC",ok:r.e+r.w+r.u===0,txt:r.e+r.w+r.u?`${r.e} errors, ${r.w} warnings, ${r.u} unknown`:`Clean · ${RULES_TOTAL} rules`,go:"checks"},
+ {k:"Board matches schematic",ok:!(d.ercFix&&!d.synced),txt:d.ercFix&&!d.synced?"2 parts to place":"In sync",go:"pcb"},
+ {k:"Sourcing",ok:un===0,txt:un?`${un} lines without a source`:"Every line sourced",go:"fab"},
+ {k:"Outputs for this revision",ok:d.outputsRev===d.rev,txt:d.outputsRev===d.rev?`r${d.rev}`:d.outputsRev?`Stale, made at r${d.outputsRev}`:"Not generated",go:"fab"},
+ {k:"Engineer sign-off",ok:d.signoff===d.rev,txt:d.signoff===d.rev?"Signed by you":"Pending",go:"fab"}];}
+const STAGES=[["Requirements","project"],["Parts","parts"],["Schematic","sch"],["ERC","checks"],["Layout","pcb"],["Routing","pcb"],["DRC","checks"],["3D","v3d"],["Outputs","fab"],["Release","fab"]];
+function stageState(i){const e=counts(ercRun(D)),r=counts(drcRun(D));switch(i){
+ case 0:return D.currents["+3V3"]||D.powerSized?2:1;case 1:return bomLines(D).every(x=>x.lcsc)?2:1;case 2:return 2;case 3:return e.e?0:e.w?1:2;case 4:return D.ercFix&&!D.synced?1:2;case 5:return D.usbRouted?2:1;case 6:return r.e?0:r.u||r.w?1:2;case 7:return 2;case 8:return D.outputsRev===D.rev?2:1;case 9:return D.signoff===D.rev?2:1;}}
+
+/* board geometry (mm) */
+function pads(r){const p=P[r];const[x,y,w,h]=p.b;const out=[];const n=["L","R","T","B"].reduce((a,k)=>a+(p.s[k]||[]).length,0);
+ if(["R","C","D","L"].includes(p.s.k)){const pw=Math.min(w*0.36,1.6),ph=h*0.95;out.push([x-w/2+pw/2,y,pw,ph],[x+w/2-pw/2,y,pw,ph]);return out;}
+ if(r==="U1"){for(let i=0;i<13;i++)out.push([x-w/2+1.5+i*1.27,y+h/2-0.4,0.9,0.8]);for(let i=0;i<13;i++)out.push([x-w/2+1.5+i*1.27,y-h/2+0.4,0.9,0.8]);for(let i=0;i<13;i++)out.push([x-w/2+0.4,y-h/2+1.5+i*1.18,0.8,0.9]);out.push([x-4,y,3.7,3.7]);return out;}
+ if(r==="J3"){for(let i=0;i<5;i++)out.push([x-5.08+i*2.54,y,1.7,1.7,1]);return out;}
+ if(r==="J2"){out.push([x+3.5,y-2.5,2.2,3,1],[x+3.5,y+3,2.2,3,1],[x-1,y+4.5,2.2,2.2,1]);return out;}
+ if(r==="J1"){for(let i=0;i<8;i++)out.push([x+w/2-0.6,y-2.8+i*0.8,1.1,0.32]);out.push([x-1,y-3.9,1.6,1.1,1],[x-1,y+3.9,1.6,1.1,1]);return out;}
+ if(r==="U3"){out.push([x-4.6,y-3,0.8,1.2],[x-4.6,y+3,0.8,1.2],[x+4.6,y-3,0.8,1.2],[x+4.6,y+3,0.8,1.2],[x,y,3,3]);return out;}
+ const k=Math.max(2,Math.ceil(n/2));for(let i=0;i<k;i++){const yy=y-h/2+h*(i+.5)/k;out.push([x-w/2,yy,w*0.3,Math.min(0.5,h/k*0.6)],[x+w/2,yy,w*0.3,Math.min(0.5,h/k*0.6)]);}return out;}
+function tracks(d){const T=[],pw=d.powerSized?0.6:0.4;
+ T.push({l:"F",n:"+12V_RAW",w:pw,p:d.clearFix?[[9.5,4.5],[12,4.2]]:[[9.5,5.5],[12,4.2]]});
+ T.push({l:"F",n:"VIN",w:pw,p:[[16.1,4],[19,4],[20.5,5.4]]});T.push({l:"F",n:"VIN",w:pw,p:[[16.1,13],[17.6,13],[17.6,6.5],[20.5,6.5]]});T.push({l:"F",n:"VIN",w:0.3,p:[[19,11.4],[17.6,11.4]]});
+ T.push({l:"F",n:"SW",w:0.6,p:[[23.6,6],[26,6]]});T.push({l:"F",n:"+3V3",w:pw,p:[[30,6],[33,5],[34.5,5]]});T.push({l:"F",n:"+3V3",w:pw,p:[[33,5],[33,7.5],[34.5,7.5]]});
+ T.push({l:"F",n:"FB",w:0.2,p:[[31.2,11],[24,11],[23.4,7]]});T.push({l:"F",n:"VBUS",w:0.5,p:[[8.2,27.3],[10.5,24],[13,24],[13,14.5],[12,13]]});
+ T.push({l:"F",n:"I2C_SDA",w:0.2,p:[[33,20.4],[33,15],[37.2,15]]});T.push({l:"F",n:"I2C_SDA",w:0.2,p:[[38.8,15],[40.4,15],[40.4,12]]});T.push({l:"F",n:"I2C_SCL",w:0.2,p:[[34.3,20.4],[34.3,17],[37.2,17]]});
+ T.push({l:"B",n:"I2C_SDA",w:0.2,p:[[40.4,12],[44,15.6],[52.6,15.6],[52.6,10]]});T.push({l:"B",n:"I2C_SCL",w:0.2,p:[[38.8,17],[45,16.6],[54.2,16.6],[54.2,4.6]]});
+ T.push({l:"F",n:"UART_TX",w:0.2,p:[[30.2,36],[24.5,36],[24.5,37]]});T.push({l:"F",n:"UART_RX",w:0.2,p:[[30.2,35],[21.9,35],[21.9,37]]});
+ T.push({l:"F",n:"CC1",w:0.2,p:[[8.2,31.6],[10.2,35]]});T.push({l:"F",n:"CC2",w:0.2,p:[[8.2,32.4],[9.6,37],[10.2,37]]});
+ if(d.usbRouted){const g=d.usbW+d.usbS;const a=[[8.2,29.6],[11.5,29.6],[14.6,29.6],[17,32],[28,32],[29.6,33.2]];T.push({l:"F",n:"USB_DP",w:d.usbW,p:a});T.push({l:"F",n:"USB_DN",w:d.usbW,p:a.map(q=>[q[0],q[1]+g])});}
+ if(onBoard("R3",d)){T.push({l:"F",n:"EN",w:0.2,p:[[27.8,25],[29.6,25.6]]});T.push({l:"F",n:"EN",w:0.2,p:[[27.8,27],[28.4,27],[28.4,25]]});}
+ return T;}
+const VIAS=[[11.6,5.6,"GND"],[33,9,"+3V3"],[31,24,"+3V3"],[40.4,12,"I2C_SDA"],[38.8,17,"I2C_SCL"],[18,18,"GND"],[24,20,"GND"],[36,38,"GND"],[48,18,"GND"],[6,20,"GND"],[26,14,"GND"],[15,24,"GND"],[44,3,"GND"],[20,30,"GND"]];
+const LAYERS=[["F","Top copper","L1","var(--lF)"],["In1","GND plane","L2","var(--l1)"],["In2","+3V3 plane","L3","var(--l2)"],["B","Bottom copper","L4","var(--lB)"],["SilkF","Top silkscreen","","var(--silk)"],["Edge","Board outline","","var(--edge)"]];
+const poly=(pts)=>pts.map(q=>q.join(",")).join(" ");
+function boardSvg(o={}){const vis=o.vis||{F:1,In1:1,In2:1,B:1,SilkF:1,Edge:1};const d=o.d||D;const mono=o.mono;
+ const col=k=>mono||({F:"#D8955C",B:"#6E9FD0",In1:"#5FA88A",In2:"#D07A8C",SilkF:"#E9E6DE",Edge:"#E2B35C"})[k];
+ const dim=k=>o.active&&o.active!==k?0.35:1;const T=tracks(d);
+ let s=`<rect x="0" y="0" width="56" height="40" rx="2" fill="${mono?"#000":"#101513"}"/>`;
+ const order=o.active?["In2","In1","B","F"].filter(k=>k!==o.active).concat([o.active]):["In2","In1","B","F"];
+ for(const L of order){if(!vis[L])continue;const op=dim(L);
+  if(L==="In1")s+=`<path opacity="${0.22*op}" d="M0.6 0.6H55.4V39.4H0.6Z M48.2 19.6H55.6V38.4H48.2Z" fill="${col("In1")}" fill-rule="evenodd"/>`;
+  if(L==="In2")s+=`<path opacity="${0.2*op}" d="M24 2H40V19H48V38H24Z" fill="${col("In2")}"/>`;
+  if(L==="B"){s+=`<g opacity="${op}"><path d="M0.8 0.8H55.2V39.2H0.8Z M48.2 19.6H55.6V38.4H48.2Z" fill="${col("B")}" fill-opacity=".13" fill-rule="evenodd"/>`;
+   for(const t of T.filter(t=>t.l==="B")){if(!mono)s+=`<polyline points="${poly(t.p)}" fill="none" stroke="#101513" stroke-width="${t.w+0.4}" stroke-linecap="round" stroke-linejoin="round"/>`;s+=`<polyline points="${poly(t.p)}" fill="none" stroke="${col("B")}" stroke-width="${t.w}" stroke-linecap="round" stroke-linejoin="round"/>`;}
+   if(!mono)for(const v of VIAS){s+=`<circle cx="${v[0]}" cy="${v[1]}" r=".62" fill="#101513"/>`;if(v[2]==="GND")for(let k=0;k<4;k++){const a=k*Math.PI/2+Math.PI/4;s+=`<line x1="${(v[0]+Math.cos(a)*.28).toFixed(2)}" y1="${(v[1]+Math.sin(a)*.28).toFixed(2)}" x2="${(v[0]+Math.cos(a)*.7).toFixed(2)}" y2="${(v[1]+Math.sin(a)*.7).toFixed(2)}" stroke="${col("B")}" stroke-opacity=".55" stroke-width=".17"/>`;}}
+   s+=`</g>`;}
+  if(L==="F"){s+=`<g opacity="${op}">`+T.filter(t=>t.l==="F").map(t=>`<polyline points="${poly(t.p)}" fill="none" stroke="${o.hl===t.n?"#FFE2C4":col("F")}" stroke-width="${t.w}" stroke-linecap="round" stroke-linejoin="round" ${mono?"":`data-a="net" data-arg="${t.n}" style="cursor:pointer"`}/>`).join("");
+   for(const r of Object.keys(P)){if(!onBoard(r,d))continue;for(const q of pads(r))s+=q[4]?`<circle cx="${q[0]}" cy="${q[1]}" r="${q[2]/2}" fill="${mono||"#D4B36A"}"/><circle cx="${q[0]}" cy="${q[1]}" r="${q[2]/4}" fill="#0C0D0F"/>`:`<rect x="${(q[0]-q[2]/2).toFixed(2)}" y="${(q[1]-q[3]/2).toFixed(2)}" width="${q[2]}" height="${q[3]}" rx=".12" fill="${mono||"#D4B36A"}"/>`;}
+   s+=`</g>`;}}
+ if(vis.F||vis.B)for(const v of VIAS)s+=`<circle cx="${v[0]}" cy="${v[1]}" r=".3" fill="${mono||"#C9A866"}"/><circle cx="${v[0]}" cy="${v[1]}" r=".15" fill="#0C0D0F"/>`;
+ if(vis.SilkF&&!mono)for(const r of Object.keys(P)){if(!onBoard(r,d))continue;const[x,y,w,h]=P[r].b;const sel=o.sel===r;
+  s+=`<g data-a="selPart" data-arg="${r}" style="cursor:pointer"><rect x="${x-w/2-.3}" y="${y-h/2-.3}" width="${w+.6}" height="${h+.6}" rx=".3" fill="transparent" stroke="${sel?"#D8955C":"#E9E6DE"}" stroke-opacity="${sel?1:.38}" stroke-width="${sel?.22:.12}"/><text x="${x-w/2}" y="${y-h/2-.6}" font-size="1.05" fill="#E9E6DE" fill-opacity=".7" font-family="ui-monospace,monospace">${r}</text></g>`;}
+ if(vis.Edge)s+=`<rect x="0" y="0" width="56" height="40" rx="2" fill="none" stroke="${mono||"#E2B35C"}" stroke-width=".15"/>${mono?"":`<rect x="48.2" y="19.6" width="7.4" height="18.8" fill="none" stroke="#E9E6DE" stroke-opacity=".3" stroke-width=".1" stroke-dasharray=".5 .4"/><text x="48.6" y="21" font-size=".9" fill="#E9E6DE" fill-opacity=".4">antenna keep-out</text>`}`;
+ for(const h of [[2.5,20],[38,2.2],[30,2.2]])s+=`<circle cx="${h[0]}" cy="${h[1]}" r="1.6" fill="#0C0D0F" stroke="#D4B36A" stroke-opacity=".6" stroke-width=".5"/>`;
+ if(!mono&&!d.usbRouted)s+=`<line x1="11.5" y1="29.6" x2="29.6" y2="33.2" stroke="#86C5E0" stroke-opacity=".7" stroke-width=".09" stroke-dasharray=".4 .3"/><line x1="11.5" y1="30" x2="29.6" y2="33.8" stroke="#86C5E0" stroke-opacity=".7" stroke-width=".09" stroke-dasharray=".4 .3"/>`;
+ if(o.proposal)s+=o.proposal;
+ if(o.markers)for(const f of drcRun(d)){const at=f.at||(P[f.ref]?P[f.ref].b.slice(0,2):null);if(!at)continue;s+=`<circle cx="${at[0]}" cy="${at[1]}" r="1.4" fill="none" stroke="${f.sev==="err"?"#EC7C6B":f.sev==="warn"?"#E2B35C":"#8A929E"}" stroke-width=".22">${RM?"":'<animate attributeName="r" values="1.2;1.8;1.2" dur="2.4s" repeatCount="indefinite"/>'}</circle>`;}
+ if(o.focus){const[x,y,w,h]=P[o.focus].b;s+=`<rect x="${x-w/2-1}" y="${y-h/2-1}" width="${w+2}" height="${h+2}" rx=".6" fill="none" stroke="#D8955C" stroke-width=".25"/>`;}
+ return s;}
+function usbProposalSvg(dash){const g=0.41;const a=[[8.2,29.6],[11.5,29.6],[14.6,29.6],[17,32],[28,32],[29.6,33.2]];
+ return a&&[a,a.map(q=>[q[0],q[1]+g])].map(p=>`<polyline points="${poly(p)}" fill="none" stroke="#86C5E0" stroke-width=".26" stroke-linecap="round" stroke-linejoin="round" ${dash?'pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"':""}/>`).join("");}
+
+/* schematic */
+function pinPos(S,side,i){const{x,y,w,h}=S;const mid=S.k!=="box";
+ if(side==="L")return[x,mid?y+h/2:y+30+i*26,-1,0];if(side==="R")return[x+w,mid?y+h/2:y+30+i*26,1,0];if(side==="T")return[x+w/2,y,0,-1];return[x+w/2,y+h,0,1];}
+const WIRES={
+ pwr:{w:[[162,200,180,200,180,157,198,157,"+12V_RAW"],[312,157,330,157,"VIN"],[312,297,330,297,"VIN"],[330,150,330,297,"VIN"],[330,150,408,150,"VIN"],[330,176,408,176,"VIN"],[330,297,380,297,380,308,"VIN"],
+  [602,176,620,176,"SW"],[620,122,620,187,"SW"],[620,122,660,122,"SW"],[620,187,628,187,"SW"],[602,150,610,150,610,10,660,10,660,18,"BST"],
+  [752,187,960,187,"+3V3"],[800,187,800,228,"+3V3"],[900,187,900,228,"+3V3"],[960,187,960,228,"+3V3"],[800,332,800,368,"FB"],[800,350,616,350,616,202,602,202,"FB"]],
+  j:[[330,157],[330,176],[330,297],[620,176],[800,187],[900,187],[800,350]],lab:[[186,196,"+12V_RAW"],[336,240,"VIN"],[624,140,"SW"],[668,10,"BST"],[640,346,"FB"],[848,182,"+3V3"]]},
+ mcu:{w:[[172,186,240,186,240,170,258,170,"USB_DP"],[172,212,248,212,248,196,258,196,"USB_DN"],[172,160,186,160,186,118,440,118,440,170,422,170,"VBUS"],[172,238,260,238,260,368,"CC1"],[172,264,190,264,190,368,"CC2"]],
+  j:[],lab:[[176,182,"USB_DP"],[176,226,"USB_DN"],[200,113,"VBUS"],[200,234,"CC1"],[196,284,"CC2"]]},
+ sen:{w:[[292,140,432,140,440,132,"I2C_SDA"],[292,166,432,166,440,158,"I2C_SCL"],[440,132,448,140,478,140,"I2C_SDA"],[440,158,448,166,478,166,"I2C_SCL"]],
+  j:[],lab:[[300,136,"SDA"],[300,162,"SCL"]],bus:[440,120,440,210]},
+};
+const NOL=new Set(["J2.+","D1.A","D1.K","D2.K","U2.VIN","U2.EN","C1.1","U2.SW","U2.BST","U2.FB","C9.1","C9.2","L1.1","L1.2","R7.1","R7.2","R8.1","C2.1","C3.1",
+ "J1.VBUS","J1.D+","J1.D−","J1.CC1","J1.CC2","U6.I/O1","U6.I/O2","U6.VBUS","R5.1","R6.1","U4.SDA","U4.SCL","U5.SDA","U5.SCL"]);
+function schSvg(sheet,o={}){const d=o.d||D;const erc=ercRun(d);const nr=o.newRefs||[];
+ let s=`<defs><pattern id="dg${sheet}" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".8" fill="#2A2D31"/></pattern></defs><rect x="-400" y="-300" width="1800" height="1300" fill="url(#dg${sheet})"/>`;
+ s+=`<text x="30" y="598" fill="#6F6B65" font-size="11" font-family="ui-monospace,monospace">Aurora S3 · ${SHEETS.find(x=>x[0]===sheet)[1]} · r${d.rev}</text>`;
+ const W=WIRES[sheet];
+ if(W){if(W.bus)s+=`<line x1="${W.bus[0]}" y1="${W.bus[1]}" x2="${W.bus[2]}" y2="${W.bus[3]}" stroke="#7FAE96" stroke-width="4" stroke-linecap="round"/><text x="${W.bus[0]+8}" y="${W.bus[3]+16}" fill="#9FC3D4" font-size="10.5" font-family="ui-monospace,monospace" data-net="I2C_SDA">I2C {SDA, SCL}</text>`;
+  for(const w of W.w){const n=w[w.length-1];const pts=[];for(let i=0;i<w.length-1;i+=2)pts.push(w[i]+","+w[i+1]);s+=`<polyline data-net="${n}" data-a="net" data-arg="${n}" points="${pts.join(" ")}" fill="none" stroke="${o.hl===n?"#D8955C":"#7FAE96"}" stroke-width="1.4" stroke-linejoin="round" style="cursor:pointer"/>`;}
+  for(const j of W.j)s+=`<circle cx="${j[0]}" cy="${j[1]}" r="3" fill="#7FAE96"/>`;
+  for(const l of W.lab)s+=`<text data-net="${l[2]}" data-a="net" data-arg="${l[2]}" x="${l[0]}" y="${l[1]}" fill="${o.hl===l[2]?"#D8955C":NETCLS[l[2]]==="pwr"?"#D9B78A":"#9FC3D4"}" font-size="10.5" font-family="ui-monospace,monospace" style="cursor:pointer">${l[2]}</text>`;}
+ for(const r of Object.keys(P)){const p=P[r];if(p.sheet!==sheet)continue;const present=!p.fix||d.ercFix;const isNew=nr.includes(r);if(!present&&!isNew)continue;
+  const S=p.s,sel=o.sel===r,c=isNew?"#86C5E0":sel?"#D8955C":"#B9B4AB";
+  s+=`<g data-a="selPart" data-arg="${r}" style="cursor:pointer">`;
+  if(S.k==="box")s+=`<rect x="${S.x}" y="${S.y}" width="${S.w}" height="${S.h}" rx="3" fill="#15171A" stroke="${c}" stroke-width="${sel||isNew?1.6:1}" ${isNew?'stroke-dasharray="5 3"':""}/>`;
+  else{const cx=S.x+S.w/2,cy=S.y+S.h/2;
+   if(S.k==="R")s+=`<rect x="${cx-7}" y="${cy-16}" width="14" height="32" rx="2" fill="#15171A" stroke="${c}" stroke-width="1.2"/><line x1="${cx}" y1="${S.y}" x2="${cx}" y2="${cy-16}" stroke="${c}"/><line x1="${cx}" y1="${cy+16}" x2="${cx}" y2="${S.y+S.h}" stroke="${c}"/>`;
+   if(S.k==="C")s+=`<line x1="${cx-12}" y1="${cy-4}" x2="${cx+12}" y2="${cy-4}" stroke="${c}" stroke-width="2"/><line x1="${cx-12}" y1="${cy+4}" x2="${cx+12}" y2="${cy+4}" stroke="${c}" stroke-width="2"/><line x1="${cx}" y1="${S.y}" x2="${cx}" y2="${cy-4}" stroke="${c}"/><line x1="${cx}" y1="${cy+4}" x2="${cx}" y2="${S.y+S.h}" stroke="${c}"/>`;
+   if(S.k==="D")s+=`<polygon points="${cx-10},${cy-10} ${cx-10},${cy+10} ${cx+8},${cy}" fill="none" stroke="${c}" stroke-width="1.2"/><line x1="${cx+9}" y1="${cy-10}" x2="${cx+9}" y2="${cy+10}" stroke="${c}" stroke-width="1.6"/><line x1="${S.x}" y1="${cy}" x2="${cx-10}" y2="${cy}" stroke="${c}"/><line x1="${cx+9}" y1="${cy}" x2="${S.x+S.w}" y2="${cy}" stroke="${c}"/>`;
+   if(S.k==="L")s+=`<path d="M${S.x} ${cy} H${cx-24} a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 H${S.x+S.w}" fill="none" stroke="${c}" stroke-width="1.2"/>`;
+   s+=`<rect x="${S.x}" y="${S.y}" width="${S.w}" height="${S.h}" fill="transparent"/>`;}
+  const above=S.k==="D"||S.k==="L";const lx=S.k==="box"||above?S.x:S.x+S.w+8,ly=S.k==="box"?S.y-8:above?S.y-6:S.y+S.h/2-4;
+  s+=`<text x="${lx}" y="${ly}" fill="${isNew?"#86C5E0":"#ECE8E1"}" font-size="12" font-weight="600">${r}</text><text x="${lx}" y="${ly+(S.k==="box"||above?-14:14)}" fill="#A7A29A" font-size="11">${esc(p.val)}</text>`;
+  for(const side of ["L","R","T","B"])(S[side]||[]).forEach((pn,i)=>{const[px,py,dx,dy]=pinPos(S,side,i);
+   let net=pn[1];if(r==="U1"&&pn[0]==="EN"&&!(d.ercFix||nr.includes("R3")))net=null;
+   const bad=erc.find(f=>f.ref===r&&f.pin===pn[0]);const ex=px+dx*22,ey=py+dy*22;
+   s+=`<line x1="${px}" y1="${py}" x2="${ex}" y2="${ey}" stroke="${c}" stroke-width="1"/>`;
+   if(S.k==="box")s+=`<text x="${px-dx*6}" y="${py+4}" fill="#A7A29A" font-size="10.5" text-anchor="${dx<0?"start":"end"}" font-family="ui-monospace,monospace">${pn[0]}</text>`;
+   if(net){if(net==="GND"){s+=`<g stroke="#8F8A82">`+(dx?`<line x1="${ex}" y1="${ey}" x2="${ex+dx*6}" y2="${ey}"/><line x1="${ex+dx*6}" y1="${ey-7}" x2="${ex+dx*6}" y2="${ey+7}"/><line x1="${ex+dx*9}" y1="${ey-4}" x2="${ex+dx*9}" y2="${ey+4}"/><line x1="${ex+dx*12}" y1="${ey-1.5}" x2="${ex+dx*12}" y2="${ey+1.5}"/>`:`<line x1="${ex}" y1="${ey}" x2="${ex}" y2="${ey+dy*6}"/><line x1="${ex-7}" y1="${ey+dy*6}" x2="${ex+7}" y2="${ey+dy*6}"/><line x1="${ex-4}" y1="${ey+dy*9}" x2="${ex+4}" y2="${ey+dy*9}"/><line x1="${ex-1.5}" y1="${ey+dy*12}" x2="${ex+1.5}" y2="${ey+dy*12}"/>`)+`</g>`;}
+    else if(!NOL.has(r+"."+pn[0])){const tx=ex+dx*4,ty=ey+(dy?dy*12:4);s+=`<text data-net="${net}" data-a="net" data-arg="${net}" x="${tx}" y="${ty}" fill="${o.hl===net?"#D8955C":NETCLS[net]==="pwr"?"#D9B78A":"#9FC3D4"}" font-size="10.5" font-family="ui-monospace,monospace" text-anchor="${dx<0?"end":dx>0?"start":"middle"}" style="cursor:pointer">${net}</text>`;}}
+   else if(!bad)s+=`<text x="${ex+dx*3-4}" y="${ey+4}" fill="#8F8A82" font-size="11">×</text>`;
+   if(bad)s+=`<circle cx="${ex}" cy="${ey}" r="9" fill="none" stroke="${bad.sev==="err"?"#EC7C6B":"#E2B35C"}" stroke-width="1.5"/>`;});
+  s+=`</g>`;}
+ if(sheet==="pwr"&&(d.ercFix||o.flag)){const c=o.flag&&!d.ercFix||nr.length?"#86C5E0":"#B9B4AB";s+=`<g stroke="${c}" fill="none"><line x1="780" y1="187" x2="780" y2="162"/><polygon points="772,162 788,162 780,150"/></g><circle cx="780" cy="187" r="3" fill="#7FAE96"/><text x="792" y="160" fill="${c}" font-size="10.5" font-family="ui-monospace,monospace">PWR_FLAG</text>`;}
+ return s;}
+
+/* 3D: perspective canvas renderer */
+function render3D(cv,cam,opt={}){const dpr=Math.min(devicePixelRatio||1,2);const W=cv.clientWidth,H=cv.clientHeight;if(!W||!H)return;
+ if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
+ const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+ const vis=opt.vis||{comp:1,silk:1,F:1,In:1,B:1};const e=opt.explode||0;const d=opt.d||D;
+ const cy=Math.cos(cam.yaw),sy=Math.sin(cam.yaw),ct=Math.cos(cam.tilt),st=Math.sin(cam.tilt);
+ const Dd=150,f=Math.min(W,H)*1.55*cam.zoom;const ox=W*(opt.cx||0.5),oy=H*(opt.cy||0.52);
+ const pr=(x,y,z)=>{const X=x-28,Y=y-20;const x1=X*cy-Y*sy,y1=X*sy+Y*cy;const y2=y1*ct-z*st;const dz=Dd-(z*ct+y1*st);return[ox+x1*f/dz,oy+y2*f/dz,dz];};
+ const pg=(pts,fill,stroke,lw)=>{g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();if(fill){g.fillStyle=fill;g.fill();}if(stroke){g.strokeStyle=stroke;g.lineWidth=lw||1;g.stroke();}};
+ const shade=(hex,k)=>{const n=parseInt(hex.slice(1),16);return`rgb(${Math.min(255,(n>>16)*k)|0},${Math.min(255,((n>>8)&255)*k)|0},${Math.min(255,(n&255)*k)|0})`;};
+ const label=(p,t,c)=>{if(!opt.layerLabels)return;g.font="12px system-ui,sans-serif";g.fillStyle=c;g.fillText(t,p[0]+12,p[1]+4);};
+ const zF=1.6+e*16,z1=1.1+e*5.5,z2=0.5-e*5.5,zB=0-e*16;
+ const plane=(z,fill,a)=>{g.globalAlpha=a;pg([pr(0,0,z),pr(56,0,z),pr(56,40,z),pr(0,40,z)],fill);g.globalAlpha=1;};
+ const lines=(arr,z,c)=>{for(const t of arr){g.beginPath();t.p.forEach((q,i)=>{const p=pr(q[0],q[1],z);i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]);});const m=pr(t.p[0][0],t.p[0][1],z);g.lineWidth=Math.max(.7,t.w*f/m[2]);g.strokeStyle=c;g.lineCap="round";g.lineJoin="round";g.stroke();}};
+ const T=tracks(d);
+ if(e>0.02){if(vis.B){plane(zB,"#16241f",.9);lines(T.filter(t=>t.l==="B"),zB,"#6E9FD0");label(pr(56,40,zB),"L4 · Bottom signal","#6E9FD0");}
+  if(vis.In){plane(z2,"#3a1f27",.55);label(pr(56,40,z2),"L3 · +3V3 plane","#D07A8C");plane(z1,"#1d3a2f",.55);label(pr(56,40,z1),"L2 · GND plane","#5FA88A");}
+  plane(zF-0.05,"#111614",.92);label(pr(56,40,zF),"L1 · Top signal","#D8955C");}
+ else{const top=[pr(0,0,1.6),pr(56,0,1.6),pr(56,40,1.6),pr(0,40,1.6)],bot=[pr(0,0,0),pr(56,0,0),pr(56,40,0),pr(0,40,0)];
+  const faces=[[0,1],[1,2],[2,3],[3,0]].map(([a,b])=>({p:[top[a],top[b],bot[b],bot[a]],z:(top[a][2]+top[b][2])/2}));faces.sort((a,b)=>b.z-a.z);for(const fc of faces)pg(fc.p,"#0a0d0c");pg(top,"#111614");}
+ if(vis.F){lines(T.filter(t=>t.l==="F"),zF,"#9E6C43");
+  for(const r of Object.keys(P)){if(!onBoard(r,d))continue;for(const q of pads(r)){if(q[4]){const c=pr(q[0],q[1],zF);g.beginPath();g.arc(c[0],c[1],Math.max(1,q[2]/2*f/c[2]),0,7);g.fillStyle="#D4B36A";g.fill();}else pg([pr(q[0]-q[2]/2,q[1]-q[3]/2,zF),pr(q[0]+q[2]/2,q[1]-q[3]/2,zF),pr(q[0]+q[2]/2,q[1]+q[3]/2,zF),pr(q[0]-q[2]/2,q[1]+q[3]/2,zF)],"#D4B36A");}}}
+ if(vis.silk&&e<0.02)for(const r of Object.keys(P)){if(!onBoard(r,d))continue;const[x,y,w,h]=P[r].b;g.globalAlpha=.35;pg([pr(x-w/2-.3,y-h/2-.3,zF),pr(x+w/2+.3,y-h/2-.3,zF),pr(x+w/2+.3,y+h/2+.3,zF),pr(x-w/2-.3,y+h/2+.3,zF)],null,"#E9E6DE",.8);g.globalAlpha=1;}
+ for(const h of [[2.5,20],[38,2.2],[30,2.2]]){const c=pr(h[0],h[1],zF);g.beginPath();g.arc(c[0],c[1],1.6*f/c[2],0,7);g.fillStyle="#050606";g.fill();g.strokeStyle="#D4B36A";g.lineWidth=.6*f/c[2];g.stroke();}
+ if(vis.comp){const COLS={J2:"#1c1d1f",J1:"#C5C8CC",U1:"#B7BBC0",J3:"#151516",L1:"#3A3B3D",D1:"#232425",D2:"#232425"};const faces=[];
+  const box=(x0,y0,x1,y1,za,zb,c,flag)=>{const v=[[x0,y0,za],[x1,y0,za],[x1,y1,za],[x0,y1,za],[x0,y0,zb],[x1,y0,zb],[x1,y1,zb],[x0,y1,zb]].map(q=>pr(...q));
+   for(const[ix,k] of [[[4,5,6,7],1.0],[[0,1,5,4],.62],[[1,2,6,5],.78],[[2,3,7,6],.7],[[3,0,4,7],.55]]){const pts=ix.map(i=>v[i]);faces.push({pts,z:pts.reduce((a,p)=>a+p[2],0)/4,c:shade(c,k),top:k===1,flag});}};
+  for(const r of Object.keys(P)){if(!onBoard(r,d))continue;const p=P[r];const[x,y,w,h]=p.b;const base=COLS[r]||(p.cat==="Capacitor"?"#8B6E4E":p.cat==="Resistor"?"#1E1F21":"#1A1B1D");const flag=opt.flagH&&p.h>opt.flagH;
+   if(r==="U1"){box(x-w/2,y-h/2,x+w/2-6.3,y+h/2,zF,zF+p.h,base,flag);box(x+w/2-6.3,y-h/2,x+w/2,y+h/2,zF,zF+0.8,"#111614",false);continue;}
+   box(x-w/2,y-h/2,x+w/2,y+h/2,zF,zF+p.h,base,flag);}
+  faces.sort((a,b)=>b.z-a.z);for(const fc of faces)pg(fc.pts,fc.c,fc.flag?"#E2B35C":fc.top?"rgba(255,255,255,.06)":null,fc.flag?1.3:.6);
+  if(opt.labels){g.font="11px ui-monospace,monospace";g.fillStyle="rgba(236,232,225,.75)";for(const r of ["U1","J1","J2","U2"]){const[x,y]=P[r].b;const c=pr(x,y,zF+P[r].h+.5);g.fillText(r,c[0]-8,c[1]);}}}}
+
+/* UI state */
+const U={view:"home",sheet:"mcu",sel:null,hl:null,vis:{F:1,In1:1,In2:1,B:1,SilkF:1,Edge:1},active:"F",pz:{sch:{x:0,y:0,k:1},pcb:{x:0,y:0,k:1}},
+ cam:{yaw:-0.55,tilt:0.95,zoom:1},explode:0,auto:!RM,vis3:{comp:1,silk:1,F:1,In:1,B:1},
+ partQ:"",partCat:"All",partSel:"U2",fabTab:"bom",qty:100,gerber:"F",tree:{sch:1,board:1,lib:0,out:0,docs:1},fileOn:null,
+ tools:{claude:{name:"Claude Code",st:"ready",ver:"Connected · own sign-in"},codex:{name:"Codex",st:"ready",ver:"Connected · own sign-in"},gemini:{name:"Gemini CLI",st:"signin",ver:"Found · not signed in"},opencode:{name:"OpenCode",st:"missing",ver:"Not installed"}},
+ tasks:[],taskSel:null,agentTool:"claude",group:null,
+ term:{tabs:[{id:1,name:"aurora-s3",out:"",agent:null}],cur:1,n:2},guideOn:false,gi:0,
+ projects:[{id:"atmos",name:"Aurora S3",sub:"Environmental sensor node · 4 layers · ESP32-S3",when:"Edited yesterday"},{id:"vela",name:"VELA-PD",sub:"USB-C PD 65 W sink · 2 layers",when:"Last week",draft:1},{id:"orbit",name:"ORBIT-BMS",sub:"4S Li-ion monitor · 6 layers",when:"Last month",draft:1}]};
+const VIEWS=[["home","Home","home"],["project","Project","project"],["sch","Schematic","sch"],["pcb","Board","pcb"],["parts","Parts","parts"],["agents","Agents","agents"],["checks","Checks","checks"],["v3d","3D","v3d"],["fab","Fabricate","fab"],["term","Terminal","term"]];
+
+function renderShell(){
+ $("#rail").innerHTML=`<button class="brand" data-a="about" aria-label="About EAK"><span class="mark" style="font-size:12px">EAK</span></button>`+VIEWS.map((v,i)=>`<button class="nav ${U.view===v[0]?"on":""}" data-a="go" data-arg="${v[0]}" aria-label="${v[1]}">${icon(v[2])}<span class="tip">${v[1]}<kbd>${(i+1)%10}</kbd></span></button>`).join("");
+ $("#revLbl").textContent="r"+D.rev;
+ const st=STAGES.map((s,i)=>stageState(i));const nx=st.findIndex(v=>v!==2);
+ $("#journey").innerHTML=STAGES.map((s,i)=>`<button class="jd s${st[i]} ${i===nx?"nx":""}" data-a="go" data-arg="${s[1]}" title="${s[0]}" aria-label="${s[0]}: ${["has errors","not done","done"][st[i]]}"><span></span></button>`).join("<i></i>")+`<span class="jl">${nx<0?"Every stage complete":"Next · "+STAGES[nx][0]}</span>`;
+ const e=counts(ercRun(D)),r=counts(drcRun(D));const n=e.e+r.e,w=e.w+r.w,u=r.u;const run=U.tasks.find(t=>t.st==="running");const rv=U.tasks.filter(t=>t.st==="review"||t.st==="question").length;
+ $("#topStatus").innerHTML=`<button class="pill" data-a="go" data-arg="checks" aria-label="Checks">${n?`<span class="dot" style="background:var(--err)"></span>${n}`:""}${w?`<span class="dot" style="background:var(--warn)"></span>${w}`:""}${u?`<span class="dot" style="background:var(--unk)"></span>${u}`:""}${!n&&!w&&!u?`<span class="dot" style="background:var(--ok)"></span>Checks pass`:""}</button><button class="pill" data-a="go" data-arg="agents" aria-label="Agents">${run?`<span class="dot" style="background:var(--ai);animation:blink 1.2s infinite"></span>${esc(U.tools[run.tool].name)} working`:`${icon("agents","width:14px;height:14px")}${rv?rv+" to review":"Agents"}`}</button>`;
+ $("#bUndo").disabled=!UNDO.length;$("#bRedo").disabled=!REDO.length;
+ $("#footL").textContent=`Aurora S3 · r${D.rev} · 4 layers · 56 × 40 mm`;$("#footM").textContent=U.sel?`Selected ${U.sel} · ${P[U.sel].mpn}`:U.hl?`Net ${U.hl}`:"";
+ $("#footGuide").style.display=U.guideOn?"none":"";renderGuide();}
+const style=document.createElement("style");style.textContent="@keyframes blink{50%{opacity:.25}}";document.head.appendChild(style);
+function go(v,o={}){U.view=v;Object.assign(U,o);renderAll();}
+function renderAll(){renderShell();document.querySelectorAll(".view").forEach(x=>x.classList.toggle("on",x.id==="v-"+U.view));R[U.view]();}
+const R={};
+
+/* Home */
+R.home=()=>{const e=counts(ercRun(D)),r=counts(drcRun(D));const rd=readiness(D);const done=rd.filter(x=>x.ok).length;const st=STAGES.map((s,i)=>stageState(i));const nx=st.findIndex(v=>v!==2);
+ const att=[];if(e.e+e.w)att.push(["err",`${e.e} ERC errors, ${e.w} warning`,"On MCU & USB and Power. An agent can propose a fix.","checks"]);
+ const rv=U.tasks.filter(t=>t.st==="review"||t.st==="question");if(rv.length)att.push(["ai",`${rv.length} agent ${rv.length>1?"proposals":"proposal"} waiting for you`,rv.map(t=>U.tools[t.tool].name+": "+t.title).join(" · "),"agents"]);
+ att.push(["warn","Stock risk · SHT40-AD1B","640 in stock (sample data). The planned run needs 1,000.","parts:U4"]);
+ if(r.u)att.push(["unk","DRC cannot check copper width","No current declared for +12V_RAW and +3V3.","project"]);
+ if(D.ercFix&&!D.synced)att.push(["warn","Board is behind the schematic","R3 and C7 are not on the board yet.","pcb"]);
+ if(!D.usbRouted)att.push(["err","USB pair unrouted","USB_DP and USB_DN need a 90 Ω pair on L1.","pcb"]);
+ const SC={err:"var(--err)",warn:"var(--warn)",unk:"var(--unk)",ai:"var(--ai)"};let last=0;st.forEach((v,i)=>{if(v===2)last=i});
+ const J=`<svg viewBox="-24 0 568 60" style="width:100%;height:60px"><line x1="10" y1="20" x2="510" y2="20" stroke="#2E3237" stroke-width="2"/><line x1="10" y1="20" x2="${10+last*(500/9)}" y2="20" stroke="#D8955C" stroke-width="2"/>${STAGES.map((s,i)=>{const x=10+i*(500/9),v=st[i];return`<g data-a="go" data-arg="${s[1]}" style="cursor:pointer"><rect x="${x-6}" y="14" width="12" height="12" rx="2.5" fill="${v===2?"#D4B36A":v===0?"#EC7C6B":"#17191C"}" stroke="${v===2?"#D4B36A":v===0?"#EC7C6B":"#6F6B65"}" stroke-width="1.5"/><text x="${x}" y="48" fill="${i===nx?"#ECE8E1":"#A7A29A"}" font-size="10.5" text-anchor="middle">${s[0]}</text></g>`}).join("")}</svg>`;
+ $("#v-home").innerHTML=`<div class="home"><div class="l">
+  <div><div class="lbl" style="margin-bottom:10px">Good morning</div><div class="hello">Aurora S3 is ${done} of ${rd.length} steps from fabrication review.</div></div>
+  <div class="col" style="gap:10px"><div class="intent"><textarea id="intentIn" rows="1" placeholder="Describe the board you want to build…" aria-label="Describe a board"></textarea><button class="btn pri" data-a="intent" style="height:40px">Start</button></div>
+   <div class="chips"><button data-a="intentEx" data-arg="A 65 W USB-C PD sink that powers a 20 V motor driver">USB-C PD sink, 65 W</button><button data-a="intentEx" data-arg="A 4S Li-ion battery monitor with balancing and CAN">4S battery monitor</button><button data-a="intentEx" data-arg="12–24 V powered ESP32-S3 board with USB-C for programming, SHT40 and BME280 on I2C, fits a 12 mm enclosure">ESP32-S3 sensor board</button></div></div>
+  <div class="col" style="gap:4px"><div class="row" style="margin-bottom:6px"><span class="lbl grow">Projects</span><button class="btn q" data-a="newDesign">New design</button><button class="btn q" data-a="importDesign">Import KiCad</button></div>${U.projects.map(p=>`<div class="proj" data-a="openProj" data-arg="${p.id}" tabindex="0"><div class="thumb">${p.id==="atmos"?`<svg viewBox="-3 -3 62 46" style="width:100%;height:100%">${boardSvg({vis:{F:1,In1:0,In2:0,B:1,SilkF:0,Edge:1}})}</svg>`:`<svg viewBox="0 0 120 76" style="width:100%;height:100%"><rect x="34" y="18" width="52" height="40" rx="3" fill="none" stroke="#2E3237" stroke-dasharray="3 3"/></svg>`}</div><div class="col"><div style="font-weight:560">${esc(p.name)}</div><div class="t2" style="font-size:12.5px">${esc(p.sub)}</div></div><div class="t3" style="font-size:12px;text-align:right">${p.when}${p.draft?"<br>Brief only":""}</div></div>`).join("")}</div>
+ </div><div class="r">
+  <div class="row"><div class="col grow"><div class="lbl">Continue</div><div style="font-size:20px;font-weight:500;margin-top:4px">Aurora S3 · environmental sensor node</div></div><button class="btn pri" data-a="go" data-arg="${nx<0?"fab":STAGES[nx][1]}">${nx<0?"Open release":"Continue · "+STAGES[nx][0]}</button></div>
+  <div>${J}</div>
+  <div class="row" style="gap:34px"><div><div class="big">${e.e+r.e}</div><div class="t3" style="font-size:12px;margin-top:6px">Errors</div></div><div><div class="big">${r.u}</div><div class="t3" style="font-size:12px;margin-top:6px">Unknown</div></div><div><div class="big">${bomLines(D).length}</div><div class="t3" style="font-size:12px;margin-top:6px">BOM lines</div></div><div><div class="big">$${bomCost(100).toFixed(2)}</div><div class="t3" style="font-size:12px;margin-top:6px">Per board at 100 · sample</div></div></div>
+  <div><div class="lbl" style="margin-bottom:4px">Needs attention</div>${att.slice(0,5).map(a=>`<button class="att" data-a="attn" data-arg="${a[3]}"><span class="dot" style="background:${SC[a[0]]}"></span><span class="col"><span style="font-weight:560">${esc(a[1])}</span><span class="t2" style="font-size:12.5px">${esc(a[2])}</span></span><span class="t3">${icon("r","width:16px;height:16px")}</span></button>`).join("")}</div>
+  <div><div class="lbl" style="margin-bottom:8px">Since you left</div>${D.history.slice(-4).reverse().map(h=>`<div class="row" style="padding:5px 0;font-size:12.5px"><span class="mono t3" style="width:42px">r${h.rev}</span><span class="grow">${esc(h.what)}</span><span style="color:${h.who.startsWith("agent")?"var(--ai)":"var(--t3)"};font-size:12px;white-space:nowrap">${esc(h.who.replace(" (applied by you)",""))}</span></div>`).join("")}</div>
+ </div></div>`;
+ const ta=$("#intentIn");ta.addEventListener("input",()=>{ta.style.height="auto";ta.style.height=Math.min(160,ta.scrollHeight)+"px"});};
+
+/* Project: explorer, requirements, history */
+function explorer(){const n=(id,label,ic,arg,lvl,act="open")=>`<div class="n ${U.fileOn===arg?"on":""}" style="padding-left:${6+lvl*14}px" data-a="${act}" data-arg="${arg}" tabindex="0">${ic==="car"?`<span class="car ${U.tree[id]?"open":""}">▶</span>${icon("folder")}`:`<span class="car"></span>${icon(ic)}`}<span>${label}</span></div>`;
+ let h=`<div class="tree">${n("","Aurora S3","folder","project",0)}`;
+ h+=n("sch","Schematic","car","sch",1,"tree");if(U.tree.sch)h+=SHEETS.map(s=>n("",s[1]+".sch","file","sheet:"+s[0],2)).join("");
+ h+=n("board","Board","car","board",1,"tree");if(U.tree.board)h+=n("","Aurora-S3.board","file","pcb",2)+n("","Stack-up · 4 layers","file","stack",2)+n("","3D model","file","v3d",2);
+ h+=n("lib","Library","car","lib",1,"tree");if(U.tree.lib)h+=["U1","U2","U4","J1"].map(r=>n("",P[r].mpn,"file","part:"+r,2)).join("");
+ h+=n("docs","Docs","car","docs",1,"tree");if(U.tree.docs)h+=n("","Requirements","file","project",2)+n("","Design history","file","history",2);
+ h+=n("out","Outputs","car","out",1,"tree");if(U.tree.out)h+=D.outputsRev?n("","rev-"+D.outputsRev,"folder","fab",2):`<div class="t3" style="padding:4px 0 4px 40px;font-size:12px">Nothing generated yet</div>`;
+ return h+`</div>`;}
+R.project=()=>{const c=D.currents;$("#v-project").innerHTML=`<aside class="side"><div class="ph"><span class="lbl">Explorer</span></div><div class="pb">${explorer()}</div></aside>
+ <div class="grow" style="overflow:auto;padding:40px 56px" id="projScroll"><div style="max-width:880px;display:flex;flex-direction:column;gap:36px">
+  <div><div class="lbl">Brief</div><div style="font-size:26px;font-weight:300;margin-top:8px;line-height:1.25">12–24 V powered ESP32-S3 environmental sensor node with USB-C for programming, humidity, temperature and pressure sensing, reporting over Wi-Fi.</div></div>
+  <div><div class="lbl" style="margin-bottom:10px">Power rails</div><table><thead><tr><th>Rail</th><th class="num">Voltage</th><th class="num">Max current</th><th>Source</th></tr></thead><tbody>
+   ${[["+12V_RAW","12 – 24 V","DC jack J2"],["VBUS","5 V","USB-C J1"],["+3V3","3.3 V ±3 %","TPS62933 buck"]].map(x=>`<tr><td class="mono">${x[0]}</td><td class="num">${x[1]}</td><td class="num">${x[0]==="VBUS"?"0.5 A":`<input id="cur_${x[0]}" value="${c[x[0]]||""}" placeholder="not set" style="width:84px;text-align:right;height:26px" aria-label="${x[0]} current"> A`}</td><td class="t2">${x[2]}</td></tr>`).join("")}</tbody></table>
+   <div class="row" style="margin-top:12px"><button class="btn" data-a="saveCurrents">Save currents</button><span class="t3" style="font-size:12px">Declared currents let DRC check copper width instead of reporting it as unknown.</span></div></div>
+  <div><div class="lbl" style="margin-bottom:10px">Interfaces and environment</div><dl class="kv" style="max-width:540px"><dt>Programming</dt><dd>USB 2.0 full speed, native on ESP32-S3</dd><dt>Sensors</dt><dd>I²C at 100 kHz · 0x44, 0x76</dd><dt>Enclosure</dt><dd>58 × 42 mm, ${ENCL} mm above the board</dd><dt>Operating</dt><dd>0 – 50 °C, indoor</dd><dt>Fabrication</dt><dd>4 layers, 1.6 mm, ENIG, matte black mask</dd></dl></div>
+  <div id="historyAnchor"><div class="lbl" style="margin-bottom:10px">Design history</div>${D.history.slice().reverse().map(h=>`<div class="row" style="padding:7px 0;font-size:13px"><span class="mono t3" style="width:48px">r${h.rev}</span><span class="grow">${esc(h.what)}</span><span style="font-size:12px;color:${h.who.startsWith("agent")?"var(--ai)":"var(--t3)"}">${esc(h.who)}</span></div>`).join("")}
+   <div class="lbl" style="margin:22px 0 10px">Checkpoints</div>${D.checkpoints.map((k,i)=>`<div class="row" style="padding:6px 0"><span class="grow">${esc(k.name)} <span class="t3 mono" style="font-size:12px">r${k.rev}</span></span><button class="btn q" data-a="restore" data-arg="${i}">Restore</button></div>`).join("")}<button class="btn" data-a="checkpoint" style="margin-top:8px">Save checkpoint at r${D.rev}</button></div>
+ </div></div>`;};
+
+/* shared canvas helpers */
+function panzoom(id,key,vb){const svg=document.getElementById(id);if(!svg)return;const z=U.pz[key];const apply=()=>svg.setAttribute("viewBox",`${vb[0]+z.x} ${vb[1]+z.y} ${vb[2]/z.k} ${vb[3]/z.k}`);apply();
+ let st=null;svg.addEventListener("pointerdown",ev=>{if(ev.button!==0)return;st={x:ev.clientX,y:ev.clientY,zx:z.x,zy:z.y,moved:false};});
+ svg.addEventListener("pointermove",ev=>{if(!st)return;const dx=ev.clientX-st.x,dy=ev.clientY-st.y;if(Math.abs(dx)+Math.abs(dy)>4){st.moved=true;svg.classList.add("drag");}if(st.moved){const sc=vb[2]/z.k/svg.clientWidth;z.x=st.zx-dx*sc;z.y=st.zy-dy*sc;apply();}});
+ const end=()=>{if(st&&st.moved){svg.dataset.dragged="1";setTimeout(()=>delete svg.dataset.dragged,0);}st=null;svg.classList.remove("drag");};svg.addEventListener("pointerup",end);svg.addEventListener("pointerleave",end);
+ svg.addEventListener("wheel",ev=>{ev.preventDefault();const r=svg.getBoundingClientRect();const fx=(ev.clientX-r.left)/r.width,fy=(ev.clientY-r.top)/r.height;const k0=z.k;z.k=Math.max(.5,Math.min(8,z.k*(ev.deltaY<0?1.15:1/1.15)));z.x+=vb[2]*(1/k0-1/z.k)*fx;z.y+=vb[3]*(1/k0-1/z.k)*fy;apply();},{passive:false});}
+const zoomBtns=k=>`<div class="float" style="right:16px;bottom:16px"><button class="ibtn" data-a="zoom" data-arg="${k}:in" aria-label="Zoom in">${icon("plus")}</button><button class="ibtn" data-a="zoom" data-arg="${k}:out" aria-label="Zoom out">${icon("minus")}</button><button class="ibtn" data-a="zoom" data-arg="${k}:fit" aria-label="Fit">${icon("fit")}</button></div>`;
+function netPins(n){let c=0;for(const r of Object.keys(P)){if(!has(r))continue;for(const s of ["L","R","T","B"])for(const p of P[r].s[s]||[])if(p[1]===n)c++;}return c;}
+function inspector(){const r=U.sel;if(!r)return`<div class="ph"><span class="lbl">Inspector</span></div><div class="pb t2" style="font-size:12.5px;line-height:1.6">Select a part to see its properties, datasheet and sourcing. Hover a wire or label to trace a net; click to keep it highlighted.${U.hl?`<div class="sec"><span class="lbl">Net</span><div class="mono" style="font-size:16px;color:var(--cu)">${U.hl}</div><div class="t3" style="margin-top:4px">${netPins(U.hl)} pins · ${NETCLS[U.hl]==="pwr"?"power class, 0.50 mm minimum":/USB/.test(U.hl)?"USB_DIFF class, 90 Ω":"default class, 0.20 mm"}</div><div class="row" style="margin-top:12px"><button class="btn" data-a="netBoard" data-arg="${U.hl}">Show on board</button><button class="btn q" data-a="net" data-arg="${U.hl}">Clear</button></div></div>`:""}</div>`;
+ const p=P[r];const l=D.lcsc[p.mpn]!==undefined?D.lcsc[p.mpn]:p.lcsc;
+ return`<div class="ph"><span class="lbl">Inspector</span><span class="grow"></span><button class="ibtn" data-a="selPart" data-arg="" aria-label="Clear selection">${icon("x")}</button></div><div class="pb">
+  <div style="font-size:22px;font-weight:300">${r} <span class="t2" style="font-size:15px">${esc(p.val)}</span></div><div class="t2" style="font-size:12.5px;margin:4px 0 16px">${esc(p.desc)}</div>
+  <dl class="kv"><dt>Manufacturer</dt><dd>${esc(p.mfr)}</dd><dt>MPN</dt><dd class="mono">${p.mpn}</dd><dt>Footprint</dt><dd class="mono">${p.fp}</dd><dt>Height</dt><dd>${p.h} mm</dd><dt>On board</dt><dd>${onBoard(r)?"Placed":"Not yet"}</dd><dt>LCSC</dt><dd class="mono">${l||"not matched"}</dd><dt>Price at 100</dt><dd>$${p.pr[2].toFixed(p.pr[2]<.1?4:2)} <span class="t3">sample</span></dd></dl>
+  <div class="row" style="margin-top:18px;flex-wrap:wrap"><button class="btn" data-a="datasheet" data-arg="${r}">Datasheet</button><button class="btn" data-a="${U.view==="pcb"?"partOnSch":"partOnBoard"}" data-arg="${r}">${U.view==="pcb"?"Show in schematic":"Show on board"}</button><button class="btn ai" data-a="askPart" data-arg="${r}">Ask an agent</button></div></div>`;}
+
+/* Schematic */
+R.sch=()=>{const e=ercRun(D);$("#v-sch").innerHTML=`<aside class="side"><div class="ph"><span class="lbl">Explorer</span></div><div class="pb">${explorer()}</div></aside>
+ <div class="canvas"><svg class="c" id="schSvg" preserveAspectRatio="xMidYMid meet">${schSvg(U.sheet,{sel:U.sel,hl:U.hl})}</svg>
+  <div class="float" style="left:16px;top:14px"><div class="tabs">${SHEETS.map(s=>`<button class="${U.sheet===s[0]?"on":""}" data-a="sheet" data-arg="${s[0]}">${s[1]}${e.some(f=>P[f.ref].sheet===s[0])?` <span class="dot" style="background:var(--err);width:5px;height:5px;vertical-align:2px"></span>`:""}</button>`).join("")}</div></div>
+  <div class="float" style="right:16px;top:14px"><button class="btn q" data-a="runErc" style="height:28px">Run ERC</button><span class="pill" style="background:none">${e.length?`<span class="dot" style="background:var(--err)"></span>${e.length} findings`:`<span class="dot" style="background:var(--ok)"></span>ERC clean`}</span></div>
+  ${zoomBtns("sch")}</div><aside class="insp">${inspector()}</aside>`;panzoom("schSvg","sch",[0,0,1040,620]);
+ const sv=$("#schSvg");sv.addEventListener("mouseover",ev=>{const t=ev.target.closest?ev.target.closest("[data-net]"):null;sv.querySelectorAll(".hov").forEach(x=>x.classList.remove("hov"));if(t)sv.querySelectorAll(`[data-net="${CSS.escape(t.dataset.net)}"]`).forEach(x=>x.classList.add("hov"));});};
+
+/* Board */
+R.pcb=()=>{const z=zdiff(D.usbW,D.usbS);const dr=drcRun(D);const al=LAYERS.find(l=>l[0]===U.active)||LAYERS[0];
+ $("#v-pcb").innerHTML=`<aside class="side"><div class="ph"><span class="lbl">Layers</span></div><div class="pb">
+  ${LAYERS.map(l=>`<div class="row" style="padding:5px 6px;border-radius:6px;${U.active===l[0]?"background:var(--h3)":""}"><span class="swatch" style="background:${l[3]}"></span><button class="grow" style="text-align:left;font-size:12.5px" data-a="activeLayer" data-arg="${l[0]}">${l[1]} <span class="t3 mono" style="font-size:11px">${l[2]}</span></button><button class="toggle ${U.vis[l[0]]?"on":""}" data-a="layerVis" data-arg="${l[0]}" aria-label="Show ${l[1]}"></button></div>`).join("")}
+  <div class="sec"><span class="lbl">Stack-up · 1.60 mm</span>${STACK.map(s=>`<div class="row" style="height:${s.kind==="copper"?20:Math.max(14,s.t*22)}px;font-size:11.5px"><span style="width:6px;align-self:stretch;border-radius:1px;background:${s.kind==="copper"?s.col:"#2E3237"}"></span><span class="mono t3" style="width:20px">${s.n}</span><span class="grow ${s.kind==="diel"?"t3":""}">${s.name}</span><span class="mono t3">${s.kind==="copper"?s.cu:s.t.toFixed(3)+" · εr "+s.er}</span></div>`).join("")}</div>
+  <div class="sec"><span class="lbl">USB pair impedance</span><div class="row" style="gap:12px;margin-top:4px"><label class="col t3" style="gap:4px;font-size:11.5px">Width<input id="uw" type="number" step="0.01" min="0.1" max="0.5" value="${D.usbW.toFixed(2)}" style="width:72px"></label><label class="col t3" style="gap:4px;font-size:11.5px">Gap<input id="us" type="number" step="0.01" min="0.08" max="0.5" value="${D.usbS.toFixed(2)}" style="width:72px"></label><div class="col" style="margin-left:auto;text-align:right"><span style="font-size:24px;font-weight:300;color:${Math.abs(z-90)<=9?"var(--ok)":"var(--err)"}" id="zd">${z.toFixed(1)} Ω</span><span class="t3" style="font-size:11px">target 90 Ω ±10 %</span></div></div>
+   <div class="t3" style="font-size:11.5px;margin-top:6px">Edge-coupled microstrip on L1 over the L2 plane. Single-ended ${z0(D.usbW).toFixed(1)} Ω.</div><button class="btn" style="margin-top:10px" data-a="applyGeom">Apply to net class</button></div>
+  <div class="sec"><span class="lbl">Design rules</span><dl class="kv"><dt>Clearance</dt><dd class="mono">${D.rules.clearance.toFixed(2)} mm</dd><dt>Track, minimum</dt><dd class="mono">${D.rules.track.toFixed(2)} mm</dd><dt>Via drill</dt><dd class="mono">${D.rules.via.toFixed(2)} mm</dd><dt>Annular ring</dt><dd class="mono">${D.rules.annular.toFixed(2)} mm</dd><dt>Copper to edge</dt><dd class="mono">${D.rules.edge.toFixed(2)} mm</dd><dt>Power class</dt><dd class="mono">0.50 / 0.20 mm</dd><dt>USB_DIFF class</dt><dd class="mono">${D.usbW.toFixed(2)} / ${D.usbS.toFixed(2)} mm</dd></dl><button class="btn q" style="margin-top:8px" data-a="go" data-arg="checks">Edit rules</button></div>
+ </div></aside>
+ <div class="canvas"><svg class="c" id="pcbSvg" preserveAspectRatio="xMidYMid meet">${boardSvg({vis:U.vis,active:U.active,hl:U.hl,sel:U.sel,markers:1})}</svg>
+  <div class="float" style="left:16px;top:14px"><span class="pill" style="background:none">Active <span class="swatch" style="background:${al[3]}"></span>${al[1]}</span></div>
+  <div class="float" style="right:16px;top:14px">${D.ercFix&&!D.synced?`<button class="btn pri" data-a="sync" style="height:28px">Update board · 2 parts</button>`:""}${!D.usbRouted?`<button class="btn ai" data-a="agentTask" data-arg="usb" style="height:28px">Route USB with an agent</button>`:""}<button class="btn q" data-a="runDrc" style="height:28px">Run DRC</button><span class="pill" style="background:none">${dr.length?`<span class="dot" style="background:${dr.some(f=>f.sev==="err")?"var(--err)":"var(--unk)"}"></span>${dr.length} findings`:`<span class="dot" style="background:var(--ok)"></span>DRC clean`}</span></div>
+  ${zoomBtns("pcb")}</div><aside class="insp">${inspector()}</aside>`;
+ panzoom("pcbSvg","pcb",[-3,-3,62,46]);
+ const upd=()=>{const w=+$("#uw").value,s=+$("#us").value;if(w>0&&s>0){const zz=zdiff(w,s);const el=$("#zd");el.textContent=zz.toFixed(1)+" Ω";el.style.color=Math.abs(zz-90)<=9?"var(--ok)":"var(--err)";}};$("#uw").addEventListener("input",upd);$("#us").addEventListener("input",upd);};
+
+/* Parts / library */
+function catalog(){const own=Object.keys(P).filter(has).reduce((a,r)=>{if(!a.find(x=>x.mpn===P[r].mpn))a.push({...P[r],ref:r});return a},[]);return own.concat(CATALOG_EXTRA.map(x=>({...x,ref:null})));}
+function pinout(r){const S=P[r].s;const L=[...(S.L||[]),...(S.T||[])],Rr=[...(S.R||[]),...(S.B||[])];const h=Math.max(L.length,Rr.length,1)*26+30;
+ let s=`<rect x="120" y="14" width="160" height="${h}" rx="4" fill="#17191C" stroke="#6F6B65"/><text x="200" y="${14+h/2+4}" text-anchor="middle" fill="#ECE8E1" font-size="13">${esc(P[r].val)}</text>`;
+ L.forEach((p,i)=>{const y=40+i*26;s+=`<line x1="92" y1="${y}" x2="120" y2="${y}" stroke="#6F6B65"/><text x="128" y="${y+4}" fill="#A7A29A" font-size="11" font-family="ui-monospace,monospace">${p[0]}</text><text x="86" y="${y+4}" text-anchor="end" fill="${p[1]?"#9FC3D4":"#6F6B65"}" font-size="10.5" font-family="ui-monospace,monospace">${p[1]||"NC"}</text>`;});
+ Rr.forEach((p,i)=>{const y=40+i*26;s+=`<line x1="280" y1="${y}" x2="308" y2="${y}" stroke="#6F6B65"/><text x="272" y="${y+4}" text-anchor="end" fill="#A7A29A" font-size="11" font-family="ui-monospace,monospace">${p[0]}</text><text x="314" y="${y+4}" fill="${p[1]?"#9FC3D4":"#6F6B65"}" font-size="10.5" font-family="ui-monospace,monospace">${p[1]||"NC"}</text>`;});
+ return{s,h:h+28};}
+function fpSvg(r){const[x,y,w,h]=P[r].b;const ps=pads(r);const xs=ps.flatMap(q=>[q[0]-q[2]/2,q[0]+q[2]/2]).concat([x-w/2,x+w/2]),ys=ps.flatMap(q=>[q[1]-q[3]/2,q[1]+q[3]/2]).concat([y-h/2,y+h/2]);
+ const x0=Math.min(...xs)-.8,x1=Math.max(...xs)+.8,y0=Math.min(...ys)-.8,y1=Math.max(...ys)+.8;const sw=(x1-x0)/120;
+ let s=`<svg viewBox="${x0-sw*20} ${y0-sw*20} ${x1-x0+sw*40} ${y1-y0+sw*40}" style="width:100%;height:200px"><rect x="${x0}" y="${y0}" width="${x1-x0}" height="${y1-y0}" fill="none" stroke="#E9E6DE" stroke-opacity=".25" stroke-width="${sw}" stroke-dasharray="${sw*4} ${sw*3}"/><rect x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" fill="none" stroke="#E9E6DE" stroke-opacity=".7" stroke-width="${sw*1.4}"/>`;
+ for(const q of ps)s+=q[4]?`<circle cx="${q[0]}" cy="${q[1]}" r="${q[2]/2}" fill="#D4B36A"/><circle cx="${q[0]}" cy="${q[1]}" r="${q[2]/4}" fill="#0C0D0F"/>`:`<rect x="${q[0]-q[2]/2}" y="${q[1]-q[3]/2}" width="${q[2]}" height="${q[3]}" rx="${Math.min(q[2],q[3])*.15}" fill="#D4B36A"/>`;
+ const p1=ps[0];s+=`<circle cx="${p1[0]-p1[2]/2-sw*8}" cy="${p1[1]-p1[3]/2-sw*8}" r="${sw*3}" fill="#E9E6DE"/></svg>`;return s;}
+R.parts=()=>{const q=U.partQ.toLowerCase();const cats=["All","MCU module","Power IC","Sensor","Connector","Protection","Capacitor","Resistor"];
+ const list=catalog().filter(p=>(U.partCat==="All"||p.cat===U.partCat)&&(!q||(p.mpn+" "+p.mfr+" "+p.desc+" "+p.cat).toLowerCase().includes(q)));
+ const sel=catalog().find(p=>(p.ref||p.mpn)===U.partSel)||list[0];const lc=sel?(D.lcsc[sel.mpn]!==undefined?D.lcsc[sel.mpn]:sel.lcsc):null;const stk=sel?stockOf(sel.mpn):0;const po=sel&&sel.ref?pinout(sel.ref):null;
+ $("#v-parts").innerHTML=`<div class="col" style="width:400px;flex:none;background:var(--h2)"><div style="padding:18px 18px 10px"><div class="row" style="background:var(--h3);border-radius:8px;padding:0 10px">${icon("locate","width:16px;height:16px;color:var(--t3)")}<input id="partQ" placeholder="Search by function, value or part number" value="${esc(U.partQ)}" style="background:none;flex:1;height:36px" aria-label="Search parts"></div>
+  <div class="chips" style="margin-top:12px">${cats.map(c=>`<button data-a="partCat" data-arg="${c}" style="${U.partCat===c?"background:var(--h4);color:var(--t1)":""}">${c}</button>`).join("")}</div></div>
+  <div class="pb list" style="padding:4px 10px 16px">${list.map(p=>`<div class="r ${sel&&(p.ref||p.mpn)===(sel.ref||sel.mpn)?"on":""}" data-a="partSel" data-arg="${p.ref||p.mpn}"><div class="mono-av">${p.cat.slice(0,2).toUpperCase()}</div><div class="col grow"><span style="font-weight:560" class="mono">${p.mpn}</span><span class="t2" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.desc)}</span></div><span class="t3" style="font-size:11.5px;white-space:nowrap">${p.ref?"In design":"Alternative"}</span></div>`).join("")||`<div class="t3" style="padding:20px">No parts match.</div>`}</div></div>
+ <div class="grow" style="overflow:auto;padding:34px 44px">${sel?`<div style="max-width:960px;display:flex;flex-direction:column;gap:28px">
+  <div class="row" style="align-items:flex-end;gap:16px"><div class="col grow"><span class="lbl">${esc(sel.mfr)} · ${sel.cat}</span><span style="font-size:30px;font-weight:300;margin-top:6px" class="mono">${sel.mpn}</span><span class="t2" style="margin-top:4px">${esc(sel.desc)}</span></div>
+   ${sel.ref?`<button class="btn" data-a="selPart" data-arg="${sel.ref}" data-go="sch">Show ${sel.ref} in schematic</button>`:`<button class="btn pri" data-a="swapPart" data-arg="${sel.mpn}">Propose swap for ${sel.alt}</button>`}</div>
+  ${sel.ref?`<div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:28px"><div><div class="lbl" style="margin-bottom:8px">Symbol</div><div style="background:var(--h0);border-radius:10px;padding:12px"><svg viewBox="0 0 400 ${po.h}" style="width:100%;max-height:260px">${po.s}</svg></div></div><div><div class="lbl" style="margin-bottom:8px">Footprint · <span class="mono" style="text-transform:none;letter-spacing:0">${sel.fp}</span></div><div style="background:var(--h0);border-radius:10px;padding:12px">${fpSvg(sel.ref)}</div></div></div>`:""}
+  <div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:28px">
+   <div><div class="lbl" style="margin-bottom:10px">Parameters · from the datasheet</div>${sel.ref&&DS[sel.ref]?`<table><tbody>${DS[sel.ref].map(x=>`<tr><td class="t2">${x[0]}</td><td class="num">${x[1]}</td></tr>`).join("")}</tbody></table>`:`<table><tbody><tr><td class="t2">Description</td><td class="num">${esc(sel.desc)}</td></tr><tr><td class="t2">Package</td><td class="num mono">${sel.fp}</td></tr></tbody></table>`}
+    <button class="btn" style="margin-top:14px" data-a="datasheet" data-arg="${sel.ref||sel.mpn}">Open datasheet</button></div>
+   <div><div class="lbl" style="margin-bottom:10px">LCSC · sample data</div><dl class="kv"><dt>LCSC part</dt><dd class="mono">${lc||"not matched"}</dd><dt>Stock</dt><dd style="color:${stk<1000?"var(--warn)":"inherit"}">${stk.toLocaleString("en-US")} <span class="t3">sample</span></dd>${stk<1000?`<dt></dt><dd class="t3" style="font-size:12px;white-space:normal">Below the 1,000-board run</dd>`:""}<dt>Package</dt><dd class="mono">${sel.fp}</dd></dl>${!lc&&sel.ref?`<button class="btn" style="margin-top:10px" data-a="lcscMatch" data-arg="${sel.mpn}">Find a match</button>`:""}
+    <div class="lbl" style="margin:20px 0 8px">Price breaks · sample</div><table><tbody>${[1,10,100,1000].map((n,i)=>`<tr><td class="t2">${n}+</td><td class="num">$${sel.pr[i].toFixed(sel.pr[i]<.1?4:2)}</td></tr>`).join("")}</tbody></table></div></div>
+ </div>`:""}</div>`;
+ const pq=$("#partQ");pq.addEventListener("input",()=>{U.partQ=pq.value;const pos=pq.selectionStart;R.parts();const n=$("#partQ");n.focus();n.setSelectionRange(pos,pos);});};
+
+/* Agents: tools, orchestration, propose -> verify -> apply */
+const RECIPES={
+ erc:{title:"Resolve ERC findings",tool:"claude",intent:"Fix the ERC findings on the MCU and power sheets.",ctx:["Brief","ERC findings (3)","Sheets: MCU & USB, Power","ESP32-S3-WROOM-1 datasheet §EN"],
+  plan:["Read the 3 ERC findings and the module's EN guidance","Add a 10 kΩ pull-up and 1 µF delay capacitor on EN","Mark U2 PG as no-connect and flag +3V3 as driven","Re-run ERC on a copy of r{rev}"],
+  cmds:["eak query erc --sheet 'MCU & USB'","eak <b>place_symbol</b> R3 0603WAF1002T5E --value 10k","eak <b>place_symbol</b> C7 CL10A105KB8NNNC --value 1u","eak <b>add_wire</b> R3.2 U1.EN · C7.1 U1.EN","eak <b>set_no_connect</b> U2.PG","eak <b>place_power_flag</b> +3V3","eak erc --on-copy  → 0 errors, 0 warnings"],
+  changes:[["Add","R3 · 10 kΩ · EN pull-up to +3V3","MCU & USB"],["Add","C7 · 1 µF · EN delay to GND","MCU & USB"],["Set","U2 PG · no-connect","Power"],["Add","Power flag · +3V3","Power"]],
+  labels:["ERC re-run by EAK","EN values cited from the module datasheet"],apply:d=>{d.ercFix=true;d.synced=false;},kind:"sch"},
+ usb:{title:"Route the USB pair at 90 Ω",tool:"codex",intent:"Route USB_DP / USB_DN from J1 through U6 to U1 as a 90 Ω differential pair.",ctx:["Stack-up (4 layers)","Net class USB_DIFF","J1, U6, U1 footprints","DRC rules"],
+  plan:["Read the stack-up: L1 over the L2 plane, 0.2104 mm prepreg, εr 4.4","Ask EAK for the geometry: 0.26 mm width, 0.15 mm gap","Route on L1 and length-match within 0.05 mm","Re-run DRC on a copy of r{rev}"],
+  cmds:["eak query stackup","eak calc zdiff --layer L1 --w 0.26 --s 0.15  → 89.9 Ω","eak <b>route_diff_pair</b> USB_DP USB_DN --from J1 --via U6 --to U1 --layer L1","eak <b>length_match</b> USB_DP USB_DN --tol 0.05  → skew 0.03 mm","eak drc --on-copy  → unrouted 2 → 0"],
+  changes:[["Add","USB_DP · 0.26 mm · 24.80 mm on L1","Board"],["Add","USB_DN · 0.26 mm · 24.83 mm on L1","Board"],["Set","Net class USB_DIFF · 0.26 / 0.15 mm","Rules"]],
+  labels:["DRC re-run by EAK","Impedance computed by EAK, not by the agent"],apply:d=>{d.usbRouted=true;d.usbW=0.26;d.usbS=0.15;},kind:"pcb"},
+ power:{title:"Size power copper from rail currents",tool:"claude",intent:"Declare rail currents and size the power tracks so DRC can check them.",ctx:["Brief: rail currents (missing)","Power nets on the board","IPC-2152 tables","DRC rules"],
+  q:["The ESP32-S3 peaks near 500 mA during Wi-Fi transmit and the sensors draw under 5 mA. What should I declare for +3V3?",["0.8 A peak, with margin","1.2 A, headroom for an expansion header"]],
+  plan:["Declare +12V_RAW 0.35 A and +3V3 {amps} A","Ask EAK for track width at 10 °C rise: 0.48 mm, use 0.60 mm","Move the +12V_RAW track to clear the GND via by 0.21 mm","Re-run DRC on a copy of r{rev}"],
+  cmds:["eak <b>set_net_current</b> +12V_RAW 0.35","eak <b>set_net_current</b> +3V3 {amps}","eak calc trace-width --i {amps} --rise 10  → 0.48 mm","eak <b>edit_track</b> net:+3V3,+12V_RAW,VIN --width 0.60","eak <b>move_track</b> +12V_RAW@D1 --clear 0.21","eak drc --on-copy  → unknown 1 → 0, errors 1 → 0"],
+  changes:[["Set","+12V_RAW current · 0.35 A","Brief"],["Set","+3V3 current · {amps} A","Brief"],["Edit","5 power tracks widened to 0.60 mm","Board"],["Move","+12V_RAW track near D1 · clearance 0.21 mm","Board"]],
+  labels:["Currents from your answer","Widths computed by EAK","DRC re-run by EAK"],apply:(d,a)=>{d.currents={"+12V_RAW":"0.35","+3V3":a};d.powerSized=true;d.clearFix=true;},kind:"pcb"},
+};
+function newTask(key,free){const r=RECIPES[key];const t={id:Date.now()+Math.random(),key,title:r?r.title:"Question",tool:U.agentTool,st:"running",log:[{who:"me",text:free||r.intent}],plan:0,cmds:0,ans:null,base:D.rev};
+ if(r&&!free&&U.tools[r.tool].st==="ready")t.tool=r.tool;
+ if(U.tools[t.tool].st!=="ready"){const alt=Object.keys(U.tools).find(k=>U.tools[k].st==="ready");if(!alt){toast("Connect an AI tool first");return null;}t.tool=alt;}
+ U.tasks.unshift(t);U.taskSel=t.id;return t;}
+function runTask(t){const r=RECIPES[t.key];if(!r){t.st="done";renderAll();return;}
+ if(r.q&&t.ans===null){t.st="question";renderAll();return;}
+ t.st="running";const amps=t.ans===1?"1.2":"0.8";const sub=s=>s.replace("{rev}",t.base).replace(/\{amps\}/g,amps);
+ t.planTxt=r.plan.map(sub);t.cmdTxt=r.cmds.map(sub);t.chTxt=r.changes.map(c=>c.map(sub));t.plan=0;t.cmds=0;t.amps=amps;renderAll();
+ const step=()=>{if(t.st!=="running")return;if(t.cmds<t.cmdTxt.length){t.cmds++;t.plan=Math.min(t.planTxt.length-1,Math.floor(t.cmds*t.planTxt.length/(t.cmdTxt.length+1)));if(U.view==="agents")R.agents();renderShell();t.timer=setTimeout(step,RM?0:520);}else{t.plan=t.planTxt.length;buildProposal(t);}};
+ t.timer=setTimeout(step,RM?0:520);}
+function buildProposal(t){const r=RECIPES[t.key];const copy=clone(D);r.apply(copy,t.amps);t.base=D.rev;
+ t.prop={copy,be:counts(ercRun(D)),ae:counts(ercRun(copy)),bd:counts(drcRun(D)),ad:counts(drcRun(copy))};t.st="review";renderAll();toast(`${U.tools[t.tool].name} has a proposal for you to review`);}
+function liveCanvas(t){const r=RECIPES[t.key];if(!r||!t.planTxt||!(t.st==="running"||t.st==="review"))return"";const rev=t.st==="review",c=t.cmds;let svg;
+ if(r.kind==="sch"){const d=rev?t.prop.copy:D;const nr=rev?["R3","C7"]:[c>=2?"R3":null,c>=3?"C7":null].filter(Boolean);svg=`<svg viewBox="0 0 1000 620" style="width:100%;height:100%">${schSvg(c>=6||rev?"pwr":"mcu",{newRefs:nr,d,flag:c>=6||rev})}</svg>`;}
+ else if(t.key==="usb")svg=`<svg viewBox="-3 -3 62 46" style="width:100%;height:100%">${boardSvg({d:D,proposal:rev||c>=3?usbProposalSvg(false):""})}</svg>`;
+ else{const d=rev?t.prop.copy:c>=4?(()=>{const x=clone(D);r.apply(x,t.amps);return x})():D;svg=`<svg viewBox="-3 -3 62 46" style="width:100%;height:100%">${boardSvg({d,hl:rev||c>=4?"+3V3":null,markers:1})}</svg>`;}
+ return`<div class="live"><div class="row" style="margin-bottom:8px"><span class="lbl">${rev?"Proposed change · on a copy":"Live · tool calls on a copy of r"+t.base}</span><span class="grow"></span><span class="t3" style="font-size:11.5px">${rev?"Cyan is what the agent adds":"Updates with each EAK command"}</span></div><div style="height:300px">${svg}</div></div>`;}
+const av=n=>`<span class="mono-av" style="width:20px;height:20px;font-size:9px">${n.slice(0,2).toUpperCase()}</span>`;
+function taskView(t){const r=RECIPES[t.key];const tool=U.tools[t.tool];let h="";
+ for(const m of t.log)h+=m.who==="me"?`<div class="msg me">${esc(m.text)}</div>`:`<div class="msg"><div class="who">${av(tool.name)}${tool.name}</div>${esc(m.text)}</div>`;
+ if(r)h+=`<div class="msg"><div class="who">${av(tool.name)}${tool.name} · sees</div><div class="ctx">${r.ctx.map(x=>`<span>${esc(x)}</span>`).join("")}<span>r${t.base}</span></div></div>`;
+ if(r&&r.q)h+=`<div class="msg"><div class="who">${av(tool.name)}${tool.name} asks</div><div>${esc(r.q[0])}</div>${t.ans===null?r.q[1].map((o,i)=>`<button class="qopt" data-a="answer" data-arg="${i}">${esc(o)}</button>`).join(""):`<div class="pill" style="margin-top:8px;color:var(--ai);background:var(--ai-soft)">${esc(r.q[1][t.ans])}</div>`}</div>`;
+ if(t.planTxt)h+=`<div class="msg" style="width:100%"><div class="who">Plan</div><div class="planl">${t.planTxt.map((s,i)=>`<div class="s ${i<t.plan?"done":i===t.plan&&t.st==="running"?"run":""}"><span class="b">${i<t.plan?`<svg viewBox="0 0 14 14" width="10" height="10"><path d="M3 7l3 3 5-6" stroke="#0C0D0F" stroke-width="2" fill="none"/></svg>`:""}</span>${esc(s)}</div>`).join("")}</div>
+  ${t.cmds?`<div class="cmds" style="margin-top:12px">${t.cmdTxt.slice(0,t.cmds).map(c=>`<div>${c}</div>`).join("")}</div>`:""}</div>`;
+ h+=liveCanvas(t);
+ if(t.st==="running")h+=`<div class="row"><span class="pill" style="color:var(--ai);background:var(--ai-soft)"><span class="dot" style="background:var(--ai);animation:blink 1.2s infinite"></span>Working</span><button class="btn q" data-a="stopTask">Stop</button><span class="t3" style="font-size:12px">Every action is an EAK command on a copy. Your design does not change until you apply.</span></div>`;
+ if(t.prop&&["review","applied","discarded"].includes(t.st)){const p=t.prop;const stale=t.st==="review"&&t.base!==D.rev;
+  h+=`<div class="prop"><div class="row"><span style="font-weight:560">Proposed change</span><span class="grow"></span>${t.st==="applied"?`<span class="pill" style="color:var(--ok)">Applied · r${t.appliedRev}</span>`:t.st==="discarded"?`<span class="pill">Discarded</span>`:`<span class="pill" style="color:var(--ai);background:var(--ai-soft)">Waiting for you</span>`}</div>
+   <table><tbody>${t.chTxt.map(c=>`<tr><td style="width:60px" class="t2">${c[0]}</td><td>${esc(c[1])}</td><td class="t3" style="text-align:right">${c[2]}</td></tr>`).join("")}</tbody></table>
+   <div class="delta">${[["ERC errors",p.be.e,p.ae.e],["ERC warnings",p.be.w,p.ae.w],["DRC errors",p.bd.e,p.ad.e],["DRC unknown",p.bd.u,p.ad.u]].map(x=>`<div><div class="t3" style="font-size:11.5px">${x[0]}</div><div class="v">${x[1]} <span class="t3">→</span> <span style="color:${x[2]<x[1]?"var(--ok)":x[2]>x[1]?"var(--err)":"var(--t1)"}">${x[2]}</span></div></div>`).join("")}</div>
+   <div class="t3" style="font-size:11.5px">${r.labels.join(" · ")}. Checked by EAK on a copy, never self-reported by the agent.</div>
+   ${t.st==="review"?`${stale?`<div style="color:var(--warn);font-size:12.5px">The design moved to r${D.rev} since this was checked.</div>`:""}<div class="row"><span class="grow"></span><button class="btn q" data-a="discardProp">Discard</button>${stale?`<button class="btn ai" data-a="recheck">Re-check on r${D.rev}</button>`:`<button class="btn pri" data-a="applyProp">Apply as r${D.rev+1}</button>`}</div>`:t.st==="applied"?`<div class="row"><span class="grow"></span><button class="btn q" data-a="undo">Undo</button></div>`:""}</div>`;}
+ return h;}
+R.agents=()=>{const t=U.tasks.find(x=>x.id===U.taskSel);const grp=U.group?U.group.map(id=>U.tasks.find(x=>x.id===id)).filter(Boolean):[];
+ const SL={running:"working",review:"proposal ready",question:"needs your answer",applied:"applied",discarded:"discarded",stopped:"stopped",done:"answered"};
+ const SD=x=>x.st==="running"?"var(--ai)":x.st==="review"||x.st==="question"?"var(--warn)":x.st==="applied"?"var(--ok)":"var(--unk)";
+ $("#v-agents").innerHTML=`<aside class="side" style="width:300px"><div class="ph"><span class="lbl">AI tools</span></div><div class="pb" style="padding-top:0">
+  ${Object.entries(U.tools).map(([k,v])=>`<div class="tool"><div class="mono-av">${v.name.slice(0,2).toUpperCase()}</div><div class="col grow"><span style="font-weight:560">${esc(v.name)}</span><span class="t3" style="font-size:11.5px">${esc(v.ver)}</span></div>${v.st==="ready"?`<span class="dot" style="background:${U.tasks.some(x=>x.tool===k&&x.st==="running")?"var(--ai)":"var(--ok)"}" title="Ready"></span>`:v.st==="signin"?`<button class="btn q" style="height:26px" data-a="toolSignin" data-arg="${k}">Sign in</button>`:v.st==="busy"?`<span class="t3" style="font-size:11.5px">Signing in…</span>`:v.st==="connect"?`<button class="btn q" style="height:26px" data-a="toolConnect" data-arg="${k}">Connect</button>`:`<button class="btn q" style="height:26px" data-a="toolInstall" data-arg="${k}">Install</button>`}</div>`).join("")}
+  <button class="btn q" style="margin-top:6px;width:100%;text-align:left" data-a="addTool">+ Add a command-line agent</button>
+  <div class="t3" style="font-size:11.5px;line-height:1.55;margin-top:10px">Each tool keeps its own sign-in. Connect registers EAK's tool server with it, so every action it takes is a checked EAK command.</div>
+  <div class="sec"><span class="lbl">Tasks</span><div class="list">${U.tasks.length?U.tasks.map(x=>`<div class="r ${x.id===U.taskSel?"on":""}" data-a="taskSel" data-arg="${x.id}"><span class="dot" style="background:${SD(x)}"></span><div class="col grow"><span style="font-size:12.5px">${esc(x.title)}</span><span class="t3" style="font-size:11.5px">${esc(U.tools[x.tool].name)} · ${SL[x.st]}</span></div></div>`).join(""):`<div class="t3" style="font-size:12px;padding:6px 10px">No tasks yet.</div>`}</div><button class="btn q" style="margin-top:6px" data-a="newTaskView">+ New task</button></div>
+ </div></aside>
+ <div class="col grow" style="min-height:0"><div class="thread" id="thread">
+  ${grp.length?`<div class="col" style="gap:10px;max-width:760px;width:100%"><div class="row"><span class="lbl grow">Orchestrated · Bring the layout to DRC clean</span><span class="t3" style="font-size:12px">${grp.length} agents · one shared brief</span></div><div class="lanes">${grp.map(x=>`<button class="lane ${x.id===U.taskSel?"on":""}" data-a="taskSel" data-arg="${x.id}"><span class="row">${av(U.tools[x.tool].name)}<span style="font-weight:560">${esc(U.tools[x.tool].name)}</span><span class="grow"></span><span class="dot" style="background:${SD(x)}"></span></span><span style="font-size:12.5px">${esc(x.title)}</span><span class="t3" style="font-size:11.5px">${SL[x.st]}${x.planTxt&&x.st==="running"?` · step ${Math.min(x.plan+1,x.planTxt.length)} of ${x.planTxt.length}`:""}</span></button>`).join("")}</div></div>`:""}
+  ${t?taskView(t):`<div style="margin:auto;max-width:580px;text-align:center;display:flex;flex-direction:column;gap:14px;align-items:center"><div style="font-size:28px;font-weight:300">What should the agents work on?</div><div class="t2">Agents read the design through EAK, plan, and act only through EAK commands on a copy. You see the checks before anything changes.</div>
+   <div class="col" style="gap:8px;margin-top:10px;width:100%">${[["agentTask","erc","Resolve ERC findings"],["agentTask","usb","Route the USB pair at 90 Ω"],["agentTask","power","Size power copper from rail currents"],["orchestrate","","Bring the layout to DRC clean · 2 agents"]].map(x=>`<button class="qopt" style="text-align:center;background:var(--h2)" data-a="${x[0]}" data-arg="${x[1]}">${x[2]}</button>`).join("")}</div></div>`}</div>
+  <div class="composer"><div class="box"><textarea id="agentIn" rows="1" placeholder="Ask for a change, a review or an explanation…" aria-label="Task for the agent"></textarea>
+   <div class="row"><select id="agentTool" aria-label="Tool">${Object.entries(U.tools).filter(([k,v])=>v.st==="ready").map(([k,v])=>`<option value="${k}" ${U.agentTool===k?"selected":""}>${esc(v.name)}</option>`).join("")}</select><span class="pill" style="background:none">Propose, then I review</span><span class="grow"></span><button class="btn ai" data-a="agentSend">Send</button></div></div></div></div>`;
+ const th=$("#thread");th.scrollTop=th.scrollHeight;$("#agentTool").addEventListener("change",e=>U.agentTool=e.target.value);};
+
+/* Checks */
+R.checks=()=>{const e=ercRun(D),d=drcRun(D);const all=[...e.map(f=>({...f,k:"ERC"})),...d.map(f=>({...f,k:"DRC"}))];const ce=counts(e),cd=counts(d);
+ const sevC={err:"var(--err)",warn:"var(--warn)",unk:"var(--unk)"},sevT={err:"Error",warn:"Warning",unk:"Unknown"};
+ $("#v-checks").innerHTML=`<div class="grow" style="overflow:auto;padding:40px 56px"><div style="max-width:1080px;display:flex;flex-direction:column;gap:34px">
+  <div class="row" style="gap:56px;align-items:flex-end;flex-wrap:wrap"><div><div class="lbl">Electrical rules</div><div class="big" style="margin-top:10px">${ce.e+ce.w}</div><div class="t3" style="font-size:12px;margin-top:6px">${ce.e} errors · ${ce.w} warning</div></div>
+   <div><div class="lbl">Design rules</div><div class="big" style="margin-top:10px">${cd.e+cd.w}</div><div class="t3" style="font-size:12px;margin-top:6px">${cd.e} errors · ${cd.w} warnings</div></div>
+   <div><div class="lbl">Unknown</div><div class="big" style="margin-top:10px;color:${cd.u?"var(--unk)":"var(--t1)"}">${cd.u}</div><div class="t3" style="font-size:12px;margin-top:6px">Never counted as a pass</div></div>
+   <div><div class="lbl">Passing</div><div class="big" style="margin-top:10px">${RULES_TOTAL-cd.e-cd.w-cd.u}</div><div class="t3" style="font-size:12px;margin-top:6px">of ${RULES_TOTAL} DRC rules</div></div>
+   <span class="grow"></span><div class="row"><button class="btn" data-a="runErc">Run ERC</button><button class="btn" data-a="runDrc">Run DRC</button></div></div>
+  <div><div class="lbl" style="margin-bottom:6px">Findings</div>${all.length?`<table><tbody>${all.map(f=>`<tr><td style="width:110px"><span class="row" style="color:${sevC[f.sev]};gap:7px"><span class="dot" style="background:${sevC[f.sev]}"></span>${sevT[f.sev]}</span></td><td style="width:48px" class="t3 mono">${f.k}</td><td><div>${esc(f.msg)}</div><div class="t3" style="font-size:12px;margin-top:2px">${esc(f.hint)}</div></td><td class="num" style="white-space:nowrap"><button class="btn q" data-a="locate" data-arg="${f.where}:${f.ref}">${icon("locate","width:15px;height:15px;vertical-align:-3px")} Locate</button>${f.fix?(f.fix==="sync"?`<button class="btn" data-a="sync">Update board</button>`:`<button class="btn ai" data-a="agentTask" data-arg="${f.fix}">Propose a fix</button>`):""}</td></tr>`).join("")}</tbody></table>`:`<div style="padding:26px 0;font-size:15px"><span class="dot" style="background:var(--ok);margin-right:10px"></span>Every check passes on r${D.rev}.</div>`}</div>
+  <div><div class="row" style="margin-bottom:6px"><span class="lbl">Design rules</span><span class="t3" style="font-size:12px;margin-left:12px">Change a value and DRC re-runs on the new revision.</span></div><table><thead><tr><th>Rule</th><th class="num">Value (mm)</th><th>Applies to</th></tr></thead><tbody>
+   ${[["clearance","Minimum clearance","All copper"],["track","Minimum track width","Default net class"],["via","Minimum via drill","All vias"],["annular","Minimum annular ring","All vias and pads"],["edge","Copper to board edge","Outline"]].map(x=>`<tr><td>${x[1]}</td><td class="num"><input data-rule="${x[0]}" type="number" step="0.01" min="0.05" max="2" value="${D.rules[x[0]].toFixed(2)}" style="width:84px;text-align:right;height:26px" aria-label="${x[1]}"></td><td class="t2">${x[2]}</td></tr>`).join("")}</tbody></table></div>
+ </div></div>`;
+ document.querySelectorAll("[data-rule]").forEach(inp=>inp.addEventListener("change",()=>{const k=inp.dataset.rule,v=+inp.value;if(!(v>0))return;commit(`Rule ${k} set to ${v.toFixed(2)} mm`,"you",d=>{d.rules[k]=v});}));};
+
+/* 3D */
+let raf3=null;
+R.v3d=()=>{$("#v-v3d").innerHTML=`<div class="canvas"><canvas id="cv3d" aria-label="3D board view: drag to rotate, scroll to zoom"></canvas>
+ <div class="float" style="left:16px;top:14px"><div class="tabs">${[["iso","Iso"],["top","Top"],["front","Front"],["back","Underside"]].map(v=>`<button data-a="cam" data-arg="${v[0]}">${v[1]}</button>`).join("")}</div></div>
+ <div class="float" style="right:16px;top:14px;padding:6px 12px;gap:12px"><span class="t2" style="font-size:12px">Explode layers</span><input type="range" class="slider" id="expl" min="0" max="1" step="0.01" value="${U.explode}" aria-label="Explode layers"><button class="ibtn" data-a="autoRot" aria-label="Auto rotate" style="color:${U.auto?"var(--cu)":"var(--t2)"}">${icon("v3d")}</button></div>
+ <div class="float" style="left:16px;bottom:16px;padding:8px 12px;gap:16px">${[["comp","Components"],["silk","Silkscreen"],["F","Top copper"],["In","Inner planes"],["B","Bottom copper"]].map(x=>`<span class="row" style="gap:8px;font-size:12px"><button class="toggle ${U.vis3[x[0]]?"on":""}" data-a="vis3" data-arg="${x[0]}" aria-label="${x[1]}"></button>${x[1]}</span>`).join("")}</div>
+ <div class="float" style="right:16px;bottom:16px;padding:8px 14px;font-size:12px;gap:10px"><span class="t2">Height check</span><span>J2 · 11.0 mm</span><span class="t3">enclosure ${ENCL}.0 mm</span><span style="color:var(--warn)">1.0 mm to spare</span></div></div>`;
+ const cv=$("#cv3d");let drag=null;
+ cv.addEventListener("pointerdown",e=>{drag={x:e.clientX,y:e.clientY,yaw:U.cam.yaw,tilt:U.cam.tilt};cv.setPointerCapture(e.pointerId);if(U.auto){U.auto=false;}});
+ cv.addEventListener("pointermove",e=>{if(!drag)return;U.cam.yaw=drag.yaw+(e.clientX-drag.x)*0.008;U.cam.tilt=Math.max(0.05,Math.min(1.45,drag.tilt+(e.clientY-drag.y)*0.006));});
+ cv.addEventListener("pointerup",()=>drag=null);
+ cv.addEventListener("wheel",e=>{e.preventDefault();U.cam.zoom=Math.max(.6,Math.min(2.4,U.cam.zoom*(e.deltaY<0?1.08:1/1.08)));},{passive:false});
+ $("#expl").addEventListener("input",e=>U.explode=+e.target.value);
+ cancelAnimationFrame(raf3);const loop=()=>{if(U.view!=="v3d")return;if(U.auto)U.cam.yaw+=0.0035;render3D(cv,U.cam,{explode:U.explode,vis:U.vis3,labels:U.explode<0.05,layerLabels:true,flagH:ENCL-2});raf3=requestAnimationFrame(loop);};loop();};
+
+/* Fabricate */
+R.fab=()=>{const rd=readiness(D);const b=bomLines(D);const qi=U.qty>=1000?3:U.qty>=100?2:U.qty>=10?1:0;const tot=bomCost(U.qty);const allOk=rd.slice(0,5).every(x=>x.ok);const prepared=rd.every(x=>x.ok);const un=b.filter(l=>!l.lcsc).length;
+ let body="";
+ if(U.fabTab==="bom")body=`<div class="row" style="margin-bottom:12px;flex-wrap:wrap"><span class="t2" style="font-size:12.5px">Quantity</span><div class="tabs">${[10,100,1000].map(q=>`<button class="${U.qty===q?"on":""}" data-a="qty" data-arg="${q}">${q}</button>`).join("")}</div><span class="grow"></span><span class="t3" style="font-size:12px">Prices and stock are sample data, not live quotes.</span>${un?`<button class="btn" data-a="lcscAll">Match ${un} unsourced lines</button>`:""}<button class="btn" data-a="exportBom">Export BOM.csv</button></div>
+  <table><thead><tr><th>Designators</th><th>Value</th><th>Manufacturer part</th><th>LCSC</th><th class="num">Stock</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Line</th></tr></thead><tbody>${b.map(l=>{const sk=stockOf(l.mpn);return`<tr><td class="mono" style="font-size:12px">${l.refs.join(", ")}</td><td>${esc(l.val)}</td><td><div class="mono" style="font-size:12px">${l.mpn}</div><div class="t3" style="font-size:11.5px">${esc(l.mfr)}</div></td><td class="mono" style="font-size:12px">${l.lcsc?l.lcsc:`<button class="btn q" style="height:24px;font-size:12px" data-a="lcscMatch" data-arg="${l.mpn}">Find match</button>`}</td><td class="num" style="color:${sk<1000?"var(--warn)":"inherit"}">${sk.toLocaleString("en-US")}</td><td class="num">${l.refs.length}</td><td class="num">$${l.pr[qi].toFixed(l.pr[qi]<.1?4:2)}</td><td class="num">$${(l.pr[qi]*l.refs.length).toFixed(2)}</td></tr>`}).join("")}</tbody></table>
+  <div class="row" style="justify-content:flex-end;gap:28px;margin-top:14px"><span class="t2">Parts per board</span><span style="font-size:20px;font-weight:300">$${tot.toFixed(2)}</span><span class="t2">× ${U.qty}</span><span style="font-size:20px;font-weight:300">$${(tot*U.qty).toLocaleString("en-US",{maximumFractionDigits:0})}</span><span class="t3">sample</span></div>`;
+ if(U.fabTab==="gerber"){const files=[["F","AURORA-S3-F_Cu.gtl","Top copper","#D8955C"],["In1","AURORA-S3-In1_Cu.g2","L2 · GND plane","#5FA88A"],["In2","AURORA-S3-In2_Cu.g3","L3 · +3V3 plane","#D07A8C"],["B","AURORA-S3-B_Cu.gbl","Bottom copper","#6E9FD0"],["Edge","AURORA-S3-Edge_Cuts.gm1","Outline","#E2B35C"]];const f=files.find(x=>x[0]===U.gerber)||files[0];
+  const vis={F:0,In1:0,In2:0,B:0,SilkF:0,Edge:1};vis[f[0]]=1;
+  body=`<div style="display:grid;grid-template-columns:280px minmax(0,1fr);gap:24px">${`<div class="list">${files.map(x=>`<div class="r ${f[0]===x[0]?"on":""}" data-a="gerber" data-arg="${x[0]}"><span class="swatch" style="background:${x[3]}"></span><div class="col"><span class="mono" style="font-size:12px">${x[1]}</span><span class="t3" style="font-size:11.5px">${x[2]}</span></div></div>`).join("")}<div class="r" data-a="toast" data-arg="AURORA-S3.drl · 214 holes · 6 tool sizes (0.30 – 1.10 mm)"><span class="swatch" style="background:#A7A29A"></span><div class="col"><span class="mono" style="font-size:12px">AURORA-S3.drl</span><span class="t3" style="font-size:11.5px">Excellon drill · 214 holes</span></div></div></div>`}
+   <div style="background:#000;border-radius:10px;padding:20px;min-height:380px;display:flex;align-items:center;justify-content:center"><svg viewBox="-3 -3 62 46" style="width:100%;max-height:440px">${boardSvg({vis,mono:f[3]})}</svg></div></div>`;}
+ if(U.fabTab==="asm")body=`<div class="row" style="margin-bottom:12px;flex-wrap:wrap"><span class="t2" style="font-size:12.5px">Assembly · top side · ${Object.keys(P).filter(r=>onBoard(r)).length} parts · stencil 0.12 mm</span><span class="grow"></span><button class="btn" data-a="exportCpl">Export CPL.csv</button><button class="btn" data-a="orderPrep">Prepare fab and assembly order</button></div><table><thead><tr><th>Designator</th><th>Footprint</th><th class="num">X (mm)</th><th class="num">Y (mm)</th><th class="num">Rotation</th><th>Side</th></tr></thead><tbody>${Object.keys(P).filter(r=>onBoard(r)).map(r=>`<tr class="click" data-a="selPart" data-arg="${r}" data-go="pcb"><td class="mono">${r}</td><td class="mono t2" style="font-size:12px">${P[r].fp}</td><td class="num mono">${P[r].b[0].toFixed(2)}</td><td class="num mono">${(40-P[r].b[1]).toFixed(2)}</td><td class="num mono">${r==="U1"?"90":"0"}</td><td>Top</td></tr>`).join("")}</tbody></table>`;
+ $("#v-fab").innerHTML=`<aside class="side" style="width:330px"><div class="pb" style="padding:28px 22px">
+  <div class="lbl">Release check</div><div style="font-size:22px;font-weight:300;margin:8px 0 18px">${prepared?"Prepared for review":`${rd.filter(x=>x.ok).length} of ${rd.length} ready`}</div>
+  <div class="ready">${rd.map(x=>`<div class="i" data-a="go" data-arg="${x.go}"><span class="dot" style="background:${x.ok?"var(--ok)":"transparent"};width:9px;height:9px;box-shadow:${x.ok?"none":"inset 0 0 0 1.5px var(--t3)"}"></span><span>${x.k}</span><span class="t3" style="font-size:12px;text-align:right">${x.txt}</span></div>`).join("")}</div>
+  <div class="col" style="gap:8px;margin-top:20px"><button class="btn" data-a="genOutputs">Generate outputs for r${D.rev}</button><button class="btn ${allOk?"pri":""}" data-a="signoff" ${allOk&&D.signoff!==D.rev?"":"disabled"}>${D.signoff===D.rev?"Signed off":"Sign off for fabrication review"}</button><button class="btn q" data-a="exportPkg">Download package manifest</button></div>
+  <div class="t3" style="font-size:11.5px;line-height:1.55;margin-top:16px">EAK calls a design prepared for review only when every check has passed and an engineer has signed off. It never declares a board ready on its own; anything unknown blocks the release.</div></div></aside>
+ <div class="col grow" style="min-height:0"><div class="ph" style="height:56px;padding:0 32px"><div class="tabs">${[["bom","Bill of materials"],["gerber","Gerber"],["asm","Assembly"]].map(t=>`<button class="${U.fabTab===t[0]?"on":""}" data-a="fabTab" data-arg="${t[0]}">${t[1]}</button>`).join("")}</div></div><div style="flex:1;overflow:auto;padding:8px 32px 32px">${body}</div></div>`;};
+
+/* Terminal */
+const PS=()=>`<span style="color:#7FCB9B">engineer@bench</span> <span style="color:#86C5E0">~/aurora-s3</span> `;
+R.term=()=>{const T=U.term,t=T.tabs.find(x=>x.id===T.cur);
+ $("#v-term").innerHTML=`<aside class="side" style="width:240px"><div class="ph"><span class="lbl">Sessions</span><span class="grow"></span><button class="ibtn" data-a="termNew" aria-label="New terminal">${icon("plus")}</button></div><div class="pb list">${T.tabs.map(x=>`<div class="r ${x.id===T.cur?"on":""}" data-a="termTab" data-arg="${x.id}"><span class="dot" style="background:${x.agent?"var(--ai)":"var(--ok)"}"></span><div class="col grow"><span style="font-size:12.5px">${esc(x.agent?U.tools[x.agent].name:x.name)}</span><span class="t3" style="font-size:11.5px">${x.agent?"agent detected · same tasks":"shell"}</span></div>${T.tabs.length>1?`<button class="ibtn" style="width:22px;height:22px" data-a="termClose" data-arg="${x.id}" aria-label="Close session">${icon("x","width:14px;height:14px")}</button>`:""}</div>`).join("")}
+  <div class="t3" style="font-size:11.5px;line-height:1.55;margin-top:14px">The terminal stays for engineers who prefer it. Shells here already know the project; agents started here are detected and share the same tasks, proposals and checks.</div></div></aside>
+ <div class="term" id="termBox" data-a="termFocus"><div class="out" id="termOut">${t.out||`<span style="color:#6F6B65">Aurora S3 terminal · EAK tools on PATH · type help</span>\n`}</div><div class="row" style="gap:0"><span style="white-space:pre">${PS()}${t.agent?`<span style="color:#86C5E0">${t.agent}›</span> `:"$ "}</span><input id="termIn" autocomplete="off" spellcheck="false" aria-label="Terminal input"></div></div>`;
+ const box=$("#termBox");box.scrollTop=box.scrollHeight;};
+function termRun(c){const t=U.term.tabs.find(x=>x.id===U.term.cur);const cmd=c.trim();let o="";const line=`${PS()}${t.agent?`<span style="color:#86C5E0">${t.agent}›</span> `:"$ "}${esc(c)}\n`;
+ if(t.agent){if(cmd==="/exit"||cmd==="exit"){o=`<span style="color:#6F6B65">${U.tools[t.agent].name} session ended</span>\n`;t.agent=null;}
+  else if(cmd){const k=/erc/i.test(cmd)?"erc":/usb|90/i.test(cmd)?"usb":/current|power/i.test(cmd)?"power":null;
+   if(k){const nt=newTask(k);if(nt){nt.tool=t.agent;runTask(nt);o=`<span style="color:#86C5E0">${U.tools[t.agent].name}</span> started “${RECIPES[k].title}”. It runs on a copy; the proposal appears in Agents for review.\n`;}}
+   else if(/left|release|status/i.test(cmd)){o=`<span style="color:#86C5E0">${U.tools[t.agent].name}</span> (simulated) From EAK's release check:\n`+readiness(D).map(x=>`  ${x.ok?"done   ":"open   "} ${x.k}: ${x.txt}`).join("\n")+"\n";}
+   else o=`<span style="color:#86C5E0">${U.tools[t.agent].name}</span> (simulated) I can resolve ERC findings, route the USB pair or size power copper, all as proposals you review.\n`;}}
+ else if(cmd==="help")o="eak status · eak erc · eak drc · eak bom · ls · claude · codex · clear\n";
+ else if(cmd==="clear"){t.out="";R.term();$("#termIn").focus();return;}
+ else if(cmd==="ls")o="board/  docs/  library/  outputs/  schematic/  aurora-s3.eak\n";
+ else if(cmd==="eak status"){const e=counts(ercRun(D)),d=counts(drcRun(D));o=`project   Aurora S3 · r${D.rev}\nerc       ${e.e} errors · ${e.w} warnings\ndrc       ${d.e} errors · ${d.w} warnings · ${d.u} unknown\nboard     ${D.ercFix&&!D.synced?"behind schematic (2 parts)":"in sync"}\nagents    ${U.tasks.filter(x=>x.st==="review").length} proposals waiting\n`;}
+ else if(cmd==="eak erc"){const e=ercRun(D);o=e.length?e.map(f=>`<span style="color:${f.sev==="err"?"#EC7C6B":"#E2B35C"}">${f.sev==="err"?"error":"warn "}</span> ${esc(f.msg)}`).join("\n")+"\n":"ERC clean\n";}
+ else if(cmd==="eak drc"){const d=drcRun(D);o=d.length?d.map(f=>`<span style="color:${f.sev==="err"?"#EC7C6B":f.sev==="warn"?"#E2B35C":"#8A929E"}">${f.sev==="err"?"error  ":f.sev==="warn"?"warn   ":"unknown"}</span> ${esc(f.msg)}`).join("\n")+"\n":`DRC clean · ${RULES_TOTAL} rules\n`;}
+ else if(cmd==="eak bom")o=bomLines(D).map(l=>`${l.refs.join(",").padEnd(16)} ${l.mpn.padEnd(22)} ${String(l.refs.length).padStart(2)}`).join("\n")+"\n";
+ else if(cmd==="claude"||cmd==="codex"){if(U.tools[cmd].st!=="ready")o=`${cmd}: not signed in\n`;else{t.agent=cmd;o=`<span style="color:#86C5E0">${U.tools[cmd].name}</span> (simulated) connected to Aurora S3 through EAK's tool server. Ask for a change, or /exit.\n`;}}
+ else if(cmd)o=`${esc(cmd.split(" ")[0])}: not available in this simulation · try help\n`;
+ t.out=(t.out||"")+line+o;R.term();renderShell();const i=$("#termIn");if(i)i.focus();}
+
+/* overlays */
+function dlg(html,wide){$("#dlg").className=wide?"wide":"";$("#dlg").innerHTML=html;$("#scrim").classList.add("on");setTimeout(()=>{const f=$("#dlg").querySelector("input,button.pri,button");if(f)f.focus()},20);}
+function closeDlg(){$("#scrim").classList.remove("on");}
+let tT=null;function toast(t){const el=$("#toast");el.textContent=t;el.classList.add("on");clearTimeout(tT);tT=setTimeout(()=>el.classList.remove("on"),3000);}
+function download(name,text,type="text/plain"){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();}
+let palItems=[],palI=0;
+function palOpen(){$("#pal").classList.add("on");const i=$("#palIn");i.value="";palFill("");i.focus();}
+function palClose(){$("#pal").classList.remove("on");}
+function palFill(q){q=q.toLowerCase();const items=[...VIEWS.map(v=>({t:"Go to "+v[1],k:"Area",f:()=>go(v[0])})),
+ {t:"Start the guided walkthrough",k:"Guide",f:()=>guideStart(0)},{t:"Run ERC",k:"Check",f:()=>A.runErc()},{t:"Run DRC",k:"Check",f:()=>A.runDrc()},{t:"Generate outputs",k:"Fabricate",f:()=>A.genOutputs()},{t:"Replay the opening",k:"View",f:()=>A.replay()},{t:"Explode the board in 3D",k:"3D",f:()=>{U.explode=1;go("v3d")}},
+ {t:"Ask an agent to resolve ERC findings",k:"Agent",f:()=>A.agentTask("erc")},{t:"Ask an agent to route the USB pair",k:"Agent",f:()=>A.agentTask("usb")},{t:"Orchestrate: bring the layout to DRC clean",k:"Agent",f:()=>A.orchestrate()},
+ ...Object.keys(P).filter(has).map(r=>({t:`${r} · ${P[r].mpn}`,k:"Part",f:()=>{U.sheet=P[r].sheet;go("sch",{sel:r})}})),
+ ...["+3V3","VIN","USB_DP","USB_DN","I2C_SDA","I2C_SCL","EN","VBUS"].map(n=>({t:"Net "+n,k:"Net",f:()=>go("pcb",{hl:n})}))];
+ palItems=items.filter(x=>!q||x.t.toLowerCase().includes(q)).slice(0,40);palI=0;palDraw();}
+function palDraw(){$("#palRes").innerHTML=palItems.map((x,i)=>`<div class="it ${i===palI?"on":""}" data-pi="${i}">${esc(x.t)}<span class="k">${x.k}</span></div>`).join("")||`<div class="it t3">No match</div>`;}
+$("#palIn").addEventListener("input",e=>palFill(e.target.value));
+$("#palIn").addEventListener("keydown",e=>{if(e.key==="ArrowDown"){palI=Math.min(palItems.length-1,palI+1);palDraw();e.preventDefault();}if(e.key==="ArrowUp"){palI=Math.max(0,palI-1);palDraw();e.preventDefault();}if(e.key==="Enter"&&palItems[palI]){const f=palItems[palI].f;palClose();f();}if(e.key==="Escape")palClose();});
+$("#palRes").addEventListener("click",e=>{const it=e.target.closest("[data-pi]");if(!it)return;const f=palItems[+it.dataset.pi].f;palClose();f();});
+
+/* guided walkthrough: the 15-frame storyboard, in order */
+function ensureErcFixed(){if(!D.ercFix){const r=RECIPES.erc;D.checkpoints.push({name:"Before: "+r.title,rev:D.rev});commit(r.title+" (4 changes)","agent · Claude Code (applied by you)",d=>r.apply(d));const t=U.tasks.find(x=>x.key==="erc"&&(x.st==="review"||x.st==="running"));if(t){clearTimeout(t.timer);t.st="applied";t.appliedRev=D.rev;}}}
+function ensureSynced(){ensureErcFixed();if(!D.synced)commit("Updated board from schematic: R3, C7 placed and routed","you",d=>{d.synced=true});}
+const GUIDE=[
+ ["First launch","Home says what EAK is for: describe a board, open a project, import one, or continue. Nothing here needs a terminal or an agent.",()=>go("home")],
+ ["Describe the design goal","The engineer's words become a typed brief. Missing numbers are asked for, never guessed.",()=>{go("home");const t=$("#intentIn");t.value="12–24 V powered ESP32-S3 board with USB-C for programming, SHT40 and BME280 on I2C, fits a 12 mm enclosure";A.intent();}],
+ ["Continue next day","Continue names the next stage from real check results, with what needs attention and what changed since yesterday.",()=>go("home")],
+ ["Workspace and journey","The journey in the top bar is coloured by check results, never by an agent. Every stage is one click away.",()=>{U.sheet="mcu";go("sch",{sel:null,hl:null});}],
+ ["Choose components","Search parts with datasheet values, symbol, footprint and the LCSC number. Stock and prices are sample data.",()=>go("parts",{partSel:"U2",partQ:"",partCat:"All"})],
+ ["Schematic capture","Three sheets: power, MCU and USB, sensors. Hover a wire to trace its net; click a part to inspect it.",()=>{U.sheet="pwr";go("sch",{sel:"U2",hl:null});}],
+ ["ERC with guided fixes","ERC finds 2 errors and a warning, in plain words. Each locates on the canvas or goes to an agent as a proposal.",()=>go("checks")],
+ ["Review a proposed change","Claude Code works through EAK commands on a copy. EAK re-runs ERC itself; you apply or discard.",()=>{if(!D.ercFix){let t=U.tasks.find(x=>x.key==="erc"&&["running","review"].includes(x.st));if(!t){t=newTask("erc");go("agents");runTask(t);}else go("agents",{taskSel:t.id});}else{const t=U.tasks.find(x=>x.key==="erc");go("agents",{taskSel:t?t.id:null});}}],
+ ["Update PCB","The board knows it is behind the schematic. Update shows every footprint and net change before it lands as one step.",()=>{ensureErcFixed();go("pcb",{sel:null,hl:null});if(!D.synced)A.sync();}],
+ ["Placement, routing, DRC","Two agents split the layout: Codex routes the 90 Ω USB pair, Claude Code sizes power copper. Each sees only the context it needs.",()=>{ensureSynced();if(!U.group)A.orchestrate();else go("agents",{taskSel:U.group[0]});}],
+ ["3D check","The board in 3D, checked against the 12 mm enclosure from the brief. J2 is outlined: 1.0 mm to spare.",()=>{U.explode=0;U.cam={yaw:-0.55,tilt:0.95,zoom:1};go("v3d");}],
+ ["Outputs and release check","Outputs are made per revision. The release check stays blocked while anything is unknown, unsourced or unsigned.",()=>go("fab",{fabTab:"bom"})],
+ ["Checkpoint, come back tomorrow","Every change, yours or an agent's, is a revision with its author. Restoring a checkpoint is a new revision, so it can be undone too.",()=>A.open("history")],
+ ["Connect an AI tool, no terminal","Claude Code, Codex, Gemini CLI and OpenCode keep their own sign-in. Connect points them at EAK's tool server.",()=>go("agents",{taskSel:null})],
+ ["Terminal","Engineers who prefer the terminal keep it. Agents started there are detected and land in the same tasks and checks.",()=>{go("term");if(!U.term.tabs.some(x=>x.agent)){A.termNew();termRun("eak status");termRun("claude");termRun("what is left before release?");}}],
+];
+function renderGuide(){const g=$("#guide");g.classList.toggle("on",U.guideOn);if(!U.guideOn)return;const f=GUIDE[U.gi];
+ g.innerHTML=`<button class="ibtn" data-a="guidePrev" aria-label="Previous frame" ${U.gi===0?"disabled":""}>${icon("l")}</button><span class="n">${String(U.gi+1).padStart(2,"0")} / ${GUIDE.length}</span><span class="bar"><b style="width:${(U.gi+1)/GUIDE.length*100}%"></b></span><span class="ti">${f[0]}</span><span class="cap grow">${f[1]}</span><button class="btn ${U.gi<GUIDE.length-1?"":"pri"}" data-a="guideNext">${U.gi<GUIDE.length-1?"Next":"Finish"}</button><button class="ibtn" data-a="guideClose" aria-label="Close the walkthrough">${icon("x")}</button>`;}
+function guideStart(i){U.guideOn=true;guideGo(i||0);}
+function guideGo(i){if(i<0)return;if(i>=GUIDE.length){U.guideOn=false;renderShell();toast("Walkthrough complete · every screen stays open to explore");return;}closeDlg();palClose();U.gi=i;GUIDE[i][2]();renderShell();}
+
+/* actions */
+const A={
+ go(a){go(a)},
+ attn(a){if(a.startsWith("parts:"))go("parts",{partSel:a.slice(6)});else go(a)},
+ about(){dlg(`<h2>About this vision</h2><div class="t2" style="line-height:1.65">EAK is an electronics engineering workspace where AI agents draft and route the design with you, and EAK itself checks every change before you accept it.<br><br>This page is a <b style="color:var(--t1);font-weight:560">product vision and interactive simulation</b>. The AI tools, the LCSC catalogue, stock and prices are simulated with sample data; nothing here connects to a live service. Engineering numbers (impedance, rule checks, BOM totals) are computed in the page from the sample design.</div><div class="row"><span class="grow"></span><button class="btn" data-a="replay">Replay the opening</button><button class="btn" data-a="guideOpen">Guided walkthrough</button><button class="btn pri" data-a="closeDlg">Close</button></div>`)},
+ closeDlg(){closeDlg()}, palette(){palOpen()}, undo(){undo()}, redo(){redo()},
+ replay(){closeDlg();startFilm(0)},
+ guideOpen(){closeDlg();guideStart(U.gi||0)}, guideNext(){guideGo(U.gi+1)}, guidePrev(){guideGo(U.gi-1)}, guideClose(){U.guideOn=false;renderShell()},
+ newDesign(){const t=$("#intentIn");t.focus();toast("Describe the board; EAK drafts a brief you confirm")},
+ importDesign(){dlg(`<h2>Import a KiCad project</h2><div class="t2" style="line-height:1.6">Choose a .kicad_pro folder. EAK converts the schematic, board and libraries into one EAK design and lists anything it could not convert, so nothing is dropped silently.</div><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Cancel</button><button class="btn pri" data-a="importDone">Import sample</button></div>`)},
+ importDone(){closeDlg();U.projects.splice(1,0,{id:"p"+Date.now(),name:"IMPORTED-1",sub:"From KiCad · 2 sheets · 2 layers · 3 items to review",when:"Just now",draft:1});R.home();toast("Imported · 3 items listed for review")},
+ intent(){const t=($("#intentIn").value||"").trim();if(!t){toast("Describe the board you want to build");$("#intentIn").focus();return;}
+  const m=k=>new RegExp(k,"i").test(t);const mm=(t.match(/(\d+)\s?mm/i)||[])[1];
+  const req=[["Function",t.length>90?t.slice(0,88)+"…":t],["Power",m("12 ?v")?"12 V DC input":m("usb.?c|pd")?"USB-C":m("4s|li-?ion|battery")?"4S Li-ion pack, 12.8 – 16.8 V":"Not stated"],["Interfaces",[m("usb")?"USB 2.0":"",m("i2c|sht|bme|sensor")?"I²C sensors":"",m("can")?"CAN":"",m("esp32|wi-?fi")?"Wi-Fi":""].filter(Boolean).join(", ")||"Not stated"],["Enclosure",mm?mm+" mm height limit":"Not stated"],["Board","4 layers suggested, 1.6 mm"]];
+  dlg(`<div class="lbl" style="color:var(--ai)">Draft brief</div><h2>${esc(t.length>64?t.slice(0,62)+"…":t)}</h2><dl class="kv" style="max-width:600px">${req.map(r=>`<dt>${r[0]}</dt><dd style="text-align:left;white-space:normal">${esc(r[1])}</dd>`).join("")}</dl>
+   <div class="col" style="gap:10px"><span class="lbl">Missing, so EAK asks</span><div><div style="margin-bottom:6px">Peak current on +3V3?</div><div class="qrow"><button class="qopt" data-a="pick">0.5 A</button><button class="qopt" data-a="pick">0.8 A</button><button class="qopt" data-a="pick">Not sure, leave open</button></div></div><div><div style="margin-bottom:6px">Input range on the DC supply?</div><div class="qrow"><button class="qopt" data-a="pick">12 – 24 V</button><button class="qopt" data-a="pick">9 – 36 V</button></div></div></div>
+   <div class="t3" style="font-size:12px">Open values stay open and show as unknown in the checks. Nothing is guessed.</div><div class="row"><button class="btn q" data-a="closeDlg">Cancel</button><span class="grow"></span><button class="btn pri" data-a="createProj" data-arg="${esc(t)}">Create project</button></div>`)},
+ pick(a,el){el.parentNode.querySelectorAll(".qopt").forEach(b=>b.classList.remove("on"));el.classList.add("on")},
+ intentEx(a){$("#intentIn").value=a;A.intent()},
+ createProj(a){closeDlg();const nm=(a.match(/(USB-C PD|battery|air-quality|ESP32-S3|ESP32|motor|sensor)/i)||["Board"])[0];U.projects.splice(1,0,{id:"p"+Date.now(),name:nm.toUpperCase().replace(/\s+/g,"-")+"-1",sub:a.slice(0,70),when:"Just now",draft:1});R.home();toast("Project created with a draft brief")},
+ openProj(a){if(a==="atmos")return go("project");const p=U.projects.find(x=>x.id===a);dlg(`<h2>${esc(p.name)}</h2><div class="t2">${esc(p.sub)}. This project has a brief only; in this vision Aurora S3 is the fully modelled board.</div><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Close</button><button class="btn pri" data-a="openAtmos">Open Aurora S3</button></div>`)},
+ openAtmos(){closeDlg();go("project")},
+ tree(a){U.tree[a]=!U.tree[a];R[U.view]()},
+ open(a){U.fileOn=a;if(a.startsWith("sheet:")){U.sheet=a.slice(6);go("sch")}else if(a.startsWith("part:"))go("parts",{partSel:a.slice(5)});else if(a==="stack")go("pcb");else if(a==="history"){go("project");setTimeout(()=>{const h=$("#historyAnchor");if(h)h.scrollIntoView({behavior:RM?"auto":"smooth"})},30)}else go(a)},
+ saveCurrents(){const a=$("#cur_+12V_RAW").value.trim(),b=$("#cur_+3V3").value.trim();if(!(+a>0&&+b>0)){toast("Enter a current in amps for both rails");return;}commit(`Declared currents: +12V_RAW ${a} A, +3V3 ${b} A`,"you",d=>{d.currents={"+12V_RAW":a,"+3V3":b}});toast("Currents saved · DRC can now check copper width")},
+ checkpoint(){D.checkpoints.push({name:"Checkpoint at r"+D.rev,rev:D.rev});R.project();toast("Checkpoint saved at r"+D.rev)},
+ restore(a){const k=D.checkpoints[+a];commit(`Restored checkpoint “${k.name}” (r${k.rev})`,"you",()=>{});toast(`Restored as r${D.rev}. Undo takes it back.`)},
+ sheet(a){U.sheet=a;R.sch()},
+ selPart(a,el){if(el&&el.closest&&el.closest("svg")&&el.closest("svg").dataset.dragged)return;U.sel=a||null;if(el&&el.dataset&&el.dataset.go){if(a)U.sheet=P[a].sheet;go(el.dataset.go);return;}renderShell();R[U.view]();},
+ net(a,el){if(el&&el.closest&&el.closest("svg")&&el.closest("svg").dataset.dragged)return;U.hl=U.hl===a?null:a;U.sel=null;renderShell();R[U.view]();},
+ netBoard(a){go("pcb",{hl:a})}, partOnBoard(a){go("pcb",{sel:a})}, partOnSch(a){U.sheet=P[a].sheet;go("sch",{sel:a})},
+ zoom(a){const[k,m]=a.split(":");const z=U.pz[k];if(m==="fit"){z.x=0;z.y=0;z.k=1}else z.k=Math.max(.5,Math.min(8,z.k*(m==="in"?1.25:.8)));R[k]()},
+ runErc(){const e=counts(ercRun(D));toast(e.e+e.w?`ERC on r${D.rev}: ${e.e} errors, ${e.w} warning`:`ERC clean on r${D.rev}`);if(U.view==="checks")R.checks();},
+ runDrc(){const d=counts(drcRun(D));toast(d.e+d.w+d.u?`DRC on r${D.rev}: ${d.e} errors, ${d.w} warnings, ${d.u} unknown`:`DRC clean · ${RULES_TOTAL} rules on r${D.rev}`);if(U.view==="checks")R.checks();},
+ locate(a){const[w,r]=a.split(":");if(w==="sch"){U.sheet=P[r].sheet;go("sch",{sel:r,hl:null})}else go("pcb",{sel:r,hl:null})},
+ activeLayer(a){U.active=a;U.vis[a]=1;R.pcb()}, layerVis(a){U.vis[a]=U.vis[a]?0:1;R.pcb()},
+ applyGeom(){const w=+$("#uw").value,s=+$("#us").value;if(!(w>0&&s>0))return;commit(`USB_DIFF net class set to ${w.toFixed(2)} / ${s.toFixed(2)} mm`,"you",d=>{d.usbW=w;d.usbS=s});toast(`Net class updated · ${zdiff(w,s).toFixed(1)} Ω`)},
+ sync(){dlg(`<h2>Update board from schematic</h2><div class="t2" style="font-size:12.5px">ERC passed on r${D.rev}. Computed on a copy: nothing changes until you apply, and it lands as one step you can undo.</div><table><tbody>${[["Add footprint","R3","R_0603 · 10 kΩ · next to U1 EN"],["Add footprint","C7","C_0603 · 1 µF · next to U1 EN"],["Connect","EN","R3.2, C7.1 → U1.EN"]].map(r=>`<tr><td class="t2" style="width:130px">${r[0]}</td><td class="mono">${r[1]}</td><td class="t2">${r[2]}</td></tr>`).join("")}</tbody></table><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Cancel</button><button class="btn pri" data-a="syncApply">Apply 3 changes</button></div>`)},
+ syncApply(){closeDlg();if(D.synced)return;commit("Updated board from schematic: R3, C7 placed and routed","you",d=>{d.synced=true});toast("Board updated · R3 and C7 placed near U1")},
+ datasheet(a){const r=P[a]?a:null;const p=r?P[r]:CATALOG_EXTRA.find(x=>x.mpn===a);const rows=(r&&DS[r])||[["Description",p.desc],["Package",p.fp]];const po=r?pinout(r):null;
+  dlg(`<div class="row"><div class="col grow"><span class="lbl">${esc(p.mfr)} · Datasheet viewer</span><h2 class="mono" style="margin-top:4px">${p.mpn}</h2></div><button class="btn q" data-a="closeDlg">Close</button></div>
+  <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px"><div style="background:#E9E6DE;color:#1A1A1A;border-radius:6px;padding:26px 28px;font-size:12px;line-height:1.55"><div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#6F6B65">${esc(p.mfr)}</div><div style="font-size:18px;font-weight:600;margin:4px 0 2px">${p.mpn}</div><div style="color:#4A4844;margin-bottom:14px">${esc(p.desc)}</div><div style="font-weight:600;margin-bottom:6px">Electrical characteristics</div><table><tbody>${rows.map(x=>`<tr><td style="border-top:1px solid #CFCBC4;padding:5px 0;color:#4A4844">${x[0]}</td><td style="border-top:1px solid #CFCBC4;padding:5px 0;text-align:right">${x[1]}</td></tr>`).join("")}</tbody></table><div style="margin-top:14px;color:#6F6B65;font-size:10.5px">Page 1 · sample rendering</div></div>
+   <div class="col" style="gap:14px"><div class="t3" style="font-size:12px;line-height:1.55">Values are extracted from the manufacturer's datasheet, and each one links to its page and table so you can check it. In this simulation the extraction is sample data.</div>${po?`<div class="lbl">Pins used in Aurora S3</div><svg viewBox="0 0 400 ${po.h}" style="width:100%">${po.s}</svg>`:`<div class="t2">Not used in this design yet.</div>`}</div></div>`,true)},
+ askPart(a){const t=newTask(null,`Is ${a} (${P[a].mpn}) right for this design?`);if(!t)return;t.st="done";t.log.push({who:"ai",text:`${a} is a ${P[a].desc}. ${DS[a]?DS[a].slice(0,2).map(x=>x[0]+" "+x[1]).join("; ")+". ":""}That fits the Aurora S3 rails as declared. This is advice; ERC and DRC remain the checks.`});go("agents")},
+ partCat(a){U.partCat=a;R.parts()}, partSel(a){U.partSel=a;R.parts()},
+ swapPart(a){const x=CATALOG_EXTRA.find(c=>c.mpn===a);dlg(`<h2>Propose swap: ${x.alt} → ${x.mpn}</h2><div class="t2" style="font-size:12.5px">${esc(x.desc)}. An agent checks pins, footprint and rails before proposing this as a reviewable change.</div><table><tbody><tr><td class="t2">Current</td><td class="mono">${P[x.alt].mpn}</td><td class="num">$${P[x.alt].pr[2].toFixed(2)}</td></tr><tr><td class="t2">Proposed</td><td class="mono">${x.mpn}</td><td class="num">$${x.pr[2].toFixed(2)}</td></tr><tr><td class="t2">Footprint</td><td class="mono">${x.fp}</td><td class="num">${x.fp===P[x.alt].fp?"Same":"<span style='color:var(--warn)'>Changes</span>"}</td></tr></tbody></table><div class="t3" style="font-size:11.5px">Prices are sample data.</div><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Close</button><button class="btn ai" data-a="swapAsk" data-arg="${x.mpn}">Ask an agent to evaluate</button></div>`)},
+ swapAsk(a){closeDlg();const x=CATALOG_EXTRA.find(c=>c.mpn===a);const t=newTask(null,`Evaluate swapping ${x.alt} for ${x.mpn}.`);if(!t)return;t.st="done";t.log.push({who:"ai",text:`${x.mpn}: ${x.desc}. ${x.fp===P[x.alt].fp?"Same footprint, so the board needs no change.":"Different footprint: the swap touches the layout, so I would propose it as a board change with DRC re-run by EAK."} Nothing has changed.`});go("agents")},
+ lcscMatch(a){const m=a==="0603WAF3162T5E"?"C23038":null;commit(m?`Matched ${a} to LCSC ${m}`:`Marked ${a} for global sourcing`,"you",d=>{d.lcsc[a]=m||"Global"});toast(m?`Matched to ${m} · sample catalogue`:"No LCSC match in the sample catalogue · marked for global sourcing")},
+ lcscAll(){const un=bomLines(D).filter(l=>!l.lcsc);commit(`Sourced ${un.length} BOM lines (sample catalogue)`,"you",d=>{for(const l of un)d.lcsc[l.mpn]=l.mpn==="0603WAF3162T5E"?"C23038":"Global";});toast(`${un.length} lines sourced · sample data`)},
+ agentTask(a){const t=newTask(a);if(!t)return;go("agents");runTask(t)},
+ orchestrate(){const ids=[];for(const k of ["usb","power"]){const t=newTask(k);if(!t)return;ids.push(t.id);}U.group=ids;U.taskSel=ids[0];go("agents");ids.forEach(id=>runTask(U.tasks.find(x=>x.id===id)));},
+ newTaskView(){U.taskSel=null;R.agents()}, taskSel(a){U.taskSel=+a;R.agents()},
+ agentSend(){const v=($("#agentIn").value||"").trim();if(!v){toast("Describe the task first");return;}const k=/erc|en pin|power flag/i.test(v)?"erc":/usb|differential|90/i.test(v)?"usb":/current|power trace|copper width/i.test(v)?"power":null;const t=newTask(k,v);if(!t)return;if(k){t.tool=U.agentTool;t.title=RECIPES[k].title;runTask(t);}else{t.st="done";t.log.push({who:"ai",text:"In this simulation the agents can resolve ERC findings, route the USB pair, size power copper or evaluate a part swap. Try one of those."});R.agents();renderShell();}},
+ answer(a){const t=U.tasks.find(x=>x.id===U.taskSel);t.ans=+a;runTask(t)},
+ stopTask(){const t=U.tasks.find(x=>x.id===U.taskSel);clearTimeout(t.timer);t.st="stopped";t.log.push({who:"ai",text:"Stopped. Nothing in the design changed."});renderAll()},
+ recheck(){const t=U.tasks.find(x=>x.id===U.taskSel);buildProposal(t)},
+ applyProp(){const t=U.tasks.find(x=>x.id===U.taskSel);if(t.base!==D.rev){toast("Refused: the design changed since EAK checked this");return;}const r=RECIPES[t.key];
+  D.checkpoints.push({name:"Before: "+r.title,rev:D.rev});commit(r.title+` (${t.chTxt.length} changes)`,"agent · "+U.tools[t.tool].name+" (applied by you)",d=>r.apply(d,t.amps));t.st="applied";t.appliedRev=D.rev;renderAll();toast(`Applied as r${D.rev} · a checkpoint was saved first`)},
+ discardProp(){const t=U.tasks.find(x=>x.id===U.taskSel);t.st="discarded";renderAll();toast("Discarded · nothing changed")},
+ toolSignin(a){U.tools[a].st="busy";R.agents();setTimeout(()=>{U.tools[a].st="connect";U.tools[a].ver="Signed in · not connected to Aurora S3";renderAll();toast(`${U.tools[a].name} signed in with its own account`)},RM?0:900)},
+ toolConnect(a){U.tools[a].st="ready";U.tools[a].ver="Connected · own sign-in";renderAll();toast(`${U.tools[a].name} connected to Aurora S3 through EAK's tool server`)},
+ toolInstall(a){dlg(`<h2>Install ${U.tools[a].name}</h2><div class="t2" style="line-height:1.6">EAK links to the tool's official installer and detects it when it is done. The tool signs in with its own account; EAK never stores its credentials.</div><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Close</button><button class="btn pri" data-a="toolInstalled" data-arg="${a}">Simulate install</button></div>`)},
+ toolInstalled(a){closeDlg();U.tools[a].st="signin";U.tools[a].ver="Found · not signed in";R.agents()},
+ addTool(){dlg(`<h2>Add a command-line agent</h2><div class="t2" style="font-size:12.5px">Any agent that speaks MCP can drive EAK. Give its command and EAK registers the project's tool server with it.</div><label class="col" style="gap:6px"><span class="lbl">Name</span><input id="ntName" value="Aider"></label><label class="col" style="gap:6px"><span class="lbl">Command</span><input id="ntCmd" class="mono" value="aider"></label><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Cancel</button><button class="btn pri" data-a="addToolOk">Add</button></div>`)},
+ addToolOk(){const n=($("#ntName").value||"").trim()||"Custom agent";U.tools["c"+Date.now()]={name:n,st:"ready",ver:"Custom · "+(($("#ntCmd").value||"").trim()||"command")};closeDlg();R.agents();toast(n+" added")},
+ cam(a){const C={iso:[-0.55,0.95],top:[0,0.05],front:[0,1.35],back:[Math.PI,1.2]}[a];U.auto=false;const s={...U.cam},t0=performance.now(),dur=RM?0:900;const ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+  const step=now=>{const k=dur?Math.min(1,(now-t0)/dur):1;U.cam.yaw=s.yaw+(C[0]-s.yaw)*ease(k);U.cam.tilt=s.tilt+(C[1]-s.tilt)*ease(k);if(k<1)requestAnimationFrame(step)};requestAnimationFrame(step);R.v3d()},
+ autoRot(){U.auto=!U.auto;R.v3d()}, vis3(a){U.vis3[a]=U.vis3[a]?0:1;R.v3d()},
+ fabTab(a){U.fabTab=a;R.fab()}, qty(a){U.qty=+a;R.fab()}, gerber(a){U.gerber=a;R.fab()},
+ genOutputs(){D.outputsRev=D.rev;U.tree.out=1;renderAll();toast(`Outputs written to outputs/rev-${D.rev}: 5 Gerber layers, drill, BOM, CPL`)},
+ signoff(){if(!readiness(D).slice(0,5).every(x=>x.ok)){toast("Every check must pass first");return;}D.signoff=D.rev;renderAll();toast("Signed off · Aurora S3 r"+D.rev+" is prepared for fabrication review")},
+ orderPrep(){const rd=readiness(D);const ok=rd.every(x=>x.ok);dlg(`<h2>Fab and assembly order</h2><div class="t2" style="font-size:12.5px">EAK prepares the package for a fabricator to review. Quotes and ordering happen with the fabricator; nothing is sent from this simulation.</div><dl class="kv" style="max-width:520px"><dt>Board</dt><dd>4 layers · 1.6 mm · 56 × 40 mm · ENIG · matte black</dd><dt>Quantity</dt><dd>${U.qty} boards</dd><dt>Assembly</dt><dd>Top side · ${Object.keys(P).filter(r=>onBoard(r)).length} parts</dd><dt>Parts per board</dt><dd>$${bomCost(U.qty).toFixed(2)} · sample</dd><dt>Status</dt><dd style="color:${ok?"var(--ok)":"var(--warn)"}">${ok?"Prepared for review":"Blocked by the release check"}</dd></dl><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Close</button><button class="btn pri" data-a="exportPkg">Download package manifest</button></div>`)},
+ exportBom(){download("AURORA-S3_BOM.csv",["Designators,Value,Manufacturer,MPN,LCSC,Qty"].concat(bomLines(D).map(l=>[`"${l.refs.join(" ")}"`,`"${l.val}"`,`"${l.mfr}"`,l.mpn,l.lcsc||"",l.refs.length].join(","))).join("\n"),"text/csv");toast("BOM exported · sample sourcing data")},
+ exportCpl(){download("AURORA-S3_CPL.csv",["Designator,Mid X,Mid Y,Rotation,Layer"].concat(Object.keys(P).filter(r=>onBoard(r)).map(r=>`${r},${P[r].b[0].toFixed(2)},${(40-P[r].b[1]).toFixed(2)},${r==="U1"?90:0},Top`)).join("\n"),"text/csv");toast("Pick-and-place exported")},
+ exportPkg(){closeDlg();const rd=readiness(D);download("AURORA-S3_package_manifest.txt",`Aurora S3 fabrication package manifest\nRevision r${D.rev}\nStatus: ${rd.every(x=>x.ok)?"prepared for review":"not ready, see below"}\n\n`+rd.map(x=>`${x.ok?"[x]":"[ ]"} ${x.k}: ${x.txt}`).join("\n")+`\n\nFiles: F_Cu.gtl In1_Cu.g2 In2_Cu.g3 B_Cu.gbl Edge_Cuts.gm1 AURORA-S3.drl BOM.csv CPL.csv\n\nGenerated by the EAK product vision (interactive simulation, sample data).\n`);toast("Manifest downloaded")},
+ termTab(a){U.term.cur=+a;R.term()}, termNew(){const id=U.term.n++;U.term.tabs.push({id,name:"shell "+id,out:"",agent:null});U.term.cur=id;R.term()},
+ termClose(a){const T=U.term;T.tabs=T.tabs.filter(x=>x.id!==+a);if(T.cur===+a)T.cur=T.tabs[0].id;R.term()},
+ termFocus(){const i=$("#termIn");if(i)i.focus()},
+ toast(a){toast(a)},
+ enter(){enterApp()}, filmNext(){filmGo(FI+1)}, filmPrev(){filmGo(FI-1)}, act(a){filmGo(+a)},
+};
+document.addEventListener("click",e=>{const el=e.target.closest("[data-a]");if(!el||el.tagName==="INPUT")return;if(el.disabled)return;const f=A[el.dataset.a];if(!f){console.error("no action",el.dataset.a);return;}e.stopPropagation();f(el.dataset.arg,el);});
+$("#scrim").addEventListener("click",e=>{if(e.target.id==="scrim")closeDlg()});
+document.addEventListener("keydown",e=>{const typing=/INPUT|TEXTAREA|SELECT/.test(e.target.tagName);
+ if(e.target.id==="termIn"&&e.key==="Enter"){termRun(e.target.value);return;}
+ if(e.target.id==="intentIn"&&e.key==="Enter"&&!e.shiftKey){e.preventDefault();A.intent();return;}
+ if(e.target.id==="agentIn"&&e.key==="Enter"&&!e.shiftKey){e.preventDefault();A.agentSend();return;}
+ if(filmOn){if(e.key===" "||e.key==="ArrowRight"||e.key==="PageDown"){e.preventDefault();filmGo(FI+1);}else if(e.key==="ArrowLeft"||e.key==="PageUp"){e.preventDefault();filmGo(FI-1);}else if(e.key==="Escape"||e.key==="Enter"){e.preventDefault();enterApp();}else if(/^[1-3]$/.test(e.key))filmGo(+e.key-1);return;}
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();palOpen();return;}
+ if(e.key==="Escape"){if($("#pal").classList.contains("on"))palClose();else closeDlg();return;}
+ if(typing)return;
+ if(U.guideOn&&(e.key==="ArrowRight"||e.key==="PageDown")){e.preventDefault();guideGo(U.gi+1);return;}
+ if(U.guideOn&&(e.key==="ArrowLeft"||e.key==="PageUp")){e.preventDefault();guideGo(U.gi-1);return;}
+ if(e.key.toLowerCase()==="g"&&!e.ctrlKey&&!e.metaKey){U.guideOn?A.guideClose():A.guideOpen();return;}
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();e.shiftKey?redo():undo();return;}
+ if($("#scrim").classList.contains("on"))return;
+ if(/^[0-9]$/.test(e.key)&&!e.ctrlKey&&!e.metaKey&&!e.altKey)go(VIEWS[(+e.key+9)%10][0]);});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches&&e.target.matches(".proj,.tree .n")){e.preventDefault();e.target.click();}});
+
+/* opening: a short framing of the storyline (three beats, skippable) */
+let FI=-1,filmOn=false,fTimers=[],fRaf=null;const fCam={yaw:-0.6,tilt:1.0,zoom:0.95};
+const later=(fn,ms)=>fTimers.push(setTimeout(fn,RM?0:ms));
+function fText(t,s,small){const el=$("#fText");el.classList.remove("on");el.classList.toggle("small",!!small);later(()=>{el.querySelector(".t").textContent=t||"";el.querySelector(".s").textContent=s||"";if(t)el.classList.add("on");},120);}
+function layers(on){["L-pad","L-board","L-3d"].forEach(id=>$("#"+id).classList.toggle("on",on.includes(id)));}
+function startFilm(i){filmOn=true;$("#film").classList.remove("gone");$("#app").classList.remove("on");$("#app").setAttribute("aria-hidden","true");$("#fActs").innerHTML=[0,1,2].map(k=>`<button data-a="act" data-arg="${k}" aria-label="Beat ${k+1}"><i></i></button>`).join("");FI=-1;filmGo(i||0);}
+function filmGo(i){if(i<0)i=0;if(i>2){enterApp();return;}fTimers.forEach(clearTimeout);fTimers=[];cancelAnimationFrame(fRaf);FI=i;
+ document.querySelectorAll("#fActs button").forEach((b,k)=>{b.classList.toggle("on",k===i);b.classList.toggle("done",k<i)});
+ $("#fHint").textContent=i<2?"Space or → to continue":"Enter to begin the walkthrough";$("#fEnter").className=i===2?"btn pri":"btn";[beat1,beat2,beat3][i]();}
+function padScene(trace){$("#padSvg").innerHTML=`<defs><radialGradient id="spec" cx=".35" cy=".3" r=".7"><stop offset="0" stop-color="#F4DDA6"/><stop offset=".45" stop-color="#D4B36A"/><stop offset="1" stop-color="#8C7036"/></radialGradient><filter id="soft"><feGaussianBlur stdDeviation="18"/></filter></defs>
+ <rect width="1440" height="900" fill="#0C0D0F"/><ellipse cx="560" cy="410" rx="260" ry="190" fill="#15171A" filter="url(#soft)"/>
+ <rect x="536" y="402" width="56" height="40" rx="5" fill="#050606" opacity=".6"/><rect x="530" y="392" width="56" height="40" rx="5" fill="url(#spec)"/>
+ ${trace?`<path id="trc" d="M586 412 H760 L820 352 H980 L1040 412 H1120" fill="none" stroke="#D8955C" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100" style="transition:stroke-dashoffset ${RM?0:1500}ms cubic-bezier(.65,0,.15,1)"/><circle id="via1" cx="820" cy="352" r="0" fill="#C9A866" style="transition:r 400ms"/><circle cx="820" cy="352" r="0" fill="#0C0D0F" id="via1h" style="transition:r 400ms"/><rect id="padB" x="1120" y="392" width="56" height="40" rx="5" fill="url(#spec)" opacity="0" style="transition:opacity 600ms"/>`:""}`;}
+function beat1(){layers(["L-pad"]);padScene(false);fText("","");later(()=>fText("Every board begins with an intent.","",true),900);}
+function beat2(){layers(["L-pad"]);padScene(true);fText("","");
+ later(()=>{const t=$("#trc");if(t)t.style.strokeDashoffset="0";},200);
+ later(()=>{const v=$("#via1"),h=$("#via1h");if(v){v.setAttribute("r","13");h.setAttribute("r","6");}},900);
+ later(()=>{const b=$("#padB");if(b)b.style.opacity="1";},1500);
+ later(()=>{$("#boardFilmSvg").innerHTML=`<g id="bfg" style="transform-origin:720px 450px;transform:scale(3.2);transition:transform ${RM?0:1400}ms cubic-bezier(.65,0,.15,1)"><svg x="290" y="140" width="860" height="620" viewBox="-3 -3 62 46">${boardSvg({d:Object.assign(clone(D),{usbRouted:true}),vis:{F:1,In1:1,In2:0,B:1,SilkF:1,Edge:1}})}</svg></g>`;layers(["L-board"]);requestAnimationFrame(()=>requestAnimationFrame(()=>{const g=$("#bfg");if(g)g.style.transform="scale(.74) translateY(-110px)";}));},2300);
+ later(()=>fText("EAK. Electronics, engineered with agents.","Describe the board. Agents draft it. EAK verifies every change before you accept it."),3000);}
+function beat3(){layers(["L-3d"]);fText("","");const cv=$("#fCanvas"),side=$("#fSide");const dd=Object.assign(clone(D),{usbRouted:true});
+ side.innerHTML=[["L1 · Top signal","1 oz copper · USB pair 0.26 / 0.15 mm","#D8955C"],["L2 · GND plane","Unbroken reference under every signal","#5FA88A"],["L3 · +3V3 plane","Kept clear of the antenna","#D07A8C"],["L4 · Bottom signal","I²C escape and GND pour","#6E9FD0"],["Fifteen moments, one engineer","From the first launch to the release check","#ECE8E1"]].map(x=>`<div class="it"><div style="font-size:13px;color:${x[2]}">${x[0]}</div><div class="t2" style="font-size:12.5px">${x[1]}</div></div>`).join("");
+ const t0=performance.now();const loop=now=>{const k=Math.min(1,(now-t0)/(RM?1:2600));const ease=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;fCam.yaw=-0.6+0.25*Math.sin(now/4000);render3D(cv,fCam,{explode:ease,cx:.4,cy:.5,d:dd});if(!RM)fRaf=requestAnimationFrame(loop);};fRaf=requestAnimationFrame(loop);
+ side.querySelectorAll(".it").forEach((el,i)=>later(()=>el.classList.add("on"),900+i*350));
+ later(()=>fText("One model. Schematic, layout, 3D and manufacturing are views of the same design.","",true),2800);}
+function enterApp(){if(!filmOn)return;filmOn=false;fTimers.forEach(clearTimeout);cancelAnimationFrame(fRaf);$("#film").classList.add("gone");$("#app").removeAttribute("aria-hidden");$("#app").classList.add("on");guideStart(0);}
+
+window.__dead=()=>[...document.querySelectorAll("[data-a]")].map(x=>x.dataset.a).filter(a=>!A[a]);
+window.__errors=[];window.addEventListener("error",e=>window.__errors.push(e.message));
+renderAll();startFilm(0);
+</script>
+</body>
+</html>
