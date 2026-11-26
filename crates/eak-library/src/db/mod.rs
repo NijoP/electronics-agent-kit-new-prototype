@@ -603,7 +603,10 @@ mod tests {
         let db = LibraryDb::open(&path).unwrap();
         assert_eq!(db.search("tps", None, 10).unwrap().len(), 1);
         db.conn
-            .execute("UPDATE meta SET value = '99' WHERE key = 'schema_version'", [])
+            .execute(
+                "UPDATE meta SET value = '99' WHERE key = 'schema_version'",
+                [],
+            )
             .unwrap();
         drop(db);
         assert!(LibraryDb::open(&path).is_err());
