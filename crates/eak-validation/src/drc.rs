@@ -1163,8 +1163,9 @@ fn core_to_ring(core: &Core, ring: &[Point]) -> (f64, Point) {
     best
 }
 
-/// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, unverified).
-pub const HOLE_TO_HOLE_MIN: Nm = 500_000;
+/// DRC-019 minimum drill-edge to drill-edge spacing (EAK default, unverified); the autorouter
+/// keeps the same value.
+pub const HOLE_TO_HOLE_MIN: Nm = eak_engineering::clearance::HOLE_TO_HOLE_MIN;
 /// DRC-020 minimum legend-to-board-edge clearance (EAK default, unverified).
 pub const SILK_TO_EDGE_MIN: Nm = 200_000;
 

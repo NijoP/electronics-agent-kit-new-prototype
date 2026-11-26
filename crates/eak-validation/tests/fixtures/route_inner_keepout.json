@@ -1,0 +1,38 @@
+[
+  {"type": "SetProjectName", "name": "Autoroute: inner layer past a keep-out wall"},
+  {"type": "SetStackup", "stackup": {
+    "layers": [
+      {"layer": "top", "kind": "signal", "copper_oz": 1.0, "dielectric_after_um": 200, "er": 4.5},
+      {"layer": {"inner": 1}, "kind": "plane", "copper_oz": 0.5, "dielectric_after_um": 1065, "er": 4.5},
+      {"layer": {"inner": 2}, "kind": "signal", "copper_oz": 0.5, "dielectric_after_um": 200, "er": 4.5},
+      {"layer": "bottom", "kind": "signal", "copper_oz": 1.0, "dielectric_after_um": 0, "er": 4.5}
+    ],
+    "board_thickness": 1600000,
+    "dielectric": "FR-4"
+  }},
+  {"type": "SetBoardOutline", "points": [
+    {"x": 0, "y": 0}, {"x": 30000000, "y": 0}, {"x": 30000000, "y": 20000000}, {"x": 0, "y": 20000000}
+  ]},
+  {"type": "PlaceSymbol", "component_id": "R_0603", "position": {"x": 20000000, "y": 20000000}, "refdes": "R1", "value": "1k"},
+  {"type": "PlaceSymbol", "component_id": "R_0603", "position": {"x": 40000000, "y": 20000000}, "refdes": "R2", "value": "1k"},
+  {"type": "LabelPin", "symbol_id": "@R1", "pin": "1", "name": "SIG"},
+  {"type": "LabelPin", "symbol_id": "@R2", "pin": "1", "name": "SIG"},
+  {"type": "LabelPin", "symbol_id": "@R1", "pin": "2", "name": "GND"},
+  {"type": "LabelPin", "symbol_id": "@R2", "pin": "2", "name": "GND"},
+  {"type": "SyncSchematicToPcb"},
+  {"type": "MoveFootprint", "footprint_id": "@R1", "position": {"x": 5000000, "y": 10000000}},
+  {"type": "MoveFootprint", "footprint_id": "@R2", "position": {"x": 25000000, "y": 10000000}},
+  {"type": "AddZone", "layer": {"inner": 1}, "net": "GND", "clearance": 300000, "outline": [
+    {"x": 500000, "y": 500000}, {"x": 29500000, "y": 500000}, {"x": 29500000, "y": 19500000}, {"x": 500000, "y": 19500000}
+  ]},
+  {"type": "AddRegion", "name": "outer-layer wall", "layers": ["top", "bottom"], "forbid": ["tracks"], "outline": [
+    {"x": 13000000, "y": 500000}, {"x": 17000000, "y": 500000}, {"x": 17000000, "y": 19500000}, {"x": 13000000, "y": 19500000}
+  ]},
+  {"type": "AddRegion", "name": "no vias", "forbid": ["vias"], "outline": [
+    {"x": 7500000, "y": 6000000}, {"x": 11000000, "y": 6000000}, {"x": 11000000, "y": 14000000}, {"x": 7500000, "y": 14000000}
+  ]},
+  {"type": "AddBoardCutout", "outline": [
+    {"x": 20000000, "y": 13000000}, {"x": 22000000, "y": 13000000}, {"x": 22000000, "y": 15000000}, {"x": 20000000, "y": 15000000}
+  ]},
+  {"type": "AutoRoute"}
+]
