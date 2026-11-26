@@ -1089,6 +1089,7 @@ export function SchematicView({ snapshot, selected, onSelect, edit, aiPreview = 
             <g
               key={s.id}
               data-symbol-id={s.id}
+              data-refdes={s.refdes}
               transform={dragDelta && S.has(sel, "symbol", s.id) ? `translate(${mm(dragDelta.x)} ${-mm(dragDelta.y)})` : undefined}
               className={`symbol${S.has(sel, "symbol", s.id) ? " selected" : ""}${aiPreview.includes(s.id) ? " ai-preview" : ""}`}
               onClick={() => onSelect(s.id)}

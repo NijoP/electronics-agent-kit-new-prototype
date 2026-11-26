@@ -191,11 +191,11 @@ const executed = () => execCalls().map((c) => (c.args.command as { type: string 
 
 async function createFromHome(name = "Flow") {
   render(<App />);
-  // Project Home uses the native folder dialog (mocked IPC answer), not a pasted path.
+  // Project Home: the parent folder from the native folder dialog (mocked IPC answer).
   fireEvent.click(await screen.findByRole("button", { name: "New Project" }));
   fireEvent.change(await screen.findByLabelText("Name"), { target: { value: name } });
   fireEvent.click(screen.getByRole("button", { name: "Choose parent folder…" }));
-  await screen.findByText("/p");
+  await screen.findByDisplayValue("/p");
   fireEvent.click(screen.getByRole("button", { name: "Create" }));
   await screen.findByRole("img", { name: "Schematic canvas" });
 }
@@ -212,10 +212,14 @@ async function placeResistor() {
 const activity = () => within(screen.getByRole("navigation", { name: "Activity bar" }));
 
 describe("end-to-end flow", () => {
-  it("1. new project dialog replaces the open project and lands in its schematic tab", async () => {
+  it("1. new project dialog opens the new project and lands in its schematic tab", async () => {
     await createFromHome("First");
     fireEvent.click(toolbar().getByRole("button", { name: "New project" }));
     const dlg = await screen.findByRole("dialog", { name: "New project" });
+    // F6 (audit §2): the backend keeps the other open projects open, so the hint must not say
+    // the current one is closed.
+    expect(within(dlg).getByText(/Other open projects stay open/)).toBeTruthy();
+    expect(within(dlg).queryByText(/project is closed/)).toBeNull();
     fireEvent.change(within(dlg).getByLabelText(/Project folder/), { target: { value: "/p/second.eak" } });
     fireEvent.change(within(dlg).getByLabelText("Name"), { target: { value: "Second" } });
     fireEvent.click(within(dlg).getByRole("button", { name: "Create" }));
@@ -411,11 +415,22 @@ describe("end-to-end flow", () => {
     fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Board A" } });
     expect((screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(true); // no parent chosen yet
     fireEvent.click(screen.getByRole("button", { name: "Choose parent folder…" }));
-    await screen.findByText("/p");
+    await screen.findByDisplayValue("/p");
     expect(screen.getByText("/p/Board A")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await screen.findByRole("img", { name: "Schematic canvas" });
     expect(ran("create_project").at(-1)!.args).toEqual({ path: "/p/Board A", name: "Board A" });
+  });
+
+  it("1c. Project Home takes a typed parent folder when the native chooser is not used (F6)", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "New Project" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Board B" } });
+    fireEvent.change(screen.getByLabelText("Parent folder"), { target: { value: "/work/boards" } });
+    expect(screen.getByText("/work/boards/Board B")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("img", { name: "Schematic canvas" });
+    expect(ran("create_project").at(-1)!.args).toEqual({ path: "/work/boards/Board B", name: "Board B" });
   });
 
   it("7. a failed replace that drops the old project returns to Project Home, not a stale workspace", async () => {

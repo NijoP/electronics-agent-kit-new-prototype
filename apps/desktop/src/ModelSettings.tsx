@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { PerformancePanel } from "./PerformancePanel";
+import { confirmed } from "./confirm";
 import type { ConnectionReport, ErrorClass, ModelInfo, ProfileInput, ProviderSpec, ProviderView, StatusState } from "./types";
 
 interface Draft {
@@ -217,7 +218,7 @@ export function ModelSettings({ onClose }: { onClose: () => void }) {
 
   const remove = (p: ProviderView) =>
     run(async () => {
-      if (!window.confirm(`Remove ${p.label} and delete its stored key?`)) return;
+      if (!(await confirmed(`Remove ${p.label} and delete its stored key?`))) return;
       await api.removeProvider(p.id);
       if (draft?.id === p.id) setDraft(null);
       await reload();

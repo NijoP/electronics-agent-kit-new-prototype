@@ -394,7 +394,15 @@ export function ProjectHome({ onOpened, active = true, theme, onTheme, onSetting
                 <button type="button" disabled={busy} onClick={chooseParent}>
                   Choose parent folder…
                 </button>
-                <span className="muted home-path">{parent ?? "No folder chosen"}</span>
+                {/* Typed or pasted as well (as in File › New project): the native chooser is not
+                    always usable (no portal, a remote session), and the backend checks the path. */}
+                <input
+                  aria-label="Parent folder"
+                  className="home-path"
+                  value={parent ?? ""}
+                  placeholder="No folder chosen: choose one or type an absolute path"
+                  onChange={(e) => setParent(e.target.value.trim() ? e.target.value : null)}
+                />
               </div>
             </div>
             <label>

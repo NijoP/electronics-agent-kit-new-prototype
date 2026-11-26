@@ -38,6 +38,14 @@ interface Props {
    * screen; pointer positions are mapped back, so tools keep working in design coordinates.
    */
   mirror?: boolean;
+  /**
+   * Put the SVG in the same sized box (`.canvas-stack`) as the scene renderer uses, without the
+   * scene. The PCB view needs it: as the view's grid item with an explicit row, the bare SVG's
+   * `height: 100%` resolved against the whole view in WebKitGTK (399 px in a 257 px row), so its
+   * lower part ran under the canvas strip and bottom panel (F6 `f6-canvas-fits`); the box, as in
+   * the Canvas2D renderer, takes the row's height. The schematic keeps the bare SVG.
+   */
+  boxed?: boolean;
   /** Right-click on the canvas (the editor opens its context menu; slice B3). */
   onContextMenu?: (e: ReactMouseEvent<SVGSVGElement>) => void;
 }
@@ -64,7 +72,7 @@ interface PointerSample {
   buttons: number;
 }
 
-export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay, scene, onContextMenu, mirror = false }: Props) {
+export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo, onDrag, onDropTarget, underlay, overlay, scene, onContextMenu, mirror = false, boxed = false }: Props) {
   const mirrorRef = useRef(mirror);
   mirrorRef.current = mirror;
   /** Pane x of a client x: measured from the right edge while the view is mirrored. */
@@ -197,7 +205,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
       ref={ref}
       style={scene ? undefined : flipStyle}
       data-mirror={mirror ? "true" : undefined}
-      className={`${tool ? "canvas tool" : "canvas"}${scene ? " canvas-top" : ""}`}
+      className={`${tool ? "canvas tool" : "canvas"}${scene || boxed ? " canvas-top" : ""}`}
       role="img"
       aria-label={label}
       viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
@@ -285,7 +293,7 @@ export function Canvas({ label, bounds, children, onPoint, onHover, tool, zoomTo
       {overlay?.(visible)}
     </svg>
   );
-  if (!scene) return svg;
+  if (!scene) return boxed ? <div className="canvas-stack">{svg}</div> : svg;
   return (
     <div className="canvas-stack" style={flipStyle}>
       <svg className="canvas-under" aria-hidden="true" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} preserveAspectRatio="xMidYMid meet">
