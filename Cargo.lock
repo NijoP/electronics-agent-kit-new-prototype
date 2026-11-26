@@ -1004,6 +1004,7 @@ version = "0.1.5"
 dependencies = [
  "eak-core",
  "eak-manufacturing",
+ "eak-validation",
  "serde",
  "serde_json",
  "sha2",
