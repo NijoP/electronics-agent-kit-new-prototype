@@ -247,6 +247,8 @@ pub fn release_gates_with_report(
             ));
         }
     }
+    // ADR-0054: a part whose footprint does not verify blocks release (recomputed here).
+    blocking.extend(footprint_blockers(p));
     // Fail-closed engineering gates, evaluated independently on this revision: every required
     // gate must be PASS (FAIL and UNKNOWN both block). Fabricator capability is covered by the
     // supplied, revision-bound DFM report above, so that gate is skipped here.
@@ -265,6 +267,47 @@ pub fn release_gates_with_report(
         }
     }
     (gates, blocking, gate_report)
+}
+
+/// ADR-0054: one blocking reason per component definition used on the schematic whose footprint
+/// does not verify. FP-001..FP-009 are recomputed by `eak_validation::footprint::verify` on every
+/// gate evaluation (the IR stores no verification result, so nothing can go stale). With no
+/// land-pattern table or fabrication limits on record the dimension rules are UNKNOWN, and
+/// UNKNOWN is never a pass: such a part blocks, naming the first rule that does not certify.
+pub fn footprint_blockers(p: &Project) -> Vec<String> {
+    let mut refs: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for s in p.schematic.symbols.values() {
+        refs.entry(s.component_id.as_str())
+            .or_default()
+            .push(s.refdes.as_str());
+    }
+    let mut out = vec![];
+    for (id, mut used) in refs {
+        used.sort_by_key(|a| natural(a));
+        let used = used.join(",");
+        let Some(def) = p.library.get(id) else {
+            out.push(format!(
+                "footprint of {used} is not verified: no library definition {id}"
+            ));
+            continue;
+        };
+        let report = eak_validation::footprint::verify(
+            def,
+            None,
+            None,
+            eak_validation::footprint::DEFAULT_TOLERANCE,
+        );
+        let not = report.blocking();
+        if let Some(first) = not.first() {
+            out.push(format!(
+                "footprint {} of {used} is not verified ({} of {} rules do not certify): {first}",
+                def.footprint.name,
+                not.len(),
+                eak_validation::footprint::RULES.len()
+            ));
+        }
+    }
+    out
 }
 
 /// Package status from the blocking reasons: DRAFT unless there are none.
@@ -493,6 +536,34 @@ pub fn verify_package(dir: &Path) -> Result<Vec<String>, String> {
             }
         }
     }
+    Ok(problems)
+}
+
+/// [`verify_package`] for release packaging of `p`: the manifest must also name this exact
+/// project, revision and EAK-IR hash. A package built from another revision (or a design
+/// changed since the export) is refused, whatever its own files say.
+pub fn verify_package_for(dir: &Path, p: &Project) -> Result<Vec<String>, String> {
+    let m: Manifest = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("manifest.json")).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    let mut problems = vec![];
+    if m.project_id != p.id {
+        problems.push(format!(
+            "manifest is for project {}, not {}",
+            m.project_id, p.id
+        ));
+    }
+    if m.revision != p.revision {
+        problems.push(format!(
+            "manifest is for revision {} but the project is at revision {}: export again",
+            m.revision, p.revision
+        ));
+    }
+    if m.input_sha256 != project_hash(p) {
+        problems.push("manifest EAK-IR hash does not match this design: export again".into());
+    }
+    problems.extend(verify_package(dir)?);
     Ok(problems)
 }
 
