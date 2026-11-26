@@ -30,8 +30,11 @@ CI-verified on PR #135 (`eak-validation/tests/autoroute_multilayer.rs`); no IR c
 * The grid has one plane per stack-up layer. A* routes on the signal layers only; plane layers
   carry pours (plane nets reach them through `StitchZones`) and are obstacles for vias. A layer
   change is one through via of the net-class size (drill and annular ring raised to the board
-  minimums) that must clear every layer it spans; vias exist only at layer changes. Blind and
-  buried spans wait for the allowed-span rule of the shared schema v8 migration.
+  minimums) that must clear every layer it spans; vias exist only at layer changes. Where no
+  through via fits, a layer change uses the shortest allowed blind/buried span of
+  `Constraints.via_spans` (schema v8, `SetViaSpans`) that joins both layers and clears every layer
+  it spans; `RoutedVia` carries its `from`/`to` (serde default top/bottom). Pair members keep
+  through vias. A route mixing blind and through vias is spacing-checked at its largest drill.
 * Obstacles come from `BoardGeometry` (ADR-0052): copper on every layer, the flattened outline
   and cut-outs, keep-out regions (tracks per layer, vias), hole-to-hole spacing around every drill.
   The exact acceptance check applies the DRC's rules: `clearance::required` (DRC-002), matrix

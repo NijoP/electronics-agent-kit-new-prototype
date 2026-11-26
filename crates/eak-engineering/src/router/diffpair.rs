@@ -192,6 +192,8 @@ fn pair_grid(
     keep: f64,
 ) -> Grid {
     let mut g = grid_with(env, placed.iter());
+    // Pair members change layers with through vias only (their spread vias are placed as such).
+    g.spans.clear();
     let stack = &env.p.pcb.board.stackup;
     let member = |net: &str| net == rule.positive || net == rule.negative;
     let near = |s: &Shape, grow: f64, pt: Point| {
@@ -586,6 +588,7 @@ pub(super) fn attempt(
         via_diameter: specs[k].via_diameter,
         segs: m.segs[k].clone(),
         vias: m.vias[k].clone(),
+        blind: vec![],
         shapes,
         pair: true,
     };

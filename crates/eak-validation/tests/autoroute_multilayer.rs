@@ -330,3 +330,39 @@ fn the_same_board_routes_to_the_same_copper_every_run() {
         );
     }
 }
+
+/// Blind via span (schema v8 `SetViaSpans`): the bottom layer is one GND pour, so no SIG through
+/// via fits anywhere, and a top-layer wall stands between the parts. The only way across is
+/// In1, reached by the allowed Top-In1 blind span; without that rule SIG stays open.
+#[test]
+fn a_blind_span_is_used_where_no_through_via_fits() {
+    let (e, warnings) = build("route_blind_span", 0);
+    eprintln!("{warnings:#?}");
+    let p = e.project();
+    let sig: Vec<_> = p.pcb.vias.values().filter(|v| v.net == "SIG").collect();
+    assert!(sig.len() >= 2, "SIG goes down to In1 and back: {sig:?}");
+    for v in &sig {
+        assert_eq!(
+            (v.from, v.to),
+            (CopperLayer::Top, CopperLayer::Inner(1)),
+            "{v:?}"
+        );
+    }
+    assert!(p
+        .pcb
+        .tracks
+        .values()
+        .any(|t| t.net == "SIG" && t.layer == CopperLayer::Inner(1)));
+    evidence("route_blind_span", p, &warnings, Some(2), 2);
+    assert_all_connected(p);
+    assert_drc_clean(p);
+
+    // Same board without the span rule: through vias only, and none fits for SIG.
+    let (mut e, _) = build("route_blind_span", 2);
+    let _ = exec(&mut e, json!({"type": "AutoRoute"}));
+    let conn = eak_engineering::copper::analyse(e.project());
+    assert!(
+        conn.net_groups.get("SIG").is_some_and(|g| *g > 1),
+        "SIG cannot cross without a blind span"
+    );
+}

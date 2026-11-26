@@ -3209,8 +3209,8 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                         drill: v.drill,
                         diameter: v.diameter,
                         net: v.net,
-                        from: CopperLayer::Top,
-                        to: CopperLayer::Bottom,
+                        from: v.from,
+                        to: v.to,
                     },
                 );
                 created.push(id);
@@ -3297,8 +3297,8 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                         drill: v.drill,
                         diameter: v.diameter,
                         net: v.net,
-                        from: CopperLayer::Top,
-                        to: CopperLayer::Bottom,
+                        from: v.from,
+                        to: v.to,
                     },
                 );
                 created.push(id);

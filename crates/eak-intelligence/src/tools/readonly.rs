@@ -421,7 +421,7 @@ fn analyze_routing(p: &Project, preview: bool) -> Value {
         "shorts": conn.shorts.len(),
         "limitations": [
             "differential pairs are detected by net name only",
-            "the router routes on every signal layer with through vias only (no blind or buried spans); plane layers are not routed on",
+            "the router routes on every signal layer with through vias, and blind/buried vias only of a span the board allows (SetViaSpans) where a through via does not fit; plane layers are not routed on; differential pairs change layers with through vias only",
             "widths are IPC-2221 current sizing only; no impedance, no length matching, no return-path analysis",
             "a dry run is not applied: run AutoRoute, then verify_routing",
         ],
