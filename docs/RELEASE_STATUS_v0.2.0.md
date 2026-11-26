@@ -30,23 +30,30 @@ cargo test and vitest on Linux, plus builds and tests on Windows, macOS arm64 an
 | One board geometry for DRC, connectivity, 2D and 3D (E1) | landed | #107 | ci: Rust `board.rs` unit tests, `eak-validation/tests/board_geometry.rs` |
 | Real-window PCB workflow scenario (create a project, draw by hand, route, auto-route) | landed | #99 | ui-evidence `p1-pcb-flow.json` |
 | Definition-of-done fixes: F3 edit integrity, F4 ui-evidence and inventory gates, F5 drawing tools, F7 navigation and cross-probe, F9 library and panels honesty, F10 rules and inspector reasons, F11 docs truth pass | landed | #97, #93, #96, bf88f87, dd6e42d, b43b5e6, 11bd4bc | ui-evidence `f3-edit-integrity.json` and the scenarios cited in STATUS.md rows F7, F9 and F10; vitest; `scripts/check-status-evidence.sh` |
-| Agent propose mode: proposals are checked on a copy and applied only by a person | partial: the agent side (`eak --propose`, MCP `proposal_*` tools) works; the in-app review dialog (#111) has not landed | #106 | ci: Rust e2e `crates/eak-harness/tests/proposal.rs` |
+| Journey bar and Problems panel | landed | #105 | ui-evidence `g2-problems.json`; vitest `shell/journey.test.ts`, `shell/problems.test.tsx` |
+| AI tool adapters and Settings › AI tools: detects Claude Code and Codex, starts AI sessions in propose mode, shows a live log, offers Restart | partial: see "What is not done". Reached from the rail: Preferences › AI tools (EDA workspace) | #125, #131 | ui-evidence `w2-ai-tools.json` (on a runner without the tools: "Not found" rows); Rust `crates/eak-agents/tests/fake_tools.rs` against fake `claude`/`codex` binaries, `src-tauri/tests/agents.rs` |
+| Personal-library component create/edit (rail › Library) | landed | #128 | ui-evidence `d1-library.json`; vitest `library/componentEditor.test.tsx` |
+| Agent propose mode: proposals are checked on a copy and applied only by a person | partial: works for the agent (`eak --propose`, MCP `proposal_*` tools) and for AI sessions started from Settings › AI tools; the in-app proposal review dialog (#111) has not landed | #106, #131 | ci: Rust e2e `crates/eak-harness/tests/proposal.rs` |
 | WEFT agent-to-agent orchestration | partial: works over the CLI and `eak-mcp`; the in-app activity view (#126) has not landed | #117 | ci: Rust e2e `crates/eak-harness/tests/weft.rs` (two real `eak-mcp` clients) |
-| Footprint verification FP-001..FP-010 | partial: an engine report only; the Library UI that shows it (#124, #127) has not landed | #113 | ci: unit tests in `eak-validation/src/footprint.rs` |
+| Footprint verification FP-001..FP-010, shown in the app: the Parts dock and the Library panel (rail › Library) show the real report | landed | #113, #128 | ui-evidence `d1-library.json`; Rust `eak-validation/src/footprint.rs` unit tests, `src-tauri/tests/library_verify_ipc.rs` |
+| Pin-to-pad compatibility verification PP-001.. | landed | #128 (slice C, parts 1 to 3, first opened as #121, #124, #127) | Rust `src-tauri/tests/library_verify_ipc.rs`; ui-evidence `d1-library.json` |
 | Part model, part sources and KiCad export (new crate `eak-library`) | partial: engine only; the desktop app does not use the crate yet | #109 | ci: `crates/eak-library/tests/{kicad_roundtrip,sources}.rs` |
 | MPN discovery and manufacturer identification | partial: engine only (`eak-library/src/mpn.rs`); no UI | #114 | ci: unit tests in `mpn.rs` |
+| KiCad library folder import (lib tables, symbol/footprint pairing, 3D model references) | partial: engine only (`eak-library/src/kicad_lib`; no IPC); the desktop import is #122, which has not landed | #115 | ci: `kicad_lib` unit tests, `crates/eak-library/tests/kicad_lib_import.rs` |
+| Datasheet references and typed specs per part | partial: engine only; no UI | #116 | ci: `eak-library` unit tests |
+| Local SQLite library database with prefix search (A2) and portable user library export/import (A3) | partial: engine only (`eak-library/src/db`; no IPC); the desktop side is #122, which has not landed | #119 (A2 was first opened as #118) | ci: `db` and `portable` unit tests |
 | App version 0.2.0 | landed | #112 | ci; `scripts/check-release-docs.sh` (versions agree) |
 
-## Open when this page was written (not in this release unless merged and green before the freeze)
+## Open at the last update of this page (not in this release unless merged and green before the freeze)
 
 | Feature | PR |
 |---|---|
-| Journey bar and Problems panel | #105 |
 | Agent proposal review dialog | #111 |
 | Release integrity: unverified footprints block, packaging bound to the revision | #123 |
-| AI tool adapters and Settings › AI tools | #125 |
 | Agent activity view (WEFT) | #126 |
-| Library: KiCad folder import, SQLite library database, export/import, MPN datasheets and specs, CSV/JSON part lists, pin-to-pad and verification UI | #115, #116, #118, #119, #120, #121, #122, #124, #127 |
+| Library: desktop KiCad folder import, library database search and user library files (A4) | #122 |
+| Library: CSV/JSON part-list source and the LCSC not-connected slot (B.3) | #120 |
+| WEFT follow-ups | #129, #130 |
 
 ## What is not done
 
@@ -58,8 +65,15 @@ cargo test and vitest on Linux, plus builds and tests on Windows, macOS arm64 an
 - **Platforms:** there are no Linux arm64 or Windows arm64 builds.
 - **Product decisions:** the rail's Agents item opens Model settings, because no agent panel exists in the EDA workspace
   yet; agent sessions run in the Terminal.
-- **Not shown in the app:** footprint verification, MPN discovery and the `eak-library` part model have no UI in this
-  release.
+- **Not shown in the app:** MPN discovery, datasheets and specs, KiCad library folder import, the library database and
+  export/import, and the `eak-library` part model are engine-only in this release.
+- **AI tools:**
+  - CI has no real Claude Code or Codex, so only fake binaries test the adapters; on the CI runner the real-window
+    scenario sees "Not found".
+  - There are no OpenCode or Gemini adapters.
+  - Restart starts a fresh session; it does not resume the old one.
+  - Settings › AI tools is reached from the rail's Preferences item in the EDA workspace. The rail beside Home and the
+    Terminal has no Preferences item, and its Agents item opens Model settings.
 
 ## Known bugs
 

@@ -7,13 +7,23 @@ docs/RELEASE_STATUS_v0.2.0.md.
   top bar, navigation rail across Home, Schematic, PCB, 3D, Library, Agents, Checks, Manufacturing and Terminal,
   explorer panel and status bar (#110).
 - Desktop: Project Home with project facts, Needs attention, a design brief and a first-run tour (#108).
+- Desktop: journey bar and Problems panel (#105).
 - Engineering: one board geometry shared by DRC, connectivity, 2D and 3D (#107).
-- Agents: propose mode, where proposals are checked on a copy and applied by a person (#106). WEFT agent-to-agent
-  orchestration over the CLI and `eak-mcp` (#117). Neither has an in-app view yet.
-- Library (engine only, no UI yet):
-  - the new `eak-library` crate: part model, part sources and KiCad export (#109);
-  - MPN discovery and manufacturer identification (#114);
-  - footprint verification FP-001..FP-010 (#113).
+- Agents:
+  - Settings › AI tools detects Claude Code and Codex and starts AI sessions in propose mode, with a live log and
+    Restart (#125, #131). There are no OpenCode or Gemini adapters, and Restart starts a fresh session.
+  - Propose mode: proposals are checked on a copy and applied by a person (#106). The in-app review dialog has not
+    landed.
+  - WEFT agent-to-agent orchestration over the CLI and `eak-mcp` (#117). It has no in-app view yet.
+- Library:
+  - In the app: footprint verification FP-001..FP-010 (#113) and pin-to-pad verification are shown in the Parts dock
+    and the Library panel, and components can be created and edited in the personal library (#128).
+  - Engine only, no UI yet:
+    - the new `eak-library` crate: part model, part sources and KiCad export (#109);
+    - MPN discovery and manufacturer identification (#114);
+    - KiCad library folder import (#115);
+    - datasheet references and typed specs (#116);
+    - the library database and portable export/import (#119).
 - QA: a real-window PCB workflow scenario (#99) and the definition-of-done fixes F3 to F11.
 - The app version is 0.2.0 (#112). Every build is unsigned and not notarized.
 
