@@ -15,7 +15,7 @@ import { ModelSettings } from "./ModelSettings";
 import type { HomeTarget } from "./home/homeFacts";
 import { ProjectHome, saveSession } from "./ProjectHome";
 import { Tour } from "./shell/onboarding/Tour";
-import { setTourState, tourState } from "./shell/onboarding/tour";
+import { setTourState, tourState } from "./shell/onboarding/tourState";
 import { listWorkspaces, useRegistryVersion, type WorkspaceContext } from "./shell/registry";
 import { modalOpen } from "./shell/viewState";
 import "./shell/workspaces";

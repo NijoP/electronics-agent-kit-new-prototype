@@ -1,7 +1,7 @@
 // First-run tour panel. Non-modal on purpose: it sits in Home's page flow (or, when replayed from
 // the workspace Help menu, in a corner) and never blocks the controls it describes.
 import { useEffect, useState } from "react";
-import { TOUR_STEPS, type TourStep } from "./tour";
+import { TOUR_STEPS, type TourStep } from "./tourState";
 
 interface Props {
   /** The tour ended: finished on the last step, or skipped. */

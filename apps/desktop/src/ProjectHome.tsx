@@ -22,7 +22,7 @@ import { EmptyState, Pill, type Tone } from "./design/ui";
 import { attentionItems, briefFromPrompt, continueTarget, currentErrors, releaseLine, unknownRules, type Attention, type HomeFacts, type HomeTarget } from "./home/homeFacts";
 import { KicadImport } from "./KicadImport";
 import { Tour } from "./shell/onboarding/Tour";
-import type { TourStep } from "./shell/onboarding/tour";
+import type { TourStep } from "./shell/onboarding/tourState";
 import { modalOpen } from "./shell/viewState";
 import type { LockState, ProjectStatus, RecentProject, Snapshot } from "./types";
 

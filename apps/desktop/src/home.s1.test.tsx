@@ -12,7 +12,7 @@ import { App } from "./App";
 import { domainReport } from "./domain.test-data";
 import { ercResult, fixture } from "./fixture.test-data";
 import type { HomeFacts } from "./home/homeFacts";
-import { TOUR_KEY } from "./shell/onboarding/tour";
+import { TOUR_KEY } from "./shell/onboarding/tourState";
 import { shellCmd } from "./shell.test-data";
 
 type Call = { cmd: string; args: Record<string, unknown> };
