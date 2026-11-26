@@ -70,9 +70,11 @@ const missing: ToolStatus = {
   surfaces: ["terminal", "headless"],
 };
 
+let indexError: string | null = null;
 let calls: { cmd: string; args: Record<string, unknown> }[];
 beforeEach(() => {
   calls = [];
+  indexError = null;
   mockIPC((cmd, payload) => {
     const args = (payload ?? {}) as Record<string, unknown>;
     calls.push({ cmd, args });
@@ -90,6 +92,8 @@ beforeEach(() => {
         return [restored];
       case "agent_tools":
         return [missing];
+      case "agent_session_index_error":
+        return indexError;
       case "agent_session_log":
         return Promise.reject(new Error("this session ran before EAK last closed and has no log file: a terminal tab's output is not kept after EAK closes"));
       case "agent_session_restart":
@@ -192,5 +196,14 @@ describe("Agents workspace", () => {
     mount({ active: false });
     await new Promise((r) => setTimeout(r, 50));
     expect(calls).toEqual([]);
+  });
+});
+
+describe("Agents workspace session index", () => {
+  it("says so when EAK could not write its session index, instead of hiding it", async () => {
+    indexError = "EAK could not record session claude-9-1 in its session index /data/sessions.jsonl: Permission denied";
+    mount();
+    const sessions = within(await screen.findByRole("region", { name: "Sessions" }));
+    expect((await sessions.findByRole("alert")).textContent).toContain("could not record session claude-9-1");
   });
 });

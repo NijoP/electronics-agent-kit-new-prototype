@@ -37,6 +37,7 @@ beforeEach(() => {
       case "project_file_create": return entry(String(a.rel), String(a.rel), a.is_dir === true);
       case "events_since": case "model_providers": case "library_components": return [];
       case "weft_engineer_queue": case "weft_conflicts": case "activity_timeline": case "agent_sessions": case "agent_tools": return [];
+      case "agent_session_index_error": return null;
       case "weft_state": return { project_dir: "/p/demo", revision: 7, entries: 0, unreadable: 0, agents: [], tasks: [], messages: [] };
       case "close_project_by_id": return null;
       default: throw new Error(`unmocked ${cmd}`);

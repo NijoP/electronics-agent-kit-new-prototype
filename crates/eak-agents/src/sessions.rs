@@ -99,22 +99,47 @@ struct Index {
     path: PathBuf,
     /// Serialises appends from the API and the exit watchers.
     write: Mutex<()>,
+    /// The last failed append, kept for the rest of the run: a later write that succeeds does
+    /// not bring a lost record back, so the app keeps saying so ([`Sessions::index_error`]).
+    error: Mutex<Option<String>>,
 }
 
 impl Index {
-    /// Append one record. A failed write costs only durability (the next run would not see this
-    /// state); the session itself is unaffected, so it is not an error for the caller.
+    fn new(path: PathBuf) -> Index {
+        Index {
+            path,
+            write: Mutex::new(()),
+            error: Mutex::new(None),
+        }
+    }
+
+    /// Append one record, creating the log folder first (a terminal session can be the first
+    /// thing written there). The session itself does not depend on the index, so a failed write
+    /// does not fail the caller: it is logged and kept for [`Sessions::index_error`].
     fn append(&self, view: &SessionView) {
-        let Ok(mut line) = serde_json::to_string(view) else {
-            return;
-        };
-        line.push('\n');
         let _w = lock(&self.write);
-        let _ = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .and_then(|mut f| f.write_all(line.as_bytes()));
+        let written = serde_json::to_string(view)
+            .map_err(std::io::Error::other)
+            .and_then(|mut line| {
+                line.push('\n');
+                if let Some(d) = self.path.parent() {
+                    std::fs::create_dir_all(d)?;
+                }
+                std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&self.path)?
+                    .write_all(line.as_bytes())
+            });
+        if let Err(e) = written {
+            let msg = format!(
+                "EAK could not record session {} in its session index {}: {e}. This run's sessions may be missing or out of date after EAK restarts.",
+                view.id,
+                self.path.display()
+            );
+            eprintln!("eak-agents: {msg}");
+            *lock(&self.error) = Some(msg);
+        }
     }
 }
 
@@ -203,12 +228,9 @@ impl Sessions {
     /// from it: without their process or terminal tab (that tab id belongs to the earlier run and
     /// is never used again), and a session recorded as running becomes `Unknown`.
     pub fn new(log_dir: Option<PathBuf>) -> Sessions {
-        let index = log_dir.as_ref().map(|d| {
-            Arc::new(Index {
-                path: d.join(INDEX_FILE),
-                write: Mutex::new(()),
-            })
-        });
+        let index = log_dir
+            .as_ref()
+            .map(|d| Arc::new(Index::new(d.join(INDEX_FILE))));
         let mut entries = Vec::new();
         if let Some(ix) = &index {
             for mut view in read_index(&ix.path) {
@@ -235,6 +257,12 @@ impl Sessions {
             log_dir,
             index,
         }
+    }
+
+    /// Why the session index could not be written this run, if it could not: the sessions are
+    /// still listed, but a later run may not see them as they are now.
+    pub fn index_error(&self) -> Option<String> {
+        self.index.as_ref().and_then(|ix| lock(&ix.error).clone())
     }
 
     fn record(&self, view: &SessionView) {
@@ -659,6 +687,37 @@ mod tests {
         assert_eq!(v.events, view.events);
         assert_eq!(s.tail("codex-1-1", 2).unwrap(), ["two", "three"]);
         assert_eq!(read_index(&dir.join(INDEX_FILE)).len(), 1);
+    }
+
+    #[test]
+    fn a_terminal_session_first_creates_the_log_folder_and_its_index() {
+        let dir = tmpdir("fresh").join("not-made-yet");
+        let s = Sessions::new(Some(dir.clone()));
+        let p = plan(&dir);
+        s.register_terminal(start("claude-3-1", &p), 1, None);
+        assert_eq!(read_index(&dir.join(INDEX_FILE)).len(), 1);
+        assert_eq!(s.index_error(), None);
+    }
+
+    #[test]
+    fn a_failed_index_write_is_reported_not_ignored() {
+        // The log "folder" is a file, so neither the folder nor the index can be written.
+        let file = tmpdir("blocked").join("a-file");
+        std::fs::write(&file, "x").unwrap();
+        let s = Sessions::new(Some(file.clone()));
+        let p = plan(&tmpdir("blocked-cwd"));
+        let v = s.register_terminal(start("claude-4-1", &p), 1, None);
+        assert_eq!(
+            v.state,
+            SessionState::Running,
+            "the session itself still starts"
+        );
+        let err = s.index_error().expect("the failed write is reported");
+        assert!(
+            err.contains("claude-4-1") && err.contains(INDEX_FILE),
+            "{err}"
+        );
+        assert_eq!(s.list().len(), 1);
     }
 
     #[test]

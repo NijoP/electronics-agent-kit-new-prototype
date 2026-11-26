@@ -86,6 +86,7 @@ function Facts({ rows }: { rows: [string, ReactNode][] }) {
 
 export function AgentsWorkspace({ active, projectId, projectName, projectDir, openModelSettings, showWorkspace }: Props) {
   const [weft, setWeft] = useState<WeftView | null>(null);
+  const [indexError, setIndexError] = useState<string | null>(null);
   const [queue, setQueue] = useState<EngineerRequest[]>([]);
   const [conflicts, setConflicts] = useState<WeftConflict[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
@@ -155,6 +156,12 @@ export function AgentsWorkspace({ active, projectId, projectName, projectDir, op
     } catch (e) {
       setSessions([]);
       setSessionsError(message(e));
+    }
+    // A session index EAK could not write is said, not hidden (ADR-0058).
+    try {
+      setIndexError((await api.agentSessionIndexError()) ?? null);
+    } catch (e) {
+      setIndexError(`EAK could not check its session index: ${message(e)}`);
     }
   }, []);
 
@@ -895,6 +902,11 @@ export function AgentsWorkspace({ active, projectId, projectName, projectDir, op
               <input type="checkbox" checked={thisProject} onChange={(e) => setThisProject(e.target.checked)} /> This project only
             </label>
             {sessionsError && <p className="muted">Could not list the sessions: {sessionsError}</p>}
+            {indexError && (
+              <p role="alert" className="ag-notice bad">
+                {indexError}
+              </p>
+            )}
             {shownSessions.length === 0 ? (
               <p className="muted">No session started from EAK{thisProject ? " in this project" : ""}. Start one from a runtime below.</p>
             ) : (
