@@ -625,10 +625,21 @@ pub enum Command {
         insulation: Option<Insulation>,
         #[serde(default)]
         enclosure: Option<Enclosure>,
-        #[serde(default)]
-        return_via_max_distance: Option<Nm>,
-        #[serde(default)]
-        plane_min_neck_width: Option<Nm>,
+        /// Largest return-via distance (ADR-0059): omitted = keep the current value, `null` =
+        /// clear it, a number = set it. Callers that predate v10 keep it by not sending it.
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "present"
+        )]
+        return_via_max_distance: Option<Option<Nm>>,
+        /// Narrowest plane neck (ADR-0059): omitted = keep, `null` = clear, a number = set.
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "present"
+        )]
+        plane_min_neck_width: Option<Option<Nm>>,
     },
     SetManufacturing {
         config: ManufacturingConfig,
@@ -3679,8 +3690,12 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             c.part_dissipation_w = part_dissipation_w.clone();
             c.insulation = insulation.clone();
             c.enclosure = enclosure.clone();
-            c.return_via_max_distance = *return_via_max_distance;
-            c.plane_min_neck_width = *plane_min_neck_width;
+            if let Some(d) = return_via_max_distance {
+                c.return_via_max_distance = *d;
+            }
+            if let Some(w) = plane_min_neck_width {
+                c.plane_min_neck_width = *w;
+            }
         }
         SetManufacturing { config } => {
             if config.mask_expansion < 0 {
@@ -3770,4 +3785,12 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
         ));
     }
     Ok(Applied { created, warnings })
+}
+
+/// A field that is present (even as `null`) decodes to `Some`, so `Option<Option<T>>` tells
+/// "omitted" (`None`, keep) from "null" (`Some(None)`, clear).
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
+    d: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(d).map(Some)
 }

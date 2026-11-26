@@ -318,8 +318,8 @@ pub fn declare_check_inputs(engine: &mut Engine) -> Result<(), String> {
             part_dissipation_w: c.part_dissipation_w.clone(),
             insulation: c.insulation.clone(),
             enclosure: c.enclosure.clone().or(Some(Enclosure::default())),
-            return_via_max_distance: c.return_via_max_distance,
-            plane_min_neck_width: c.plane_min_neck_width,
+            return_via_max_distance: None,
+            plane_min_neck_width: None,
         };
         b.run(inputs)?;
     }
