@@ -99,6 +99,7 @@ Lengths are **integer nanometres** (1 mm = 1 000 000). Rotations are `R0|R90|R18
 | `knowledge` | none for the design; `knowledge_import` writes only `knowledge/index.json` | `knowledge_search`, `knowledge_lookup`, `knowledge_cite`, `knowledge_import` (ADR-0024): advisory text with source/page/revision/hash, **never a validation result** |
 | `task` | `<project>/agent-tasks.json` only (progress record, never evidence) | `agent_task_begin`, `agent_task_finish`, `agent_task_status` (ADR-0036): phases are recorded from observed calls; `completed` is granted only when evidence supports it. `SyncSchematicToPcb` is refused (`precondition`, `details.gate = "pcb_sync"`) until ERC has run on the committed schematic |
 | `proposal` | `<project>/proposals/` only; never applies | `proposal_begin`, `proposal_status`, `proposal_list`, `proposal_submit`, `proposal_discard` (ADR-0051, see "Propose mode") |
+| `weft` | `<project>/weft/journal.jsonl` only; never the design | `weft_register`, `weft_agents`, `weft_send`, `weft_inbox`, `weft_tasks`, `weft_conflicts`, `weft_history` (ADR-0053, see "WEFT orchestration") |
 | `project` / `discovery` | creates a folder / none | `create_project`, `list_tools`, `guide`, `design_spec_schema` |
 
 ## Board flow (DESK method; heuristics, not a certification)
@@ -153,3 +154,28 @@ When the user starts your session in propose mode (`--propose` or
   (`checkpoints/rNNNNNN-before-<id>`), and executes the chosen steps as one `Batch` — one
   revision, one undo step, journalled as your agent with the user's approval. If the project moved
   on, the proposal is stale: discard it and propose again at the new revision.
+
+
+## WEFT orchestration (ADR-0053)
+
+Agents on one project coordinate through typed messages in `<project>/weft/journal.jsonl`. The
+registry, the tasks and every inbox are rebuilt from that journal, so the history is the state.
+
+- **Register.** `weft_register {tool, model, capabilities}` registers the session as
+  `agent:<name>@<session>`, the label the engine journal uses. `weft_agents` lists who is there.
+- **Delegate.** `weft_send {kind: delegate, to, title, depends_on?}` creates a task owned by `to`.
+  - Only the owner sets its status.
+  - `in_progress` and `done` are refused until every `depends_on` task is `done`.
+  - `weft_tasks` shows what each task waits on and whether it is ready.
+- **Talk.** `weft_send` also takes `context_share`, `finding`, `status` and `blocker`.
+  `weft_inbox {since}` returns what was sent to you or to everyone; pass the previous
+  `next_since`.
+- **Review.** `weft_send {kind: review_request, proposal_id, to: <agent>|engineer}` routes a
+  proposal to a reviewer other than its author. That reviewer answers with
+  `{kind: review_verdict, proposal_id, verdict}`. A verdict is advice: only the engineer applies a
+  proposal, in EAK.
+- **Conflicts.** `weft_conflicts` lists open proposals that are `stale` (made at another revision)
+  or that `overlap` (touch the same object). Applying one makes the others stale, and a stale
+  proposal is refused, so nothing is overwritten silently. Reject one, or propose again on the
+  new revision; EAK does not rebase.
+- **History.** `weft_history` returns every event with its agent, task, proposal and revision.

@@ -66,7 +66,7 @@ pub enum Status {
 }
 
 impl Status {
-    fn reviewable(self) -> bool {
+    pub fn reviewable(self) -> bool {
         matches!(self, Status::Open | Status::Ready)
     }
     fn name(self) -> &'static str {

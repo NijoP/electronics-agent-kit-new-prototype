@@ -53,6 +53,9 @@ pub enum Category {
     /// Proposals (ADR-0051): name, read, submit or discard what a propose-mode session built.
     /// Never applies one: a person does, in EAK.
     Proposal,
+    /// WEFT agent-to-agent orchestration (ADR-0053): registry, delegated tasks, typed messages,
+    /// review requests and verdicts, proposal conflicts. Never changes the design.
+    Weft,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -380,6 +383,61 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         prop,
         "Discard one of this session's proposals (open or ready). Nothing in the design changes.",
         props(json!({"proposal_id": str_schema("proposal id (default: this session's open or ready one)")}), &[]),
+    ));
+    // WEFT orchestration (ADR-0053, `weft` module): one typed journal, never the design.
+    let weft = Category::Weft;
+    let ids = |d: &str| json!({"type": "array", "items": {"type": "string"}, "description": d});
+    v.push(spec(
+        "weft_register",
+        weft,
+        "Register this session with WEFT so other agents can delegate to it, message it and ask it for reviews. Its id is agent:<name>@<session>. Call once per session (again to update).",
+        props(json!({"tool": str_schema("what runs this agent: claude-code, codex, eak-app or the client name"), "model": str_schema("model name, if known"), "capabilities": ids("what it can do, e.g. schematic, pcb, review")}), &["tool"]),
+    ));
+    v.push(spec(
+        "weft_agents",
+        weft,
+        "Every agent registered with WEFT on this project: id, tool, model, capabilities. Read-only.",
+        empty(),
+    ));
+    v.push(spec(
+        "weft_send",
+        weft,
+        "Send one typed message, recorded in the WEFT journal. kind: delegate (creates a task owned by `to`; needs title, optional depends_on and task_id as parent), context_share or finding (body), status (task_id and status; only the owner; in_progress/done wait for depends_on), blocker (marks task_id blocked), review_request (proposal_id; `to` is an agent or engineer, never the author), review_verdict (proposal_id and verdict approve|request_changes|reject, only when asked). A verdict is advice: only the engineer applies a proposal.",
+        props(json!({
+            "kind": {"type": "string", "enum": ["delegate", "context_share", "status", "finding", "review_request", "review_verdict", "blocker"]},
+            "to": str_schema("agent id (see weft_agents), engineer, or * for every agent (default)"),
+            "body": str_schema("message text"),
+            "title": str_schema("delegate: the task title"),
+            "task_id": str_schema("task the message is about (delegate: parent task)"),
+            "depends_on": ids("delegate: tasks that must be done first"),
+            "proposal_id": str_schema("review_request / review_verdict: the proposal"),
+            "status": {"type": "string", "enum": ["pending", "in_progress", "blocked", "done", "rejected"]},
+            "verdict": {"type": "string", "enum": ["approve", "request_changes", "reject"]}
+        }), &["kind"]),
+    ));
+    v.push(spec(
+        "weft_inbox",
+        weft,
+        "Messages sent to this agent or to every agent, after journal sequence `since` (pass the previous next_since). Read-only.",
+        props(json!({"since": {"type": "integer", "minimum": 0}}), &[]),
+    ));
+    v.push(spec(
+        "weft_tasks",
+        weft,
+        "The WEFT task graph: each task with owner, dependencies, status, what it still waits on and whether it is ready. Read-only.",
+        props(json!({"mine": {"type": "boolean", "description": "only tasks owned by this agent"}}), &[]),
+    ));
+    v.push(spec(
+        "weft_conflicts",
+        weft,
+        "Open proposals that cannot all be applied: made at another revision (stale) or touching the same objects (overlap), with how to resolve each. Applying one makes the others stale; nothing is overwritten silently. Read-only.",
+        empty(),
+    ));
+    v.push(spec(
+        "weft_history",
+        weft,
+        "The WEFT journal: every registration, task, status and message with its agent, task, proposal and project revision, oldest first. Read-only.",
+        props(json!({"limit": {"type": "integer", "minimum": 1}}), &[]),
     ));
     // Autonomous design flow (ADR-0020, `design` module).
     let flow = Category::Flow;
@@ -733,6 +791,7 @@ fn dispatch(
         Category::Knowledge => crate::knowledge::dispatch(engine, &spec.name, args),
         Category::Task => crate::agent_task::dispatch(engine, ctx, &spec.name, args),
         Category::Proposal => crate::proposal::dispatch(engine, ctx, &spec.name, args),
+        Category::Weft => crate::weft::dispatch(engine, ctx, &spec.name, args),
         // Discovery needs no project, but a client that sends its project context (the MCP
         // server, any app-endpoint client) must still get an answer rather than a refusal.
         Category::Discovery => Ok(discovery(&spec.name)),
