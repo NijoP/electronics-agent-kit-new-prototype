@@ -44,12 +44,35 @@ describe("activity helpers", () => {
 });
 
 let calls: string[];
+let verdicts: unknown[];
+let conflicts: unknown[];
+let queue: unknown[];
+// Failure and loading controls: a read that throws, or a conflict check that has not returned yet.
+let queueFails: string | null;
+let conflictsPending: Promise<unknown> | null;
+let verdictFails: string | null;
 beforeEach(() => {
   calls = [];
-  mockIPC((cmd) => {
+  verdicts = [];
+  conflicts = [];
+  queue = [];
+  queueFails = null;
+  conflictsPending = null;
+  verdictFails = null;
+  mockIPC((cmd, args) => {
     if (!(IPC_COMMANDS as readonly string[]).includes(cmd)) throw new Error(`unknown ${cmd}`);
     calls.push(cmd);
     if (cmd === "activity_timeline") return items;
+    if (cmd === "weft_conflicts") return conflictsPending ?? conflicts;
+    if (cmd === "weft_engineer_queue") {
+      if (queueFails) throw new Error(queueFails);
+      return queue;
+    }
+    if (cmd === "weft_engineer_verdict") {
+      if (verdictFails) throw new Error(verdictFails);
+      verdicts.push(args);
+      return { sent: {} };
+    }
     throw new Error(`unmocked ${cmd}`);
   });
 });
@@ -84,5 +107,78 @@ describe("activity dialog", () => {
     render(<ActivityDialog revision={2} busy={false} onReview={() => {}} onUndo={() => {}} onShow={() => {}} onClose={() => {}} />);
     await waitFor(() => expect(document.querySelectorAll("li[data-activity]").length).toBe(5));
     expect(screen.queryByRole("button", { name: "Undo this revision" })).toBeNull();
+  });
+});
+
+describe("conflicts and review requests", () => {
+  it("shows a stale conflict with Rebase unavailable and Re-propose / Reject on the bus; Approve opens the review", async () => {
+    conflicts = [
+      { kind: "stale", proposals: ["prop-a"], base_revision: 0, current_revision: 1, resolve: "reject it, or have its agent propose again" },
+      { kind: "overlap", proposals: ["prop-b", "prop-c"], objects: ["constraints:"], resolve: "apply at most one" },
+    ];
+    queue = [{ seq: 4, proposal_id: "prop-b", from: AGENT, body: "C1", title: "Input stage", base_revision: 1 }];
+    const onReview = vi.fn();
+    render(<ActivityDialog revision={1} busy={false} onReview={onReview} onUndo={() => {}} onShow={() => {}} onClose={() => {}} />);
+    await waitFor(() => expect(document.querySelectorAll("[data-conflict]").length).toBe(2));
+    const stale = document.querySelector('[data-conflict="stale"]')!;
+    expect(stale.textContent).toContain("Stale: made at revision 0, the project is at revision 1.");
+    expect(document.querySelector('[data-conflict="overlap"]')!.textContent).toContain("Overlap: both change constraints:");
+    const row = stale.querySelector('[data-conflict-proposal="prop-a"]')!;
+    const btn = (el: Element, name: string) => [...el.querySelectorAll("button")].find((b) => b.textContent === name)!;
+    expect(btn(row, "Rebase").disabled).toBe(true);
+
+    fireEvent.click(btn(row, "Re-propose"));
+    await waitFor(() => expect(verdicts.length).toBe(1));
+    expect(verdicts[0]).toEqual({ proposal_id: "prop-a", verdict: "request_changes", body: "Propose again on revision 1.", discard: true });
+    await waitFor(() => expect(btn(row, "Reject").disabled).toBe(false));
+    fireEvent.click(btn(row, "Reject"));
+    await waitFor(() => expect(verdicts.length).toBe(2));
+    expect(verdicts[1]).toMatchObject({ proposal_id: "prop-a", verdict: "reject", discard: true });
+
+    const req = document.querySelector('[data-review-request="prop-b"]')!;
+    expect(req.textContent).toContain("layout (session s1) asks you to review Input stage: C1");
+    await waitFor(() => expect(btn(req, "Approve").disabled).toBe(false));
+    fireEvent.click(btn(req, "Approve"));
+    await waitFor(() => expect(onReview).toHaveBeenCalledWith("prop-b"));
+    expect(verdicts[2]).toMatchObject({ proposal_id: "prop-b", verdict: "approve", discard: false });
+  });
+});
+
+describe("honest read and send failures (review of #130)", () => {
+  const open = (onReview = vi.fn()) => render(<ActivityDialog revision={1} busy={false} onReview={onReview} onUndo={() => {}} onShow={() => {}} onClose={() => {}} />);
+
+  it("a failed review-queue read shows its error, never 'No agent is waiting'", async () => {
+    queueFails = "weft journal: permission denied";
+    open();
+    await waitFor(() => expect(screen.getByText(/Review requests could not be read: weft journal: permission denied/)).toBeTruthy());
+    expect(screen.queryByText("No agent is waiting for your review.")).toBeNull();
+  });
+
+  it("conflicts show a loading state until the first check returns, then 'none'", async () => {
+    let finish: (v: unknown) => void = () => {};
+    conflictsPending = new Promise((r) => (finish = r));
+    open();
+    await waitFor(() => expect(screen.getByText("Checking open proposals for conflicts…")).toBeTruthy());
+    expect(screen.queryByText(/Conflicts could not be checked/)).toBeNull();
+    finish([]);
+    await waitFor(() => expect(screen.getByText(/None: no open proposal is stale/)).toBeTruthy());
+    expect(screen.queryByText("Checking open proposals for conflicts…")).toBeNull();
+  });
+
+  it("a verdict that could not be sent says so, and Approve then opens nothing", async () => {
+    queue = [{ seq: 4, proposal_id: "prop-b", from: AGENT, body: "", title: "Input stage", base_revision: 1 }];
+    verdictFails = "verdict not sent, nothing discarded: weft journal: permission denied";
+    const onReview = vi.fn();
+    open(onReview);
+    const req = await waitFor(() => {
+      const el = document.querySelector('[data-review-request="prop-b"]');
+      if (!el) throw new Error("no review request yet");
+      return el;
+    });
+    const approve = [...req.querySelectorAll("button")].find((b) => b.textContent === "Approve")!;
+    await waitFor(() => expect(approve.disabled).toBe(false));
+    fireEvent.click(approve);
+    await waitFor(() => expect(screen.getByText("verdict not sent, nothing discarded: weft journal: permission denied")).toBeTruthy());
+    expect(onReview).not.toHaveBeenCalled();
   });
 });

@@ -121,5 +121,27 @@
     `launched_sessions_register_themselves_delegate_review_and_meet_a_stale_conflict`. Two
     launched `eak-mcp` sessions register without a call, delegate, review with a verdict, and
     meet a stale-revision conflict; a session started by hand stays unregistered.
+- **Addendum, conflict and approval UI (2026-11-26):**
+  - The engineer is a party on the bus without registering: `weft::engineer_verdict` appends a
+    `review_verdict` from `engineer` to the proposal's author. With `discard`, it then discards
+    the proposal as the person, only once the verdict is appended: a verdict that cannot be sent
+    discards nothing, and a discard that fails after sending is reported as such. Approve with
+    `discard` is refused.
+  - The activity view shows a failed review-queue or conflict read as an error and a loading
+    state before the first conflict check returns, never as an empty list.
+  - `weft::engineer_queue` lists the review requests routed to `engineer` that are not answered,
+    for proposals that are still open.
+  - Desktop IPC: `weft_conflicts`, `weft_engineer_queue` and `weft_engineer_verdict`.
+  - The activity view lists:
+    - each conflict with its proposals: Review, Rebase (unavailable: EAK does not rebase),
+      Re-propose (discard, plus `request_changes` asking for a new proposal on the current
+      revision) and Reject (discard, plus `reject`);
+    - each review request for the engineer: Approve (an `approve` verdict, then the review
+      dialog, where the engineer applies) and Reject.
+  - A verdict never applies anything.
+  - Tests:
+    - `apps/desktop/src-tauri/tests/proposal.rs` `the_engineer_answers_review_requests_and_conflicts_on_the_weft_bus`;
+    - vitest `activity.test.tsx`;
+    - ui-evidence `w3-weft-review`.
 - **Source requirement:** Captain's 19:00 directive §2 (WEFT orchestration); AGENTS.md (one write
   path through `Engine::execute`, AI never self-certifies); ADR-0051.
