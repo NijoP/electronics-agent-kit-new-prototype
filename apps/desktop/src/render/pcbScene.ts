@@ -10,7 +10,7 @@
 //   < board outline < ratsnest < drill holes on top.
 // Layers on the far side of the active copper layer are drawn semi-transparent.
 import { layerKey, viaLayers } from "../layers";
-import type { CopperLayer, FillView, Point, Snapshot } from "../types";
+import type { CopperLayer, FillView, Point, SilkStroke, Snapshot } from "../types";
 import { mm, toView } from "../viewport";
 import { boxOfPts, grow, inBox, inPoly, polyEdgeDist, rectPoly, segDist, union } from "./geometry";
 import type { Box, DrawOp, Pt, RenderLayer, RenderObject, Scene } from "./types";
@@ -37,6 +37,12 @@ export interface PcbSceneOptions {
    * translucent, as before the fill is known.
    */
   fills?: FillView[] | null;
+  /**
+   * The engine silkscreen legend for this revision (ADR-0052: the legend DRC and the Gerber use).
+   * When present it is drawn on each side's silk in place of the plain refdes label; absent or
+   * null: the refdes label is drawn as before.
+   */
+  silk?: { top: SilkStroke[]; bottom: SilkStroke[] } | null;
 }
 
 /** Outline-view line width in view mm. */
@@ -284,10 +290,22 @@ export function buildPcbScene(s: Snapshot, o: PcbSceneOptions): Scene {
       owner: f.id,
       ops: [
         { t: "rect", x: court.minX, y: court.minY, w: 2 * hw, h: 2 * hh, radius: 0, stroke: "--c-courtyard", lineWidth: 0.05 },
-        { t: "text", x, y: court.minY - 0.5, text: f.refdes, size: 0.9, colour: "--c-text", minPx: 5 },
+        ...(o.silk ? [] : [{ t: "text", x, y: court.minY - 0.5, text: f.refdes, size: 0.9, colour: "--c-text", minPx: 5 } as DrawOp]),
       ],
-      sig: `${x},${y},${hw},${hh},${f.refdes}`,
+      sig: `${x},${y},${hw},${hh},${f.refdes}${o.silk ? ",legend" : ""}`,
     });
+  }
+
+  // The engine silkscreen legend (outlines, pin-1 marks, stroke-font refdes, mask-clipped): one
+  // decoration object per side on that side's silk.
+  for (const side of ["top", "bottom"] as const) {
+    const strokes = o.silk?.[side] ?? [];
+    if (!strokes.length) continue;
+    const ops: DrawOp[] = strokes.map((st) => ({ t: "seg", a: toView(st.a), b: toView(st.b), width: mm(st.width), colour: "--c-text" }));
+    const pts = strokes.flatMap((st) => [toView(st.a), toView(st.b)]);
+    let h = 0;
+    for (const st of strokes) h = (h * 31 + st.a.x + 7 * st.a.y + 13 * st.b.x + 17 * st.b.y + st.width) | 0;
+    objects.push({ key: `silk:${side}`, ref: null, layerKey: `${side}:silk`, bbox: boxOfPts(pts, mm(strokes[0].width)), hit: () => false, ops, sig: `${strokes.length}:${h}` });
   }
 
   // Vias: barrel on the multi-layer, hole on the drill layer; pickable on every layer they span.
