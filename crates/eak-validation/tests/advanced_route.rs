@@ -3,7 +3,7 @@
 //! Differential pairs: a declared 90 ohm differential pair (ADR-0055) between two
 //! connectors on a 4-layer board is auto-routed coupled. The gap is derived from the target
 //! impedance with the stack-up (IPC-2141A), the members keep that gap everywhere, the skew is
-//! reported against `max_skew` (matching is a later increment), the pair is connected, and DRC
+//! length-matched within `max_skew`, the pair is connected, and DRC
 //! finds no clearance or short error. A pair whose gap cannot be derived (two-layer board: no
 //! reference plane) is not routed coupled and says which input is missing. Written without
 //! running (no local builds): CI decides.
@@ -130,7 +130,7 @@ fn commit(p: &mut Project, res: &RouteResult) {
 }
 
 #[test]
-fn declared_pair_is_routed_coupled_at_the_impedance_gap() {
+fn declared_pair_is_routed_coupled_at_the_impedance_gap_and_length_matched() {
     let mut p = board(four_layer());
     let res = router::route(&p, &RouterOptions::default());
     assert!(
@@ -150,9 +150,8 @@ fn declared_pair_is_routed_coupled_at_the_impedance_gap() {
         "the derived gap keeps the class clearance: {gap_mm}"
     );
     assert!(pair.note.contains("derived for 90 ohm"), "{}", pair.note);
-    // Length matching is a later increment: the skew verdict is known, not yet guaranteed.
-    assert!(pair.skew_within_tolerance.is_some(), "{pair:?}");
-    assert!(pair.note.contains("not length matched"), "{}", pair.note);
+    assert_eq!(pair.skew_within_tolerance, Some(true), "{pair:?}");
+    assert!(pair.skew_mm <= 0.05 + 1e-6, "{pair:?}");
     assert_eq!(pair.impedance_within_tolerance, Some(true), "{pair:?}");
     assert!(pair
         .impedance
