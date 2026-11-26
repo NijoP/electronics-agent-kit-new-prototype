@@ -935,7 +935,7 @@ dependencies = [
 
 [[package]]
 name = "eak-core"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -945,7 +945,7 @@ dependencies = [
 
 [[package]]
 name = "eak-desktop"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "eak-agents",
  "eak-core",
@@ -968,7 +968,7 @@ dependencies = [
 
 [[package]]
 name = "eak-engineering"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "eak-core",
  "serde",
@@ -977,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "eak-harness"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "eak-core",
  "eak-engineering",
@@ -994,7 +994,7 @@ dependencies = [
 
 [[package]]
 name = "eak-intelligence"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "eak-core",
  "eak-engineering",
@@ -1009,10 +1009,11 @@ dependencies = [
 
 [[package]]
 name = "eak-library"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "eak-core",
  "eak-manufacturing",
+ "eak-validation",
  "serde",
  "serde_json",
  "sha2",
@@ -1020,7 +1021,7 @@ dependencies = [
 
 [[package]]
 name = "eak-manufacturing"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "eak-core",
  "eak-engineering",
@@ -1034,7 +1035,7 @@ dependencies = [
 
 [[package]]
 name = "eak-runtime"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "eak-core",
  "eak-engineering",
@@ -1046,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "eak-simulation"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "eak-core",
  "eak-engineering",
@@ -1059,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "eak-terminal"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "portable-pty",
  "serde",
@@ -1070,7 +1071,7 @@ dependencies = [
 
 [[package]]
 name = "eak-validation"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "eak-core",
  "eak-engineering",

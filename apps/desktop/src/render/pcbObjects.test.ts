@@ -103,3 +103,19 @@ describe("scene with schema v4 objects", () => {
     }
   });
 });
+
+// Design system (vision CMF): the board edge and cut-outs are a physical line drawn in the
+// material token --c-edge, never in the brand accent (which marks focus and selection only).
+describe("board edge colour", () => {
+  it("strokes the outline and cut-outs with --c-edge, not --accent", () => {
+    const s = referenceBasic();
+    s.project.pcb.cutouts = { c: { id: "c", outline: [mm(4, 20), mm(6, 20), mm(6, 22)] } };
+    const scene = buildPcbScene(s, opts);
+    for (const key of ["outline", "cutout:c"]) {
+      const o = scene.objects.find((x) => x.key === key);
+      expect(o, key).toBeDefined();
+      const strokes = o!.ops.map((op) => ("stroke" in op ? op.stroke : undefined)).filter(Boolean);
+      expect(strokes, key).toEqual(["--c-edge"]);
+    }
+  });
+});
