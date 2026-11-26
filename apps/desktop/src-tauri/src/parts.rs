@@ -22,8 +22,9 @@ use eak_manufacturing::fabricator::{self, DfmReport, PrepResult};
 use eak_manufacturing::provider::{Answer, ErrorKind, Resilient, Served, SupplierProvider};
 use eak_manufacturing::sourcing::{self, SourcingRecord};
 use eak_runtime::{Actor, Command, CommandRequest, CommandResponse, Engine};
-use eak_validation::{drc, erc, Report};
+use eak_validation::{drc, erc, footprint, pin_pad, CheckState, Report};
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -565,6 +566,119 @@ pub fn fabricator_prepare(s: &Session, out_dir: &str) -> Result<PrepareResult, S
     })?
 }
 
+// ---------------------------------------------------------------------------------------
+// Library verification and component authoring (slice C)
+// ---------------------------------------------------------------------------------------
+
+/// A definition found in one of the library scopes, with the scope it came from.
+#[derive(Debug, Clone, Serialize)]
+pub struct ScopedDef {
+    pub scope: String,
+    pub def: eak_core::ComponentDef,
+}
+
+/// The definition `id` as placement sees it: project first, then personal, then imported,
+/// then built-in. A disabled library is not searched.
+pub fn find_def(
+    store: &crate::libstore::LibraryStore,
+    project: &BTreeMap<String, eak_core::ComponentDef>,
+    id: &str,
+) -> Result<ScopedDef, String> {
+    use eak_manufacturing::library_link::Scope;
+    let rank = |sc: &Scope| match sc {
+        Scope::Project => 0,
+        Scope::Personal => 1,
+        Scope::Imported(_) => 2,
+        Scope::Builtin => 3,
+    };
+    crate::libstore::all_defs(store, project)
+        .into_iter()
+        .filter(|(_, d)| d.id == id)
+        .min_by_key(|(sc, _)| rank(sc))
+        .map(|(sc, def)| ScopedDef {
+            scope: sc.label(),
+            def,
+        })
+        .ok_or_else(|| format!("no component {id:?} in any enabled library"))
+}
+
+/// Footprint verification (FP-001..FP-009) of one library part. Library parts carry no stored
+/// land-pattern table or fabrication limits yet, so the rules that need them come back
+/// `UNKNOWN`: the report never reads as verified without that evidence.
+pub fn footprint_verify_in(
+    store: &crate::libstore::LibraryStore,
+    project: &BTreeMap<String, eak_core::ComponentDef>,
+    id: &str,
+) -> Result<footprint::FootprintReport, String> {
+    let found = find_def(store, project, id)?;
+    Ok(footprint::verify(&found.def, None, None, footprint::DEFAULT_TOLERANCE))
+}
+
+/// Pin-to-pad compatibility (PP-001..PP-005) of one library part.
+pub fn pin_pad_verify_in(
+    store: &crate::libstore::LibraryStore,
+    project: &BTreeMap<String, eak_core::ComponentDef>,
+    id: &str,
+) -> Result<pin_pad::PinPadReport, String> {
+    Ok(pin_pad::verify(&find_def(store, project, id)?.def))
+}
+
+/// What saving a created or edited component did.
+#[derive(Debug, Clone, Serialize)]
+pub struct ComponentSaved {
+    pub id: String,
+    /// `personal`: created and edited parts live in the user's personal library.
+    pub scope: String,
+    /// True when a personal definition with this id was replaced.
+    pub replaced: bool,
+    pub pin_pad: pin_pad::PinPadReport,
+    pub footprint: footprint::FootprintReport,
+}
+
+/// Create or edit a component in the user's personal library through the existing store
+/// (`LibraryStore::personal_save`, which refuses inconsistent definitions). A pin map that
+/// fails PP-001 (a pin on a missing pad, a pad joining two pins) is refused; the other results
+/// are returned for the editor to show. Built-in parts never change: an edited built-in part is
+/// saved as a personal copy with the same id.
+pub fn component_save_in(
+    store: &crate::libstore::LibraryStore,
+    def: eak_core::ComponentDef,
+) -> Result<ComponentSaved, String> {
+    let pp = pin_pad::verify(&def);
+    if let Some(r) = pp
+        .rule_results
+        .iter()
+        .find(|r| r.rule_id == "PP-001" && r.state == CheckState::Fail)
+    {
+        return Err(format!("the pin map is wrong and was not saved: {}", r.reason));
+    }
+    let replaced = store.personal().0.iter().any(|d| d.id == def.id);
+    let fp = footprint::verify(&def, None, None, footprint::DEFAULT_TOLERANCE);
+    let id = def.id.clone();
+    store.personal_save(def)?;
+    Ok(ComponentSaved {
+        id,
+        scope: "personal".into(),
+        replaced,
+        pin_pad: pp,
+        footprint: fp,
+    })
+}
+
+pub fn footprint_verify(s: &Session, id: &str) -> Result<footprint::FootprintReport, String> {
+    let project = crate::libstore::project_library(s);
+    footprint_verify_in(crate::libstore::store(), &project, id)
+}
+
+pub fn pin_pad_verify(s: &Session, id: &str) -> Result<pin_pad::PinPadReport, String> {
+    let project = crate::libstore::project_library(s);
+    pin_pad_verify_in(crate::libstore::store(), &project, id)
+}
+
+pub fn component_save(def: eak_core::ComponentDef) -> Result<ComponentSaved, String> {
+    component_save_in(crate::libstore::store(), def)
+}
+
 /// Tauri command wrappers: argument decoding only, no logic. Network and file work runs on the
 /// blocking pool (`crate::cmd::blocking`): supplier search is P4 (bounded background), the
 /// import is an edit (P1, never queued), fab previews/preparation are P3 (bounded).
@@ -655,5 +769,29 @@ pub mod cmd {
             super::fabricator_prepare(s, &out_dir)
         })
         .await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn footprint_verify(
+        app: AppHandle,
+        id: String,
+    ) -> Result<eak_validation::footprint::FootprintReport, String> {
+        blocking(app, Priority::P2, move |s| super::footprint_verify(s, &id)).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn pin_pad_verify(
+        app: AppHandle,
+        id: String,
+    ) -> Result<eak_validation::pin_pad::PinPadReport, String> {
+        blocking(app, Priority::P2, move |s| super::pin_pad_verify(s, &id)).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn component_save(
+        app: AppHandle,
+        def: eak_core::ComponentDef,
+    ) -> Result<super::ComponentSaved, String> {
+        blocking(app, Priority::P1, move |_| super::component_save(def)).await
     }
 }
