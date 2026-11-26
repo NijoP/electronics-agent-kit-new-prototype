@@ -148,3 +148,54 @@ fn the_proof_is_reported_and_a_closed_path_names_the_keepout_that_closes_it() {
         "{why}"
     );
 }
+
+/// Acceptance board 1: the EAK reference circuit (5 V header, AMS1117 LDO, ATtiny85, LED, I/O
+/// header) on Sig / GND plane / Sig / Sig. The plane net reaches its plane through StitchZones,
+/// everything else is auto-routed.
+#[test]
+fn four_layer_reference_board_routes_with_every_connection_proven_and_drc_clean() {
+    let (e, warnings) = build("route_ref4", 0);
+    eprintln!("{warnings:#?}");
+    let p = e.project();
+    assert_eq!(p.pcb.board.stackup.copper_layers(), 4);
+    assert!(
+        !warnings.iter().any(|w| w.starts_with("unrouted ")),
+        "{warnings:#?}"
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.starts_with("connectivity proof: all ")),
+        "{warnings:#?}"
+    );
+    assert!(p
+        .pcb
+        .tracks
+        .values()
+        .all(|t| t.layer != CopperLayer::Inner(1)));
+    assert_all_connected(p);
+    assert_drc_clean(p);
+}
+
+/// Acceptance board 2: a constrained design on four layers — a fully reversed 4-net bus between
+/// two headers, a 1 A +12V rail in a wide net class with declared voltages, a net-pair clearance
+/// rule, a board cut-out in the middle, a top-layer keep-out band and a no-via band.
+#[test]
+fn constrained_four_layer_design_routes_with_every_rule_kept() {
+    let (e, warnings) = build("route_constrained4", 0);
+    eprintln!("{warnings:#?}");
+    let p = e.project();
+    assert!(
+        !warnings.iter().any(|w| w.starts_with("unrouted ")),
+        "{warnings:#?}"
+    );
+    for t in p.pcb.tracks.values().filter(|t| t.net == "+12V") {
+        assert!(t.width >= 500_000, "+12V keeps its class width: {t:?}");
+    }
+    for v in p.pcb.vias.values() {
+        let x = v.position.x as f64 / 1e6;
+        assert!(!(15.0..=19.0).contains(&x), "via in the no-via band: {v:?}");
+    }
+    assert_all_connected(p);
+    assert_drc_clean(p);
+}

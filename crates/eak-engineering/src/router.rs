@@ -35,9 +35,10 @@
 //!   why, it is never necked below its current-sized width.
 //!
 //! The exact check applies the DRC's own rules: `clearance::required` (DRC-002), the clearance
-//! matrix, board edge (DRC-005), copper-to-hole (DRC-018), hole-to-hole (DRC-019) and keep-outs
-//! (DRC-021). The router is still a heuristic: whether the resulting board is electrically or
-//! manufacturing correct is decided afterwards by `eak-validation` (DRC, connectivity), never here.
+//! matrix, board edge (DRC-005), copper-to-hole (DRC-018), hole-to-hole (DRC-019), keep-outs
+//! (DRC-021) and constraint-region track widths (DRC-022). The router is still a heuristic: whether
+//! the resulting board is electrically or manufacturing correct is decided afterwards by
+//! `eak-validation` (DRC, connectivity), never here.
 
 use crate::board::{BoardGeometry, Hole};
 use crate::clearance;
@@ -317,7 +318,8 @@ struct Env<'a> {
     edges: &'a [(Point, Point)],
     track_keepouts: &'a [KeepOut],
     via_keepouts: &'a [KeepOut],
-    inflate: f64,
+    /// Grid inflation per plane: largest clearance + half the widest track on that layer + margin.
+    inflate: Vec<f64>,
     /// Minimum drill-edge to drill-edge spacing (DRC-019).
     hole_min: f64,
     /// Grid inflation of a drill so another via drill keeps `hole_min`.
@@ -397,12 +399,24 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         .keys()
         .map(|net| (net.clone(), intel::net_spec(p, net)))
         .collect();
-    let max_width = specs
-        .values()
-        .map(|s| s.track_width.max(s.inner_track_width))
-        .chain(std::iter::once(c.default_class.track_width))
-        .max()
-        .unwrap_or(250_000);
+    // Widest track on each plane (inner layers carry the IPC internal width).
+    let width_on: Vec<f64> = layers
+        .iter()
+        .map(|l| {
+            specs
+                .values()
+                .map(|s| {
+                    if l.is_outer() {
+                        s.track_width
+                    } else {
+                        s.inner_track_width
+                    }
+                })
+                .chain(std::iter::once(c.default_class.track_width))
+                .max()
+                .unwrap_or(250_000) as f64
+        })
+        .collect();
     let max_via_d = specs
         .values()
         .map(|s| s.via_diameter)
@@ -415,9 +429,10 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         .chain(std::iter::once(c.default_class.via_drill))
         .max()
         .unwrap_or(300_000) as f64;
-    // shortcut: one grid inflation for every net (the largest rule anywhere, like DRC's sweep
-    // window), so one high-voltage net makes every net route with its spacing; per-net grids
-    // would recover that space when dense HV boards need it.
+    // shortcut: one grid inflation per layer for every net (the largest clearance anywhere and
+    // that layer's widest track), so one high-voltage or high-current net makes every net route
+    // with its spacing on that layer; per-net grids would recover the space when dense HV /
+    // high-current boards need it.
     let vmax = c
         .net_voltages_v
         .values()
@@ -434,7 +449,10 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         max_clear = max_clear.max(ipc::clearance_mm(vmax * 2.0, ClearanceCondition::B2) * 1e6);
     }
     let margin = pitch as f64 * 0.5;
-    let inflate = max_clear + max_width as f64 / 2.0 + margin;
+    let inflate: Vec<f64> = width_on
+        .iter()
+        .map(|w| max_clear + w / 2.0 + margin)
+        .collect();
 
     // Board edge keep-out: outline and cut-outs.
     let mut edges: Vec<(Point, Point)> = ring_segments(outline).collect();
@@ -445,7 +463,8 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         c.matrix_cell(ObjectClass::Track, ObjectClass::Outline)
             .unwrap_or(0),
     ) as f64;
-    let edge = edge_min + max_width as f64 / 2.0;
+    // Outer width: an inner track nearer the edge than this is caught by the exact check.
+    let edge = edge_min + width_on[0] / 2.0;
     let mut outside = vec![false; n];
     for r in 0..rows {
         for cc in 0..cols {
@@ -480,7 +499,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
             let k = ko();
             for (l, on) in k.layers.iter().enumerate() {
                 if *on {
-                    base.mark(l, &k.shape, max_width as f64 / 2.0 + margin, MULTI);
+                    base.mark(l, &k.shape, width_on[l] / 2.0 + margin, MULTI);
                 }
             }
             track_keepouts.push(k);
@@ -505,7 +524,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
     for it in copper {
         let id = net_ids.get(&it.net).copied().unwrap_or(MULTI);
         if let Some(l) = stack.index_of(it.layer) {
-            base.mark(l, &it.shape, inflate, id);
+            base.mark(l, &it.shape, inflate[l], id);
         }
     }
     let classes: Vec<ObjectClass> = copper.iter().map(|it| class_of(it, &geo.holes)).collect();
@@ -773,7 +792,7 @@ fn pad_layers(env: &Env, pt: Point, net: &str) -> Vec<usize> {
 
 fn mark_placed(grid: &mut Grid, pl: &Placed, env: &Env) {
     for (l, s) in &pl.shapes {
-        grid.mark(*l, s, env.inflate, pl.id);
+        grid.mark(*l, s, env.inflate[*l], pl.id);
     }
     for v in &pl.vias {
         let drill = Shape {
@@ -948,7 +967,7 @@ fn find_victims(
                 *sl == l
                     && Shape {
                         core: s.core.clone(),
-                        radius: s.radius + env.inflate,
+                        radius: s.radius + env.inflate[l],
                     }
                     .contains(pt)
             });
@@ -1043,7 +1062,7 @@ fn partial_grid(env: &Env, fixed: bool, placed: &[Placed]) -> Grid {
         for it in &env.geo.copper {
             let id = env.net_ids.get(&it.net).copied().unwrap_or(MULTI);
             if let Some(l) = stack.index_of(it.layer) {
-                g.mark(l, &it.shape, env.inflate, id);
+                g.mark(l, &it.shape, env.inflate[l], id);
             }
         }
         for h in &env.geo.holes {
@@ -1161,7 +1180,7 @@ fn blocker(env: &Env, l: usize, pt: Point, net: &str, placed: &[Placed]) -> Stri
         .iter()
         .filter(|it| it.layer == layer && (it.net != net || it.net.is_empty()))
         .map(|it| (distance(&dot, &it.shape), it))
-        .filter(|(d, _)| *d <= env.inflate)
+        .filter(|(d, _)| *d <= env.inflate[l])
         .min_by(|a, b| a.0.total_cmp(&b.0));
     if let Some((_, it)) = near {
         let net_name = if it.net.is_empty() { "no net" } else { &it.net };
@@ -1174,7 +1193,7 @@ fn blocker(env: &Env, l: usize, pt: Point, net: &str, placed: &[Placed]) -> Stri
     let regions: Vec<&str> = env
         .track_keepouts
         .iter()
-        .filter(|k| k.layers[l] && distance(&dot, &k.shape) <= env.inflate)
+        .filter(|k| k.layers[l] && distance(&dot, &k.shape) <= env.inflate[l])
         .map(|k| k.label.as_str())
         .collect();
     if !regions.is_empty() {
@@ -1189,7 +1208,7 @@ fn blocker(env: &Env, l: usize, pt: Point, net: &str, placed: &[Placed]) -> Stri
             && pl
                 .shapes
                 .iter()
-                .any(|(sl, s)| *sl == l && distance(&dot, s) <= env.inflate)
+                .any(|(sl, s)| *sl == l && distance(&dot, s) <= env.inflate[l])
     }) {
         return format!(
             "a route of {} placed earlier (higher priority) [DRC-002]",
@@ -1218,7 +1237,7 @@ fn via_blocker(
         if let Some(k) = env
             .via_keepouts
             .iter()
-            .find(|k| distance(&dot, &k.shape) <= env.inflate)
+            .find(|k| distance(&dot, &k.shape) <= env.inflate.iter().copied().fold(0.0, f64::max))
         {
             return format!("{}, which keeps vias out [DRC-021]", k.label);
         }
@@ -1407,6 +1426,28 @@ fn violation(
                     layer.name(),
                     k.label
                 ));
+            }
+        }
+        if me == ObjectClass::Track {
+            let w = (s.radius * 2.0).round() as Nm;
+            for reg in env.p.pcb.regions.values() {
+                let narrow = reg.min_track_width.is_some_and(|m| w < m);
+                let wide = reg.max_track_width.is_some_and(|m| w > m);
+                if !(narrow || wide) || !reg.applies_to(layer) || reg.outline.len() < 3 {
+                    continue;
+                }
+                let area = Shape {
+                    core: Core::Polygon(reg.outline.clone()),
+                    radius: 0.0,
+                };
+                if distance(s, &area) <= 0.0 {
+                    return Some(format!(
+                        "a {} track on {} would enter {}, outside its track width limits [DRC-022]",
+                        mm(w as f64),
+                        layer.name(),
+                        reg.label()
+                    ));
+                }
             }
         }
     }
