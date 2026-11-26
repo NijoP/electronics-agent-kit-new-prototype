@@ -86,13 +86,20 @@ pub struct ItemMeta {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "status")]
 pub enum Pairing {
-    Paired { library: String, footprint: String },
+    Paired {
+        library: String,
+        footprint: String,
+    },
     /// The symbol has no `Footprint` property.
     NoFootprintProperty,
     /// The property has no `lib:` part, so it names no library.
-    Unqualified { reference: String },
+    Unqualified {
+        reference: String,
+    },
     /// No imported footprint library holds the named footprint.
-    NotFound { reference: String },
+    NotFound {
+        reference: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

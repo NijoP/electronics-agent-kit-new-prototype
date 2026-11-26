@@ -97,10 +97,18 @@ fn scan_lists_table_entries_and_folder_libraries() {
 fn import_pairs_reports_unpaired_and_carries_metadata() {
     let dir = fixture("import");
     let imp = import_folder(&dir, &opts()).unwrap();
-    assert!(imp.files.iter().all(|f| f.error.is_none()), "{:?}", imp.files);
+    assert!(
+        imp.files.iter().all(|f| f.error.is_none()),
+        "{:?}",
+        imp.files
+    );
     assert_eq!(imp.files.len(), 3);
     assert_eq!(imp.footprints.len(), 2);
-    assert_eq!(imp.symbols.len(), 2, "an unpaired symbol is kept, not dropped");
+    assert_eq!(
+        imp.symbols.len(),
+        2,
+        "an unpaired symbol is kept, not dropped"
+    );
 
     let r = imp
         .symbols

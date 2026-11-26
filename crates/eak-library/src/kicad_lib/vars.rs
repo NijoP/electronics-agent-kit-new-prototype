@@ -186,7 +186,10 @@ mod tests {
         assert_eq!(e.text, "/p/a//m/b.step");
         assert!(e.unresolved.is_empty());
         let e = expand("${KICAD9_3DMODEL_DIR}/x.wrl and ${KICAD9_3DMODEL_DIR}", &v);
-        assert_eq!(e.text, "${KICAD9_3DMODEL_DIR}/x.wrl and ${KICAD9_3DMODEL_DIR}");
+        assert_eq!(
+            e.text,
+            "${KICAD9_3DMODEL_DIR}/x.wrl and ${KICAD9_3DMODEL_DIR}"
+        );
         assert_eq!(e.unresolved, vec!["KICAD9_3DMODEL_DIR".to_string()]);
         assert_eq!(expand("cost $5 ${", &v).text, "cost $5 ${");
     }

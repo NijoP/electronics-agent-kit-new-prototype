@@ -134,9 +134,11 @@ mod tests {
     fn wrong_root_is_an_error() {
         assert!(parse_table("(fp_lib_table)", TableKind::Symbol).is_err());
         assert!(parse_table("(sym_lib_table", TableKind::Symbol).is_err());
-        assert!(parse_table("(sym_lib_table (version 7))", TableKind::Symbol)
-            .unwrap()
-            .entries
-            .is_empty());
+        assert!(
+            parse_table("(sym_lib_table (version 7))", TableKind::Symbol)
+                .unwrap()
+                .entries
+                .is_empty()
+        );
     }
 }
