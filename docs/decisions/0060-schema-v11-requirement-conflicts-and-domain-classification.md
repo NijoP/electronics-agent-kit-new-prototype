@@ -76,7 +76,9 @@
     evidence against.
   - An entry anyone else recorded is never replaced. When the classifier disagrees with it, the
     classifier's view is added as a candidate, and it is removed again once the classifier agrees.
-  - Classifier entries without evidence are removed.
+  - Classifier entries without evidence are removed. A value someone else recorded against a
+    classifier entry is never dropped by a later run: it stays as a conflict, becomes the entry
+    when the classifier now agrees with it, or takes the entry's place when the evidence goes.
   - When nothing changes, the command is refused (nothing to classify).
   - A DERIVED class goes stale when an input changes later (ADR-0057 staleness).
   - `SetRequirementField` refuses DERIVED for everyone: only ClassifyDomain writes it.

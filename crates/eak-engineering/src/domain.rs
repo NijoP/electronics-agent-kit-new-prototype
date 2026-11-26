@@ -763,6 +763,21 @@ fn entry_for(r: &ClassResult, def: &DomainClassDef, at_ms: u64, revision: u64) -
     }
 }
 
+/// `base` with `candidates` as its conflicting values, in order: a candidate with no value, the
+/// base's value or the value of an earlier candidate is left out (so a person's value, listed
+/// first, wins over the classifier's same value).
+fn with_conflicts(mut base: ReqEntry, candidates: Vec<ReqEntry>) -> ReqEntry {
+    base.conflicts.clear();
+    for mut c in candidates {
+        c.conflicts.clear();
+        let known = c.value == base.value || base.conflicts.iter().any(|x| x.value == c.value);
+        if c.value.is_some() && !known {
+            base.conflicts.push(c);
+        }
+    }
+    base
+}
+
 /// The `domain.*` entries `ClassifyDomain` records for a classification: each changed key with
 /// its new entry (`None` = remove the classifier's entry). Empty when the stored classification
 /// already matches the evidence. Entries recorded by anyone else are never replaced: when the
@@ -788,11 +803,39 @@ pub fn plan(
                     out.push((key, Some(w)));
                 }
             }
-            Some(old) if by_classifier(old) => match wanted {
-                None => out.push((key, None)),
-                Some(w) if w.same_content(old) => {}
-                Some(w) => out.push((key, Some(w))),
-            },
+            Some(old) if by_classifier(old) => {
+                // The classifier's own entry. Values others recorded against it are carried over
+                // (never dropped): a person's value the classifier now agrees with becomes the
+                // entry, and without evidence a person's value takes the entry's place.
+                let people: Vec<ReqEntry> = old
+                    .conflicts
+                    .iter()
+                    .filter(|x| !by_classifier(x))
+                    .cloned()
+                    .collect();
+                let new = match wanted {
+                    None if people.is_empty() => None,
+                    None => Some(with_conflicts(people[0].clone(), people[1..].to_vec())),
+                    Some(w) => match people.iter().position(|x| x.value == w.value) {
+                        Some(i) => {
+                            let mut rest = people;
+                            let agreed = rest.remove(i);
+                            rest.extend(w.conflicts);
+                            Some(with_conflicts(agreed, rest))
+                        }
+                        None => {
+                            let mut rest = people;
+                            rest.extend(w.conflicts.iter().cloned());
+                            Some(with_conflicts(w, rest))
+                        }
+                    },
+                };
+                match new {
+                    None => out.push((key, None)),
+                    Some(n) if n.same_content(old) => {}
+                    Some(n) => out.push((key, Some(n))),
+                }
+            }
             Some(old) => {
                 // Someone else's entry: keep it, with the classifier's view beside it while
                 // they disagree (an unchanged view keeps its earlier stamp).
@@ -1066,6 +1109,46 @@ mod tests {
         // Classified again, the class has no evidence left and the classifier's entry goes.
         record(&mut s, 4);
         assert!(s.entry("domain.high_current").is_none());
+    }
+
+    /// Regression (review of #157): a person's value recorded against the classifier's own entry
+    /// survives every later classification, whatever the evidence does.
+    #[test]
+    fn a_person_value_against_the_classifier_entry_is_never_dropped() {
+        let mut s = RequirementSet::default();
+        let usb = text("USB-C 5 V");
+        let proposed = entry(ReqStatus::NeedsConfirmation, usb.clone());
+        s.set("supply.sources", proposed).unwrap();
+        record(&mut s, 2);
+        let key = "domain.usb_interface";
+        assert!(by_classifier(s.entry(key).unwrap()));
+        // A person disputes the classifier's proposal.
+        let no = ReqEntry {
+            source: source(SourceKind::Engineer),
+            ..entry(ReqStatus::Confirmed, ReqValue::Flag { value: false })
+        };
+        assert_eq!(s.record(key, no.clone(), false), Ok(Recorded::Conflict));
+        let theirs = |s: &RequirementSet| -> Vec<ReqEntry> {
+            let e = s.entry(key).unwrap();
+            let mut all = e.conflicts.clone();
+            all.push(e.clone());
+            all.into_iter().filter(|x| !by_classifier(x)).collect()
+        };
+        // The evidence firms up: the classifier's entry becomes DERIVED, the dispute stays.
+        s.set("supply.sources", entry(ReqStatus::Confirmed, usb))
+            .unwrap();
+        assert!(record(&mut s, 3) > 0);
+        let e = s.entry(key).unwrap();
+        assert_eq!(e.status, ReqStatus::Derived);
+        assert_eq!(theirs(&s).len(), 1, "the person's value is kept: {e:?}");
+        assert!(theirs(&s)[0].same_content(&no));
+        assert_eq!(record(&mut s, 4), 0, "nothing changes");
+        // The evidence goes: the person's value takes the entry's place instead of vanishing.
+        s.clear("supply.sources").unwrap();
+        record(&mut s, 5);
+        let e = s.entry(key).unwrap();
+        assert!(e.same_content(&no), "{e:?}");
+        assert!(e.conflicts.is_empty());
     }
 
     #[test]
