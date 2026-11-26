@@ -14,11 +14,14 @@
 //!   manufacturer identification from a sourced alias table, with an explicit unknown result.
 //! * `kicad`   – KiCad `.kicad_sym` / `.kicad_mod` export, the inverse of the clean-room reader
 //!   in `eak_core::kicad_import`, with every loss reported.
+//! * `db`     – local SQLite library database: items with a token index for prefix search, and
+//!   a cache of source answers that keeps each retrieval time.
 //!
 //! Nothing here mutates a design: a part enters a project only through `Engine::execute`
 //! (`UpsertComponentDefinition`) in the layers above. Nothing here is verified by import or by
 //! being stored.
 
+pub mod db;
 pub mod kicad;
 pub mod mpn;
 pub mod part;

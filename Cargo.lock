@@ -1005,6 +1005,7 @@ dependencies = [
  "eak-core",
  "eak-manufacturing",
  "eak-validation",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",
