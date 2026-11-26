@@ -470,6 +470,11 @@ pub mod cmd {
     ) -> R<Vec<SessionView>> {
         Ok(sessions(&state, &terminal.manager))
     }
+    /// Why the session index could not be written this run (ADR-0058), or null.
+    #[tauri::command]
+    pub fn agent_session_index_error(state: State<'_, AgentsState>) -> R<Option<String>> {
+        Ok(state.sessions.index_error())
+    }
     #[tauri::command(async)]
     pub fn agent_session_log(
         state: State<'_, AgentsState>,
@@ -516,7 +521,7 @@ pub mod cmd {
 }
 
 /// IPC command names this module registers (kept in sync with `AGENT_IPC` in `api.ts`).
-pub const AGENT_COMMANDS: [&str; 10] = [
+pub const AGENT_COMMANDS: [&str; 11] = [
     "agent_tools",
     "agent_tool_connect",
     "agent_tool_disconnect",
@@ -527,4 +532,5 @@ pub const AGENT_COMMANDS: [&str; 10] = [
     "agent_tool_stop",
     "agent_session_restart",
     "weft_state",
+    "agent_session_index_error",
 ];

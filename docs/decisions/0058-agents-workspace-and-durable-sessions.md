@@ -55,3 +55,13 @@
   file); vitest `src/agents/*.test.ts(x)`; ui-evidence `scenarios/m2-agents.json`.
 - **Source requirement:** Execution brief §4.1, §9.1-§9.4, §10.1, §10.5; captain's standing rules
   (no decorative controls; Terminal workspace unchanged).
+
+## Addendum: a failed index write is surfaced (follow-up to #152)
+
+Writing the index no longer fails silently. The log folder is created before each append (a
+terminal session may be the first record of a fresh install). A failed write is logged to stderr
+and kept for the rest of the run, `Sessions::index_error`, because a later successful write does
+not bring the lost record back. The app reads it with one more read-only IPC,
+`agent_session_index_error` (in `AGENT_COMMANDS` / `AGENT_IPC`), and the Agents workspace shows
+it as an alert in its Sessions group. The session itself still runs: its process or tab does not
+depend on the index.
