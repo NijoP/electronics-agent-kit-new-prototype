@@ -186,7 +186,7 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .label text { text-anchor: start; fill: var(--c-label); }
 .label.power text { fill: var(--c-power); }
 .no-connect { stroke: var(--err); stroke-width: 0.25; fill: none; }
-.board { fill: var(--c-board); stroke: var(--accent); stroke-width: 0.15; }
+.board { fill: var(--c-board); stroke: var(--c-edge); stroke-width: 0.15; }
 .zone { fill-opacity: 0.25; stroke-width: 0.05; }
 /* E5: once the engine fill is known the outline polygon is only the hit target and edge; the
    copper drawn is the fill (DRC raster), which never takes the pointer. */
