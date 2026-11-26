@@ -17,7 +17,7 @@ impl LcscSlot {
     pub const STATUS_TEXT: &'static str = "not connected";
 
     fn not_connected() -> SourceError {
-        SourceError::Unavailable("supplier:lcsc: not connected; no request was made".into())
+        SourceError::Unavailable("LCSC is not connected; no request made".into())
     }
 }
 

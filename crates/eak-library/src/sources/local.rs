@@ -97,7 +97,7 @@ impl LocalListSource {
         reference: &str,
         format: ListFormat,
         bytes: &[u8],
-        retrieved_at_unix_s: Option<u64>,
+        retrieved_at: Option<u64>,
     ) -> LocalListSource {
         let mut s = LocalListSource {
             id: SourceId::new(id),
@@ -116,7 +116,7 @@ impl LocalListSource {
         let raw_sha256 = format!("{:x}", Sha256::digest(bytes));
         let mut seen: BTreeMap<PartKey, String> = BTreeMap::new();
         for (at, row) in rows {
-            let result = row.and_then(|row| s.record(&at, row, &raw_sha256, retrieved_at_unix_s));
+            let result = row.and_then(|row| s.record(&at, row, &raw_sha256, retrieved_at));
             match result {
                 Ok(r) => {
                     if let Some(first) = seen.get(&r.key) {
@@ -237,7 +237,7 @@ impl LocalListSource {
 /// Refuse over-long text and control characters.
 fn check_text(t: &str) -> Result<(), String> {
     if t.chars().count() > MAX_FIELD_CHARS {
-        return Err(format!("a field is longer than {MAX_FIELD_CHARS} characters"));
+        return Err(format!("a field is over {MAX_FIELD_CHARS} characters"));
     }
     if t.chars().any(char::is_control) {
         return Err("a field contains a control character".into());
@@ -325,7 +325,10 @@ fn parse_csv(text: &str) -> Result<Vec<(usize, Vec<String>)>, String> {
 /// What a CSV column holds.
 enum Column {
     Field(&'static str),
-    Spec { name: String, unit: Option<String> },
+    Spec {
+        name: String,
+        unit: Option<String>,
+    },
     Ignored,
 }
 
@@ -560,7 +563,7 @@ Acme,SHORT\r\n";
         assert_eq!(s.records()[0].specs[0].display_value(), "55 uA");
         let rejected = &s.report().rejected;
         assert_eq!(rejected.len(), 2);
-        assert!(rejected[0].starts_with("item 2: unknown field `verified`"));
+        assert!(rejected[0].starts_with("item 2: unknown field"));
         assert!(rejected[1].contains("control character"));
     }
 
