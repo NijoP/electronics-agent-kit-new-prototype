@@ -23,6 +23,7 @@ pub const SOURCE_PATH: &str = "R = ρ(T)·L/(w·t) per track piece and ρ(T)·h/
 
 pub const LIMITATIONS: &[&str] = &[
     "Voltage drop (DRC-028): pads are equipotential (pad copper and THT barrels carry no resistance); track length runs along the centre line to the point nearest each contact, so ends inside pads are counted; DC only",
+    "Voltage drop (DRC-028): where two different tracks overlap (a jog shorter than the track width) they join at their closest centre-line points, so up to about one width of copper per such jog is not counted",
     "Voltage drop (DRC-028): the whole net current is taken through each sink path, an upper bound when the load is shared between sinks; plated copper is a few percent more resistive than the annealed-copper model",
 ];
 
@@ -292,6 +293,16 @@ pub fn net_path(p: &Project, net: &str) -> Result<NetPath, PathError> {
             }
             match (a.kind == ItemKind::Track, b.kind == ItemKind::Track) {
                 (false, false) => dsu.union(base[i], base[j]),
+                // Chords of one (arc) track run in series: only consecutive chords meet, at
+                // their shared vertex. A short chord narrower than the track would otherwise
+                // let non-adjacent chords touch and short the arc out.
+                (true, true) if a.object_id == b.object_id => {
+                    if j == i + 1 {
+                        let n = dsu.add();
+                        contacts[i].push((1.0, n));
+                        contacts[j].push((0.0, n));
+                    }
+                }
                 (true, true) => {
                     let ((p0, p1), (q0, q1)) = (seg(i), seg(j));
                     let (t, u) = closest_params(p0, p1, q0, q1);
@@ -697,6 +708,68 @@ mod tests {
         p.constraints.ambient_temp_c = None;
         let e = net_path(&p, "PWR").unwrap_err();
         assert_eq!(e, unknown("missing input: ambient temperature"));
+    }
+
+    #[test]
+    fn arc_track_counts_its_full_length() {
+        // Regression (review of PR 143, B1): a 1 mm wide arc flattens into 0.89 mm chords, so
+        // non-adjacent chords touched and shorted the arc out.
+        let mut p = base();
+        let a = place(
+            &mut p,
+            "J1",
+            "CONN_1x02_P2.54",
+            Point::mm(-5.0, -1.27),
+            Side::Top,
+        );
+        let b = place(
+            &mut p,
+            "J2",
+            "CONN_1x02_P2.54",
+            Point::mm(10.0, 13.73),
+            Side::Top,
+        );
+        let (s, e) = (Point::mm(0.0, 0.0), Point::mm(10.0, 10.0));
+        track(&mut p, "l1", CopperLayer::Top, 0.2, a, s);
+        track(&mut p, "l2", CopperLayer::Top, 0.2, e, b);
+        // 90° counter-clockwise about (0, 10): r = 10 mm.
+        track(&mut p, "arc", CopperLayer::Top, 1.0, s, e);
+        p.pcb.tracks.get_mut("arc").unwrap().arc_deg = Some(90.0);
+        // Hand: two 5 mm × 0.2 mm leads + ρ·r·θ/(w·t) for the arc.
+        let leads = 2.0 * rho35() * 0.005 / (0.2e-3 * T1OZ);
+        let arc = rho35() * 0.010 * std::f64::consts::FRAC_PI_2 / (1e-3 * T1OZ);
+        let hand = leads + arc;
+        let r = worst(&p);
+        // The 10 µm chord flattening shortens the arc by about 0.03 %.
+        assert!((r - hand).abs() / hand < 3e-3, "{r} vs {hand}");
+    }
+
+    #[test]
+    fn a_short_chamfer_on_a_wide_track_loses_at_most_one_width() {
+        let mut p = base();
+        let a = place(
+            &mut p,
+            "J1",
+            "CONN_1x02_P2.54",
+            Point::mm(0.0, -1.27),
+            Side::Top,
+        );
+        let b = place(
+            &mut p,
+            "J2",
+            "CONN_1x02_P2.54",
+            Point::mm(10.3, 9.03),
+            Side::Top,
+        );
+        let (k1, k2) = (Point::mm(10.0, 0.0), Point::mm(10.3, 0.3));
+        track(&mut p, "t1", CopperLayer::Top, 1.0, a, k1);
+        track(&mut p, "t2", CopperLayer::Top, 1.0, k1, k2);
+        track(&mut p, "t3", CopperLayer::Top, 1.0, k2, b);
+        let len = a.dist(k1) + k1.dist(k2) + k2.dist(b);
+        let per_m = rho35() / (1e-3 * T1OZ);
+        let (hi, lo) = (per_m * len * 1e-9, per_m * (len * 1e-9 - 1e-3));
+        let r = worst(&p);
+        assert!(r <= hi * (1.0 + 1e-9) && r >= lo, "{r} not in [{lo}, {hi}]");
     }
 
     #[test]

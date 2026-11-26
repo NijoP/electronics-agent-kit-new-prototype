@@ -1023,6 +1023,16 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         "Differential pairs: skew counts track length only (no via barrels); the gap rule checks only the closest approach, not where the members run apart; impedance uses the positive member's width and is not checked on uncoupled segments".into(),
     ];
     limitations.extend(pathres::LIMITATIONS.iter().map(|l| l.to_string()));
+    let no_drop: Vec<String> = crate::gates::power_nets(p)
+        .into_iter()
+        .filter(|n| !c.net_max_drop_v.contains_key(n))
+        .collect();
+    if !no_drop.is_empty() {
+        limitations.push(format!(
+            "NOT EVALUATED: DRC-028 DC voltage drop for power nets without a declared allowed drop (net_max_drop_v): {}",
+            no_drop.join(", ")
+        ));
+    }
     limitations.extend(undeclared_nets_not_evaluated(p));
     let (no_current, no_voltage) = undeclared_nets(p, items);
     let mut report = Report::new("DRC", p, rules, f, not_implemented, limitations);
@@ -1140,7 +1150,7 @@ fn voltage_drop(p: &Project, f: &mut Vec<Finding>) -> Option<String> {
             (Verdict::Pass, _) => {}
             (Verdict::Fail, Some(_)) => {
                 let msg = format!(
-                    "net {net}: {drop:.3} V drop from {} to {} ({:.1} mΩ), above the allowed {max} V",
+                    "net {net}: up to {drop:.3} V drop from {} to {} ({:.1} mΩ), above the allowed {max} V",
                     worst.from,
                     worst.to,
                     worst.resistance_ohm * 1e3

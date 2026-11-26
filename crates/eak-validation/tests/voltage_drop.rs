@@ -123,3 +123,15 @@ fn without_a_source_pad_only_a_pass_is_proven() {
     assert!(why.contains("missing input: source pad"), "{why}");
     assert!(!r.findings.iter().any(|f| f.rule_id == "DRC-028"));
 }
+
+#[test]
+fn power_nets_without_an_allowed_drop_are_listed_not_evaluated() {
+    let mut e = eak_runtime::Engine::in_memory(Project::new("nets"));
+    eak_runtime::fixtures::build_schematic(&mut e).unwrap();
+    let r = drc::run(e.project());
+    let line = r
+        .limitations
+        .iter()
+        .find(|l| l.starts_with("NOT EVALUATED: DRC-028"));
+    assert!(line.is_some(), "{:?}", r.limitations);
+}

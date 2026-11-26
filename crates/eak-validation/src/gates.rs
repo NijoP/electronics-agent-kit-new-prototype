@@ -166,7 +166,7 @@ fn unknown_unless_failed(g: &mut Gate, reason: impl Into<String>) {
 }
 
 /// Non-reference nets that carry power by the schematic (a power-port label or a power pin).
-fn power_nets(p: &Project) -> Vec<String> {
+pub(crate) fn power_nets(p: &Project) -> Vec<String> {
     netlist::build(p)
         .nets
         .values()
