@@ -16,6 +16,8 @@
 //! * `route`    – picks the running app's engine (socket) or a direct engine under the project
 //!   lock, and invokes a tool.
 //! * `mcp`      – Model Context Protocol server over stdio exposing the same tools.
+//! * `proposal` – propose mode (ADR-0051): design edits collected on a copy, reviewed with their
+//!   ERC/DRC delta and applied by a person as one checkpointed `Batch`.
 //! * `cli`      – the `eak` command line.
 
 pub mod agent_task;
@@ -27,6 +29,7 @@ pub mod engineering;
 pub mod intel;
 pub mod knowledge;
 pub mod mcp;
+pub mod proposal;
 pub mod rework;
 pub mod route;
 pub mod task_approval;
