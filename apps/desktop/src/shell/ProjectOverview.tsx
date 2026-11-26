@@ -107,6 +107,18 @@ export function ProjectOverview({ snapshot, results, conn, domain, events, busy,
         </dl>
       </Section>
 
+      <Section title="Brief" label="Design brief">
+        {(project.requirements ?? []).length === 0 ? (
+          <p className="muted overview-note">No design brief yet. Starting a project from a description on Project Home records one, line by line.</p>
+        ) : (
+          <ol className="overview-list" aria-label="Brief lines">
+            {(project.requirements ?? []).map((r) => (
+              <li key={r.id}>{r.text}</li>
+            ))}
+          </ol>
+        )}
+      </Section>
+
       <Section title="Schematic" aside={<button type="button" className="linkish" onClick={() => onView("schematic")}>Open</button>}>
         <dl className="facts">
           <Fact name="Sheets">{f.sheets}</Fact>
