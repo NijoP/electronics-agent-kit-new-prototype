@@ -88,11 +88,59 @@ fn assert_all_connected(p: &Project) {
     }
 }
 
+/// Asserts the AutoRoute connectivity proof covers every net with pads, each one copper group
+/// (`nets` of them when the fixture fixes the count) and at least `min_vias` vias were placed, then
+/// prints the evidence line. Written to the process's stderr directly: the test harness captures
+/// `println!`/`eprintln!` of passing tests, so CI logs would not show it otherwise.
+fn evidence(board: &str, p: &Project, warnings: &[String], nets: Option<usize>, min_vias: usize) {
+    use std::io::Write;
+    let proof = warnings
+        .iter()
+        .find(|w| w.starts_with("connectivity proof: all "))
+        .unwrap_or_else(|| panic!("{board}: no all-nets proof line in {warnings:#?}"));
+    let proven: usize = proof["connectivity proof: all ".len()..]
+        .split(' ')
+        .next()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("{board}: no net count in {proof}"));
+    let pad_nets: std::collections::BTreeSet<&String> = p
+        .pcb
+        .footprints
+        .values()
+        .flat_map(|f| f.pad_nets.values())
+        .filter(|n| !n.is_empty())
+        .collect();
+    assert_eq!(
+        proven,
+        pad_nets.len(),
+        "{board}: every net with pads is proven"
+    );
+    if let Some(n) = nets {
+        assert_eq!(proven, n, "{board}: nets proven");
+    }
+    let vias = p.pcb.vias.len();
+    assert!(
+        vias >= min_vias,
+        "{board}: {vias} vias, expected >= {min_vias}"
+    );
+    let unrouted = warnings
+        .iter()
+        .filter(|w| w.starts_with("unrouted "))
+        .count();
+    let layers = p.pcb.board.stackup.copper_layers();
+    let _ = writeln!(
+        std::io::stderr(),
+        "ROUTER-EVIDENCE {board}: layers={layers} nets_proven={proven} unrouted={unrouted} vias={vias} tracks={} | {proof}",
+        p.pcb.tracks.len()
+    );
+}
+
 #[test]
 fn routes_on_the_inner_signal_layer_past_an_outer_keepout_wall() {
     let (e, warnings) = build("route_inner_keepout", 0);
     eprintln!("{warnings:#?}");
     let p = e.project();
+    evidence("route_inner_keepout", p, &warnings, Some(2), 2);
     assert!(!p.pcb.tracks.is_empty(), "nothing routed: {warnings:?}");
     let on = |l: CopperLayer| p.pcb.tracks.values().filter(|t| t.layer == l).count();
     assert!(
@@ -157,6 +205,7 @@ fn four_layer_reference_board_routes_with_every_connection_proven_and_drc_clean(
     let (e, warnings) = build("route_ref4", 0);
     eprintln!("{warnings:#?}");
     let p = e.project();
+    evidence("route_ref4", p, &warnings, None, 0);
     assert_eq!(p.pcb.board.stackup.copper_layers(), 4);
     assert!(
         !warnings.iter().any(|w| w.starts_with("unrouted ")),
@@ -185,6 +234,7 @@ fn constrained_four_layer_design_routes_with_every_rule_kept() {
     let (e, warnings) = build("route_constrained4", 0);
     eprintln!("{warnings:#?}");
     let p = e.project();
+    evidence("route_constrained4", p, &warnings, Some(6), 0);
     assert!(
         !warnings.iter().any(|w| w.starts_with("unrouted ")),
         "{warnings:#?}"
@@ -198,4 +248,85 @@ fn constrained_four_layer_design_routes_with_every_rule_kept() {
     }
     assert_all_connected(p);
     assert_drc_clean(p);
+}
+
+/// The board's layout as sorted text rows, object ids left out (they are random per run):
+/// footprint placement (refdes, position, rotation, side), tracks (layer, ends, width, net) and
+/// vias (position, drill, size, span, net).
+fn layout_rows(p: &Project) -> Vec<String> {
+    let fps = p.pcb.footprints.values().map(|f| {
+        format!(
+            "F {} {:?} {:?} {:?}",
+            f.refdes, f.position, f.rotation, f.side
+        )
+    });
+    let tracks = p.pcb.tracks.values().map(|t| {
+        let (a, b) = if t.a <= t.b { (t.a, t.b) } else { (t.b, t.a) };
+        format!("T {:?} {a:?} {b:?} {} {}", t.layer, t.width, t.net)
+    });
+    let vias = p.pcb.vias.values().map(|v| {
+        format!(
+            "V {:?} {} {} {:?} {:?} {}",
+            v.position, v.drill, v.diameter, v.from, v.to, v.net
+        )
+    });
+    let mut rows: Vec<String> = fps.chain(tracks).chain(vias).collect();
+    rows.sort();
+    rows
+}
+
+/// Route fingerprint: track and via count plus an FNV-1a hash of the layout rows.
+fn fingerprint(p: &Project) -> (usize, usize, u64) {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in layout_rows(p).join("\n").bytes() {
+        h = (h ^ b as u64).wrapping_mul(0x0100_0000_01b3);
+    }
+    (p.pcb.tracks.len(), p.pcb.vias.len(), h)
+}
+
+/// The same design routes to the same copper on every run and platform (undo/replay and
+/// reviewable diffs depend on it). Two builds in one process get different random object ids,
+/// which used to reorder the ratsnest and change the routes. On a mismatch the differing rows
+/// are printed, so the CI log names what moved.
+#[test]
+fn the_same_board_routes_to_the_same_copper_every_run() {
+    use std::io::Write;
+    // Pinned from CI run 45844200699, equal on linux, windows, macos-arm and macos-intel. A
+    // deliberate router change updates these values (and says so in its commit).
+    let pinned: [(&str, (usize, usize, u64)); 3] = [
+        ("route_inner_keepout", (12, 4, 0xe9af_c688_064d_bab4)),
+        ("route_ref4", (103, 11, 0x4fae_609d_6a2b_f1a2)),
+        ("route_constrained4", (50, 2, 0x9fa3_6954_c61e_e1a7)),
+    ];
+    for (board, want) in pinned {
+        let (e1, _) = build(board, 0);
+        let (e2, _) = build(board, 0);
+        let (r1, r2) = (layout_rows(e1.project()), layout_rows(e2.project()));
+        if r1 != r2 {
+            let only = |a: &[String], b: &[String]| -> Vec<String> {
+                a.iter()
+                    .filter(|r| !b.contains(r))
+                    .take(12)
+                    .cloned()
+                    .collect()
+            };
+            panic!(
+                "{board}: two runs laid out differently\nonly in run 1: {:#?}\nonly in run 2: {:#?}",
+                only(&r1, &r2),
+                only(&r2, &r1)
+            );
+        }
+        let first = fingerprint(e1.project());
+        let _ = writeln!(
+            std::io::stderr(),
+            "ROUTER-FINGERPRINT {board}: tracks={} vias={} hash={:016x}",
+            first.0,
+            first.1,
+            first.2
+        );
+        assert_eq!(
+            first, want,
+            "{board}: route fingerprint changed (see ROUTER-FINGERPRINT)"
+        );
+    }
 }
