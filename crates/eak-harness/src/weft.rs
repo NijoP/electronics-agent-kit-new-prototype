@@ -180,14 +180,13 @@ pub fn read(dir: &Path) -> State {
 
 fn append(dir: &Path, by: &str, revision: u64, events: Vec<Event>) -> Result<Vec<Entry>, Fail> {
     std::fs::create_dir_all(dir.join(DIR)).map_err(storage)?;
-    let mut seq = read(dir).last_seq;
+    let start = read(dir).last_seq;
     let ts_ms = store::now_ms() as u64;
     let mut lines = String::new();
     let mut out = vec![];
-    for event in events {
-        seq += 1;
+    for (i, event) in events.into_iter().enumerate() {
         let e = Entry {
-            seq,
+            seq: start + i as u64 + 1,
             ts_ms,
             by: by.to_string(),
             revision,
@@ -314,7 +313,7 @@ fn registered(state: &State, ctx: &CallContext) -> Result<String, Fail> {
 /// touch the same objects. Applying one makes the others stale, and `proposal::apply` refuses a
 /// stale one, so nothing is overwritten silently. The engineer rejects one, or its agent proposes
 /// again on the new revision. EAK does not rebase a proposal.
-pub fn conflicts(engine: &Engine) -> Result<Vec<Value>, Fail> {
+pub(crate) fn conflicts(engine: &Engine) -> Result<Vec<Value>, Fail> {
     let dir = engine
         .dir()
         .ok_or_else(|| precondition("WEFT needs a saved project folder"))?;
