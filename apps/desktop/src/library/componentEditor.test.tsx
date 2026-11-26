@@ -96,6 +96,7 @@ describe("definitionOf", () => {
 describe("ComponentEditor", () => {
   it("creates a new personal part from a definition and shows its footprint as unverified", async () => {
     render(<ComponentEditor def={base} />);
+    fireEvent.click(screen.getByText("Edit in personal library…"));
     fireEvent.change(screen.getByLabelText("Personal part id"), { target: { value: "MY_R" } });
     fireEvent.change(screen.getByLabelText("Personal part name"), { target: { value: "My resistor" } });
     fireEvent.change(screen.getByLabelText("Pads of pin 2"), { target: { value: "2" } });
@@ -110,6 +111,7 @@ describe("ComponentEditor", () => {
   it("shows why the backend refused the save", async () => {
     refuse = true;
     render(<ComponentEditor def={base} />);
+    fireEvent.click(screen.getByText("Edit in personal library…"));
     fireEvent.click(screen.getByRole("button", { name: "Save to personal library" }));
     await waitFor(() => expect(screen.getByTestId("component-save-error").textContent).toContain("pin map is wrong"));
     expect(screen.queryByTestId("component-saved")).toBeNull();
@@ -117,6 +119,7 @@ describe("ComponentEditor", () => {
 
   it("disables Save with the reason while the id is unusable", () => {
     render(<ComponentEditor def={base} />);
+    fireEvent.click(screen.getByText("Edit in personal library…"));
     fireEvent.change(screen.getByLabelText("Personal part id"), { target: { value: "a/b" } });
     const save = screen.getByRole("button", { name: "Save to personal library" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);

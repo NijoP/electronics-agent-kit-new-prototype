@@ -55,6 +55,7 @@ export function ComponentEditor({ def, onSaved }: { def: ComponentDef; onSaved?:
   const [saved, setSaved] = useState<ComponentSaved | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     setF(formOf(def));
     setSaved(null);
@@ -85,8 +86,17 @@ export function ComponentEditor({ def, onSaved }: { def: ComponentDef; onSaved?:
     </label>
   );
   return (
-    <details className="component-editor">
-      <summary>Edit in personal library…</summary>
+    <details className="component-editor" open={open}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen(!open);
+        }}
+      >
+        Edit in personal library…
+      </summary>
+      {open && (
+        <>
       <p className="muted">Saves to your personal library (all projects). Keep the id to edit your copy, or enter a new id to create a new part. Built-in parts are never changed.</p>
       {field("Id", "id")}
       {field("Name", "name")}
@@ -124,6 +134,8 @@ export function ComponentEditor({ def, onSaved }: { def: ComponentDef; onSaved?:
           {" · "}
           {allCertify(saved.pin_pad.rule_results, PIN_PAD_RULES) ? "Pin-to-pad checks passed" : "Pin-to-pad unverified"}
         </p>
+      )}
+        </>
       )}
     </details>
   );
