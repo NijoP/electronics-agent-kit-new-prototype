@@ -64,7 +64,7 @@ impl Estimate {
 /// A width (or gap) sized for a target impedance, or why it cannot be sized.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
-pub enum Sized {
+pub enum Sizing {
     Known {
         value: Nm,
         /// Impedance the rounded value gives.
@@ -251,7 +251,7 @@ fn solve(
     Ok((pick, f(pick)))
 }
 
-fn sized(r: Result<(Nm, Estimate), String>) -> Sized {
+fn sized(r: Result<(Nm, Estimate), String>) -> Sizing {
     match r {
         Ok((
             value,
@@ -260,21 +260,21 @@ fn sized(r: Result<(Nm, Estimate), String>) -> Sized {
                 formula,
                 geometry,
             },
-        )) => Sized::Known {
+        )) => Sizing::Known {
             value,
             achieved_ohm: ohm,
             formula,
             geometry,
         },
-        Ok((_, Estimate::Unknown { missing })) | Err(missing) => Sized::Unknown { missing },
+        Ok((_, Estimate::Unknown { missing })) | Err(missing) => Sizing::Unknown { missing },
     }
 }
 
 /// Track width on `layer` for a single-ended `target_ohm`.
-pub fn width_for(st: &Stackup, layer: CopperLayer, target_ohm: f64) -> Sized {
+pub fn width_for(st: &Stackup, layer: CopperLayer, target_ohm: f64) -> Sizing {
     let g = match geometry(st, layer) {
         Ok(g) => g,
-        Err(missing) => return Sized::Unknown { missing },
+        Err(missing) => return Sizing::Unknown { missing },
     };
     let mm = |x: f64| (x * 1e6) as Nm;
     // Search bounds that keep the model valid.
@@ -286,14 +286,14 @@ pub fn width_for(st: &Stackup, layer: CopperLayer, target_ohm: f64) -> Sized {
 }
 
 /// Edge-to-edge gap on `layer` that gives `target_ohm` differential with `width_nm` tracks.
-pub fn gap_for(st: &Stackup, layer: CopperLayer, width_nm: Nm, target_ohm: f64) -> Sized {
+pub fn gap_for(st: &Stackup, layer: CopperLayer, width_nm: Nm, target_ohm: f64) -> Sizing {
     let g = match geometry(st, layer) {
         Ok(g) => g,
-        Err(missing) => return Sized::Unknown { missing },
+        Err(missing) => return Sizing::Unknown { missing },
     };
     // A width outside the model fails for every gap: say so, not "search bounds".
     if let Estimate::Unknown { missing } = z0(g, width_nm) {
-        return Sized::Unknown { missing };
+        return Sizing::Unknown { missing };
     }
     // Zdiff rises with the gap: solve on the negated gap so the function decreases.
     let r = solve(-5_000_000, -10_000, target_ohm, |neg| {
@@ -340,7 +340,7 @@ mod tests {
         assert!(e.contains("reference plane"), "{e}");
         assert!(matches!(
             width_for(&two, CopperLayer::Top, 50.0),
-            Sized::Unknown { .. }
+            Sizing::Unknown { .. }
         ));
     }
 
@@ -361,7 +361,7 @@ mod tests {
     #[test]
     fn solved_width_and_gap_hit_the_target() {
         let st = four_layer();
-        let Sized::Known {
+        let Sizing::Known {
             value: w,
             achieved_ohm,
             ..
@@ -373,15 +373,15 @@ mod tests {
         let g = geometry(&st, CopperLayer::Top).unwrap();
         assert_eq!(z0(g, w).ohm(), Some(achieved_ohm));
         let target = zdiff(g, w, 300_000).ohm().unwrap();
-        let Sized::Known { value: s, .. } = gap_for(&st, CopperLayer::Top, w, target) else {
+        let Sizing::Known { value: s, .. } = gap_for(&st, CopperLayer::Top, w, target) else {
             panic!("the gap that gave the target is reachable");
         };
         assert!((s - 300_000).abs() <= 1_000, "{s}");
         assert!(matches!(
             width_for(&st, CopperLayer::Top, 500.0),
-            Sized::Unknown { .. }
+            Sizing::Unknown { .. }
         ));
-        let Sized::Unknown { missing } = gap_for(&st, CopperLayer::Top, 5_000_000, 90.0) else {
+        let Sizing::Unknown { missing } = gap_for(&st, CopperLayer::Top, 5_000_000, 90.0) else {
             panic!("a 5 mm track is outside the microstrip model");
         };
         assert!(missing.contains("w/h"), "{missing}");
