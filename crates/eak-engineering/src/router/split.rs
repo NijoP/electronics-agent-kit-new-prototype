@@ -30,6 +30,9 @@ pub(super) struct RefMap {
     keys: Vec<Option<Vec<u32>>>,
 }
 
+// shortcut: two zones of one net on a plane get different keys, so a route may not pass from one
+// to the other although DRC-028 accepts that (its rule is not transitive, so no key can match it
+// exactly); upgrade when a board with abutting same-net plane zones needs such a route.
 pub(super) fn ref_map(
     p: &Project,
     geo: &BoardGeometry,
@@ -146,6 +149,18 @@ pub(super) fn for_net(
 ) -> Option<Mask> {
     let map = env.refs.filter(|_| env.high_speed.contains(net))?;
     mask(map, env.base, ends, guard, wild)
+}
+
+/// The mask of single connection `conn`: other reference copper stays half its widest track plus
+/// the grid margin from its centre line.
+pub(super) fn for_conn(env: &Env, conn: &Conn) -> Option<Mask> {
+    let half = env
+        .specs
+        .get(&conn.net)
+        .map_or(0.0, |s| s.track_width.max(s.inner_track_width) as f64 / 2.0);
+    let guard = half + env.margin;
+    let wild = guard + 2.0 * env.opts.pitch as f64;
+    for_net(env, &conn.net, [conn.a, conn.b], guard, wild)
 }
 
 /// Return vias for the high-speed routes among `placed`, and notes on the layer changes that did

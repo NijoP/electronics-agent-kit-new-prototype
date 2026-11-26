@@ -921,15 +921,25 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         let why = match env.net_ids.get(&c.net) {
             Some(&id) if why == NO_PATH => {
                 let ends = (pad_layers(&env, c.a, &c.net), pad_layers(&env, c.b, &c.net));
-                explain_no_path(
-                    &env,
-                    &final_grid,
-                    c,
-                    id,
-                    (&ends.0, &ends.1),
-                    &best.placed,
-                    &no_costs,
-                )
+                // Blocked only by its reference-plane limits: say so (the explanation below searches
+                // without them and would blame something else).
+                let free = || {
+                    let (a, b) = ((c.a, ends.0.as_slice()), (c.b, ends.1.as_slice()));
+                    astar(&final_grid, id, a, b, env.routable, env.opts, &no_costs).is_some()
+                };
+                if split::for_conn(&env, c).is_some() && free() {
+                    format!("NO_LEGAL_PATH: every path leaves the reference copper under its ends or crosses a split in a reference plane [DRC-028]; route {} on a layer whose reference is continuous between its ends, or join the plane copper there", c.net)
+                } else {
+                    explain_no_path(
+                        &env,
+                        &final_grid,
+                        c,
+                        id,
+                        (&ends.0, &ends.1),
+                        &best.placed,
+                        &no_costs,
+                    )
+                }
             }
             _ => why.clone(),
         };
@@ -1364,13 +1374,7 @@ fn run_pass(env: &Env, conns: &[Conn], key: &[i64]) -> PassOutcome {
         }
         let aff = affinity(env, conn, &placed);
         // A declared high-speed net keeps to the reference copper under its ends (`split`).
-        let half = env
-            .specs
-            .get(&conn.net)
-            .map_or(0.0, |s| s.track_width.max(s.inner_track_width) as f64 / 2.0);
-        let guard = half + env.margin;
-        let wild = guard + 2.0 * env.opts.pitch as f64;
-        let mask = split::for_net(env, &conn.net, [conn.a, conn.b], guard, wild);
+        let mask = split::for_conn(env, conn);
         let costs = Costs {
             congestion: &cong,
             affinity: aff.as_deref(),
