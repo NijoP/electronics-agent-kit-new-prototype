@@ -578,6 +578,7 @@ pub fn run(p: &Project) -> Report {
 
     bus_and_port_checks(p, &nl, &mut f);
     let stress_unknown = crate::stress::check(p, &nl, &mut f);
+    let tj_unknown = crate::stress::junction(p, &mut f);
 
     let mut rules = vec![
         rule(
@@ -668,7 +669,7 @@ pub fn run(p: &Project) -> Report {
         "Net classes generated from buses".into(),
         "Only one net name per bus group (bus aliases)".into(),
         "Analog simulation, operating-point and tolerance analysis".into(),
-        "Part temperature rating against a junction-temperature estimate (needs a declared ambient temperature and dissipation)".into(),
+        "Junction temperature of parts without a declared dissipation (part_dissipation_w)".into(),
         "Part current for parts other than L, D, Q and F, and the current actually flowing through a part (the net current is an upper bound)".into(),
     ];
     let limitations = vec![
@@ -679,6 +680,9 @@ pub fn run(p: &Project) -> Report {
     // A rating rule that could not evaluate a part checked nothing for it: UNKNOWN, never PASS.
     for (id, why) in stress_unknown {
         report = report.degrade(id, CheckState::Unknown, &why);
+    }
+    if let Some(why) = tj_unknown {
+        report = report.degrade("ERC-025", CheckState::Unknown, &why);
     }
     report
 }

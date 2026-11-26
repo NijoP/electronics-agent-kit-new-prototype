@@ -1149,8 +1149,8 @@ pub enum RuleSeverity {
 /// the checks' rule tables by an eak-validation test, so the engine can refuse a configuration for
 /// a rule that does not exist.
 pub const RULE_FAMILIES: [(&str, u32); 5] = [
-    ("ERC", 24),
-    ("DRC", 26),
+    ("ERC", 25),
+    ("DRC", 27),
     ("DFM", 10),
     ("MECH", 4),
     ("SRC", 12),

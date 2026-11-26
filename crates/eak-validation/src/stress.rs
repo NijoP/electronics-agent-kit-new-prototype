@@ -8,7 +8,8 @@ use eak_core::{ComponentDef, Project, SymbolInstance};
 use eak_engineering::calc::parse_value;
 use eak_engineering::netlist::Netlist;
 use eak_engineering::rating::{derating, CURRENT_RATINGS, POWER_RATINGS, VOLTAGE_RATINGS};
-use eak_engineering::verify::{part_rating, Verdict};
+use eak_engineering::rating::{THETA_JA_RATINGS, TJ_MAX_RATINGS};
+use eak_engineering::verify::{self, part_rating, Verdict};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Parts whose rated current is a series (through) current: inductors, diodes, transistors, fuses.
@@ -34,6 +35,12 @@ pub(crate) fn rules() -> Vec<RuleInfo> {
             "Resistor power rating",
             "P = ΔV² / R from the declared voltages of the two pin nets vs the power rating; no derating fact on record, so the limit is the rating",
             src,
+        ),
+        rule(
+            "ERC-025",
+            "Junction temperature",
+            "parts with a declared dissipation (part_dissipation_w): Tj = Ta + P·θJA from the declared ambient and the part's theta_ja (°C/W) vs its tj_max (°C)",
+            verify::SOURCE_TJ,
         ),
     ]
 }
@@ -274,4 +281,46 @@ pub(crate) fn check(
             (rule, msg)
         })
         .collect()
+}
+
+/// The first rating of `names` in `unit` (one of another unit counts as absent).
+fn rated(def: &ComponentDef, names: &[&str], unit: &str) -> Option<f64> {
+    let r = def.ratings.iter().find(|r| names.contains(&r.name.as_str()));
+    r.filter(|r| r.unit == unit).map(|r| r.value)
+}
+
+/// ERC-025: each part with a declared dissipation (`Constraints::part_dissipation_w`) against its
+/// junction limit, Tj = Ta + P·θJA. Returns why a declared part was not evaluated. Parts without
+/// a declared dissipation are not checked (a listed limitation).
+pub(crate) fn junction(p: &Project, f: &mut Vec<Finding>) -> Option<String> {
+    let c = &p.constraints;
+    let mut why = vec![];
+    for (refdes, &watts) in &c.part_dissipation_w {
+        let sym = p.schematic.symbols.values().find(|s| &s.refdes == refdes);
+        let found = sym.and_then(|s| Some((s, p.library.get(&s.component_id)?)));
+        let Some((s, def)) = found else {
+            why.push(format!("{refdes}: no such part on the schematic"));
+            continue;
+        };
+        let theta = rated(def, THETA_JA_RATINGS, "°C/W");
+        let tj_max = rated(def, TJ_MAX_RATINGS, "°C");
+        let ch = verify::junction_temperature(Some(watts), theta, c.ambient_temp_c, tj_max);
+        match ch.verdict {
+            Verdict::Pass => {}
+            Verdict::Fail => {
+                let (tj, max) = (ch.value.unwrap_or(0.0), ch.limit.unwrap_or(0.0));
+                let msg = format!("{refdes} junction estimate {tj:.1} °C exceeds its {max:.0} °C");
+                f.push(
+                    finding("ERC-025", Error, msg, vec![s.id.clone()], Some(s.position))
+                        .measured(tj, "°C")
+                        .required(Bound::Max, max, "°C")
+                        .fix(format!(
+                            "Lower the dissipation of {refdes}, add copper or airflow to cut its θJA, or choose a part rated hotter."
+                        )),
+                );
+            }
+            Verdict::Unknown | Verdict::Blocked => why.push(format!("{refdes}: {}", ch.reason)),
+        }
+    }
+    (!why.is_empty()).then(|| why.join("; "))
 }

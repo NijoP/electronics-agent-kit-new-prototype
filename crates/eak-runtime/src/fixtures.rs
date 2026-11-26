@@ -241,7 +241,8 @@ pub fn build_pcb_layers(engine: &mut Engine, copper_layers: u8) -> Result<Vec<St
 /// - a voltage and a current for every copper net without one: GND 0 V and 0.3 A (the return of
 ///   the 3V3 rail), any other net 3.3 V and 0.01 A;
 /// - the voltage rating its generic resistor, LED and headers lack (ERC-022), unverified;
-/// - an enclosure with no bottom-side limit and no mounting holes (MECH-004).
+/// - an enclosure with no bottom-side limit and no mounting holes (MECH-004);
+/// - 25 µm via plating (DRC-027).
 ///
 /// Declared values are kept.
 pub fn declare_check_inputs(engine: &mut Engine) -> Result<(), String> {
@@ -309,14 +310,14 @@ pub fn declare_check_inputs(engine: &mut Engine) -> Result<(), String> {
         })?;
     }
     let c = &b.engine.project().constraints;
-    if c.enclosure.is_none() {
+    if c.enclosure.is_none() || c.via_plating_um.is_none() {
         let inputs = C::SetEngineeringInputs {
             ambient_temp_c: c.ambient_temp_c,
-            via_plating_um: c.via_plating_um,
+            via_plating_um: c.via_plating_um.or(Some(25.0)),
             net_max_drop_v: c.net_max_drop_v.clone(),
             part_dissipation_w: c.part_dissipation_w.clone(),
             insulation: c.insulation.clone(),
-            enclosure: Some(Enclosure::default()),
+            enclosure: c.enclosure.clone().or(Some(Enclosure::default())),
         };
         b.run(inputs)?;
     }
