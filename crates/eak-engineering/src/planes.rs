@@ -2,12 +2,13 @@
 //! signal layer, which copper of that plane lies under a point, where a track's reference changes
 //! (a split crossing) or is missing, and what a layer change needs to keep the return path.
 //!
-//! The model reads the stack-up (`LayerKind::Plane` layers) and the zone fills of the one board
-//! geometry (`board::BoardGeometry`, ADR-0052), so the router (which avoids splits) and the DRC
-//! (which reports them) judge the same copper. A point's reference is the fill island of a plane
-//! zone under it; a void inside a zone outline (an anti-pad, the clearance around other-net
-//! copper) close to fill counts as the nearest island, so drilled holes are not splits, while a
-//! gap between zones, a slot cutting a fill in two, or leaving the zone are.
+//! The model reads the stack-up (`LayerKind::Plane` layers, and neighbours carrying a pour) and
+//! the zone fills of the one board geometry (`board::BoardGeometry`, ADR-0052), so the router
+//! (which avoids splits) and the DRC (which reports them) judge the same copper. A point's
+//! reference is the fill island of a zone under it; a void inside a zone outline (an anti-pad,
+//! the clearance around other-net copper) close to fill counts as the nearest island, so drilled
+//! holes are not splits, while a gap between zones, a slot cutting a fill in two, or leaving the
+//! zone are.
 //!
 //! `power::return_path` stays the advisory any-signal ground-continuity estimate; this module is
 //! the stack-up model for declared high-speed nets.
@@ -15,7 +16,7 @@
 use crate::board::BoardGeometry;
 use crate::copper::{ZoneFill, ZONE_FILL_PITCH};
 use eak_core::geom::point_in_polygon;
-use eak_core::{CopperLayer, LayerKind, Nm, Point, Project};
+use eak_core::{CopperLayer, LayerKind, Nm, Point, Project, StackupLayer};
 use serde::Serialize;
 use std::collections::BTreeSet;
 
@@ -41,9 +42,9 @@ pub fn declared_high_speed(p: &Project) -> BTreeSet<String> {
     pairs.chain(classes).collect()
 }
 
-/// The plane layers adjacent to `layer` in the stack-up, nearest dielectric first (the return
-/// current flows mostly in the nearest one). Empty for a plane layer, a layer the stack-up lacks
-/// and a layer with no plane neighbour.
+/// The reference layers of `layer`: its stack-up neighbours that are plane layers or carry a zone
+/// (a pour, as on a two-layer board), nearest dielectric first (the return current flows mostly in
+/// the nearest one). Empty for a plane layer, a layer the stack-up lacks and a layer with neither.
 pub fn reference_layers(p: &Project, layer: CopperLayer) -> Vec<CopperLayer> {
     let st = &p.pcb.board.stackup;
     let Some(i) = st.index_of(layer) else {
@@ -52,14 +53,17 @@ pub fn reference_layers(p: &Project, layer: CopperLayer) -> Vec<CopperLayer> {
     if st.layers[i].kind == LayerKind::Plane {
         return vec![];
     }
+    let reference = |l: &StackupLayer| {
+        l.kind == LayerKind::Plane || p.pcb.zones.values().any(|z| z.layer == l.layer)
+    };
     let mut out: Vec<(u32, CopperLayer)> = vec![];
     if let Some(above) = i.checked_sub(1).map(|j| &st.layers[j]) {
-        if above.kind == LayerKind::Plane {
+        if reference(above) {
             out.push((above.dielectric_after_um, above.layer));
         }
     }
     if let Some(below) = st.layers.get(i + 1) {
-        if below.kind == LayerKind::Plane {
+        if reference(below) {
             out.push((st.layers[i].dielectric_after_um, below.layer));
         }
     }
@@ -403,6 +407,18 @@ mod tests {
         let mut q = Project::new("two");
         q.pcb.board.stackup = Stackup::two_layer(1_600_000, 1.0, "FR-4", 4.5);
         assert!(reference_layers(&q, CopperLayer::Top).is_empty());
+        // A pour on the other side is the reference on a two-layer board.
+        zone(
+            &mut q,
+            "pour",
+            CopperLayer::Bottom,
+            "GND",
+            rect(1.0, 1.0, 9.0, 9.0),
+        );
+        assert_eq!(
+            reference_layers(&q, CopperLayer::Top),
+            vec![CopperLayer::Bottom]
+        );
     }
 
     #[test]
