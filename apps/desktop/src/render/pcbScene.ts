@@ -347,7 +347,7 @@ export function buildPcbScene(s: Snapshot, o: PcbSceneOptions): Scene {
       bbox: boxOfPts(pts, 0.1),
       hit: () => false,
       pathPts: pts,
-      ops: [{ t: "poly", pts, fill: "--bg-canvas", stroke: "--accent", lineWidth: 0.15 }],
+      ops: [{ t: "poly", pts, fill: "--bg-canvas", stroke: "--c-edge", lineWidth: 0.15 }],
       sig: pts.join(";"),
     });
   }
@@ -393,7 +393,7 @@ export function buildPcbScene(s: Snapshot, o: PcbSceneOptions): Scene {
       bbox: boxOfPts(outline, 0.1),
       hit: () => false,
       pathPts: outline,
-      ops: [{ t: "poly", pts: outline, stroke: "--accent", lineWidth: 0.15 }],
+      ops: [{ t: "poly", pts: outline, stroke: "--c-edge", lineWidth: 0.15 }],
       sig: outline.join(";"),
     });
   }
