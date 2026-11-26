@@ -397,15 +397,6 @@ pub fn rail_drops(p: &Project) -> Vec<RailDrop> {
     out
 }
 
-fn filled_at(f: &copper::ZoneFill, pt: Point) -> bool {
-    if pt.x < f.origin.x || pt.y < f.origin.y || f.pitch <= 0 {
-        return false;
-    }
-    let c = ((pt.x - f.origin.x) / f.pitch) as usize;
-    let r = ((pt.y - f.origin.y) / f.pitch) as usize;
-    c < f.cols && r < f.rows && f.cells[r * f.cols + c] != 0
-}
-
 /// Return-path continuity: signal tracks whose adjacent reference plane has a gap under them,
 /// and reference zones split into islands. `min_gap` is the shortest reported gap.
 pub fn return_path(p: &Project, min_gap: Nm) -> ReturnPathReport {
@@ -486,7 +477,7 @@ pub fn return_path(p: &Project, min_gap: Nm) -> ReturnPathReport {
                 // Only stretches inside the plane's own outline count: a track leaving the
                 // plane area entirely is a different (unreferenced-routing) question.
                 let inside = point_in_polygon(pt, zone_outline);
-                if inside && filled_at(f, pt) {
+                if inside && f.cell_at(pt) != 0 {
                     any_ref = true;
                     run = 0;
                 } else if inside {
