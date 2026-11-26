@@ -32,6 +32,10 @@
 //!   `enclosure`) are new and absent means undeclared: no pairs, through vias only, and every
 //!   check that needs an input UNKNOWN, exactly the v7 meaning. Only the version number changes;
 //!   a v8 file is refused by v7 builds, which would silently drop the declared rules.
+//! * v8 → v9 (ADR-0057): the structured requirement record `requirement_set` is new and absent
+//!   means empty: every requirement field UNKNOWN and no rails or interfaces declared, exactly the
+//!   v8 meaning (v8 recorded none). Only the version number changes; a v9 file is refused by v8
+//!   builds, which would silently drop the record.
 
 use crate::ir::{Stackup, FR4_ER, SCHEMA_VERSION};
 use crate::library::SymbolDef;
@@ -64,9 +68,10 @@ pub fn migrate(mut raw: Value) -> Result<Value, CoreError> {
     if found <= 5 {
         raw = v5_to_v6(raw);
     }
-    // v6 → v7 and v7 → v8 only add optional data: the version number is all that changes.
-    if found <= 7 {
-        raw["schema_version"] = Value::from(8);
+    // v6 → v7, v7 → v8 and v8 → v9 only add optional data: the version number is all that
+    // changes.
+    if found <= 8 {
+        raw["schema_version"] = Value::from(9);
     }
     Ok(raw)
 }
@@ -770,6 +775,88 @@ mod tests {
         bad.constraints.default_class.target_z0_ohm = Some(-1.0);
         let Err(CoreError::Integrity(problems)) = from_json(&to_json(&bad)) else {
             panic!("integrity must refuse the v8 data");
+        };
+        assert_eq!(problems.len(), 2, "{problems:?}");
+    }
+
+    /// v8 → v9 (ADR-0057): a v8 file loads with an empty requirement record (every field
+    /// UNKNOWN), a project without one saves without the key, a recorded set round-trips, and
+    /// entries that break the status rules fail integrity.
+    #[test]
+    fn v9_requirement_record_migrates_and_round_trips() {
+        use crate::requirements::{evaluate, ReqItem, SourceKind};
+        use crate::{ReqEntry, ReqItemKind, ReqSource, ReqStatus, ReqUnit, ReqValue};
+        let plain = Project::new("v8-board");
+        let json = to_json(&plain);
+        assert!(
+            !json.contains("requirement_set"),
+            "an empty record is not written"
+        );
+        let mut v: Value = serde_json::from_str(&json).unwrap();
+        v["schema_version"] = Value::from(8);
+        let p = from_json(&v.to_string()).expect("v8 project loads");
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
+        assert_eq!(p, plain);
+        let r = evaluate(&p.requirement_set);
+        assert_eq!(r.completeness.unknown, r.completeness.total);
+
+        let confirmed = |value: ReqValue| ReqEntry {
+            status: ReqStatus::Confirmed,
+            value: Some(value),
+            source: Some(ReqSource {
+                kind: SourceKind::Client,
+                reference: "requirements review 2026-11-25".into(),
+            }),
+            derived_from: vec![],
+            owner: Some("Client PM".into()),
+            risk_if_wrong: None,
+            note: None,
+            updated_at_ms: 1_795_000_000_000,
+            updated_revision: 4,
+        };
+        let mut q = Project::new("recorded");
+        let set = &mut q.requirement_set;
+        set.fields.insert(
+            "supply.input_voltage".into(),
+            confirmed(ReqValue::Range {
+                min: Some(4.5),
+                nom: Some(5.0),
+                max: Some(5.5),
+                unit: ReqUnit::Volt,
+            }),
+        );
+        let mut rail = ReqItem {
+            id: "rail_1".into(),
+            kind: ReqItemKind::Rail,
+            name: "3V3".into(),
+            parent: None,
+            fields: Default::default(),
+        };
+        rail.fields.insert(
+            "current_peak".into(),
+            confirmed(ReqValue::Number {
+                value: 300.0,
+                unit: ReqUnit::Milliampere,
+                tolerance_pct: Some(10.0),
+            }),
+        );
+        set.items.insert("rail_1".into(), rail);
+        let a = to_json(&q);
+        assert!(a.contains("\"CONFIRMED\"") && a.contains("\"mA\""));
+        let back = from_json(&a).expect("recorded project loads");
+        assert_eq!(back, q);
+        assert_eq!(a, to_json(&back));
+
+        let mut bad = q.clone();
+        let e = bad
+            .requirement_set
+            .fields
+            .get_mut("supply.input_voltage")
+            .unwrap();
+        e.status = ReqStatus::Unknown; // UNKNOWN with a value
+        bad.requirement_set.items.get_mut("rail_1").unwrap().parent = Some("rail_gone".into());
+        let Err(CoreError::Integrity(problems)) = from_json(&to_json(&bad)) else {
+            panic!("integrity must refuse the requirement record");
         };
         assert_eq!(problems.len(), 2, "{problems:?}");
     }

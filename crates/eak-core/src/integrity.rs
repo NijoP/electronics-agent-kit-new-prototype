@@ -271,6 +271,8 @@ pub fn check(p: &Project) -> Vec<String> {
         }
     }
     e.extend(engineering_inputs(c));
+    // Schema-v9 requirement record (ADR-0057): status rules, catalogue keys, references.
+    e.extend(p.requirement_set.problems());
     e
 }
 
