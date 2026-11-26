@@ -24,6 +24,10 @@
   - `verify_package_for(dir, p)` checks a package on disk against the project: same project id,
     revision and EAK-IR hash, plus every per-file hash and syntax check of `verify_package`.
     `fabricator::prepare_with` refuses (returns an error, writes no bundle) when it finds a problem.
+  - Every Gerber and drill file carries `EAK-IR sha256 <hash> revision <n>` (a `G04` comment, an
+    Excellon `;` comment), and `verify_package_for` refuses a file whose stamp is not this design
+    revision. BOM and CPL CSVs stay plain tables for fabricator import; the manifest binds them by
+    their SHA-256 next to the same revision and EAK-IR hash.
   - `FootprintInputs` (land-pattern tables by definition id, fabrication limits) reach the gate
     through `release_gates_with_footprints` and `compile_with_footprints`; a part whose footprint
     matches its reviewed table no longer blocks, and one that no longer matches blocks again (tested).

@@ -599,8 +599,24 @@ pub fn verify_package_for(dir: &Path, p: &Project) -> Result<Vec<String>, String
             m.revision, p.revision
         ));
     }
-    if m.input_sha256 != project_hash(p) {
+    let input = project_hash(p);
+    if m.input_sha256 != input {
         problems.push("manifest EAK-IR hash does not match this design: export again".into());
+    }
+    // Every Gerber and drill file names the design it was generated from (ADR-0054).
+    let stamp = format!("EAK-IR sha256 {input} revision {}", p.revision);
+    for f in m
+        .files
+        .iter()
+        .filter(|f| f.kind == "gerber" || f.kind == "drill")
+    {
+        let text = std::fs::read_to_string(dir.join(&f.name)).unwrap_or_default();
+        if !text.contains(&stamp) {
+            problems.push(format!(
+                "{} was not generated from this design revision: export again",
+                f.name
+            ));
+        }
     }
     problems.extend(verify_package(dir)?);
     Ok(problems)

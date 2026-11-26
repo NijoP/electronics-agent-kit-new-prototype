@@ -122,8 +122,22 @@ fn packaging_refuses_a_package_from_another_revision() {
     let mut e = board(true);
     let dir = std::env::temp_dir().join(format!("eak-mfg-integrity-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    compile(e.project(), &[], &dir).expect("compile");
+    let m = compile(e.project(), &[], &dir).expect("compile");
     assert!(verify_package_for(&dir, e.project()).unwrap().is_empty());
+    // Every Gerber and drill file names the design hash and revision it was generated from.
+    let stamp = format!(
+        "EAK-IR sha256 {} revision {}",
+        m.input_sha256,
+        e.project().revision
+    );
+    for f in m
+        .files
+        .iter()
+        .filter(|f| f.kind == "gerber" || f.kind == "drill")
+    {
+        let text = std::fs::read_to_string(dir.join(&f.name)).unwrap();
+        assert!(text.contains(&stamp), "{} lacks {stamp}", f.name);
+    }
     execute(
         &mut e,
         Command::SetProjectName {
@@ -133,6 +147,12 @@ fn packaging_refuses_a_package_from_another_revision() {
     let problems = verify_package_for(&dir, e.project()).unwrap();
     assert!(
         problems.iter().any(|p| p.contains("export again")),
+        "{problems:?}"
+    );
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.contains("was not generated from this design revision")),
         "{problems:?}"
     );
     let _ = std::fs::remove_dir_all(&dir);

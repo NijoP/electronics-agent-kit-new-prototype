@@ -104,6 +104,13 @@ impl Writer {
             project.id,
             project.revision
         );
+        // ADR-0054: the file names the exact design it was generated from.
+        let _ = writeln!(
+            s,
+            "G04 EAK-IR sha256 {} revision {}*",
+            eak_validation::report::project_hash(project),
+            project.revision
+        );
         let _ = writeln!(s, "%TF.FileFunction,{function}*%");
         let _ = writeln!(s, "%TF.FilePolarity,{polarity}*%");
         s.push_str("%FSLAX46Y46*%\n%MOMM*%\n%LPD*%\nG01*\n");

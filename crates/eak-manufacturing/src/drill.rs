@@ -78,6 +78,12 @@ fn render(p: &Project, h: &BTreeMap<Nm, Vec<Point>>, function: &str) -> String {
         p.id,
         p.revision
     );
+    let _ = writeln!(
+        s,
+        "; EAK-IR sha256 {} revision {}",
+        eak_validation::report::project_hash(p),
+        p.revision
+    );
     let _ = writeln!(s, "; #@! TF.FileFunction,{function}");
     s.push_str("FMAT,2\nMETRIC,TZ\n");
     for (i, d) in h.keys().enumerate() {
