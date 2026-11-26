@@ -102,7 +102,7 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
         ),
         SetRequirementField { .. } => (
             D::Project,
-            "Record one structured requirement field (schema v9): `path` is a catalogue key such as supply.input_voltage, or `<item id>/<field>` for a rail or interface (see get_requirements for the catalogue and paths). The whole entry is replaced; quantities carry a unit, a value never stands in for a missing one, and EAK stamps the time and revision. An agent records UNKNOWN or NEEDS_CONFIRMATION (source kind agent_proposal or calculation for its own values); only a person records CONFIRMED, DERIVED or NOT_APPLICABLE. NEEDS_CONFIRMATION needs a source, the owner who must confirm it and risk_if_wrong.",
+            "Record one structured requirement field (schema v9): `path` is a catalogue key such as supply.input_voltage, or `<item id>/<field>` for a rail or interface (see get_requirements for the catalogue and paths). The whole entry is replaced; quantities carry a unit, a value never stands in for a missing one, and EAK stamps the time and revision. An agent records UNKNOWN or NEEDS_CONFIRMATION (source kind agent_proposal or calculation for its own values); only a person records CONFIRMED or NOT_APPLICABLE; DERIVED is refused for everyone (only a deterministic evaluator writes it, and none exists yet). NEEDS_CONFIRMATION needs a source, the owner who must confirm it and risk_if_wrong; a recorded UNKNOWN needs its owner.",
             obj(
                 &[
                     ("path", string("requirement path")),

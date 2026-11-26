@@ -17,7 +17,8 @@
 //!   (the engine refuses it from an agent).
 //! * `DERIVED` – computed from other requirement fields, which it names. It is firm only while
 //!   every input is firm and none changed after it was derived (otherwise it is stale); an UNKNOWN
-//!   input is reported as an issue. An agent never records it.
+//!   input is reported as an issue. Only a deterministic evaluator records it, with a `calculation`
+//!   source naming it; none exists yet, so no command records DERIVED.
 //! * `NOT_APPLICABLE` – the field does not apply to this product. It carries no value and needs a
 //!   reason. Only fields the catalogue allows may be not applicable, and only a person says so.
 //!
@@ -65,14 +66,11 @@ impl ReqStatus {
         }
     }
 
-    /// Statuses an agent may never record: it never confirms a requirement, declares one not
-    /// applicable, or certifies its own computation as DERIVED (the AI never self-certifies; an
-    /// agent's computed value is NEEDS_CONFIRMATION with source `calculation` or `agent_proposal`).
+    /// Statuses only a person may record: an agent never confirms a requirement or declares one
+    /// not applicable (the AI never self-certifies; an agent's value is NEEDS_CONFIRMATION with
+    /// source `calculation` or `agent_proposal`). DERIVED is written by no command at all.
     pub fn human_only(self) -> bool {
-        matches!(
-            self,
-            ReqStatus::Confirmed | ReqStatus::NotApplicable | ReqStatus::Derived
-        )
+        matches!(self, ReqStatus::Confirmed | ReqStatus::NotApplicable)
     }
 }
 
@@ -1205,6 +1203,9 @@ pub fn entry_problems(d: &FieldDef, path: &str, e: &ReqEntry) -> Vec<String> {
         ReqStatus::NeedsConfirmation if e.owner.is_none() => {
             found.push("NEEDS_CONFIRMATION needs the owner who must confirm it".into())
         }
+        ReqStatus::Unknown if e.owner.is_none() => {
+            found.push("a recorded UNKNOWN needs the owner who must answer it".into())
+        }
         _ => {}
     }
     match (e.status, &e.risk_if_wrong) {
@@ -1226,6 +1227,15 @@ pub fn entry_problems(d: &FieldDef, path: &str, e: &ReqEntry) -> Vec<String> {
     if e.status == ReqStatus::Derived {
         if e.derived_from.is_empty() {
             found.push("DERIVED needs the fields it is derived from".into());
+        }
+        if !e
+            .source
+            .as_ref()
+            .is_some_and(|s| s.kind == SourceKind::Calculation)
+        {
+            found.push(
+                "DERIVED needs a calculation source naming the evaluator and its version".into(),
+            );
         }
     } else if !e.derived_from.is_empty() {
         found.push("only a DERIVED value names derived_from".into());
@@ -1445,6 +1455,8 @@ pub struct Completeness {
     pub confirmed: usize,
     pub derived: usize,
     pub not_applicable: usize,
+    /// Item lists that have items: no status of their own (see [`FieldReport::status`]).
+    pub item_lists: usize,
     pub missing: usize,
     pub provisional: usize,
     pub firm: usize,
@@ -1455,14 +1467,15 @@ pub struct Completeness {
 }
 
 impl Completeness {
-    fn add(&mut self, status: ReqStatus, level: Level) {
+    fn add(&mut self, status: Option<ReqStatus>, level: Level) {
         self.total += 1;
         match status {
-            ReqStatus::Unknown => self.unknown += 1,
-            ReqStatus::NeedsConfirmation => self.needs_confirmation += 1,
-            ReqStatus::Confirmed => self.confirmed += 1,
-            ReqStatus::Derived => self.derived += 1,
-            ReqStatus::NotApplicable => self.not_applicable += 1,
+            None => self.item_lists += 1,
+            Some(ReqStatus::Unknown) => self.unknown += 1,
+            Some(ReqStatus::NeedsConfirmation) => self.needs_confirmation += 1,
+            Some(ReqStatus::Confirmed) => self.confirmed += 1,
+            Some(ReqStatus::Derived) => self.derived += 1,
+            Some(ReqStatus::NotApplicable) => self.not_applicable += 1,
         }
         match level {
             Level::Missing => self.missing += 1,
@@ -1494,9 +1507,9 @@ pub struct FieldReport {
     pub path: String,
     pub label: String,
     pub section: Section,
-    /// The recorded status; UNKNOWN when nothing is recorded. An item list with items reports
-    /// DERIVED (from its items, listed in `derived_from`).
-    pub status: ReqStatus,
+    /// The recorded status; UNKNOWN when nothing is recorded. `None` for an item list that has
+    /// items: the list has no status of its own, and its state is its items' fields (`items`).
+    pub status: Option<ReqStatus>,
     pub level: Level,
     /// Whether anything is recorded at this path.
     pub recorded: bool,
@@ -1506,6 +1519,9 @@ pub struct FieldReport {
     pub source: Option<ReqSource>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub derived_from: Vec<String>,
+    /// The items of an item list (rail or interface ids).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub items: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1524,7 +1540,8 @@ pub struct FieldReport {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Blocker {
     pub path: String,
-    pub status: ReqStatus,
+    /// `None` for an item list that has items (see [`FieldReport::status`]).
+    pub status: Option<ReqStatus>,
     pub level: Level,
     pub needs: Level,
 }
@@ -1566,14 +1583,14 @@ pub const NOT_IMPLEMENTED: &[&str] = &[
     "requirement-to-constraint compilation (design profile) and requirement-to-block-to-net traceability",
     "scoped gates (a gate that passes for one variant or scope, such as a low-voltage prototype, while another stays blocked)",
     "domain-required fields from the classification (for example, NOT_APPLICABLE refused for safety under a mains or high-voltage classification)",
-    "a deterministic evaluator that writes DERIVED values; today a person records them with their inputs",
+    "a deterministic evaluator that writes DERIVED values; until one exists, no command records DERIVED",
     "folding the harness design-flow spec (design-flow/spec.json) into this record",
 ];
 
 pub const LIMITATIONS: &[&str] = &[
     "completeness counts presence and status only: a CONFIRMED value is as right as its source",
     "the operation table is EAK's own engineering-order dependency table (ADR-0057), not a standard",
-    "an item list (rails, interfaces) is satisfied by one item; whether the list is complete is the owner's call",
+    "an item list (rails, interfaces) is as firm as its items' material fields; whether the list names every item is the owner's call",
 ];
 
 fn status_level(status: ReqStatus) -> Level {
@@ -1596,8 +1613,16 @@ impl<'a> Ctx<'a> {
         let set: &'a RequirementSet = self.set;
         if let Ok(ReqPath::Field(k)) = parse_path(path) {
             if let Some(ValueKind::Items(kind)) = field_def(k).map(|d| d.kind) {
-                if set.items_of(kind).next().is_some() {
-                    return Level::Firm;
+                let ids: Vec<String> = set.items_of(kind).map(|i| i.id.clone()).collect();
+                if !ids.is_empty() {
+                    // Never firm by itself: as firm as the weakest material field of its items.
+                    let mut level = Level::Firm;
+                    for id in &ids {
+                        for d in kind.fields().iter().filter(|d| d.material) {
+                            level = level.min(self.level_of(&format!("{id}/{}", d.key), stack));
+                        }
+                    }
+                    return level;
                 }
             }
         }
@@ -1649,14 +1674,10 @@ impl<'a> Ctx<'a> {
             _ => vec![],
         };
         let e = set.entry(&path);
-        let (status, derived_from) = if list_items.is_empty() {
-            (
-                e.map_or(ReqStatus::Unknown, |e| e.status),
-                e.map(|e| e.derived_from.clone()).unwrap_or_default(),
-            )
-        } else {
-            (ReqStatus::Derived, list_items)
-        };
+        let status = list_items
+            .is_empty()
+            .then(|| e.map_or(ReqStatus::Unknown, |e| e.status));
+        let derived_from = e.map(|e| e.derived_from.clone()).unwrap_or_default();
         FieldReport {
             path,
             label,
@@ -1667,6 +1688,7 @@ impl<'a> Ctx<'a> {
             value: e.and_then(|e| e.value.clone()),
             source: e.and_then(|e| e.source.clone()),
             derived_from,
+            items: list_items,
             owner: e.and_then(|e| e.owner.clone()),
             risk_if_wrong: e.and_then(|e| e.risk_if_wrong.clone()),
             note: e.and_then(|e| e.note.clone()),
@@ -1737,7 +1759,7 @@ pub fn evaluate(set: &RequirementSet) -> RequirementsReport {
             }
             let (status, level) = index
                 .get(path.as_str())
-                .map_or((ReqStatus::Unknown, Level::Missing), |f| {
+                .map_or((Some(ReqStatus::Unknown), Level::Missing), |f| {
                     (f.status, f.level)
                 });
             if level < need {
@@ -1759,7 +1781,8 @@ pub fn evaluate(set: &RequirementSet) -> RequirementsReport {
 
     let mut questions = vec![];
     for (f, d) in fields.iter().zip(&defs) {
-        if f.level != Level::Missing || !d.material {
+        // A list with items is asked through its items' fields, not as a list.
+        if f.level != Level::Missing || !d.material || !f.items.is_empty() {
             continue;
         }
         let blocks: Vec<Operation> = operations
@@ -1798,20 +1821,27 @@ mod tests {
     use super::*;
 
     fn entry(status: ReqStatus, value: Option<ReqValue>) -> ReqEntry {
-        let source =
-            matches!(status, ReqStatus::NeedsConfirmation | ReqStatus::Confirmed).then(|| {
-                ReqSource {
-                    kind: SourceKind::Client,
-                    reference: "kick-off call 2026-11-20".into(),
-                }
-            });
+        let source = match status {
+            ReqStatus::NeedsConfirmation | ReqStatus::Confirmed => Some(ReqSource {
+                kind: SourceKind::Client,
+                reference: "kick-off call 2026-11-20".into(),
+            }),
+            ReqStatus::Derived => Some(ReqSource {
+                kind: SourceKind::Calculation,
+                reference: "test evaluator v0".into(),
+            }),
+            _ => None,
+        };
         ReqEntry {
             status,
             value,
             source,
             derived_from: vec![],
-            owner: matches!(status, ReqStatus::NeedsConfirmation | ReqStatus::Confirmed)
-                .then(|| "A. Engineer".to_string()),
+            owner: matches!(
+                status,
+                ReqStatus::Unknown | ReqStatus::NeedsConfirmation | ReqStatus::Confirmed
+            )
+            .then(|| "A. Engineer".to_string()),
             risk_if_wrong: (status == ReqStatus::NeedsConfirmation)
                 .then(|| "the regulator is re-selected".to_string()),
             note: (status == ReqStatus::NotApplicable).then(|| "no battery".to_string()),
@@ -1965,6 +1995,17 @@ mod tests {
                 ..entry(ReqStatus::Confirmed, Some(volts(4.5, 5.0, 5.5)))
             },
             entry(ReqStatus::Confirmed, None),
+            // A recorded UNKNOWN without the owner who answers it.
+            ReqEntry {
+                owner: None,
+                ..entry(ReqStatus::Unknown, None)
+            },
+            // DERIVED without a calculation source naming the evaluator.
+            ReqEntry {
+                derived_from: vec!["power_budget.peak_current".into()],
+                source: None,
+                ..entry(ReqStatus::Derived, Some(volts(4.5, 5.0, 5.5)))
+            },
             // A working value without the owner who confirms it or its risk if wrong; a risk on
             // a value that is not provisional.
             ReqEntry {
@@ -2048,11 +2089,12 @@ mod tests {
         // The list fields are satisfied by their items.
         let r = evaluate(&s);
         let rails = r.fields.iter().find(|f| f.path == "supply.rails").unwrap();
-        assert_eq!(
-            (rails.status, rails.level),
-            (ReqStatus::Derived, Level::Firm)
-        );
-        assert_eq!(rails.derived_from.len(), 2);
+        // A list with items has no status of its own and is only as firm as its items' material
+        // fields, which are all UNKNOWN here.
+        assert_eq!((rails.status, rails.level), (None, Level::Missing));
+        assert_eq!(rails.items.len(), 2);
+        assert!(rails.derived_from.is_empty());
+        assert_eq!(r.completeness.item_lists, 2, "rails and interfaces");
         // Power sizing waits for each rail's firm voltage and currents.
         assert!(op(&r, Operation::PowerSizing)
             .blocked_by
@@ -2076,6 +2118,35 @@ mod tests {
             .find(|b| b.path == p)
             .unwrap();
         assert_eq!((b.level, b.needs), (Level::Provisional, Level::Firm));
+        // The list becomes firm only when every material field of every rail is firm.
+        for id in [&vin, &v3] {
+            for (key, value) in [
+                ("voltage", volts(3.2, 3.3, 3.4)),
+                ("current_peak", amps(0.5)),
+                ("current_continuous", amps(0.3)),
+            ] {
+                s.set(
+                    &format!("{id}/{key}"),
+                    entry(ReqStatus::Confirmed, Some(value)),
+                )
+                .unwrap();
+            }
+        }
+        let list_level = |s: &RequirementSet| {
+            evaluate(s)
+                .fields
+                .into_iter()
+                .find(|f| f.path == "supply.rails")
+                .unwrap()
+                .level
+        };
+        assert_eq!(list_level(&s), Level::Firm);
+        s.set(
+            &p,
+            entry(ReqStatus::NeedsConfirmation, Some(volts(3.2, 3.3, 3.4))),
+        )
+        .unwrap();
+        assert_eq!(list_level(&s), Level::Provisional);
         // A rail other rails are generated from cannot be deleted; a leaf can.
         assert!(matches!(
             s.delete_item(&vin),

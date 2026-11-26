@@ -38,14 +38,16 @@
 
 | Status | Value | Also needs | Level for operations |
 |---|---|---|---|
-| `UNKNOWN` (also: no entry) | none | (owner and note may say who answers it) | missing |
+| `UNKNOWN` (also: no entry) | none | a recorded UNKNOWN names the `owner` who must answer it | missing |
 | `NEEDS_CONFIRMATION` | required | source, the owner who must confirm it, `risk_if_wrong` | provisional |
-| `CONFIRMED` | required | source and owner; **only a person** | firm |
-| `DERIVED` | required | `derived_from` (existing paths, not itself); **only a person** | firm only if every input is firm and none was recorded at a later revision; else provisional (an UNKNOWN input, a loop or a stale value is reported as an issue) |
+| `CONFIRMED` | required | source and owner (the person who confirmed it: DESK's `confirmed_by`; the engine-stamped `updated_at_ms` is `confirmed_at`); **only a person** | firm |
+| `DERIVED` | required | `derived_from` (existing paths, not itself) and a `calculation` source naming the evaluator and its version; **only a deterministic evaluator**, so no command records it until one exists | firm only if every input is firm and none was recorded at a later revision; else provisional (an UNKNOWN input, a loop or a stale value is reported as an issue) |
 | `NOT_APPLICABLE` | none | a reason in the note, a field the catalogue lets be N/A; **only a person** | firm |
 
-  An item list (`supply.rails`, `interfaces.list`) is satisfied by its items. Its own entry can
-  only be UNKNOWN, or NOT_APPLICABLE while no items exist. Status is the single confidence
+  An item list (`supply.rails`, `interfaces.list`) with items has no status of its own (the
+  report gives `status: null` and the item ids in `items`). It is as firm as the weakest
+  *material* field of its items, and it raises no question of its own. Its own entry can only be
+  UNKNOWN, or NOT_APPLICABLE while no items exist. Status is the single confidence
   axis: no second "confidence" number exists that could disagree with it. `risk_if_wrong` is
   carried only by NEEDS_CONFIRMATION.
 - **Catalogue:** `FIELDS` (53 project fields in ten sections, which are DESK's ten dimensions as
@@ -87,9 +89,10 @@
     is generated from the item or a DERIVED value elsewhere names one of its fields. Class:
     destructive.
   - **The AI never self-certifies:** `Engine::execute` refuses (precondition) a
-    `SetRequirementField` with CONFIRMED, DERIVED or NOT_APPLICABLE from an agent actor,
-    including inside a batch. An agent records NEEDS_CONFIRMATION (source kind `agent_proposal`
-    or `calculation`) for a person to confirm.
+    `SetRequirementField` with CONFIRMED or NOT_APPLICABLE from an agent actor, including
+    inside a batch. An agent records NEEDS_CONFIRMATION (source kind `agent_proposal` or
+    `calculation`) for a person to confirm. `SetRequirementField` with DERIVED is refused
+    (precondition) for every actor.
   - The agent tool schemas cover all four commands (`eak-intelligence` tool count 93 → 97). The
     harness counts them as requirement changes for task invalidation.
 - **Read access:** the read tool `get_requirements` (`eak-intelligence` read tools, so it is in
@@ -111,7 +114,8 @@ Adopted:
 - NEEDS_CONFIRMATION carries `risk_if_wrong` and the `owner` who must answer it (DESK
   PROVISIONAL, risk noted).
 - CONFIRMED and NOT_APPLICABLE are human only, and NOT_APPLICABLE carries a rationale.
-- An agent may not record DERIVED.
+- DERIVED is written only by a deterministic evaluator: no command records it, and an entry
+  needs a `calculation` source naming the evaluator and its version.
 - A DERIVED value goes stale when an input is recorded at a later revision.
 - Status is per value, not per row: each field and item field has its own entry, which removes
   the need for `parts`.
@@ -139,9 +143,6 @@ Diverged, with the reason:
 - **No `derived_from{calc_id, evaluator, evaluator_version}` or `inputs@revision`.** The input
   paths are stored, and staleness compares the inputs' `updated_revision` with the derived
   entry's.
-- **Persons may record DERIVED.** DESK wants DERIVED written only by a deterministic evaluator.
-  No such evaluator exists yet, so a person records it with its inputs, and the evaluator is
-  listed in `not_implemented`.
 - **Not built yet, and listed in `not_implemented`:**
   - `condition` and `scope`, with scoped gates (UPS_1000 "PASSED for the low-voltage prototype
     only");
@@ -176,8 +177,8 @@ Diverged, with the reason:
   this report yet, so readiness is advisory); requirement-to-constraint compilation and
   traceability.
 - Limitations: completeness counts presence and status, so a CONFIRMED value is only as right as
-  its source. The operation table is EAK's own, not a standard. One item satisfies an item list,
-  and whether the list is complete is the owner's call. The free-text `requirements` notes are
+  its source. The operation table is EAK's own, not a standard. An item list is as firm as its items'
+  material fields, and whether it names every item is the owner's call. The free-text `requirements` notes are
   not part of completeness.
 - Source requirement: execution brief §8.1, §7.2 B and D, M4.1. Spec §2.1 (one canonical EAK-IR,
   typed commands only).

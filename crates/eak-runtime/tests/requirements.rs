@@ -111,6 +111,17 @@ fn requirement_fields_are_set_stamped_undone_and_saved() {
         Actor::human(),
         set("supply.not_a_field", ReqStatus::Unknown, None),
     );
+    // DERIVED comes only from a deterministic evaluator: a person cannot record it either.
+    let r = refused_as(
+        &mut e,
+        Actor::human(),
+        set(path, ReqStatus::Derived, input_5v()),
+    );
+    assert!(
+        matches!(r.error, Some(CommandError::Precondition(_))),
+        "{:?}",
+        r.error
+    );
 
     ok(&mut e, set(path, ReqStatus::Confirmed, input_5v()));
     assert_eq!(

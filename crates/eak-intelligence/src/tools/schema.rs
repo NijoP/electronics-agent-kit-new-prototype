@@ -286,7 +286,7 @@ pub fn req_status() -> Value {
         .collect();
     enumeration(
         &names,
-        "UNKNOWN (no value), NEEDS_CONFIRMATION (working value with a source, the owner who must confirm it and risk_if_wrong), CONFIRMED (a person confirmed it: owner and source required; never an agent), DERIVED (computed from derived_from; stale when an input changes later; never an agent), NOT_APPLICABLE (no value, reason in the note; never an agent)",
+        "UNKNOWN (no value; a recorded one names the owner who must answer it), NEEDS_CONFIRMATION (working value with a source, the owner who must confirm it and risk_if_wrong), CONFIRMED (a person confirmed it: owner and source required; never an agent), DERIVED (written only by a deterministic evaluator with a calculation source; none exists yet, so commands refuse it), NOT_APPLICABLE (no value, reason in the note; never an agent)",
     )
 }
 

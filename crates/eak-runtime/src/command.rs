@@ -29,7 +29,7 @@ pub enum Command {
     // ---- structured requirements (schema v9, ADR-0057)
     /// Record one requirement field. `path` is a catalogue key (`supply.input_voltage`) or
     /// `<item id>/<field>` (`rail_1a2b/voltage`). The whole entry is replaced and stamped with the
-    /// time and the new revision. An agent can never record CONFIRMED, DERIVED or NOT_APPLICABLE.
+    /// time and the new revision. An agent can never record CONFIRMED or NOT_APPLICABLE, and no command records DERIVED.
     SetRequirementField {
         path: String,
         status: ReqStatus,
@@ -1393,6 +1393,13 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             risk_if_wrong,
             note,
         } => {
+            // DESK study §2.3: DERIVED is written only by a deterministic evaluator, and none
+            // exists yet, so no command records it (from a person or an agent).
+            if *status == ReqStatus::Derived {
+                return Err(CommandError::Precondition(format!(
+                    "requirement {path}: DERIVED is written only by a deterministic evaluator, and none exists yet; record a computed value as NEEDS_CONFIRMATION with source kind calculation"
+                )));
+            }
             let entry = ReqEntry {
                 status: *status,
                 value: value.clone(),

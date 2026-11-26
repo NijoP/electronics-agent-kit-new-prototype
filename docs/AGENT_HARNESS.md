@@ -116,9 +116,10 @@ A field with nothing recorded is `UNKNOWN`. Never put a number where nobody gave
   `UpsertRequirementItem` (`kind` `rail` or `interface`; a rail's `parent` is the rail it is
   generated from).
 - As an agent you record `UNKNOWN` or `NEEDS_CONFIRMATION`; give a value you computed or proposed
-  the source kind `calculation` or `agent_proposal`. Only a person records `CONFIRMED`, `DERIVED` or
-  `NOT_APPLICABLE`: the engine refuses them from an agent (`precondition`). A DERIVED value whose
-  input changed later is reported stale. Ask the person, and quote the report's question for the field.
+  the source kind `calculation` or `agent_proposal`. Only a person records `CONFIRMED` or
+  `NOT_APPLICABLE`: the engine refuses them from an agent (`precondition`). No command records
+  `DERIVED` (only a deterministic evaluator will). A recorded `UNKNOWN` names its `owner`. A rail
+  or interface list has no status of its own: it is as firm as its items' material fields. Ask the person, and quote the report's question for the field.
 - Readiness is advisory: no tool refuses an operation on it yet. Say which operations are
   still blocked when you report.
 
