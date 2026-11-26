@@ -36,6 +36,8 @@ beforeEach(() => {
       case "project_file_read": return { rel: a.rel, size: 5, text: "hello", binary: false, truncated: false };
       case "project_file_create": return entry(String(a.rel), String(a.rel), a.is_dir === true);
       case "events_since": case "model_providers": case "library_components": return [];
+      case "weft_engineer_queue": case "weft_conflicts": case "activity_timeline": case "agent_sessions": case "agent_tools": return [];
+      case "weft_state": return { project_dir: "/p/demo", revision: 7, entries: 0, unreadable: 0, agents: [], tasks: [], messages: [] };
       case "close_project_by_id": return null;
       default: throw new Error(`unmocked ${cmd}`);
     }
@@ -276,12 +278,17 @@ describe("v2 shell chrome", () => {
     expect(bar().getByRole("button", { name: "Checks" }).getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("Manufacturing opens its side view; Agents opens Model settings", async () => {
+  it("Manufacturing opens its side view; Agents opens the Agents workspace, with Model settings one click away", async () => {
     await open();
     fireEvent.click(bar().getByRole("button", { name: "Manufacturing" }));
     await screen.findByRole("region", { name: "Manufacturing prep" });
     expect(bar().getByRole("button", { name: "Manufacturing" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(bar().getByRole("button", { name: "Agents" }));
+    const ws = await screen.findByRole("region", { name: "Agents workspace" });
+    expect(ws.closest(".ws-host")!.hasAttribute("hidden")).toBe(false);
+    expect(screen.queryByRole("dialog", { name: "Model settings" })).toBeNull();
+    expect(bar().getByRole("button", { name: "Agents" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(ws).getByRole("button", { name: "Model settings" }));
     await screen.findByRole("dialog", { name: "Model settings" });
   });
 

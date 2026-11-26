@@ -183,3 +183,141 @@ fn sign_in_and_launch_open_terminal_tabs_and_sessions_are_listed() {
     assert!(agents::restart(&s, &manager, "no-such-session").is_err());
     manager.shutdown();
 }
+
+/// The Agents workspace's WEFT view (ADR-0058) replays the project's real journal file: the
+/// registry with registration times and revisions, tasks with their creation revision, last
+/// status change and unmet dependencies, every message, and broken lines counted, not guessed.
+#[test]
+fn weft_view_replays_the_project_journal_with_times_revisions_and_waits() {
+    use eak_harness::weft::{AgentCard, Entry, Event, Message, MessageKind, Task, TaskStatus};
+    let dir = tmpdir("weft");
+    let empty = agents::weft_view(&dir, 0);
+    assert!(empty.agents.is_empty() && empty.tasks.is_empty() && empty.messages.is_empty());
+    assert_eq!((empty.entries, empty.unreadable), (0, 0));
+
+    let card = |name: &str, session: &str| AgentCard {
+        id: format!("agent:{name}@{session}"),
+        name: name.into(),
+        session_id: session.into(),
+        tool: "codex".into(),
+        model: String::new(),
+        capabilities: vec!["plan".into()],
+    };
+    let task = |id: &str, deps: &[&str]| Task {
+        id: id.into(),
+        title: format!("task {id}"),
+        owner: "agent:layout@s2".into(),
+        created_by: "agent:plan@s1".into(),
+        depends_on: deps.iter().map(|d| d.to_string()).collect(),
+        parent: None,
+        status: TaskStatus::Pending,
+    };
+    let entry = |seq: u64, ts_ms: u64, revision: u64, by: &str, event: Event| {
+        serde_json::to_string(&Entry {
+            seq,
+            ts_ms,
+            by: by.into(),
+            revision,
+            event,
+        })
+        .unwrap()
+    };
+    let delegate = Message {
+        id: "m1".into(),
+        kind: MessageKind::Delegate,
+        from: "agent:plan@s1".into(),
+        to: "agent:layout@s2".into(),
+        task_id: Some("t1".into()),
+        proposal_id: None,
+        body: "place the input capacitor".into(),
+        verdict: None,
+        status: None,
+    };
+    let lines = [
+        entry(
+            1,
+            1000,
+            2,
+            "agent:plan@s1",
+            Event::AgentRegistered {
+                agent: card("plan", "s1"),
+            },
+        ),
+        entry(
+            2,
+            1100,
+            2,
+            "agent:layout@s2",
+            Event::AgentRegistered {
+                agent: card("layout", "s2"),
+            },
+        ),
+        entry(
+            3,
+            1200,
+            3,
+            "agent:plan@s1",
+            Event::TaskCreated {
+                task: task("t1", &[]),
+            },
+        ),
+        entry(
+            4,
+            1300,
+            3,
+            "agent:plan@s1",
+            Event::TaskCreated {
+                task: task("t2", &["t1"]),
+            },
+        ),
+        entry(
+            5,
+            1300,
+            3,
+            "agent:plan@s1",
+            Event::Message { message: delegate },
+        ),
+        entry(
+            6,
+            1400,
+            4,
+            "agent:layout@s2",
+            Event::TaskStatus {
+                task_id: "t1".into(),
+                status: TaskStatus::InProgress,
+            },
+        ),
+    ];
+    std::fs::create_dir_all(dir.join("weft")).unwrap();
+    std::fs::write(
+        dir.join("weft").join("journal.jsonl"),
+        format!("{}\n{{broken\n", lines.join("\n")),
+    )
+    .unwrap();
+
+    let v = agents::weft_view(&dir, 5);
+    assert_eq!(v.revision, 5);
+    assert_eq!((v.entries, v.unreadable), (6, 1));
+    let ids: Vec<&str> = v.agents.iter().map(|a| a.card.id.as_str()).collect();
+    assert_eq!(ids, ["agent:layout@s2", "agent:plan@s1"]);
+    let plan = &v.agents[1];
+    assert_eq!((plan.registered_ms, plan.registered_revision), (1000, 2));
+
+    let t1 = v.tasks.iter().find(|t| t.task.id == "t1").unwrap();
+    assert_eq!(t1.task.status, TaskStatus::InProgress);
+    assert_eq!(
+        (t1.created_ms, t1.created_revision, t1.updated_ms),
+        (1200, 3, 1400)
+    );
+    assert!(t1.waiting_on.is_empty() && !t1.ready);
+    let t2 = v.tasks.iter().find(|t| t.task.id == "t2").unwrap();
+    assert_eq!(t2.waiting_on, ["t1"]);
+    assert!(!t2.ready, "t2 waits for t1");
+    assert_eq!(t2.updated_ms, 1300, "never changed: its creation time");
+
+    assert_eq!(v.messages.len(), 1);
+    let m = &v.messages[0];
+    assert_eq!((m.seq, m.ts_ms, m.revision), (5, 1300, 3));
+    assert_eq!(m.message.kind, MessageKind::Delegate);
+    assert_eq!(m.message.task_id.as_deref(), Some("t1"));
+}

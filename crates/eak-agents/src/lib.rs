@@ -103,7 +103,7 @@ pub struct LaunchPlan {
 }
 
 /// What a headless session reported, parsed from one line of its output stream.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AgentEvent {
     Started { detail: String },
