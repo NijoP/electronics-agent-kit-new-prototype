@@ -171,7 +171,7 @@ describe("starting a design from Home", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     const form = within(await screen.findByRole("form", { name: "Create from brief" }));
     expect((form.getByLabelText("Project name") as HTMLInputElement).value).toBe("5 V input from a 2-pin header");
-    expect(await form.findByText("/docs/EAK Projects")).toBeTruthy();
+    expect(await form.findByDisplayValue("/docs/EAK Projects")).toBeTruthy();
     expect(within(form.getByRole("list", { name: "Brief lines" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["5 V input from a 2-pin header.", "3.3 V rail, at most 300 mA."]);
     fireEvent.change(form.getByLabelText("Project name"), { target: { value: "LDO board" } });
     fireEvent.click(form.getByRole("button", { name: "Create project and brief" }));
@@ -197,7 +197,7 @@ describe("starting a design from Home", () => {
     render(<App />);
     // The default folder is shown once it is known (New Project form), then the sample uses it.
     fireEvent.click(await screen.findByRole("button", { name: "New Project" }));
-    await screen.findByText("/docs/EAK Projects");
+    await screen.findByDisplayValue("/docs/EAK Projects");
     fireEvent.click(await screen.findByRole("button", { name: "Open sample board" }));
     await waitFor(() => expect(ran("create_sample_project")).toHaveLength(1));
     expect(ran("home_suggest_folder")[0].args).toEqual({ parent: "/docs/EAK Projects", name: "Sample board" });

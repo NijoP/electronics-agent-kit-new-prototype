@@ -111,9 +111,9 @@ describe("desktop shell flow", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "New Project" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "New" } });
-    // The parent folder comes from the (mocked) native folder dialog, never from pasted text.
+    // The parent folder comes from the (mocked) native folder dialog here; typing it is test 1c of flow.test.tsx.
     fireEvent.click(screen.getByRole("button", { name: /Choose parent folder/ }));
-    await screen.findByText("/p");
+    await screen.findByDisplayValue("/p");
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await screen.findByRole("img", { name: "PCB canvas" });
     expect(calls.find((c) => c.cmd === "create_project")!.args).toEqual({ path: "/p/New", name: "New" });

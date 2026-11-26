@@ -3,6 +3,7 @@
 // changes the project calls the Rust engine.
 import { useEffect, useRef, useState } from "react";
 import { formatShortcut } from "./design/shortcuts";
+import { nativeConfirm, whenConfirmed, type Confirm } from "./confirm";
 
 export interface PaletteAction {
   id: string;
@@ -20,7 +21,7 @@ export interface PaletteAction {
 interface Props {
   actions: PaletteAction[];
   onClose: () => void;
-  confirm?: (message: string) => boolean;
+  confirm?: Confirm;
   title?: string;
   searchLabel?: string;
   placeholder?: string;
@@ -30,7 +31,7 @@ interface Props {
 export function CommandPalette({
   actions,
   onClose,
-  confirm = (m) => window.confirm(m),
+  confirm = nativeConfirm,
   title = "Command palette",
   searchLabel = "Search commands",
   placeholder = "Type a command…",
@@ -51,9 +52,12 @@ export function CommandPalette({
   }, [active]);
   const pick = (a: PaletteAction | undefined) => {
     if (!a) return;
-    if (a.destructive && !confirm(`${a.label}: this is a destructive change. Continue?`)) return;
-    onClose();
-    a.run();
+    const go = () => {
+      onClose();
+      a.run();
+    };
+    if (a.destructive) void whenConfirmed(`${a.label}: this is a destructive change. Continue?`, go, confirm);
+    else go();
   };
 
   return (

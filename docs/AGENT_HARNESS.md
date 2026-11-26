@@ -27,6 +27,7 @@ Inside an EAK terminal session these are exported; flags and tool arguments over
 | `EAK_AGENT_NAME` | your agent name, recorded in the journal (`--agent`) |
 | `EAK_HARNESS_SOCKET`, `EAK_HARNESS_TOKEN_FILE` | the desktop app's harness endpoint (informational; the CLI finds it from `<project>/.harness.json`) |
 | `EAK_HARNESS_ALLOW_DESTRUCTIVE=1` | user opt-in for destructive commands (`--allow-destructive`) |
+| `EAK_HARNESS_APPLY_MODE=propose` | propose mode (`--propose`, ADR-0051): design tools build a proposal the user reviews and applies in EAK; the project does not change |
 
 There is no global "active project": every call names its project, and every response echoes
 `project.id` and `project.revision` — check them.
@@ -97,6 +98,7 @@ Lengths are **integer nanometres** (1 mm = 1 000 000). Rotations are `R0|R90|R18
 | `rework` | evidence in `rework/<session>/`; `rework_apply` = one revision per repair after human approval (`eak rework approve`) | `rework_inspect`, `rework_baseline`, `rework_audit`, `rework_protect`, `rework_plan`, `rework_apply`, `rework_report` (ADR-0022; loop in `docs/agents/REWORK.md`) |
 | `knowledge` | none for the design; `knowledge_import` writes only `knowledge/index.json` | `knowledge_search`, `knowledge_lookup`, `knowledge_cite`, `knowledge_import` (ADR-0024): advisory text with source/page/revision/hash, **never a validation result** |
 | `task` | `<project>/agent-tasks.json` only (progress record, never evidence) | `agent_task_begin`, `agent_task_finish`, `agent_task_status` (ADR-0036): phases are recorded from observed calls; `completed` is granted only when evidence supports it. `SyncSchematicToPcb` is refused (`precondition`, `details.gate = "pcb_sync"`) until ERC has run on the committed schematic |
+| `proposal` | `<project>/proposals/` only; never applies | `proposal_begin`, `proposal_status`, `proposal_list`, `proposal_submit`, `proposal_discard` (ADR-0051, see "Propose mode") |
 | `project` / `discovery` | creates a folder / none | `create_project`, `list_tools`, `guide`, `design_spec_schema` |
 
 ## Board flow (DESK method; heuristics, not a certification)
@@ -124,3 +126,30 @@ Every response is `{"ok", "tool", "category", "route", "project", "session", "re
 user's opt-in), `not_found`, `precondition`, `integrity`, `storage`, `nothing_to_do`,
 `simulator_unavailable`, `simulation_failed`, `export_failed`, `app_unreachable`, `auth_failed`,
 `internal`. CLI exit codes: 0 ok, 1 error, 2 usage, 3 validation errors found, 4 stale revision.
+
+## Propose mode (ADR-0051)
+
+When the user starts your session in propose mode (`--propose` or
+`EAK_HARNESS_APPLY_MODE=propose`), nothing you do changes the project or its revision:
+
+- A design tool call is checked on a copy of the project (same command code and integrity check
+  as the engine) and added as a step to your session's **open proposal**, started at the current
+  revision. The response has `"proposed": true`, `proposal_id`, the `created` ids and the
+  `changes`; `revision_after` equals `revision_before`. Pass the same `expected_revision` (the
+  project's revision) on every call. Objects you create keep the ids you were shown, so later
+  steps may name them.
+- Reads, `run_check`, `run_gates` and simulation show the copy with your open proposal applied
+  (`result.proposal_view`); such checks store no evidence. `project_info`, `get_history` and
+  `intel_*` show the project itself.
+- `Undo`, `Redo` and `rework_apply` are refused (`precondition`); `design_apply` adds its plan's
+  steps to the proposal.
+- `proposal_begin {title, rationale}` names it (the rationale is shown to the reviewer as
+  *assumed*); `proposal_status` gives EAK's review: each step's changes and the steps it
+  `requires`, the total delta, ERC/DRC before and after on the copy (findings that appear or are
+  resolved, rules newly UNKNOWN, labels), and `problem` if it cannot be applied;
+  `proposal_submit` marks it ready; `proposal_discard` drops it.
+- **There is no apply tool.** The user applies the proposal in EAK: Apply is refused unless the
+  project is still at the proposal's base revision, saves a checkpoint
+  (`checkpoints/rNNNNNN-before-<id>`), and executes the chosen steps as one `Batch` — one
+  revision, one undo step, journalled as your agent with the user's approval. If the project moved
+  on, the proposal is stale: discard it and propose again at the new revision.

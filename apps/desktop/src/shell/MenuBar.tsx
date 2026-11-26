@@ -6,6 +6,7 @@
 // returns focus to its button, Tab closes it.
 import { useEffect, useRef, useState } from "react";
 import { formatShortcut } from "../design/shortcuts";
+import { nativeConfirm, whenConfirmed, type Confirm } from "../confirm";
 
 export interface MenuItem {
   label: string;
@@ -25,7 +26,7 @@ export interface Menu {
 
 type Focus = "first" | "last" | null;
 
-export function MenuBar({ menus, confirm = (m) => window.confirm(m) }: { menus: Menu[]; confirm?: (m: string) => boolean }) {
+export function MenuBar({ menus, confirm = nativeConfirm }: { menus: Menu[]; confirm?: Confirm }) {
   const [open, setOpen] = useState<number | null>(null);
   const root = useRef<HTMLElement>(null);
   // Which item to focus once the menu that was just opened from the keyboard has rendered.
@@ -105,9 +106,13 @@ export function MenuBar({ menus, confirm = (m) => window.confirm(m) }: { menus: 
 
   const pick = (it: MenuItem) => {
     if (it.disabled || !it.run) return;
-    if (it.destructive && !confirm(`${it.label}: this is a destructive change. Continue?`)) return;
-    setOpen(null);
-    it.run();
+    const run = it.run;
+    const go = () => {
+      setOpen(null);
+      run();
+    };
+    if (it.destructive) void whenConfirmed(`${it.label}: this is a destructive change. Continue?`, go, confirm);
+    else go();
   };
 
   return (

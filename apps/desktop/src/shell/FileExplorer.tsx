@@ -4,6 +4,7 @@
 // the backend refuses to change them even if this UI were bypassed.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { confirmed } from "../confirm";
 import { baseName, formatSize, gitMarks, joinRel, nameProblem, parentOf, ROLE_LABEL, visibleRows, type FileEntry, type GitStatus } from "./files";
 
 // Reusable: the EDA Explorer mounts it for the open project; the terminal workspace mounts one per
@@ -177,7 +178,7 @@ export function FileExplorer({ projectId, rootLabel, cwd, onCwd, revision, onOpe
   const remove = async (entry: FileEntry | null = selectedEntry) => {
     if (!entry || entry.protected || busy) return;
     const what = entry.is_dir ? `the folder "${entry.name}" and everything in it` : `"${entry.name}"`;
-    if (!window.confirm(`Delete ${what}? This cannot be undone.`)) return;
+    if (!(await confirmed(`Delete ${what}? This cannot be undone.`))) return;
     setBusy(true);
     try {
       await api.projectFileDelete(projectId, entry.rel, entry.is_dir);

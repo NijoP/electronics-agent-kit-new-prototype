@@ -1319,6 +1319,19 @@ fn apply(engine: &mut Engine, ctx: &CallContext, root: &Path, args: &Value) -> R
         crate::agent_task::pcb_sync_gate(engine)
             .map_err(|why| Fail(ErrorCode::Precondition, why, json!({"gate": "pcb_sync"})))?;
     }
+    // Propose mode (ADR-0051): the plan becomes steps of the session's proposal; nothing runs.
+    if ctx.apply_mode == crate::proposal::ApplyMode::Propose {
+        let mut v = crate::proposal::propose(engine, ctx, "design_apply", command, expected)?;
+        record(
+            root,
+            ctx,
+            engine.project().revision,
+            "propose",
+            json!({"plan_id": plan_id, "proposal_id": v["proposal_id"], "steps_added": v["steps_added"]}),
+        )?;
+        v["plan_id"] = json!(plan_id);
+        return Ok(v);
+    }
     let resp = engine.execute(CommandRequest {
         expected_revision: expected,
         actor: Actor::agent_in_session(&ctx.agent, &ctx.session_id),

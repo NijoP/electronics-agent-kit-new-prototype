@@ -19,6 +19,8 @@ OPTIONS (default from the EAK terminal session environment):
   --session <ID>        session id for the journal [$EAK_SESSION_ID]
   --agent <NAME>        agent name for the journal [$EAK_AGENT_NAME]
   --allow-destructive   allow destructive commands [$EAK_HARNESS_ALLOW_DESTRUCTIVE=1]
+  --propose             design tools build a proposal the user applies in EAK; the
+                        project does not change   [$EAK_HARNESS_APPLY_MODE=propose]
   --json                print one JSON object
 
 COMMANDS:
@@ -40,6 +42,7 @@ COMMANDS:
   design log                    iteration record
   design report                 evidence report with labels and approval state
   design approve <REV> <FP>     human approval of a report (interactive terminal only)
+  proposals                     proposals of the project (status, base revision, steps)
   rework inspect [PROJECT_ID]   read-only inspection of an existing project
   rework baseline <PROJECT_ID> immutable baseline; opens a rework session
   rework audit                  classify issues (category, severity, affected objects)
@@ -133,6 +136,10 @@ pub fn main_with(args: Vec<String>) -> i32 {
                 ctx.max_class = OperationClass::Destructive;
                 Ok(())
             }
+            "--propose" => {
+                ctx.apply_mode = crate::proposal::ApplyMode::Propose;
+                Ok(())
+            }
             "-h" | "--help" => {
                 out(USAGE);
                 return 0;
@@ -171,6 +178,7 @@ pub fn main_with(args: Vec<String>) -> i32 {
         }
         "guide" => ("guide".into(), json!({})),
         "tools" => ("list_tools".into(), json!({})),
+        "proposals" => ("proposal_list".into(), json!({})),
         "info" => ("project_info".into(), json!({})),
         "new" => match (a(1), a(2)) {
             (Some(d), Some(n)) => {
