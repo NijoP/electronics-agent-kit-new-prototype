@@ -88,11 +88,59 @@ fn assert_all_connected(p: &Project) {
     }
 }
 
+/// Asserts the AutoRoute connectivity proof covers every net with pads, each one copper group
+/// (`nets` of them when the fixture fixes the count) and at least `min_vias` vias were placed, then
+/// prints the evidence line. Written to the process's stderr directly: the test harness captures
+/// `println!`/`eprintln!` of passing tests, so CI logs would not show it otherwise.
+fn evidence(board: &str, p: &Project, warnings: &[String], nets: Option<usize>, min_vias: usize) {
+    use std::io::Write;
+    let proof = warnings
+        .iter()
+        .find(|w| w.starts_with("connectivity proof: all "))
+        .unwrap_or_else(|| panic!("{board}: no all-nets proof line in {warnings:#?}"));
+    let proven: usize = proof["connectivity proof: all ".len()..]
+        .split(' ')
+        .next()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("{board}: no net count in {proof}"));
+    let pad_nets: std::collections::BTreeSet<&String> = p
+        .pcb
+        .footprints
+        .values()
+        .flat_map(|f| f.pad_nets.values())
+        .filter(|n| !n.is_empty())
+        .collect();
+    assert_eq!(
+        proven,
+        pad_nets.len(),
+        "{board}: every net with pads is proven"
+    );
+    if let Some(n) = nets {
+        assert_eq!(proven, n, "{board}: nets proven");
+    }
+    let vias = p.pcb.vias.len();
+    assert!(
+        vias >= min_vias,
+        "{board}: {vias} vias, expected >= {min_vias}"
+    );
+    let unrouted = warnings
+        .iter()
+        .filter(|w| w.starts_with("unrouted "))
+        .count();
+    let layers = p.pcb.board.stackup.copper_layers();
+    let _ = writeln!(
+        std::io::stderr(),
+        "ROUTER-EVIDENCE {board}: layers={layers} nets_proven={proven} unrouted={unrouted} vias={vias} tracks={} | {proof}",
+        p.pcb.tracks.len()
+    );
+}
+
 #[test]
 fn routes_on_the_inner_signal_layer_past_an_outer_keepout_wall() {
     let (e, warnings) = build("route_inner_keepout", 0);
     eprintln!("{warnings:#?}");
     let p = e.project();
+    evidence("route_inner_keepout", p, &warnings, Some(2), 2);
     assert!(!p.pcb.tracks.is_empty(), "nothing routed: {warnings:?}");
     let on = |l: CopperLayer| p.pcb.tracks.values().filter(|t| t.layer == l).count();
     assert!(
@@ -157,6 +205,7 @@ fn four_layer_reference_board_routes_with_every_connection_proven_and_drc_clean(
     let (e, warnings) = build("route_ref4", 0);
     eprintln!("{warnings:#?}");
     let p = e.project();
+    evidence("route_ref4", p, &warnings, None, 0);
     assert_eq!(p.pcb.board.stackup.copper_layers(), 4);
     assert!(
         !warnings.iter().any(|w| w.starts_with("unrouted ")),
@@ -185,6 +234,7 @@ fn constrained_four_layer_design_routes_with_every_rule_kept() {
     let (e, warnings) = build("route_constrained4", 0);
     eprintln!("{warnings:#?}");
     let p = e.project();
+    evidence("route_constrained4", p, &warnings, Some(6), 0);
     assert!(
         !warnings.iter().any(|w| w.starts_with("unrouted ")),
         "{warnings:#?}"
