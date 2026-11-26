@@ -90,6 +90,27 @@
     giving one revision with the same ids and a checkpoint, one undo taking it all back, a journal
     actor that is the agent, and a stale proposal refusing new steps. `eak-core` `ir.rs`
     `id_script_tests` covers per-prefix replay, recording and the panic reset.
+- **Addendum, slice S9 (review dialog, 2026-11-26):**
+  - The desktop app has five IPC commands (`src-tauri/src/proposal.rs`): `proposal_list`,
+    `proposal_review(id, steps)`, `proposal_apply(id, expected_revision, steps)`,
+    `proposal_discard(id)` and `proposal_export(id, steps)`. Apply and discard use the Human actor,
+    so the person at the window is the approver. Apply is the library `proposal::apply` above;
+    nothing else writes. Export saves EAK's recomputed review as
+    `evidence/proposal-<id>-rNNNNNN.json`.
+  - `ProposalReviewDialog` (Tools › Review agent proposals…) generalises the Update PCB review.
+    Both dialogs use one grouped checkbox table (`ReviewTable`), and the ECO dialog keeps its DOM,
+    so scenario c2 is unchanged.
+  - Rows are the changes of every step, grouped by object (part, net, footprint, rule, routing,
+    board, sheet, project). A step is the smallest unit a typed command allows, so a row's checkbox
+    checks its step. Checking a step checks the steps it `requires`; unchecking it unchecks the
+    steps that require it.
+  - Every selection change asks EAK to review again, and Apply is enabled only when the review on
+    screen is of exactly the checked steps and has no `problem`.
+  - Discard asks for confirmation first.
+  - The ui-evidence `fixture-agent-propose` step makes the g4 fixture proposal through the app's
+    own harness endpoint in propose mode. That is a real agent session, not a hand-written file.
+  - Limitation: a step that makes several changes (a part and its library entry) is applied or left
+    out whole.
 - **Source requirement:** Product spec AI section (AI proposes, the engine verifies, a person
   approves); AGENTS.md non-negotiables (a single write path through `Engine::execute`, AI never
   self-certifies, unknown is never a pass); Traycer review §10 S8 acceptance.

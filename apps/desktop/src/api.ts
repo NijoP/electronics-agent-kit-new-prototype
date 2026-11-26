@@ -59,6 +59,7 @@ import type {
 } from "./types";
 import type { FileContent, FileEntry, GitStatus } from "./shell/files";
 import type { SyncPreview } from "./shell/ecoPreview";
+import type { ApplyOutcome, ProposalReview, ProposalSummary } from "./shell/proposalReview";
 import type { EngineChange } from "./shell/syncReport";
 import type { HomeFacts } from "./home/homeFacts";
 
@@ -164,6 +165,11 @@ export const IPC_COMMANDS = [
   "operation_changes",
   "sync_preview",
   "sync_preview_export",
+  "proposal_list",
+  "proposal_review",
+  "proposal_apply",
+  "proposal_discard",
+  "proposal_export",
   "project_files",
   "project_file_read",
   "project_file_create",
@@ -336,6 +342,14 @@ export const api = {
   // copy (read-only); the export saves that preview as project evidence.
   syncPreview: (revision: number) => call<SyncPreview>("sync_preview", { expected_revision: revision }),
   syncPreviewExport: (revision: number, excluded: string[]) => call<string>("sync_preview_export", { expected_revision: revision, excluded }),
+  // Agent proposals (slice S9, ADR-0051): an agent session in propose mode stores its edits as a
+  // proposal; EAK reviews it on a copy (read-only) and only the person applies it, as one Batch at
+  // the expected revision. `steps` null means every step.
+  proposalList: () => call<ProposalSummary[]>("proposal_list"),
+  proposalReview: (id: string, steps: number[] | null) => call<ProposalReview>("proposal_review", { id, steps }),
+  proposalApply: (id: string, revision: number, steps: number[] | null) => call<ApplyOutcome>("proposal_apply", { id, expected_revision: revision, steps }),
+  proposalDiscard: (id: string) => call<ProposalSummary>("proposal_discard", { id }),
+  proposalExport: (id: string, steps: number[] | null) => call<string>("proposal_export", { id, steps }),
   projectFiles: (projectId: string, rel: string) => call<FileEntry[]>("project_files", { project_id: projectId, rel }),
   projectFileRead: (projectId: string, rel: string) => call<FileContent>("project_file_read", { project_id: projectId, rel }),
   projectFileCreate: (projectId: string, rel: string, isDir: boolean) =>
