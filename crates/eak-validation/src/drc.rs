@@ -982,7 +982,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         "Clearance-matrix cells are checked by DRC only: the interactive router keeps net classes, declared voltages and net-pair rules but not the matrix, and the autorouter keeps neither the matrix nor net-pair rules (ADR-0046)".into(),
     ];
     limitations.extend(undeclared_nets_not_evaluated(p));
-    let (no_current, no_voltage) = undeclared_nets(p);
+    let (no_current, no_voltage) = undeclared_nets(p, items);
     let mut report = Report::new("DRC", p, rules, f, not_implemented, limitations);
     // Fail-closed: a current/voltage rule over nets with no declared value checked nothing for
     // those nets, so it is UNKNOWN (never PASS) until the value is declared (EVALUATION C1).
@@ -1055,11 +1055,11 @@ pub fn unenforced_cells() -> Vec<String> {
 }
 
 /// Copper nets with no declared current, and with no declared voltage.
-fn undeclared_nets(p: &Project) -> (Vec<String>, Vec<String>) {
+fn undeclared_nets(p: &Project, items: &[copper::CopperItem]) -> (Vec<String>, Vec<String>) {
     let c = &p.constraints;
-    let nets: BTreeSet<String> = copper::items(p)
-        .into_iter()
-        .map(|i| i.net)
+    let nets: BTreeSet<String> = items
+        .iter()
+        .map(|i| i.net.clone())
         .filter(|n| !n.is_empty())
         .collect();
     let missing = |declared: &dyn Fn(&String) -> bool| -> Vec<String> {

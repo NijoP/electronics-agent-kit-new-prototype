@@ -302,6 +302,8 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const revision = snapshot.project.revision;
   const [geometry, setGeometry] = useState<BoardGeometry | null>(null);
   useEffect(() => {
+    // Only the Canvas2D scene draws the legend; the SVG fallback never asks for it.
+    if (!useCanvas) return;
     let cancelled = false;
     api
       .boardGeometry()
@@ -314,7 +316,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
     return () => {
       cancelled = true;
     };
-  }, [revision, snapshot.project.id]);
+  }, [revision, snapshot.project.id, useCanvas]);
   const silk = geometry && geometry.revision === revision ? geometry.silk : null;
   const scene = useMemo(
     () =>
