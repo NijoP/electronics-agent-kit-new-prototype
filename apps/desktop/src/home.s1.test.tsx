@@ -19,7 +19,6 @@ type Call = { cmd: string; args: Record<string, unknown> };
 let calls: Call[];
 let defaultDir: string | null;
 let lastSnap: ReturnType<typeof fixture>;
-| null;
 
 const facts = (): HomeFacts => ({
   path: "/projects/fixture",

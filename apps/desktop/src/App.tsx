@@ -37,7 +37,6 @@ export function App() {
     setTourState(how);
     setTour(null);
   };
-| null>(null);
   const [settings, setSettings] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [current, setCurrent] = useState("eda");
