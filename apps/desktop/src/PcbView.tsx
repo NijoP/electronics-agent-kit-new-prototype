@@ -1275,6 +1275,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
       </div>
       <Canvas
         label="PCB canvas"
+        boxed
         bounds={pcbBounds(snapshot)}
         mirror={lv.flip}
         zoomTo={zoomTo && zoomTo.bounds ? { bounds: zoomTo.bounds, n: zoomTo.n } : null}

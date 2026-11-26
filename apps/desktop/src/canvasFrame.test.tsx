@@ -31,3 +31,20 @@ it("folds pointer moves within a frame and flushes the last one on release", () 
   // The folded move is the last position, not an intermediate one.
   expect(move.mock.calls[1][0]).toBeCloseTo(end.mock.calls[0][0]);
 });
+
+// Regression (F6 `f6-canvas-fits`): the PCB's SVG renderer puts the SVG in the same sized box as
+// the Canvas2D renderer (`boxed`); the schematic's SVG stays a bare grid item, as before.
+it("boxes the SVG only when asked", () => {
+  const draw = (boxed: boolean) =>
+    render(
+      <Canvas label={boxed ? "boxed" : "bare"} bounds={{ minX: 0, minY: 0, maxX: 100, maxY: 100 }} boxed={boxed}>
+        <g />
+      </Canvas>,
+    ).container.firstElementChild!;
+  const boxed = draw(true);
+  expect(boxed.className).toBe("canvas-stack");
+  expect(boxed.querySelector(':scope > svg.canvas.canvas-top[aria-label="boxed"]')).toBeTruthy();
+  const bare = draw(false);
+  expect(bare.tagName.toLowerCase()).toBe("svg");
+  expect(bare.getAttribute("class")).toBe("canvas");
+});
