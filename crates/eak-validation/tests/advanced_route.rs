@@ -306,10 +306,11 @@ fn a_priority_net_shoves_a_lower_priority_track_aside_and_stays_drc_clean() {
 }
 
 /// Two wide areas joined by the 2.7 mm neck of the shove test (usable y 8.5..10.6 mm inside the
-/// 0.3 mm edge clearance), walled at y 9.55 mm on both layers by a GND track (the highest
-/// priority, so never shoved). Below the wall the channel is 0.925 mm: a 0.25 mm FINE track at
-/// the default 0.2 mm clearance fits (0.45 mm), a 0.25 mm WIDE track whose own class asks
-/// 0.8 mm does not (1.05 mm). J1/J2 carry FINE (left pad) and WIDE (right pad).
+/// 0.3 mm edge clearance), walled at y 9.625 mm on both layers by a 0.25 mm GND track (the
+/// highest priority, so never shoved). Below the wall the channel is 1.0 mm: a 0.25 mm FINE
+/// track at the default 0.2 mm clearance fits (0.45 mm, a 0.55 mm band of centres on the
+/// 0.25 mm grid); a 0.25 mm WIDE track whose own class asks 0.8 mm does not (1.05 mm). FINE runs
+/// J1-J2 and WIDE J3-J4, far enough apart that WIDE's rule never closes FINE's pads.
 fn neck_with_two_clearances() -> Project {
     let mut p = Project::new("per-net-clearance");
     p.pcb.board.outline = [
@@ -329,10 +330,18 @@ fn neck_with_two_clearances() -> Project {
     .into_iter()
     .map(|(x, y)| Point::mm(x, y))
     .collect();
-    place(&mut p, "J1", Point::mm(5.0, 4.0), Rotation::R90);
-    place(&mut p, "J2", Point::mm(45.0, 4.0), Rotation::R90);
-    assign(&mut p, "J1", "FINE", "WIDE", |c| c.x as f64);
-    assign(&mut p, "J2", "FINE", "WIDE", |c| c.x as f64);
+    place(&mut p, "J1", Point::mm(5.0, 5.0), Rotation::R90);
+    place(&mut p, "J2", Point::mm(45.0, 5.0), Rotation::R90);
+    place(&mut p, "J3", Point::mm(10.0, 2.0), Rotation::R90);
+    place(&mut p, "J4", Point::mm(40.0, 2.0), Rotation::R90);
+    for (j, net) in [
+        ("J1", "FINE"),
+        ("J2", "FINE"),
+        ("J3", "WIDE"),
+        ("J4", "WIDE"),
+    ] {
+        assign(&mut p, j, net, net, |c| c.x as f64);
+    }
     p.constraints.net_classes.push(NetClass {
         name: "WIDE_GAP".into(),
         track_width: 250_000,
@@ -342,7 +351,7 @@ fn neck_with_two_clearances() -> Project {
         nets: vec!["WIDE".into()],
         target_z0_ohm: None,
     });
-    let (a, b) = (Point::mm(2.0, 9.55), Point::mm(48.0, 9.55));
+    let (a, b) = (Point::mm(2.0, 9.625), Point::mm(48.0, 9.625));
     for (id, layer) in [
         ("gnd_top", CopperLayer::Top),
         ("gnd_bot", CopperLayer::Bottom),
