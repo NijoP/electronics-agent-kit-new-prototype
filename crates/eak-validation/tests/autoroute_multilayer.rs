@@ -291,7 +291,14 @@ fn fingerprint(p: &Project) -> (usize, usize, u64) {
 #[test]
 fn the_same_board_routes_to_the_same_copper_every_run() {
     use std::io::Write;
-    for board in ["route_inner_keepout", "route_ref4", "route_constrained4"] {
+    // Pinned from CI run 45844200699, equal on linux, windows, macos-arm and macos-intel. A
+    // deliberate router change updates these values (and says so in its commit).
+    let pinned: [(&str, (usize, usize, u64)); 3] = [
+        ("route_inner_keepout", (12, 4, 0xe9af_c688_064d_bab4)),
+        ("route_ref4", (103, 11, 0x4fae_609d_6a2b_f1a2)),
+        ("route_constrained4", (50, 2, 0x9fa3_6954_c61e_e1a7)),
+    ];
+    for (board, want) in pinned {
         let (e1, _) = build(board, 0);
         let (e2, _) = build(board, 0);
         let (r1, r2) = (layout_rows(e1.project()), layout_rows(e2.project()));
@@ -316,6 +323,10 @@ fn the_same_board_routes_to_the_same_copper_every_run() {
             first.0,
             first.1,
             first.2
+        );
+        assert_eq!(
+            first, want,
+            "{board}: route fingerprint changed (see ROUTER-FINGERPRINT)"
         );
     }
 }
