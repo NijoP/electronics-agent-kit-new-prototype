@@ -192,7 +192,7 @@ export function LibraryFolders({ onChanged }: { onChanged?: () => void }) {
           ))}
           <input aria-label="Folder licence" placeholder="Licence (required), e.g. CC-BY-SA-4.0" value={licence} onChange={(e) => setLicence(e.target.value)} />
           <input aria-label="Folder source" placeholder="Source (required), e.g. a URL" value={source} onChange={(e) => setSource(e.target.value)} />
-          <button type="button" disabled={!canImport} onClick={importFolder}>
+          <button type="button" disabled={!canImport} title={canImport ? undefined : "Needs a usable library, a licence and a source"} onClick={importFolder}>
             Import to library database
           </button>
         </div>
@@ -224,7 +224,7 @@ export function LibraryFolders({ onChanged }: { onChanged?: () => void }) {
           </option>
         ))}
       </select>
-      <button type="button" disabled={!exportLib} onClick={exportLibrary}>
+      <button type="button" disabled={!exportLib} title={exportLib ? undefined : "Choose a library to export first"} onClick={exportLibrary}>
         Export library…
       </button>
       <button type="button" onClick={importFile}>
