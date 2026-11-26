@@ -146,9 +146,9 @@ fn closest_params(a: F2, b: F2, c: F2, d: F2) -> (f64, f64) {
     .unwrap_or((0.0, 0.0))
 }
 
-/// Pads of `net` on the power-output pins of each part, by footprint id.
-fn source_pads(p: &Project, net: &str) -> BTreeMap<Id, Vec<String>> {
-    let mut out: BTreeMap<Id, Vec<String>> = BTreeMap::new();
+/// (footprint id, pad, net) of every pad on a power-output pin.
+fn power_out_pads(p: &Project) -> Vec<(Id, String, String)> {
+    let mut out = vec![];
     for fp in p.pcb.footprints.values() {
         let Some(def) = p.library.get(&fp.component_id) else {
             continue;
@@ -158,13 +158,27 @@ fn source_pads(p: &Project, net: &str) -> BTreeMap<Id, Vec<String>> {
                 continue;
             }
             for pad in def.pin_map.get(&pin.number).into_iter().flatten() {
-                if fp.pad_nets.get(pad).is_some_and(|n| n == net) {
-                    out.entry(fp.id.clone()).or_default().push(pad.clone());
+                if let Some(net) = fp.pad_nets.get(pad) {
+                    out.push((fp.id.clone(), pad.clone(), net.clone()));
                 }
             }
         }
     }
     out
+}
+
+/// Pads of `net` on the power-output pins of each part, by footprint id.
+fn source_pads(p: &Project, net: &str) -> BTreeMap<Id, Vec<String>> {
+    let mut out: BTreeMap<Id, Vec<String>> = BTreeMap::new();
+    for (fp, pad, _) in power_out_pads(p).into_iter().filter(|x| x.2 == net) {
+        out.entry(fp).or_default().push(pad);
+    }
+    out
+}
+
+/// Nets a placed part drives through a power-output pin (on the board, schematic or not).
+pub fn driven_nets(p: &Project) -> BTreeSet<String> {
+    power_out_pads(p).into_iter().map(|x| x.2).collect()
 }
 
 /// Conductance network: adjacency lists of (node, siemens).

@@ -1023,16 +1023,6 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         "Differential pairs: skew counts track length only (no via barrels); the gap rule checks only the closest approach, not where the members run apart; impedance uses the positive member's width and is not checked on uncoupled segments".into(),
     ];
     limitations.extend(pathres::LIMITATIONS.iter().map(|l| l.to_string()));
-    let no_drop: Vec<String> = crate::gates::power_nets(p)
-        .into_iter()
-        .filter(|n| !c.net_max_drop_v.contains_key(n))
-        .collect();
-    if !no_drop.is_empty() {
-        limitations.push(format!(
-            "NOT EVALUATED: DRC-028 DC voltage drop for power nets without a declared allowed drop (net_max_drop_v): {}",
-            no_drop.join(", ")
-        ));
-    }
     limitations.extend(undeclared_nets_not_evaluated(p));
     let (no_current, no_voltage) = undeclared_nets(p, items);
     let mut report = Report::new("DRC", p, rules, f, not_implemented, limitations);
@@ -1126,10 +1116,24 @@ fn via_current(p: &Project, f: &mut Vec<Finding>) -> Option<String> {
 /// DRC-028: each net with an allowed drop (`net_max_drop_v`): net current × the copper-network
 /// resistance from its source pad to its worst sink pad. Without a single power-output part the
 /// worst pad pair bounds the drop for any source: it can pass, but exceeding it is UNKNOWN.
-/// Returns why a net could not be evaluated.
+/// A power net with no allowed drop is UNKNOWN (fail-closed, like DRC-008 for undeclared
+/// currents), never a pass. Returns why a net could not be evaluated.
 fn voltage_drop(p: &Project, f: &mut Vec<Finding>) -> Option<String> {
     let c = &p.constraints;
     let mut why = vec![];
+    let mut power: BTreeSet<String> = crate::gates::power_nets(p).into_iter().collect();
+    power.extend(pathres::driven_nets(p));
+    let no_drop: Vec<String> = power
+        .into_iter()
+        .filter(|n| !n.is_empty() && !eak_engineering::power::is_reference_net(n))
+        .filter(|n| !c.net_max_drop_v.contains_key(n))
+        .collect();
+    if !no_drop.is_empty() {
+        why.push(format!(
+            "missing input: allowed drop (net_max_drop_v) for power net {}",
+            no_drop.join(", ")
+        ));
+    }
     for (net, &max) in &c.net_max_drop_v {
         let path = match pathres::net_path(p, net) {
             Ok(path) => path,

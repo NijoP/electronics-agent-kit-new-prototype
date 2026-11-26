@@ -65,8 +65,16 @@ fn gate(p: &Project) -> GateState {
 }
 
 #[test]
-fn nothing_declared_is_nothing_to_check() {
-    assert_eq!(drc::run(&rail(true)).state_of("DRC-028"), CheckState::Pass);
+fn a_power_net_without_an_allowed_drop_is_unknown_never_pass() {
+    // J1 drives PWR through a power-output pin, but no net_max_drop_v is declared.
+    let r = drc::run(&rail(true));
+    assert_eq!(r.state_of("DRC-028"), CheckState::Unknown);
+    let why = reason(&r);
+    assert!(
+        why.contains("missing input: allowed drop (net_max_drop_v) for power net PWR"),
+        "{why}"
+    );
+    assert_eq!(gate(&rail(true)), GateState::Unknown);
 }
 
 #[test]
@@ -125,13 +133,15 @@ fn without_a_source_pad_only_a_pass_is_proven() {
 }
 
 #[test]
-fn power_nets_without_an_allowed_drop_are_listed_not_evaluated() {
+fn schematic_power_nets_without_an_allowed_drop_are_unknown() {
     let mut e = eak_runtime::Engine::in_memory(Project::new("nets"));
     eak_runtime::fixtures::build_schematic(&mut e).unwrap();
     let r = drc::run(e.project());
-    let line = r
-        .limitations
-        .iter()
-        .find(|l| l.starts_with("NOT EVALUATED: DRC-028"));
-    assert!(line.is_some(), "{:?}", r.limitations);
+    assert_eq!(r.state_of("DRC-028"), CheckState::Unknown);
+    let why = reason(&r);
+    assert!(
+        why.contains("+3V3") && why.contains("missing input: allowed drop"),
+        "{why}"
+    );
+    assert!(!why.contains("GND"), "{why}");
 }
