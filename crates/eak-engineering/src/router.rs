@@ -603,7 +603,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
             if k.layers.iter().all(|on| *on) {
                 base.forbid_via(&k.shape, grow);
             } else {
-                for (l, on) in k.layers.iter().enumerate().filter(|(_, on)| **on) {
+                for (l, _) in k.layers.iter().enumerate().filter(|(_, on)| **on) {
                     for i in base.cells(&k.shape, grow) {
                         base.no_via_on[l][i] = true;
                     }
