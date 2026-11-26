@@ -365,6 +365,17 @@ fn undeclared_current_and_voltage_are_listed_as_not_evaluated() {
         p.constraints.net_voltages_v.insert(n, 3.3);
     }
     assert!(drc::undeclared_nets_not_evaluated(&p).is_empty());
+    // DRC-028 (voltage drop) also needs an allowed drop for each power net.
+    let drop_line = drc::run(&p)
+        .limitations
+        .into_iter()
+        .find(|l| l.starts_with("NOT EVALUATED: DRC-028"));
+    for n in drop_line
+        .iter()
+        .flat_map(|l| l.rsplit(": ").next().unwrap().split(", "))
+    {
+        p.constraints.net_max_drop_v.insert(n.to_string(), 1.0);
+    }
     assert!(!drc::run(&p)
         .limitations
         .iter()
