@@ -30,6 +30,7 @@ import { ExportDialog } from "./shell/ExportDialog";
 import { BomExportDialog, DocumentExportDialog } from "./shell/OutputDialogs";
 import { ReleaseCheckDialog } from "./shell/ReleaseCheckDialog";
 import { ProposalReviewDialog } from "./shell/ProposalReviewDialog";
+import { ActivityDialog } from "./shell/ActivityDialog";
 import { JourneyBar } from "./shell/JourneyBar";
 import { journeyStages, type StageId } from "./shell/journey";
 import { ProblemsPanel } from "./shell/ProblemsPanel";
@@ -133,7 +134,9 @@ const writeFlag = (key: string, on: boolean) => {
 };
 
 export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged, landing = null, onTour, home, apps, navRequest }: Props) {
-  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate" | "release" | "proposals">(null);
+  const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate" | "release" | "proposals" | "activity">(null);
+  // Proposal the activity view asked the review dialog to show first.
+  const [reviewId, setReviewId] = useState<string | null>(null);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [snapshot, setSnapshot] = useState(initial);
   const [events, setEvents] = useState<EngineEvent[]>([]);
@@ -1320,16 +1323,45 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       {dialog === "bom" && <BomExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "outputs" && <DocumentExportDialog revision={revision} busy={busy} onExported={outputExported} onClose={() => setDialog(null)} />}
       {dialog === "release" && <ReleaseCheckDialog revision={revision} busy={busy} onCheck={(c) => setRelease({ check: c, error: null })} onClose={() => setDialog(null)} />}
+      {dialog === "activity" && (
+        <ActivityDialog
+          revision={revision}
+          busy={busy}
+          onReview={(id) => {
+            setReviewId(id);
+            setDialog("proposals");
+          }}
+          onUndo={() => undo()}
+          onShow={(t) => {
+            setDialog(null);
+            if (t.editor === "schematic") {
+              if (!showInSchematic({ kind: "component", symbolId: t.id }, null)) setMessage(`${t.id} is no longer on a sheet`);
+            } else {
+              const d = docs.find((x) => x.kind === "pcb");
+              if (d && snapshot.project.pcb.footprints[t.id]) {
+                open(d.id);
+                setFocus({ n: Date.now(), objects: [t.id], location: null });
+              } else setMessage(`${t.id} is no longer on the PCB`);
+            }
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
       {dialog === "proposals" && (
         <ProposalReviewDialog
           revision={revision}
+          initialId={reviewId ?? undefined}
           busy={busy}
           onApplied={(out) => {
             setDialog(null);
+            setReviewId(null);
             setMessage(`Applied as one undo step: proposal ${out.proposal.id} → revision ${out.response.revision_after} (checkpoint ${out.checkpoint})${out.response.warnings.length ? ` (${out.response.warnings.length} warning(s))` : ""}`);
             void refresh();
           }}
-          onClose={() => setDialog(null)}
+          onClose={() => {
+            setDialog(null);
+            setReviewId(null);
+          }}
         />
       )}
       {dialog === "export" && (

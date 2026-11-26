@@ -141,6 +141,17 @@ jobs:
           UI_SCENARIO: scenarios/g4-proposal.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # W2 (WEFT, ADR-0053): two scripted agent sessions message over the WEFT bus through the app
+      # harness endpoint; the activity view shows each agent's timeline from the journals only.
+      - name: Run W2 agent activity scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/w2
+          UI_SCENARIO: scenarios/w2-activity.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # C3 (routing experience): the Route tool's routing options in the inspector.
       - name: Run C3 routing scenario under Xvfb
         if: always()
