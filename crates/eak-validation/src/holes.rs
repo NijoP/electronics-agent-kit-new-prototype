@@ -33,7 +33,7 @@ pub fn object_class(p: &Project, it: &copper::CopperItem) -> ObjectClass {
     }
 }
 
-// The hole list is part of the one board geometry (ADR-0051); re-exported for DFM and tests.
+// The hole list is part of the one board geometry (ADR-0052); re-exported for DFM and tests.
 pub use eak_engineering::board::{holes, Hole};
 
 fn mm(v: f64) -> String {

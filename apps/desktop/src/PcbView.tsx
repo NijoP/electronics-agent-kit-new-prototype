@@ -298,7 +298,7 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const hiddenKey = [...lv.hidden].sort().join(",");
   const colourKey = order.map((l) => lv.colourOf(l)).join(",");
   const sceneAirwires = lv.airwires ? (airwires ?? null) : null;
-  // The engine legend of this revision (ADR-0051: the silkscreen DRC and the Gerber use).
+  // The engine legend of this revision (ADR-0052: the silkscreen DRC and the Gerber use).
   const revision = snapshot.project.revision;
   const [geometry, setGeometry] = useState<BoardGeometry | null>(null);
   useEffect(() => {

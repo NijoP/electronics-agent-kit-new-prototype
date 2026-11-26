@@ -739,7 +739,7 @@ pub fn connectivity(s: &Session) -> Result<ConnectivityReport, String> {
     })
 }
 
-/// The board as fabricated for the current revision (ADR-0051): the one geometry DRC checks
+/// The board as fabricated for the current revision (ADR-0052): the one geometry DRC checks
 /// (outline, cut-outs, copper, zone fills, holes, legend) plus the 3D bodies built from it. The
 /// 2D and 3D views draw this; read-only and derived per call, never stored.
 #[derive(Debug, Clone, Serialize)]

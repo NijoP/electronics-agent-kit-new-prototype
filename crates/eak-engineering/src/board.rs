@@ -3,7 +3,7 @@
 //! dead-island removal, drilled holes and the mask-clipped silkscreen legend.
 //!
 //! DRC, connectivity and the 3D scene read this one value instead of re-deriving geometry, so
-//! the geometry that is checked is the geometry that is drawn (ADR-0051). Derived on request,
+//! the geometry that is checked is the geometry that is drawn (ADR-0052). Derived on request,
 //! never stored.
 
 use crate::copper::{self, CopperItem, Core, ItemKind, Shape, ZoneFill};

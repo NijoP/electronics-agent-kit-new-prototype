@@ -1,6 +1,6 @@
 // 3D board scene. Pure data, no three.js: the viewer renders it and it is never electrical truth.
 // Copper, zone fills, holes, outline, cut-outs, silkscreen and bodies come from the engine's board
-// geometry (`board_geometry`, ADR-0051: the geometry DRC checks); until the geometry of the
+// geometry (`board_geometry`, ADR-0052: the geometry DRC checks); until the geometry of the
 // snapshot's revision arrives they are derived from the snapshot as before. Nothing is invented: a part without a body height in
 // its library definition is listed in `missing`, not drawn with a guessed height.
 import { layerColour, layerKey, layerName, stackLayers } from "../layers";

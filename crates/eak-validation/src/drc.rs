@@ -48,7 +48,7 @@ pub fn run(p: &Project) -> Report {
     run_with(p, &BoardGeometry::build(p))
 }
 
-/// DRC of `p` against `geo`, the board geometry the 2D and 3D views draw (ADR-0051): every copper,
+/// DRC of `p` against `geo`, the board geometry the 2D and 3D views draw (ADR-0052): every copper,
 /// fill, hole and legend check reads `geo`, so what is checked is what is drawn.
 pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     let c = &p.constraints;

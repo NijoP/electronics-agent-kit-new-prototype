@@ -38,7 +38,7 @@ export interface PcbSceneOptions {
    */
   fills?: FillView[] | null;
   /**
-   * The engine silkscreen legend for this revision (ADR-0051: the legend DRC and the Gerber use).
+   * The engine silkscreen legend for this revision (ADR-0052: the legend DRC and the Gerber use).
    * When present it is drawn on each side's silk in place of the plain refdes label; absent or
    * null: the refdes label is drawn as before.
    */

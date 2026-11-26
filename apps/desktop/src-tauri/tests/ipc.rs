@@ -897,7 +897,7 @@ fn zone_fills_follow_the_revision_and_the_stackup_round_trips() {
     let p = current_project(&s).unwrap().project;
     assert_eq!(r.revision, p.revision);
     assert_eq!(r.zone_fills, eak_engineering::fill_view::fill_views(&p));
-    // E1 (ADR-0051): the 2D/3D payload carries the very fills connectivity and DRC read.
+    // E1 (ADR-0052): the 2D/3D payload carries the very fills connectivity and DRC read.
     let g = board_geometry(&s).unwrap();
     assert_eq!(g.geometry.revision, p.revision);
     assert_eq!(g.geometry.fill_views, r.zone_fills);

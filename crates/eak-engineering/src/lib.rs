@@ -4,7 +4,7 @@
 //! * `calc`    – circuit calculations and engineering value parsing.
 //! * `netlist` – schematic connectivity → canonical nets.
 //! * `board`   – the one derived board geometry (outline, copper, fills, holes, silk) that DRC,
-//!   connectivity, the 3D scene and the desktop views all read (ADR-0051).
+//!   connectivity, the 3D scene and the desktop views all read (ADR-0052).
 //! * `copper`  – PCB copper shapes, zone fill with thermal reliefs, physical connectivity.
 //! * `stitch`  – zone stitching: escape vias for orphan SMD pads, stitching vias for pour islands (DESK).
 //! * `silk`    – silkscreen legend: stroke-font reference designators, mask-opening clip.

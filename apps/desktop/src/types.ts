@@ -975,7 +975,7 @@ export interface BoardHole { object_id: Id; pad: string; label: string; center: 
 export interface SilkStroke { a: Point; b: Point; width: Nm }
 export interface SceneBody3d { footprint_id: Id; symbol_id: Id; refdes: string; side: Side; x: number; y: number; z: number; sx: number; sy: number; sz: number; kind: string; color: string }
 /**
- * The board as fabricated for one revision (ADR-0051, `board_geometry` IPC): the one geometry DRC
+ * The board as fabricated for one revision (ADR-0052, `board_geometry` IPC): the one geometry DRC
  * checks, drawn by the 2D and 3D views. Coordinates in board nm unless named `_mm`.
  */
 export interface BoardGeometry {

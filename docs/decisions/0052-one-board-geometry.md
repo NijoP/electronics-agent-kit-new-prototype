@@ -1,4 +1,4 @@
-# ADR-0051: One derived board geometry for DRC, connectivity, 2D and 3D
+# ADR-0052: One derived board geometry for DRC, connectivity, 2D and 3D
 - **Date:** 2026-11-26
 - **Context:** EAK v2 slice E1 (board geometry truth). Each consumer re-derived the board on its
   own: DRC called `copper::items` and `copper::fill_zone`, then `copper::analyse` filled every zone

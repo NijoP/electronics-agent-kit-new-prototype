@@ -1,4 +1,4 @@
-//! DRC agreement (ADR-0051): the zone fill DRC checks is the fill the 2D/3D views draw. A zone
+//! DRC agreement (ADR-0052): the zone fill DRC checks is the fill the 2D/3D views draw. A zone
 //! clearance edit moves a thermal relief's spoke from landing to blocked; before and after, the
 //! thermal-relief state DRC reports matches the copper in the serialized `board_geometry`
 //! payload, spoke by spoke.

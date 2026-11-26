@@ -253,7 +253,7 @@ interface Three {
 export function Viewer3D({ projectId, revision, active, selected = null, onSelect, onProbe, execute, busy = false, layerColourOf = layerColour, layerHidden, onToggleLayer }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const three = useRef<Three | null>(null);
-  /** The engine board geometry (ADR-0051) of the latest revision read; null until it arrives. */
+  /** The engine board geometry (ADR-0052) of the latest revision read; null until it arrives. */
   const [geometry, setGeometry] = useState<BoardGeometry | null>(null);
   const [loads, setLoads] = useState<Record<string, Load>>({});
   const [reloadNonce, setReloadNonce] = useState(0);

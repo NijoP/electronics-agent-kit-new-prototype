@@ -281,7 +281,7 @@ export const api = {
   releaseCheck: () => call<ReleaseCheck>("release_check"),
   runReleaseChecks: () => call<ReleaseCheck>("run_release_checks"),
   connectivity: () => call<ConnectivityReport>("connectivity"),
-  /** E1 (ADR-0051): the board as fabricated, the geometry DRC checks; the 2D and 3D views draw it. */
+  /** E1 (ADR-0052): the board as fabricated, the geometry DRC checks; the 2D and 3D views draw it. */
   boardGeometry: () => call<BoardGeometry>("board_geometry"),
   aiPropose: (providerId: string, prompt: string) => call<AiProposal>("ai_propose", { provider_id: providerId, prompt }),
   aiAccept: (stepId: number) => call<CommandResponse>("ai_accept", { step_id: stepId }),
