@@ -12,10 +12,9 @@ the EAK application.
 ## 1. Design system
 
 ### Identity
-- **Idea:** an engineering instrument, not a website. The design should feel calm, precise and
-  bench-grade, like a well-made oscilloscope: dark matte housing, one warm metal, a cool signal.
-- **Signature:** the **copper trace**. The film opens on a single trace being routed. The same
-  copper line becomes the progress, focus and selection language in the product.
+- **Idea:** an engineering instrument, not a website: calm, precise and bench-grade. Near-black and white carry the identity, as in the TUSK (Tusk Innovations Global) mark.
+- **Brand mark:** the TUSK "T" in its orange, drawn inline as SVG. Orange is a restrained accent: the mark, the focus ring, the primary action and current progress. It never fills large areas.
+- **Materials stay physical:** board copper, ENIG gold and soldermask keep their real colours. Brand orange is never used for copper.
 
 ### CMF (colour, material, finish)
 | Role | Material | Value |
@@ -24,15 +23,16 @@ the EAK application.
 | App surface | Graphite | `#121316` |
 | Panels | Graphite, lifted | `#17191C` |
 | Raised, hover | Satin graphite | `#1E2024`, `#25282D` |
-| Text | Warm white, bone, ash | `#ECE8E1`, `#A7A29A`, `#6F6B65` |
-| Brand / focus | Copper | `#D8955C` (soft `rgba(216,149,92,.14)`) |
+| Text | White, grey, ash | `#F2F2F0`, `#A9A9A6`, `#6E6E6B` |
+| Brand accent / focus | TUSK orange | `#EE5F1B` (soft `rgba(238,95,27,.13)`) |
+| Board copper | Copper (physical) | `#D8955C` |
 | AI agent activity | Signal cyan | `#86C5E0` |
 | Pass, warning, fail, unknown | Phosphor, amber, coral, slate | `#7FCB9B`, `#E2B35C`, `#EC7C6B`, `#8A929E` |
 | Board | Matte black soldermask, ENIG gold pads, white silk | `#111614`, `#D4B36A`, `#E9E6DE` |
 
 - **Finish:** matte. A faint film grain (an SVG noise layer at 3% opacity) gives surfaces a material feel.
 - **Lighting:** a single soft key light from top left, made from layered solid tones and shadow falloff. No gradients for decoration.
-- **Status colour:** used only for status. Copper appears only where the user's focus is.
+- **Status colour:** used only for status. Orange appears only where the user's focus is.
 
 ### Type
 - **Faces:** the system UI stack (`Inter`, SF Pro, Segoe UI, Roboto) for interface text; the system monospace stack for designators, nets and values. Tabular numbers everywhere.
@@ -59,7 +59,7 @@ Separation between levels comes from tone steps. A hairline (`rgba(255,255,255,.
 | Kind | Curve | Duration |
 |---|---|---|
 | Interface | `cubic-bezier(.2,.7,.1,1)` | 140 ms for state, 240 ms for panels |
-| Camera (film and canvas moves) | `cubic-bezier(.65,0,.15,1)` | 900–1400 ms |
+| Camera (film and canvas moves; the film runs on a scrubbable timeline) | `cubic-bezier(.65,0,.15,1)` | 900–1400 ms |
 | Trace drawing | linear stroke-dash | – |
 
 - **One thing moves at a time**, and motion always means something: a change of state or a change of place.
@@ -67,11 +67,11 @@ Separation between levels comes from tone steps. A hairline (`rgba(255,255,255,.
 
 ### Iconography
 - **Style:** 20 px inline SVG with a 1.5 px stroke, round caps and joins, and geometric forms drawn from electronics: pin, trace, via, layer stack, probe.
-- **Rules:** no fills and no colour, except the active icon, which turns copper. Tool names (Claude Code, Codex and others) appear as text, never as logos.
+- **Rules:** no fills and no colour, except the active icon, which turns orange. Tool names (Claude Code, Codex and others) appear as text, never as logos.
 
 ## 2. Storyline: storyboard frame → product screen
 
-The storyline is the existing 15-frame storyboard: the engineer's view, the 12-stage workflow and its loops, the product architecture, and the AI tool integration (Traycer review report §3, §8, §10 and §11). A short opening of three beats (an intent, a trace becoming the board, the four-layer stack) introduces it and can be skipped. The frames then play in order as a guided walkthrough through the product: the presenter advances with → / ← or **Next**, and every screen stays freely explorable.
+The storyline is the existing 15-frame storyboard: the engineer's view, the 12-stage workflow and its loops, the product architecture, and the AI tool integration (Traycer review report §3, §8, §10 and §11). A launch film introduces it: brand reveal, intent, agents interpreting the brief and picking parts, the real schematic in macro, and the final reveal of EAK as one environment. It autoplays on the same data as the product, with play, pause, replay, skip, a scrubbable timeline with scene markers, and a seamless hand-off into the workspace. The frames then play in order as a guided walkthrough through the product: the presenter advances with → / ← or **Next**, and every screen stays freely explorable.
 
 1 First launch → Home · 2 Describe the design goal → Home, draft brief with question cards · 3 Continue next day → Home, Continue and Needs attention · 4 Workspace and journey → Schematic, journey in the top bar · 5 Choose components → Parts: symbol, footprint, datasheet values, LCSC (sample) · 6 Schematic capture → Schematic, Power sheet · 7 ERC with guided fixes → Checks · 8 Review a proposed change → Agents, Claude Code proposal, ERC re-run on a copy · 9 Update PCB → Board, update dialog · 10 Placement, routing, DRC → Agents, orchestrated Codex and Claude Code lanes with live tool calls on the canvas · 11 3D check → 3D, enclosure height check · 12 Outputs and release check → Fabricate: BOM, Gerber, assembly, release check · 13 Checkpoint, come back tomorrow → Project history and checkpoints · 14 Connect an AI tool, no terminal → Agents, AI tools · 15 Terminal → Terminal, a detected agent session.
 

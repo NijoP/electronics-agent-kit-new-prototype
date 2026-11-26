@@ -10,8 +10,8 @@
 :root{
   --h0:#0C0D0F;--h1:#121316;--h2:#17191C;--h3:#1E2024;--h4:#25282D;--h5:#2E3237;
   --hair:rgba(255,255,255,.05);
-  --t1:#ECE8E1;--t2:#A7A29A;--t3:#6F6B65;
-  --cu:#D8955C;--cu-soft:rgba(216,149,92,.14);--cu-line:rgba(216,149,92,.55);
+  --t1:#F2F2F0;--t2:#A9A9A6;--t3:#6E6E6B;
+  --cu:#EE5F1B;--cu-soft:rgba(238,95,27,.13);--cu-line:rgba(238,95,27,.55);
   --ai:#86C5E0;--ai-soft:rgba(134,197,224,.13);
   --ok:#7FCB9B;--warn:#E2B35C;--err:#EC7C6B;--unk:#8A929E;--gold:#D4B36A;
   --lF:#D8955C;--lB:#6E9FD0;--l1:#5FA88A;--l2:#D07A8C;--edge:#E2B35C;--silk:#E9E6DE;
@@ -36,7 +36,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .grow{flex:1;min-width:0}
 .btn{height:30px;padding:0 14px;border-radius:6px;background:var(--h3);color:var(--t1);white-space:nowrap;transition:background var(--d1) var(--e-ui)}
 .btn:hover{background:var(--h4)}
-.btn.pri{background:var(--cu);color:#1A1006;font-weight:560}.btn.pri:hover{background:#E3A36B}
+.btn.pri{background:var(--cu);color:#120804;font-weight:560}.btn.pri:hover{background:#F27A40}
 .btn.ai{background:var(--ai-soft);color:var(--ai)}.btn.ai:hover{background:rgba(134,197,224,.2)}
 .btn.q{background:none;color:var(--t2)}.btn.q:hover{background:var(--h3);color:var(--t1)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
@@ -46,30 +46,50 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .grain{position:fixed;inset:0;pointer-events:none;z-index:90;opacity:.035;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>")}
 
 /* film */
-#film{position:fixed;inset:0;z-index:50;background:var(--h0);transition:opacity 700ms var(--e-cam)}
-#film.gone{opacity:0;pointer-events:none}
-#film .layer{position:absolute;inset:0;opacity:0;transition:opacity 900ms var(--e-cam)}
-#film .layer.on{opacity:1}
-#film svg.scene{width:100%;height:100%;display:block}
-#fText{position:absolute;left:0;right:0;bottom:20%;text-align:center;pointer-events:none}
-#fText .t{font-weight:300;font-size:clamp(30px,3.4vw,56px);letter-spacing:-.01em;opacity:0;transform:translateY(8px);transition:opacity 900ms var(--e-cam),transform 900ms var(--e-cam)}
-#fText .s{margin-top:14px;font-size:clamp(14px,1.2vw,18px);color:var(--t2);opacity:0;transition:opacity 900ms var(--e-cam) 300ms}
-#fText.on .t{opacity:1;transform:none}#fText.on .s{opacity:1}
-#fText.small .t{font-size:clamp(20px,1.9vw,30px)}
-#fCtl{position:absolute;left:0;right:0;bottom:28px;display:flex;justify-content:center;align-items:center;gap:16px}
-#fActs{display:flex;gap:4px}
-#fActs button{width:34px;height:28px;display:flex;align-items:center;justify-content:center}
-#fActs button i{width:22px;height:2px;border-radius:1px;background:var(--h5);display:block;transition:background var(--d2)}
-#fActs button.on i{background:var(--cu)}#fActs button.done i{background:var(--t3)}
-#fBrand{position:absolute;left:32px;top:26px;display:flex;align-items:center;gap:12px;color:var(--t2);font-size:12px}
-#fEnter{position:absolute;right:28px;top:20px}
-#fHint{position:absolute;right:32px;bottom:34px;color:var(--t3);font-size:12px}
-.mark{font-weight:640;letter-spacing:.14em;color:var(--t1);font-size:14px}
-#fCanvas{position:absolute;inset:0;width:100%;height:100%}
-#fSide{position:absolute;right:7%;top:50%;transform:translateY(-50%);width:300px;display:flex;flex-direction:column;gap:14px}
-#fSide .it{opacity:0;transform:translateX(8px);transition:opacity 600ms var(--e-cam),transform 600ms var(--e-cam)}
-#fSide .it.on{opacity:1;transform:none}
-
+#film{position:fixed;inset:0;z-index:50;background:#0A0A0B;overflow:hidden}
+#film.gone{display:none}
+.tmark{display:inline-block;flex:none}
+#fStage{position:absolute;inset:0}
+.fs{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 700ms var(--e-cam)}
+.fs.on{opacity:1}
+.fs .cam{will-change:transform}
+#fs-brand .cam{display:flex;flex-direction:column;align-items:center;gap:18px}
+#fs-brand .tm{width:74px;height:74px}
+#fs-brand .tm path{fill:#EE5F1B;stroke:#EE5F1B;stroke-width:.25;stroke-dasharray:90;stroke-dashoffset:90;fill-opacity:0}
+#fs-brand .fw{font-weight:640;letter-spacing:.32em;font-size:58px;color:#F2F2F0;margin-right:-.32em}
+#fs-brand .ft{font-weight:300;font-size:22px;color:#F2F2F0}
+#fs-brand .fb{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#6E6E6B}
+#fs-intent .cam{width:min(860px,80vw);display:flex;flex-direction:column;gap:22px}
+.fi{background:#131315;border-radius:14px;padding:22px 26px;font-size:22px;font-weight:300;min-height:76px;color:#F2F2F0;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.fi .caret{display:inline-block;width:2px;height:1.05em;background:#EE5F1B;margin-left:3px;vertical-align:-3px}
+.fbrief{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px 22px;font-size:15px}
+.fbrief .k{color:#6E6E6B;font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding-top:2px}
+#fs-agents .cam{width:min(1120px,88vw);display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:40px;align-items:start}
+.flane{padding:16px 0;display:flex;gap:14px;align-items:flex-start}
+.flane .st{color:var(--ai);font-size:13px}
+.fpart{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 18px;padding:12px 0;border-top:1px solid rgba(255,255,255,.06)}
+.fpart .m{font:15px var(--mono);color:#F2F2F0}.fpart .d{color:#A9A9A6;font-size:13px}.fpart .l{font:12px var(--mono);color:#6E6E6B;text-align:right}
+#fSchHost{position:absolute;inset:6% 4% 22% 4%;border-radius:14px;overflow:hidden;background:#0C0D0F;box-shadow:0 40px 100px rgba(0,0,0,.7)}
+#fSchHost .cam{position:absolute;inset:0;transform-origin:38% 48%}
+#fSchHost [data-module="schematic"] .sx-bar,#fSchHost [data-module="schematic"] .sx-left,#fSchHost [data-module="schematic"] .sx-right,#fSchHost [data-module="schematic"] .sx-drawer,#fSchHost [data-module="schematic"] footer{display:none!important}
+#fSchHost [data-module="schematic"]{min-height:0!important;pointer-events:none}
+#fSchHost [data-module="schematic"] .sx-body{position:absolute!important;inset:0!important}#fSchHost [data-module="schematic"] .sx-sch{grid-template-columns:minmax(0,1fr)!important;height:100%}
+#fDof{position:absolute;inset:0;pointer-events:none;backdrop-filter:blur(2.5px);-webkit-backdrop-filter:blur(2.5px);-webkit-mask-image:radial-gradient(ellipse 46% 42% at 40% 48%,transparent 55%,#000 100%);mask-image:radial-gradient(ellipse 46% 42% at 40% 48%,transparent 55%,#000 100%)}
+.fcap{position:absolute;left:0;right:0;bottom:10%;text-align:center;font-weight:300;font-size:24px;color:#F2F2F0}
+.fcap small{display:block;font-size:14px;color:#A9A9A6;margin-top:8px;font-weight:400}
+#fs-final .cam{display:flex;flex-direction:column;align-items:center;gap:22px;text-align:center}
+#fs-final .big1{font-weight:300;font-size:56px;letter-spacing:-.01em}
+#fs-final .areas{display:flex;gap:26px;color:#A9A9A6;font-size:15px}
+#fTop{position:absolute;left:28px;right:24px;top:20px;display:flex;align-items:center;gap:14px;color:#A9A9A6;font-size:12px;z-index:2}
+#fTop .wm{display:flex;align-items:center;gap:8px;color:#F2F2F0;font-weight:640;letter-spacing:.2em;font-size:13px}
+#fBar{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:min(880px,86vw);display:flex;align-items:center;gap:12px;z-index:2}
+#fTrack{position:relative;flex:1;height:34px;cursor:pointer;touch-action:none}
+#fTrack .rail{position:absolute;left:0;right:0;top:9px;height:3px;border-radius:2px;background:#26262A}
+#fFill{position:absolute;left:0;top:9px;height:3px;border-radius:2px;background:#F2F2F0}
+#fHead{position:absolute;top:4px;width:13px;height:13px;margin-left:-6.5px;border-radius:50%;background:#F2F2F0;box-shadow:0 0 0 4px rgba(10,10,11,.8)}
+.fmk{position:absolute;top:0;height:34px;padding-top:20px;font-size:11px;color:#6E6E6B;white-space:nowrap;transform:translateX(-1px);border-left:1px solid #3A3A3F}
+.fmk span{padding-left:6px}.fmk.on{color:#F2F2F0}
+#fTime{font:12px var(--mono);color:#6E6E6B;width:86px;text-align:right}
 /* shell */
 #app{position:fixed;inset:0;display:grid;grid-template-columns:56px minmax(0,1fr);grid-template-rows:46px minmax(0,1fr) auto 26px;background:var(--h1);opacity:0;transform:scale(1.015);transition:opacity 700ms var(--e-cam),transform 900ms var(--e-cam)}
 #app.on{opacity:1;transform:none}
@@ -252,15 +272,16 @@ R.parts=()=>{if(sxMount())sxShow("v-parts","lib");else R.partsOwn();};
 <body>
 <div class="grain"></div>
 
-<section id="film" aria-label="EAK introduction">
-  <div class="layer" id="L-pad"><svg class="scene" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" id="padSvg"></svg></div>
-  <div class="layer" id="L-board"><svg class="scene" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid meet" id="boardFilmSvg"></svg></div>
-  <div class="layer" id="L-3d"><canvas id="fCanvas"></canvas><div id="fSide"></div></div>
-  <div id="fText"><div class="t"></div><div class="s"></div></div>
-  <div id="fBrand"><span class="mark">EAK</span><span>Product vision · interactive simulation</span></div>
-  <button class="btn" id="fEnter" data-a="enter">Enter EAK</button>
-  <div id="fCtl"><button class="ibtn" data-a="filmPrev" aria-label="Previous"><svg class="ico" viewBox="0 0 20 20"><path d="M12 5l-5 5 5 5"/></svg></button><div id="fActs"></div><button class="ibtn" data-a="filmNext" aria-label="Next"><svg class="ico" viewBox="0 0 20 20"><path d="M8 5l5 5-5 5"/></svg></button></div>
-  <div id="fHint">Space or → to continue</div>
+<section id="film" aria-label="EAK launch film">
+  <div id="fStage">
+    <div class="fs" id="fs-brand"><div class="cam"><svg class="tmark tm" viewBox="0 0 20 20" aria-hidden="true"><path d="M0 0H20V3.2H15.6C14.1 3.2 13 4.3 13 5.9V20C11.4 16.2 9.8 9.6 9.8 3.2H0Z" fill="#EE5F1B"/></svg><div class="fw">EAK</div><div class="ft">Electronics, engineered with agents.</div><div class="fb">by Tusk Innovations Global</div></div></div>
+    <div class="fs" id="fs-intent"><div class="cam"><div class="lbl">It starts with an intent</div><div class="fi"><span id="fiText"></span><i class="caret"></i></div><div class="fbrief" id="fiBrief"></div></div></div>
+    <div class="fs" id="fs-agents"><div class="cam"><div><div class="lbl" style="margin-bottom:8px">Agents interpret the brief</div><div id="faLanes"></div></div><div><div class="row" style="margin-bottom:8px"><span class="lbl grow">Parts proposed from the library</span><span class="t3" style="font-size:11.5px">LCSC numbers · sample data</span></div><div id="faParts"></div></div></div></div>
+    <div class="fs" id="fs-sch"><div id="fSchHost"><div class="cam" id="fSchCam"></div><div id="fDof"></div></div><div class="fcap" id="fSchCap">The real schematic. Three sheets, one model.<small>USB_DP / USB_DN, declared as a 90 Ω pair, followed across the design.</small></div></div>
+    <div class="fs" id="fs-final"><div class="cam"><div class="big1">One environment.</div><div class="areas" id="fAreas"></div><div class="row" style="gap:10px;margin-top:18px"><svg class="tmark" style="width:26px;height:26px" viewBox="0 0 20 20" aria-hidden="true"><path d="M0 0H20V3.2H15.6C14.1 3.2 13 4.3 13 5.9V20C11.4 16.2 9.8 9.6 9.8 3.2H0Z" fill="#EE5F1B"/></svg><span class="mark" style="font-size:18px;letter-spacing:.3em">EAK</span></div></div></div>
+  </div>
+  <div id="fTop"><span class="wm"><svg class="tmark" style="width:16px;height:16px" viewBox="0 0 20 20" aria-hidden="true"><path d="M0 0H20V3.2H15.6C14.1 3.2 13 4.3 13 5.9V20C11.4 16.2 9.8 9.6 9.8 3.2H0Z" fill="#EE5F1B"/></svg>EAK</span><span>Product vision · interactive simulation</span><span class="grow"></span><button class="btn q" data-a="enter">Skip to EAK</button></div>
+  <div id="fBar"><button class="ibtn" id="fPlayBtn" data-a="fPlay" aria-label="Pause"></button><button class="ibtn" data-a="fReplay" aria-label="Replay"><svg class="ico" viewBox="0 0 20 20"><path d="M4 10a6 6 0 1 0 2-4.5"/><path d="M4 3v3.5h3.5"/></svg></button><div id="fTrack" role="slider" tabindex="0" aria-label="Film timeline" aria-valuemin="0"><div class="rail"></div><div id="fFill"></div><div id="fMarks"></div><div id="fHead"></div></div><span id="fTime"></span></div>
 </section>
 
 <div id="app" aria-hidden="true">
@@ -273,7 +294,7 @@ R.parts=()=>{if(sxMount())sxShow("v-parts","lib");else R.partsOwn();};
     <div class="row" style="gap:2px">
       <button class="ibtn" data-a="undo" id="bUndo" aria-label="Undo"><svg class="ico" viewBox="0 0 20 20"><path d="M7 4L3 8l4 4"/><path d="M3 8h9a5 5 0 010 10H9"/></svg></button>
       <button class="ibtn" data-a="redo" id="bRedo" aria-label="Redo"><svg class="ico" viewBox="0 0 20 20"><path d="M13 4l4 4-4 4"/><path d="M17 8H8a5 5 0 000 10h3"/></svg></button>
-      <button class="ibtn" data-a="replay" aria-label="Replay the opening"><svg class="ico" viewBox="0 0 20 20"><path d="M7 5l8 5-8 5z"/></svg></button>
+      <button class="ibtn" data-a="replay" aria-label="Replay the launch film"><svg class="ico" viewBox="0 0 20 20"><path d="M7 5l8 5-8 5z"/></svg></button>
     </div>
   </header>
   <main id="main">
@@ -947,7 +968,7 @@ R.parts=()=>{if(sxMount())sxShow("v-parts","lib");else R.partsOwn();};
     (sheet.texts || []).forEach(function (t) { s += txt(t[0], t[1], t[2], 's-note'); });
     // title block
     s += '<g><rect class="s-tb" x="880" y="672" width="296" height="68"/><path class="s-tb" d="M880 696h296M1080 696v44"/>' +
-      txt(892, 689, PROJECT.name + '  ·  Air-quality node', 's-tbh') + txt(892, 713, 'Sheet ' + sheet.id + ' / ' + SHEETS.length + '  ·  ' + sheet.name, 's-tbt') +
+      txt(892, 689, PROJECT.name + '  ·  Environmental sensor node', 's-tbh') + txt(892, 713, 'Sheet ' + sheet.id + ' / ' + SHEETS.length + '  ·  ' + sheet.name, 's-tbt') +
       txt(892, 729, '4 layers  ·  EAK-IR', 's-tbt') + txt(1092, 713, 'Rev ' + PROJECT.rev, 's-tbt') + txt(1092, 729, 'A3', 's-tbt') + '</g>';
     (sheet.buses || []).forEach(function (b) { s += '<polyline class="s-bus" points="' + b.map(function (q) { return q.join(','); }).join(' ') + '"/>'; });
     (sheet.entries || []).forEach(function (e) { s += '<line class="s-wire" x1="' + e[0] + '" y1="' + e[1] + '" x2="' + e[2] + '" y2="' + e[3] + '"/>'; });
@@ -1717,7 +1738,7 @@ const U={view:"home",sheet:"mcu",sel:null,hl:null,vis:{F:1,In1:1,In2:1,B:1,SilkF
 const VIEWS=[["home","Home","home"],["project","Project","project"],["sch","Schematic","sch"],["pcb","Board","pcb"],["parts","Parts","parts"],["agents","Agents","agents"],["checks","Checks","checks"],["v3d","3D","v3d"],["fab","Fabricate","fab"],["term","Terminal","term"]];
 
 function renderShell(){
- $("#rail").innerHTML=`<button class="brand" data-a="about" aria-label="About EAK"><span class="mark" style="font-size:12px">EAK</span></button>`+VIEWS.map((v,i)=>`<button class="nav ${U.view===v[0]?"on":""}" data-a="go" data-arg="${v[0]}" aria-label="${v[1]}">${icon(v[2])}<span class="tip">${v[1]}<kbd>${(i+1)%10}</kbd></span></button>`).join("");
+ $("#rail").innerHTML=`<button class="brand" data-a="about" aria-label="About EAK"><svg class="tmark" style="width:15px;height:15px;margin-right:4px" viewBox="0 0 20 20" aria-hidden="true"><path d="M0 0H20V3.2H15.6C14.1 3.2 13 4.3 13 5.9V20C11.4 16.2 9.8 9.6 9.8 3.2H0Z" fill="#EE5F1B"/></svg><span class="mark" style="font-size:11px">EAK</span></button>`+VIEWS.map((v,i)=>`<button class="nav ${U.view===v[0]?"on":""}" data-a="go" data-arg="${v[0]}" aria-label="${v[1]}">${icon(v[2])}<span class="tip">${v[1]}<kbd>${(i+1)%10}</kbd></span></button>`).join("");
  $("#revLbl").textContent="r"+D.rev;
  const st=STAGES.map((s,i)=>stageState(i));const nx=st.findIndex(v=>v!==2);
  $("#journey").innerHTML=STAGES.map((s,i)=>`<button class="jd s${st[i]} ${i===nx?"nx":""}" data-a="go" data-arg="${s[1]}" title="${s[0]}" aria-label="${s[0]}: ${["has errors","not done","done"][st[i]]}"><span></span></button>`).join("<i></i>")+`<span class="jl">${nx<0?"Every stage complete":"Next · "+STAGES[nx][0]}</span>`;
@@ -1740,7 +1761,7 @@ R.home=()=>{const e=counts(ercRun(D)),r=counts(drcRun(D));const rd=readiness(D);
  if(D.ercFix&&!D.synced)att.push(["warn","Board is behind the schematic","R3 and D3 are not on the board yet.","pcb"]);
  if(!D.usbRouted)att.push(["err","USB pair unrouted","USB_DP and USB_DN need a 90 Ω pair on L1.","pcb"]);
  const SC={err:"var(--err)",warn:"var(--warn)",unk:"var(--unk)",ai:"var(--ai)"};let last=0;st.forEach((v,i)=>{if(v===2)last=i});
- const J=`<svg viewBox="-24 0 568 60" style="width:100%;height:60px"><line x1="10" y1="20" x2="510" y2="20" stroke="#2E3237" stroke-width="2"/><line x1="10" y1="20" x2="${10+last*(500/9)}" y2="20" stroke="#D8955C" stroke-width="2"/>${STAGES.map((s,i)=>{const x=10+i*(500/9),v=st[i];return`<g data-a="go" data-arg="${s[1]}" style="cursor:pointer"><rect x="${x-6}" y="14" width="12" height="12" rx="2.5" fill="${v===2?"#D4B36A":v===0?"#EC7C6B":"#17191C"}" stroke="${v===2?"#D4B36A":v===0?"#EC7C6B":"#6F6B65"}" stroke-width="1.5"/><text x="${x}" y="48" fill="${i===nx?"#ECE8E1":"#A7A29A"}" font-size="10.5" text-anchor="middle">${s[0]}</text></g>`}).join("")}</svg>`;
+ const J=`<svg viewBox="-24 0 568 60" style="width:100%;height:60px"><line x1="10" y1="20" x2="510" y2="20" stroke="#2E3237" stroke-width="2"/><line x1="10" y1="20" x2="${10+last*(500/9)}" y2="20" stroke="#EE5F1B" stroke-width="2"/>${STAGES.map((s,i)=>{const x=10+i*(500/9),v=st[i];return`<g data-a="go" data-arg="${s[1]}" style="cursor:pointer"><rect x="${x-6}" y="14" width="12" height="12" rx="2.5" fill="${v===2?"#D4B36A":v===0?"#EC7C6B":"#17191C"}" stroke="${v===2?"#D4B36A":v===0?"#EC7C6B":"#6F6B65"}" stroke-width="1.5"/><text x="${x}" y="48" fill="${i===nx?"#ECE8E1":"#A7A29A"}" font-size="10.5" text-anchor="middle">${s[0]}</text></g>`}).join("")}</svg>`;
  $("#v-home").innerHTML=`<div class="home"><div class="l">
   <div><div class="lbl" style="margin-bottom:10px">Good morning</div><div class="hello">Aurora S3 is ${done} of ${rd.length} steps from fabrication review.</div></div>
   <div class="col" style="gap:10px"><div class="intent"><textarea id="intentIn" rows="1" placeholder="Describe the board you want to build…" aria-label="Describe a board"></textarea><button class="btn pri" data-a="intent" style="height:40px">Start</button></div>
@@ -2007,7 +2028,7 @@ let palItems=[],palI=0;
 function palOpen(){$("#pal").classList.add("on");const i=$("#palIn");i.value="";palFill("");i.focus();}
 function palClose(){$("#pal").classList.remove("on");}
 function palFill(q){q=q.toLowerCase();const items=[...VIEWS.map(v=>({t:"Go to "+v[1],k:"Area",f:()=>go(v[0])})),
- {t:"Start the guided walkthrough",k:"Guide",f:()=>guideStart(0)},{t:"Run ERC",k:"Check",f:()=>A.runErc()},{t:"Run DRC",k:"Check",f:()=>A.runDrc()},{t:"Generate outputs",k:"Fabricate",f:()=>A.genOutputs()},{t:"Replay the opening",k:"View",f:()=>A.replay()},{t:"Explode the board in 3D",k:"3D",f:()=>{U.explode=1;go("v3d")}},
+ {t:"Start the guided walkthrough",k:"Guide",f:()=>guideStart(0)},{t:"Run ERC",k:"Check",f:()=>A.runErc()},{t:"Run DRC",k:"Check",f:()=>A.runDrc()},{t:"Generate outputs",k:"Fabricate",f:()=>A.genOutputs()},{t:"Replay the launch film",k:"View",f:()=>A.replay()},{t:"Explode the board in 3D",k:"3D",f:()=>{U.explode=1;go("v3d")}},
  {t:"Ask an agent to resolve ERC findings",k:"Agent",f:()=>A.agentTask("erc")},{t:"Ask an agent to route the USB pair",k:"Agent",f:()=>A.agentTask("usb")},{t:"Orchestrate: bring the layout to DRC clean",k:"Agent",f:()=>A.orchestrate()},
  ...Object.keys(P).filter(has).map(r=>({t:`${r} · ${P[r].mpn}`,k:"Part",f:()=>{U.sheet=P[r].sheet;go("sch",{sel:r})}})),
  ...["+3V3","VIN","USB_DP","USB_DN","I2C_SDA","I2C_SCL","EN","VBUS"].map(n=>({t:"Net "+n,k:"Net",f:()=>go("pcb",{hl:n})}))];
@@ -2046,9 +2067,9 @@ function guideGo(i){if(i<0)return;if(i>=GUIDE.length){U.guideOn=false;renderShel
 const A={
  go(a){go(a)},
  attn(a){if(a.startsWith("parts:"))go("parts",{partSel:a.slice(6)});else go(a)},
- about(){dlg(`<h2>About this vision</h2><div class="t2" style="line-height:1.65">EAK is an electronics engineering workspace where AI agents draft and route the design with you, and EAK itself checks every change before you accept it.<br><br>This page is a <b style="color:var(--t1);font-weight:560">product vision and interactive simulation</b>. The AI tools, the LCSC catalogue, stock and prices are simulated with sample data; nothing here connects to a live service. Engineering numbers (impedance, rule checks, BOM totals) are computed in the page from the sample design.</div><div class="row"><span class="grow"></span><button class="btn" data-a="replay">Replay the opening</button><button class="btn" data-a="guideOpen">Guided walkthrough</button><button class="btn pri" data-a="closeDlg">Close</button></div>`)},
+ about(){dlg(`<h2>About this vision</h2><div class="t2" style="line-height:1.65">EAK is an electronics engineering workspace where AI agents draft and route the design with you, and EAK itself checks every change before you accept it.<br><br>This page is a <b style="color:var(--t1);font-weight:560">product vision and interactive simulation</b>. The AI tools, the LCSC catalogue, stock and prices are simulated with sample data; nothing here connects to a live service. Engineering numbers (impedance, rule checks, BOM totals) are computed in the page from the sample design.</div><div class="row"><span class="grow"></span><button class="btn" data-a="replay">Replay the launch film</button><button class="btn" data-a="guideOpen">Guided walkthrough</button><button class="btn pri" data-a="closeDlg">Close</button></div>`)},
  closeDlg(){closeDlg()}, palette(){palOpen()}, undo(){undo()}, redo(){redo()},
- replay(){closeDlg();startFilm(0)},
+ replay(){closeDlg();startFilm()},
  guideOpen(){closeDlg();guideStart(U.gi||0)}, guideNext(){guideGo(U.gi+1)}, guidePrev(){guideGo(U.gi-1)}, guideClose(){U.guideOn=false;renderShell()},
  newDesign(){const t=$("#intentIn");t.focus();toast("Describe the board; EAK drafts a brief you confirm")},
  importDesign(){dlg(`<h2>Import a KiCad project</h2><div class="t2" style="line-height:1.6">Choose a .kicad_pro folder. EAK converts the schematic, board and libraries into one EAK design and lists anything it could not convert, so nothing is dropped silently.</div><div class="row"><span class="grow"></span><button class="btn q" data-a="closeDlg">Cancel</button><button class="btn pri" data-a="importDone">Import sample</button></div>`)},
@@ -2121,7 +2142,7 @@ const A={
  termClose(a){const T=U.term;T.tabs=T.tabs.filter(x=>x.id!==+a);if(T.cur===+a)T.cur=T.tabs[0].id;R.term()},
  termFocus(){const i=$("#termIn");if(i)i.focus()},
  toast(a){toast(a)},
- enter(){enterApp()}, filmNext(){filmGo(FI+1)}, filmPrev(){filmGo(FI-1)}, act(a){filmGo(+a)},
+ enter(){enterApp()}, fPlay(){FILM.playing=!FILM.playing;FILM.last=performance.now();filmRender()}, fReplay(){FILM.t=0;FILM.playing=true;FILM.last=performance.now();filmRender()}, fSeek(a){filmSeek(+a)},
 };
 document.addEventListener("click",e=>{const el=e.target.closest("[data-a]");if(!el||el.tagName==="INPUT")return;if(el.disabled)return;const f=A[el.dataset.a];if(!f){console.error("no action",el.dataset.a);return;}e.stopPropagation();f(el.dataset.arg,el);});
 $("#scrim").addEventListener("click",e=>{if(e.target.id==="scrim")closeDlg()});
@@ -2129,7 +2150,7 @@ document.addEventListener("keydown",e=>{const typing=/INPUT|TEXTAREA|SELECT/.tes
  if(e.target.id==="termIn"&&e.key==="Enter"){termRun(e.target.value);return;}
  if(e.target.id==="intentIn"&&e.key==="Enter"&&!e.shiftKey){e.preventDefault();A.intent();return;}
  if(e.target.id==="agentIn"&&e.key==="Enter"&&!e.shiftKey){e.preventDefault();A.agentSend();return;}
- if(filmOn){if(e.key===" "||e.key==="ArrowRight"||e.key==="PageDown"){e.preventDefault();filmGo(FI+1);}else if(e.key==="ArrowLeft"||e.key==="PageUp"){e.preventDefault();filmGo(FI-1);}else if(e.key==="Escape"||e.key==="Enter"){e.preventDefault();enterApp();}else if(/^[1-3]$/.test(e.key))filmGo(+e.key-1);return;}
+ if(filmOn){if(e.key===" "){e.preventDefault();A.fPlay();}else if(e.key==="ArrowRight"){e.preventDefault();filmSeek(FILM.t+5000);}else if(e.key==="ArrowLeft"){e.preventDefault();filmSeek(FILM.t-5000);}else if(e.key==="Home"){e.preventDefault();filmSeek(0);}else if(e.key==="Escape"||e.key==="Enter"){e.preventDefault();enterApp();}return;}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();palOpen();return;}
  if(e.key==="Escape"){if($("#pal").classList.contains("on"))palClose();else closeDlg();return;}
  if(typing)return;
@@ -2141,36 +2162,59 @@ document.addEventListener("keydown",e=>{const typing=/INPUT|TEXTAREA|SELECT/.tes
  if(/^[0-9]$/.test(e.key)&&!e.ctrlKey&&!e.metaKey&&!e.altKey)go(VIEWS[(+e.key+9)%10][0]);});
 document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches&&e.target.matches(".proj,.tree .n")){e.preventDefault();e.target.click();}});
 
-/* opening: a short framing of the storyline (three beats, skippable) */
-let FI=-1,filmOn=false,fTimers=[],fRaf=null;const fCam={yaw:-0.6,tilt:1.0,zoom:0.95};
-const later=(fn,ms)=>fTimers.push(setTimeout(fn,RM?0:ms));
-function fText(t,s,small){const el=$("#fText");el.classList.remove("on");el.classList.toggle("small",!!small);later(()=>{el.querySelector(".t").textContent=t||"";el.querySelector(".s").textContent=s||"";if(t)el.classList.add("on");},120);}
-function layers(on){["L-pad","L-board","L-3d"].forEach(id=>$("#"+id).classList.toggle("on",on.includes(id)));}
-function startFilm(i){filmOn=true;$("#film").classList.remove("gone");$("#app").classList.remove("on");$("#app").setAttribute("aria-hidden","true");$("#fActs").innerHTML=[0,1,2].map(k=>`<button data-a="act" data-arg="${k}" aria-label="Beat ${k+1}"><i></i></button>`).join("");FI=-1;filmGo(i||0);}
-function filmGo(i){if(i<0)i=0;if(i>2){enterApp();return;}fTimers.forEach(clearTimeout);fTimers=[];cancelAnimationFrame(fRaf);FI=i;
- document.querySelectorAll("#fActs button").forEach((b,k)=>{b.classList.toggle("on",k===i);b.classList.toggle("done",k<i)});
- $("#fHint").textContent=i<2?"Space or → to continue":"Enter to begin the walkthrough";$("#fEnter").className=i===2?"btn pri":"btn";[beat1,beat2,beat3][i]();}
-function padScene(trace){$("#padSvg").innerHTML=`<defs><radialGradient id="spec" cx=".35" cy=".3" r=".7"><stop offset="0" stop-color="#F4DDA6"/><stop offset=".45" stop-color="#D4B36A"/><stop offset="1" stop-color="#8C7036"/></radialGradient><filter id="soft"><feGaussianBlur stdDeviation="18"/></filter></defs>
- <rect width="1440" height="900" fill="#0C0D0F"/><ellipse cx="560" cy="410" rx="260" ry="190" fill="#15171A" filter="url(#soft)"/>
- <rect x="536" y="402" width="56" height="40" rx="5" fill="#050606" opacity=".6"/><rect x="530" y="392" width="56" height="40" rx="5" fill="url(#spec)"/>
- ${trace?`<path id="trc" d="M586 412 H760 L820 352 H980 L1040 412 H1120" fill="none" stroke="#D8955C" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100" style="transition:stroke-dashoffset ${RM?0:1500}ms cubic-bezier(.65,0,.15,1)"/><circle id="via1" cx="820" cy="352" r="0" fill="#C9A866" style="transition:r 400ms"/><circle cx="820" cy="352" r="0" fill="#0C0D0F" id="via1h" style="transition:r 400ms"/><rect id="padB" x="1120" y="392" width="56" height="40" rx="5" fill="url(#spec)" opacity="0" style="transition:opacity 600ms"/>`:""}`;}
-function beat1(){layers(["L-pad"]);padScene(false);fText("","");later(()=>fText("Every board begins with an intent.","",true),900);}
-function beat2(){layers(["L-pad"]);padScene(true);fText("","");
- later(()=>{const t=$("#trc");if(t)t.style.strokeDashoffset="0";},200);
- later(()=>{const v=$("#via1"),h=$("#via1h");if(v){v.setAttribute("r","13");h.setAttribute("r","6");}},900);
- later(()=>{const b=$("#padB");if(b)b.style.opacity="1";},1500);
- later(()=>{$("#boardFilmSvg").innerHTML=`<g id="bfg" style="transform-origin:720px 450px;transform:scale(3.2);transition:transform ${RM?0:1400}ms cubic-bezier(.65,0,.15,1)"><svg x="290" y="140" width="860" height="620" viewBox="-3 -3 62 46">${boardSvg({d:Object.assign(clone(D),{usbRouted:true}),vis:{F:1,In1:1,In2:0,B:1,SilkF:1,Edge:1}})}</svg></g>`;layers(["L-board"]);requestAnimationFrame(()=>requestAnimationFrame(()=>{const g=$("#bfg");if(g)g.style.transform="scale(.74) translateY(-110px)";}));},2300);
- later(()=>fText("EAK. Electronics, engineered with agents.","Describe the board. Agents draft it. EAK verifies every change before you accept it."),3000);}
-function beat3(){layers(["L-3d"]);fText("","");const cv=$("#fCanvas"),side=$("#fSide");const dd=Object.assign(clone(D),{usbRouted:true});
- side.innerHTML=[["L1 · Top signal","1 oz copper · USB pair 0.26 / 0.15 mm","#D8955C"],["L2 · GND plane","Unbroken reference under every signal","#5FA88A"],["L3 · +3V3 plane","Kept clear of the antenna","#D07A8C"],["L4 · Bottom signal","I²C escape and GND pour","#6E9FD0"],["Fifteen moments, one engineer","From the first launch to the release check","#ECE8E1"]].map(x=>`<div class="it"><div style="font-size:13px;color:${x[2]}">${x[0]}</div><div class="t2" style="font-size:12.5px">${x[1]}</div></div>`).join("");
- const t0=performance.now();const loop=now=>{const k=Math.min(1,(now-t0)/(RM?1:2600));const ease=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;fCam.yaw=-0.6+0.25*Math.sin(now/4000);render3D(cv,fCam,{explode:ease,cx:.4,cy:.5,d:dd});if(!RM)fRaf=requestAnimationFrame(loop);};fRaf=requestAnimationFrame(loop);
- side.querySelectorAll(".it").forEach((el,i)=>later(()=>el.classList.add("on"),900+i*350));
- later(()=>fText("One model. Schematic, layout, 3D and manufacturing are views of the same design.","",true),2800);}
-function enterApp(){if(!filmOn)return;filmOn=false;fTimers.forEach(clearTimeout);cancelAnimationFrame(fRaf);$("#film").classList.add("gone");$("#app").removeAttribute("aria-hidden");$("#app").classList.add("on");guideStart(0);}
+/* launch film: autoplay timeline, deterministic in time so it can be scrubbed */
+let filmOn=false;const FILM={t:0,playing:false,last:0,raf:0,scenes:[],built:false,fsx:null,hl:false};
+const clamp01=x=>Math.max(0,Math.min(1,x)),seg=(p,a,b)=>clamp01((p-a)/(b-a)),ez=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const FILM_INTENT="A 12–24 V ESP32-S3 sensor node: USB-C for programming, BME280 and SHT40 on I²C, reporting over Wi-Fi.";
+const FILM_BRIEF=[["Power","12–24 V in, TPS62933 buck to 3.3 V"],["USB","USB-C 2.0, ESD protected, 90 Ω pair"],["Sensors","BME280 and SHT40 on I²C"],["Board","4 layers: Top, GND, PWR, Bottom"]];
+const FILM_PARTS=["TPS62933DRLR","TPS2051BDBVR","USBLC6-2SC6","ESP32-S3-WROOM-1-N8R8","BME280","SHT40-AD1B","USB4105-GF-A"];
+function filmScenes(){const M=window.EAKModules&&window.EAKModules.schematic;return[{id:"brand",label:"EAK",d:4200,r:sBrand},{id:"intent",label:"Intent",d:6800,r:sIntent},{id:"agents",label:"Agents",d:7200,r:sAgents},...(M&&M.data&&document.getElementById("tpl-sx")?[{id:"sch",label:"Schematic",d:7400,r:sSch}]:[]),{id:"final",label:"One environment",d:5600,r:sFinal}];}
+const filmTotal=()=>FILM.scenes.reduce((a,x)=>a+x.d,0);
+function filmBuild(){if(FILM.built)return;FILM.built=true;
+ $("#fiBrief").innerHTML=FILM_BRIEF.map(b=>`<span class="k">${b[0]}</span><span>${esc(b[1])}</span>`).join("");
+ $("#faLanes").innerHTML=[["Claude Code","Reading the brief","Rails and currents checked against datasheets"],["Codex","Searching the library","7 parts proposed, each with a cited value"]].map(l=>`<div class="flane">${av(l[0])}<div class="col"><span style="font-weight:560">${l[0]}</span><span class="st" data-a1="${esc(l[1])}" data-a2="${esc(l[2])}">${esc(l[1])}</span></div></div>`).join("");
+ const cat=(window.EAKModules&&EAKModules.schematic&&EAKModules.schematic.data&&EAKModules.schematic.data.catalogue)||[];
+ $("#faParts").innerHTML=FILM_PARTS.map(m=>{const c=cat.find(x=>x.mpn===m)||{};return`<div class="fpart"><span class="m">${m}</span><span class="l">${c.lcsc||""}</span><span class="d">${esc(c.desc||"")}</span><span class="l">${c.mfr?esc(c.mfr):""}</span></div>`}).join("");
+ $("#fAreas").innerHTML=["Schematic","Board","3D","Agents","Checks","Fabrication","Terminal"].map(a=>`<span>${a}</span>`).join("");}
+function sBrand(p){const tm=document.querySelector("#fs-brand .tm path");tm.style.strokeDashoffset=90*(1-ez(seg(p,.05,.4)));tm.style.fillOpacity=seg(p,.3,.5);
+ const c=document.querySelectorAll("#fs-brand .cam > div");[[.35,.6],[.55,.8],[.65,.9]].forEach((w,i)=>{const k=ez(seg(p,w[0],w[1]));c[i].style.opacity=k;c[i].style.transform=`translateY(${(1-k)*10}px)`;});
+ document.querySelector("#fs-brand .cam").style.transform=`scale(${1.04-.04*ez(p)})`;}
+function sIntent(p){const n=Math.round(FILM_INTENT.length*seg(p,.06,.5));$("#fiText").textContent=FILM_INTENT.slice(0,n);
+ [...$("#fiBrief").children].forEach((el,i)=>{const k=ez(seg(p,.56+Math.floor(i/2)*.08,.66+Math.floor(i/2)*.08));el.style.opacity=k;el.style.transform=`translateY(${(1-k)*6}px)`;});
+ document.querySelector("#fs-intent .cam").style.transform=`scale(${1.03-.03*ez(p)})`;}
+function sAgents(p){document.querySelectorAll("#faLanes .flane").forEach((el,i)=>{const k=ez(seg(p,.04+i*.1,.18+i*.1));el.style.opacity=k;const st=el.querySelector(".st");st.textContent=p>.62?st.dataset.a2:st.dataset.a1;st.style.color=p>.62?"var(--t2)":"var(--ai)";});
+ document.querySelectorAll("#faParts .fpart").forEach((el,i)=>{const k=ez(seg(p,.16+i*.075,.26+i*.075));el.style.opacity=k;el.style.transform=`translateX(${(1-k)*12}px)`;});
+ document.querySelector("#fs-agents .cam").style.transform=`scale(${1.02-.02*ez(p)})`;}
+function sSch(p){if(!FILM.fsx){const M=EAKModules.schematic,host=$("#fSchCam");host.appendChild(document.getElementById("tpl-sx").content.cloneNode(true));const root=host.querySelector('[data-module="schematic"]');root.style.height="100%";
+  FILM.fsx=M.mount(root,{toast(){},emit(){},on(){},navigate(){}});const b=root.querySelector('[data-act="sheet"][data-sheet="2"]');if(b)b.click();}
+ const k=ez(seg(p,.1,.95));$("#fSchCam").style.transform=`scale(${1+.75*k}) translate(${-2*k}%,${-1*k}%)`;$("#fDof").style.opacity=seg(p,.2,.5);
+ if(p>.32&&!FILM.hl){FILM.hl=true;FILM.fsx.selectNet("USB_DP");}if(p<.3&&FILM.hl){FILM.hl=false;FILM.fsx.selectNet(null);}
+ $("#fSchCap").style.opacity=seg(p,.4,.6);}
+function sFinal(p){document.querySelector("#fs-final .big1").style.opacity=ez(seg(p,.02,.2));
+ document.querySelectorAll("#fAreas span").forEach((el,i)=>{el.style.opacity=ez(seg(p,.15+i*.05,.25+i*.05));});
+ const r=document.querySelector("#fs-final .row");r.style.opacity=ez(seg(p,.5,.65));
+ document.querySelector("#fs-final .cam").style.transform=`scale(${1.03-.03*ez(p)})`;
+ const h=seg(p,.82,1);$("#film").style.opacity=1-h;$("#app").classList.toggle("on",h>0);}
+function filmRender(){const T=filmTotal();let acc=0;FILM.scenes.forEach((x,i)=>{const last=i===FILM.scenes.length-1,on=FILM.t>=acc&&(FILM.t<acc+x.d||last);$("#fs-"+x.id).classList.toggle("on",on);
+  if(on){const p=clamp01((FILM.t-acc)/x.d);x.r(RM?(x.id==="final"?p:1):p);if(x.id!=="final"){$("#film").style.opacity=1;$("#app").classList.remove("on");}}
+  const mk=document.querySelector(`.fmk[data-i="${i}"]`);if(mk)mk.classList.toggle("on",FILM.t>=acc);acc+=x.d;});
+ const f=FILM.t/T*100;$("#fFill").style.width=f+"%";$("#fHead").style.left=f+"%";$("#fTrack").setAttribute("aria-valuenow",Math.round(FILM.t/1000));$("#fTrack").setAttribute("aria-valuemax",Math.round(T/1000));
+ const tt=ms=>{const v=Math.floor(ms/1000);return Math.floor(v/60)+":"+String(v%60).padStart(2,"0")};$("#fTime").textContent=tt(FILM.t)+" / "+tt(T);
+ $("#fPlayBtn").innerHTML=FILM.playing?'<svg class="ico" viewBox="0 0 20 20"><path d="M7 4.5v11M13 4.5v11"/></svg>':'<svg class="ico" viewBox="0 0 20 20"><path d="M6.5 4.5l9 5.5-9 5.5z"/></svg>';$("#fPlayBtn").setAttribute("aria-label",FILM.playing?"Pause":"Play");}
+function filmTick(now){if(!filmOn)return;if(FILM.playing){FILM.t+=Math.min(100,now-FILM.last);if(FILM.t>=filmTotal()){FILM.t=filmTotal();filmRender();enterApp();return;}}FILM.last=now;filmRender();FILM.raf=requestAnimationFrame(filmTick);}
+function filmSeek(ms){FILM.t=Math.max(0,Math.min(filmTotal()-1,ms));filmRender();}
+function startFilm(){filmOn=true;FILM.scenes=filmScenes();filmBuild();const T=filmTotal();let acc=0;
+ $("#fMarks").innerHTML=FILM.scenes.map((x,i)=>{const m=`<button class="fmk" data-i="${i}" data-a="fSeek" data-arg="${acc}" style="left:${acc/T*100}%"><span>${x.label}</span></button>`;acc+=x.d;return m;}).join("");
+ $("#film").classList.remove("gone");$("#film").style.opacity=1;$("#app").classList.remove("on");$("#app").setAttribute("aria-hidden","true");closeDlg();
+ FILM.t=0;FILM.playing=true;FILM.last=performance.now();cancelAnimationFrame(FILM.raf);FILM.raf=requestAnimationFrame(filmTick);}
+function enterApp(){if(!filmOn)return;filmOn=false;cancelAnimationFrame(FILM.raf);$("#film").classList.add("gone");$("#app").removeAttribute("aria-hidden");$("#app").classList.add("on");guideStart(0);}
+(()=>{const tr=$("#fTrack");let drag=false;const at=e=>{const r=tr.getBoundingClientRect();return clamp01((e.clientX-r.left)/r.width)*filmTotal();};
+ tr.addEventListener("pointerdown",e=>{if(e.target.closest(".fmk"))return;drag=true;tr.setPointerCapture(e.pointerId);filmSeek(at(e));});
+ tr.addEventListener("pointermove",e=>{if(drag)filmSeek(at(e));});tr.addEventListener("pointerup",()=>drag=false);})();
 
 window.__dead=()=>[...document.querySelectorAll("[data-a]")].map(x=>x.dataset.a).filter(a=>!A[a]);
 window.__errors=[];window.addEventListener("error",e=>window.__errors.push(e.message));
-renderAll();startFilm(0);
+renderAll();startFilm();
 </script>
 </body>
 </html>
