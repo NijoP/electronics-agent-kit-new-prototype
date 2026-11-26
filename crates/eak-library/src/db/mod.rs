@@ -68,6 +68,7 @@ pub struct StoredItem {
     pub library: String,
     pub name: String,
     pub description: String,
+    pub keywords: Vec<String>,
     pub maturity: LibraryMaturity,
     pub licence: String,
     pub source: String,
@@ -99,7 +100,8 @@ pub struct LibrarySummary {
 const SCHEMA_VERSION: &str = "1";
 
 const COLUMNS: &str =
-    "id, kind, library, name, description, maturity, licence, source, payload, content_hash, added_at";
+    "id, kind, library, name, description, maturity, licence, source, payload, content_hash, added_at, \
+     keywords";
 
 /// Lower-case search tokens: alphanumeric runs, plus the whole text without separators.
 pub fn tokens(text: &str) -> Vec<String> {
@@ -145,6 +147,7 @@ struct RawItem {
     payload: String,
     content_hash: String,
     added_at: i64,
+    keywords: String,
 }
 
 impl RawItem {
@@ -161,6 +164,7 @@ impl RawItem {
             payload: r.get(8)?,
             content_hash: r.get(9)?,
             added_at: r.get(10)?,
+            keywords: r.get(11)?,
         })
     }
 
@@ -172,6 +176,7 @@ impl RawItem {
             library: self.library,
             name: self.name,
             description: self.description,
+            keywords: serde_json::from_str(&self.keywords).map_err(|e| e.to_string())?,
             maturity: maturity_from(&self.maturity)
                 .ok_or_else(|| format!("unknown maturity {:?}", self.maturity))?,
             licence: self.licence,
@@ -206,7 +211,7 @@ impl LibraryDb {
              CREATE TABLE IF NOT EXISTS items(
                id INTEGER PRIMARY KEY,
                kind TEXT NOT NULL, library TEXT NOT NULL, name TEXT NOT NULL,
-               description TEXT NOT NULL, maturity TEXT NOT NULL,
+               description TEXT NOT NULL, keywords TEXT NOT NULL, maturity TEXT NOT NULL,
                licence TEXT NOT NULL, source TEXT NOT NULL,
                payload TEXT NOT NULL, content_hash TEXT NOT NULL, added_at INTEGER NOT NULL,
                UNIQUE(kind, library, name));
@@ -261,16 +266,17 @@ impl LibraryDb {
         }
         let payload = serde_json::to_string(&item.payload).map_err(|e| e.to_string())?;
         let hash = format!("{:x}", Sha256::digest(payload.as_bytes()));
+        let keywords = serde_json::to_string(&item.keywords).map_err(|e| e.to_string())?;
         let (library, name) = (item.library.trim(), item.name.trim());
         let tx = self.conn.transaction().map_err(db_err)?;
         tx.execute(
             "INSERT INTO items(kind, library, name, description, maturity, licence, source,
-               payload, content_hash, added_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+               payload, content_hash, added_at, keywords)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(kind, library, name) DO UPDATE SET description=excluded.description,
                maturity=excluded.maturity, licence=excluded.licence, source=excluded.source,
                payload=excluded.payload, content_hash=excluded.content_hash,
-               added_at=excluded.added_at",
+               added_at=excluded.added_at, keywords=excluded.keywords",
             params![
                 item.kind.as_str(),
                 library,
@@ -282,6 +288,7 @@ impl LibraryDb {
                 payload,
                 hash,
                 now_unix_s as i64,
+                keywords,
             ],
         )
         .map_err(db_err)?;
@@ -520,6 +527,7 @@ mod tests {
         assert_eq!(got.payload, json!({ "name": "R_0805" }));
         assert_eq!(got.content_hash.len(), 64);
         assert_eq!(got.added_at_unix_s, 100);
+        assert_eq!(got.keywords, vec!["resistor".to_string()]);
 
         let s = |q: &str, k: Option<ItemKind>| names(db.search(q, k, 50).unwrap());
         assert_eq!(s("resis", None), vec!["R", "R_0805"]);
