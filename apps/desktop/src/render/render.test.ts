@@ -91,6 +91,22 @@ describe("render-object table", () => {
     for (const o of s.objects) expect(o.bbox.minX).toBeLessThanOrEqual(o.bbox.maxX);
   });
 
+  it("E1: draws the engine silkscreen legend on each side's silk in place of the refdes label", () => {
+    const plain = basic();
+    const labelled = plain.objects.find((o) => o.key.startsWith("footprint:"))!;
+    expect(labelled.ops.some((op) => op.t === "text")).toBe(true);
+    const st = { a: { x: 1_000_000, y: 2_000_000 }, b: { x: 3_000_000, y: 2_000_000 }, width: 160_000 };
+    const s = basic({ silk: { top: [st, st], bottom: [] } });
+    const legend = s.objects.find((o) => o.key === "silk:top")!;
+    expect(legend.layerKey).toBe("top:silk");
+    expect(legend.ops).toHaveLength(2);
+    expect(legend.ops[0]).toMatchObject({ t: "seg", width: 0.16 });
+    expect(s.objects.some((o) => o.key === "silk:bottom")).toBe(false);
+    const fp = s.objects.find((o) => o.key === labelled.key)!;
+    expect(fp.ops.some((op) => op.t === "text")).toBe(false);
+    expect(fp.sig).not.toBe(labelled.sig);
+  });
+
   it("leaves hidden layers out, as the SVG view does, and keeps a via while one of its layers shows", () => {
     const s = basic({ hidden: new Set(["bottom"]) });
     expect(count(s, "zone:")).toBe(0);
