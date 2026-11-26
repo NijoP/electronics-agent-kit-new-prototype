@@ -207,6 +207,8 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     execute: (c) => edit.execute(c),
     busy,
     layerColour: layerView.colourOf,
+    layerHidden: layerView.hidden,
+    toggleLayer: layerView.toggle,
   });
   // Built-in parts plus parts imported into this project (e.g. from Distributor), so an imported
   // part can be placed from the part picker.

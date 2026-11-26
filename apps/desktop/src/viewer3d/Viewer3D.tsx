@@ -14,8 +14,8 @@ import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRe
 import { api, pickModelFile } from "../api";
 import { layerColour, stackLayers } from "../layers";
 import { modelFormOf, modelRefFromForm, QUALITIES, type ModelForm } from "../shell/LibraryPanel";
-import type { Command, ComponentDef, CopperLayer, ModelQuality, ModelRef, Snapshot } from "../types";
-import { buildScene, modelStatus, type BoardScene, type ModelStatus } from "./scene";
+import type { BoardGeometry, Command, ComponentDef, CopperLayer, ModelQuality, ModelRef, Snapshot } from "../types";
+import { buildScene, explodeScene, modelStatus, type BoardScene, type ModelStatus } from "./scene";
 import { evictModel, loadModel, modelKey } from "./modelLoader";
 import { modelToWorld } from "./modelTransform";
 import { publishView3d } from "./controls";
@@ -38,6 +38,10 @@ interface Props {
   busy?: boolean;
   /** The PCB layer manager's colour per copper layer (layer colour sync). */
   layerColourOf?: (l: CopperLayer) => string;
+  /** Copper layer keys the PCB layer manager hides (one visibility store for Board and 3D). */
+  layerHidden?: ReadonlySet<string>;
+  /** Show or hide a copper layer in that store (absent: the 3D view keeps its own toggle). */
+  onToggleLayer?: (l: CopperLayer) => void;
 }
 
 /** Layer-group keys beyond the copper layers. */
@@ -48,6 +52,8 @@ const GROUPS = [
   { key: "bodies-bottom", label: "Bottom bodies" },
   { key: "outline-top", label: "Top courtyards" },
   { key: "outline-bottom", label: "Bottom courtyards" },
+  { key: "silk-top", label: "Top silkscreen" },
+  { key: "silk-bottom", label: "Bottom silkscreen" },
   { key: "vias", label: "Vias" },
 ] as const;
 
@@ -132,6 +138,7 @@ export function buildGroups(sc: BoardScene, modelled: ReadonlySet<string> = new 
 
   if (sc.outline.length >= 3) {
     const shape = new THREE.Shape(sc.outline.map(([x, y]) => new THREE.Vector2(x, y)));
+    for (const c of sc.cutouts) if (c.length >= 3) shape.holes.push(new THREE.Path(c.map(([x, y]) => new THREE.Vector2(x, y))));
     const geo = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false });
     geo.rotateX(Math.PI / 2); // shape (x, y) -> world (x, -depth, y)
     geo.translate(0, t / 2, 0);
@@ -153,6 +160,10 @@ export function buildGroups(sc: BoardScene, modelled: ReadonlySet<string> = new 
     const boxPads = sc.pads.filter((p) => p.layer === l.key && p.shape !== "circle").map((p) => [p.x, l.y + 0.002, p.y, p.sx, l.thickness, p.sy, 0]);
     const roundPads = sc.pads.filter((p) => p.layer === l.key && p.shape === "circle").map((p) => [p.x, l.y + 0.002, p.y, p.sx, l.thickness, p.sy, 0]);
     for (const m of [instanced(box, l.colour, tracks), instanced(box, look.pad, boxPads), instanced(cyl, look.pad, roundPads)]) if (m) g.add(m);
+    // Engine zone fill: the copper DRC checks, as thin slabs just under the tracks.
+    const fill = sc.fills.filter((zf) => zf.layer === l.key).flatMap((zf) => zf.rects.map(([x0, y0, x1, y1]) => [(x0 + x1) / 2, l.y - 0.001, (y0 + y1) / 2, x1 - x0, l.thickness, y1 - y0, 0]));
+    const fillMesh = instanced(box, l.colour, fill);
+    if (fillMesh) g.add(fillMesh);
     for (const z of sc.zones.filter((zz) => zz.layer === l.key)) {
       const pts = z.outline.map(([x, y]) => new THREE.Vector3(x, l.y + l.thickness, y));
       if (pts.length > 1) g.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: l.colour })));
@@ -179,7 +190,15 @@ export function buildGroups(sc: BoardScene, modelled: ReadonlySet<string> = new 
       g.setAttribute("position", new THREE.Float32BufferAttribute(seg, 3));
       group(`bodies-${side}`).add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: PLACEHOLDER })));
     }
-    // Courtyard rectangles stand in for silkscreen outlines (the IR has no silkscreen artwork yet).
+    // The fabricated silkscreen legend (engine strokes, mask-clipped), just above the surface.
+    const silk: number[] = [];
+    for (const st of sc.silk.filter((x) => x.side === side)) silk.push(st.ax, edge + dir * 0.012, st.ay, st.bx, edge + dir * 0.012, st.by);
+    if (silk.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(silk, 3));
+      group(`silk-${side}`).add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xf4f4f4 })));
+    }
+    // Courtyard rectangles (the placement envelope), drawn under the legend.
     const seg: number[] = [];
     for (const c of sc.courtyards.filter((cy) => cy.side === side)) {
       const y = edge + dir * 0.01;
@@ -232,9 +251,11 @@ interface Three {
   groups: Map<string, THREE.Group>;
 }
 
-export function Viewer3D({ projectId, revision, active, selected = null, onSelect, onProbe, execute, busy = false, layerColourOf = layerColour }: Props) {
+export function Viewer3D({ projectId, revision, active, selected = null, onSelect, onProbe, execute, busy = false, layerColourOf = layerColour, layerHidden, onToggleLayer }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const three = useRef<Three | null>(null);
+  /** The engine board geometry (ADR-0052) of the latest revision read; null until it arrives. */
+  const [geometry, setGeometry] = useState<BoardGeometry | null>(null);
   const [loads, setLoads] = useState<Record<string, Load>>({});
   const [reloadNonce, setReloadNonce] = useState(0);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -242,11 +263,21 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
   const [webgl, setWebgl] = useState(true);
   const [gpuLost, setGpuLost] = useState(false);
   const [ready, setReady] = useState(false);
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [ownHidden, setHidden] = useState<Set<string>>(new Set());
+  // Copper visibility comes from the PCB layer manager when the workspace shares it.
+  const sharedKey = layerHidden ? [...layerHidden].sort().join(",") : null;
+  const hidden = useMemo(() => {
+    if (sharedKey === null) return ownHidden;
+    const h = new Set([...ownHidden].filter((k) => !k.startsWith("cu:")));
+    for (const k of sharedKey ? sharedKey.split(",") : []) h.add(`cu:${k}`);
+    return h;
+  }, [ownHidden, sharedKey]);
   const [projection, setProjectionState] = useState<Projection>("perspective");
   const [measuring, setMeasuring] = useState(false);
   const [points, setPoints] = useState<V3[]>([]);
   const [labelsOn, setLabelsOn] = useState(true);
+  /** Stack-up explode, 0 (real stack-up) to 1 (layers pulled apart); view only. */
+  const [explode, setExplode] = useState(0);
   const hiddenRef = useRef(hidden);
   hiddenRef.current = hidden;
   const measuringRef = useRef(measuring);
@@ -257,7 +288,8 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
   // Layer colour sync: the scene is rebuilt when the PCB layer manager's colours change.
   const colourSig = snapshot ? stackLayers(snapshot.project.pcb.board.stackup).map((l) => layerColourOf(l.layer)).join(",") : "";
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const scene = useMemo(() => (snapshot ? buildScene(snapshot, layerColourOf) : null), [snapshot, colourSig]);
+  const board = useMemo(() => (snapshot ? buildScene(snapshot, layerColourOf, geometry) : null), [snapshot, geometry, colourSig]);
+  const scene = useMemo(() => (board ? explodeScene(board, explode) : null), [board, explode]);
   const look = useMemo(() => (snapshot ? appearance(snapshot) : null), [snapshot]);
   const stack = useMemo(() => (snapshot ? stackTable(snapshot) : null), [snapshot]);
   /** Footprint ids whose real model loaded (comma-joined so it works as an effect dependency). */
@@ -291,6 +323,15 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
       })
       .catch((e) => {
         if (!cancelled) setError(typeof e === "string" ? e : ((e as { message?: string })?.message ?? "Could not read the project"));
+      });
+    // The geometry DRC checks for this revision; the scene uses it once its revision matches.
+    api
+      .boardGeometry()
+      .then((g) => {
+        if (!cancelled) setGeometry(g ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setGeometry(null);
       });
     return () => {
       cancelled = true;
@@ -674,13 +715,16 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
   }, [ready, scene, projection, measuring, points.length, labelsOn, modelCount]);
   useEffect(() => () => publishView3d(null), []);
 
-  const toggle = (key: string) =>
+  const toggle = (key: string) => {
+    const shared = onToggleLayer && key.startsWith("cu:") ? scene?.layers.find((l) => `cu:${l.key}` === key)?.layer : undefined;
+    if (shared !== undefined) return onToggleLayer?.(shared);
     setHidden((h) => {
       const n = new Set(h);
       if (n.has(key)) n.delete(key);
       else n.add(key);
       return n;
     });
+  };
 
   const toggles: { key: string; label: string; colour?: string }[] = [
     ...GROUPS.map((g) => ({ key: g.key as string, label: g.label as string })),
@@ -704,7 +748,7 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
   const noGl = webgl ? null : "Unavailable: WebGL is not available in this window";
 
   return (
-    <div className="viewer3d" aria-label="3D board viewer" data-projection={projection}>
+    <div className="viewer3d" aria-label="3D board viewer" data-projection={projection} data-geometry={scene?.source ?? "none"} data-explode={explode > 0 ? "on" : "off"}>
       <div className="v3d-bar" role="toolbar" aria-label="3D view">
         {PRESETS.map((p) => (
           <button key={p.id} type="button" disabled={noGl !== null} onClick={() => preset(p.id)} title={noGl ?? p.title}>
@@ -799,6 +843,10 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
           )}
           <section aria-label="3D layers">
             <strong>Visibility</strong>
+            <label title="Pull the copper layers apart about the board centre (view only; the stack-up is unchanged)">
+              Explode stack-up
+              <input type="range" aria-label="Explode stack-up" min={0} max={1} step={0.05} value={explode} onChange={(e) => setExplode(Number(e.target.value))} />
+            </label>
             {toggles.map((g) => (
               <label key={g.key}>
                 <input type="checkbox" checked={!hidden.has(g.key)} onChange={() => toggle(g.key)} />
@@ -817,7 +865,7 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
                 Board {scene.thickness.toFixed(2)} mm, {scene.layers.length} copper layer{scene.layers.length === 1 ? "" : "s"}. Copper colours follow the PCB layer manager.
               </div>
               {scene.outline.length < 3 && <div>No board outline set: the board slab is not drawn.</div>}
-              <div>Parts without a loaded model are placeholders, drawn with amber edges and a label: boxes from the footprint courtyard and library body height. Courtyard outlines stand in for silkscreen; zone fills are not drawn in 3D (outline only; the PCB editor draws the engine fill).</div>
+              <div>Parts without a loaded model are placeholders, drawn with amber edges and a label: boxes from the footprint courtyard and library body height. {scene.source === "engine" ? "Copper, zone fills, holes and silkscreen are the engine board geometry DRC checks." : "Engine board geometry not loaded yet: copper is drawn from the project and zone fills and silkscreen are not shown."}</div>
               {scene.missing.length > 0 && <div>No body height in the library, outline only: {scene.missing.join(", ")}.</div>}
             </div>
           )}

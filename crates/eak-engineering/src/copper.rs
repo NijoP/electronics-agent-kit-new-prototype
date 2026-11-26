@@ -9,13 +9,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Core geometry of a copper shape; the final shape is the core inflated by `radius`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Core {
     Segment(Point, Point),
     Polygon(Vec<Point>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Shape {
     pub core: Core,
     pub radius: f64,
@@ -114,7 +115,7 @@ pub enum ItemKind {
 }
 
 /// One piece of copper on one layer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CopperItem {
     pub kind: ItemKind,
     /// Owning object id (footprint id for pads, track/via/zone id otherwise).
@@ -726,6 +727,11 @@ pub fn analyse(p: &Project) -> Connectivity {
         .keys()
         .filter_map(|z| fill_zone(p, z, &items))
         .collect();
+    analyse_with(&items, &fills)
+}
+
+/// Connectivity of `items` joined through the zone `fills` built from them.
+pub fn analyse_with(items: &[CopperItem], fills: &[ZoneFill]) -> Connectivity {
     // Node layout: items, then one node per (fill, island).
     let mut island_node: BTreeMap<(usize, u32), usize> = BTreeMap::new();
     let mut n = items.len();

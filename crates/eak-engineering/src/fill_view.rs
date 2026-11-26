@@ -68,24 +68,28 @@ pub fn rects_of(f: &ZoneFill) -> Vec<[Nm; 4]> {
     out
 }
 
+/// The drawable form of one fill: the same cells as rectangles.
+pub fn view_of(f: &ZoneFill) -> FillView {
+    FillView {
+        zone_id: f.zone_id.clone(),
+        layer: f.layer,
+        net: f.net.clone(),
+        islands: f.islands,
+        removed_islands: f.removed_islands,
+        filled_area_mm2: f.filled_area_mm2(),
+        pitch: f.pitch,
+        rects: rects_of(f),
+    }
+}
+
 /// Every zone's fill, in zone-id order. A zone without a usable outline has no entry.
 pub fn fill_views(p: &Project) -> Vec<FillView> {
     let items = copper::items(p);
     let mut out = Vec::new();
     for z in p.pcb.zones.keys() {
-        let Some(f) = copper::fill_zone(p, z, &items) else {
-            continue;
-        };
-        out.push(FillView {
-            rects: rects_of(&f),
-            filled_area_mm2: f.filled_area_mm2(),
-            zone_id: f.zone_id,
-            layer: f.layer,
-            net: f.net,
-            islands: f.islands,
-            removed_islands: f.removed_islands,
-            pitch: f.pitch,
-        });
+        if let Some(f) = copper::fill_zone(p, z, &items) {
+            out.push(view_of(&f));
+        }
     }
     out
 }

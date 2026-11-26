@@ -9,6 +9,7 @@ use eak_core::geom::{
     to_mm,
 };
 use eak_core::{Nm, ObjectClass, PadKind, Point, Project, Rect, RegionObject, Side};
+use eak_engineering::board::BoardGeometry;
 use eak_engineering::copper::{self, distance, Core, ItemKind};
 use eak_engineering::ipc::{self, ClearanceCondition};
 use eak_engineering::{netlist, silk};
@@ -44,11 +45,16 @@ fn gap_point(a: &Rect, b: &Rect, gap: f64) -> Point {
 }
 
 pub fn run(p: &Project) -> Report {
+    run_with(p, &BoardGeometry::build(p))
+}
+
+/// DRC of `p` against `geo`, the board geometry the 2D and 3D views draw (ADR-0052): every copper,
+/// fill, hole and legend check reads `geo`, so what is checked is what is drawn.
+pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     let c = &p.constraints;
     let mut f: Vec<Finding> = Vec::new();
     // Arc edges (schema v4) are checked on the flattened outline (chord error ≤ 10 µm).
-    let outline_path = p.pcb.board.outline_path();
-    let outline = &outline_path;
+    let outline = &geo.outline;
     let has_outline = outline.len() >= 3 && !polygon_self_intersects(outline);
     if !has_outline {
         f.push(
@@ -257,7 +263,7 @@ pub fn run(p: &Project) -> Report {
     }
 
     // Copper items and pairwise clearance (DRC-002) — sweep on x for efficiency.
-    let items = copper::items(p);
+    let items = &geo.copper;
     let boxes: Vec<Rect> = items.iter().map(|i| i.shape.bbox()).collect();
     let classes: Vec<ObjectClass> = items.iter().map(|i| holes::object_class(p, i)).collect();
     let max_req = {
@@ -457,7 +463,7 @@ pub fn run(p: &Project) -> Report {
         let edge = c.board_edge_clearance as f64;
         for cut in p.pcb.cutouts.values() {
             let mut seen = BTreeSet::new();
-            for it in &items {
+            for it in items {
                 let (d, at) = core_to_ring(&it.shape.core, &cut.outline);
                 let gap = d - it.shape.radius;
                 let label = it.label();
@@ -490,7 +496,7 @@ pub fn run(p: &Project) -> Report {
     // DRC-021 keep-out regions and DRC-022 constraint-region track widths (schema v4, ADR-0042).
     for r in p.pcb.regions.values() {
         let mut seen = BTreeSet::new();
-        for it in &items {
+        for it in items {
             if !r.applies_to(it.layer) {
                 continue;
             }
@@ -623,7 +629,7 @@ pub fn run(p: &Project) -> Report {
     }
 
     // DRC-004: unrouted connections; DRC-013 zone islands.
-    let conn = copper::analyse(p);
+    let conn = geo.connectivity();
     for (net, groups) in &conn.net_groups {
         if *groups > 1 {
             let n = conn.ratsnest.iter().filter(|r| &r.0 == net).count();
@@ -646,7 +652,7 @@ pub fn run(p: &Project) -> Report {
     }
     for (z, zone) in &p.pcb.zones {
         let at = zone.outline.first().copied();
-        if let Some(fill) = copper::fill_zone(p, z, &items) {
+        if let Some(fill) = geo.fill(z) {
             let mut touched = BTreeSet::new();
             for it in items
                 .iter()
@@ -687,14 +693,14 @@ pub fn run(p: &Project) -> Report {
                         .fix(format!("Reshape zone {z} so the isolated island(s) are not created, or so they reach a {} pad; this check counts an island as connected only when it touches a pad of the zone net.", fill.net)),
                 );
             }
-            f.extend(thermal_reliefs(p, &fill));
+            f.extend(thermal_reliefs(p, fill));
         }
     }
 
     // DRC-015: silkscreen over soldermask openings (checks the legend as fabricated).
     for side in [Side::Top, Side::Bottom] {
         f.extend(silk_over_openings(
-            &silk::legend(p, side),
+            geo.legend(side),
             &silk::mask_openings(p, side.copper()),
             silk::MASK_CLEARANCE,
             side,
@@ -913,17 +919,19 @@ pub fn run(p: &Project) -> Report {
     }
 
     // DRC-018 / DRC-019 / DRC-020: holes and silkscreen-to-edge.
-    f.extend(holes::copper_to_hole(p, c.min_clearance));
+    f.extend(holes::copper_to_hole(p, geo, c.min_clearance));
     // The hole/hole and silk/outline matrix cells raise these minimums (Phase 1 C5, ADR-0046).
     let (hole_min, hole_basis) = match c.matrix_cell(ObjectClass::Hole, ObjectClass::Hole) {
         Some(m) if m > HOLE_TO_HOLE_MIN => (m, "clearance matrix hole / hole"),
         _ => (HOLE_TO_HOLE_MIN, "EAK default"),
     };
-    f.extend(holes::hole_to_hole(p, hole_min, "DRC-019", hole_basis));
+    f.extend(holes::hole_to_hole(
+        &geo.holes, hole_min, "DRC-019", hole_basis,
+    ));
     let silk_min = c
         .matrix_cell(ObjectClass::Silk, ObjectClass::Outline)
         .map_or(SILK_TO_EDGE_MIN, |m| m.max(SILK_TO_EDGE_MIN));
-    f.extend(holes::silk_to_edge(p, silk_min));
+    f.extend(holes::silk_to_edge(geo, silk_min));
 
     let rules = vec![
         rule("DRC-001", "Minimum / net-class track width", format!("min {}", mm(c.min_track_width as f64)), "Project constraints"),
@@ -974,7 +982,7 @@ pub fn run(p: &Project) -> Report {
         "Clearance-matrix cells are checked by DRC only: the interactive router keeps net classes, declared voltages and net-pair rules but not the matrix, and the autorouter keeps neither the matrix nor net-pair rules (ADR-0046)".into(),
     ];
     limitations.extend(undeclared_nets_not_evaluated(p));
-    let (no_current, no_voltage) = undeclared_nets(p);
+    let (no_current, no_voltage) = undeclared_nets(p, items);
     let mut report = Report::new("DRC", p, rules, f, not_implemented, limitations);
     // Fail-closed: a current/voltage rule over nets with no declared value checked nothing for
     // those nets, so it is UNKNOWN (never PASS) until the value is declared (EVALUATION C1).
@@ -1047,11 +1055,11 @@ pub fn unenforced_cells() -> Vec<String> {
 }
 
 /// Copper nets with no declared current, and with no declared voltage.
-fn undeclared_nets(p: &Project) -> (Vec<String>, Vec<String>) {
+fn undeclared_nets(p: &Project, items: &[copper::CopperItem]) -> (Vec<String>, Vec<String>) {
     let c = &p.constraints;
-    let nets: BTreeSet<String> = copper::items(p)
-        .into_iter()
-        .map(|i| i.net)
+    let nets: BTreeSet<String> = items
+        .iter()
+        .map(|i| i.net.clone())
         .filter(|n| !n.is_empty())
         .collect();
     let missing = |declared: &dyn Fn(&String) -> bool| -> Vec<String> {
