@@ -14,6 +14,7 @@
 //! * `placer`  – constructive footprint placement.
 //! * `placement_intel` – placement mental models (roles, snaps, analysis) ported from DESK.
 //! * `power`   – unit-aware trace width, voltage drop, rail drop, return-path continuity.
+//! * `rating`  – part-rating names and derating facts (ERC-022..024, harness component checks).
 //! * `scene3d` – board/component geometry for the 3D workspace and mechanical checks.
 //! * `verify`  – verification engines: typed inputs to PASS / FAIL / UNKNOWN / BLOCKED with sources.
 
@@ -29,6 +30,7 @@ pub mod placement_intel;
 pub mod placer;
 pub mod power;
 pub mod priority;
+pub mod rating;
 pub mod router;
 pub mod routing_intel;
 pub mod scene3d;

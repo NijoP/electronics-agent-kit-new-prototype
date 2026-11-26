@@ -89,6 +89,8 @@ pub const SOURCE_VIA: &str = "IPC-2221 conductor formula on the via barrel cross
 pub const SOURCE_DROP: &str =
     "Ohm's law V = I·R; R from the copper resistivity model of eak_engineering::power";
 pub const SOURCE_TJ: &str = "Tj = Ta + P·θJA (one-resistor steady-state estimate; θJA from the part's datasheet, board-dependent)";
+pub const SOURCE_RATING: &str =
+    "stress against rating × derating fraction (eak_engineering::rating::DERATING)";
 
 /// Net current through `vias` parallel vias against their combined IPC-2221 capacity. Equal
 /// current sharing is assumed (no derating), which the caller must state.
@@ -163,6 +165,28 @@ pub fn junction_temperature(
     Check::compare(ta + p * th, tj, b, u, s)
 }
 
+/// Applied stress (voltage, current or power, sign ignored) against `max_fraction` of the part
+/// rating. Exceeding the derated limit is `FAIL`; the caller tells it from exceeding the rating.
+pub fn part_rating(
+    applied: Option<f64>,
+    rating: Option<f64>,
+    max_fraction: f64,
+    unit: &str,
+) -> Check {
+    let (b, s) = (Bound::Max, SOURCE_RATING);
+    let (Some(a), Some(r)) = (applied, rating) else {
+        let missing = [
+            ("applied stress", applied.is_none()),
+            ("part rating", rating.is_none()),
+        ];
+        return Check::unknown(&missing, b, unit, s);
+    };
+    if !(positive(r) && max_fraction > 0.0 && max_fraction <= 1.0 && a.is_finite()) {
+        return Check::blocked("rating must be positive and the derating in (0, 1]", b, unit, s);
+    }
+    Check::compare(a.abs(), r * max_fraction, b, unit, s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,6 +232,19 @@ mod tests {
         assert_eq!(u.verdict, Verdict::Unknown);
         assert_eq!(u.reason, "missing input: θJA, ambient temperature");
         let bad = junction_temperature(Some(0.85), Some(0.0), Some(25.0), Some(125.0));
+        assert_eq!(bad.verdict, Verdict::Blocked);
+    }
+
+    #[test]
+    fn part_rating_outcomes() {
+        let ok = part_rating(Some(3.3), Some(6.0), 0.8, "V");
+        assert_eq!(ok.verdict, Verdict::Pass);
+        let f = part_rating(Some(-5.0), Some(6.0), 0.8, "V");
+        assert_eq!(f.verdict, Verdict::Fail);
+        assert!((f.limit.unwrap() - 4.8).abs() < 1e-12);
+        let u = part_rating(Some(5.0), None, 0.8, "V");
+        assert_eq!(u.reason, "missing input: part rating");
+        let bad = part_rating(Some(5.0), Some(6.0), 1.5, "V");
         assert_eq!(bad.verdict, Verdict::Blocked);
     }
 }

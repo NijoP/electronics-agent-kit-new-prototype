@@ -13,6 +13,8 @@
 
 use crate::dfm::{self, FabProfile};
 use crate::drc;
+use crate::erc;
+use crate::state::CheckState;
 use crate::report::{project_hash, Finding, Report, Severity};
 use eak_core::{PinType, Project};
 use eak_engineering::{copper, netlist, power};
@@ -427,6 +429,27 @@ pub fn evaluate(p: &Project, fab: Option<&FabProfile>) -> GateReport {
         finding_ids: vec![],
         detail: format!("{} power net(s): {}", pn.len(), pn.join(", ")),
     });
+    gates.push(g);
+
+    // Part stress (ERC-011, ERC-022..024): an exceeded rating fails; a part that could not be
+    // evaluated (no rating, an undeclared net, only an upper bound) leaves the gate UNKNOWN.
+    let erc = erc::run(&at_defaults);
+    let stress = ["ERC-011", "ERC-022", "ERC-023", "ERC-024"];
+    let mut g = from_findings(
+        "part_ratings",
+        "Part voltage, current and power ratings hold under the declared net conditions",
+        &erc,
+        &stress.map(|r| (r, Error)),
+        true,
+    );
+    for rr in &erc.rule_results {
+        if stress.contains(&rr.rule_id.as_str()) && rr.state == CheckState::Unknown {
+            unknown_unless_failed(
+                &mut g,
+                format!("{} is UNKNOWN: {}", rr.rule_id, rr.reason),
+            );
+        }
+    }
     gates.push(g);
 
     // Return-path continuity: advisory (a signal-integrity concern, not a fabrication fault),

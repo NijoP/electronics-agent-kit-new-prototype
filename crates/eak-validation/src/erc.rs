@@ -1,6 +1,7 @@
 //! Electrical rules check over the canonical schematic connectivity.
 
 use crate::report::{finding, rule, Bound, Finding, Report, Severity::*};
+use crate::state::CheckState;
 use eak_core::{PinType, Project};
 use eak_engineering::{calc::parse_value, netlist};
 use std::collections::{BTreeMap, BTreeSet};
@@ -576,8 +577,9 @@ pub fn run(p: &Project) -> Report {
     }
 
     bus_and_port_checks(p, &nl, &mut f);
+    let stress_unknown = crate::stress::check(p, &nl, &mut f);
 
-    let rules = vec![
+    let mut rules = vec![
         rule(
             "ERC-001",
             "Unconnected pin",
@@ -655,6 +657,7 @@ pub fn run(p: &Project) -> Report {
             "EAK (ADR-0040)",
         ),
     ];
+    rules.extend(crate::stress::rules());
     let not_implemented = vec![
         "Pin-conflict cells for EasyEDA pin types EAK does not have (open emitter, ground, high impedance, terminator, undefined): OE-OUT, OE-OC, OE-OE, Power-OE, Ground-IN/OUT/BI/Power, HiZ-IN/OUT/Power and every Undefined pairing".into(),
         "Bus contention timing between tri-state/bidirectional drivers".into(),
@@ -665,13 +668,19 @@ pub fn run(p: &Project) -> Report {
         "Net classes generated from buses".into(),
         "Only one net name per bus group (bus aliases)".into(),
         "Analog simulation, operating-point and tolerance analysis".into(),
-        "Component stress/derating beyond capacitor voltage".into(),
+        "Part temperature rating against a junction-temperature estimate (needs a declared ambient temperature and dissipation)".into(),
+        "Part current for parts other than L, D, Q and F, and the current actually flowing through a part (the net current is an upper bound)".into(),
     ];
     let limitations = vec![
         "Pin-name heuristics for supply/ground pins can miss unusual naming".into(),
         "Ratings in the built-in library are unverified unless marked verified".into(),
     ];
-    Report::new("ERC", p, rules, f, not_implemented, limitations)
+    let mut report = Report::new("ERC", p, rules, f, not_implemented, limitations);
+    // A rating rule that could not evaluate a part checked nothing for it: UNKNOWN, never PASS.
+    for (id, why) in stress_unknown {
+        report = report.degrade(id, CheckState::Unknown, &why);
+    }
+    report
 }
 
 /// ERC-014 pin-to-pin compatibility after EasyEDA Pro's pin-conflict matrix (Phase 1 B5; the
