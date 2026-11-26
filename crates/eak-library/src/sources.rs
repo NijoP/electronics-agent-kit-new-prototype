@@ -9,6 +9,11 @@
 //!   the caller hands in the search function it already has, plus the status it already knows.
 //!   A source built with a status other than `Ready` (for example no credentials) is never
 //!   called.
+//! * [`local::LocalListSource`]: a part list the user supplied (CSV or JSON), validated row by row.
+//! * [`lcsc::LcscSlot`]: the LCSC slot, always disabled and "not connected"; it makes no requests.
+
+pub mod lcsc;
+pub mod local;
 
 use crate::part::{
     DatasheetRef, DefKind, DefLink, OfferSnapshot, Parameter, PartKey, PartRecord, PriceBreak,
