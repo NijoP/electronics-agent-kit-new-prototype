@@ -591,6 +591,7 @@ pub(super) fn attempt(
         blind: vec![],
         shapes,
         pair: true,
+        moved: None,
     };
     Ok(PairRoute {
         placed: [make(0, ip, cp, idp, sp), make(1, inn, cn, idn, sn)],
