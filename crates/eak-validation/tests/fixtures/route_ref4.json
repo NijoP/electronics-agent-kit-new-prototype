@@ -60,6 +60,5 @@
   {"type": "AddZone", "layer": {"inner": 1}, "net": "GND", "clearance": 300000, "outline": [
     {"x": 500000, "y": 500000}, {"x": 39500000, "y": 500000}, {"x": 39500000, "y": 29500000}, {"x": 500000, "y": 29500000}
   ]},
-  {"type": "StitchZones", "net": "GND"},
   {"type": "AutoRoute"}
 ]

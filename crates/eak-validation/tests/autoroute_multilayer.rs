@@ -150,8 +150,8 @@ fn the_proof_is_reported_and_a_closed_path_names_the_keepout_that_closes_it() {
 }
 
 /// Acceptance board 1: the EAK reference circuit (5 V header, AMS1117 LDO, ATtiny85, LED, I/O
-/// header) on Sig / GND plane / Sig / Sig. The plane net reaches its plane through StitchZones,
-/// everything else is auto-routed.
+/// header) on Sig / GND plane / Sig / Sig. Every net, GND included, is auto-routed on the signal
+/// layers; the In1 GND pour joins through-hole GND pads by its reliefs.
 #[test]
 fn four_layer_reference_board_routes_with_every_connection_proven_and_drc_clean() {
     let (e, warnings) = build("route_ref4", 0);
