@@ -23,8 +23,8 @@
 //! one year); they decide which rules to consider, they are not safety classifications.
 
 use eak_core::requirements::{
-    evaluate, item_field_def, DomainClassDef, DomainKind, Level, ReqEntry, ReqItemKind,
-    ReqSource, ReqStatus, ReqUnit, ReqValue, RequirementSet, SourceKind, DOMAIN_CLASSES, MAX_TEXT,
+    evaluate, item_field_def, DomainClassDef, DomainKind, Level, ReqEntry, ReqItemKind, ReqSource,
+    ReqStatus, ReqUnit, ReqValue, RequirementSet, SourceKind, DOMAIN_CLASSES, MAX_TEXT,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -948,7 +948,10 @@ mod tests {
         let mut s = RequirementSet::default();
         s.set(
             "function.description",
-            entry(ReqStatus::Confirmed, text("ESP32 sensor node with Bluetooth")),
+            entry(
+                ReqStatus::Confirmed,
+                text("ESP32 sensor node with Bluetooth"),
+            ),
         )
         .unwrap();
         let memory = number(512.0, ReqUnit::Kibibyte);
@@ -1107,9 +1110,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(classify(&s), classify(&s.clone()));
-        assert_eq!(
-            plan(&s, &classify(&s), 5, 5),
-            plan(&s, &classify(&s), 5, 5)
-        );
+        assert_eq!(plan(&s, &classify(&s), 5, 5), plan(&s, &classify(&s), 5, 5));
     }
 }

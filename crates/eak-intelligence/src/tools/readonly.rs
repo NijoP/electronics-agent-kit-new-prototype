@@ -211,7 +211,7 @@ fn requirements(p: &Project) -> Value {
     use eak_core::requirements as rq;
     use eak_engineering::domain;
     let classification = domain::classify(&p.requirement_set);
-    let up_to_date = domain::plan(&p.requirement_set, &classification, 0, 0).is_empty();
+    let changes = domain::plan(&p.requirement_set, &classification, 0, 0);
     let units: Vec<Value> = eak_core::ReqUnit::ALL
         .iter()
         .map(|u| json!({"symbol": u.symbol(), "measures": u.measure()}))
@@ -221,7 +221,7 @@ fn requirements(p: &Project) -> Value {
         "record": p.requirement_set,
         "report": rq::evaluate(&p.requirement_set),
         "classification": classification,
-        "recorded_up_to_date": up_to_date,
+        "recorded_up_to_date": changes.is_empty(),
         "catalogue": {
             "domain_classes": rq::DOMAIN_CLASSES,
             "fields": rq::FIELDS,

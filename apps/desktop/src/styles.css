@@ -348,6 +348,19 @@ kbd { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-dim); b
 .domain-list { padding-left: var(--s-2); margin: var(--s-half) 0; font-size: var(--fs-sm); }
 .domain-list ul { margin: 2px 0 6px; padding-left: var(--s-2); }
 .domain .badge { border: 1px solid var(--line-strong); border-radius: 3px; padding: 0 var(--s-half); font-size: var(--fs-xs); white-space: nowrap; }
+/* Requirements panel (M4.2/M4.3) */
+.reqs { display: grid; gap: var(--s-1); font-size: var(--fs-sm); }
+.reqs details > summary { cursor: pointer; padding: var(--s-half) 0; }
+.reqs-fields, .reqs-list, .reqs-evidence { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); }
+.reqs-evidence { gap: 2px; padding-left: var(--s-2); font-size: var(--fs-xs); }
+.req-field { border-top: 1px solid var(--line); padding-top: var(--s-half); display: grid; gap: var(--s-half); }
+.req-label { font-weight: 600; }
+.req-value { overflow-wrap: anywhere; }
+.req-conflicts ol { margin: 0; padding-left: var(--s-2); display: grid; gap: var(--s-half); }
+.req-edit { display: grid; gap: var(--s-half); }
+.req-edit button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.reqs .badge { border: 1px solid var(--line-strong); border-radius: 3px; padding: 0 var(--s-half); font-size: var(--fs-xs); white-space: nowrap; }
+.reqs-person input { min-width: 0; }
 
 /* Layer manager, airwires, finding highlight */
 .layer-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }

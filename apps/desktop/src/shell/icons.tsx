@@ -12,6 +12,7 @@ export const Icons = {
   project: svg(<><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M9 4.5v15M3.5 10h5.5" /></>),
   parts: svg(<><rect x="8" y="8" width="8" height="8" rx="1" /><path d="M10 8V4M14 8V4M10 20v-4M14 20v-4M8 10H4M8 14H4M20 10h-4M20 14h-4" /></>),
   domain: svg(<><circle cx="12" cy="12" r="8" /><path d="M12 4a12 12 0 0 1 0 16M12 4a12 12 0 0 0 0 16M4 12h16" /></>),
+  requirements: svg(<><rect x="5" y="4" width="14" height="17" rx="1.5" /><path d="M9 4V3h6v1" /><path d="M8.5 10l1.5 1.5 2.5-2.5M8.5 16l1.5 1.5 2.5-2.5M14.5 10.5h2M14.5 16.5h2" /></>),
   manufacturing: svg(<><path d="M4 18h16M6 18V9l4 3V9l4 3V6h4v12" /></>),
   assets: svg(<><path d="M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" /><path d="M9 13.5l2 2 4-4" /></>),
   settings: svg(<><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></>),

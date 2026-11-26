@@ -258,7 +258,7 @@ describe("v2 shell chrome", () => {
     const areas = within(bar().getByRole("group", { name: "Areas" }));
     expect(areas.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Home", "Schematic", "PCB", "Library", "Agents", "Checks", "Manufacturing"]);
     const panels = within(bar().getByRole("group", { name: "Project panels" }));
-    expect(panels.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Explorer", "Overview", "Design manager", "Domain", "Assets"]);
+    expect(panels.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Explorer", "Overview", "Requirements", "Design manager", "Domain", "Assets"]);
     expect(bar().getByRole("button", { name: "Schematic" }).getAttribute("aria-pressed")).toBe("true");
   });
 

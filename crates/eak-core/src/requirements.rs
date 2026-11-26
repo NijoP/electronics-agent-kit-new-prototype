@@ -2162,7 +2162,10 @@ pub fn evaluate(set: &RequirementSet) -> RequirementsReport {
         let question = if f.conflicts.is_empty() {
             question
         } else {
-            format!("Resolve the {} conflicting value(s): {question}", f.conflicts.len())
+            format!(
+                "Resolve the {} conflicting value(s): {question}",
+                f.conflicts.len()
+            )
         };
         questions.push(Question {
             path: f.path.clone(),
@@ -2686,9 +2689,15 @@ mod tests {
             }),
             ..entry(ReqStatus::Confirmed, Some(volts(11.0, 12.0, 13.0)))
         };
-        assert_eq!(s.record(path, twelve.clone(), false), Ok(Recorded::Conflict));
+        assert_eq!(
+            s.record(path, twelve.clone(), false),
+            Ok(Recorded::Conflict)
+        );
         let kept = s.entry(path).unwrap();
-        assert_eq!(kept.value, five.value, "the recorded value is not overwritten");
+        assert_eq!(
+            kept.value, five.value,
+            "the recorded value is not overwritten"
+        );
         assert_eq!(kept.conflicts.len(), 1);
         assert!(s.problems().is_empty(), "{:?}", s.problems());
         // The same conflicting value again changes nothing; erasing a value needs supersede.
@@ -2794,7 +2803,12 @@ mod tests {
             assert_eq!(domain_class(c.id).map(|d| d.id), Some(c.id));
             // Archetypes are listed first.
             if overlays {
-                assert_eq!(c.kind, DomainKind::Overlay, "{}: archetypes come first", c.id);
+                assert_eq!(
+                    c.kind,
+                    DomainKind::Overlay,
+                    "{}: archetypes come first",
+                    c.id
+                );
             }
             overlays = c.kind == DomainKind::Overlay;
         }

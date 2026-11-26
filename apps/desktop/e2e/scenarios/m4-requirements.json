@@ -1,0 +1,32 @@
+{
+  "name": "M4 Requirements panel: honest UNKNOWN, conflicts resolved by a person, the domain classifier",
+  "description": "Execution brief M4.2/M4.3 (ADR-0060, schema v11). On an isolated fixture project the power source is recorded CONFIRMED as USB-C 5 V and then a second source records a 12 V barrel jack (fixture-commands, SETUP through the execute_command IPC the panel uses): the engine keeps it beside the first value as a conflict instead of overwriting it. In the real window View > Show Requirements opens the Requirements panel, read through the requirements_report IPC. The input voltage nobody answered is shown as UNKNOWN, never as a number. The power-source row shows both values. Keep stays disabled until a person names themself; once a name is typed, Keep on the recorded value resolves the conflict (ResolveRequirementConflict) and the value becomes CONFIRMED. Classify runs the deterministic domain classifier (ClassifyDomain): the confirmed USB-C source is strong, firm evidence, so the USB overlay is recorded DERIVED. Reject records the person's decision that it does not apply (CONFIRMED no). Enter on the input voltage records a nominal 5 V as NEEDS_CONFIRMATION with its risk (SetRequirementField), and Confirm makes it CONFIRMED. Every edit is an engine command; the panel computes nothing itself.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "M4 Requirements Fixture", "folder": "m4-requirements-fixture" },
+    {
+      "id": "m4-setup",
+      "do": "fixture-commands",
+      "title": "SETUP: a CONFIRMED power source, then a different value from a second source (kept as a conflict by the engine)",
+      "commands": [
+        { "type": "SetRequirementField", "path": "supply.sources", "status": "CONFIRMED", "value": { "kind": "text", "text": "USB-C 5 V" }, "source": { "kind": "client", "reference": "kick-off call" }, "derived_from": [], "owner": "Client PM", "risk_if_wrong": null, "note": null, "supersede": false },
+        { "type": "SetRequirementField", "path": "supply.sources", "status": "NEEDS_CONFIRMATION", "value": { "kind": "text", "text": "12 V barrel jack" }, "source": { "kind": "client", "reference": "follow-up email" }, "derived_from": [], "owner": "Client PM", "risk_if_wrong": "the input stage is re-designed", "note": null, "supersede": false }
+      ],
+      "shot": false
+    },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "M4 Requirements Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    { "id": "m4-panel", "do": "menu", "title": "View > Show Requirements opens the panel, read through the requirements_report IPC", "menu": "View", "item": "Show Requirements", "expect": "section[aria-label=\"Requirements\"] p[aria-label=\"Completeness\"]", "timeout": 30000 },
+    { "id": "m4-unknown", "do": "wait", "title": "M4.2: the input voltage nobody answered is UNKNOWN, never a number", "selector": "li[data-path=\"supply.input_voltage\"][data-status=\"UNKNOWN\"] .req-value", "text": "no value: UNKNOWN" },
+    { "id": "m4-conflict", "do": "wait", "title": "M4.2: the second value is shown beside the first as a conflict, not written over it", "selector": "li[data-path=\"supply.sources\"][data-conflicts=\"1\"] [aria-label=\"Conflicting values\"]", "text": "2 values disagree" },
+    { "id": "m4-keep-locked", "do": "wait", "title": "Keep is unavailable until a person names themself", "selector": "li[data-path=\"supply.sources\"] button[data-keep=\"0\"][disabled]", "shot": false },
+    { "id": "m4-name", "do": "type", "title": "The person types their name", "selector": "input[aria-label=\"Your name\"]", "value": "A. Engineer", "shot": false },
+    { "id": "m4-resolve", "do": "click", "title": "M4.2: Keep on the recorded value resolves the conflict (ResolveRequirementConflict); the value is CONFIRMED", "selector": "li[data-path=\"supply.sources\"] button[data-keep=\"0\"]", "expect": "li[data-path=\"supply.sources\"][data-status=\"CONFIRMED\"]:not([data-conflicts]) .req-value", "expectText": "USB-C 5 V" },
+    { "id": "m4-classify", "do": "click", "title": "M4.3: Classify runs the deterministic classifier (ClassifyDomain); the USB overlay is DERIVED from the confirmed source", "selector": "section[aria-label=\"Domain classification\"] > button", "text": "Classify", "expect": "li[data-class=\"usb_interface\"][data-recorded=\"DERIVED\"] [aria-label=\"Evidence for\"]", "expectText": "For: supply.sources" },
+    { "id": "m4-reject", "do": "click", "title": "M4.3: Reject records the person's decision: CONFIRMED, does not apply", "selector": "li[data-class=\"usb_interface\"] button", "text": "Reject", "expect": "li[data-class=\"usb_interface\"][data-recorded=\"CONFIRMED\"][data-value=\"no\"]" },
+    { "id": "m4-enter", "do": "click", "title": "M4.2: Enter opens the edit form for the input voltage", "selector": "li[data-path=\"supply.input_voltage\"] button", "text": "Enter", "expect": "li[data-path=\"supply.input_voltage\"] .req-edit input[aria-label=\"Nominal\"]", "shot": false },
+    { "id": "m4-nominal", "do": "type", "title": "Nominal 5 (unit V)", "selector": "li[data-path=\"supply.input_voltage\"] input[aria-label=\"Nominal\"]", "value": "5", "shot": false },
+    { "id": "m4-risk", "do": "type", "title": "Risk if wrong", "selector": "li[data-path=\"supply.input_voltage\"] input[aria-label=\"Risk if wrong\"]", "value": "the regulator is re-selected" },
+    { "id": "m4-record", "do": "click", "title": "M4.2: Record sends SetRequirementField; the value is NEEDS_CONFIRMATION with its unit", "selector": "li[data-path=\"supply.input_voltage\"] .req-edit button", "text": "Record", "expect": "li[data-path=\"supply.input_voltage\"][data-status=\"NEEDS_CONFIRMATION\"] .req-value", "expectText": "– / 5 / – V" },
+    { "id": "m4-confirm", "do": "click", "title": "M4.2: Confirm makes it CONFIRMED by the person", "selector": "li[data-path=\"supply.input_voltage\"] button", "text": "Confirm", "expect": "li[data-path=\"supply.input_voltage\"][data-status=\"CONFIRMED\"] .req-value", "expectText": "– / 5 / – V" }
+  ]
+}

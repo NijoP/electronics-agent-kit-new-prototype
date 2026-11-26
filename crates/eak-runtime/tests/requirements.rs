@@ -453,9 +453,9 @@ fn classify_domain_records_the_classifier_result_as_derived() {
     assert_eq!(rf.status, ReqStatus::Derived);
     assert_eq!(rf.value, Some(ReqValue::Flag { value: true }));
     assert_eq!(rf.derived_from, vec![protocol.clone()]);
-    let source = rf.source.as_ref().unwrap();
-    assert_eq!(source.kind, SourceKind::Calculation);
-    assert!(source.reference.starts_with(domain::EVALUATOR));
+    let by = rf.source.as_ref().unwrap();
+    assert_eq!(by.kind, SourceKind::Calculation);
+    assert!(by.reference.starts_with(domain::EVALUATOR));
     assert!(rf.note.as_deref().unwrap().contains(&protocol));
     // Up to date: classifying again changes nothing.
     refused_as(&mut e, agent.clone(), C::ClassifyDomain);

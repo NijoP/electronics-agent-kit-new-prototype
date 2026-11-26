@@ -710,6 +710,65 @@ pub fn domain_classification(s: &Session) -> Result<DomainReport, String> {
     })
 }
 
+/// The structured requirement record, its evaluation and the deterministic domain
+/// classification of the open project (ADR-0057, ADR-0060), for the Requirements panel, with the
+/// field catalogue the panel's edit form needs. Read-only and recomputed per call; every edit
+/// goes through `execute_command`.
+#[derive(Serialize)]
+pub struct RequirementsView {
+    pub revision: u64,
+    pub record: eak_core::requirements::RequirementSet,
+    pub report: eak_core::requirements::RequirementsReport,
+    pub classification: eak_engineering::domain::Classification,
+    /// Whether the recorded `domain.*` entries already match the classification.
+    pub recorded_up_to_date: bool,
+    pub catalogue: RequirementsCatalogue,
+}
+
+#[derive(Serialize)]
+pub struct RequirementsCatalogue {
+    pub fields: &'static [eak_core::requirements::FieldDef],
+    pub rail_fields: &'static [eak_core::requirements::FieldDef],
+    pub interface_fields: &'static [eak_core::requirements::FieldDef],
+    pub domain_classes: &'static [eak_core::requirements::DomainClassDef],
+    pub units: Vec<RequirementUnit>,
+}
+
+#[derive(Serialize)]
+pub struct RequirementUnit {
+    pub symbol: &'static str,
+    pub measure: eak_core::requirements::Measure,
+}
+
+pub fn requirements_report(s: &Session) -> Result<RequirementsView, String> {
+    use eak_core::requirements as rq;
+    use eak_engineering::domain;
+    let (_, p) = s.shared_project()?;
+    let classification = domain::classify(&p.requirement_set);
+    let changes = domain::plan(&p.requirement_set, &classification, 0, 0);
+    let units = eak_core::ReqUnit::ALL
+        .iter()
+        .map(|u| RequirementUnit {
+            symbol: u.symbol(),
+            measure: u.measure(),
+        })
+        .collect();
+    Ok(RequirementsView {
+        revision: p.revision,
+        report: rq::evaluate(&p.requirement_set),
+        record: p.requirement_set.clone(),
+        classification,
+        recorded_up_to_date: changes.is_empty(),
+        catalogue: RequirementsCatalogue {
+            fields: rq::FIELDS,
+            rail_fields: rq::RAIL_FIELDS,
+            interface_fields: rq::INTERFACE_FIELDS,
+            domain_classes: rq::DOMAIN_CLASSES,
+            units,
+        },
+    })
+}
+
 /// Engineering intelligence summary of the open project (ADR-0027): product classification,
 /// active domains, architecture, requirement coverage, missing information, conflicts, domain
 /// check outcomes and risks. Read-only and recomputed per call from the design and the stored
@@ -1396,6 +1455,7 @@ pub const IPC_COMMANDS: [&str; 109] = [
     "component_save",
     "library_components",
     "domain_classification",
+    "requirements_report",
     "intelligence_summary",
     "export_manufacturing",
     "bom_table",
@@ -1618,6 +1678,11 @@ pub mod cmd {
     #[tauri::command(rename_all = "snake_case")]
     pub async fn domain_classification(app: AppHandle) -> Result<DomainReport, String> {
         blocking(app, Priority::P2, super::domain_classification).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn requirements_report(app: AppHandle) -> Result<super::RequirementsView, String> {
+        blocking(app, Priority::P2, super::requirements_report).await
     }
 
     #[tauri::command(rename_all = "snake_case")]
@@ -1887,6 +1952,7 @@ pub fn run() {
             models::cmd::model_export_config,
             models::cmd::model_import_config,
             cmd::domain_classification,
+            cmd::requirements_report,
             cmd::intelligence_summary,
             cmd::library_components,
             cmd::library_search,
