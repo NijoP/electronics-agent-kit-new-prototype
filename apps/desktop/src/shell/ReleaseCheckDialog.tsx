@@ -103,7 +103,9 @@ export function ReleaseCheckDialog({ revision, busy, onClose, onCheck }: { revis
                 <strong>{statusLine(check)}</strong>
               </p>
               <p className="muted">
-                {open.length === 0
+                {open.length === 0 && check.status === "DRAFT"
+                  ? `All ${required.length} required gates pass, but ${check.blocking.length} other blocking reason(s) keep revision ${check.revision} DRAFT.`
+                  : open.length === 0
                   ? `All ${required.length} required gates pass for revision ${check.revision}.`
                   : `${open.length} of ${required.length} required gates do not pass for revision ${check.revision}.`}
               </p>

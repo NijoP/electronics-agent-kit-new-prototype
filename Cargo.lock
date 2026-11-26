@@ -952,6 +952,7 @@ dependencies = [
  "eak-engineering",
  "eak-harness",
  "eak-intelligence",
+ "eak-library",
  "eak-manufacturing",
  "eak-runtime",
  "eak-simulation",

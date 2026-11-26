@@ -27,6 +27,7 @@ eak-validation.workspace = true
 eak-manufacturing.workspace = true
 eak-simulation.workspace = true
 eak-harness.workspace = true
+eak-library.workspace = true
 eak-terminal.workspace = true
 eak-agents.workspace = true
 serde.workspace = true

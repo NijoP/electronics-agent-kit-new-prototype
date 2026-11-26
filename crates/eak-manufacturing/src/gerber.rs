@@ -104,6 +104,13 @@ impl Writer {
             project.id,
             project.revision
         );
+        // ADR-0054: the file names the exact design it was generated from.
+        let _ = writeln!(
+            s,
+            "G04 EAK-IR sha256 {} revision {}*",
+            eak_validation::report::project_hash(project),
+            project.revision
+        );
         let _ = writeln!(s, "%TF.FileFunction,{function}*%");
         let _ = writeln!(s, "%TF.FilePolarity,{polarity}*%");
         s.push_str("%FSLAX46Y46*%\n%MOMM*%\n%LPD*%\nG01*\n");
@@ -308,7 +315,8 @@ pub fn validate(text: &str) -> GerberCheck {
     let (mut mode, mut multi_quadrant, mut at) = (Mode::Linear, false, Point::default());
     for (n, raw) in text.lines().enumerate() {
         let l = raw.trim();
-        if l.is_empty() {
+        // G04 is a comment (RS-274X 4.1); EAK writes its design stamp in one (ADR-0054).
+        if l.is_empty() || (l.starts_with("G04") && l.ends_with('*')) {
             continue;
         }
         if end {
@@ -488,6 +496,18 @@ pub fn copper_function(p: &Project, layer: CopperLayer) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_g04_comment_is_not_a_problem() {
+        // Regression: the ADR-0054 design stamp is a G04 comment; validate rejected it.
+        let text = "G04 EAK-IR sha256 00 revision 7*\n%FSLAX46Y46*%\n%MOMM*%\nM02*\n";
+        let c = validate(text);
+        assert!(
+            c.problems.iter().all(|p| !p.contains("unrecognised")),
+            "{:?}",
+            c.problems
+        );
+    }
+
     use super::*;
     use eak_core::{Cutout, DrawLayer, OutlineArc, PcbText, Rotation, Track};
 
