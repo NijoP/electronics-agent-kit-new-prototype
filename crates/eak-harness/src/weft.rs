@@ -478,8 +478,12 @@ pub fn engineer_verdict(
     )
     .map_err(|f| format!("verdict not sent, nothing discarded: {}", f.1))?;
     if discard {
-        proposal::discard(engine, proposal_id, &Actor::human(), None)
-            .map_err(|e| format!("verdict sent to {}, but the discard failed: {e}", message.to))?;
+        proposal::discard(engine, proposal_id, &Actor::human(), None).map_err(|e| {
+            format!(
+                "verdict sent to {}, but the discard failed: {e}",
+                message.to
+            )
+        })?;
     }
     Ok(json!({"sent": message, "discarded": discard}))
 }

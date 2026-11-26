@@ -265,7 +265,9 @@ fn a_verdict_that_cannot_be_sent_discards_nothing() {
     assert!(e.contains("cannot discard"), "{e}");
 
     // A directory where the journal file should be: every append fails, on every platform.
-    let journal = dir.join(eak_harness::weft::DIR).join(eak_harness::weft::JOURNAL);
+    let journal = dir
+        .join(eak_harness::weft::DIR)
+        .join(eak_harness::weft::JOURNAL);
     let _ = std::fs::remove_file(&journal);
     std::fs::create_dir_all(&journal).unwrap();
     let e = weft_engineer_verdict(&s, &pid, "reject", "no", true).unwrap_err();
