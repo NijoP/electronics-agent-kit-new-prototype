@@ -11,6 +11,7 @@ pub mod footprint;
 pub mod gates;
 pub mod holes;
 pub mod mech;
+pub mod pin_pad;
 pub mod report;
 pub mod sourcing;
 pub mod state;
