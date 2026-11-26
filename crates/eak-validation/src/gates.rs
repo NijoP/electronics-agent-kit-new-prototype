@@ -444,10 +444,7 @@ pub fn evaluate(p: &Project, fab: Option<&FabProfile>) -> GateReport {
     );
     for rr in &erc.rule_results {
         if stress.contains(&rr.rule_id.as_str()) && rr.state == CheckState::Unknown {
-            unknown_unless_failed(
-                &mut g,
-                format!("{} is UNKNOWN: {}", rr.rule_id, rr.reason),
-            );
+            unknown_unless_failed(&mut g, format!("{} is UNKNOWN: {}", rr.rule_id, rr.reason));
         }
     }
     gates.push(g);

@@ -136,7 +136,8 @@ pub fn voltage_drop(
         return Check::unknown(&missing, b, u, s);
     };
     if !(positive(i) && positive(r) && positive(max)) {
-        return Check::blocked("current, resistance and allowed drop must be positive", b, u, s);
+        let why = "current, resistance and allowed drop must be positive";
+        return Check::blocked(why, b, u, s);
     }
     Check::compare(i * r, max, b, u, s)
 }
@@ -182,9 +183,86 @@ pub fn part_rating(
         return Check::unknown(&missing, b, unit, s);
     };
     if !(positive(r) && max_fraction > 0.0 && max_fraction <= 1.0 && a.is_finite()) {
-        return Check::blocked("rating must be positive and the derating in (0, 1]", b, unit, s);
+        let why = "rating must be positive and the derating in (0, 1]";
+        return Check::blocked(why, b, unit, s);
     }
     Check::compare(a.abs(), r * max_fraction, b, unit, s)
+}
+
+/// Insulation standard a spacing rule is declared against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InsulationStandard {
+    /// IPC-2221B Table 6-1 conductor spacing (clearance).
+    Ipc2221b,
+    /// IEC 60664-1 creepage (Table F.4 as transcribed); its clearance table is not implemented.
+    Iec60664_1,
+}
+
+/// The declared standard and environment for voltage spacing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Insulation {
+    pub standard: InsulationStandard,
+    pub pollution_degree: u8,
+    /// IEC 60664-1 material group: I, II, IIIa or IIIb.
+    pub material_group: String,
+    pub altitude_m: f64,
+    /// Permanent polymer coating (IPC-2221B condition B4).
+    pub coated: bool,
+}
+
+/// Sources of the spacing [`voltage_spacing`] requires.
+pub const SOURCE_IPC_SPACING: &str = "IPC-2221B Table 6-1 (B1 inner; B2 outer uncoated to 3050 m; B3 outer uncoated above 3050 m; B4 outer coated), via eak_engineering::ipc::clearance_mm; verified_against_standard = false";
+pub const SOURCE_IEC_CREEPAGE: &str = "IEC 60664-1 Table F.4 creepage as transcribed (eak_engineering::ipc::creepage_mm); verified_against_standard = false";
+
+/// Measured spacing (mm) between conductors at `working_v` volts against the spacing the
+/// declared standard requires. No declaration is UNKNOWN; a case the transcribed tables do not
+/// cover (pollution degree 3 and 4, creepage above 1000 V, inner layers under IEC) is BLOCKED.
+/// IEC 60664-1 is applied as creepage only: its clearance table needs the rated impulse voltage
+/// and is not implemented, so an IEC declaration never certifies the air gap.
+pub fn voltage_spacing(
+    measured_mm: f64,
+    working_v: Option<f64>,
+    insulation: Option<&Insulation>,
+    outer_layer: bool,
+) -> Check {
+    let (b, u) = (Bound::Min, "mm");
+    let (Some(v), Some(ins)) = (working_v, insulation) else {
+        let missing = [
+            ("working voltage", working_v.is_none()),
+            ("insulation standard and environment", insulation.is_none()),
+        ];
+        return Check::unknown(&missing, b, u, SOURCE_IPC_SPACING);
+    };
+    if !(v.is_finite() && ins.altitude_m.is_finite()) {
+        let why = "working voltage and altitude must be finite";
+        return Check::blocked(why, b, u, SOURCE_IPC_SPACING);
+    }
+    match ins.standard {
+        InsulationStandard::Ipc2221b => {
+            let cond = match (outer_layer, ins.coated, ins.altitude_m > 3050.0) {
+                (false, _, _) => ipc::ClearanceCondition::B1,
+                (true, true, _) => ipc::ClearanceCondition::B4,
+                (true, false, true) => ipc::ClearanceCondition::B3,
+                (true, false, false) => ipc::ClearanceCondition::B2,
+            };
+            let req = ipc::clearance_mm(v, cond);
+            Check::compare(measured_mm, req, b, u, SOURCE_IPC_SPACING)
+        }
+        InsulationStandard::Iec60664_1 if !outer_layer => Check::blocked(
+            "inner layers: solid insulation, not an IEC 60664-1 creepage path",
+            b,
+            u,
+            SOURCE_IEC_CREEPAGE,
+        ),
+        InsulationStandard::Iec60664_1 => {
+            let req = ipc::creepage_mm(v, ins.pollution_degree, &ins.material_group);
+            match req {
+                Ok(req) => Check::compare(measured_mm, req, b, u, SOURCE_IEC_CREEPAGE),
+                Err(e) => Check::blocked(e.to_string(), b, u, SOURCE_IEC_CREEPAGE),
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -233,6 +311,47 @@ mod tests {
         assert_eq!(u.reason, "missing input: θJA, ambient temperature");
         let bad = junction_temperature(Some(0.85), Some(0.0), Some(25.0), Some(125.0));
         assert_eq!(bad.verdict, Verdict::Blocked);
+    }
+
+    fn env(standard: InsulationStandard, pd: u8, altitude_m: f64, coated: bool) -> Insulation {
+        Insulation {
+            standard,
+            pollution_degree: pd,
+            material_group: "IIIb".into(),
+            altitude_m,
+            coated,
+        }
+    }
+
+    #[test]
+    fn voltage_spacing_follows_the_declared_standard_and_environment() {
+        use InsulationStandard::*;
+        let ipc = env(Ipc2221b, 2, 0.0, false);
+        // 230 V, outer uncoated (B2): 1.25 mm.
+        let ok = voltage_spacing(1.3, Some(230.0), Some(&ipc), true);
+        assert_eq!((ok.verdict, ok.limit), (Verdict::Pass, Some(1.25)));
+        let close = voltage_spacing(1.0, Some(230.0), Some(&ipc), true);
+        assert_eq!(close.verdict, Verdict::Fail);
+        // Above 3050 m (B3) the same gap fails: 6.4 mm.
+        let mountain = env(Ipc2221b, 2, 4000.0, false);
+        let high = voltage_spacing(1.3, Some(230.0), Some(&mountain), true);
+        assert_eq!((high.verdict, high.limit), (Verdict::Fail, Some(6.4)));
+        // Coated (B4) and inner (B1) need less.
+        let coat = env(Ipc2221b, 2, 0.0, true);
+        let coated = voltage_spacing(0.5, Some(230.0), Some(&coat), true);
+        assert_eq!((coated.verdict, coated.limit), (Verdict::Pass, Some(0.4)));
+        let inner = voltage_spacing(0.2, Some(230.0), Some(&ipc), false);
+        assert_eq!(inner.verdict, Verdict::Pass);
+        // IEC 60664-1 PD2, material group IIIb, 250 V: 2.5 mm creepage.
+        let iec = env(Iec60664_1, 2, 0.0, false);
+        let creep = voltage_spacing(2.0, Some(250.0), Some(&iec), true);
+        assert_eq!((creep.verdict, creep.limit), (Verdict::Fail, Some(2.5)));
+        // No declaration: UNKNOWN; outside the transcribed table: BLOCKED.
+        let none = voltage_spacing(5.0, Some(250.0), None, true);
+        assert!(none.reason.contains("insulation"), "{}", none.reason);
+        let dirty = env(Iec60664_1, 3, 0.0, false);
+        let pd3 = voltage_spacing(5.0, Some(250.0), Some(&dirty), true);
+        assert_eq!(pd3.verdict, Verdict::Blocked);
     }
 
     #[test]

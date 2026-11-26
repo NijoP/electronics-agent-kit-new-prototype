@@ -206,7 +206,8 @@ pub(crate) fn check(
             };
             why.push(("ERC-011", reason));
         } else {
-            why.push(("ERC-022", evaluate(s, def, &VOLTAGE, across.clone(), exact, f)));
+            let v = evaluate(s, def, &VOLTAGE, across.clone(), exact, f);
+            why.push(("ERC-022", v));
         }
         let prefix: String = s
             .refdes
@@ -219,7 +220,8 @@ pub(crate) fn check(
                 .filter_map(|n| amps.get(*n).copied())
                 .reduce(f64::max)
                 .ok_or_else(|| format!("no declared current on {}", nets.join(", ")));
-            why.push(("ERC-023", evaluate(s, def, &CURRENT, current, false, f)));
+            let i = evaluate(s, def, &CURRENT, current, false, f);
+            why.push(("ERC-023", i));
         }
         if def.category == "Resistor" {
             let power = match (parse_value(&s.value).filter(|r| *r > 0.0), across) {
@@ -230,7 +232,8 @@ pub(crate) fn check(
                 (Some(r), Ok(dv)) => Ok(dv * dv / r),
                 (Some(_), Err(e)) => Err(e),
             };
-            why.push(("ERC-024", evaluate(s, def, &POWER, power, true, f)));
+            let w = evaluate(s, def, &POWER, power, true, f);
+            why.push(("ERC-024", w));
         }
         for (rule, reason) in why {
             if let Some(r) = reason {
@@ -247,7 +250,8 @@ pub(crate) fn check(
                 0 => String::new(),
                 n => format!(" and {n} more"),
             };
-            (rule, format!("not evaluated for {}{tail}", why.join("; ")))
+            let msg = format!("not evaluated for {}{tail}", why.join("; "));
+            (rule, msg)
         })
         .collect()
 }
