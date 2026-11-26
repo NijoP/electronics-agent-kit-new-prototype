@@ -50,11 +50,21 @@ fn fixture(name: &str) -> PathBuf {
 fn folder_import_stores_items_with_licence_source_and_reports_gaps() {
     let dir = fixture("folder");
     let mut db = LibraryDb::open(&dir.join("db.sqlite")).unwrap();
-    assert!(import_into(&mut db, &dir, "", "src").is_err(), "licence required");
-    assert!(import_into(&mut db, &dir, "CC0-1.0", " ").is_err(), "source required");
+    assert!(
+        import_into(&mut db, &dir, "", "src").is_err(),
+        "licence required"
+    );
+    assert!(
+        import_into(&mut db, &dir, "CC0-1.0", " ").is_err(),
+        "source required"
+    );
 
     let sum = import_into(&mut db, &dir, "CC0-1.0", "eak test fixture").unwrap();
-    assert_eq!((sum.symbols, sum.footprints, sum.stored), (2, 1, 3), "{sum:?}");
+    assert_eq!(
+        (sum.symbols, sum.footprints, sum.stored),
+        (2, 1, 3),
+        "{sum:?}"
+    );
     assert_eq!(sum.unpaired, vec!["Demo:EAK_ORPHAN".to_string()]);
     assert_eq!(sum.models_found, 0, "no model file was written");
     assert_eq!(sum.models_missing, vec!["DemoFP:R_A".to_string()]);

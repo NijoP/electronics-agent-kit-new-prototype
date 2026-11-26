@@ -156,7 +156,13 @@ pub fn import_into(
         source: source.to_string(),
     };
     let imp = import_folder(folder, &opts)?;
-    Ok(store_import(db, &imp, licence.trim(), source.trim(), now_s()))
+    Ok(store_import(
+        db,
+        &imp,
+        licence.trim(),
+        source.trim(),
+        now_s(),
+    ))
 }
 
 /// One search hit, without the stored payload.
