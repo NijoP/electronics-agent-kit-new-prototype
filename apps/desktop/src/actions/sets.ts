@@ -69,6 +69,8 @@ export interface ActionDeps {
   help: () => void;
   /** Opens the About dialog (version, what EAK does and does not claim). */
   about: () => void;
+  /** Help › Replay first-run tour (slice S1). */
+  tour: () => void;
   /** Side view shown in the side panel ("Show <view>" is checked when it is open). */
   sideView: SideView;
   notify: (m: string) => void;
@@ -172,6 +174,7 @@ export function commonActions(d: ActionDeps): Action[] {
     { id: "theme", label: "Light theme", menu: "Settings", checked: d.theme === "light", enabled: () => true, run: d.onTheme },
 
     { id: "help", label: "Keyboard shortcuts", menu: "Help", enabled: () => true, run: d.help },
+    { id: "tour", label: "Replay first-run tour", title: "Show the four-step introduction to Home, checks and evidence again", menu: "Help", enabled: () => true, run: d.tour },
     {
       id: "about",
       label: "About EAK",

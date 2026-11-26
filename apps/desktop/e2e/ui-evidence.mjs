@@ -43,6 +43,11 @@ const childEnv = {
   XDG_CONFIG_HOME: path.join(appHome, "config"),
   XDG_CACHE_HOME: path.join(appHome, "cache"),
 };
+// The user's Documents folder (where Project Home proposes "EAK Projects") is the run's own folder
+// too: XDG user directories are read from XDG_CONFIG_HOME/user-dirs.dirs.
+const documentsDir = path.join(OUT, "documents");
+fs.mkdirSync(path.join(appHome, "config"), { recursive: true });
+fs.writeFileSync(path.join(appHome, "config", "user-dirs.dirs"), `XDG_DOCUMENTS_DIR="${documentsDir}"\n`);
 // tauri-driver starts WebKitWebDriver on --native-port (default 4445): keep the two apart.
 const driverArgs = ["--port", String(PORT), "--native-port", String(PORT + 1)];
 if (NATIVE_DRIVER) driverArgs.push("--native-driver", NATIVE_DRIVER);
@@ -590,6 +595,13 @@ const handlers = {
     return `XTest drag ${s.dx ?? 0},${s.dy ?? 0} from ${p.x},${p.y}; ${attr} ${before} → ${after}`;
   },
   // XTest typing into whatever has the keyboard focus, then waits for `expect`.
+  // File read: a path under the run's Documents folder (where Project Home creates projects by
+  // default) must exist, e.g. the project file a UI action created. Nothing is written.
+  async "file-exists"(s) {
+    const p = path.join(documentsDir, s.path);
+    if (!fs.existsSync(p)) throw new Error(`not on disk: Documents/${s.path}`);
+    return `on disk: Documents/${s.path}`;
+  },
   async gone(s) {
     await waitGone(s.selector, s.timeout ?? 15000);
     return `not visible: ${s.selector}`;

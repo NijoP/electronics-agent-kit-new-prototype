@@ -225,6 +225,8 @@ export interface Project {
   id: Id;
   name: string;
   revision: number;
+  /** The design brief: one line per requirement (`AddRequirement`); absent in fixtures that predate it. */
+  requirements?: { id: Id; text: string }[];
   schematic: {
     sheets: Record<Id, Sheet>;
     symbols: Record<Id, SymbolInstance>;
@@ -405,6 +407,7 @@ export type Command =
   | { type: "DeleteSheetGraphic"; graphic_id: Id }
   | { type: "DeleteBus"; bus_id: Id }
   | { type: "DeleteBusEntry"; entry_id: Id }
+  | { type: "AddRequirement"; text: string }
   | { type: "Batch"; commands: Command[]; label?: string | null };
 
 export interface CommandError {

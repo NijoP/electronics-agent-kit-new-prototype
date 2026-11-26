@@ -12,7 +12,10 @@ import { api } from "./api";
 import { formatShortcut, matches, SHORTCUTS, tip } from "./design/shortcuts";
 import { applyTheme, loadTheme, type Theme } from "./design/theme";
 import { ModelSettings } from "./ModelSettings";
+import type { HomeTarget } from "./home/homeFacts";
 import { ProjectHome, saveSession } from "./ProjectHome";
+import { Tour } from "./shell/onboarding/Tour";
+import { setTourState, tourState } from "./shell/onboarding/tourState";
 import { listWorkspaces, useRegistryVersion, type WorkspaceContext } from "./shell/registry";
 import { modalOpen } from "./shell/viewState";
 import "./shell/workspaces";
@@ -20,7 +23,20 @@ import type { OpenProject, Snapshot } from "./types";
 import { Workspace } from "./Workspace";
 
 export function App() {
-  const [opened, setOpened] = useState<Snapshot | null>(null);
+  const [opened, setOpenedState] = useState<Snapshot | null>(null);
+  // Where a project opened from Home lands first (a Needs attention item, Continue); used once.
+  const [landing, setLanding] = useState<HomeTarget | null>(null);
+  const setOpened = (s: Snapshot | null, to?: HomeTarget) => {
+    setLanding(to ?? null);
+    setOpenedState(s);
+  };
+  // First-run tour (slice S1): shown in Home at first launch until finished or skipped; replayed
+  // from Help, in Home or (from the workspace Help menu) as a corner panel over the workspace.
+  const [tour, setTour] = useState<null | "home" | "floating">(() => (tourState() === "unseen" ? "home" : null));
+  const closeTour = (how: "done" | "skipped") => {
+    setTourState(how);
+    setTour(null);
+  };
   const [settings, setSettings] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [current, setCurrent] = useState("eda");
@@ -141,6 +157,8 @@ export function App() {
               visible={active === "eda"}
               onClosed={onClosed}
               onOpened={setOpened}
+              landing={landing}
+              onTour={() => setTour("floating")}
               onSettings={() => setSettings(true)}
               theme={theme}
               onTheme={toggleTheme}
@@ -148,7 +166,16 @@ export function App() {
               onProjectsChanged={() => void refreshProjects()}
             />
           ) : (
-            <ProjectHome onOpened={setOpened} active={active === "eda"} theme={theme} onTheme={toggleTheme} onSettings={() => setSettings(true)} />
+            <ProjectHome
+              onOpened={setOpened}
+              active={active === "eda"}
+              theme={theme}
+              onTheme={toggleTheme}
+              onSettings={() => setSettings(true)}
+              tourOpen={tour !== null}
+              onTourClose={closeTour}
+              onTourReplay={() => setTour("home")}
+            />
           )}
         </div>
         {apps
@@ -159,6 +186,7 @@ export function App() {
             </div>
           ))}
       </div>
+      {tour === "floating" && opened && active === "eda" && <Tour floating onClose={closeTour} />}
       {settings && <ModelSettings onClose={() => setSettings(false)} />}
     </div>
   );

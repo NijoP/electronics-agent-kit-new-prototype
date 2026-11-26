@@ -999,6 +999,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "eak-library"
+version = "0.1.5"
+dependencies = [
+ "eak-core",
+ "eak-manufacturing",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "eak-manufacturing"
 version = "0.1.5"
 dependencies = [
