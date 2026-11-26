@@ -955,6 +955,45 @@ export interface FillView {
   rects: [number, number, number, number][];
 }
 
+/** A copper shape: its core (a segment, a == b for a disc, or a polygon) inflated by `radius` nm. */
+export interface CopperShape {
+  core: { segment: [Point, Point] } | { polygon: Point[] };
+  radius: number;
+}
+/** One piece of copper on one layer (eak-engineering `copper::CopperItem`). */
+export interface CopperItem {
+  kind: "pad" | "track" | "via" | "zone";
+  /** Footprint id for pads, track or via id otherwise. */
+  object_id: Id;
+  /** Pad number for pads, empty otherwise. */
+  sub: string;
+  layer: CopperLayer;
+  net: string;
+  shape: CopperShape;
+}
+export interface BoardHole { object_id: Id; pad: string; label: string; center: Point; drill: Nm; net: string }
+export interface SilkStroke { a: Point; b: Point; width: Nm }
+export interface SceneBody3d { footprint_id: Id; symbol_id: Id; refdes: string; side: Side; x: number; y: number; z: number; sx: number; sy: number; sz: number; kind: string; color: string }
+/**
+ * The board as fabricated for one revision (ADR-0051, `board_geometry` IPC): the one geometry DRC
+ * checks, drawn by the 2D and 3D views. Coordinates in board nm unless named `_mm`.
+ */
+export interface BoardGeometry {
+  revision: number;
+  /** Outline with arc edges flattened. */
+  outline: Point[];
+  cutouts: Point[][];
+  thickness: Nm;
+  copper: CopperItem[];
+  fill_views: FillView[];
+  holes: BoardHole[];
+  silk: { top: SilkStroke[]; bottom: SilkStroke[] };
+  outline_mm: [number, number][];
+  thickness_mm: number;
+  bodies: SceneBody3d[];
+  missing_models: string[];
+}
+
 // AI panel (src-tauri/src/ai.rs): agent-loop proposals awaiting Accept/Reject.
 export type AgentOutcome =
   | { outcome: "completed" }

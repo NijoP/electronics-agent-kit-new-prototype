@@ -14,7 +14,7 @@ import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRe
 import { api, pickModelFile } from "../api";
 import { layerColour, stackLayers } from "../layers";
 import { modelFormOf, modelRefFromForm, QUALITIES, type ModelForm } from "../shell/LibraryPanel";
-import type { Command, ComponentDef, CopperLayer, ModelQuality, ModelRef, Snapshot } from "../types";
+import type { BoardGeometry, Command, ComponentDef, CopperLayer, ModelQuality, ModelRef, Snapshot } from "../types";
 import { buildScene, modelStatus, type BoardScene, type ModelStatus } from "./scene";
 import { evictModel, loadModel, modelKey } from "./modelLoader";
 import { modelToWorld } from "./modelTransform";
@@ -47,6 +47,8 @@ const GROUPS = [
   { key: "bodies-bottom", label: "Bottom bodies" },
   { key: "outline-top", label: "Top courtyards" },
   { key: "outline-bottom", label: "Bottom courtyards" },
+  { key: "silk-top", label: "Top silkscreen" },
+  { key: "silk-bottom", label: "Bottom silkscreen" },
   { key: "vias", label: "Vias" },
 ] as const;
 
@@ -131,6 +133,7 @@ export function buildGroups(sc: BoardScene, modelled: ReadonlySet<string> = new 
 
   if (sc.outline.length >= 3) {
     const shape = new THREE.Shape(sc.outline.map(([x, y]) => new THREE.Vector2(x, y)));
+    for (const c of sc.cutouts) if (c.length >= 3) shape.holes.push(new THREE.Path(c.map(([x, y]) => new THREE.Vector2(x, y))));
     const geo = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false });
     geo.rotateX(Math.PI / 2); // shape (x, y) -> world (x, -depth, y)
     geo.translate(0, t / 2, 0);
@@ -152,6 +155,10 @@ export function buildGroups(sc: BoardScene, modelled: ReadonlySet<string> = new 
     const boxPads = sc.pads.filter((p) => p.layer === l.key && p.shape !== "circle").map((p) => [p.x, l.y + 0.002, p.y, p.sx, l.thickness, p.sy, 0]);
     const roundPads = sc.pads.filter((p) => p.layer === l.key && p.shape === "circle").map((p) => [p.x, l.y + 0.002, p.y, p.sx, l.thickness, p.sy, 0]);
     for (const m of [instanced(box, l.colour, tracks), instanced(box, look.pad, boxPads), instanced(cyl, look.pad, roundPads)]) if (m) g.add(m);
+    // Engine zone fill: the copper DRC checks, as thin slabs just under the tracks.
+    const fill = sc.fills.filter((zf) => zf.layer === l.key).flatMap((zf) => zf.rects.map(([x0, y0, x1, y1]) => [(x0 + x1) / 2, l.y - 0.001, (y0 + y1) / 2, x1 - x0, l.thickness, y1 - y0, 0]));
+    const fillMesh = instanced(box, l.colour, fill);
+    if (fillMesh) g.add(fillMesh);
     for (const z of sc.zones.filter((zz) => zz.layer === l.key)) {
       const pts = z.outline.map(([x, y]) => new THREE.Vector3(x, l.y + l.thickness, y));
       if (pts.length > 1) g.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: l.colour })));
@@ -178,7 +185,15 @@ export function buildGroups(sc: BoardScene, modelled: ReadonlySet<string> = new 
       g.setAttribute("position", new THREE.Float32BufferAttribute(seg, 3));
       group(`bodies-${side}`).add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: PLACEHOLDER })));
     }
-    // Courtyard rectangles stand in for silkscreen outlines (the IR has no silkscreen artwork yet).
+    // The fabricated silkscreen legend (engine strokes, mask-clipped), just above the surface.
+    const silk: number[] = [];
+    for (const st of sc.silk.filter((x) => x.side === side)) silk.push(st.ax, edge + dir * 0.012, st.ay, st.bx, edge + dir * 0.012, st.by);
+    if (silk.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(silk, 3));
+      group(`silk-${side}`).add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xf4f4f4 })));
+    }
+    // Courtyard rectangles (the placement envelope), drawn under the legend.
     const seg: number[] = [];
     for (const c of sc.courtyards.filter((cy) => cy.side === side)) {
       const y = edge + dir * 0.01;
@@ -233,7 +248,9 @@ interface Three {
 
 export function Viewer3D({ projectId, revision, active, selected = null, onSelect, onProbe, execute, busy = false, layerColourOf = layerColour }: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const three = useRef<Three | null>(null);
+  const three = useRef<Three |  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  /** The engine board geometry (ADR-0051) of the latest revision read; null until it arrives. */
+  const [geometry, setGeometry] = useState<BoardGeometry | null>(null);
   const [loads, setLoads] = useState<Record<string, Load>>({});
   const [reloadNonce, setReloadNonce] = useState(0);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -256,7 +273,7 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
   // Layer colour sync: the scene is rebuilt when the PCB layer manager's colours change.
   const colourSig = snapshot ? stackLayers(snapshot.project.pcb.board.stackup).map((l) => layerColourOf(l.layer)).join(",") : "";
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const scene = useMemo(() => (snapshot ? buildScene(snapshot, layerColourOf) : null), [snapshot, colourSig]);
+  const scene = useMemo(() => (snapshot ? buildScene(snapshot, layerColourOf, geometry) : null), [snapshot, geometry, colourSig]);
   const look = useMemo(() => (snapshot ? appearance(snapshot) : null), [snapshot]);
   const stack = useMemo(() => (snapshot ? stackTable(snapshot) : null), [snapshot]);
   /** Footprint ids whose real model loaded (comma-joined so it works as an effect dependency). */
@@ -290,6 +307,15 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
       })
       .catch((e) => {
         if (!cancelled) setError(typeof e === "string" ? e : ((e as { message?: string })?.message ?? "Could not read the project"));
+      });
+    // The geometry DRC checks for this revision; the scene uses it once its revision matches.
+    api
+      .boardGeometry()
+      .then((g) => {
+        if (!cancelled) setGeometry(g ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setGeometry(null);
       });
     return () => {
       cancelled = true;
@@ -815,7 +841,7 @@ export function Viewer3D({ projectId, revision, active, selected = null, onSelec
                 Board {scene.thickness.toFixed(2)} mm, {scene.layers.length} copper layer{scene.layers.length === 1 ? "" : "s"}. Copper colours follow the PCB layer manager.
               </div>
               {scene.outline.length < 3 && <div>No board outline set: the board slab is not drawn.</div>}
-              <div>Parts without a loaded model are placeholders, drawn with amber edges and a label: boxes from the footprint courtyard and library body height. Courtyard outlines stand in for silkscreen; zone fills are not drawn in 3D (outline only; the PCB editor draws the engine fill).</div>
+              <div>Parts without a loaded model are placeholders, drawn with amber edges and a label: boxes from the footprint courtyard and library body height. {scene.source === "engine" ? "Copper, zone fills, holes and silkscreen are the engine board geometry DRC checks." : "Engine board geometry not loaded yet: copper is drawn from the project and zone fills and silkscreen are not shown."}</div>
               {scene.missing.length > 0 && <div>No body height in the library, outline only: {scene.missing.join(", ")}.</div>}
             </div>
           )}

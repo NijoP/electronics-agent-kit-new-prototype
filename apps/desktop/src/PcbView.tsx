@@ -41,7 +41,7 @@ import {
   widthPresetValue,
   type RouteDraft,
 } from "./routeTool";
-import type { BendMode, Command, ConflictMode, CopperLayer, DrawLayer, FillView, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
+import type { BendMode, BoardGeometry, Command, ConflictMode, CopperLayer, DrawLayer, FillView, Id, PadGeom, Point, RouteStepReport, Snapshot } from "./types";
 import { isActiveEditor, useDocId, useRegisterTools } from "./shell/viewState";
 import { ToolOptionFields } from "./shell/Inspector";
 import { NO_SELECTION, useHasInspector, usePublishEditorContext, type OptionField } from "./shell/inspectorModel";
@@ -297,12 +297,30 @@ export function PcbView({ snapshot, selected, onSelect, edit: editProp, aiPrevie
   const hiddenKey = [...lv.hidden].sort().join(",");
   const colourKey = order.map((l) => lv.colourOf(l)).join(",");
   const sceneAirwires = lv.airwires ? (airwires ?? null) : null;
+  // The engine legend of this revision (ADR-0051: the silkscreen DRC and the Gerber use).
+  const revision = snapshot.project.revision;
+  const [geometry, setGeometry] = useState<BoardGeometry | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .boardGeometry()
+      .then((g) => {
+        if (!cancelled) setGeometry(g ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setGeometry(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [revision, snapshot.project.id]);
+  const silk = geometry && geometry.revision === revision ? geometry.silk : null;
   const scene = useMemo(
     () =>
       useCanvas
-        ? buildPcbScene(snapshot, { order, hidden: lv.hidden, colourOf: lv.colourOf, activeLayer: activeKey, airwires: sceneAirwires, outlineView: lv.outline, fills: zoneFills })
+        ? buildPcbScene(snapshot, { order, hidden: lv.hidden, colourOf: lv.colourOf, activeLayer: activeKey, airwires: sceneAirwires, outlineView: lv.outline, fills: zoneFills, silk })
         : null,
-    [useCanvas, snapshot, hiddenKey, colourKey, activeKey, sceneAirwires, lv.outline, zoneFills],
+    [useCanvas, snapshot, hiddenKey, colourKey, activeKey, sceneAirwires, lv.outline, zoneFills, silk],
   );
   const picker = useMemo(() => (scene ? new PickIndex(scene) : null), [scene]);
   const byKey = useMemo(() => new Map<string, RenderObject>((scene?.objects ?? []).map((o) => [o.key, o])), [scene]);
