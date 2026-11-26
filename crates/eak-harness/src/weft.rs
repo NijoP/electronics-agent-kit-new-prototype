@@ -28,6 +28,33 @@ pub const JOURNAL: &str = "journal.jsonl";
 pub const ENGINEER: &str = "engineer";
 /// Recipient meaning every registered agent (context, findings, status, blockers).
 pub const EVERYONE: &str = "*";
+
+/// Launch contract (ADR-0053 addendum): a session started by EAK's AI tools (or any launcher)
+/// sets these next to `EAK_AGENT_NAME` and `EAK_SESSION_ID`, and `eak-mcp` then registers the
+/// session on the bus itself, as if it had called `weft_register`.
+pub const ENV_AGENT_TOOL: &str = "EAK_AGENT_TOOL";
+pub const ENV_AGENT_MODEL: &str = "EAK_AGENT_MODEL";
+/// Comma-separated.
+pub const ENV_AGENT_CAPABILITIES: &str = "EAK_AGENT_CAPABILITIES";
+
+/// What a launcher said about the session it started; `None` when `EAK_AGENT_TOOL` is not set
+/// (a session started by hand registers with `weft_register` when it wants to).
+pub fn launch_registration(get: impl Fn(&str) -> Option<String>) -> Option<Value> {
+    let tool = get(ENV_AGENT_TOOL)
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())?;
+    let capabilities: Vec<String> = get(ENV_AGENT_CAPABILITIES)
+        .unwrap_or_default()
+        .split(',')
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .collect();
+    Some(json!({
+        "tool": tool,
+        "model": get(ENV_AGENT_MODEL).unwrap_or_default().trim(),
+        "capabilities": capabilities,
+    }))
+}
 const MAX_TEXT: usize = 8000;
 
 /// A registered agent. `id` is the journal actor label (`agent:<name>@<session>`), so the
@@ -625,6 +652,28 @@ pub(crate) fn dispatch(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launch_registration_comes_only_from_a_launcher_that_named_the_tool() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                pairs
+                    .iter()
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, v)| v.to_string())
+            }
+        };
+        assert_eq!(launch_registration(env(&[])), None);
+        assert_eq!(launch_registration(env(&[(ENV_AGENT_TOOL, " ")])), None);
+        assert_eq!(
+            launch_registration(env(&[
+                (ENV_AGENT_TOOL, "codex"),
+                (ENV_AGENT_MODEL, "m1"),
+                (ENV_AGENT_CAPABILITIES, "schematic, review,,"),
+            ])),
+            Some(json!({"tool": "codex", "model": "m1", "capabilities": ["schematic", "review"]}))
+        );
+    }
 
     fn card(id: &str) -> AgentCard {
         AgentCard {

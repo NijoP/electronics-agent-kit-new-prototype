@@ -19,6 +19,8 @@ same typed commands as the editor. Pre-release software, not yet proven on real 
   <img src="https://img.shields.io/badge/platforms-Windows%20x64%20%7C%20Linux%20x64%20%7C%20macOS-lightgrey" alt="Platforms">
 </p>
 
+Execution roadmap (goals, owners, evidence, completion marks): [ROADMAP_EXECUTION.md](ROADMAP_EXECUTION.md).
+
 ## Contents
 
 - [What EAK is](#what-eak-is)
@@ -107,7 +109,7 @@ usual tools.
 
 Full tables: [docs/RELEASE_STATUS_v0.2.0.md](docs/RELEASE_STATUS_v0.2.0.md), [STATUS.md](STATUS.md),
 [FEATURE_MATRIX.md](FEATURE_MATRIX.md). "Tested" below means CI tests, plus real-window scenarios on
-Linux under Xvfb where [docs/qa/UI_EVIDENCE.md](docs/qa/UI_EVIDENCE.md) lists one; 34 scenarios drive the app in a real window.
+Linux under Xvfb where [docs/qa/UI_EVIDENCE.md](docs/qa/UI_EVIDENCE.md) lists one; 35 scenarios drive the app in a real window.
 
 | Area | Implemented | Limits |
 |---|---|---|

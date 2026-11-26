@@ -1,0 +1,91 @@
+{
+  "name": "W2 agent activity",
+  "description": "WEFT activity view (ADR-0053) in the real window. SETUP: on an isolated software fixture, two scripted agent sessions reach the app through its harness endpoint, exactly as eak-mcp would. They register (a planner and a layout agent), the planner delegates a task to the layout agent, the layout agent marks it in progress, proposes a capacitor (propose mode: the project does not move) and asks the engineer to review it. Tools > Agent activity... shows one timeline per agent, read only from the project journals: the planner's delegate message; the layout agent's status, proposal and review request; and no revision yet. Review proposal opens that proposal in the review dialog, and Apply puts one part on the sheet. The activity view then shows the applied Batch as a revision under the layout agent (the journal actor) and the proposal's applied event. Show on canvas selects the changed part on the schematic, and Undo this revision takes it back in one undo step. The bus rules (owner-only status, dependencies, review routing, conflicts) are covered by crates/eak-harness/tests/weft.rs; the timeline by src-tauri/tests/proposal.rs and src/shell/activity.test.tsx.",
+  "steps": [
+    { "id": "home", "do": "wait", "title": "Project Home visible", "selector": "main.home h1", "timeout": 60000 },
+    { "id": "fixture", "do": "fixture-project", "title": "Create fixture project", "name": "W2 Activity Fixture", "folder": "w2-activity-fixture" },
+    { "id": "open", "do": "click", "title": "Open fixture from Recent projects", "selector": "button.home-row", "text": "W2 Activity Fixture", "expect": "nav[aria-label=\"Application menu\"]" },
+    {
+      "id": "w2-planner",
+      "do": "fixture-agent-calls",
+      "title": "W2: the planner agent session registers on the WEFT bus (SETUP)",
+      "folder": "w2-activity-fixture",
+      "agent": "w2-planner",
+      "session": "w2-plan",
+      "calls": [{ "tool": "weft_register", "args": { "tool": "ui-evidence-script", "capabilities": ["plan"] } }],
+      "shot": false
+    },
+    {
+      "id": "w2-layout",
+      "do": "fixture-agent-calls",
+      "title": "W2: the layout agent session registers (SETUP)",
+      "folder": "w2-activity-fixture",
+      "agent": "w2-layout",
+      "session": "w2-lay",
+      "calls": [{ "tool": "weft_register", "args": { "tool": "ui-evidence-script", "capabilities": ["schematic"] } }],
+      "shot": false
+    },
+    {
+      "id": "w2-delegate",
+      "do": "fixture-agent-calls",
+      "title": "W2: the planner delegates a task to the layout agent (SETUP)",
+      "folder": "w2-activity-fixture",
+      "agent": "w2-planner",
+      "session": "w2-plan",
+      "calls": [{ "tool": "weft_send", "args": { "kind": "delegate", "to": "agent:w2-layout@w2-lay", "title": "Input decoupling capacitor" }, "save": "task=sent.task_id" }],
+      "shot": false
+    },
+    {
+      "id": "w2-start",
+      "do": "fixture-agent-calls",
+      "title": "W2: the layout agent starts the task (SETUP)",
+      "folder": "w2-activity-fixture",
+      "agent": "w2-layout",
+      "session": "w2-lay",
+      "calls": [{ "tool": "weft_send", "args": { "kind": "status", "task_id": "$saved:task", "status": "in_progress" } }],
+      "shot": false
+    },
+    {
+      "id": "w2-propose",
+      "do": "fixture-agent-propose",
+      "title": "W2: the layout agent proposes a capacitor in propose mode (SETUP)",
+      "folder": "w2-activity-fixture",
+      "agent": "w2-layout",
+      "session": "w2-lay",
+      "proposalTitle": "Input decoupling",
+      "rationale": "100 nF at the input",
+      "save": "proposal",
+      "commands": [{ "type": "PlaceSymbol", "component_id": "C_0805", "position": { "x": 20000000, "y": 40000000 }, "value": "100n" }],
+      "shot": false
+    },
+    {
+      "id": "w2-ask",
+      "do": "fixture-agent-calls",
+      "title": "W2: the layout agent asks the engineer to review its proposal (SETUP)",
+      "folder": "w2-activity-fixture",
+      "agent": "w2-layout",
+      "session": "w2-lay",
+      "calls": [{ "tool": "weft_send", "args": { "kind": "review_request", "proposal_id": "$saved:proposal", "to": "engineer", "body": "please review the input capacitor" } }],
+      "shot": false
+    },
+    { "id": "sch", "do": "menu", "title": "Open schematic", "menu": "View", "item": "Go to Schematic editor", "expect": "section[aria-label=\"Schematic view\"]", "shot": false },
+    { "id": "w2-untouched", "do": "count", "title": "W2: nothing applied yet: the sheet is empty", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 0, "shot": false },
+    { "id": "w2-open", "do": "menu", "title": "W2: Tools > Agent activity... shows one timeline per agent from the journals", "menu": "Tools", "item": "Agent activity…", "expect": "[role=\"dialog\"][aria-label=\"Agent activity\"] section[data-actor=\"agent:w2-planner@w2-plan\"]" },
+    { "id": "w2-delegated", "do": "wait", "title": "W2: the planner's delegate message", "selector": "[role=\"dialog\"][aria-label=\"Agent activity\"] section[data-actor=\"agent:w2-planner@w2-plan\"] li[data-activity=\"weft\"][data-kind=\"delegate\"]", "shot": false },
+    { "id": "w2-status", "do": "wait", "title": "W2: the layout agent's status change", "selector": "[role=\"dialog\"][aria-label=\"Agent activity\"] section[data-actor=\"agent:w2-layout@w2-lay\"] li[data-activity=\"weft\"][data-kind=\"task_status\"]", "shot": false },
+    { "id": "w2-proposed", "do": "wait", "title": "W2: the layout agent's submitted proposal", "selector": "[role=\"dialog\"][aria-label=\"Agent activity\"] section[data-actor=\"agent:w2-layout@w2-lay\"] li[data-activity=\"proposal\"][data-kind=\"submitted\"]", "shot": false },
+    { "id": "w2-asked", "do": "wait", "title": "W2: the review request to the engineer", "selector": "[role=\"dialog\"][aria-label=\"Agent activity\"] section[data-actor=\"agent:w2-layout@w2-lay\"] li[data-activity=\"weft\"][data-kind=\"review_request\"]" },
+    { "id": "w2-no-rev", "do": "count", "title": "W2: no revision yet (a proposal does not change the project)", "selector": "[role=\"dialog\"][aria-label=\"Agent activity\"] li[data-activity=\"revision\"]", "equals": 0, "shot": false },
+    { "id": "w2-review", "do": "click", "title": "W2: Review proposal opens it in EAK's review", "selector": "[role=\"dialog\"][aria-label=\"Agent activity\"] li[data-kind=\"review_request\"] button", "text": "Review proposal", "gone": "[role=\"dialog\"][aria-label=\"Agent activity\"]", "expect": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] button.primary:not([disabled])", "expectText": "Apply proposal" },
+    { "id": "w2-apply", "do": "click", "title": "W2: the engineer applies it", "selector": "[role=\"dialog\"][aria-label=\"Review agent proposal\"] button.primary", "text": "Apply proposal", "gone": "[role=\"dialog\"][aria-label=\"Review agent proposal\"]", "expect": "footer.status span.msg", "expectText": "Applied as one undo step" },
+    { "id": "w2-applied", "do": "count", "title": "W2: one part on the sheet", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 1, "shot": false },
+    { "id": "w2-open-2", "do": "menu", "title": "W2: the applied Batch is a revision under the layout agent (the journal actor)", "menu": "Tools", "item": "Agent activity…", "expect": "[role=\"dialog\"][aria-label=\"Agent activity\"] section[data-actor=\"agent:w2-layout@w2-lay\"] li[data-activity=\"revision\"][data-kind=\"Batch\"]" },
+    { "id": "w2-applied-event", "do": "wait", "title": "W2: the proposal's applied event", "selector": "[role=\"dialog\"][aria-label=\"Agent activity\"] li[data-activity=\"proposal\"][data-kind=\"applied\"]", "shot": false },
+    { "id": "w2-show", "do": "click", "title": "W2: Show on canvas selects the changed part on the schematic", "selector": "[role=\"dialog\"][aria-label=\"Agent activity\"] li[data-activity=\"revision\"] button", "text": "Show on canvas", "gone": "[role=\"dialog\"][aria-label=\"Agent activity\"]", "expect": "section[aria-label=\"Schematic view\"] g[data-symbol-id].selected" },
+    { "id": "w2-open-3", "do": "menu", "title": "W2: reopen the activity view", "menu": "Tools", "item": "Agent activity…", "expect": "[role=\"dialog\"][aria-label=\"Agent activity\"] li[data-activity=\"revision\"] button", "expectText": "Undo this revision", "shot": false },
+    { "id": "w2-undo", "do": "click", "title": "W2: Undo this revision takes the applied proposal back (Edit > Undo)", "selector": "[role=\"dialog\"][aria-label=\"Agent activity\"] li[data-activity=\"revision\"] button", "text": "Undo this revision", "expect": "footer.status span.msg", "expectText": "Undo → revision" },
+    { "id": "w2-undo-row", "do": "wait", "title": "W2: the undo is recorded as your revision", "selector": "[role=\"dialog\"][aria-label=\"Agent activity\"] li[data-activity=\"revision\"][data-kind=\"Undo\"]" },
+    { "id": "w2-close", "do": "key", "title": "W2: Escape closes the activity view", "keys": "Escape", "gone": "[role=\"dialog\"][aria-label=\"Agent activity\"]", "shot": false },
+    { "id": "w2-undone", "do": "count", "title": "W2: the sheet is empty again", "selector": "section[aria-label=\"Schematic view\"] g[data-symbol-id]", "equals": 0, "shot": false }
+  ]
+}

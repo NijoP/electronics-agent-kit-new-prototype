@@ -29,12 +29,24 @@ struct Client {
 
 impl Client {
     fn start(dir: &Path, agent: &str, session: &str) -> Client {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_eak-mcp"))
-            .env("EAK_PROJECT_DIR", dir)
+        Client::start_env(dir, agent, session, &[])
+    }
+
+    /// A session started by a launcher (the AI tools adapter) with the launch contract set.
+    fn start_env(dir: &Path, agent: &str, session: &str, env: &[(&str, &str)]) -> Client {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_eak-mcp"));
+        cmd.env("EAK_PROJECT_DIR", dir)
             .env("EAK_SESSION_ID", session)
             .env("EAK_AGENT_NAME", agent)
             .env("EAK_HARNESS_APPLY_MODE", "propose")
             .env_remove("EAK_PROJECT_ID")
+            .env_remove("EAK_AGENT_TOOL")
+            .env_remove("EAK_AGENT_MODEL")
+            .env_remove("EAK_AGENT_CAPABILITIES");
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
+        let mut child = cmd
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -303,5 +315,130 @@ fn two_mcp_agents_delegate_review_and_meet_a_conflict_over_the_real_bus() {
     assert_eq!(last["revision"], 0, "sent before the engineer applied");
     drop(planner);
     drop(layout);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Launch integration: sessions an AI tools launcher started (`EAK_AGENT_TOOL`, `EAK_AGENT_MODEL`,
+/// `EAK_AGENT_CAPABILITIES`, `EAK_SESSION_ID`) register themselves on the bus, with no
+/// `weft_register` call, as soon as the project exists. Two of them delegate, review with a
+/// verdict, and meet a conflict on a stale revision; a session started by hand stays
+/// unregistered.
+#[test]
+fn launched_sessions_register_themselves_delegate_review_and_meet_a_stale_conflict() {
+    let root = temp_dir("launch");
+    let dir = root.join("l.eak");
+    let claude = "agent:claude@task-claude-1";
+    let codex = "agent:codex@task-codex-1";
+    let mut a = Client::start_env(
+        &dir,
+        "claude",
+        "task-claude-1",
+        &[
+            ("EAK_AGENT_TOOL", "claude-code"),
+            ("EAK_AGENT_MODEL", "model-a"),
+            ("EAK_AGENT_CAPABILITIES", "planning,review"),
+        ],
+    );
+    // The project does not exist at initialize; registration follows its creation.
+    a.ok("create_project", json!({"dir": dir, "name": "Launch"}));
+    let mut b = Client::start_env(
+        &dir,
+        "codex",
+        "task-codex-1",
+        &[("EAK_AGENT_TOOL", "codex"), ("EAK_AGENT_MODEL", "model-b")],
+    );
+    let mut by_hand = Client::start(&dir, "manual", "s-manual");
+
+    let agents = b.ok("weft_agents", json!({}));
+    let list = agents["agents"].as_array().unwrap();
+    assert_eq!(list.len(), 2, "{agents}");
+    let card = |id: &str| {
+        list.iter()
+            .find(|c| c["id"] == id)
+            .unwrap_or_else(|| panic!("{id} not registered: {agents}"))
+            .clone()
+    };
+    assert_eq!(card(claude)["tool"], "claude-code");
+    assert_eq!(card(claude)["model"], "model-a");
+    assert_eq!(card(claude)["capabilities"], json!(["planning", "review"]));
+    assert_eq!(card(codex)["tool"], "codex");
+    assert_eq!(card(codex)["session_id"], "task-codex-1");
+    by_hand.refused(
+        "weft_send",
+        json!({"kind": "finding", "body": "x"}),
+        "precondition",
+    );
+
+    // Delegate.
+    let d = a.ok(
+        "weft_send",
+        json!({"kind": "delegate", "to": codex, "title": "Input capacitor"}),
+    );
+    let task = d["task"]["task"]["id"].as_str().unwrap().to_string();
+    b.ok(
+        "weft_send",
+        json!({"kind": "status", "task_id": task, "status": "in_progress", "to": claude}),
+    );
+
+    // Both propose on revision 0; codex asks claude to review and gets a verdict.
+    let pb = b.ok(
+        "PlaceSymbol",
+        json!({"expected_revision": 0, "component_id": "C_0805", "position": {"x": 0, "y": 0}}),
+    );
+    let pb = pb["proposal_id"].as_str().unwrap().to_string();
+    b.ok("proposal_submit", json!({"proposal_id": pb}));
+    let pa = a.ok("PlaceSymbol", json!({"expected_revision": 0, "component_id": "R_0805", "position": {"x": 0, "y": 20000000}}));
+    let pa = pa["proposal_id"].as_str().unwrap().to_string();
+    b.ok(
+        "weft_send",
+        json!({"kind": "review_request", "to": claude, "proposal_id": pb}),
+    );
+    let v = a.ok(
+        "weft_send",
+        json!({"kind": "review_verdict", "proposal_id": pb, "verdict": "approve"}),
+    );
+    assert_eq!(v["sent"]["to"], codex);
+    let inbox = b.ok("weft_inbox", json!({}));
+    assert!(
+        inbox["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["message"]["kind"] == "review_verdict"
+                && m["message"]["verdict"] == "approve"),
+        "{inbox}"
+    );
+
+    // The engineer applies the approved proposal: claude's, made on revision 0, is now stale.
+    {
+        let mut engine = Engine::open(&dir, false).unwrap();
+        assert!(
+            proposal::apply(&mut engine, &pb, 0, None, &Actor::human())
+                .unwrap()
+                .response
+                .accepted
+        );
+        let err = proposal::apply(&mut engine, &pa, 1, None, &Actor::human()).unwrap_err();
+        assert!(err.to_string().contains("stale"), "{err}");
+    }
+    let c = a.ok("weft_conflicts", json!({}));
+    assert_eq!(c["conflicts"].as_array().unwrap().len(), 1, "{c}");
+    assert_eq!(c["conflicts"][0]["kind"], "stale");
+    assert_eq!(c["conflicts"][0]["proposals"], json!([pa]));
+
+    // Each launched session registered exactly once.
+    let h = a.ok("weft_history", json!({}));
+    let regs: Vec<&str> = h["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["event"] == "agent_registered")
+        .map(|e| e["by"].as_str().unwrap())
+        .collect();
+    assert_eq!(regs.len(), 2, "{h}");
+    assert!(regs.contains(&claude) && regs.contains(&codex));
+    drop(a);
+    drop(b);
+    drop(by_hand);
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -31,13 +31,15 @@ const reviewable = (p: ProposalSummary) => p.status === "open" || p.status === "
 interface Props {
   /** The project's revision; a change reloads the list and the review. */
   revision: number;
+  /** Proposal to show first (from the activity view); default the newest reviewable one. */
+  initialId?: string;
   busy: boolean;
   /** Called after an accepted apply (the workspace refreshes and reports it). */
   onApplied: (outcome: ApplyOutcome) => void;
   onClose: () => void;
 }
 
-export function ProposalReviewDialog({ revision, busy, onApplied, onClose }: Props) {
+export function ProposalReviewDialog({ revision, initialId, busy, onApplied, onClose }: Props) {
   useEscape(onClose);
   const [list, setList] = useState<ProposalSummary[] | null>(null);
   const [id, setId] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export function ProposalReviewDialog({ revision, busy, onApplied, onClose }: Pro
       .then((l) => {
         if (!live) return;
         setList(l);
-        setId((cur) => (cur && l.some((p) => p.id === cur) ? cur : ([...l].reverse().find(reviewable) ?? l[l.length - 1])?.id ?? null));
+        setId((cur) => (cur && l.some((p) => p.id === cur) ? cur : initialId && l.some((p) => p.id === initialId) ? initialId : ([...l].reverse().find(reviewable) ?? l[l.length - 1])?.id ?? null));
       })
       .catch((e) => live && setError(message(e)));
     return () => {

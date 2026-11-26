@@ -145,3 +145,26 @@ pub mod cmd {
         .await
     }
 }
+
+/// The agent activity timeline of the active project (ADR-0053): committed revisions, proposal
+/// events, WEFT messages and saved check reports, read from the project's own journals. Read-only.
+pub fn activity_timeline(s: &Session) -> Result<Vec<eak_harness::activity::Item>, String> {
+    s.with_engine(|e| {
+        e.dir()
+            .map(eak_harness::activity::timeline)
+            .unwrap_or_default()
+    })
+}
+
+pub mod activity_cmd {
+    use crate::cmd::blocking;
+    use crate::resources::Priority;
+    use tauri::AppHandle;
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn activity_timeline(
+        app: AppHandle,
+    ) -> Result<Vec<eak_harness::activity::Item>, String> {
+        blocking(app, Priority::P0, super::activity_timeline).await
+    }
+}
