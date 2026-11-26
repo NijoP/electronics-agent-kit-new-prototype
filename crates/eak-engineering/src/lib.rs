@@ -15,6 +15,7 @@
 //! * `placement_intel` – placement mental models (roles, snaps, analysis) ported from DESK.
 //! * `power`   – unit-aware trace width, voltage drop, rail drop, return-path continuity.
 //! * `scene3d` – board/component geometry for the 3D workspace and mechanical checks.
+//! * `verify`  – verification engines: typed inputs to PASS / FAIL / UNKNOWN / BLOCKED with sources.
 
 pub mod board;
 pub mod calc;
@@ -33,3 +34,4 @@ pub mod routing_intel;
 pub mod scene3d;
 pub mod silk;
 pub mod stitch;
+pub mod verify;
