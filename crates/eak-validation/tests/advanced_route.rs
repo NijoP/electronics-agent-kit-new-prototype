@@ -95,8 +95,14 @@ fn four_layer() -> Stackup {
     Stackup::multilayer(4, 1_600_000, 1.0, 0.5, "FR-4", FR4_ER)
 }
 
-/// Commit a route result the way `AutoRoute` does.
+/// Commit a route result the way `AutoRoute` does (pushed-aside tracks are replaced).
 fn commit(p: &mut Project, res: &RouteResult) {
+    for id in &res.replaced_tracks {
+        assert!(
+            p.pcb.tracks.remove(id).is_some(),
+            "replaced track {id} exists"
+        );
+    }
     for (k, t) in res.tracks.iter().enumerate() {
         let id = format!("trk{k}");
         p.pcb.tracks.insert(
@@ -204,4 +210,96 @@ fn a_pair_whose_gap_cannot_be_derived_is_not_routed_coupled_and_says_why() {
     assert!(pair.note.contains("reference plane"), "{}", pair.note);
     assert_eq!(pair.gap_mm, None);
     assert_eq!(pair.impedance_within_tolerance, None);
+}
+
+fn track(p: &mut Project, id: &str, layer: CopperLayer, a: Point, b: Point) {
+    p.pcb.tracks.insert(
+        id.into(),
+        Track {
+            id: id.into(),
+            layer,
+            width: 250_000,
+            a,
+            b,
+            net: "SIG".into(),
+            arc_deg: None,
+        },
+    );
+}
+
+/// Push-and-shove: two wide areas joined by a 2.7 mm neck (y 8.2..10.9 mm). A low-priority SIG
+/// track crosses the neck at y 9.6 mm on both layers. The 0.8 mm VCC route (0.2 mm clearance,
+/// 0.3 mm edge clearance) fits neither below it (it would need y <= 8.875 and >= 8.9) nor
+/// above it (y >= 10.325 but <= 10.2), so the plain router fails; pushing SIG up makes room.
+#[test]
+fn a_priority_net_shoves_a_lower_priority_track_aside_and_stays_drc_clean() {
+    let mut p = Project::new("shove");
+    p.pcb.board.outline = [
+        (0.0, 0.0),
+        (15.0, 0.0),
+        (15.0, 8.2),
+        (35.0, 8.2),
+        (35.0, 0.0),
+        (50.0, 0.0),
+        (50.0, 14.0),
+        (35.0, 14.0),
+        (35.0, 10.9),
+        (15.0, 10.9),
+        (15.0, 14.0),
+        (0.0, 14.0),
+    ]
+    .into_iter()
+    .map(|(x, y)| Point::mm(x, y))
+    .collect();
+    place(&mut p, "J1", Point::mm(5.0, 4.0), Rotation::R90);
+    place(&mut p, "J2", Point::mm(45.0, 4.0), Rotation::R90);
+    assign(&mut p, "J1", "VCC", "VCC", |c| c.x as f64);
+    assign(&mut p, "J2", "VCC", "VCC", |c| c.x as f64);
+    p.constraints.net_classes.push(NetClass {
+        name: "PWR".into(),
+        track_width: 800_000,
+        clearance: 200_000,
+        via_drill: 400_000,
+        via_diameter: 800_000,
+        nets: vec!["VCC".into()],
+        target_z0_ohm: None,
+    });
+    let (a, b) = (Point::mm(2.0, 9.6), Point::mm(48.0, 9.6));
+    track(&mut p, "sig_top", CopperLayer::Top, a, b);
+    track(&mut p, "sig_bot", CopperLayer::Bottom, a, b);
+
+    let res = router::route(&p, &RouterOptions::default());
+    assert!(
+        res.failed_connections.is_empty(),
+        "{:?}",
+        res.failed_connections
+    );
+    assert_eq!(res.replaced_tracks.len(), 1, "{:?}", res.replaced_tracks);
+    let moved = &res.replaced_tracks[0];
+    assert!(moved == "sig_top" || moved == "sig_bot");
+    // The moved SIG copper keeps both of its ends.
+    let sig: Vec<_> = res.tracks.iter().filter(|t| t.net == "SIG").collect();
+    assert!(sig.iter().any(|t| t.a == a || t.b == a), "{sig:?}");
+    assert!(sig.iter().any(|t| t.a == b || t.b == b), "{sig:?}");
+    assert!(
+        res.notes.iter().any(|n| n.contains("push-and-shove")),
+        "{:?}",
+        res.notes
+    );
+
+    commit(&mut p, &res);
+    let conn = copper::analyse(&p);
+    assert!(
+        !conn.ratsnest.iter().any(|(n, _, _)| n == "VCC"),
+        "{:?}",
+        conn.ratsnest
+    );
+    assert!(conn.shorts.is_empty(), "{:?}", conn.shorts);
+    let bad: Vec<String> = drc::run(&p)
+        .findings
+        .into_iter()
+        .filter(|f| ["DRC-002", "DRC-003", "DRC-005"].contains(&f.rule_id.as_str()))
+        .map(|f| format!("{}: {}", f.rule_id, f.message))
+        .collect();
+    assert!(bad.is_empty(), "{bad:?}");
 }

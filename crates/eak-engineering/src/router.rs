@@ -156,6 +156,10 @@ pub struct RouteResult {
     /// Copper layers routed on (the signal layers of the stack-up), top to bottom.
     #[serde(default)]
     pub routing_layers: Vec<CopperLayer>,
+    /// Pre-existing tracks pushed aside (push-and-shove): delete these ids; their new
+    /// polylines are among `tracks`.
+    #[serde(default)]
+    pub replaced_tracks: Vec<String>,
 }
 
 const FREE: u32 = 0;
@@ -314,6 +318,9 @@ struct Placed {
     shapes: Vec<(usize, Shape)>,
     /// Placed by the coupled pair router; never ripped up alone (its partner would lose it).
     pair: bool,
+    /// The pre-existing track this copper replaces (moved aside by a shove; `conn` is
+    /// `usize::MAX`). Never a rip-up victim.
+    moved: Option<String>,
 }
 
 struct PassOutcome {
@@ -352,6 +359,9 @@ struct Env<'a> {
     coupled: &'a BTreeMap<String, Result<diffpair::Coupled, String>>,
     /// For each connection, the partner connection it is routed coupled with (declared pairs).
     mates: &'a [Option<usize>],
+    /// Routing priority of every net (`priority::net_priority`); a shove moves only
+    /// pre-existing tracks of lower-priority nets.
+    priority: &'a BTreeMap<String, u32>,
     base: &'a Grid,
     /// Cells outside the board or inside the edge keep-out (not "congestion").
     outside: &'a [bool],
@@ -435,6 +445,19 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
             net_ids.entry(it.net.clone()).or_insert(next);
         }
     }
+    let terminals = crate::priority::terminal_counts(p);
+    let fast = crate::priority::high_speed_nets(p);
+    let priority: BTreeMap<String, u32> = net_ids
+        .keys()
+        .map(|net| {
+            let n = terminals.get(net).copied().unwrap_or(2);
+            let amps = p.constraints.net_currents_a.get(net).copied();
+            (
+                net.clone(),
+                crate::priority::net_priority(net, n, amps, fast.contains(net)),
+            )
+        })
+        .collect();
     // Per-net width / via from class and declared current.
     let specs: BTreeMap<String, NetSpec> = net_ids
         .keys()
@@ -632,6 +655,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         pairs: &pairs,
         coupled: &coupled,
         mates: &mates,
+        priority: &priority,
         base: &base,
         outside: &outside,
         edges: &edges,
@@ -652,7 +676,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         result.ripups += out.ripups;
         result.passes.push(PassSummary {
             pass,
-            routed: out.placed.len(),
+            routed: out.placed.iter().filter(|pl| pl.moved.is_none()).count(),
             unrouted: out.failed.len(),
             ripups: out.ripups,
             vias: out.vias,
@@ -727,7 +751,14 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
                 .into(),
         );
     }
-    result.routed_connections = best.placed.len();
+    result.routed_connections = best.placed.iter().filter(|pl| pl.moved.is_none()).count();
+    result.replaced_tracks = moved_ids(best.placed.iter()).into_iter().collect();
+    if !result.replaced_tracks.is_empty() {
+        notes.insert(format!(
+            "{} lower-priority track(s) pushed aside (push-and-shove: 45-degree bumps that keep their ends)",
+            result.replaced_tracks.len()
+        ));
+    }
     let final_grid = grid_with(&env, best.placed.iter());
     let flat = vec![vec![0u8; n]; nl];
     let no_costs = Costs {
@@ -938,13 +969,76 @@ fn mark_placed(grid: &mut Grid, pl: &Placed, env: &Env) {
     }
 }
 
-/// The base grid plus the given placed routes.
+/// The base grid plus the given placed routes; the pre-existing tracks a shove moved are gone.
 fn grid_with<'a>(env: &Env, placed: impl Iterator<Item = &'a Placed>) -> Grid {
+    let placed: Vec<&Placed> = placed.collect();
     let mut g = env.base.clone();
-    for pl in placed {
+    for pl in &placed {
         mark_placed(&mut g, pl, env);
     }
+    let hidden = moved_ids(placed.iter().copied());
+    if !hidden.is_empty() {
+        unhide(&mut g, env, &hidden, &placed);
+    }
     g
+}
+
+/// Ids of the pre-existing tracks the given placed copper replaces.
+fn moved_ids<'a>(placed: impl Iterator<Item = &'a Placed>) -> BTreeSet<String> {
+    placed.filter_map(|pl| pl.moved.clone()).collect()
+}
+
+/// Whether copper item `it` is (part of) one of the `hidden` pre-existing tracks.
+fn is_hidden(it: &CopperItem, hidden: &BTreeSet<String>) -> bool {
+    it.kind == ItemKind::Track && hidden.contains(&it.object_id)
+}
+
+/// Re-derive the grid cells the `hidden` pre-existing tracks covered as if they were gone:
+/// owned by whatever other copper or placed route still covers them, blocked by a track
+/// keep-out, free otherwise (the exact check in `violation_hiding` decides legality).
+fn unhide(g: &mut Grid, env: &Env, hidden: &BTreeSet<String>, placed: &[&Placed]) {
+    let stack = &env.p.pcb.board.stackup;
+    for it in env.geo.copper.iter().filter(|it| is_hidden(it, hidden)) {
+        let Some(l) = stack.index_of(it.layer) else {
+            continue;
+        };
+        let inflate = env.inflate[l];
+        for i in g.cells(&it.shape, inflate) {
+            if env.outside[i] {
+                continue;
+            }
+            let pt = g.center(i % g.cols, i / g.cols);
+            let covers = |s: &Shape| {
+                Shape {
+                    core: s.core.clone(),
+                    radius: s.radius + inflate,
+                }
+                .contains(pt)
+            };
+            let mut ids: Vec<u32> = env
+                .geo
+                .copper
+                .iter()
+                .filter(|o| o.layer == it.layer && !is_hidden(o, hidden) && covers(&o.shape))
+                .map(|o| env.net_ids.get(&o.net).copied().unwrap_or(MULTI))
+                .collect();
+            for pl in placed {
+                if pl.shapes.iter().any(|(sl, s)| *sl == l && covers(s)) {
+                    ids.push(pl.id);
+                }
+            }
+            if env
+                .track_keepouts
+                .iter()
+                .any(|k| k.layers[l] && covers(&k.shape))
+            {
+                ids.push(MULTI);
+            }
+            g.owner[l][i] =
+                ids.into_iter()
+                    .fold(FREE, |o, id| if o == FREE || o == id { id } else { MULTI });
+        }
+    }
 }
 
 /// Coarse congestion of `grid` (2 mm cells at the default pitch); board-edge keep-out is ignored.
@@ -1060,6 +1154,17 @@ fn run_pass(env: &Env, conns: &[Conn], key: &[i64]) -> PassOutcome {
                 since_cong += 1;
             }
             Err(why) => {
+                // Push-and-shove first: move lower-priority pre-existing tracks aside.
+                if let Some((route, moved)) = shove(env, conn, ci, &placed, &costs) {
+                    placed.push(route);
+                    placed.extend(moved);
+                    failed.remove(&ci);
+                    grid = grid_with(env, placed.iter());
+                    cong = congestion_map(env, &grid).step_penalties();
+                    since_cong = 0;
+                    continue;
+                }
+                // Bounded fallback: rip up lower-priority copper this pass placed.
                 let tries = rip_tries.entry(ci).or_insert(0);
                 let allowed = *tries < 1 && ripups < env.opts.max_ripups;
                 *tries += 1;
@@ -1125,7 +1230,9 @@ fn find_victims(
     // Coupled pair copper is never a victim, so it stays in the way like higher-priority copper.
     let ghost = grid_with(
         env,
-        placed.iter().filter(|pl| pl.pair || key[pl.conn] <= my_key),
+        placed
+            .iter()
+            .filter(|pl| pl.pair || pl.moved.is_some() || key[pl.conn] <= my_key),
     );
     let id = *env.net_ids.get(&conn.net)?;
     let la = pad_layers(env, conn.a, &conn.net);
@@ -1143,7 +1250,7 @@ fn find_victims(
     for &(l, c, r) in &path {
         let pt = ghost.center(c, r);
         for (idx, pl) in placed.iter().enumerate() {
-            if pl.net == conn.net || pl.pair || key[pl.conn] <= my_key {
+            if pl.net == conn.net || pl.pair || pl.moved.is_some() || key[pl.conn] <= my_key {
                 continue;
             }
             let covers = pl.shapes.iter().any(|(sl, s)| {
@@ -1164,6 +1271,221 @@ fn find_victims(
     } else {
         Some(hit.into_iter().collect())
     }
+}
+
+/// Push-and-shove for a connection that found no path: route it as if the pre-existing tracks
+/// of lower-priority nets (`Env::priority`; never a declared pair's) were not there, then move
+/// each of those tracks the route crowds sideways with the route tool's 45-degree bump that
+/// keeps both of its ends (`interactive::bump`); a moved track that crowds a further one pushes
+/// it too, up to `MAX_SHOVE_LEVELS` levels and `MAX_SHOVED` tracks. Accepted only when the
+/// route and every moved track pass the full exact check (`violation_hiding`: clearance, board
+/// edge, holes, keep-outs) with the originals gone; the moved tracks come back as placed copper
+/// that replaces them. `None` when nothing movable blocks, a track cannot be bumped or a check
+/// fails: the caller then falls back to rip-up.
+fn shove(
+    env: &Env,
+    conn: &Conn,
+    ci: usize,
+    placed: &[Placed],
+    costs: &Costs,
+) -> Option<(Placed, Vec<Placed>)> {
+    use crate::interactive::{bump, Pusher, ShovedTrack, MAX_SHOVED, MAX_SHOVE_LEVELS};
+    let c = &env.p.constraints;
+    let stack = &env.p.pcb.board.stackup;
+    let score = |net: &str| env.priority.get(net).copied().unwrap_or(0);
+    let mine = score(&conn.net);
+    let already = moved_ids(placed.iter());
+    let movable: BTreeSet<String> = env
+        .geo
+        .copper
+        .iter()
+        .filter(|i| {
+            i.kind == ItemKind::Track
+                && !i.net.is_empty()
+                && i.net != conn.net
+                && score(&i.net) < mine
+                && stack
+                    .index_of(i.layer)
+                    .is_some_and(|l| env.routable.contains(&l))
+                && !c.diff_pairs.iter().any(|d| d.has(&i.net))
+                && !already.contains(&i.object_id)
+        })
+        .map(|i| i.object_id.clone())
+        .collect();
+    if movable.is_empty() {
+        return None;
+    }
+    let id = *env.net_ids.get(&conn.net)?;
+    let spec = &env.specs[&conn.net];
+    let refs: Vec<&Placed> = placed.iter().collect();
+    let mut ghost = grid_with(env, placed.iter());
+    unhide(&mut ghost, env, &movable, &refs);
+    let la = pad_layers(env, conn.a, &conn.net);
+    let lb = pad_layers(env, conn.b, &conn.net);
+    let path = astar(
+        &ghost,
+        id,
+        (conn.a, &la),
+        (conn.b, &lb),
+        env.routable,
+        env.opts,
+        costs,
+    )?;
+    let (segs, vias) = path_to_segments(&ghost, &path, conn.a, conn.b);
+    let widths: Vec<Nm> = env
+        .layers
+        .iter()
+        .map(|l| {
+            if l.is_outer() {
+                spec.track_width
+            } else {
+                spec.inner_track_width
+            }
+        })
+        .collect();
+    let nl = env.layers.len();
+    let shapes = shapes_for(&segs, &vias, &widths, spec.via_diameter, nl);
+    let net = &conn.net;
+    if violation_hiding(env, &shapes, &vias, spec.via_drill, net, placed, &movable).is_some() {
+        return None;
+    }
+
+    // The route pushes; then each level's moved tracks push.
+    let mut pushers: Vec<Pusher> = shapes
+        .iter()
+        .filter_map(|(l, s)| match s.core {
+            Core::Segment(a, b) if a != b => Some(Pusher {
+                a,
+                b,
+                half_width: s.radius,
+                layer: env.layers[*l],
+                net: conn.net.clone(),
+            }),
+            _ => None,
+        })
+        .collect();
+    let crowded = |pushers: &[Pusher], done: &[ShovedTrack]| -> Vec<String> {
+        let mut out: Vec<String> = vec![];
+        for it in env
+            .geo
+            .copper
+            .iter()
+            .filter(|i| movable.contains(&i.object_id))
+        {
+            if done.iter().any(|m| m.id == it.object_id) || out.contains(&it.object_id) {
+                continue;
+            }
+            let hit = pushers.iter().any(|q| {
+                let seg = Shape {
+                    core: Core::Segment(q.a, q.b),
+                    radius: q.half_width,
+                };
+                q.layer == it.layer
+                    && q.net != it.net
+                    && distance(&seg, &it.shape)
+                        < clearance::required(c, &q.net, &it.net, it.layer) - 1.0
+            });
+            if hit {
+                out.push(it.object_id.clone());
+            }
+        }
+        out
+    };
+    let mut moved: Vec<ShovedTrack> = vec![];
+    let mut next = crowded(&pushers, &moved);
+    for _ in 0..MAX_SHOVE_LEVELS {
+        if next.is_empty() {
+            break;
+        }
+        let first = moved.len();
+        for t in &next {
+            moved.push(bump(env.p, c, &env.geo.copper, &pushers, t)?);
+        }
+        if moved.len() > MAX_SHOVED {
+            return None;
+        }
+        let level: Vec<Pusher> = moved[first..]
+            .iter()
+            .flat_map(|s| {
+                s.points
+                    .windows(2)
+                    .filter(|w| w[0] != w[1])
+                    .map(|w| Pusher {
+                        a: w[0],
+                        b: w[1],
+                        half_width: s.width as f64 / 2.0,
+                        layer: s.layer,
+                        net: s.net.clone(),
+                    })
+            })
+            .collect();
+        next = crowded(&level, &moved);
+        pushers.extend(level);
+    }
+    if !next.is_empty() {
+        return None; // more levels would be needed
+    }
+
+    let route = Placed {
+        conn: ci,
+        net: conn.net.clone(),
+        id,
+        widths,
+        via_drill: spec.via_drill,
+        via_diameter: spec.via_diameter,
+        segs,
+        vias,
+        shapes,
+        pair: false,
+        moved: None,
+    };
+    let mut shoved: Vec<Placed> = vec![];
+    for s in moved {
+        let l = stack.index_of(s.layer)?;
+        let segs: Vec<(usize, Point, Point)> = s
+            .points
+            .windows(2)
+            .filter(|w| w[0] != w[1])
+            .map(|w| (l, w[0], w[1]))
+            .collect();
+        let widths = vec![s.width; nl];
+        shoved.push(Placed {
+            conn: usize::MAX,
+            net: s.net.clone(),
+            id: env.net_ids.get(&s.net).copied().unwrap_or(MULTI),
+            shapes: shapes_for(&segs, &[], &widths, 0, nl),
+            widths,
+            via_drill: 0,
+            via_diameter: 0,
+            segs,
+            vias: vec![],
+            pair: false,
+            moved: Some(s.id),
+        });
+    }
+    // Exact check of the route and of every moved track against everything, moved tracks at
+    // their new places and the originals gone.
+    let mut after: Vec<Placed> = placed.to_vec();
+    after.extend(shoved.iter().cloned());
+    if violation(
+        env,
+        &route.shapes,
+        &route.vias,
+        route.via_drill,
+        net,
+        &after,
+    )
+    .is_some()
+    {
+        return None;
+    }
+    after.push(route.clone());
+    for m in &shoved {
+        if violation(env, &m.shapes, &[], 0, &m.net, &after).is_some() {
+            return None;
+        }
+    }
+    Some((route, shoved))
 }
 
 /// Route one connection on `grid`; exact clearance is verified before it is accepted.
@@ -1220,6 +1542,7 @@ fn attempt(
         vias,
         shapes,
         pair: false,
+        moved: None,
     })
 }
 
@@ -1506,6 +1829,22 @@ fn violation(
     net: &str,
     placed: &[Placed],
 ) -> Option<String> {
+    violation_hiding(env, shapes, vias, via_drill, net, placed, &BTreeSet::new())
+}
+
+/// [`violation`], with the pre-existing tracks in `hidden` and those placed copper replaces
+/// (moved aside by a shove) gone from the board.
+fn violation_hiding(
+    env: &Env,
+    shapes: &[(usize, Shape)],
+    vias: &[Point],
+    via_drill: Nm,
+    net: &str,
+    placed: &[Placed],
+    hidden: &BTreeSet<String>,
+) -> Option<String> {
+    let mut hidden = hidden.clone();
+    hidden.extend(moved_ids(placed.iter()));
     let c = &env.p.constraints;
     // Router shapes: a zero-length core is a via pad, anything else a track.
     let class = |s: &Shape| match s.core {
@@ -1520,7 +1859,7 @@ fn violation(
             c.matrix_cell(me, other).map_or(r, |m| r.max(m as f64))
         };
         for (it, oc) in env.geo.copper.iter().zip(env.classes) {
-            if it.layer != layer || (it.net == net && !net.is_empty()) {
+            if it.layer != layer || (it.net == net && !net.is_empty()) || is_hidden(it, &hidden) {
                 continue;
             }
             let need = rule(&it.net, *oc);
