@@ -1348,7 +1348,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 
 /// Names of every IPC command registered with Tauri; `tests/ipc.rs` checks that the
 /// frontend (`src/api.ts`) invokes exactly these.
-pub const IPC_COMMANDS: [&str; 98] = [
+pub const IPC_COMMANDS: [&str; 101] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
@@ -1429,6 +1429,9 @@ pub const IPC_COMMANDS: [&str; 98] = [
     "proposal_discard",
     "proposal_export",
     "activity_timeline",
+    "weft_conflicts",
+    "weft_engineer_queue",
+    "weft_engineer_verdict",
     "project_files",
     "project_file_read",
     "project_file_create",
@@ -1921,6 +1924,9 @@ pub fn run() {
             proposal::cmd::proposal_discard,
             proposal::cmd::proposal_export,
             proposal::activity_cmd::activity_timeline,
+            proposal::weft_cmd::weft_conflicts,
+            proposal::weft_cmd::weft_engineer_queue,
+            proposal::weft_cmd::weft_engineer_verdict,
             workspace::cmd::project_files,
             workspace::cmd::project_file_read,
             workspace::cmd::project_file_create,

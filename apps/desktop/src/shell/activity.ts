@@ -26,6 +26,7 @@ export function actorName(actor: string): string {
   const m = /^agent:([^@]+)@(.+)$/.exec(actor);
   if (m) return `${m[1]} (session ${m[2]})`;
   if (actor.startsWith("human")) return "You";
+  if (actor === "engineer") return "You (engineer, on the WEFT bus)";
   if (actor === "system") return "EAK checks";
   return actor || "unknown";
 }
@@ -73,4 +74,30 @@ export function firstChanged(it: ActivityItem): { editor: "schematic" | "pcb"; i
     if (path === "pcb.footprints") return { editor: "pcb", id: key };
   }
   return null;
+}
+
+/** One flagged conflict among open proposals (`weft::conflicts`, ADR-0053). */
+export interface WeftConflict {
+  kind: "stale" | "overlap";
+  proposals: string[];
+  objects?: string[];
+  base_revision?: number;
+  current_revision?: number;
+  resolve: string;
+}
+
+/** A review request an agent routed to the engineer, not answered yet (`weft::engineer_queue`). */
+export interface EngineerRequest {
+  seq: number;
+  proposal_id: string;
+  from: string;
+  body: string;
+  title: string;
+  base_revision: number;
+}
+
+/** What a conflict is, in one line. */
+export function conflictText(c: WeftConflict): string {
+  if (c.kind === "stale") return `Stale: made at revision ${c.base_revision}, the project is at revision ${c.current_revision}.`;
+  return `Overlap: both change ${(c.objects ?? []).join(", ") || "the same objects"}.`;
 }

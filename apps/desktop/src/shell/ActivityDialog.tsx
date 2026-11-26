@@ -8,7 +8,7 @@
 // changed part or footprint.
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { actorName, checkDeltas, firstChanged, groupByActor, latestRevision, type ActivityItem } from "./activity";
+import { actorName, checkDeltas, conflictText, firstChanged, groupByActor, latestRevision, type ActivityItem, type EngineerRequest, type WeftConflict } from "./activity";
 import { useEscape } from "./useEscape";
 
 const message = (e: unknown) => String(e).replace(/^Error: /, "");
@@ -28,9 +28,16 @@ export function ActivityDialog({ revision, busy, onReview, onUndo, onShow, onClo
   useEscape(onClose);
   const [items, setItems] = useState<ActivityItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<WeftConflict[] | null>(null);
+  const [queue, setQueue] = useState<EngineerRequest[]>([]);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [working, setWorking] = useState(false);
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     let live = true;
-    const load = () =>
+    // Conflicts review every open proposal on a copy: one request at a time.
+    let checking = false;
+    const load = () => {
       api
         .activityTimeline()
         .then((xs) => {
@@ -39,13 +46,47 @@ export function ActivityDialog({ revision, busy, onReview, onUndo, onShow, onClo
           setError(null);
         })
         .catch((e) => live && setError(message(e)));
-    void load();
+      api
+        .weftEngineerQueue()
+        .then((q) => live && setQueue(q))
+        .catch(() => undefined);
+      if (checking) return;
+      checking = true;
+      api
+        .weftConflicts()
+        .then((c) => live && setConflicts(c))
+        .catch(() => live && setConflicts(null))
+        .finally(() => {
+          checking = false;
+        });
+    };
+    load();
     const t = setInterval(load, POLL_MS);
     return () => {
       live = false;
       clearInterval(t);
     };
-  }, [revision]);
+  }, [revision, reload]);
+
+  // The engineer's answer goes on the WEFT bus to the proposal's author; Reject and Re-propose
+  // discard the proposal first. Nothing here applies a proposal (Approve opens the review).
+  const answer = async (id: string, verdict: "approve" | "request_changes" | "reject", body: string, discard: boolean, done: string) => {
+    setWorking(true);
+    try {
+      await api.weftEngineerVerdict(id, verdict, body, discard);
+      setNote({ ok: true, text: done });
+      if (verdict === "approve") onReview(id);
+    } catch (e) {
+      setNote({ ok: false, text: `Not sent: ${message(e)}` });
+    } finally {
+      setWorking(false);
+      setReload((n) => n + 1);
+    }
+  };
+  const reject = (id: string) => answer(id, "reject", "Rejected by the engineer.", true, `Proposal ${id} rejected: discarded, and its agent was told on the WEFT bus.`);
+  const repropose = (id: string) =>
+    answer(id, "request_changes", `Propose again on revision ${revision}.`, true, `Proposal ${id} sent back: discarded, and its agent was asked on the WEFT bus to propose again on revision ${revision}.`);
+  const off = busy || working;
 
   const all = items ?? [];
   const latest = latestRevision(all, revision);
@@ -61,6 +102,58 @@ export function ActivityDialog({ revision, busy, onReview, onUndo, onShow, onClo
               {error}
             </p>
           )}
+          {note && (
+            <p role="status" className={note.ok ? "muted activity-note" : "explorer-error activity-note"}>
+              {note.text}
+            </p>
+          )}
+          <section className="activity-conflicts" aria-label="Conflicts">
+            <h4>Conflicts among open proposals</h4>
+            {conflicts === null && <p className="muted">Conflicts could not be checked.</p>}
+            {conflicts && conflicts.length === 0 && <p className="muted">None: no open proposal is stale or touches what another one touches.</p>}
+            {conflicts?.map((c, i) => (
+              <div key={`${c.kind}-${c.proposals.join("-")}-${i}`} className="activity-conflict" data-conflict={c.kind}>
+                <p>
+                  <strong>{conflictText(c)}</strong> <span className="muted">{c.resolve}</span>
+                </p>
+                {c.proposals.map((id) => (
+                  <div key={id} className="activity-actions" data-conflict-proposal={id}>
+                    <code>{id}</code>
+                    <button type="button" onClick={() => onReview(id)}>
+                      Review proposal
+                    </button>
+                    <button type="button" disabled title="EAK does not rebase a proposal (ADR-0051): send it back to be proposed again on the current revision">
+                      Rebase
+                    </button>
+                    <button type="button" disabled={off} onClick={() => void repropose(id)} title="Discard it and ask its agent, on the WEFT bus, to propose again on the current revision">
+                      Re-propose
+                    </button>
+                    <button type="button" className="danger" disabled={off} onClick={() => void reject(id)} title="Discard it and tell its agent on the WEFT bus">
+                      Reject
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </section>
+          <section className="activity-requests" aria-label="Review requests for you">
+            <h4>Review requests for you</h4>
+            {queue.length === 0 && <p className="muted">No agent is waiting for your review.</p>}
+            {queue.map((r) => (
+              <div key={r.proposal_id} className="activity-actions" data-review-request={r.proposal_id}>
+                <span>
+                  {actorName(r.from)} asks you to review <strong>{r.title || r.proposal_id}</strong>
+                  {r.body ? `: ${r.body}` : ""}
+                </span>
+                <button type="button" className="primary" disabled={off} onClick={() => void answer(r.proposal_id, "approve", "Approved by the engineer.", false, `Approval sent to its agent: apply proposal ${r.proposal_id} in the review.`)} title="Tell its agent you approve, then open the review to apply it">
+                  Approve
+                </button>
+                <button type="button" className="danger" disabled={off} onClick={() => void reject(r.proposal_id)}>
+                  Reject
+                </button>
+              </div>
+            ))}
+          </section>
           {items && items.length === 0 && <p className="muted activity-empty">Nothing recorded yet: no revision, proposal, agent message or saved check in this project.</p>}
           {groups.map((g) => (
             <section key={g.actor} className="activity-actor" aria-label={`Activity of ${actorName(g.actor)}`} data-actor={g.actor}>

@@ -716,7 +716,12 @@ try {
     logLevel: "error",
     capabilities: { "tauri:options": { application: APP } },
   });
-  for (const st of scenario.steps) {
+  for (const raw of scenario.steps) {
+    // "$saved:<name>" in a selector or expected text is a value an earlier SETUP step saved
+    // (for example a proposal id), so a step can address one proposal's row.
+    const st = { ...raw };
+    for (const k of ["selector", "expect", "gone", "text", "expectText"])
+      if (typeof st[k] === "string") st[k] = st[k].replace(/\$saved:([\w-]+)/g, (m, n) => (n in saved ? String(saved[n]) : m));
     const h = handlers[st.do];
     if (!h) {
       await run({ ...st, shot: false }, () => {
