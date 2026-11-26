@@ -525,6 +525,10 @@ pub fn record(
     out: &Value,
     call_rev: u64,
 ) {
+    // A proposed edit (ADR-0051) changed nothing: the ledger records what happened, not plans.
+    if out.pointer("/result/proposed") == Some(&Value::Bool(true)) {
+        return;
+    }
     let Some(dir) = engine.dir() else { return };
     let ok = out["ok"].as_bool().unwrap_or(false);
     let p = engine.project();

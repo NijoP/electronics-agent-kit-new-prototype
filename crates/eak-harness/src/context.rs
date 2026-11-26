@@ -3,10 +3,11 @@
 //!
 //! Defaults come from the environment an EAK terminal session exports (context contract with
 //! the terminal workspace): `EAK_PROJECT_DIR`, `EAK_PROJECT_ID`, `EAK_SESSION_ID`,
-//! `EAK_HARNESS_SOCKET`, `EAK_HARNESS_TOKEN_FILE`; plus `EAK_AGENT_NAME` and
-//! `EAK_HARNESS_ALLOW_DESTRUCTIVE=1`. Explicit flags or tool arguments always win, and every
+//! `EAK_HARNESS_SOCKET`, `EAK_HARNESS_TOKEN_FILE`; plus `EAK_AGENT_NAME`,
+//! `EAK_HARNESS_ALLOW_DESTRUCTIVE=1` and `EAK_HARNESS_APPLY_MODE=propose` (ADR-0051). Explicit flags or tool arguments always win, and every
 //! response echoes the project id and revision it acted on.
 
+use crate::proposal::ApplyMode;
 use eak_runtime::OperationClass;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -18,6 +19,7 @@ pub const ENV_AGENT_NAME: &str = "EAK_AGENT_NAME";
 pub const ENV_SOCKET: &str = "EAK_HARNESS_SOCKET";
 pub const ENV_TOKEN_FILE: &str = "EAK_HARNESS_TOKEN_FILE";
 pub const ENV_ALLOW_DESTRUCTIVE: &str = "EAK_HARNESS_ALLOW_DESTRUCTIVE";
+pub const ENV_APPLY_MODE: &str = "EAK_HARNESS_APPLY_MODE";
 
 /// Which project a call targets.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -38,6 +40,10 @@ pub struct CallContext {
     /// destructive commands (DeleteSymbol, ClearRouting) need an explicit opt-in by the user
     /// who starts the agent.
     pub max_class: OperationClass,
+    /// `propose`: design tools build a proposal a person reviews and applies; the project
+    /// does not change (ADR-0051). Default `apply`.
+    #[serde(default)]
+    pub apply_mode: ApplyMode,
     /// Explicit app endpoint (socket + token file), if the terminal exported one.
     #[serde(default)]
     pub socket: Option<String>,
@@ -65,6 +71,11 @@ impl CallContext {
                 OperationClass::Destructive
             } else {
                 OperationClass::EngineeringImpacting
+            },
+            apply_mode: if env(ENV_APPLY_MODE).is_some_and(|v| v.eq_ignore_ascii_case("propose")) {
+                ApplyMode::Propose
+            } else {
+                ApplyMode::Apply
             },
             socket: env(ENV_SOCKET),
             token_file: env(ENV_TOKEN_FILE).map(PathBuf::from),
