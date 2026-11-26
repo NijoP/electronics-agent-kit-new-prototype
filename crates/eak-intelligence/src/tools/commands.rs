@@ -100,6 +100,46 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                 &["key"],
             ),
         ),
+        SetRequirementField { .. } => (
+            D::Project,
+            "Record one structured requirement field (schema v9): `path` is a catalogue key such as supply.input_voltage, or `<item id>/<field>` for a rail or interface (see get_requirements for the catalogue and paths). The whole entry is replaced; quantities carry a unit, a value never stands in for a missing one, and EAK stamps the time and revision. An agent records UNKNOWN or NEEDS_CONFIRMATION (source kind agent_proposal or calculation for its own values); only a person records CONFIRMED or NOT_APPLICABLE; DERIVED is refused for everyone (only a deterministic evaluator writes it, and none exists yet). NEEDS_CONFIRMATION needs a source, the owner who must confirm it and risk_if_wrong; a recorded UNKNOWN needs its owner.",
+            obj(
+                &[
+                    ("path", string("requirement path")),
+                    ("status", req_status()),
+                    ("value", nullable(req_value())),
+                    ("source", nullable(req_source())),
+                    ("derived_from", array(string("requirement path"), "inputs of a DERIVED value")),
+                    ("owner", nullable(string("person responsible for the value: who must confirm it, or who confirmed it"))),
+                    ("risk_if_wrong", nullable(string("what goes wrong if the value is wrong (NEEDS_CONFIRMATION only, and required there)"))),
+                    ("note", nullable(string("rationale, open question, or why not applicable"))),
+                ],
+                &["path", "status"],
+            ),
+        ),
+        ClearRequirementField { .. } => (
+            D::Project,
+            "Remove a recorded requirement field: it is UNKNOWN again. Refused while a DERIVED value names it.",
+            obj(&[("path", string("requirement path"))], &["path"]),
+        ),
+        UpsertRequirementItem { .. } => (
+            D::Project,
+            "Add a supply rail or external interface to the requirement record (omit item_id; returns the new id), or rename / re-parent one. Only a rail has a parent: the rail it is generated from (the rail tree).",
+            obj(
+                &[
+                    ("item_id", nullable(string("existing item id; omit to add"))),
+                    ("kind", req_item_kind()),
+                    ("name", string("rail or interface name, e.g. 3V3, USB-C")),
+                    ("parent", nullable(string("rails only: id of the rail it is generated from"))),
+                ],
+                &["kind", "name"],
+            ),
+        ),
+        DeleteRequirementItem { .. } => (
+            D::Project,
+            "Remove a rail or interface and its recorded fields. Refused while a rail is generated from it or a DERIVED value names one of its fields.",
+            obj(&[("item_id", string("requirement item id"))], &["item_id"]),
+        ),
         ImportLibraryComponent { .. } => (
             D::Library,
             "Copy a built-in library component into the project library.",
@@ -886,6 +926,36 @@ pub fn command_samples() -> Vec<Command> {
             key: "company".into(),
             value: Some("ACME".into()),
         },
+        SetRequirementField {
+            path: "supply.input_voltage".into(),
+            status: ReqStatus::NeedsConfirmation,
+            value: Some(ReqValue::Range {
+                min: Some(4.5),
+                nom: Some(5.0),
+                max: Some(5.5),
+                unit: ReqUnit::Volt,
+            }),
+            source: Some(ReqSource {
+                kind: eak_core::requirements::SourceKind::Client,
+                reference: "kick-off notes".into(),
+            }),
+            derived_from: vec![],
+            owner: Some("Client PM".into()),
+            risk_if_wrong: Some("the input protection and regulator are re-selected".into()),
+            note: Some("USB bus power".into()),
+        },
+        ClearRequirementField {
+            path: "supply.input_voltage".into(),
+        },
+        UpsertRequirementItem {
+            item_id: None,
+            kind: ReqItemKind::Rail,
+            name: "3V3".into(),
+            parent: Some("rail_vin".into()),
+        },
+        DeleteRequirementItem {
+            item_id: "rail_3v3".into(),
+        },
         ImportLibraryComponent {
             component_id: "c".into(),
         },
@@ -1417,13 +1487,14 @@ mod tests {
         let tools = command_tools();
         let names: BTreeSet<_> = tools.iter().map(|t| t.spec.name.clone()).collect();
         assert_eq!(names.len(), tools.len(), "duplicate command sample");
-        // 93 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
+        // 97 commands (incl. Batch, SetLayerCount, StitchZones, DeleteNoConnect, the 14 schema-v3
         // schematic commands of ADR-0040, the 16 PCB commands of ADR-0042 (15 schema-v4 edits plus
         // SyncSchematicToPcbSelected), the 3 sheet commands of ADR-0043, the 2 schema-v5 commands of
         // ADR-0044, the 3 group and rename commands of ADR-0045, the 3 schema-v7 rule commands
-        // of ADR-0046, SetNetLabelKind of ADR-0049 and the 4 schema-v8 commands of ADR-0055); keep in step with
-        // REQUIREMENTS_TRACEABILITY INT-04.
-        assert_eq!(tools.len(), 93);
+        // of ADR-0046, SetNetLabelKind of ADR-0049, the 4 schema-v8 commands of ADR-0055 and the 4
+        // schema-v9 requirement commands of ADR-0057); keep in step with REQUIREMENTS_TRACEABILITY
+        // INT-04.
+        assert_eq!(tools.len(), 97);
         for t in &tools {
             assert!(t
                 .spec

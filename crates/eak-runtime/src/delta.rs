@@ -31,6 +31,8 @@ const COLLECTIONS: &[&[&str]] = &[
 const SECTIONS: &[&[&str]] = &[
     &["name"],
     &["requirements"],
+    // Schema v9 (ADR-0057): the structured requirement record; one undo step per change.
+    &["requirement_set"],
     &["pcb", "board"],
     // Schema v5 (ADR-0044): the route tool's saved options; one undo step per change.
     &["pcb", "routing"],
