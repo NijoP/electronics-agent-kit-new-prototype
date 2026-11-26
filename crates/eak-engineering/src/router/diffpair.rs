@@ -365,23 +365,24 @@ fn check(
         env.specs[&rule.positive].via_drill as f64 / 2.0,
         env.specs[&rule.negative].via_drill as f64 / 2.0,
     );
-    if vias_too_close(vias, rp, rn, env.hole_min) {
-        return Err(format!(
-                    "CLEARANCE_CONFLICT: the members' vias would be closer than the {:.3} mm hole-to-hole spacing [DRC-019]",
-                    env.hole_min / 1e6
-        ));
-    }
-    Ok(())
+    via_spacing(vias, rp, rn, env.hole_min)
 }
 
-/// Whether a positive-member via and a negative-member via (drill radii `rp`, `rn`) would be
-/// closer than `hole_min` edge to edge (DRC-019).
-fn vias_too_close(vias: &[Vec<Point>; 2], rp: f64, rn: f64, hole_min: f64) -> bool {
-    vias[0].iter().any(|vp| {
+/// `CLEARANCE_CONFLICT [DRC-019]` when a positive-member via and a negative-member via (drill
+/// radii `rp`, `rn`) would be closer than `hole_min` edge to edge.
+fn via_spacing(vias: &[Vec<Point>; 2], rp: f64, rn: f64, hole_min: f64) -> Result<(), String> {
+    let close = vias[0].iter().any(|vp| {
         vias[1]
             .iter()
             .any(|vn| vp.dist(*vn) - rp - rn < hole_min - 1.0)
-    })
+    });
+    if close {
+        return Err(format!(
+            "CLEARANCE_CONFLICT: the members' vias would be closer than the {:.3} mm hole-to-hole spacing [DRC-019]",
+            hole_min / 1e6
+        ));
+    }
+    Ok(())
 }
 
 /// Rectangular bumps on the `tunable` segments (longest first) on the `outer` side, adding
@@ -691,17 +692,22 @@ mod tests {
     }
 
     #[test]
-    fn member_vias_closer_than_the_hole_spacing_are_rejected() {
+    fn member_vias_closer_than_the_hole_spacing_are_a_drc_019_conflict() {
         // 0.3 mm drills, 0.5 mm hole-to-hole minimum: centres 0.8 mm apart are exactly legal.
         let (r, min) = (150_000.0, 500_000.0);
         let at = |x: i64| vec![Point::new(x, 0)];
-        assert!(!vias_too_close(&[at(0), at(800_000)], r, r, min));
-        // The fixture's failure: 0.452 mm edge to edge.
-        assert!(vias_too_close(&[at(0), at(752_000)], r, r, min));
+        let conflict = |vias: [Vec<Point>; 2]| {
+            let e = via_spacing(&vias, r, r, min).expect_err("too close");
+            assert!(e.starts_with("CLEARANCE_CONFLICT"), "{e}");
+            assert!(e.contains("[DRC-019]") && e.contains("0.500 mm"), "{e}");
+        };
+        assert_eq!(via_spacing(&[at(0), at(800_000)], r, r, min), Ok(()));
+        // The acceptance fixture's failure: 0.452 mm edge to edge.
+        conflict([at(0), at(752_000)]);
         // Any pair counts, not only the first; a member with no via never conflicts.
         let p = vec![Point::new(0, 5_000_000), Point::new(0, 0)];
-        assert!(vias_too_close(&[p.clone(), at(700_000)], r, r, min));
-        assert!(!vias_too_close(&[p, vec![]], r, r, min));
+        conflict([p.clone(), at(700_000)]);
+        assert_eq!(via_spacing(&[p, vec![]], r, r, min), Ok(()));
     }
 
     #[test]
