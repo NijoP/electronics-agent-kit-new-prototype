@@ -1352,6 +1352,7 @@ pub fn recent_projects(s: &Session, limit: usize) -> Result<Vec<RecentProject>, 
 pub const IPC_COMMANDS: [&str; 95] = [
 pub const IPC_COMMANDS: [&str; 92] = [
 pub const IPC_COMMANDS: [&str; 96] = [
+pub const IPC_COMMANDS: [&str; 97] = [
     "ai_propose",
     "ai_accept",
     "ai_reject",
