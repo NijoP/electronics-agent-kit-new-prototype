@@ -391,11 +391,17 @@ pub fn evaluate(p: &Project, fab: Option<&FabProfile>) -> GateReport {
     // current or voltage are unknown, never passed.
     let mut g = from_findings(
         "electrical_constraints",
-        "Declared electrical constraints met (track and relief current capacity)",
+        "Declared electrical constraints met (track and relief current capacity, DC voltage drop)",
         &drc,
-        &[("DRC-008", Error), ("DRC-014", Error)],
+        &[("DRC-008", Error), ("DRC-014", Error), ("DRC-028", Error)],
         true,
     );
+    // A declared allowed drop the copper model could not evaluate is never passed.
+    if drc.state_of("DRC-028") == CheckState::Unknown {
+        let why = drc.rule_results.iter().find(|r| r.rule_id == "DRC-028");
+        let why = why.map_or(String::new(), |r| r.reason.clone());
+        unknown_unless_failed(&mut g, format!("DRC-028 is UNKNOWN: {why}"));
+    }
     let c = &p.constraints;
     let pn = power_nets(p);
     let no_current: Vec<&str> = pn

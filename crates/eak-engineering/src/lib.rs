@@ -17,6 +17,7 @@
 //! * `placement_intel` – placement mental models (roles, snaps, analysis) ported from DESK.
 //! * `impedance` – microstrip/stripline and edge-coupled differential Z0 from the stack-up (IPC-2141A).
 //! * `power`   – unit-aware trace width, voltage drop, rail drop, return-path continuity.
+//! * `pathres` – DC path resistance of a net from its routed copper (tracks, via barrels).
 //! * `rating`  – part-rating names and derating facts (ERC-022..024, harness component checks).
 //! * `scene3d` – board/component geometry for the 3D workspace and mechanical checks.
 //! * `verify`  – verification engines: typed inputs to PASS / FAIL / UNKNOWN / BLOCKED with sources.
@@ -30,6 +31,7 @@ pub mod impedance;
 pub mod interactive;
 pub mod ipc;
 pub mod netlist;
+pub mod pathres;
 pub mod placement_intel;
 pub mod placer;
 pub mod power;
