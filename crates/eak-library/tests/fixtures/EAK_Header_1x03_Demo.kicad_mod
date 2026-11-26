@@ -1,0 +1,7 @@
+(footprint "EAK_Header_1x03_Demo" (version 20240108) (generator "eak-test-fixture") (layer "F.Cu")
+  (attr through_hole)
+  (fp_poly (pts (xy -1.8 -1.8) (xy 1.8 -1.8) (xy 1.8 6.88) (xy -1.8 6.88)) (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd"))
+  (pad "1" thru_hole rect (at 0 0) (size 1.7 1.7) (drill 1) (layers "*.Cu" "*.Mask"))
+  (pad "2" thru_hole oval (at 0 2.54) (size 1.7 1.7) (drill oval 1 1.2) (layers "*.Cu" "*.Mask"))
+  (pad "3" thru_hole circle (at 0 5.08 90) (size 1.7 2) (drill 1.1) (layers "*.Cu" "*.Mask"))
+)
