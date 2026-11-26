@@ -193,6 +193,7 @@ pub fn builtin_tools() -> Vec<Box<dyn AgentTool>> {
         Box::new(adapters::codex::Codex),
         Box::new(adapters::generic::Generic::opencode()),
         Box::new(adapters::generic::Generic::gemini()),
+        Box::new(adapters::generic::Generic::kimi()),
     ]
 }
 
