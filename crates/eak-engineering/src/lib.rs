@@ -6,6 +6,8 @@
 //! * `board`   – the one derived board geometry (outline, copper, fills, holes, silk) that DRC,
 //!   connectivity, the 3D scene and the desktop views all read (ADR-0052).
 //! * `copper`  – PCB copper shapes, zone fill with thermal reliefs, physical connectivity.
+//! * `domain`  – domain classification (archetypes and overlays) from the structured requirement
+//!   record, with the evidence for and against each class (ADR-0060).
 //! * `stitch`  – zone stitching: escape vias for orphan SMD pads, stitching vias for pour islands (DESK).
 //! * `silk`    – silkscreen legend: stroke-font reference designators, mask-opening clip.
 //! * `router`  – EAK's native multilayer grid router (signal layers, through vias, passes, rip-up,
@@ -25,6 +27,7 @@ pub mod board;
 pub mod calc;
 pub mod clearance;
 pub mod copper;
+pub mod domain;
 pub mod fill_view;
 pub mod impedance;
 pub mod interactive;

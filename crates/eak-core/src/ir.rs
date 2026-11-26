@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 9;
+pub const SCHEMA_VERSION: u32 = 11;
 
 pub type Id = String;
 
@@ -101,7 +101,8 @@ pub struct Project {
     /// Free-text requirement notes (`AddRequirement`).
     #[serde(default)]
     pub requirements: Vec<Requirement>,
-    /// The structured requirement record (schema v9, ADR-0057): values with unit, status,
+    /// The structured requirement record (schema v9, ADR-0057; conflicts and the domain
+    /// classification in v11, ADR-0060): values with unit, status,
     /// source, owner and timestamp. Omitted from the file when nothing is recorded.
     #[serde(default, skip_serializing_if = "RequirementSet::is_empty")]
     pub requirement_set: RequirementSet,

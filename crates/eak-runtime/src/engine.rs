@@ -400,7 +400,7 @@ impl Engine {
                 }
                 Self::check_policy(&req, class)?;
                 if req.actor.kind == ActorKind::Agent {
-                    if let Some(m) = crate::command::human_only(&req.command) {
+                    if let Some(m) = crate::command::human_only(&self.project, &req.command) {
                         return Err(CommandError::Precondition(m));
                     }
                 }

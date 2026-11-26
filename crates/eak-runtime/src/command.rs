@@ -27,9 +27,12 @@ pub enum Command {
         value: Option<String>,
     },
     // ---- structured requirements (schema v9, ADR-0057)
-    /// Record one requirement field. `path` is a catalogue key (`supply.input_voltage`) or
-    /// `<item id>/<field>` (`rail_1a2b/voltage`). The whole entry is replaced and stamped with the
-    /// time and the new revision. An agent can never record CONFIRMED or NOT_APPLICABLE, and no command records DERIVED.
+    /// Record one requirement field. `path` is a catalogue key (`supply.input_voltage`), a domain
+    /// class (`domain.rf_wireless`) or `<item id>/<field>` (`rail_1a2b/voltage`). The entry is
+    /// stamped with the time and the new revision. A value that differs from the recorded one is
+    /// kept beside it as a conflict (schema v11, ADR-0060) unless `supersede` replaces it. An agent
+    /// can never record CONFIRMED or NOT_APPLICABLE, nor replace a person's decision, and only
+    /// `ClassifyDomain` records DERIVED.
     SetRequirementField {
         path: String,
         status: ReqStatus,
@@ -47,11 +50,30 @@ pub enum Command {
         risk_if_wrong: Option<String>,
         #[serde(default)]
         note: Option<String>,
+        /// Replace a recorded value (and drop its open conflicts) instead of recording a
+        /// different value beside it as a conflict.
+        #[serde(default)]
+        supersede: bool,
     },
     /// Remove the entry at `path`: the field is UNKNOWN again.
     ClearRequirementField {
         path: String,
     },
+    /// Resolve the conflicting values of a requirement (ADR-0060): `keep` 0 keeps the recorded
+    /// value, n the n-th conflicting value. The kept value becomes CONFIRMED by `owner`, the person
+    /// who resolved it; the others are dropped (undo and the journal keep them). Only a person.
+    ResolveRequirementConflict {
+        path: String,
+        keep: usize,
+        owner: String,
+        #[serde(default)]
+        note: Option<String>,
+    },
+    /// Run the deterministic domain classifier (`eak_engineering::domain`, ADR-0060) on the
+    /// requirement record and record its result as the `domain.*` entries: DERIVED where strong
+    /// firm evidence exists, NEEDS_CONFIRMATION where it is weak, and a conflict where evidence
+    /// points both ways. A person's decision is never replaced; a disagreement is kept beside it.
+    ClassifyDomain,
     /// Add a rail or interface (no `item_id`), or rename / re-parent one. Only a rail has a
     /// parent: the rail it is generated from.
     UpsertRequirementItem {
@@ -707,6 +729,8 @@ impl Command {
             | AddRequirement { .. }
             | SetRequirementField { .. }
             | ClearRequirementField { .. }
+            | ResolveRequirementConflict { .. }
+            | ClassifyDomain
             | UpsertRequirementItem { .. }
             | ImportLibraryComponent { .. }
             | SetComponentProperties { .. }
@@ -923,17 +947,60 @@ pub struct Applied {
     pub warnings: Vec<String>,
 }
 
-/// Why an agent may not submit `cmd`, looking inside batches: only a person confirms a
-/// requirement or declares one not applicable (ADR-0057; the AI never self-certifies).
-pub fn human_only(cmd: &Command) -> Option<String> {
+/// Why an agent may not submit `cmd` against project `p`, looking inside batches: only a person
+/// confirms a requirement or declares one not applicable (ADR-0057; the AI never self-certifies),
+/// and only a person replaces, clears or resolves what a person decided or what is in conflict
+/// (ADR-0060). An agent may still record a different value beside a person's: it becomes a
+/// conflict for a person to resolve.
+pub fn human_only(p: &Project, cmd: &Command) -> Option<String> {
+    let decided = |e: &ReqEntry| e.status.human_only();
     match cmd {
         Command::SetRequirementField { path, status, .. } if status.human_only() => Some(format!(
             "only a person can record {} for requirement {path}; an agent records NEEDS_CONFIRMATION (source agent_proposal or calculation) for a person to confirm",
             status.as_str()
         )),
-        Command::Batch { commands, .. } => commands.iter().find_map(human_only),
+        Command::SetRequirementField {
+            path,
+            value,
+            supersede,
+            ..
+        } => {
+            let old = p.requirement_set.entry(path)?;
+            let beside = old.value.is_some() && value.is_some() && old.value != *value;
+            if decided(old) && (*supersede || !beside) {
+                Some(format!(
+                    "requirement {path} is {} by a person; an agent cannot replace it, only record a different value beside it as a conflict",
+                    old.status.as_str()
+                ))
+            } else if *supersede && !old.conflicts.is_empty() {
+                Some(format!(
+                    "requirement {path} has conflicting values; only a person resolves them"
+                ))
+            } else {
+                None
+            }
+        }
+        Command::ClearRequirementField { path } => {
+            let old = p.requirement_set.entry(path)?;
+            if decided(old) || !old.conflicts.is_empty() {
+                Some(format!(
+                    "requirement {path} holds a person's decision or conflicting values; only a person clears it"
+                ))
+            } else {
+                None
+            }
+        }
+        Command::ResolveRequirementConflict { path, .. } => Some(format!(
+            "only a person resolves the conflicting values of requirement {path}"
+        )),
+        Command::Batch { commands, .. } => commands.iter().find_map(|c| human_only(p, c)),
         _ => None,
     }
+}
+
+/// The engine's wall clock for requirement stamps (milliseconds since the Unix epoch).
+fn now_ms_u64() -> u64 {
+    u64::try_from(crate::store::now_ms()).unwrap_or(u64::MAX)
 }
 
 fn requirement_error(e: eak_core::requirements::ReqEditError) -> CommandError {
@@ -1392,12 +1459,13 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             owner,
             risk_if_wrong,
             note,
+            supersede,
         } => {
-            // DESK study §2.3: DERIVED is written only by a deterministic evaluator, and none
-            // exists yet, so no command records it (from a person or an agent).
+            // DESK study §2.3: DERIVED is written only by a deterministic evaluator (the domain
+            // classifier, through ClassifyDomain), never through this command.
             if *status == ReqStatus::Derived {
                 return Err(CommandError::Precondition(format!(
-                    "requirement {path}: DERIVED is written only by a deterministic evaluator, and none exists yet; record a computed value as NEEDS_CONFIRMATION with source kind calculation"
+                    "requirement {path}: DERIVED is written only by a deterministic evaluator (ClassifyDomain for the domain.* classification); record a computed value as NEEDS_CONFIRMATION with source kind calculation"
                 )));
             }
             let entry = ReqEntry {
@@ -1408,15 +1476,61 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 owner: owner.clone(),
                 risk_if_wrong: risk_if_wrong.clone(),
                 note: note.clone(),
-                updated_at_ms: u64::try_from(crate::store::now_ms()).unwrap_or(u64::MAX),
+                updated_at_ms: now_ms_u64(),
                 updated_revision: p.revision + 1,
+                conflicts: vec![],
             };
-            p.requirement_set
-                .set(path, entry)
+            let done = p
+                .requirement_set
+                .record(path, entry, *supersede)
                 .map_err(requirement_error)?;
+            if done == eak_core::requirements::Recorded::Conflict {
+                warnings.push(format!(
+                    "requirement {path}: the value differs from the recorded one, so it was recorded beside it as a conflict; a person resolves it (ResolveRequirementConflict)"
+                ));
+            }
         }
         ClearRequirementField { path } => {
             p.requirement_set.clear(path).map_err(requirement_error)?;
+        }
+        ResolveRequirementConflict {
+            path,
+            keep,
+            owner,
+            note,
+        } => {
+            let (at, rev) = (now_ms_u64(), p.revision + 1);
+            p.requirement_set
+                .resolve(path, *keep, owner, note.as_deref(), at, rev)
+                .map_err(requirement_error)?;
+        }
+        ClassifyDomain => {
+            use eak_engineering::domain;
+            let c = domain::classify(&p.requirement_set);
+            let plan = domain::plan(&p.requirement_set, &c, now_ms_u64(), p.revision + 1);
+            if plan.is_empty() {
+                return Err(CommandError::NothingTo(
+                    "classify: the recorded classification already matches the record".into(),
+                ));
+            }
+            for (key, entry) in plan {
+                match entry {
+                    Some(e) => p.requirement_set.set(key, e).map_err(requirement_error)?,
+                    None => {
+                        p.requirement_set.fields.remove(key);
+                    }
+                }
+            }
+            let open = |v: domain::Verdict| c.classes.iter().filter(|r| r.verdict == v).count();
+            let (unsure, disputed) = (
+                open(domain::Verdict::NeedsConfirmation),
+                open(domain::Verdict::Conflict),
+            );
+            if unsure + disputed > 0 {
+                warnings.push(format!(
+                    "classification: {unsure} class(es) need confirmation and {disputed} are in conflict; a person confirms or resolves them"
+                ));
+            }
         }
         UpsertRequirementItem {
             item_id,

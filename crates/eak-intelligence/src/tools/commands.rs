@@ -102,7 +102,7 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
         ),
         SetRequirementField { .. } => (
             D::Project,
-            "Record one structured requirement field (schema v9): `path` is a catalogue key such as supply.input_voltage, or `<item id>/<field>` for a rail or interface (see get_requirements for the catalogue and paths). The whole entry is replaced; quantities carry a unit, a value never stands in for a missing one, and EAK stamps the time and revision. An agent records UNKNOWN or NEEDS_CONFIRMATION (source kind agent_proposal or calculation for its own values); only a person records CONFIRMED or NOT_APPLICABLE; DERIVED is refused for everyone (only a deterministic evaluator writes it, and none exists yet). NEEDS_CONFIRMATION needs a source, the owner who must confirm it and risk_if_wrong; a recorded UNKNOWN needs its owner.",
+            "Record one structured requirement field (schema v11): `path` is a catalogue key such as supply.input_voltage, a domain class such as domain.rf_wireless (a flag), or `<item id>/<field>` for a rail or interface (see get_requirements for the catalogue and paths). Quantities carry a unit, a value never stands in for a missing one, and EAK stamps the time and revision. A value that differs from the recorded one is NOT written over it: it is recorded beside it as a conflict (the response warns) until a person resolves it; supersede: true replaces the recorded value instead (a person's CONFIRMED or NOT_APPLICABLE value cannot be superseded by an agent). An agent records UNKNOWN or NEEDS_CONFIRMATION (source kind agent_proposal or calculation for its own values); only a person records CONFIRMED or NOT_APPLICABLE; DERIVED is refused for everyone (only ClassifyDomain writes it). NEEDS_CONFIRMATION needs a source, the owner who must confirm it and risk_if_wrong; a recorded UNKNOWN needs its owner.",
             obj(
                 &[
                     ("path", string("requirement path")),
@@ -113,14 +113,33 @@ pub fn describe(c: &Command) -> (Domain, &'static str, Value) {
                     ("owner", nullable(string("person responsible for the value: who must confirm it, or who confirmed it"))),
                     ("risk_if_wrong", nullable(string("what goes wrong if the value is wrong (NEEDS_CONFIRMATION only, and required there)"))),
                     ("note", nullable(string("rationale, open question, or why not applicable"))),
+                    ("supersede", boolean("replace a recorded value instead of recording a different value beside it as a conflict (default false)")),
                 ],
                 &["path", "status"],
             ),
         ),
         ClearRequirementField { .. } => (
             D::Project,
-            "Remove a recorded requirement field: it is UNKNOWN again. Refused while a DERIVED value names it.",
+            "Remove a recorded requirement field: it is UNKNOWN again. Refused while a DERIVED value names it; an agent cannot clear a person's decision or a field in conflict.",
             obj(&[("path", string("requirement path"))], &["path"]),
+        ),
+        ResolveRequirementConflict { .. } => (
+            D::Project,
+            "Resolve the conflicting values of a requirement (get_requirements lists them under `conflicts`): keep 0 keeps the recorded value, n the n-th conflicting value; the kept value becomes CONFIRMED by owner. Only a person: an agent's call is refused.",
+            obj(
+                &[
+                    ("path", string("requirement path")),
+                    ("keep", integer("0 = the recorded value, n = the n-th conflicting value")),
+                    ("owner", string("the person who resolved it")),
+                    ("note", nullable(string("why this value was kept"))),
+                ],
+                &["path", "keep", "owner"],
+            ),
+        ),
+        ClassifyDomain => (
+            D::Project,
+            "Run EAK's deterministic domain classifier on the requirement record and record its result as domain.* entries: DERIVED where strong evidence comes from firm values, NEEDS_CONFIRMATION where it is weak, and a conflict where evidence points both ways. A person's decision is never replaced. get_requirements shows the evidence for and against each class.",
+            obj(&[], &[]),
         ),
         UpsertRequirementItem { .. } => (
             D::Project,
@@ -943,10 +962,18 @@ pub fn command_samples() -> Vec<Command> {
             owner: Some("Client PM".into()),
             risk_if_wrong: Some("the input protection and regulator are re-selected".into()),
             note: Some("USB bus power".into()),
+            supersede: false,
         },
         ClearRequirementField {
             path: "supply.input_voltage".into(),
         },
+        ResolveRequirementConflict {
+            path: "supply.input_voltage".into(),
+            keep: 1,
+            owner: "A. Engineer".into(),
+            note: Some("the adapter datasheet is authoritative".into()),
+        },
+        ClassifyDomain,
         UpsertRequirementItem {
             item_id: None,
             kind: ReqItemKind::Rail,
@@ -1492,9 +1519,9 @@ mod tests {
         // SyncSchematicToPcbSelected), the 3 sheet commands of ADR-0043, the 2 schema-v5 commands of
         // ADR-0044, the 3 group and rename commands of ADR-0045, the 3 schema-v7 rule commands
         // of ADR-0046, SetNetLabelKind of ADR-0049, the 4 schema-v8 commands of ADR-0055 and the 4
-        // schema-v9 requirement commands of ADR-0057); keep in step with REQUIREMENTS_TRACEABILITY
-        // INT-04.
-        assert_eq!(tools.len(), 97);
+        // schema-v9 requirement commands of ADR-0057, and ResolveRequirementConflict and
+        // ClassifyDomain of ADR-0060); keep in step with REQUIREMENTS_TRACEABILITY INT-04.
+        assert_eq!(tools.len(), 99);
         for t in &tools {
             assert!(t
                 .spec

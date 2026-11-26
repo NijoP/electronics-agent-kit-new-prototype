@@ -28,7 +28,12 @@ COMMANDS:
   guide                         print the agent guide
   new <DIR> <NAME>              create a project
   info                          project id, revision, counts
-  requirements                  requirement record, completeness, blocked operations
+  requirements                  requirement record, completeness, blocked operations,
+                                conflicts and the domain classification
+  requirement set <REV> <JSON|-> record a field (SetRequirementField arguments: path,
+                                status, value, source, owner, ...); a different value
+                                is recorded beside the old one as a conflict
+  requirement classify <REV>    run the domain classifier (ClassifyDomain)
   call <TOOL> [ARGS_JSON|-]     invoke any tool with a JSON object of arguments
   exec <REV> <COMMAND_JSON|->   execute one typed command ({\"type\":\"PlaceSymbol\",...}) at revision REV
   check <erc|drc|mech|dfm|all>  run verification; findings + evidence
@@ -182,6 +187,29 @@ pub fn main_with(args: Vec<String>) -> i32 {
         "proposals" => ("proposal_list".into(), json!({})),
         "info" => ("project_info".into(), json!({})),
         "requirements" => ("get_requirements".into(), json!({})),
+        "requirement" => {
+            let rev = a(2).and_then(|s| s.parse::<u64>().ok());
+            match (a(1).as_deref(), rev) {
+                (Some("classify"), Some(r)) => {
+                    ("ClassifyDomain".into(), json!({"expected_revision": r}))
+                }
+                (Some("set"), Some(r)) => {
+                    let Some(arg) = a(3) else {
+                        return usage("requirement set <REV> <JSON|->");
+                    };
+                    let mut v = match read_arg(&arg) {
+                        Ok(v) => v,
+                        Err(e) => return usage(&e),
+                    };
+                    let Some(m) = v.as_object_mut() else {
+                        return usage("requirement set needs a JSON object of arguments");
+                    };
+                    m.insert("expected_revision".into(), json!(r));
+                    ("SetRequirementField".into(), v)
+                }
+                _ => return usage("requirement <set <REV> <JSON|-> | classify <REV>>"),
+            }
+        }
         "new" => match (a(1), a(2)) {
             (Some(d), Some(n)) => {
                 let d = std::path::absolute(&d).unwrap_or_else(|_| PathBuf::from(&d));

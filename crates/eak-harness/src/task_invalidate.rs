@@ -52,6 +52,8 @@ pub fn classify_command(command_type: &str) -> Option<Change> {
         "AddRequirement"
         | "SetRequirementField"
         | "ClearRequirementField"
+        | "ResolveRequirementConflict"
+        | "ClassifyDomain"
         | "UpsertRequirementItem"
         | "DeleteRequirementItem" => Some(Change::Requirements),
         // A pad's own mask or paste expansion changes the fabrication outputs, like SetManufacturing.
