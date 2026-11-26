@@ -26,6 +26,10 @@
 //!   is routed coupled (`diffpair`: one centreline, members offset at the gap, spread vias);
 //!   a name-detected pair only prefers to stay near the first net, and the report says spacing
 //!   and length are not controlled;
+//! * declared high-speed nets (declared pairs, net classes with a target impedance) keep to the
+//!   reference copper under their ends on each layer, so they go around a plane split instead of
+//!   over it, prefer layers with reference copper, and get a return via of the reference net
+//!   beside a layer change whose reference plane changes (`split`, `crate::planes`, M7.6);
 //! * step costs include a congestion penalty measured on the ownership grid;
 //! * routing is pass-based: a pass that leaves connections unrouted promotes them and routes
 //!   everything again; the best pass wins; passes stop on stagnation (no change in unrouted
@@ -59,6 +63,7 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, VecDeque};
 
 mod diffpair;
+mod split;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoutedTrack {
@@ -406,6 +411,10 @@ struct Env<'a> {
     coupled: &'a BTreeMap<String, Result<diffpair::Coupled, String>>,
     /// For each connection, the partner connection it is routed coupled with (declared pairs).
     mates: &'a [Option<usize>],
+    /// Declared high-speed nets (`planes::declared_high_speed`): kept to their reference copper.
+    high_speed: &'a BTreeSet<String>,
+    /// Reference keys of the routed planes, when a declared high-speed net is routed (`split`).
+    refs: Option<&'a split::RefMap>,
     /// Routing priority of every net (`priority::net_priority`); a shove moves only
     /// pre-existing tracks of lower-priority nets.
     priority: &'a BTreeMap<String, u32>,
@@ -432,6 +441,8 @@ struct Env<'a> {
 struct Costs<'a> {
     congestion: &'a [Vec<u8>],
     affinity: Option<&'a [Vec<bool>]>,
+    /// Reference-plane limits of a declared high-speed connection (`split`).
+    split: Option<&'a split::Mask>,
 }
 
 impl Costs<'_> {
@@ -442,7 +453,14 @@ impl Costs<'_> {
                 e += AFFINITY_PENALTY;
             }
         }
+        if let Some(m) = self.split {
+            e += m.penalty(layer);
+        }
         e
+    }
+    /// The cell may carry this connection on `layer` (reference-plane limits, `split`).
+    fn allows(&self, layer: usize, i: usize) -> bool {
+        self.split.is_none_or(|m| m.allows(layer, i))
     }
 }
 
@@ -741,6 +759,12 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         }
     }
 
+    let high_speed = crate::planes::declared_high_speed(p);
+    let refs = conns
+        .iter()
+        .any(|c| high_speed.contains(&c.net))
+        .then(|| split::ref_map(p, &geo, &base, &layers, &routable));
+
     let env = Env {
         p,
         opts,
@@ -753,6 +777,8 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         pairs: &pairs,
         coupled: &coupled,
         mates: &mates,
+        high_speed: &high_speed,
+        refs: refs.as_ref(),
         priority: &priority,
         base: &base,
         outside: &outside,
@@ -864,6 +890,17 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
             "vias are through vias, or an allowed blind/buried span (SetViaSpans) where a through via does not fit".into()
         });
     }
+    if env.refs.is_some() {
+        let (returns, why) = split::return_vias(&env, &best.placed);
+        if !returns.is_empty() {
+            notes.insert(format!(
+                "{} return via(s) placed beside high-speed layer changes whose reference plane changes",
+                returns.len()
+            ));
+        }
+        result.vias.extend(returns);
+        notes.extend(why);
+    }
     result.routed_connections = best.placed.iter().filter(|pl| pl.moved.is_none()).count();
     result.replaced_tracks = moved_ids(best.placed.iter()).into_iter().collect();
     if !result.replaced_tracks.is_empty() {
@@ -877,6 +914,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
     let no_costs = Costs {
         congestion: &flat,
         affinity: None,
+        split: None,
     };
     for (ci, why) in &best.failed {
         let c = &conns[*ci];
@@ -1295,6 +1333,7 @@ fn run_pass(env: &Env, conns: &[Conn], key: &[i64]) -> PassOutcome {
                 let costs = Costs {
                     congestion: &cong,
                     affinity: None,
+                    split: None,
                 };
                 match diffpair::attempt(
                     env,
@@ -1324,9 +1363,18 @@ fn run_pass(env: &Env, conns: &[Conn], key: &[i64]) -> PassOutcome {
             }
         }
         let aff = affinity(env, conn, &placed);
+        // A declared high-speed net keeps to the reference copper under its ends (`split`).
+        let half = env
+            .specs
+            .get(&conn.net)
+            .map_or(0.0, |s| s.track_width.max(s.inner_track_width) as f64 / 2.0);
+        let guard = half + env.margin;
+        let wild = guard + 2.0 * env.opts.pitch as f64;
+        let mask = split::for_net(env, &conn.net, [conn.a, conn.b], guard, wild);
         let costs = Costs {
             congestion: &cong,
             affinity: aff.as_deref(),
+            split: mask.as_ref(),
         };
         match attempt(env, &grid, conn, ci, &placed, &costs) {
             Ok(pl) => {
@@ -2343,7 +2391,7 @@ fn astar(
     };
     for &l in start.1.iter().filter(|l| routable.contains(l)) {
         let i = grid.idx(sc, sr);
-        if grid.passable(l, i, net) {
+        if grid.passable(l, i, net) && costs.allows(l, i) {
             g[state(l, i)] = 0;
             heap.push(Reverse((h(sc, sr), 0u64, state(l, i))));
         }
@@ -2399,7 +2447,7 @@ fn astar(
                 continue;
             }
             let ni = grid.idx(nc_ as usize, nr_ as usize);
-            if !grid.passable(l, ni, net) {
+            if !grid.passable(l, ni, net) || !costs.allows(l, ni) {
                 continue;
             }
             let diag = dc != 0 && dr != 0;
@@ -2407,7 +2455,8 @@ fn astar(
                 // No corner cutting past blocked cells.
                 let a1 = grid.idx(nc_ as usize, r);
                 let a2 = grid.idx(c, nr_ as usize);
-                if !grid.passable(l, a1, net) || !grid.passable(l, a2, net) {
+                let open = |j| grid.passable(l, j, net) && costs.allows(l, j);
+                if !open(a1) || !open(a2) {
                     continue;
                 }
             }
@@ -2419,7 +2468,8 @@ fn astar(
         if routable.len() > 1 {
             let through = grid.via_ok(c, r, net);
             for &ol in routable.iter().filter(|&&ol| ol != l) {
-                if through || grid.span_fits(c, r, net, l, ol).is_some() {
+                let fits = through || grid.span_fits(c, r, net, l, ol).is_some();
+                if fits && costs.allows(ol, i) {
                     relax(state(ol, i), opts.via_cost + costs.extra(ol, i), &mut heap);
                 }
             }
@@ -2506,6 +2556,7 @@ mod tests {
         let costs = Costs {
             congestion: &pen,
             affinity: None,
+            split: None,
         };
         let opts = RouterOptions::default();
         let path = astar(
@@ -2536,6 +2587,7 @@ mod tests {
         let costs = Costs {
             congestion: &pen,
             affinity: None,
+            split: None,
         };
         let opts = RouterOptions::default();
         let path = astar(
@@ -2573,6 +2625,7 @@ mod tests {
         let costs = Costs {
             congestion: &pen,
             affinity: None,
+            split: None,
         };
         let opts = RouterOptions::default();
         let route = |g: &Grid| {
@@ -2672,6 +2725,7 @@ mod tests {
         let costs = Costs {
             congestion: &pen,
             affinity: None,
+            split: None,
         };
         let opts = RouterOptions::default();
         let route = |g: &Grid| {
