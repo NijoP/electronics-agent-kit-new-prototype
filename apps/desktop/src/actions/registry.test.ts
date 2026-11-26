@@ -37,6 +37,7 @@ function deps(over: Partial<ActionDeps> = {}): ActionDeps {
     grid: { kind: "schematic", cfg: GRID_KINDS.schematic.defaults, set: fn() },
     toolbarLabels: false,
     toggleToolbarLabels: fn(),
+    tour: fn(),
     ...over,
   };
 }

@@ -60,6 +60,7 @@ import type {
 import type { FileContent, FileEntry, GitStatus } from "./shell/files";
 import type { SyncPreview } from "./shell/ecoPreview";
 import type { EngineChange } from "./shell/syncReport";
+import type { HomeFacts } from "./home/homeFacts";
 
 // Terminal workspace commands: must match `TERMINAL_COMMANDS` in src-tauri/src/terminal.rs.
 export const TERMINAL_IPC = [
@@ -172,6 +173,11 @@ export const IPC_COMMANDS = [
   "resource_profile",
   "performance_settings",
   "set_performance_settings",
+  "home_project_facts",
+  "home_default_dir",
+  "home_suggest_folder",
+  "create_project_with_brief",
+  "create_sample_project",
   ...TERMINAL_IPC,
 ] as const;
 type IpcCommand = (typeof IPC_COMMANDS)[number];
@@ -229,6 +235,13 @@ export async function pickKicadFile(title: string): Promise<string | null> {
 
 export const api = {
   createProject: (path: string, name: string) => call<Snapshot>("create_project", { path, name }),
+  // Project Home (slice S1, src-tauri/src/home.rs): read-only facts of a project folder, the default
+  // projects folder, a free folder name, and the two Home starts that go through the engine.
+  homeProjectFacts: (path: string) => call<HomeFacts>("home_project_facts", { path }),
+  homeDefaultDir: () => call<string | null>("home_default_dir"),
+  homeSuggestFolder: (parent: string, name: string) => call<string>("home_suggest_folder", { parent, name }),
+  createProjectWithBrief: (path: string, name: string, brief: string[]) => call<Snapshot>("create_project_with_brief", { path, name, brief }),
+  createSampleProject: (path: string) => call<Snapshot>("create_sample_project", { path }),
   openProject: (path: string, takeOverLock: boolean) =>
     call<Snapshot>("open_project", { path, take_over_lock: takeOverLock }),
   projectLockState: (path: string) => call<LockState>("project_lock_state", { path }),
