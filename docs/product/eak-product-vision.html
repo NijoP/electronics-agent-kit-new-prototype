@@ -86,7 +86,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 #fB3dHost [data-module="pcb"]{position:absolute;inset:0;background:none;border:0}
 #fB3dHost .pcb-head,#fB3dHost .pcb-panel,#fB3dHost .pcb-hint3d,#fB3dHost [data-view]:not([data-view="3d"]){display:none!important}
 #fB3dHost .pcb-body,#fB3dHost .pcb-view[data-view="3d"]{position:absolute;inset:0;display:block!important}
-#fB3dHost .pcb-stage3d{position:absolute;inset:0}#fB3dHost canvas{pointer-events:none}
+#fB3dHost .pcb-stage3d{position:absolute;inset:0}#fB3dHost .pcb-x3labels{display:none}#fB3dHost canvas{pointer-events:none}
 .fcap.top{bottom:auto;top:12%}
 .fhint{position:absolute;right:32px;bottom:96px;font-size:12px;color:#6E6E6B}
 #fs-fab .cam{width:min(1180px,90vw);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:44px;align-items:start}
@@ -1601,7 +1601,7 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--h2)}
     T('vin1', 'VIN', 'L1', 0.8, [[10.8, 40], [10.8, 36.0], [12.7, 34.1], [20.5, 34.1]]),
     T('vin2', 'VIN', 'L1', 0.6, [[14.1, 30.05], [16.45, 30.05], [20.5, 34.1]]),
     T('vin3', 'VIN', 'L1', 0.35, [[20.5, 34.1], [22.35, 32.25], [24.25, 32.25]]),
-    T('vin4', 'VIN', 'L1', 0.25, [[24.25, 31.75], [24.25, 32.25]]),
+    T('vin4', 'VIN', 'L1', 0.3, [[24.25, 31.75], [24.25, 32.25]]),
     // VBUS
     T('vbus1', 'VBUS', 'L1', 0.5, [[6.8, 24.2], [9.5, 24.2], [9.5, 26.5]]),
     T('vbus2', 'VBUS', 'L1', 0.5, [[9.5, 26.5], [9.5, 28.65], [10.9, 30.05], [11.9, 30.05]]),
@@ -3118,6 +3118,9 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--h2)}
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
       cvs.addEventListener('webglcontextlost', function (e) { e.preventDefault(); $('hint3d').textContent = '3D context lost: switch views to restore'; });
       renderer.setClearColor(0x000000, 0);
+      // software GL (SwiftShader, llvmpipe) crashes the tab on anisotropic sampling: use it on real GPUs only
+      var gl = renderer.getContext(), dbg = gl.getExtension('WEBGL_debug_renderer_info'), glName = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+      var softGL = /swiftshader|llvmpipe|softpipe|software/i.test(glName), ANISO = softGL ? 1 : Math.min(8, renderer.capabilities.getMaxAnisotropy());
       renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
       renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -3170,7 +3173,7 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--h2)}
         var c = document.createElement('canvas'); c.width = Math.round(W * ppm); c.height = Math.round(H * ppm);
         var g2 = c.getContext('2d'); g2.fillStyle = bg; g2.fillRect(0, 0, c.width, c.height);
         var t = new THREE.CanvasTexture(c); t.flipY = false; t.repeat.set(1 / W, 1 / H); t.offset.set(0.5, 0.5);
-        t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = ANISO; if (srgb) t.colorSpace = THREE.SRGBColorSpace;
         var img = new Image();
         img.onload = function () { g2.drawImage(img, 0, 0, c.width, c.height); t.needsUpdate = true; draw3d(); };
         img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + c.width + '" height="' + c.height + '"><defs>' + defs + '</defs>' + body + '</svg>');
@@ -3298,7 +3301,7 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--h2)}
           var mat = M.copper.clone(); mat.alphaMap = tex[L]; mat.alphaTest = 0.5; built.push(mat);
           mesh(pg, mat, G[L], L === 'L1' ? Z.top + 0.003 : L === 'L4' ? -0.003 : Z[L].y1).userData.layer = L;
         });
-        var mT = new THREE.MeshPhysicalMaterial({ map: tex.maskTop, roughness: 0.42, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.3, side: THREE.DoubleSide });
+        var mT = new THREE.MeshPhysicalMaterial({ map: tex.maskTop, roughness: 0.62, metalness: 0, clearcoat: 0.18, clearcoatRoughness: 0.6, envMapIntensity: 0.3, side: THREE.DoubleSide });
         var mB = mT.clone(); mB.map = tex.maskBot; built.push(mT, mB);
         mesh(pg, mT, G.maskTop, Z.top + 0.012).userData.layer = 'mask';
         mesh(pg, mB, G.maskBot, -0.012).userData.layer = 'mask';
@@ -3382,7 +3385,7 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--h2)}
         var hit = ray.intersectObjects(G.comps.children, true).filter(function (i) { return i.object.userData.ref; })[0];
         return hit ? hit.object.userData.ref : null;
       }
-      return { render: render, pick: pick, rebuild: function () { buildBoard(); render(); }, info: function () { return renderer.info; } };
+      return { render: render, pick: pick, rebuild: function () { buildBoard(); render(); }, info: function () { return { gl: glName, software: softGL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs.length }; } };
     }
 
     /* ================================================================ Fabricate */
@@ -3528,8 +3531,8 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--h2)}
     /* ---------- init ---------- */
     renderLayers(); renderStack(); renderNets(); renderBoard(); recheck(false); renderInspector(); renderBom(); renderGfiles(); render3dInfo(); setExplode(0, 0);
     readout('Aurora S3 rev B · scroll to zoom · drag to pan · click to select');
-    sec.__pcb = { film: function (o) { rot = false; camAnim = null; cam = { yaw: o.yaw, pitch: o.pitch, zoom: o.zoom }; explode = o.explode; if (st.view !== "3d") setView("3d"); if (T3) T3.render(); else if (threeState === "failed") draw3d(); }, state: st, model: function () { return model; }, setView: setView, runDrc: function () { return runDrc(model, rules); } };
-    sec.__pcbDraw = function () { if (T3) T3.render(); };
+    sec.__pcb = { film: function (o) { var fk = [o.yaw, o.pitch, o.zoom, o.explode].map(function (v) { return v.toFixed(4); }).join(); if (T3 && sec.__fk === fk) return; if (T3) sec.__fk = fk; rot = false; camAnim = null; cam = { yaw: o.yaw, pitch: o.pitch, zoom: o.zoom }; explode = o.explode; if (st.view !== "3d") setView("3d"); if (T3) T3.render(); else if (threeState === "failed") draw3d(); }, state: st, model: function () { return model; }, setView: setView, runDrc: function () { return runDrc(model, rules); } };
+    sec.__pcbDraw = function () { if (T3) T3.render(); }; sec.__pcbInfo = function () { return T3 ? T3.info() : threeState; };
   }
 
   window.EAKModules = window.EAKModules || {};
@@ -4211,7 +4214,7 @@ let fPcb=null;
 function filmPcb(){if(fPcb)return fPcb;const h=$("#fB3dHost");h.appendChild(document.getElementById("tpl-pcb").content.cloneNode(true));fPcb=h.querySelector('[data-module="pcb"]');
  window.EAKModules.pcb.mount(fPcb,{navigate(){},toast(){},emit(){},on(){}});fPcb.__pcb.setView("3d");return fPcb;}
 function sB3d(p){const k=ez(seg(p,0,.4));const cam={yaw:-1.0+.55*ez(p)+FILM.uy,tilt:Math.max(.05,Math.min(1.45,1.12-.3*k+FILM.ut)),zoom:.92+.12*k};
- const ex=ez(seg(p,.3,.6))*(1-ez(seg(p,.86,1)));filmPcb().__pcb.film({yaw:cam.yaw,pitch:cam.tilt,zoom:cam.zoom,explode:ex});
+ const ex=ez(seg(p,.3,.6))*(1-ez(seg(p,.86,1)));filmPcb().__pcb.film({yaw:cam.yaw,pitch:cam.tilt,zoom:cam.zoom*(.7-.12*ex),explode:ex});
  $("#fB3dCap1").style.opacity=seg(p,.05,.15)*(1-seg(p,.28,.34));$("#fB3dCap2").style.opacity=seg(p,.36,.46)*(1-seg(p,.84,.9));}
 function sFab(p){document.querySelectorAll("#fBom tr").forEach((el,i)=>el.style.opacity=ez(seg(p,.04+i*.04,.12+i*.04)));
  document.querySelectorAll("#fGerb .gl").forEach((el,i)=>{const k=ez(seg(p,.3+i*.06,.4+i*.06));el.style.opacity=k;el.style.transform=`translateY(${(1-k)*8}px)`;});
