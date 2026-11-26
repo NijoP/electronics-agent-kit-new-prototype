@@ -128,6 +128,8 @@ const FREE: u32 = 0;
 const MULTI: u32 = u32::MAX;
 /// Extra step cost for leaving a differential-pair partner's neighbourhood.
 const AFFINITY_PENALTY: u64 = 4;
+/// Failure of the grid search; replaced by `explain_no_path` in the result.
+const NO_PATH: &str = "NO_LEGAL_PATH";
 
 #[derive(Clone)]
 struct Grid {
@@ -632,15 +634,35 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
         );
     }
     result.routed_connections = best.placed.len();
+    let final_grid = grid_with(&env, best.placed.iter());
+    let flat = vec![vec![0u8; n]; nl];
+    let no_costs = Costs {
+        congestion: &flat,
+        affinity: None,
+    };
     for (ci, why) in &best.failed {
         let c = &conns[*ci];
+        let why = match env.net_ids.get(&c.net) {
+            Some(&id) if why == NO_PATH => {
+                let ends = (pad_layers(&env, c.a, &c.net), pad_layers(&env, c.b, &c.net));
+                explain_no_path(
+                    &env,
+                    &final_grid,
+                    c,
+                    id,
+                    (&ends.0, &ends.1),
+                    &best.placed,
+                    &no_costs,
+                )
+            }
+            _ => why.clone(),
+        };
         result
             .failed_connections
-            .push((c.net.clone(), c.a, c.b, why.clone()));
+            .push((c.net.clone(), c.a, c.b, why));
     }
     result.notes = notes.into_iter().collect();
     result.pairs = pair_reports(&pairs, &best.placed, &conns, &best.failed);
-    let final_grid = grid_with(&env, best.placed.iter());
     let cong = congestion_map(&env, &final_grid);
     result.congestion = cong.hotspots(5, base.origin, pitch);
     result
@@ -966,7 +988,8 @@ fn attempt(
         env.opts,
         costs,
     ) else {
-        return Err("NO_LEGAL_PATH: no path found within clearance constraints".into());
+        // Explained once, on the final board, for connections that stay unrouted (`route`).
+        return Err(NO_PATH.into());
     };
     let (segs, vias) = path_to_segments(grid, &path, conn.a, conn.b);
     let widths: Vec<Nm> = env
@@ -995,6 +1018,242 @@ fn attempt(
         vias,
         shapes,
     })
+}
+
+fn at(env: &Env, l: usize, pt: Point) -> String {
+    format!(
+        "({:.2}, {:.2}) mm on {}",
+        pt.x as f64 / 1e6,
+        pt.y as f64 / 1e6,
+        env.layers[l].name()
+    )
+}
+
+/// A grid with only some obstacle classes: the board edge always; fixed copper and drills when
+/// `fixed`; and the routes of `placed`. Keep-outs are never in it.
+fn partial_grid(env: &Env, fixed: bool, placed: &[Placed]) -> Grid {
+    let mut g = env.base.blank();
+    for (i, _) in env.outside.iter().enumerate().filter(|(_, o)| **o) {
+        for plane in g.owner.iter_mut() {
+            plane[i] = MULTI;
+        }
+    }
+    if fixed {
+        let stack = &env.p.pcb.board.stackup;
+        for it in &env.geo.copper {
+            let id = env.net_ids.get(&it.net).copied().unwrap_or(MULTI);
+            if let Some(l) = stack.index_of(it.layer) {
+                g.mark(l, &it.shape, env.inflate, id);
+            }
+        }
+        for h in &env.geo.holes {
+            g.forbid_via(&h.shape(), env.via_hole_inflate);
+        }
+    }
+    for pl in placed {
+        mark_placed(&mut g, pl, env);
+    }
+    g
+}
+
+/// Why `conn` has no path, as which objects of which rule close it. The obstacle classes are
+/// dropped one at a time: if a path exists without the keep-outs, the keep-outs it crosses are
+/// the cause; else if one exists with fixed copper only, the earlier routes it crosses are; else
+/// fixed copper (pads, existing tracks and vias) closes every path, and the first such obstacle
+/// on the shortest edge-only path is named.
+fn explain_no_path(
+    env: &Env,
+    grid: &Grid,
+    conn: &Conn,
+    id: u32,
+    (la, lb): (&[usize], &[usize]),
+    placed: &[Placed],
+    costs: &Costs,
+) -> String {
+    let search = |g: &Grid| {
+        astar(
+            g,
+            id,
+            (conn.a, la),
+            (conn.b, lb),
+            env.routable,
+            env.opts,
+            costs,
+        )
+    };
+    // The real-board obstacles along `path`, distinct, in path order.
+    let blockers = |path: &[(usize, usize, usize)], first_only: bool| -> Vec<String> {
+        let mut out: Vec<String> = vec![];
+        let mut prev_layer = None;
+        for &(l, c, r) in path {
+            let pt = grid.center(c, r);
+            let why = if prev_layer.is_some_and(|pl| pl != l) && !grid.via_ok(c, r, id) {
+                Some(format!(
+                    "no via fits at {}: {}",
+                    at(env, l, pt),
+                    via_blocker(env, grid, c, r, id, &conn.net, placed)
+                ))
+            } else if !grid.passable(l, grid.idx(c, r), id) {
+                Some(format!(
+                    "at {}: {}",
+                    at(env, l, pt),
+                    blocker(env, l, pt, &conn.net, placed)
+                ))
+            } else {
+                None
+            };
+            prev_layer = Some(l);
+            if let Some(w) = why {
+                // One line per object, not per grid cell it covers.
+                let object = w.split_once(": ").map_or(w.as_str(), |x| x.1).to_string();
+                if !out.iter().any(|o| o.ends_with(&object)) {
+                    out.push(w);
+                }
+                if first_only || out.len() >= 3 {
+                    break;
+                }
+            }
+        }
+        out
+    };
+    if let Some(path) = search(&partial_grid(env, true, placed)) {
+        let b = blockers(&path, false);
+        if !b.is_empty() {
+            return format!(
+                "NO_LEGAL_PATH: only keep-out regions close the path; {}",
+                b.join("; ")
+            );
+        }
+    }
+    if let Some(path) = search(&partial_grid(env, true, &[])) {
+        let b = blockers(&path, false);
+        if !b.is_empty() {
+            return format!(
+                "NO_LEGAL_PATH: routes placed earlier (higher priority, not ripped up) close the path; {}",
+                b.join("; ")
+            );
+        }
+    }
+    match search(&partial_grid(env, false, &[])) {
+        None => "NO_LEGAL_PATH: no path even on an empty board: an end lies outside the board or within the edge / cut-out clearance [DRC-005]".into(),
+        Some(path) => match blockers(&path, true).pop() {
+            Some(b) => format!(
+                "NO_LEGAL_PATH: fixed copper and drills close every path; first obstacle on the shortest path {b}"
+            ),
+            None => format!(
+                "NO_LEGAL_PATH: search budget exhausted ({} expansions) before a path was found",
+                env.opts.max_expansions
+            ),
+        },
+    }
+}
+
+/// The object that makes grid cell `pt` of plane `l` impassable for `net`.
+fn blocker(env: &Env, l: usize, pt: Point, net: &str, placed: &[Placed]) -> String {
+    let layer = env.layers[l];
+    let dot = Shape {
+        core: Core::Segment(pt, pt),
+        radius: 0.0,
+    };
+    let near = env
+        .geo
+        .copper
+        .iter()
+        .filter(|it| it.layer == layer && (it.net != net || it.net.is_empty()))
+        .map(|it| (distance(&dot, &it.shape), it))
+        .filter(|(d, _)| *d <= env.inflate)
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+    if let Some((_, it)) = near {
+        let net_name = if it.net.is_empty() { "no net" } else { &it.net };
+        return format!(
+            "{} ({net_name}): tracks keep {} from it [DRC-002]",
+            it.label(),
+            mm(clearance::required(&env.p.constraints, net, &it.net, layer))
+        );
+    }
+    let regions: Vec<&str> = env
+        .track_keepouts
+        .iter()
+        .filter(|k| k.layers[l] && distance(&dot, &k.shape) <= env.inflate)
+        .map(|k| k.label.as_str())
+        .collect();
+    if !regions.is_empty() {
+        return format!(
+            "{}, which keep(s) tracks out of {} [DRC-021]",
+            regions.join(" and "),
+            layer.name()
+        );
+    }
+    if let Some(pl) = placed.iter().find(|pl| {
+        pl.net != net
+            && pl
+                .shapes
+                .iter()
+                .any(|(sl, s)| *sl == l && distance(&dot, s) <= env.inflate)
+    }) {
+        return format!(
+            "a route of {} placed earlier (higher priority) [DRC-002]",
+            pl.net
+        );
+    }
+    "the board edge or a cut-out (edge clearance) [DRC-005]".into()
+}
+
+/// Why no through via of `net` fits at cell (c, r).
+fn via_blocker(
+    env: &Env,
+    grid: &Grid,
+    c: usize,
+    r: usize,
+    id: u32,
+    net: &str,
+    placed: &[Placed],
+) -> String {
+    let pt = grid.center(c, r);
+    let dot = Shape {
+        core: Core::Segment(pt, pt),
+        radius: 0.0,
+    };
+    if grid.no_via[grid.idx(c, r)] {
+        if let Some(k) = env
+            .via_keepouts
+            .iter()
+            .find(|k| distance(&dot, &k.shape) <= env.inflate)
+        {
+            return format!("{}, which keeps vias out [DRC-021]", k.label);
+        }
+        let reach = env.via_hole_inflate;
+        if let Some(h) = env
+            .geo
+            .holes
+            .iter()
+            .find(|h| distance(&dot, &h.shape()) <= reach)
+        {
+            return format!(
+                "the drill of {} ({} hole-to-hole spacing) [DRC-019]",
+                h.label,
+                mm(env.hole_min)
+            );
+        }
+        return format!(
+            "a new via drill nearby ({} hole-to-hole spacing) [DRC-019]",
+            mm(env.hole_min)
+        );
+    }
+    // Some layer around the via site is taken: name it.
+    for dr in -1i64..=1 {
+        for dc in -1i64..=1 {
+            let (x, y) = (c as i64 + dc, r as i64 + dr);
+            if x < 0 || y < 0 || x >= grid.cols as i64 || y >= grid.rows as i64 {
+                return "the board edge (edge clearance) [DRC-005]".into();
+            }
+            let j = grid.idx(x as usize, y as usize);
+            if let Some(l) = (0..grid.owner.len()).find(|&l| !grid.passable(l, j, id)) {
+                return blocker(env, l, grid.center(x as usize, y as usize), net, placed);
+            }
+        }
+    }
+    "an obstacle on another layer of the via span".into()
 }
 
 fn shapes_for(

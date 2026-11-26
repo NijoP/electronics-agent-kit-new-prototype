@@ -6,9 +6,9 @@
 //! other field the schematic symbol with refdes R1 (ids are generated, refdes are stable).
 
 use eak_core::{CopperLayer, Project};
-use eak_runtime::{Actor, Command, CommandRequest, Engine};
+use eak_runtime::{Actor, Command, CommandRequest, CommandResponse, Engine};
 use eak_validation::drc;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 fn resolve(p: &Project, key: &str, v: &mut Value) {
     match v {
@@ -41,23 +41,30 @@ fn resolve(p: &Project, key: &str, v: &mut Value) {
     }
 }
 
-/// Run every command of `fixtures/<name>.json`; returns the engine and the warnings of the last.
-fn build(name: &str) -> (Engine, Vec<String>) {
+/// Run one fixture command (JSON, `@refdes` resolved) through the engine.
+fn exec(e: &mut Engine, mut v: Value) -> CommandResponse {
+    resolve(e.project(), "", &mut v);
+    let command: Command =
+        serde_json::from_value(v.clone()).unwrap_or_else(|err| panic!("{err}: {v}"));
+    e.execute(CommandRequest {
+        expected_revision: e.project().revision,
+        actor: Actor::human(),
+        command,
+        approval: None,
+    })
+}
+
+/// Run the commands of `fixtures/<name>.json` (all but the last `skip`); returns the engine
+/// and the warnings of the last command run.
+fn build(name: &str, skip: usize) -> (Engine, Vec<String>) {
     let path = format!("{}/tests/fixtures/{name}.json", env!("CARGO_MANIFEST_DIR"));
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
-    let script: Vec<Value> = serde_json::from_str(&text).expect("fixture is a JSON array");
+    let mut script: Vec<Value> = serde_json::from_str(&text).expect("fixture is a JSON array");
+    script.truncate(script.len() - skip);
     let mut e = Engine::in_memory(Project::new(name));
     let mut last = vec![];
-    for (k, mut v) in script.into_iter().enumerate() {
-        resolve(e.project(), "", &mut v);
-        let command: Command =
-            serde_json::from_value(v.clone()).unwrap_or_else(|err| panic!("step {k}: {err}: {v}"));
-        let r = e.execute(CommandRequest {
-            expected_revision: e.project().revision,
-            actor: Actor::human(),
-            command,
-            approval: None,
-        });
+    for (k, v) in script.into_iter().enumerate() {
+        let r = exec(&mut e, v.clone());
         assert!(r.accepted, "step {k} {v} rejected: {:?}", r.error);
         last = r.warnings;
     }
@@ -83,7 +90,7 @@ fn assert_all_connected(p: &Project) {
 
 #[test]
 fn routes_on_the_inner_signal_layer_past_an_outer_keepout_wall() {
-    let (e, warnings) = build("route_inner_keepout");
+    let (e, warnings) = build("route_inner_keepout", 0);
     eprintln!("{warnings:#?}");
     let p = e.project();
     assert!(!p.pcb.tracks.is_empty(), "nothing routed: {warnings:?}");
@@ -109,4 +116,35 @@ fn routes_on_the_inner_signal_layer_past_an_outer_keepout_wall() {
     }
     assert_all_connected(p);
     assert_drc_clean(p);
+}
+
+#[test]
+fn the_proof_is_reported_and_a_closed_path_names_the_keepout_that_closes_it() {
+    let (_, warnings) = build("route_inner_keepout", 0);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.starts_with("connectivity proof: all ")),
+        "{warnings:#?}"
+    );
+
+    // Same board, but a wall that keeps tracks out of every layer: no route can exist, and the
+    // reason names the region and its rule instead of a bare "no path".
+    let (mut e, _) = build("route_inner_keepout", 1);
+    let wall = json!({"type": "AddRegion", "name": "full wall", "forbid": ["tracks"], "outline": [
+        {"x": 13000000, "y": 0}, {"x": 17000000, "y": 0},
+        {"x": 17000000, "y": 20000000}, {"x": 13000000, "y": 20000000}
+    ]});
+    assert!(exec(&mut e, wall).accepted);
+    let r = exec(&mut e, json!({"type": "AutoRoute"}));
+    assert!(!r.accepted, "nothing can cross the wall");
+    let why = format!("{:?}", r.error);
+    assert!(
+        why.contains("only keep-out regions close the path"),
+        "{why}"
+    );
+    assert!(
+        why.contains("full wall") && why.contains("[DRC-021]"),
+        "{why}"
+    );
 }

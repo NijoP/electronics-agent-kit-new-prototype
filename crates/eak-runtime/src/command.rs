@@ -1222,6 +1222,34 @@ fn passes_through(a: Point, b: Point, pts: &[Point], allowed: &[Point]) -> Vec<P
         .collect()
 }
 
+/// Connectivity proof of the board as it now is: every net's pads in one copper group (tracks,
+/// vias, pads and zone fills of the one board geometry, the same input as DRC-004), and no shorts.
+/// Each open net and short is named; nothing is assumed from what the router reported.
+fn connectivity_proof(p: &Project) -> Vec<String> {
+    let c = eak_engineering::board::BoardGeometry::build(p).connectivity();
+    let mut out: Vec<String> = c
+        .net_groups
+        .iter()
+        .filter(|(_, g)| **g > 1)
+        .map(|(net, g)| {
+            let links = c.ratsnest.iter().filter(|(n, _, _)| n == net).count();
+            format!(
+                "connectivity proof: {net} is OPEN: its pads are in {g} separate copper groups ({links} unrouted link(s))"
+            )
+        })
+        .collect();
+    out.extend(c.shorts.iter().map(|(a, b, ia, ib)| {
+        format!("connectivity proof: SHORT between {a} and {b} ({ia} touches {ib})")
+    }));
+    if out.is_empty() {
+        out.push(format!(
+            "connectivity proof: all {} nets with pads are each one copper group, no shorts (board geometry incl. zone fills)",
+            c.net_groups.len()
+        ));
+    }
+    out
+}
+
 pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
     use Command::*;
     let mut created = vec![];
@@ -3177,6 +3205,7 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                     geom::to_mm(b.y)
                 ));
             }
+            warnings.extend(connectivity_proof(p));
         }
         StitchZones { net } => {
             if !p

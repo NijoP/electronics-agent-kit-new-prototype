@@ -394,6 +394,7 @@ fn analyze_routing(p: &Project, preview: bool) -> Value {
     priority::order_connections(p, &mut todo);
     let nets: std::collections::BTreeSet<String> = todo.iter().map(|(n, _, _)| n.clone()).collect();
     let terminals = priority::terminal_counts(p);
+    let fast = priority::high_speed_nets(p);
     let order: Vec<Value> = todo
         .iter()
         .take(40)
@@ -404,6 +405,7 @@ fn analyze_routing(p: &Project, preview: bool) -> Value {
                     n,
                     terminals.get(n).copied().unwrap_or(2),
                     p.constraints.net_currents_a.get(n).copied(),
+                    fast.contains(n),
                 ),
                 "length_mm": (a.dist(*b) / 1e3).round() / 1e3,
             })
