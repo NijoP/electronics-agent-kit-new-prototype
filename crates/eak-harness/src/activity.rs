@@ -59,9 +59,15 @@ fn item(ts_ms: u64, source: &'static str, actor: &str, kind: &str, summary: Stri
 }
 
 fn revisions(dir: &Path) -> Vec<Item> {
-    // The journal may hold a pending and a committed line per operation: keep the last one.
+    // The engine writes a pending line with the changes, then a committed line without them:
+    // keep the last state of each operation and the changes of its pending line.
     let mut last: BTreeMap<String, store::JournalEntry> = BTreeMap::new();
-    for e in store::read_journal(dir) {
+    for mut e in store::read_journal(dir) {
+        if e.changes.is_empty() {
+            if let Some(prev) = last.remove(&e.op_id) {
+                e.changes = prev.changes;
+            }
+        }
         last.insert(e.op_id.clone(), e);
     }
     last.into_values()
