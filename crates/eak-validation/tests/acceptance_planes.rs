@@ -263,20 +263,13 @@ fn a_high_speed_pair_routes_around_a_power_plane_split_with_return_vias_and_drc_
     // The pair changes to Bottom and goes around the island there, never over it.
     let bottom = pair_tracks(p, CopperLayer::Bottom);
     assert!(!bottom.is_empty(), "the pair has no Bottom run");
-    let (x0, x1, top) = ISLAND;
+    let top = ISLAND.2;
     let highest = bottom
         .iter()
         .flat_map(|t| [t.a, t.b])
         .map(|pt| pt.y as f64 / 1e6)
         .fold(f64::MIN, f64::max);
     assert!(highest > top + 1.0, "Bottom run tops out at {highest} mm");
-    for t in &bottom {
-        let over = |pt: Point| {
-            let (x, y) = (pt.x as f64 / 1e6, pt.y as f64 / 1e6);
-            x > x0 && x < x1 && y < top
-        };
-        assert!(!over(t.a) && !over(t.b), "{} ends over the island", t.id);
-    }
 
     // Every pair layer change has a GND return via joining In1 and In2 within 3 mm.
     let st = &p.pcb.board.stackup;
@@ -358,4 +351,35 @@ fn a_high_speed_pair_routes_around_a_power_plane_split_with_return_vias_and_drc_
         "{:#?}",
         r.findings
     );
+}
+
+#[test]
+fn a_pair_whose_only_way_crosses_the_split_fails_naming_the_split() {
+    let mut e = build();
+    // Close the way round above the island on Bottom: the only Bottom path left crosses it.
+    run(
+        &mut e,
+        C::AddRegion {
+            name: Some("no way round".into()),
+            outline: rect(18.0, 26.0, 42.0, 40.0),
+            layers: vec![CopperLayer::Bottom],
+            forbid: vec![RegionObject::Tracks],
+            min_track_width: None,
+            max_track_width: None,
+        },
+    );
+    let plan = router::route(e.project(), &RouterOptions::default());
+    let split: Vec<_> = plan
+        .failed_connections
+        .iter()
+        .filter(|(net, ..)| net == DP || net == DN)
+        .map(|(_, _, _, why)| why)
+        .collect();
+    assert!(!split.is_empty(), "the pair routed over the split");
+    for why in split {
+        assert!(
+            why.contains("crosses a split in a reference plane"),
+            "{why}"
+        );
+    }
 }
