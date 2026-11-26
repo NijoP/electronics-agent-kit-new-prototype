@@ -378,6 +378,18 @@ jobs:
           UI_SCENARIO: scenarios/p1-pcb-flow.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # G1 (slice S1, Project Home and first run): no SETUP step. The first-run tour (skip, replay
+      # from Help), New Project in the default projects folder, the prompt box creating a project and
+      # its brief without AI, the sample board, and Needs attention items opening their place.
+      - name: Run G1 Project Home and first-run scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/g1
+          UI_SCENARIO: scenarios/g1-home-firstrun.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # G2 (report §10 S2, S3): the journey bar coloured from current reports only, a stage click
       # opening its view; the Problems tab with not-run checks named, release blockers, ERC findings
       # going through the F7 navigation, an UNKNOWN DRC rule naming its missing input, and filters.

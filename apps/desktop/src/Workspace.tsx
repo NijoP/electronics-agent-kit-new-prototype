@@ -45,6 +45,7 @@ import { lockProblem } from "./layerLock";
 import { statusLayerName } from "./layers";
 import type { Focus } from "./pcbFocus";
 import { findingKey, probeTarget } from "./EngineeringMonitor";
+import type { HomeTarget } from "./home/homeFacts";
 import { DocTabs } from "./shell/DocTabs";
 import { FileExplorer } from "./shell/FileExplorer";
 import { FileViewer } from "./shell/FileViewer";
@@ -96,6 +97,10 @@ interface Props {
   /** Every project open in the window (the engine keeps them all; one is active). */
   projects: OpenProject[];
   onProjectsChanged: () => void;
+  /** Where to land on opening, when Project Home asked for a place (Continue, Needs attention). Applied once. */
+  landing?: HomeTarget | null;
+  /** Help › Replay first-run tour. */
+  onTour?: () => void;
 }
 
 
@@ -120,7 +125,7 @@ const writeFlag = (key: string, on: boolean) => {
   }
 };
 
-export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged }: Props) {
+export function Workspace({ initial, visible, onClosed, onOpened, onSettings, theme, onTheme, projects, onProjectsChanged, landing = null, onTour }: Props) {
   const [dialog, setDialog] = useState<null | "new" | "open" | "export" | "rules" | "bom" | "outputs" | "annotate" | "release">(null);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [snapshot, setSnapshot] = useState(initial);
@@ -663,6 +668,30 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
       if (same) open(same.id);
     } else if (edaViews.some((w) => w.id === id)) open(viewDocId(id));
   };
+  // Project Home (S1) opened the project for one item: show the place that acts on it, once.
+  // A check target re-runs that read-only check so its findings are listed for this revision.
+  const landed = useRef(false);
+  useEffect(() => {
+    if (landed.current || !landing) return;
+    landed.current = true;
+    switch (landing.kind) {
+      case "check":
+        void check(landing.check);
+        break;
+      case "view":
+        showWorkspace(landing.view);
+        break;
+      case "release":
+        setDialog("release");
+        break;
+      case "library":
+        setBottomTab("library");
+        break;
+      case "overview":
+        showSide("overview");
+        break;
+    }
+  });
   // Cross-probe from the 3D document: open the PCB zoomed to the selected footprint, or the
   // schematic sheet that holds the selected symbol (the selection itself is shared).
   const probeTo = (kind: "pcb" | "schematic") => {
@@ -977,6 +1006,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
     quickOpen: () => (setPalette(false), setQuickOpen(true)),
     help: () => setHelp(true),
     about: () => setAbout(true),
+    tour: () => onTour?.(),
     preferences: () => setPrefs(true),
     sideView,
     notify: setMessage,

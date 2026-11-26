@@ -79,6 +79,7 @@ function actions(deleteSel: () => void) {
     grid: { kind: "pcb", cfg: GRID_KINDS.pcb.defaults, set: fn() },
     toolbarLabels: false,
     toggleToolbarLabels: fn(),
+    tour: fn(),
   };
   return workspaceActions(d);
 }
