@@ -63,8 +63,9 @@ fn voltage_rating_passes_warns_fails_and_is_unknown_without_a_rating() {
     assert_eq!(r.state_of("ERC-022"), CheckState::Unknown);
     let why = reason(&r, "ERC-022");
     assert!(why.contains("J2: no voltage rating"), "{why}");
-    // U1 spans three nets: 20 V across them only bounds its pins, so it is UNKNOWN, not FAIL.
-    let mut q = p.clone();
+    // U1 spans three nets: 20 V across them only bounds its pins, so it is UNKNOWN, not FAIL
+    // (without J1's rating, which 20 V would fail outright).
+    let mut q = reference(5.0, 0.01);
     q.constraints.net_voltages_v.insert("+5V".into(), 20.0);
     let r = erc::run(&q);
     assert!(on(&r, "ERC-022", "U1").is_empty());
@@ -137,7 +138,9 @@ fn two_net_current_takes_the_smaller_net_and_no_connect_pins_add_no_stress() {
     assert!(!why.contains("D1"), "{why}");
     // U2's no-connect pins 2 and 3 are on nets of their own that need no declared voltage.
     let before = p.constraints.net_voltages_v.len();
-    p.constraints.net_voltages_v.retain(|n, _| !n.starts_with("N_U2_"));
+    p.constraints
+        .net_voltages_v
+        .retain(|n, _| !n.starts_with("N_U2_"));
     assert!(p.constraints.net_voltages_v.len() < before);
     let why = reason(&erc::run(&p), "ERC-022");
     assert!(!why.contains("U2"), "{why}");
