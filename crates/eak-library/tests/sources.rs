@@ -184,4 +184,5 @@ fn the_resolver_caps_each_source_at_the_query_limit_and_says_so() {
     assert!(
         notes.iter().any(|n| n.contains("over the limit")),
         "{notes:?}"
+    );
 }
