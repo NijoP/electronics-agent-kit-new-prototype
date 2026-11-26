@@ -168,3 +168,60 @@ pub mod activity_cmd {
         blocking(app, Priority::P0, super::activity_timeline).await
     }
 }
+
+/// WEFT conflicts among the open proposals (ADR-0053): stale ones and overlapping pairs.
+pub fn weft_conflicts(s: &Session) -> Result<Vec<Value>, String> {
+    s.with_engine(|e| eak_harness::weft::conflict_list(e))?
+}
+
+/// Review requests agents routed to the engineer and the engineer has not answered.
+pub fn weft_engineer_queue(s: &Session) -> Result<Vec<Value>, String> {
+    s.with_engine(|e| eak_harness::weft::engineer_queue(e))
+}
+
+/// The engineer's verdict on a proposal, sent to its author on the WEFT bus (approve,
+/// request_changes, reject); with `discard` the proposal is then discarded, only once the verdict
+/// is sent. Applies nothing.
+pub fn weft_engineer_verdict(
+    s: &Session,
+    proposal_id: &str,
+    verdict: &str,
+    body: &str,
+    discard: bool,
+) -> Result<Value, String> {
+    let verdict: eak_harness::weft::Verdict = serde_json::from_value(Value::from(verdict))
+        .map_err(|_| format!("unknown verdict {verdict}: approve, request_changes or reject"))?;
+    s.with_engine(|e| eak_harness::weft::engineer_verdict(e, proposal_id, verdict, body, discard))?
+}
+
+pub mod weft_cmd {
+    use crate::cmd::blocking;
+    use crate::resources::Priority;
+    use serde_json::Value;
+    use tauri::AppHandle;
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn weft_conflicts(app: AppHandle) -> Result<Vec<Value>, String> {
+        // Reviews each open proposal on a copy, like a check.
+        blocking(app, Priority::P2, super::weft_conflicts).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn weft_engineer_queue(app: AppHandle) -> Result<Vec<Value>, String> {
+        blocking(app, Priority::P0, super::weft_engineer_queue).await
+    }
+
+    #[tauri::command(rename_all = "snake_case")]
+    pub async fn weft_engineer_verdict(
+        app: AppHandle,
+        proposal_id: String,
+        verdict: String,
+        body: String,
+        discard: bool,
+    ) -> Result<Value, String> {
+        blocking(app, Priority::P1, move |s| {
+            super::weft_engineer_verdict(s, &proposal_id, &verdict, &body, discard)
+        })
+        .await
+    }
+}

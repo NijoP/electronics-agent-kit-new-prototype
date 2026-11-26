@@ -385,6 +385,109 @@ pub(crate) fn conflicts(engine: &Engine) -> Result<Vec<Value>, Fail> {
     Ok(out)
 }
 
+// ------------------------------------------------- the engineer's side (desktop, ADR-0053)
+
+/// The conflicts among open proposals, for the activity view.
+pub fn conflict_list(engine: &Engine) -> Result<Vec<Value>, String> {
+    conflicts(engine).map_err(|f| f.1)
+}
+
+/// Review requests routed to the engineer that the engineer has not answered yet, for proposals
+/// that can still be applied (oldest first, one per proposal).
+pub fn engineer_queue(engine: &Engine) -> Vec<Value> {
+    let Some(dir) = engine.dir() else {
+        return vec![];
+    };
+    let state = read(dir);
+    let answered: BTreeSet<String> = state
+        .messages
+        .iter()
+        .filter(|(_, m)| m.from == ENGINEER && m.kind == MessageKind::ReviewVerdict)
+        .filter_map(|(_, m)| m.proposal_id.clone())
+        .collect();
+    let mut seen = BTreeSet::new();
+    let mut out = vec![];
+    for (seq, m) in &state.messages {
+        if m.kind != MessageKind::ReviewRequest || m.to != ENGINEER {
+            continue;
+        }
+        let Some(pid) = m.proposal_id.clone() else {
+            continue;
+        };
+        if answered.contains(&pid) || !seen.insert(pid.clone()) {
+            continue;
+        }
+        let Ok(p) = proposal::load(dir, &pid) else {
+            continue;
+        };
+        if !p.status.reviewable() {
+            continue;
+        }
+        out.push(json!({
+            "seq": seq, "proposal_id": pid, "from": m.from, "body": m.body,
+            "title": p.title, "base_revision": p.base_revision,
+        }));
+    }
+    out
+}
+
+/// The engineer answers a proposal on the bus: a review verdict sent to its author. With
+/// `discard` (Reject, Re-propose) the proposal is then discarded, by the person, so it can no
+/// longer be applied. The verdict is sent first: if sending fails, nothing is discarded and the
+/// proposal stays open; if the discard then fails, the error says the verdict was sent. Approve
+/// with discard is refused. A verdict never applies anything: Apply stays in the review dialog.
+pub fn engineer_verdict(
+    engine: &Engine,
+    proposal_id: &str,
+    verdict: Verdict,
+    body: &str,
+    discard: bool,
+) -> Result<Value, String> {
+    let dir = engine
+        .dir()
+        .ok_or("WEFT needs a saved project folder")?
+        .to_path_buf();
+    let p = proposal::load(&dir, proposal_id).map_err(|e| e.to_string())?;
+    if !p.status.reviewable() {
+        return Err(format!(
+            "proposal {} is no longer open: nothing to answer",
+            p.id
+        ));
+    }
+    if discard && verdict == Verdict::Approve {
+        return Err("approve keeps the proposal open for Apply: it cannot discard it".into());
+    }
+    let message = Message {
+        id: eak_core::new_id("msg"),
+        kind: MessageKind::ReviewVerdict,
+        from: ENGINEER.to_string(),
+        to: author(&p),
+        task_id: None,
+        proposal_id: Some(p.id.clone()),
+        body: clip(body),
+        verdict: Some(verdict),
+        status: None,
+    };
+    append(
+        &dir,
+        ENGINEER,
+        engine.project().revision,
+        vec![Event::Message {
+            message: message.clone(),
+        }],
+    )
+    .map_err(|f| format!("verdict not sent, nothing discarded: {}", f.1))?;
+    if discard {
+        proposal::discard(engine, proposal_id, &Actor::human(), None).map_err(|e| {
+            format!(
+                "verdict sent to {}, but the discard failed: {e}",
+                message.to
+            )
+        })?;
+    }
+    Ok(json!({"sent": message, "discarded": discard}))
+}
+
 /// `weft_send`: check one typed message against the journal state and append it, with the task
 /// it creates or the status it sets.
 fn send(engine: &Engine, dir: &Path, ctx: &CallContext, args: &Value) -> Result<Value, Fail> {
