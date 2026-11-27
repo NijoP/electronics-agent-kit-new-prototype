@@ -1,0 +1,62 @@
+/* Agents workspace (docs/product/EAK_AGENT_WORKSPACE_SPEC.md §3): context bar, roster, work
+   surface, inspector and a collapsible activity region. Tokens only (design/tokens.css); dense
+   rows, calm hierarchy, status colours only for status. */
+.agents-ws { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--bg-app); color: var(--fg); font-size: var(--fs-md); }
+.agents-ws h1 { margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-strong); }
+.agents-ws h2 { margin: 0 0 var(--s-1); font-size: var(--fs-xl); font-weight: var(--fw-strong); line-height: var(--lh-tight); overflow-wrap: anywhere; }
+.agents-ws h3 { margin: 0 0 var(--s-half); font-size: var(--fs-xs); font-weight: var(--fw-strong); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--fg-dim); }
+.agents-ws p { margin: 0 0 var(--s-1); line-height: var(--lh); }
+.agents-ws code { font-family: var(--mono); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+
+.ag-context { display: flex; align-items: center; gap: var(--s-1h); min-height: var(--h-bar); padding: 0 var(--s-2); border-bottom: var(--border) solid var(--line); background: var(--bg-panel); flex-wrap: wrap; }
+.ag-project { font-weight: var(--fw-medium); }
+.ag-errors { padding: var(--s-1) var(--s-2); color: var(--err); background: var(--err-soft); }
+.ag-errors p { margin: 0; }
+.ag-notice { margin: 0; padding: var(--s-half) var(--s-2); color: var(--ok); background: var(--ok-soft); }
+.ag-notice.bad { color: var(--err); background: var(--err-soft); }
+
+.ag-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 264px minmax(0, 1fr) 320px; }
+.ag-roster { min-height: 0; overflow: auto; padding: var(--s-1); border-right: var(--border) solid var(--line); background: var(--bg-panel); display: grid; gap: var(--s-1h); align-content: start; }
+.ag-roster section { display: grid; gap: var(--s-half); min-width: 0; }
+.ag-filter { width: 100%; height: var(--h-md); }
+.ag-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-quarter); min-width: 0; }
+.ag-row { display: flex; align-items: center; gap: var(--s-1); width: 100%; min-height: var(--h-sm); padding: var(--s-quarter) var(--s-1); border: var(--border) solid transparent; border-radius: var(--r-1); background: transparent; color: var(--fg); text-align: left; min-width: 0; }
+.ag-row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-row.on { background: var(--bg-active); border-color: var(--accent-line); }
+.ag-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ag-static { display: block; padding: var(--s-quarter) var(--s-1); color: var(--fg-dim); overflow-wrap: anywhere; }
+.ag-toggle { display: inline-flex; gap: var(--s-half); align-items: center; font-size: var(--fs-sm); color: var(--fg-dim); }
+
+.ag-surface { min-height: 0; min-width: 0; overflow: auto; padding: var(--s-2) var(--s-3); }
+.ag-block { display: grid; gap: var(--s-half); margin-top: var(--s-2); min-width: 0; }
+.ag-needs { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-half); }
+.ag-need { display: flex; align-items: center; gap: var(--s-1h); padding: var(--s-1); border: var(--border) solid var(--line); border-radius: var(--r-2); background: var(--bg-panel); min-width: 0; flex-wrap: wrap; }
+.ag-need-text { display: grid; gap: var(--s-quarter); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ag-actions { display: inline-flex; gap: var(--s-1); flex-wrap: wrap; align-items: center; margin: var(--s-1) 0; }
+.ag-link { padding: 0; border: none; background: none; color: var(--fg); text-decoration: underline; text-decoration-color: var(--line-strong); text-align: left; }
+.ag-link:hover:not(:disabled) { background: none; text-decoration-color: var(--accent); }
+.ag-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.ag-table th, .ag-table td { padding: var(--s-half) var(--s-1); border-bottom: var(--border) solid var(--hairline); text-align: left; vertical-align: baseline; }
+.ag-table th { color: var(--fg-dim); font-weight: var(--fw-medium); }
+.ag-thread, .ag-events, .ag-timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-half); min-width: 0; }
+.ag-thread > li { padding: var(--s-1); border-left: 2px solid var(--line-strong); background: var(--bg-panel); border-radius: 0 var(--r-1) var(--r-1) 0; min-width: 0; }
+.ag-msg-head { display: flex; gap: var(--s-1); align-items: center; flex-wrap: wrap; }
+.ag-msg-body { margin: var(--s-half) 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ag-msg-meta { font-size: var(--fs-xs); margin-top: var(--s-half); overflow-wrap: anywhere; }
+.ag-brief { padding: var(--s-1); border-radius: var(--r-1); background: var(--bg-raised); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ag-launch { display: grid; gap: var(--s-1); max-width: 560px; }
+.ag-launch label { display: grid; gap: var(--s-half); }
+.ag-launch label.inline { display: inline-flex; align-items: center; gap: var(--s-half); }
+.ag-log { margin: 0; max-height: 320px; overflow: auto; padding: var(--s-1); border-radius: var(--r-1); background: var(--term-bg); font-family: var(--mono); font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.ag-inspector { min-height: 0; overflow: auto; padding: var(--s-2); border-left: var(--border) solid var(--line); background: var(--bg-panel); display: grid; gap: var(--s-1); align-content: start; }
+.ag-facts { margin-bottom: var(--s-1); }
+.ag-gaps { margin: 0; padding-left: var(--s-2); font-size: var(--fs-sm); display: grid; gap: var(--s-quarter); }
+
+.ag-activity { display: flex; flex-direction: column; max-height: 30%; min-height: var(--h-bar); border-top: var(--border) solid var(--line); background: var(--bg-panel); }
+.ag-activity.closed { max-height: none; }
+.ag-activity > header { display: flex; align-items: center; gap: var(--s-1h); min-height: var(--h-bar); padding: 0 var(--s-2); }
+.ag-activity > header h3 { margin: 0; }
+.ag-activity > p { padding: 0 var(--s-2) var(--s-1); }
+.ag-timeline { overflow: auto; padding: 0 var(--s-2) var(--s-1); font-size: var(--fs-sm); }
+.ag-timeline > li { display: block; overflow-wrap: anywhere; }

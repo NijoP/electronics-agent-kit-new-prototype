@@ -69,6 +69,8 @@ fn only_insulation(ins: Option<Insulation>) -> C {
         part_dissipation_w: Default::default(),
         insulation: ins,
         enclosure: None,
+        return_via_max_distance: None,
+        plane_min_neck_width: None,
     }
 }
 
@@ -177,6 +179,8 @@ fn via_spans_and_engineering_inputs_are_validated_and_survive_save() {
                     keepout_radius: 3_000_000,
                 }],
             }),
+            return_via_max_distance: None,
+            plane_min_neck_width: None,
         },
     );
     ok(

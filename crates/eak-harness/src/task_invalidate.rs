@@ -49,7 +49,11 @@ pub fn classify_command(command_type: &str) -> Option<Change> {
         | "MoveBusEntry" | "DeleteBusEntry" | "RenameSheet" | "RenameNetLabel" => Some(Change::Net),
         "PlaceSymbol" | "DeleteSymbol" | "SetRefdes" | "Annotate" | "AddSheet" | "DeleteSheet"
         | "ReorderSheets" => Some(Change::Schematic),
-        "AddRequirement" => Some(Change::Requirements),
+        "AddRequirement"
+        | "SetRequirementField"
+        | "ClearRequirementField"
+        | "UpsertRequirementItem"
+        | "DeleteRequirementItem" => Some(Change::Requirements),
         // A pad's own mask or paste expansion changes the fabrication outputs, like SetManufacturing.
         "SetNetCurrent" | "SetNetVoltage" | "SetManufacturing" | "SetPadExpansion" => {
             Some(Change::Constraints)

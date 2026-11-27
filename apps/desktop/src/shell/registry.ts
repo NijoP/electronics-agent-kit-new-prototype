@@ -20,6 +20,10 @@ export interface WorkspaceContext {
   revision: number | null;
   /** Every project open in the window, with its folder. */
   openProjects: OpenProject[];
+  /** Opens Model settings (providers and models), the dialog the rail's Agents item used to open. */
+  openModelSettings?: () => void;
+  /** Shows another top-level workspace by id (e.g. "terminal"). */
+  showWorkspace?: (id: string) => void;
   /** True while this workspace is the one shown (it stays mounted, hidden, when another is). */
   active: boolean;
   // Placement "eda" only (a document of the EDA workspace, such as the 3D view):

@@ -10,6 +10,7 @@ const sheets: Record<string, string> = {
   "src/styles.css": read("src/styles.css"),
   "src/grid.css": read("src/grid.css"),
   "src/tools/schematic/schematic.css": read("src/tools/schematic/schematic.css"),
+  "src/agents/agents.css": read("src/agents/agents.css"),
 };
 const defined = new Set([...tokens.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
 

@@ -40,6 +40,12 @@ pub fn read_tools() -> Vec<ReadTool> {
             true,
         ),
         tool(
+            "get_requirements",
+            "The structured requirement record (schema v9) and its deterministic evaluation: every catalogue field with value, unit, status (UNKNOWN / NEEDS_CONFIRMATION / CONFIRMED / DERIVED / NOT_APPLICABLE), source, owner and the revision that set it; rails and interfaces; completeness per section; which downstream operations each missing or unconfirmed value blocks; targeted questions for missing values that change architecture or safety; and the field catalogue with its paths and units. A missing value is never zero. Edit with SetRequirementField, ClearRequirementField, UpsertRequirementItem and DeleteRequirementItem.",
+            obj(&[], &[]),
+            true,
+        ),
+        tool(
             "classify_domain",
             "Classify the current design against the 100 DESK domain classes (deterministic, no model). Returns ranked classes with reasons, DESK maturity labels and ceilings, overlays, missing information and the list of checks not implemented. A classification is a hypothesis, never a certification.",
             obj(&[], &[]),
@@ -199,6 +205,29 @@ fn req_num(args: &Value, key: &str) -> Result<f64, String> {
 
 const CALC_NOTE: &str = "computed by eak-engineering (deterministic); not a design verification";
 
+/// The requirement record, its evaluation (`eak_core::requirements::evaluate`, pure and
+/// deterministic) and the catalogue an agent needs to address fields (ADR-0057).
+fn requirements(p: &Project) -> Value {
+    use eak_core::requirements as rq;
+    let units: Vec<Value> = eak_core::ReqUnit::ALL
+        .iter()
+        .map(|u| json!({"symbol": u.symbol(), "measures": u.measure()}))
+        .collect();
+    json!({
+        "revision": p.revision,
+        "record": p.requirement_set,
+        "report": rq::evaluate(&p.requirement_set),
+        "catalogue": {
+            "fields": rq::FIELDS,
+            "rail_fields": rq::RAIL_FIELDS,
+            "interface_fields": rq::INTERFACE_FIELDS,
+            "operations": rq::OPERATIONS,
+            "units": units,
+            "paths": "a project field is its key (supply.input_voltage); a rail or interface field is <item id>/<field> (rail_1a2b/voltage)",
+        },
+    })
+}
+
 fn summary(p: &Project) -> Value {
     json!({
         "project_id": p.id,
@@ -282,6 +311,7 @@ fn nets(p: &Project, only: Option<&str>) -> Value {
 pub fn run(name: &str, args: &Value, p: &Project) -> Option<Result<Value, String>> {
     let r = match name {
         "get_design_summary" => Ok(summary(p)),
+        "get_requirements" => Ok(requirements(p)),
         "classify_domain" => {
             serde_json::to_value(crate::domain::classify_project(p)).map_err(|e| e.to_string())
         }
@@ -508,6 +538,28 @@ mod tests {
         assert!(a["preview"]["skipped"].is_string());
         let v = run("verify_routing", &json!({}), &p).unwrap().unwrap();
         assert!(v["not_implemented"].as_array().unwrap().len() >= 4);
+    }
+
+    #[test]
+    fn requirements_tool_reports_unknown_never_zero() {
+        let p = Project::new("t");
+        let r = run("get_requirements", &json!({}), &p).unwrap().unwrap();
+        assert_eq!(r["revision"], 0);
+        let c = &r["report"]["completeness"];
+        assert!(c["total"].as_u64().unwrap() > 0);
+        assert_eq!(c["unknown"], c["total"]);
+        assert_eq!(c["percent_firm"], 0);
+        let fields = r["report"]["fields"].as_array().unwrap();
+        assert!(fields
+            .iter()
+            .all(|f| f["status"] == "UNKNOWN" && f.get("value").is_none()));
+        assert!(r["report"]["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|o| o["ready"] == false));
+        assert!(r["report"]["not_implemented"].is_array());
+        assert!(r["catalogue"]["fields"].as_array().unwrap().len() > 40);
     }
 
     #[test]
