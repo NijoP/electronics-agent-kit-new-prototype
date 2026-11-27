@@ -578,6 +578,9 @@ fn a_pair_never_routes_coupled_on_a_layer_outside_its_impedance_band() {
     let res = router::route(&p, &RouterOptions::default());
     let pair = res.pairs.iter().find(|r| r.positive == P).unwrap();
     assert!(pair.coupled, "{pair:?}");
-    assert!(pair.impedance.iter().any(|l| l.layer.starts_with("In2")), "{pair:?}");
+    assert!(
+        pair.impedance.iter().any(|l| l.layer.starts_with("In2")),
+        "{pair:?}"
+    );
     assert_eq!(pair.impedance_within_tolerance, Some(true), "{pair:?}");
 }
