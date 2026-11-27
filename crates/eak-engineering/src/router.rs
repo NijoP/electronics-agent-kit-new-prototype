@@ -936,7 +936,7 @@ pub fn route(p: &Project, opts: &RouterOptions) -> RouteResult {
                     astar(&final_grid, id, a, b, env.routable, env.opts, &no_costs).is_some()
                 };
                 if split::for_conn(&env, c).is_some() && free() {
-                    format!("NO_LEGAL_PATH: every path leaves the reference copper under its ends or crosses a split in a reference plane [DRC-028]; route {} on a layer whose reference is continuous between its ends, or join the plane copper there", c.net)
+                    format!("NO_LEGAL_PATH: every path leaves the reference copper under its ends or crosses a split in a reference plane [DRC-029]; route {} on a layer whose reference is continuous between its ends, or join the plane copper there", c.net)
                 } else {
                     explain_no_path(
                         &env,
