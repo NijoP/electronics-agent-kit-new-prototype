@@ -34,6 +34,8 @@ COMMANDS:
                                 status, value, source, owner, ...); a different value
                                 is recorded beside the old one as a conflict
   requirement classify <REV>    run the domain classifier (ClassifyDomain)
+  rules                         engineering rule registry and the rules the domain
+                                classification composes (engineering_rules)
   call <TOOL> [ARGS_JSON|-]     invoke any tool with a JSON object of arguments
   exec <REV> <COMMAND_JSON|->   execute one typed command ({\"type\":\"PlaceSymbol\",...}) at revision REV
   check <erc|drc|mech|dfm|all>  run verification; findings + evidence
@@ -187,6 +189,7 @@ pub fn main_with(args: Vec<String>) -> i32 {
         "proposals" => ("proposal_list".into(), json!({})),
         "info" => ("project_info".into(), json!({})),
         "requirements" => ("get_requirements".into(), json!({})),
+        "rules" => ("engineering_rules".into(), json!({})),
         "requirement" => {
             let rev = a(2).and_then(|s| s.parse::<u64>().ok());
             match (a(1).as_deref(), rev) {

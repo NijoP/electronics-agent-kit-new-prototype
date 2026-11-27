@@ -158,7 +158,7 @@ fn rules_gate(id: &str, title: &str, r: &Report, rules: &[&str]) -> Gate {
 }
 
 /// `UNKNOWN` unless the gate already failed: a deterministic violation outranks missing data.
-fn unknown_unless_failed(g: &mut Gate, reason: impl Into<String>) {
+pub(crate) fn unknown_unless_failed(g: &mut Gate, reason: impl Into<String>) {
     if g.state != GateState::Fail {
         g.state = GateState::Unknown;
     }
@@ -519,6 +519,9 @@ pub fn evaluate(p: &Project, fab: Option<&FabProfile>) -> GateReport {
         .extend(rp.limitations.iter().map(|l| format!("limitation: {l}")));
     gates.push(g);
     apply_rule_config(p, &mut gates);
+    // ADR-0061: the domain composition reads the rule configuration itself; a required rule the
+    // project disables is a FAIL here, not a NOT_RUN.
+    gates.extend(crate::rules::composition_gates(p));
 
     let blocking: Vec<String> = gates
         .iter()
