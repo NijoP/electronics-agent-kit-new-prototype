@@ -3,8 +3,8 @@
 //    Manufacturing · Terminal. Each runs the existing operation it stands for: Schematic and PCB
 //    open that editor document, 3D (and any view registered in registry.ts) opens its document
 //    tab, Library and Checks show the bottom dock's Library and Findings tabs, Manufacturing shows
-//    the manufacturing side view, Agents opens Model settings (providers and models; agent
-//    sessions run in the Terminal), and Home / Terminal switch the app shell to that area;
+//    the manufacturing side view, Agents opens the Agents workspace (agent sessions, tasks,
+//    messages and reviews; ADR-0058), and Home / Terminal switch the app shell to that area;
 //  * project panels (Explorer, Overview, Requirements, Design manager, Domain, Assets): each switches the left
 //    dock, and pressing the active one collapses it. Library, Checks and Manufacturing toggle the
 //    same way;
@@ -49,7 +49,11 @@ export interface ShellArea {
 
 /** Tooltips shared with the app shell's own rail (App.tsx). */
 export const HOME_TITLE = "Home: projects, new design, continue";
-export const AGENTS_TITLE = "Agents: model providers and models (Model settings); agent sessions run in the Terminal";
+export const AGENTS_TITLE = "Agents: agent sessions, tasks, messages and reviews for this project";
+/** Registry id of the Agents workspace (workspaces/agents.workspace.tsx); both rails place it after Library. */
+export const AGENTS_AREA = "agents";
+/** Tooltip of the fallback Agents item while no Agents workspace is registered: it opens Model settings. */
+export const MODEL_SETTINGS_TITLE = "Model settings: model providers and models";
 
 /** Registry action whose key opens each side view (none for the others). */
 const SIDE_ACTIONS: Partial<Record<SideView, string>> = { project: "show-project", design: "show-design" };
@@ -105,15 +109,16 @@ export function ActivityBar({ sideView, sideOpen, onSide, workspace, onWorkspace
     return { id: tab === "findings" ? "checks" : tab, label, icon, current: on, title: on ? `${label}: ${what} (press again to collapse the bottom panel)` : `${label}: ${what}`, run: () => onBottom(tab) };
   };
   const shell = (a: ShellArea): NavItem => ({ id: a.id, label: a.label, icon: a.icon, title: a.title, shortcut: a.shortcut, run: a.run });
+  const agentsApp = apps.find((a) => a.id === AGENTS_AREA);
   const areas: NavItem[] = [
     ...(home ? [shell(home)] : []),
     ...EDITOR_WORKSPACES.map((w) => ws(w.id, w.label, Icons[w.id], keyOf(w.action))),
     ...registered.map((w) => ws(w.id, w.label, w.icon, w.shortcut)),
     dock("library", "Library", Icons.parts, "parts, symbols and footprints"),
-    { id: "agents", label: "Agents", icon: Icons.sparkle, title: AGENTS_TITLE, run: onSettings },
+    agentsApp ? { ...shell(agentsApp), title: AGENTS_TITLE } : { id: "agents", label: "Agents", icon: Icons.sparkle, title: MODEL_SETTINGS_TITLE, run: onSettings },
     dock("findings", "Checks", Icons.checks, "ERC and DRC findings"),
     side("manufacturing"),
-    ...apps.map(shell),
+    ...apps.filter((a) => a.id !== AGENTS_AREA).map(shell),
   ];
   const footer: NavItem[] = [
     { id: "theme", label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", icon: theme === "dark" ? Icons.sun : Icons.moon, title: "Toggle light/dark theme", run: onTheme },

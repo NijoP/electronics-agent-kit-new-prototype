@@ -80,6 +80,8 @@ export const AGENT_IPC = [
   "agent_session_log",
   "agent_tool_stop",
   "agent_session_restart",
+  "weft_state",
+  "agent_session_index_error",
 ] as const;
 
 // Terminal workspace commands: must match `TERMINAL_COMMANDS` in src-tauri/src/terminal.rs.
@@ -477,6 +479,10 @@ export const api = {
   agentSessionLog: (id: string, lines: number) => call<string>("agent_session_log", { id, lines }),
   agentToolStop: (id: string) => call<AgentSession>("agent_tool_stop", { id }),
   agentSessionRestart: (id: string) => call<AgentSession>("agent_session_restart", { id }),
+  // Agents workspace (ADR-0058): the open project's WEFT journal, replayed (read only).
+  weftState: () => call<import("./agents/weft").WeftView>("weft_state"),
+  // Why the session index could not be written this run (ADR-0058), or null.
+  agentSessionIndexError: () => call<string | null>("agent_session_index_error"),
 };
 
 export function describeError(e: CommandError): string {

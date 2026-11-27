@@ -209,7 +209,7 @@ export function AiToolsSettings() {
       </fieldset>
       <h4>Sessions</h4>
       {sessions.length === 0 ? (
-        <p className="muted">No AI session started from EAK in this run.</p>
+        <p className="muted">No AI session started from EAK yet (sessions of earlier runs are kept).</p>
       ) : (
         <table className="settings-table" aria-label="AI sessions">
           <thead>

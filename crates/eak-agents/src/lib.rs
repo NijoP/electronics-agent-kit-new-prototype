@@ -103,7 +103,7 @@ pub struct LaunchPlan {
 }
 
 /// What a headless session reported, parsed from one line of its output stream.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AgentEvent {
     Started { detail: String },
@@ -193,6 +193,7 @@ pub fn builtin_tools() -> Vec<Box<dyn AgentTool>> {
         Box::new(adapters::codex::Codex),
         Box::new(adapters::generic::Generic::opencode()),
         Box::new(adapters::generic::Generic::gemini()),
+        Box::new(adapters::generic::Generic::kimi()),
     ]
 }
 

@@ -32,6 +32,17 @@ impl Generic {
             login: None,
         }
     }
+    /// Kimi Code (Moonshot's `kimi` CLI) signs in from inside its interactive session; it has no
+    /// separate login or sign-in status command EAK can read, so its sign-in stays unknown.
+    pub fn kimi() -> Generic {
+        Generic {
+            id: "kimi",
+            label: "Kimi Code",
+            program: "kimi",
+            install_url: "https://github.com/MoonshotAI/kimi-cli",
+            login: None,
+        }
+    }
 }
 
 impl AgentTool for Generic {

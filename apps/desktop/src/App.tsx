@@ -1,11 +1,11 @@
 // Application shell (product vision §1): the top bar, the navigation rail and the workspace hosts.
 //
 //   EAK  Electronics Agent Kit  /  <project>                                         [ + ]
-//   rail │ Home  ·  EDA workspace (schematic, PCB, 3D and their docks)  ·  Terminal Workspace
+//   rail │ Home  ·  EDA workspace (schematic, PCB, 3D and their docks)  ·  Agents  ·  Terminal Workspace
 //
 // The rail lists the areas: Home, Schematic, PCB, 3D, Library, Agents, Checks, Manufacturing and
 // Terminal. While the EDA workspace is shown it draws the rail itself, from its live document and
-// dock state (shell/ActivityBar.tsx). Beside Home and the registered top-level workspaces (the
+// dock state (shell/ActivityBar.tsx). Beside Home and the registered top-level workspaces (Agents and the
 // Terminal Workspace, shell/registry.ts) the shell draws the same rail (shell/NavRail.tsx); an EDA
 // area picked there switches back to the workspace and asks it to show that area. Every workspace
 // that has been opened stays mounted while another is shown, so switching never kills a terminal
@@ -18,7 +18,7 @@ import { applyTheme, loadTheme, type Theme } from "./design/theme";
 import { ModelSettings } from "./ModelSettings";
 import type { HomeTarget } from "./home/homeFacts";
 import { ProjectHome, saveSession } from "./ProjectHome";
-import { AGENTS_TITLE, HOME_TITLE, type ShellArea } from "./shell/ActivityBar";
+import { AGENTS_AREA, AGENTS_TITLE, HOME_TITLE, MODEL_SETTINGS_TITLE, type ShellArea } from "./shell/ActivityBar";
 import { Icons } from "./shell/icons";
 import { NavRail, type NavItem } from "./shell/NavRail";
 import { Tour } from "./shell/onboarding/Tour";
@@ -131,11 +131,15 @@ export function App() {
     revision: opened?.project.revision ?? null,
     openProjects: projects,
     active: isActive,
+    openModelSettings: () => setSettings(true),
+    showWorkspace: show,
   });
 
   // Rail entries the shell owns (Home and the top-level workspaces), shared with the EDA rail.
   const homeArea: ShellArea = { id: "home", label: "Home", icon: Icons.home, title: HOME_TITLE, run: () => show("home") };
   const appAreas: ShellArea[] = apps.map((a) => ({ id: a.id, label: a.navLabel ?? a.label, icon: a.icon, title: a.label, shortcut: a.shortcut, run: () => show(a.id) }));
+  // The Agents workspace sits after Library (the vision's order), not with the workspaces at the end.
+  const agentsApp = appAreas.find((a) => a.id === AGENTS_AREA);
   // The rail beside Home and the Terminal Workspace. EDA areas need an open project.
   const eda = (id: string, label: string, icon: NavItem["icon"], title: string): NavItem => ({ id, label, icon, title, run: () => toEda(id), unavailable: opened ? undefined : NO_PROJECT });
   const railAreas: NavItem[] = [
@@ -144,10 +148,10 @@ export function App() {
     eda("pcb", "PCB", Icons.pcb, "PCB workspace"),
     ...edaViews.map((w) => eda(w.id, w.label, w.icon, `${w.label} workspace`)),
     eda("library", "Library", Icons.parts, "Library: parts, symbols and footprints"),
-    { id: "agents", label: "Agents", icon: Icons.sparkle, title: AGENTS_TITLE, run: () => setSettings(true) },
+    agentsApp ? { ...agentsApp, title: AGENTS_TITLE, current: active === agentsApp.id } : { id: "agents", label: "Agents", icon: Icons.sparkle, title: MODEL_SETTINGS_TITLE, run: () => setSettings(true) },
     eda("checks", "Checks", Icons.checks, "Checks: ERC and DRC findings"),
     eda("manufacturing", "Manufacturing", Icons.manufacturing, "Manufacturing"),
-    ...appAreas.map((a) => ({ ...a, current: active === a.id })),
+    ...appAreas.filter((a) => a.id !== AGENTS_AREA).map((a) => ({ ...a, current: active === a.id })),
   ];
   const railFooter: NavItem[] = [
     { id: "theme", label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", icon: theme === "dark" ? Icons.sun : Icons.moon, title: "Toggle light/dark theme", run: toggleTheme },

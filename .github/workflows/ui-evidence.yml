@@ -163,6 +163,17 @@ jobs:
           UI_SCENARIO: scenarios/w3-weft-review.json
           GDK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
+      # M2 (Agents workspace, ADR-0058): the rail opens the Agents workspace; roster, tasks, needs-you,
+      # inspector and runtimes from real state, and Request changes answered on the WEFT bus.
+      - name: Run M2 Agents workspace scenario under Xvfb
+        if: always()
+        working-directory: apps/desktop/e2e
+        env:
+          EAK_APP: ${{ github.workspace }}/target/debug/eak-desktop
+          UI_OUT: ${{ runner.temp }}/ui-evidence/m2
+          UI_SCENARIO: scenarios/m2-agents.json
+          GDK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node ui-evidence.mjs
       # C3 (routing experience): the Route tool's routing options in the inspector.
       - name: Run C3 routing scenario under Xvfb
         if: always()
