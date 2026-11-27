@@ -13,7 +13,7 @@ use eak_engineering::board::BoardGeometry;
 use eak_engineering::copper::{self, distance, Core, ItemKind};
 use eak_engineering::ipc::{self, ClearanceCondition};
 use eak_engineering::verify::{self, Verdict};
-use eak_engineering::{netlist, silk};
+use eak_engineering::{netlist, pathres, silk};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn mm(v: f64) -> String {
@@ -947,6 +947,8 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     let pair_unknown = crate::pairs::check(p, &mut f);
     // DRC-027: via barrel current.
     let via_unknown = via_current(p, &mut f);
+    // DRC-028: DC voltage drop along the routed copper.
+    let drop_unknown = voltage_drop(p, &mut f);
 
     let mut rules = vec![
         rule("DRC-001", "Minimum / net-class track width", format!("min {}", mm(c.min_track_width as f64)), "Project constraints"),
@@ -985,9 +987,20 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         ),
         verify::SOURCE_VIA,
     ));
+    rules.push(rule(
+        "DRC-028",
+        "DC voltage drop",
+        format!(
+            "net current × copper-network resistance from the source pad to each sink pad against net_max_drop_v; conductor at ambient {} + ΔT {} °C",
+            c.ambient_temp_c
+                .map_or("not declared".into(), |t| format!("{t} °C")),
+            c.temp_rise_c
+        ),
+        pathres::SOURCE_PATH,
+    ));
     let not_implemented = vec![
         "Single-ended controlled impedance (net-class target Z0) and signal integrity beyond the declared differential pairs".into(),
-        "DC voltage drop along a net against net_max_drop_v (no path-resistance model yet)".into(),
+        "DC voltage drop through copper zones (DRC-028 leaves a net with a pour UNKNOWN)".into(),
         "Thermal analysis and copper current density in zones (only relief-spoke width vs declared net current is checked)".into(),
         "Creepage (surface path) analysis — only voltage-based clearance (air gap) is checked"
             .into(),
@@ -1009,6 +1022,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         "Clearance-matrix cells are checked by DRC only: the interactive router keeps net classes, declared voltages and net-pair rules but not the matrix, and the autorouter keeps neither the matrix nor net-pair rules (ADR-0046)".into(),
         "Differential pairs: skew counts track length only (no via barrels); the gap rule checks only the closest approach, not where the members run apart; impedance uses the positive member's width and is not checked on uncoupled segments".into(),
     ];
+    limitations.extend(pathres::LIMITATIONS.iter().map(|l| l.to_string()));
     limitations.extend(undeclared_nets_not_evaluated(p));
     let (no_current, no_voltage) = undeclared_nets(p, items);
     let mut report = Report::new("DRC", p, rules, f, not_implemented, limitations);
@@ -1033,6 +1047,9 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     }
     if let Some(why) = via_unknown {
         report = report.degrade("DRC-027", CheckState::Unknown, &why);
+    }
+    if let Some(why) = drop_unknown {
+        report = report.degrade("DRC-028", CheckState::Unknown, &why);
     }
     if let Some(why) = eak_engineering::clearance::spacing_unknown(c) {
         report = report.degrade("DRC-002", CheckState::Unknown, &why);
@@ -1096,6 +1113,71 @@ fn via_current(p: &Project, f: &mut Vec<Finding>) -> Option<String> {
     why
 }
 
+/// DRC-028: each net with an allowed drop (`net_max_drop_v`): net current × the copper-network
+/// resistance from its source pad to its worst sink pad. Without a single power-output part the
+/// worst pad pair bounds the drop for any source: it can pass, but exceeding it is UNKNOWN.
+/// A power net with no allowed drop is UNKNOWN (fail-closed, like DRC-008 for undeclared
+/// currents), never a pass. Returns why a net could not be evaluated.
+fn voltage_drop(p: &Project, f: &mut Vec<Finding>) -> Option<String> {
+    let c = &p.constraints;
+    let mut why = vec![];
+    let mut power: BTreeSet<String> = crate::gates::power_nets(p).into_iter().collect();
+    power.extend(pathres::driven_nets(p));
+    let no_drop: Vec<String> = power
+        .into_iter()
+        .filter(|n| !n.is_empty() && !eak_engineering::power::is_reference_net(n))
+        .filter(|n| !c.net_max_drop_v.contains_key(n))
+        .collect();
+    if !no_drop.is_empty() {
+        why.push(format!(
+            "missing input: allowed drop (net_max_drop_v) for power net {}",
+            no_drop.join(", ")
+        ));
+    }
+    for (net, &max) in &c.net_max_drop_v {
+        let path = match pathres::net_path(p, net) {
+            Ok(path) => path,
+            Err((_, reason)) => {
+                why.push(format!("{net}: {reason}"));
+                continue;
+            }
+        };
+        let Some(worst) = path.worst() else { continue };
+        // Every sink shares the source's copper node: nothing to drop across.
+        if worst.resistance_ohm <= 0.0 {
+            continue;
+        }
+        let amps = c.net_currents_a.get(net).copied();
+        let ch = verify::voltage_drop(amps, Some(worst.resistance_ohm), Some(max));
+        let drop = ch.value.unwrap_or(0.0);
+        match (ch.verdict, &path.source) {
+            (Verdict::Pass, _) => {}
+            (Verdict::Fail, Some(_)) => {
+                let msg = format!(
+                    "net {net}: up to {drop:.3} V drop from {} to {} ({:.1} mΩ), above the allowed {max} V",
+                    worst.from,
+                    worst.to,
+                    worst.resistance_ohm * 1e3
+                );
+                f.push(
+                    finding("DRC-028", Error, msg, vec![worst.to_footprint.clone()], Some(worst.at))
+                        .measured(drop, "V")
+                        .required(Bound::Max, max, "V")
+                        .fix(format!(
+                            "Widen or shorten the {net} copper between {} and {}, add parallel copper or a pour, or use heavier copper.",
+                            worst.from, worst.to
+                        )),
+                );
+            }
+            (Verdict::Fail, None) => why.push(format!(
+                "{net}: missing input: source pad (no single part drives the net through a power-output pin); the worst pad pair {} – {} drops {drop:.3} V, above {max} V",
+                worst.from, worst.to
+            )),
+            (Verdict::Unknown | Verdict::Blocked, _) => why.push(format!("{net}: {}", ch.reason)),
+        }
+    }
+    (!why.is_empty()).then(|| why.join("; "))
+}
 /// The rule that enforces a clearance-matrix cell, `None` when no rule does (Phase 1 C5,
 /// ADR-0046). Copper pairs are DRC-002 (between different nets), copper to holes DRC-018, holes
 /// to holes DRC-019, copper to the outline DRC-005 and silkscreen to the outline DRC-020.

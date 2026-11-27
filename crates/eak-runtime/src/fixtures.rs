@@ -242,7 +242,8 @@ pub fn build_pcb_layers(engine: &mut Engine, copper_layers: u8) -> Result<Vec<St
 ///   the 3V3 rail), any other net 3.3 V and 0.01 A;
 /// - the voltage rating its generic resistor, LED and headers lack (ERC-022), unverified;
 /// - an enclosure with no bottom-side limit and no mounting holes (MECH-004);
-/// - 25 µm via plating (DRC-027).
+/// - 25 µm via plating (DRC-027);
+/// - 25 °C ambient and a 0.1 V allowed drop on every non-reference copper net (DRC-028).
 ///
 /// Declared values are kept.
 pub fn declare_check_inputs(engine: &mut Engine) -> Result<(), String> {
@@ -310,11 +311,22 @@ pub fn declare_check_inputs(engine: &mut Engine) -> Result<(), String> {
         })?;
     }
     let c = &b.engine.project().constraints;
-    if c.enclosure.is_none() || c.via_plating_um.is_none() {
+    let mut drops = c.net_max_drop_v.clone();
+    for net in nets
+        .iter()
+        .filter(|n| !eak_engineering::power::is_reference_net(n))
+    {
+        drops.entry(net.clone()).or_insert(0.1);
+    }
+    if c.enclosure.is_none()
+        || c.via_plating_um.is_none()
+        || c.ambient_temp_c.is_none()
+        || drops != c.net_max_drop_v
+    {
         let inputs = C::SetEngineeringInputs {
-            ambient_temp_c: c.ambient_temp_c,
+            ambient_temp_c: c.ambient_temp_c.or(Some(25.0)),
             via_plating_um: c.via_plating_um.or(Some(25.0)),
-            net_max_drop_v: c.net_max_drop_v.clone(),
+            net_max_drop_v: drops,
             part_dissipation_w: c.part_dissipation_w.clone(),
             insulation: c.insulation.clone(),
             enclosure: c.enclosure.clone().or(Some(Enclosure::default())),
