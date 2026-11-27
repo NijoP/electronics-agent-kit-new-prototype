@@ -72,3 +72,18 @@ pub fn run_gates(p: &Project, args: &Value) -> Result<GateReport, String> {
     };
     Ok(gates::evaluate(p, fab.as_ref()))
 }
+
+/// `engineering_rules`: the versioned rule registry and the rules the project's domain
+/// classification composes (ADR-0061).
+pub fn engineering_rules(p: &Project) -> Result<Value, String> {
+    let registry =
+        serde_json::to_value(eak_validation::rules::registry()).map_err(|e| e.to_string())?;
+    let composition =
+        serde_json::to_value(eak_validation::rules::compose(p)).map_err(|e| e.to_string())?;
+    Ok(json!({
+        "revision": p.revision,
+        "registry": registry,
+        "composition": composition,
+        "note": "composition only adds rules; a weakened required rule fails the domain_rules gate, and concerns no evaluator covers stay UNKNOWN in domain_concerns",
+    }))
+}

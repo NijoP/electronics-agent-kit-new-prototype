@@ -451,3 +451,48 @@ fn cli_records_requirements_and_an_agent_never_confirms_them() {
     assert_eq!(usb["source"]["kind"], "calculation", "{r}");
     let _ = std::fs::remove_dir_all(root);
 }
+
+/// ADR-0061 (M4.4) through the real CLI: `eak rules` returns the versioned rule registry and the
+/// rules the recorded domain classification composes; an unclassified project composes none.
+#[test]
+fn cli_reads_the_rule_registry_and_the_domain_composition() {
+    let root = temp_dir("rules");
+    let dir = root.join("rules.eak");
+    let (code, v) = eak(&dir, &["new", dir.to_str().unwrap(), "Rules"]);
+    assert_eq!(code, 0, "{v}");
+    let (code, r) = eak(&dir, &["rules"]);
+    assert_eq!(code, 0, "{r}");
+    let registry = &r["result"]["registry"];
+    assert_eq!(registry["version"], 1, "{r}");
+    let rules = registry["rules"].as_array().unwrap();
+    let drc2 = rules.iter().find(|x| x["id"] == "DRC-002").unwrap();
+    assert_eq!(drc2["source_state"], "CITED_NOT_VERIFIED", "{drc2}");
+    assert!(drc2["required_by"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|c| c == "high_voltage"));
+    assert_eq!(r["result"]["composition"]["classified"], false, "{r}");
+
+    let usb = json!({
+        "path": "domain.usb_interface",
+        "status": "NEEDS_CONFIRMATION",
+        "value": {"kind": "flag", "value": true},
+        "source": {"kind": "engineer", "reference": "design review"},
+        "owner": "Lead engineer",
+        "risk_if_wrong": "the USB rules are missed",
+    });
+    let (code, v) = eak(&dir, &["requirement", "set", "0", &usb.to_string()]);
+    assert_eq!(code, 0, "{v}");
+    let (_, r) = eak(&dir, &["rules"]);
+    let c = &r["result"]["composition"];
+    assert_eq!(c["active"][0]["id"], "usb_interface", "{r}");
+    let composed: Vec<&str> = c["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|x| x["rule_id"].as_str())
+        .collect();
+    assert_eq!(composed, ["DRC-024", "DRC-025", "DRC-026"], "{r}");
+    let _ = std::fs::remove_dir_all(root);
+}

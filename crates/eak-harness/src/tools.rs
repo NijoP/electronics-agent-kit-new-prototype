@@ -258,6 +258,12 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         "Track-only DC drop upper bound per net with a declared current, declared currents with no copper, and return-path continuity (signal tracks over gaps in the adjacent ground plane, split ground zones). Unknown entries are reported with the reason.",
         empty(),
     ));
+    v.push(spec(
+        "engineering_rules",
+        Read,
+        "The versioned engineering rule registry (every rule: id, version, check, evaluator, source and its verification state, gates, requiring domain classes, fingerprint) and the rules the project's recorded domain classes compose, with any project configuration that weakens a required rule and the concerns no evaluator covers.",
+        empty(),
+    ));
     v.extend(
         crate::intel::tool_specs()
             .into_iter()
@@ -1229,6 +1235,9 @@ fn read(engine: &Engine, name: &str, args: &Value) -> Result<Value, Fail> {
         }
         "power_analysis" => {
             crate::engineering::power_analysis(p).map_err(|e| fail(ErrorCode::Internal, e))
+        }
+        "engineering_rules" => {
+            crate::engineering::engineering_rules(p).map_err(|e| fail(ErrorCode::Internal, e))
         }
         n if n.starts_with("intel_") => {
             crate::intel::read(engine, n, args).map_err(|e| fail(ErrorCode::InvalidArguments, e))
