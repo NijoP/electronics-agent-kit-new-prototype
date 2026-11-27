@@ -37,7 +37,8 @@ export type AgentEvent =
   | { kind: "finished"; ok: boolean; summary: string }
   | { kind: "error"; message: string };
 
-export type SessionState = "running" | "completed" | "failed" | "stopped";
+/** `unknown`: recorded as running when EAK last closed; no longer supervised, outcome not known (ADR-0058). */
+export type SessionState = "running" | "completed" | "failed" | "stopped" | "unknown";
 
 /** Must match `eak_agents::sessions::SessionView`. */
 export interface AgentSession {
@@ -55,6 +56,10 @@ export interface AgentSession {
   terminal_session: number | null;
   log_file: string | null;
   events: AgentEvent[];
+  /** WEFT agent id the session registers under (`agent:<name>@<session>`), when known. */
+  weft_id: string | null;
+  /** Restored from an earlier app run: no process, tab or live output here. */
+  from_earlier_run: boolean;
 }
 
 export const yesNoUnknown = (v: boolean | null): string => (v === null ? "unknown" : v ? "yes" : "no");
@@ -128,4 +133,5 @@ export const SESSION_STATE_LABEL: Record<SessionState, string> = {
   completed: "Completed",
   failed: "Failed",
   stopped: "Stopped",
+  unknown: "Unknown (EAK restarted)",
 };

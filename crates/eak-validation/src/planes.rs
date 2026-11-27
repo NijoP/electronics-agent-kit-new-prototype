@@ -1,9 +1,9 @@
-//! Reference planes and return paths (M7.6) on the `eak_engineering::planes` model: DRC-028 a
-//! declared high-speed track crossing a split in its reference plane, DRC-029 a declared
-//! high-speed track with no reference copper beside it, DRC-030 a high-speed layer change with no
-//! return via, DRC-031 a plane zone split into islands. With no declared high-speed net, DRC-028
-//! to DRC-030 are NOT_APPLICABLE (never PASS); a return via without a declared largest distance
-//! leaves DRC-030 UNKNOWN naming the missing input.
+//! Reference planes and return paths (M7.6) on the `eak_engineering::planes` model: DRC-029 a
+//! declared high-speed track crossing a split in its reference plane, DRC-030 a declared
+//! high-speed track with no reference copper beside it, DRC-031 a high-speed layer change with no
+//! return via, DRC-032 a plane zone split into islands. With no declared high-speed net, DRC-029
+//! to DRC-031 are NOT_APPLICABLE (never PASS); a return via without a declared largest distance
+//! leaves DRC-031 UNKNOWN naming the missing input.
 
 use crate::report::{finding, rule, Bound, Finding, RuleInfo, Severity::*};
 use eak_core::geom::to_mm;
@@ -16,25 +16,25 @@ pub(crate) fn rules() -> Vec<RuleInfo> {
     let src = "EAK reference-plane model (eak_engineering::planes, M7.6) on the zone fills of the board geometry (ADR-0052); declared high-speed nets = declared differential pairs and net classes with a target impedance";
     vec![
         rule(
-            "DRC-028",
+            "DRC-029",
             "High-speed track over a reference-plane split",
             format!("centreline and both edges sampled every 0.1 mm over each reference layer (adjacent plane layer or pour); a change of reference net, or of fill island within one zone, or leaving the plane copper is a crossing; voids within {:.1} mm of fill (anti-pads) are not", to_mm(planes::VOID_REACH)),
             src,
         ),
         rule(
-            "DRC-029",
+            "DRC-030",
             "High-speed track without a reference plane",
             "the track's layer has an adjacent plane layer or pour, and plane copper lies under some of the track",
             src,
         ),
         rule(
-            "DRC-030",
+            "DRC-031",
             "Return via at a high-speed layer change",
             "where a high-speed via changes between layers with different nearest reference planes of one net, a via of that net joining both planes lies within the declared distance; a change of reference net needs a stitching capacitor (not checked)",
             src,
         ),
         rule(
-            "DRC-031",
+            "DRC-032",
             "Plane zone split into islands",
             "every zone on a plane layer fills as one island",
             src,
@@ -50,8 +50,8 @@ pub(crate) struct Gaps {
     pub not_applicable: Vec<(&'static str, String)>,
 }
 
-/// DRC-028..031 findings. `return_max` is the declared largest return-via distance (`None` =
-/// undeclared: DRC-030 is UNKNOWN wherever a return via is present).
+/// DRC-029..031 findings. `return_max` is the declared largest return-via distance (`None` =
+/// undeclared: DRC-031 is UNKNOWN wherever a return via is present).
 pub(crate) fn check(
     p: &Project,
     geo: &BoardGeometry,
@@ -62,7 +62,7 @@ pub(crate) fn check(
     let st = &p.pcb.board.stackup;
     let model = Planes::new(p, geo);
 
-    // DRC-031: plane zones fill as one island.
+    // DRC-032: plane zones fill as one island.
     let mut plane_fills = 0;
     for fill in geo
         .fills
@@ -78,7 +78,7 @@ pub(crate) fn check(
                 fill.layer.name()
             );
             f.push(
-                finding("DRC-031", Warning, msg, vec![z.clone()], None)
+                finding("DRC-032", Warning, msg, vec![z.clone()], None)
                     .measured(f64::from(n), "islands")
                     .required(Bound::Max, 1.0, "islands")
                     .fix(format!("Move the copper that cuts zone {z} off its layer, or join the islands, so the plane is continuous.")),
@@ -87,20 +87,20 @@ pub(crate) fn check(
     }
     if plane_fills == 0 {
         gaps.not_applicable
-            .push(("DRC-031", "no zone on a plane layer".into()));
+            .push(("DRC-032", "no zone on a plane layer".into()));
     }
 
     let hs = planes::declared_high_speed(p);
     if hs.is_empty() {
         let why =
             "no declared high-speed net (differential pair or net class with a target impedance)";
-        for r in ["DRC-028", "DRC-029", "DRC-030"] {
+        for r in ["DRC-029", "DRC-030", "DRC-031"] {
             gaps.not_applicable.push((r, why.into()));
         }
         return gaps;
     }
 
-    // DRC-028 / DRC-029: every declared high-speed track.
+    // DRC-029 / DRC-030: every declared high-speed track.
     for t in p.pcb.tracks.values().filter(|t| hs.contains(&t.net)) {
         let refs = planes::reference_layers(p, t.layer);
         let path = t.path();
@@ -122,7 +122,7 @@ pub(crate) fn check(
                 t.layer.name()
             );
             f.push(
-                finding("DRC-029", Error, msg, vec![t.id.clone()], Some(t.a)).fix(format!(
+                finding("DRC-030", Error, msg, vec![t.id.clone()], Some(t.a)).fix(format!(
                     "Route {} on a layer next to a plane, or pour reference copper under it.",
                     t.net
                 )),
@@ -144,7 +144,7 @@ pub(crate) fn check(
                 s.crossings.len()
             );
             f.push(
-                finding("DRC-028", Error, msg, vec![t.id.clone()], Some(c.at))
+                finding("DRC-029", Error, msg, vec![t.id.clone()], Some(c.at))
                     .key(&s.plane.name())
                     .fix(format!(
                         "Re-route {} around the split in {}, or on a layer whose reference is continuous.",
@@ -155,7 +155,7 @@ pub(crate) fn check(
         }
     }
 
-    // DRC-030: every layer change of a declared high-speed net.
+    // DRC-031: every layer change of a declared high-speed net.
     let mut unknown: Vec<String> = vec![];
     for v in p.pcb.vias.values().filter(|v| hs.contains(&v.net)) {
         let r = v.diameter as f64 / 2.0;
@@ -187,7 +187,7 @@ pub(crate) fn check(
                             plane.name()
                         );
                         f.push(
-                            finding("DRC-030", Error, msg, vec![v.id.clone()], Some(v.position))
+                            finding("DRC-031", Error, msg, vec![v.id.clone()], Some(v.position))
                                 .key(&key)
                                 .fix(format!(
                                     "Move via {} over continuous reference copper.",
@@ -204,7 +204,7 @@ pub(crate) fn check(
                             planes[1].name()
                         );
                         f.push(
-                            finding("DRC-030", Warning, msg, vec![v.id.clone()], Some(v.position))
+                            finding("DRC-031", Warning, msg, vec![v.id.clone()], Some(v.position))
                                 .key(&key)
                                 .fix(format!(
                                     "Place a stitching capacitor between {} and {} next to via {}, or keep {} on layers that share a reference.",
@@ -233,7 +233,7 @@ pub(crate) fn check(
                             (None, _) => {
                                 let msg = format!("{change}: no via of {net} joins reference planes {p0} and {p1}; the return current has no path");
                                 f.push(
-                                    finding("DRC-030", Error, msg, vec![v.id.clone()], Some(v.position))
+                                    finding("DRC-031", Error, msg, vec![v.id.clone()], Some(v.position))
                                         .key(&key)
                                         .fix(format!("Place a {net} via joining {p0} and {p1} next to via {}.", v.id)),
                                 );
@@ -242,7 +242,7 @@ pub(crate) fn check(
                                 let (d_mm, max_mm) = (to_mm(d as Nm), to_mm(max));
                                 let msg = format!("{change}: the nearest {net} return via {} is {d_mm:.2} mm away", o.id);
                                 f.push(
-                                    finding("DRC-030", Error, msg, vec![v.id.clone(), o.id.clone()], Some(v.position))
+                                    finding("DRC-031", Error, msg, vec![v.id.clone(), o.id.clone()], Some(v.position))
                                         .key(&key)
                                         .measured(d_mm, "mm")
                                         .required(Bound::Max, max_mm, "mm")
@@ -262,7 +262,7 @@ pub(crate) fn check(
         }
     }
     if !unknown.is_empty() {
-        gaps.unknown.push(("DRC-030", unknown.join("; ")));
+        gaps.unknown.push(("DRC-031", unknown.join("; ")));
     }
     gaps
 }

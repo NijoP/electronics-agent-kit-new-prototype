@@ -26,6 +26,46 @@ pub enum Command {
         #[serde(default)]
         value: Option<String>,
     },
+    // ---- structured requirements (schema v9, ADR-0057)
+    /// Record one requirement field. `path` is a catalogue key (`supply.input_voltage`) or
+    /// `<item id>/<field>` (`rail_1a2b/voltage`). The whole entry is replaced and stamped with the
+    /// time and the new revision. An agent can never record CONFIRMED or NOT_APPLICABLE, and no command records DERIVED.
+    SetRequirementField {
+        path: String,
+        status: ReqStatus,
+        #[serde(default)]
+        value: Option<ReqValue>,
+        #[serde(default)]
+        source: Option<ReqSource>,
+        /// Paths a DERIVED value is computed from.
+        #[serde(default)]
+        derived_from: Vec<String>,
+        #[serde(default)]
+        owner: Option<String>,
+        /// What goes wrong if a NEEDS_CONFIRMATION value is wrong (required for that status).
+        #[serde(default)]
+        risk_if_wrong: Option<String>,
+        #[serde(default)]
+        note: Option<String>,
+    },
+    /// Remove the entry at `path`: the field is UNKNOWN again.
+    ClearRequirementField {
+        path: String,
+    },
+    /// Add a rail or interface (no `item_id`), or rename / re-parent one. Only a rail has a
+    /// parent: the rail it is generated from.
+    UpsertRequirementItem {
+        #[serde(default)]
+        item_id: Option<Id>,
+        kind: ReqItemKind,
+        name: String,
+        #[serde(default)]
+        parent: Option<Id>,
+    },
+    /// Remove a rail or interface and its recorded fields.
+    DeleteRequirementItem {
+        item_id: Id,
+    },
     // ---- library
     /// Copy a built-in library component definition into the project library.
     ImportLibraryComponent {
@@ -585,6 +625,21 @@ pub enum Command {
         insulation: Option<Insulation>,
         #[serde(default)]
         enclosure: Option<Enclosure>,
+        /// Largest return-via distance (ADR-0059): omitted = keep the current value, `null` =
+        /// clear it, a number = set it. Callers that predate v10 keep it by not sending it.
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "present"
+        )]
+        return_via_max_distance: Option<Option<Nm>>,
+        /// Narrowest plane neck (ADR-0059): omitted = keep, `null` = clear, a number = set.
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "present"
+        )]
+        plane_min_neck_width: Option<Option<Nm>>,
     },
     SetManufacturing {
         config: ManufacturingConfig,
@@ -665,6 +720,9 @@ impl Command {
         match self {
             SetProjectName { .. }
             | AddRequirement { .. }
+            | SetRequirementField { .. }
+            | ClearRequirementField { .. }
+            | UpsertRequirementItem { .. }
             | ImportLibraryComponent { .. }
             | SetComponentProperties { .. }
             | AddSheet { .. }
@@ -752,7 +810,10 @@ impl Command {
             | SetViaSpans { .. }
             | SetEngineeringInputs { .. }
             | SetManufacturing { .. } => EngineeringImpacting,
-            DeleteSymbol { .. } | DeleteSheet { .. } | ClearRouting { .. } => Destructive,
+            DeleteSymbol { .. }
+            | DeleteSheet { .. }
+            | ClearRouting { .. }
+            | DeleteRequirementItem { .. } => Destructive,
             // A batch carries the risk of its riskiest step, so approval covers every step.
             Batch { commands, .. } => commands
                 .iter()
@@ -875,6 +936,29 @@ pub fn sync_changes(before: &Project, after: &Project) -> Vec<SyncChange> {
 pub struct Applied {
     pub created: Vec<Id>,
     pub warnings: Vec<String>,
+}
+
+/// Why an agent may not submit `cmd`, looking inside batches: only a person confirms a
+/// requirement or declares one not applicable (ADR-0057; the AI never self-certifies).
+pub fn human_only(cmd: &Command) -> Option<String> {
+    match cmd {
+        Command::SetRequirementField { path, status, .. } if status.human_only() => Some(format!(
+            "only a person can record {} for requirement {path}; an agent records NEEDS_CONFIRMATION (source agent_proposal or calculation) for a person to confirm",
+            status.as_str()
+        )),
+        Command::Batch { commands, .. } => commands.iter().find_map(human_only),
+        _ => None,
+    }
+}
+
+fn requirement_error(e: eak_core::requirements::ReqEditError) -> CommandError {
+    use eak_core::requirements::ReqEditError as E;
+    match e {
+        E::NotFound(m) => CommandError::NotFound(m),
+        E::Invalid(m) => CommandError::Invalid(m),
+        E::Precondition(m) => CommandError::Precondition(m),
+        E::Unchanged(m) => CommandError::NothingTo(m),
+    }
 }
 
 /// Refuse a layer the board's stackup does not have.
@@ -1311,6 +1395,60 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
                 text: text.clone(),
             });
             created.push(id);
+        }
+        // Schema-v9 requirement record (ADR-0057): eak-core checks the status rules; the
+        // integrity pass after apply checks the whole record again.
+        SetRequirementField {
+            path,
+            status,
+            value,
+            source,
+            derived_from,
+            owner,
+            risk_if_wrong,
+            note,
+        } => {
+            // DESK study §2.3: DERIVED is written only by a deterministic evaluator, and none
+            // exists yet, so no command records it (from a person or an agent).
+            if *status == ReqStatus::Derived {
+                return Err(CommandError::Precondition(format!(
+                    "requirement {path}: DERIVED is written only by a deterministic evaluator, and none exists yet; record a computed value as NEEDS_CONFIRMATION with source kind calculation"
+                )));
+            }
+            let entry = ReqEntry {
+                status: *status,
+                value: value.clone(),
+                source: source.clone(),
+                derived_from: derived_from.clone(),
+                owner: owner.clone(),
+                risk_if_wrong: risk_if_wrong.clone(),
+                note: note.clone(),
+                updated_at_ms: u64::try_from(crate::store::now_ms()).unwrap_or(u64::MAX),
+                updated_revision: p.revision + 1,
+            };
+            p.requirement_set
+                .set(path, entry)
+                .map_err(requirement_error)?;
+        }
+        ClearRequirementField { path } => {
+            p.requirement_set.clear(path).map_err(requirement_error)?;
+        }
+        UpsertRequirementItem {
+            item_id,
+            kind,
+            name,
+            parent,
+        } => {
+            let new = p
+                .requirement_set
+                .upsert_item(item_id.as_deref(), *kind, name, parent.as_deref())
+                .map_err(requirement_error)?;
+            created.extend(new);
+        }
+        DeleteRequirementItem { item_id } => {
+            p.requirement_set
+                .delete_item(item_id)
+                .map_err(requirement_error)?;
         }
         SetProjectProperty { key, value } => {
             let key = key.trim();
@@ -3542,6 +3680,8 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             part_dissipation_w,
             insulation,
             enclosure,
+            return_via_max_distance,
+            plane_min_neck_width,
         } => {
             let c = &mut p.constraints;
             c.ambient_temp_c = *ambient_temp_c;
@@ -3550,6 +3690,12 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
             c.part_dissipation_w = part_dissipation_w.clone();
             c.insulation = insulation.clone();
             c.enclosure = enclosure.clone();
+            if let Some(d) = return_via_max_distance {
+                c.return_via_max_distance = *d;
+            }
+            if let Some(w) = plane_min_neck_width {
+                c.plane_min_neck_width = *w;
+            }
         }
         SetManufacturing { config } => {
             if config.mask_expansion < 0 {
@@ -3639,4 +3785,12 @@ pub fn apply(p: &mut Project, cmd: &Command) -> Result<Applied, CommandError> {
         ));
     }
     Ok(Applied { created, warnings })
+}
+
+/// A field that is present (even as `null`) decodes to `Some`, so `Option<Option<T>>` tells
+/// "omitted" (`None`, keep) from "null" (`Some(None)`, clear).
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
+    d: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(d).map(Some)
 }

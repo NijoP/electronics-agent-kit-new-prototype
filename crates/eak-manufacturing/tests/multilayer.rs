@@ -66,13 +66,31 @@ fn four_layer_board_passes_drc_and_exports_every_layer() {
     assert_eq!(dfm_r.errors, 0, "{:?}", dfm_r.findings);
     let m = compile(p, &[&erc_r, &drc_r, &mech_r, &dfm_r], &dir).expect("compile");
     // ADR-0054: every other gate passes; only the unverified footprints (no land-pattern table
-    // on record) keep the package DRAFT.
+    // on record) and DRC-028 on +5V keep the package DRAFT: its inner-layer pour does not
+    // conduct in the voltage-drop model yet, so the drop is UNKNOWN, never PASS.
     assert_eq!(m.status, PackageStatus::Draft);
-    assert!(!m.blocking_reasons.is_empty());
+    let (vdrop, rest): (Vec<&String>, Vec<&String>) = m
+        .blocking_reasons
+        .iter()
+        .partition(|b| b.contains("DRC-028 is UNKNOWN"));
+    // Once from the DRC report and once from the electrical_constraints gate it feeds.
+    let (drc, gate): (Vec<&&String>, Vec<&&String>) =
+        vdrop.iter().partition(|b| b.starts_with("DRC: "));
+    assert_eq!((drc.len(), gate.len()), (1, 1), "{:?}", m.blocking_reasons);
     assert!(
-        m.blocking_reasons
+        gate[0].starts_with("gate electrical_constraints "),
+        "{}",
+        gate[0]
+    );
+    assert!(
+        vdrop
             .iter()
-            .all(|b| b.starts_with("footprint ")),
+            .all(|b| b.contains("+5V: net has a copper zone")),
+        "{vdrop:?}"
+    );
+    assert!(!rest.is_empty());
+    assert!(
+        rest.iter().all(|b| b.starts_with("footprint ")),
         "{:?}",
         m.blocking_reasons
     );

@@ -89,7 +89,7 @@ Lengths are **integer nanometres** (1 mm = 1 000 000). Rotations are `R0|R90|R18
 
 | Category | Effect | Tools |
 |---|---|---|
-| `read` | none | `project_info`, `list_symbols`, `get_component`, `list_footprints`, `get_board`, `get_connectivity`, `get_history`, `get_design_summary`, `get_netlist`, `list_library_components`, `classify_domain`, `calc_*` (incl. `calc_copper_trace_width`, `calc_copper_voltage_drop`: every input explicit), `power_analysis` |
+| `read` | none | `project_info`, `list_symbols`, `get_component`, `list_footprints`, `get_board`, `get_connectivity`, `get_history`, `get_design_summary`, `get_requirements`, `get_netlist`, `list_library_components`, `classify_domain`, `calc_*` (incl. `calc_copper_trace_width`, `calc_copper_voltage_drop`: every input explicit), `power_analysis` |
 | `design` | one new revision (needs `expected_revision`) | one tool per EAK command (`PlaceSymbol`, `ConnectPins`, `SyncSchematicToPcb`, `SetBoardOutline`, `MoveFootprint`, `AddTrack`, `AddVia`, `AddZone`, `AutoRoute`, `StitchZones`, `Batch`, ...), `Undo`, `Redo` |
 | `simulation` | none (ngspice on a snapshot) | `simulation_status`, `run_simulation` |
 | `validation` | stores evidence only | `run_check` (`erc`, `drc`, `mech`, `dfm`, `all`), `run_gates` (fail-closed gates, ADR-0021; only PASS passes) |
@@ -101,6 +101,27 @@ Lengths are **integer nanometres** (1 mm = 1 000 000). Rotations are `R0|R90|R18
 | `proposal` | `<project>/proposals/` only; never applies | `proposal_begin`, `proposal_status`, `proposal_list`, `proposal_submit`, `proposal_discard` (ADR-0051, see "Propose mode") |
 | `weft` | `<project>/weft/journal.jsonl` only; never the design | `weft_register`, `weft_agents`, `weft_send`, `weft_inbox`, `weft_tasks`, `weft_conflicts`, `weft_history` (ADR-0053, see "WEFT orchestration") |
 | `project` / `discovery` | creates a folder / none | `create_project`, `list_tools`, `guide`, `design_spec_schema` |
+
+## Requirements (schema v9, ADR-0057)
+
+`eak requirements --json` (tool `get_requirements`) returns the structured requirement record,
+its evaluation and the field catalogue: completeness per section, which operations (architecture,
+part selection, schematic capture, power sizing, board outline, placement, routing, safety
+spacing, manufacturing release) each missing or unconfirmed value blocks, and targeted questions.
+A field with nothing recorded is `UNKNOWN`. Never put a number where nobody gave one.
+
+- Record a value: `{"type":"SetRequirementField","path":"supply.input_voltage","status":"NEEDS_CONFIRMATION","value":{"kind":"range","min":4.5,"nom":5.0,"max":5.5,"unit":"V"},"source":{"kind":"client","reference":"kick-off call 2026-11-20"},"owner":"Client PM","risk_if_wrong":"the input protection and regulator are re-selected"}`.
+  NEEDS_CONFIRMATION needs a source, the `owner` who must confirm it and `risk_if_wrong`.
+  A rail or interface field is `<item id>/<field>`. Add the item first with
+  `UpsertRequirementItem` (`kind` `rail` or `interface`; a rail's `parent` is the rail it is
+  generated from).
+- As an agent you record `UNKNOWN` or `NEEDS_CONFIRMATION`; give a value you computed or proposed
+  the source kind `calculation` or `agent_proposal`. Only a person records `CONFIRMED` or
+  `NOT_APPLICABLE`: the engine refuses them from an agent (`precondition`). No command records
+  `DERIVED` (only a deterministic evaluator will). A recorded `UNKNOWN` names its `owner`. A rail
+  or interface list has no status of its own: it is as firm as its items' material fields. Ask the person, and quote the report's question for the field.
+- Readiness is advisory: no tool refuses an operation on it yet. Say which operations are
+  still blocked when you report.
 
 ## Board flow (DESK method; heuristics, not a certification)
 

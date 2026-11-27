@@ -21,7 +21,7 @@
   - Claude Code registers in its **local scope**, keyed to the project folder and private to the
     user, so nothing is written into the project. Codex has only a user-level config: its
     registration names one project at a time, and Disconnect refuses to remove another project's.
-  - A tool whose commands are not confirmed (OpenCode, Gemini CLI today) is found, versioned and
+  - A tool whose commands are not confirmed (OpenCode, Gemini CLI, Kimi Code today) is found, versioned and
     started in a terminal tab; Connect and headless runs report `Unsupported` with the reason.
   - Terminal sessions and sign-in are new tabs of the existing Terminal workspace through its
     session manager (with `EAK_AGENT_NAME`, `EAK_TASK_ID`); the workspace UI is unchanged.

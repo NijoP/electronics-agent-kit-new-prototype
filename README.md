@@ -109,7 +109,7 @@ usual tools.
 
 Full tables: [docs/RELEASE_STATUS_v0.2.0.md](docs/RELEASE_STATUS_v0.2.0.md), [STATUS.md](STATUS.md),
 [FEATURE_MATRIX.md](FEATURE_MATRIX.md). "Tested" below means CI tests, plus real-window scenarios on
-Linux under Xvfb where [docs/qa/UI_EVIDENCE.md](docs/qa/UI_EVIDENCE.md) lists one; 36 scenarios drive the app in a real window.
+Linux under Xvfb where [docs/qa/UI_EVIDENCE.md](docs/qa/UI_EVIDENCE.md) lists one; 37 scenarios drive the app in a real window.
 
 | Area | Implemented | Limits |
 |---|---|---|

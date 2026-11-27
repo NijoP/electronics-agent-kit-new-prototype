@@ -5,11 +5,12 @@
 
 use crate::geom::{Nm, Point, Rotation};
 use crate::library::ComponentDef;
+use crate::requirements::RequirementSet;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Current on-disk schema version. Bump together with a migration in `migrate.rs`.
-pub const SCHEMA_VERSION: u32 = 8;
+pub const SCHEMA_VERSION: u32 = 10;
 
 pub type Id = String;
 
@@ -97,8 +98,13 @@ pub struct Project {
     pub name: String,
     /// Monotonic revision; every committed command increments it by one.
     pub revision: u64,
+    /// Free-text requirement notes (`AddRequirement`).
     #[serde(default)]
     pub requirements: Vec<Requirement>,
+    /// The structured requirement record (schema v9, ADR-0057): values with unit, status,
+    /// source, owner and timestamp. Omitted from the file when nothing is recorded.
+    #[serde(default, skip_serializing_if = "RequirementSet::is_empty")]
+    pub requirement_set: RequirementSet,
     /// Project-local copy of every component definition used (self-contained project).
     #[serde(default)]
     pub library: BTreeMap<String, ComponentDef>,
@@ -1132,6 +1138,13 @@ pub struct Constraints {
     /// Enclosure limits for mechanical checks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enclosure: Option<Enclosure>,
+    /// Largest distance from a declared high-speed layer change to the return via joining its
+    /// reference planes (schema v10, ADR-0059; DRC-031).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_via_max_distance: Option<Nm>,
+    /// Narrowest allowed neck of a plane zone's fill (schema v10, ADR-0059; DRC-032).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plane_min_neck_width: Option<Nm>,
 }
 
 /// Report severity a rule override may set (EasyEDA's ladder maps onto it: Fatal and Error
@@ -1150,7 +1163,7 @@ pub enum RuleSeverity {
 /// a rule that does not exist.
 pub const RULE_FAMILIES: [(&str, u32); 5] = [
     ("ERC", 25),
-    ("DRC", 31),
+    ("DRC", 32),
     ("DFM", 10),
     ("MECH", 4),
     ("SRC", 12),
@@ -1358,6 +1371,8 @@ impl Default for Constraints {
             part_dissipation_w: BTreeMap::new(),
             insulation: None,
             enclosure: None,
+            return_via_max_distance: None,
+            plane_min_neck_width: None,
         }
     }
 }
@@ -1429,6 +1444,7 @@ impl Project {
             name: name.to_string(),
             revision: 0,
             requirements: vec![],
+            requirement_set: RequirementSet::default(),
             library: BTreeMap::new(),
             schematic: Schematic {
                 sheets,

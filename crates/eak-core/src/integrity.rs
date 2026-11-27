@@ -271,6 +271,8 @@ pub fn check(p: &Project) -> Vec<String> {
         }
     }
     e.extend(engineering_inputs(c));
+    // Schema-v9 requirement record (ADR-0057): status rules, catalogue keys, references.
+    e.extend(p.requirement_set.problems());
     e
 }
 
@@ -361,6 +363,12 @@ fn engineering_inputs(c: &crate::ir::Constraints) -> Vec<String> {
         if !(ins.altitude_m.is_finite() && ins.altitude_m >= 0.0) {
             e.push("altitude must not be negative".into());
         }
+    }
+    if c.return_via_max_distance.is_some_and(|d| d <= 0) {
+        e.push("largest return-via distance must be positive".into());
+    }
+    if c.plane_min_neck_width.is_some_and(|w| w <= 0) {
+        e.push("plane neck width must be positive".into());
     }
     if let Some(enc) = &c.enclosure {
         if enc.max_height_bottom.is_some_and(|h| h <= 0) {
