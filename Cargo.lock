@@ -983,6 +983,7 @@ dependencies = [
  "eak-core",
  "eak-engineering",
  "eak-intelligence",
+ "eak-library",
  "eak-manufacturing",
  "eak-runtime",
  "eak-simulation",

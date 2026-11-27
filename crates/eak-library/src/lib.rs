@@ -12,6 +12,9 @@
 //! * land patterns – [`LandPatternSpec`] / [`PadSpec`], the datasheet land-pattern table a
 //!   footprint is verified against. The type lives in `eak_validation::footprint` (this crate
 //!   depends on eak-validation, not the other way round, ADR-0052) and is re-exported here.
+//! * `selection` – role-driven candidate search against typed criteria, candidate comparison,
+//!   and alternative / equivalence checks; an unstated or unreviewed value is unknown, never a
+//!   pass (M5.1, M5.6, M5.7).
 //! * `mpn`     – MPN discovery (exact, prefix and partial MPN matches across ready sources) and
 //!   manufacturer identification from a sourced alias table, with an explicit unknown result.
 //! * `kicad`   – KiCad `.kicad_sym` / `.kicad_mod` export, the inverse of the clean-room reader
@@ -30,11 +33,17 @@ pub mod kicad;
 pub mod kicad_lib;
 pub mod mpn;
 pub mod part;
+pub mod selection;
 pub mod source;
 pub mod sources;
 
 pub use eak_validation::footprint::{LandPatternSpec, PadSpec};
 pub use mpn::{discover, identify_manufacturer, Discovery, ManufacturerId, MpnMatch};
 pub use part::{Part, PartKey, PartKeyError, PartRecord, SourceId, Spec, SpecOrigin, SpecValue};
+pub use selection::{
+    check_equivalence, compare, search_candidates, CandidateSearch, Comparison, Criterion,
+    CriterionKind, Equivalence, EquivalenceVerdict, FamilyRequirement, Outcome, Rule, Subject,
+    Verdict,
+};
 pub use source::{resolve, PartQuery, PartSource, Resolution, SourceStatus};
 pub use sources::{lcsc::LcscSlot, local::LocalListSource};

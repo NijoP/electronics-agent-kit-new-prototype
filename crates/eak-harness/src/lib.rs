@@ -31,6 +31,7 @@ pub mod endpoint;
 pub mod engineering;
 pub mod intel;
 pub mod knowledge;
+pub mod library;
 pub mod mcp;
 pub mod proposal;
 pub mod rework;
