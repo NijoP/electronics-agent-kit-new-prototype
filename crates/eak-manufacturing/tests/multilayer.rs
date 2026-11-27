@@ -69,9 +69,17 @@ fn four_layer_board_passes_drc_and_exports_every_layer() {
     // on record) and DRC-028 on +5V keep the package DRAFT: its inner-layer pour does not
     // conduct in the voltage-drop model yet, so the drop is UNKNOWN, never PASS.
     assert_eq!(m.status, PackageStatus::Draft);
-    let (vdrop, rest): (Vec<&String>, Vec<&String>) = m
+    // ADR-0059: the plane zones are not checked for necks while no plane_min_neck_width is
+    // declared, so DRC-032 is UNKNOWN naming that input, never PASS.
+    let (neck, others): (Vec<&String>, Vec<&String>) = m
         .blocking_reasons
         .iter()
+        .partition(|b| b.contains("DRC-032 is UNKNOWN"));
+    assert_eq!(neck.len(), 1, "{:?}", m.blocking_reasons);
+    assert!(neck[0].starts_with("DRC: "), "{}", neck[0]);
+    assert!(neck[0].contains("plane_min_neck_width"), "{}", neck[0]);
+    let (vdrop, rest): (Vec<&String>, Vec<&String>) = others
+        .into_iter()
         .partition(|b| b.contains("DRC-028 is UNKNOWN"));
     // Once from the DRC report and once from the electrical_constraints gate it feeds.
     let (drc, gate): (Vec<&&String>, Vec<&&String>) =

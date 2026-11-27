@@ -1,7 +1,8 @@
 //! Reference planes and return paths (M7.6) on the `eak_engineering::planes` model: DRC-029 a
 //! declared high-speed track crossing a split in its reference plane, DRC-030 a declared
 //! high-speed track with no reference copper beside it, DRC-031 a high-speed layer change with no
-//! return via, DRC-032 a plane zone split into islands. With no declared high-speed net, DRC-029
+//! return via, DRC-032 a plane zone split into islands or narrower than the declared neck width.
+//! With no declared high-speed net, DRC-029
 //! to DRC-031 are NOT_APPLICABLE (never PASS); a return via without a declared largest distance
 //! leaves DRC-031 UNKNOWN naming the missing input.
 
@@ -35,8 +36,8 @@ pub(crate) fn rules() -> Vec<RuleInfo> {
         ),
         rule(
             "DRC-032",
-            "Plane zone split into islands",
-            "every zone on a plane layer fills as one island",
+            "Plane zone split into islands or narrowed below the neck width",
+            "every zone on a plane layer fills as one island (WARNING otherwise); no part of it is narrower than the declared plane_min_neck_width, found by eroding the 0.1 mm fill raster by half that width (ERROR where that splits an island; UNKNOWN while no width is declared)",
             src,
         ),
     ]
@@ -50,15 +51,13 @@ pub(crate) struct Gaps {
     pub not_applicable: Vec<(&'static str, String)>,
 }
 
-/// DRC-029..032 findings. `return_max` is the declared largest return-via distance (`None` =
-/// undeclared: DRC-031 is UNKNOWN wherever a return via is present).
-pub(crate) fn check(
-    p: &Project,
-    geo: &BoardGeometry,
-    return_max: Option<Nm>,
-    f: &mut Vec<Finding>,
-) -> Gaps {
+/// DRC-029..032 findings against the declared limits (ADR-0059): `return_via_max_distance`
+/// (undeclared: DRC-031 is UNKNOWN wherever a return via is present) and `plane_min_neck_width`
+/// (undeclared: DRC-032 is UNKNOWN on a board with plane zones).
+pub(crate) fn check(p: &Project, geo: &BoardGeometry, f: &mut Vec<Finding>) -> Gaps {
     let mut gaps = Gaps::default();
+    let return_max = p.constraints.return_via_max_distance;
+    let neck = p.constraints.plane_min_neck_width;
     let st = &p.pcb.board.stackup;
     let model = Planes::new(p, geo);
 
@@ -84,10 +83,30 @@ pub(crate) fn check(
                     .fix(format!("Move the copper that cuts zone {z} off its layer, or join the islands, so the plane is continuous.")),
             );
         }
+        for (island, at) in neck.map_or(vec![], |w| planes::narrow_necks(fill, w)) {
+            let (z, w_mm) = (&fill.zone_id, to_mm(neck.unwrap_or_default()));
+            let msg = format!(
+                "plane zone {z} ({} on {}) narrows below the declared {w_mm:.2} mm neck width (island {island})",
+                fill.net,
+                fill.layer.name()
+            );
+            f.push(
+                finding("DRC-032", Error, msg, vec![z.clone()], Some(at))
+                    .key(&format!("neck-{island}"))
+                    .required(Bound::Min, w_mm, "mm")
+                    .fix(format!("Widen zone {z} there, or move the copper or anti-pads that pinch it, so the plane is at least {w_mm:.2} mm wide.")),
+            );
+        }
     }
     if plane_fills == 0 {
         gaps.not_applicable
             .push(("DRC-032", "no zone on a plane layer".into()));
+    }
+    if plane_fills > 0 && neck.is_none() {
+        gaps.unknown.push((
+            "DRC-032",
+            "plane neck width not checked: no plane_min_neck_width is declared (SetEngineeringInputs)".into(),
+        ));
     }
 
     let hs = planes::declared_high_speed(p);

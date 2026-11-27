@@ -18,7 +18,7 @@ use crate::copper::{ZoneFill, ZONE_FILL_PITCH};
 use eak_core::geom::point_in_polygon;
 use eak_core::{CopperLayer, LayerKind, Nm, Point, Project, StackupLayer};
 use serde::Serialize;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// A void inside a plane zone this close to fill belongs to the nearest fill island; a larger
 /// void is a gap in the reference.
@@ -316,6 +316,111 @@ impl<'a> Planes<'a> {
     }
 }
 
+/// Where an island of `f` narrows below `min_width`. The fill is eroded by half that width (a
+/// cell stays when every cell within `min_width / 2` of it is copper of its island); an island the
+/// erosion splits into parts, or removes entirely, has copper narrower than `min_width`. One point
+/// per such island, on its narrow copper (between two parts where there is one).
+pub fn narrow_necks(f: &ZoneFill, min_width: Nm) -> Vec<(u32, Point)> {
+    let (cols, rows) = (f.cols, f.rows);
+    let n = cols * rows;
+    if f.pitch <= 0 || n == 0 || f.cells.len() != n {
+        return vec![];
+    }
+    let rad = min_width as f64 / 2.0 / f.pitch as f64;
+    let k = rad.floor() as i64;
+    let disk: Vec<(i64, i64)> = (-k..=k)
+        .flat_map(|dr| (-k..=k).map(move |dc| (dc, dr)))
+        .filter(|&(dc, dr)| (dc * dc + dr * dr) as f64 <= rad * rad)
+        .collect();
+    let at = |c: i64, r: i64| -> Option<usize> {
+        ((0..cols as i64).contains(&c) && (0..rows as i64).contains(&r))
+            .then(|| r as usize * cols + c as usize)
+    };
+    let keep: Vec<bool> = (0..n)
+        .map(|i| {
+            let island = f.cells[i];
+            let (c, r) = ((i % cols) as i64, (i / cols) as i64);
+            island != 0
+                && disk
+                    .iter()
+                    .all(|&(dc, dr)| at(c + dc, r + dr).is_some_and(|j| f.cells[j] == island))
+        })
+        .collect();
+    // Parts of the eroded fill (8-connected, so a diagonal joint is not a split).
+    let mut part = vec![0u32; n];
+    let mut parts_of: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut next = 0u32;
+    for s in 0..n {
+        if !keep[s] || part[s] != 0 {
+            continue;
+        }
+        next += 1;
+        *parts_of.entry(f.cells[s]).or_default() += 1;
+        part[s] = next;
+        let mut stack = vec![s];
+        while let Some(i) = stack.pop() {
+            let (c, r) = ((i % cols) as i64, (i / cols) as i64);
+            for (dc, dr) in [
+                (-1, -1),
+                (0, -1),
+                (1, -1),
+                (-1, 0),
+                (1, 0),
+                (-1, 1),
+                (0, 1),
+                (1, 1),
+            ] {
+                if let Some(j) = at(c + dc, r + dr) {
+                    if keep[j] && part[j] == 0 {
+                        part[j] = next;
+                        stack.push(j);
+                    }
+                }
+            }
+        }
+    }
+    // Flood every part over its island's copper at once: where two floods meet is the middle of
+    // a neck between them.
+    let mut meet: BTreeMap<u32, usize> = BTreeMap::new();
+    let mut queue: VecDeque<usize> = (0..n).filter(|&i| part[i] != 0).collect();
+    while let Some(i) = queue.pop_front() {
+        let (c, r) = ((i % cols) as i64, (i / cols) as i64);
+        for (dc, dr) in [
+            (-1, -1),
+            (0, -1),
+            (1, -1),
+            (-1, 0),
+            (1, 0),
+            (-1, 1),
+            (0, 1),
+            (1, 1),
+        ] {
+            let Some(j) = at(c + dc, r + dr).filter(|&j| f.cells[j] == f.cells[i]) else {
+                continue;
+            };
+            if part[j] == 0 {
+                part[j] = part[i];
+                queue.push_back(j);
+            } else if part[j] != part[i] {
+                meet.entry(f.cells[i]).or_insert(j);
+            }
+        }
+    }
+    let mut out = vec![];
+    for island in 1..=f.islands {
+        let parts = parts_of.get(&island).copied().unwrap_or(0);
+        let at_cell = match parts {
+            1 => None,
+            0 => (0..n).find(|&i| f.cells[i] == island),
+            _ => meet.get(&island).copied(),
+        };
+        if let Some(i) = at_cell {
+            out.push((island, f.cell_center(i % cols, i / cols)));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -514,5 +619,37 @@ mod tests {
                 planes: [CopperLayer::Inner(2), CopperLayer::Inner(1)],
             }
         );
+    }
+
+    #[test]
+    fn a_narrow_bridge_between_two_plane_areas_is_a_neck() {
+        // Two 10 x 10 cell blocks (0.1 mm cells) joined by a bridge two cells high.
+        let (cols, rows) = (30, 10);
+        let cells = (0..cols * rows)
+            .map(|i| {
+                let (c, r) = (i % cols, i / cols);
+                u32::from(!(10..20).contains(&c) || (4..6).contains(&r))
+            })
+            .collect();
+        let f = ZoneFill {
+            zone_id: "gnd".into(),
+            layer: CopperLayer::Inner(1),
+            net: "GND".into(),
+            origin: Point::new(0, 0),
+            pitch: 100_000,
+            cols,
+            rows,
+            cells,
+            islands: 1,
+            removed_islands: 0,
+            reliefs: vec![],
+        };
+        let necks = narrow_necks(&f, 500_000);
+        assert_eq!(necks.len(), 1, "{necks:?}");
+        let (island, at) = necks[0];
+        assert_eq!(island, 1);
+        assert!((1_000_000..2_000_000).contains(&at.x), "{at:?}");
+        // The bridge is 0.2 mm wide: a 0.15 mm minimum keeps the plane whole.
+        assert!(narrow_necks(&f, 150_000).is_empty());
     }
 }

@@ -7,9 +7,9 @@
 //!
 //! Accepted when the router routes everything (empty ratsnest, no shorts), the pair's Bottom run
 //! goes around the island, every pair layer change has a GND return via joining In1 and In2
-//! within the stitch ring, and DRC reports no error, with DRC-029 (split crossing), DRC-030
-//! (missing reference) and DRC-032 (plane islands) PASS. DRC-031 stays UNKNOWN naming the missing
-//! input until a largest return-via distance can be declared. Negative: a pair track straight
+//! within the declared largest return-via distance, and DRC reports no error, with DRC-029 (split
+//! crossing), DRC-030 (missing reference), DRC-031 (return via) and DRC-032 (plane islands and
+//! necks against the declared neck width) PASS. Negative: a pair track straight
 //! across the island FAILS DRC-029, and the board without its return vias FAILS DRC-031. Written
 //! without running (no local builds): CI decides.
 
@@ -146,6 +146,21 @@ fn build() -> Engine {
                 zdiff_tolerance_pct: Some(10.0),
                 max_skew: Some(50_000),
             },
+        },
+    );
+    // The reference-plane limits this board is designed to (ADR-0059): return vias within 3.5 mm of
+    // a layer change, plane copper at least 0.5 mm wide.
+    run(
+        &mut e,
+        C::SetEngineeringInputs {
+            ambient_temp_c: None,
+            via_plating_um: None,
+            net_max_drop_v: Default::default(),
+            part_dissipation_w: Default::default(),
+            insulation: None,
+            enclosure: None,
+            return_via_max_distance: Some(Some(3_500_000)),
+            plane_min_neck_width: Some(Some(500_000)),
         },
     );
     run(&mut e, C::SyncSchematicToPcb);
@@ -302,20 +317,15 @@ fn a_high_speed_pair_routes_around_a_power_plane_split_with_return_vias_and_drc_
     let errs = errors(p);
     assert!(errs.is_empty(), "{errs:#?}");
     let r = drc::run(p);
-    for rule in ["DRC-029", "DRC-030", "DRC-032"] {
-        assert_eq!(r.state_of(rule), CheckState::Pass, "{rule}");
+    for rule in ["DRC-029", "DRC-030", "DRC-031", "DRC-032"] {
+        let why = &r
+            .rule_results
+            .iter()
+            .find(|x| x.rule_id == rule)
+            .unwrap()
+            .reason;
+        assert_eq!(r.state_of(rule), CheckState::Pass, "{rule}: {why}");
     }
-    // shortcut: DRC-031 is UNKNOWN until `return_via_max_distance` can be declared (approved IR
-    // field, after schema v9 lands); then declare it here and assert PASS.
-    assert_eq!(r.state_of("DRC-031"), CheckState::Unknown);
-    let why = &r
-        .rule_results
-        .iter()
-        .find(|x| x.rule_id == "DRC-031")
-        .unwrap()
-        .reason;
-    assert!(why.contains("nearest GND return via"), "{why}");
-    assert!(why.contains("no largest return-via distance"), "{why}");
 
     // Negative: a pair track straight across the island fails DRC-029.
     let mut bad = e.project().clone();
