@@ -5,11 +5,17 @@
 //! its own config; sign-in runs the tool's own login in a tab of the existing Terminal
 //! workspace; headless logs go to the app data folder. A connected agent changes the design only
 //! through `eak-mcp`, the harness and `Engine::execute`.
+//!
+//! The Agents workspace (ADR-0058) reads the same sessions and, through [`weft_view`], the open
+//! project's WEFT journal (ADR-0053): read only, nothing here sends on the bus.
 
 use crate::Session;
 use eak_agents::sessions::{SessionState, SessionView, Sessions, Start};
 use eak_agents::{AgentTool, LaunchPlan, Locator, Surface, ToolStatus};
+use eak_harness::weft;
 use eak_terminal::{CreateOptions, Manager, SessionInfo};
+use serde::Serialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -271,6 +277,123 @@ pub fn restart(
     )
 }
 
+/// A registered WEFT agent, with when and at which project revision it (last) registered.
+#[derive(Debug, Clone, Serialize)]
+pub struct WeftAgentView {
+    pub card: weft::AgentCard,
+    pub registered_ms: u64,
+    pub registered_revision: u64,
+}
+
+/// A WEFT task with its journal times and what it still waits for.
+#[derive(Debug, Clone, Serialize)]
+pub struct WeftTaskView {
+    pub task: weft::Task,
+    pub created_ms: u64,
+    /// The project revision when the task was delegated.
+    pub created_revision: u64,
+    /// When its status last changed (its creation when it never did).
+    pub updated_ms: u64,
+    /// Dependencies that are not done yet.
+    pub waiting_on: Vec<String>,
+    /// Pending with nothing to wait for.
+    pub ready: bool,
+}
+
+/// A WEFT message with its journal sequence number, time and revision.
+#[derive(Debug, Clone, Serialize)]
+pub struct WeftMessageView {
+    pub seq: u64,
+    pub ts_ms: u64,
+    pub revision: u64,
+    pub message: weft::Message,
+}
+
+/// What the open project's WEFT journal says, for the Agents workspace: the registry, the task
+/// graph and every message, each with the time and revision the journal recorded.
+#[derive(Debug, Clone, Serialize)]
+pub struct WeftView {
+    pub project_dir: String,
+    /// The project's current revision (to tell how far behind a task or registration is).
+    pub revision: u64,
+    /// Journal entries read.
+    pub entries: usize,
+    /// Lines that did not parse (skipped, never guessed; a line being written reads as one).
+    pub unreadable: usize,
+    pub agents: Vec<WeftAgentView>,
+    pub tasks: Vec<WeftTaskView>,
+    pub messages: Vec<WeftMessageView>,
+}
+
+/// Replay `dir`'s WEFT journal into the workspace's view. Reads files only.
+pub fn weft_view(dir: &Path, revision: u64) -> WeftView {
+    let (entries, unreadable) = weft::entries(dir);
+    let state = weft::replay(&entries);
+    let mut registered: HashMap<&str, (u64, u64)> = HashMap::new();
+    let mut created: HashMap<&str, (u64, u64)> = HashMap::new();
+    let mut updated: HashMap<&str, u64> = HashMap::new();
+    let mut messages = Vec::new();
+    for e in &entries {
+        match &e.event {
+            weft::Event::AgentRegistered { agent } => {
+                registered.insert(agent.id.as_str(), (e.ts_ms, e.revision));
+            }
+            weft::Event::TaskCreated { task } => {
+                created.insert(task.id.as_str(), (e.ts_ms, e.revision));
+            }
+            weft::Event::TaskStatus { task_id, .. } => {
+                updated.insert(task_id.as_str(), e.ts_ms);
+            }
+            weft::Event::Message { message } => messages.push(WeftMessageView {
+                seq: e.seq,
+                ts_ms: e.ts_ms,
+                revision: e.revision,
+                message: message.clone(),
+            }),
+        }
+    }
+    let agents = state
+        .agents
+        .values()
+        .map(|a| {
+            let (ms, rev) = registered.get(a.id.as_str()).copied().unwrap_or((0, 0));
+            WeftAgentView {
+                card: a.clone(),
+                registered_ms: ms,
+                registered_revision: rev,
+            }
+        })
+        .collect();
+    let tasks = state
+        .tasks
+        .values()
+        .map(|t| {
+            let (ms, rev) = created.get(t.id.as_str()).copied().unwrap_or((0, 0));
+            let waiting_on = weft::waiting_on(&state, t);
+            WeftTaskView {
+                ready: t.status == weft::TaskStatus::Pending && waiting_on.is_empty(),
+                waiting_on,
+                created_ms: ms,
+                created_revision: rev,
+                updated_ms: updated.get(t.id.as_str()).copied().unwrap_or(ms),
+                task: t.clone(),
+            }
+        })
+        .collect();
+    WeftView {
+        project_dir: dir.display().to_string(),
+        revision,
+        entries: entries.len(),
+        unreadable,
+        agents,
+        tasks,
+        messages,
+    }
+}
+
+const NO_SAVED_PROJECT: &str =
+    "open a saved project first: the WEFT bus is the project folder's weft/journal.jsonl";
+
 pub mod cmd {
     use super::*;
     use crate::terminal::TerminalState;
@@ -347,6 +470,11 @@ pub mod cmd {
     ) -> R<Vec<SessionView>> {
         Ok(sessions(&state, &terminal.manager))
     }
+    /// Why the session index could not be written this run (ADR-0058), or null.
+    #[tauri::command]
+    pub fn agent_session_index_error(state: State<'_, AgentsState>) -> R<Option<String>> {
+        Ok(state.sessions.index_error())
+    }
     #[tauri::command(async)]
     pub fn agent_session_log(
         state: State<'_, AgentsState>,
@@ -370,6 +498,18 @@ pub mod cmd {
         restart(&state, &terminal.manager, &id)
     }
 
+    /// The open project's WEFT journal, replayed (Agents workspace; read only).
+    #[tauri::command(async)]
+    pub fn weft_state(session: State<'_, Session>) -> R<WeftView> {
+        let (dir, revision) = session
+            .with_engine(|e| {
+                let revision = e.project().revision;
+                e.dir().map(|d| (d.to_path_buf(), revision))
+            })?
+            .ok_or(NO_SAVED_PROJECT)?;
+        Ok(weft_view(&dir, revision))
+    }
+
     #[tauri::command(async)]
     pub fn agent_tool_stop(
         state: State<'_, AgentsState>,
@@ -381,7 +521,7 @@ pub mod cmd {
 }
 
 /// IPC command names this module registers (kept in sync with `AGENT_IPC` in `api.ts`).
-pub const AGENT_COMMANDS: [&str; 9] = [
+pub const AGENT_COMMANDS: [&str; 11] = [
     "agent_tools",
     "agent_tool_connect",
     "agent_tool_disconnect",
@@ -391,4 +531,6 @@ pub const AGENT_COMMANDS: [&str; 9] = [
     "agent_session_log",
     "agent_tool_stop",
     "agent_session_restart",
+    "weft_state",
+    "agent_session_index_error",
 ];

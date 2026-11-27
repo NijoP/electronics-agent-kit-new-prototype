@@ -14,7 +14,7 @@
 //! (`stitch` ring: 0.6–3.0 mm, 24 angles), checked like any routed copper (`violation`), unless
 //! one is already within that ring. A change of reference net only gets a note: a stitching
 //! capacitor is a part, not copper the router may place. `eak-validation` judges the result
-//! (DRC-028..030), never this module.
+//! (DRC-029..031), never this module.
 
 use super::*;
 use crate::planes::{self, Planes, Reference, ReturnNeed};
@@ -31,7 +31,7 @@ pub(super) struct RefMap {
 }
 
 // shortcut: two zones of one net on a plane get different keys, so a route may not pass from one
-// to the other although DRC-028 accepts that (its rule is not transitive, so no key can match it
+// to the other although DRC-029 accepts that (its rule is not transitive, so no key can match it
 // exactly); upgrade when a board with abutting same-net plane zones needs such a route.
 pub(super) fn ref_map(
     p: &Project,

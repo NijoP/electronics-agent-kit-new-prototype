@@ -399,6 +399,11 @@ impl Engine {
                     });
                 }
                 Self::check_policy(&req, class)?;
+                if req.actor.kind == ActorKind::Agent {
+                    if let Some(m) = crate::command::human_only(&req.command) {
+                        return Err(CommandError::Precondition(m));
+                    }
+                }
                 let mut next = self.project.clone();
                 let applied = apply(&mut next, &req.command)?;
                 let problems = eak_core::integrity::check(&next);

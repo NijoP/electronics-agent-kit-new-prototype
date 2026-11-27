@@ -7,10 +7,10 @@
 //!
 //! Accepted when the router routes everything (empty ratsnest, no shorts), the pair's Bottom run
 //! goes around the island, every pair layer change has a GND return via joining In1 and In2
-//! within the stitch ring, and DRC reports no error, with DRC-028 (split crossing), DRC-029
-//! (missing reference) and DRC-031 (plane islands) PASS. DRC-030 stays UNKNOWN naming the missing
+//! within the stitch ring, and DRC reports no error, with DRC-029 (split crossing), DRC-030
+//! (missing reference) and DRC-032 (plane islands) PASS. DRC-031 stays UNKNOWN naming the missing
 //! input until a largest return-via distance can be declared. Negative: a pair track straight
-//! across the island FAILS DRC-028, and the board without its return vias FAILS DRC-030. Written
+//! across the island FAILS DRC-029, and the board without its return vias FAILS DRC-031. Written
 //! without running (no local builds): CI decides.
 
 use eak_core::{CopperLayer, DiffPairRule, Id, LabelKind, NetClass, Point, RegionObject, Rotation};
@@ -302,22 +302,22 @@ fn a_high_speed_pair_routes_around_a_power_plane_split_with_return_vias_and_drc_
     let errs = errors(p);
     assert!(errs.is_empty(), "{errs:#?}");
     let r = drc::run(p);
-    for rule in ["DRC-028", "DRC-029", "DRC-031"] {
+    for rule in ["DRC-029", "DRC-030", "DRC-032"] {
         assert_eq!(r.state_of(rule), CheckState::Pass, "{rule}");
     }
-    // shortcut: DRC-030 is UNKNOWN until `return_via_max_distance` can be declared (approved IR
+    // shortcut: DRC-031 is UNKNOWN until `return_via_max_distance` can be declared (approved IR
     // field, after schema v9 lands); then declare it here and assert PASS.
-    assert_eq!(r.state_of("DRC-030"), CheckState::Unknown);
+    assert_eq!(r.state_of("DRC-031"), CheckState::Unknown);
     let why = &r
         .rule_results
         .iter()
-        .find(|x| x.rule_id == "DRC-030")
+        .find(|x| x.rule_id == "DRC-031")
         .unwrap()
         .reason;
     assert!(why.contains("nearest GND return via"), "{why}");
     assert!(why.contains("no largest return-via distance"), "{why}");
 
-    // Negative: a pair track straight across the island fails DRC-028.
+    // Negative: a pair track straight across the island fails DRC-029.
     let mut bad = e.project().clone();
     bad.pcb.tracks.insert(
         "across".into(),
@@ -332,22 +332,22 @@ fn a_high_speed_pair_routes_around_a_power_plane_split_with_return_vias_and_drc_
         },
     );
     let r = drc::run(&bad);
-    assert_eq!(r.state_of("DRC-028"), CheckState::Fail);
-    let f = r.findings.iter().find(|f| f.rule_id == "DRC-028").unwrap();
+    assert_eq!(r.state_of("DRC-029"), CheckState::Fail);
+    let f = r.findings.iter().find(|f| f.rule_id == "DRC-029").unwrap();
     assert_eq!(f.objects, vec!["across".to_string()]);
     assert!(f.message.contains("In2.Cu"), "{}", f.message);
 
-    // Negative: without the return vias, the layer changes fail DRC-030.
+    // Negative: without the return vias, the layer changes fail DRC-031.
     let ids: Vec<Id> = returns.iter().map(|v| v.id.clone()).collect();
     for via_id in ids {
         run(&mut e, C::DeleteVia { via_id });
     }
     let r = drc::run(e.project());
-    assert_eq!(r.state_of("DRC-030"), CheckState::Fail);
+    assert_eq!(r.state_of("DRC-031"), CheckState::Fail);
     assert!(
         r.findings
             .iter()
-            .any(|f| f.rule_id == "DRC-030" && f.message.contains("no via of GND joins")),
+            .any(|f| f.rule_id == "DRC-031" && f.message.contains("no via of GND joins")),
         "{:#?}",
         r.findings
     );
