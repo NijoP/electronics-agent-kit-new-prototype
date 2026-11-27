@@ -1,7 +1,9 @@
-//! Schema v9 (ADR-0057) through the engine: the requirement commands are the only write path
-//! into the structured requirement record. Each is one undo step, a refusal changes nothing, an
-//! agent never confirms or derives a requirement, and the record survives a save and load. Written without
-//! running (no local builds): CI decides.
+//! Schema v9 and v11 (ADR-0057, ADR-0060) through the engine: the requirement commands are the
+//! only write path into the structured requirement record. Each is one undo step, a refusal changes
+//! nothing, an agent never confirms, derives, resolves or replaces a person's requirement, a
+//! different value is a conflict until a person resolves it, the domain classifier records its
+//! result through ClassifyDomain, and the record survives a save and load. Written without running
+//! (no local builds): CI decides.
 
 use eak_core::requirements::{evaluate, Level, Operation, SourceKind};
 use eak_core::{from_json, to_json, Project, ReqItemKind, ReqSource, ReqStatus, ReqUnit, ReqValue};
@@ -52,17 +54,35 @@ fn client() -> Option<ReqSource> {
 }
 
 fn set(path: &str, status: ReqStatus, value: Option<ReqValue>) -> C {
+    set_from(path, status, value, client(), false)
+}
+
+fn set_from(
+    path: &str,
+    status: ReqStatus,
+    value: Option<ReqValue>,
+    source: Option<ReqSource>,
+    supersede: bool,
+) -> C {
     C::SetRequirementField {
         path: path.into(),
         status,
         value,
-        source: client(),
+        source,
         derived_from: vec![],
         owner: Some("Client PM".into()),
         risk_if_wrong: (status == ReqStatus::NeedsConfirmation)
             .then(|| "the input protection is re-selected".to_string()),
         note: None,
+        supersede,
     }
+}
+
+fn source(kind: SourceKind, reference: &str) -> Option<ReqSource> {
+    Some(ReqSource {
+        kind,
+        reference: reference.into(),
+    })
 }
 
 fn input_5v() -> Option<ReqValue> {
@@ -289,4 +309,177 @@ fn rails_and_interfaces_are_items_with_their_own_fields() {
     assert!(e.project().requirement_set.items[&v3]
         .fields
         .contains_key("current_peak"));
+}
+
+fn input(nom: f64) -> Option<ReqValue> {
+    Some(ReqValue::Range {
+        min: Some(nom - 1.0),
+        nom: Some(nom),
+        max: Some(nom + 1.0),
+        unit: ReqUnit::Volt,
+    })
+}
+
+fn precondition(r: &CommandResponse) {
+    assert!(
+        matches!(r.error, Some(CommandError::Precondition(_))),
+        "{:?}",
+        r.error
+    );
+}
+
+#[test]
+fn a_different_value_is_a_conflict_until_a_person_resolves_it() {
+    let mut e = Engine::in_memory(Project::new("v11-conflicts"));
+    let agent = Actor::agent_in_session("claude", "s1");
+    let path = "supply.input_voltage";
+    ok(&mut e, set(path, ReqStatus::Confirmed, input(12.0)));
+    // A different value never overwrites the recorded one: it is kept beside it.
+    let other = set(path, ReqStatus::NeedsConfirmation, input(24.0));
+    let r = ok(&mut e, other);
+    assert!(r.warnings.iter().any(|w| w.contains("conflict")), "{r:?}");
+    let entry = e.project().requirement_set.fields[path].clone();
+    assert_eq!(entry.value, input(12.0));
+    assert_eq!(entry.status, ReqStatus::Confirmed);
+    assert_eq!(entry.conflicts.len(), 1);
+    assert_eq!(entry.conflicts[0].value, input(24.0));
+    // While in conflict the value counts as missing.
+    let report = evaluate(&e.project().requirement_set);
+    let f = report.fields.iter().find(|f| f.path == path).unwrap();
+    assert_eq!(f.level, Level::Missing);
+    assert_eq!(f.conflicts.len(), 1);
+
+    // An agent may add its own differing value as another conflict...
+    let proposal = set_from(
+        path,
+        ReqStatus::NeedsConfirmation,
+        input(48.0),
+        source(SourceKind::AgentProposal, "adapter datasheet"),
+        false,
+    );
+    let r = run_as(&mut e, agent.clone(), proposal);
+    assert!(r.accepted, "{:?}", r.error);
+    assert_eq!(e.project().requirement_set.fields[path].conflicts.len(), 2);
+    // ...but never replace, clear or resolve a person's decision or a conflict.
+    let nc = ReqStatus::NeedsConfirmation;
+    let replace = set_from(path, nc, input(48.0), client(), true);
+    precondition(&refused_as(&mut e, agent.clone(), replace.clone()));
+    precondition(&refused_as(
+        &mut e,
+        agent.clone(),
+        C::Batch {
+            commands: vec![replace],
+            label: None,
+        },
+    ));
+    precondition(&refused_as(
+        &mut e,
+        agent.clone(),
+        C::ClearRequirementField { path: path.into() },
+    ));
+    let resolve = |keep: usize| C::ResolveRequirementConflict {
+        path: path.into(),
+        keep,
+        owner: "A. Engineer".into(),
+        note: Some("the adapter label is authoritative".into()),
+    };
+    precondition(&refused_as(&mut e, agent, resolve(1)));
+    // Out of range is refused for a person too.
+    refused_as(&mut e, Actor::human(), resolve(3));
+
+    // A person resolves: the kept value is CONFIRMED by them and the others are dropped.
+    ok(&mut e, resolve(1));
+    let entry = e.project().requirement_set.fields[path].clone();
+    assert_eq!(entry.value, input(24.0));
+    assert_eq!(entry.status, ReqStatus::Confirmed);
+    assert_eq!(entry.owner.as_deref(), Some("A. Engineer"));
+    assert!(entry.conflicts.is_empty() && entry.risk_if_wrong.is_none());
+    refused_as(&mut e, Actor::human(), resolve(1));
+    // One undo step brings the conflict back; it survives a save and load.
+    let rev = e.project().revision;
+    assert!(e.undo(rev, &Actor::human()).accepted);
+    assert_eq!(e.project().requirement_set.fields[path].conflicts.len(), 2);
+    let saved = to_json(e.project());
+    assert!(saved.contains("\"conflicts\""));
+    let back = from_json(&saved).expect("a v11 project loads");
+    assert_eq!(&back, e.project());
+    // A person may supersede: the new value replaces the old and its conflicts.
+    let five = set_from(path, ReqStatus::Confirmed, input(5.0), client(), true);
+    ok(&mut e, five);
+    let entry = &e.project().requirement_set.fields[path];
+    assert_eq!(entry.value, input(5.0));
+    assert!(entry.conflicts.is_empty());
+}
+
+#[test]
+fn classify_domain_records_the_classifier_result_as_derived() {
+    use eak_engineering::domain;
+    let mut e = Engine::in_memory(Project::new("v11-classify"));
+    // Nothing recorded: nothing to classify.
+    let r = refused_as(&mut e, Actor::human(), C::ClassifyDomain);
+    assert!(
+        matches!(r.error, Some(CommandError::NothingTo(_))),
+        "{:?}",
+        r.error
+    );
+    let r = ok(
+        &mut e,
+        C::UpsertRequirementItem {
+            item_id: None,
+            kind: ReqItemKind::Interface,
+            name: "Radio".into(),
+            parent: None,
+        },
+    );
+    let radio = r.created[0].clone();
+    let ble = Some(ReqValue::Text {
+        text: "BLE 5".into(),
+    });
+    let protocol = format!("{radio}/protocol");
+    ok(&mut e, set(&protocol, ReqStatus::Confirmed, ble));
+    // No command records DERIVED for a domain class directly.
+    let flag = Some(ReqValue::Flag { value: true });
+    precondition(&refused_as(
+        &mut e,
+        Actor::human(),
+        set("domain.rf_wireless", ReqStatus::Derived, flag),
+    ));
+
+    // An agent may run the classifier: its result is the evaluator's, not the agent's.
+    let agent = Actor::agent_in_session("claude", "s1");
+    let r = run_as(&mut e, agent.clone(), C::ClassifyDomain);
+    assert!(r.accepted, "{:?}", r.error);
+    let rf = e.project().requirement_set.fields["domain.rf_wireless"].clone();
+    assert_eq!(rf.status, ReqStatus::Derived);
+    assert_eq!(rf.value, Some(ReqValue::Flag { value: true }));
+    assert_eq!(rf.derived_from, vec![protocol.clone()]);
+    let by = rf.source.as_ref().unwrap();
+    assert_eq!(by.kind, SourceKind::Calculation);
+    assert!(by.reference.starts_with(domain::EVALUATOR));
+    assert!(rf.note.as_deref().unwrap().contains(&protocol));
+    // Up to date: classifying again changes nothing.
+    refused_as(&mut e, agent.clone(), C::ClassifyDomain);
+
+    // A person rejects the class; the classifier keeps its view beside it, never over it.
+    let reject = set_from(
+        "domain.rf_wireless",
+        ReqStatus::Confirmed,
+        Some(ReqValue::Flag { value: false }),
+        source(SourceKind::Engineer, "design review"),
+        true,
+    );
+    ok(&mut e, reject);
+    let r = run_as(&mut e, agent, C::ClassifyDomain);
+    assert!(r.accepted, "{:?}", r.error);
+    let rf = e.project().requirement_set.fields["domain.rf_wireless"].clone();
+    assert_eq!(rf.status, ReqStatus::Confirmed);
+    assert_eq!(rf.value, Some(ReqValue::Flag { value: false }));
+    assert_eq!(rf.conflicts.len(), 1);
+    assert!(domain::by_classifier(&rf.conflicts[0]));
+    // Each run is one undo step.
+    let rev = e.project().revision;
+    assert!(e.undo(rev, &Actor::human()).accepted);
+    assert!(e.project().requirement_set.fields["domain.rf_wireless"]
+        .conflicts
+        .is_empty());
 }

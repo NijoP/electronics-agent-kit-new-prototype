@@ -601,6 +601,65 @@ fn export_without_outline_or_project_fails_loudly() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// M4.2/M4.3 (ADR-0060): the Requirements panel's read is the record, its evaluation and the
+/// live classification; an edit through `execute_command` shows on the next read, and a different
+/// value is a conflict, never an overwrite.
+#[test]
+fn requirements_report_reads_the_record_and_its_classification() {
+    use eak_core::requirements::{ReqSource, ReqStatus, ReqValue, SourceKind};
+    let s = session();
+    assert!(requirements_report(&s).is_err(), "no project open");
+    let d = tmpdir("requirements");
+    create_project(&s, &path(&d), "Requirements panel").unwrap();
+    let before = requirements_report(&s).unwrap();
+    assert_eq!(before.revision, 0);
+    assert!(before.classification.classes.is_empty());
+    assert!(before.recorded_up_to_date);
+    assert!(!before.catalogue.fields.is_empty());
+    assert!(!before.catalogue.units.is_empty());
+    let set = |text: &str, rev: u64| {
+        execute_command(
+            &s,
+            rev,
+            C::SetRequirementField {
+                path: "supply.sources".into(),
+                status: ReqStatus::Confirmed,
+                value: Some(ReqValue::Text { text: text.into() }),
+                source: Some(ReqSource {
+                    kind: SourceKind::Client,
+                    reference: "kick-off call".into(),
+                }),
+                derived_from: vec![],
+                owner: Some("Client PM".into()),
+                risk_if_wrong: None,
+                note: None,
+                supersede: false,
+            },
+        )
+        .unwrap()
+    };
+    assert!(set("USB-C 5 V", 0).accepted);
+    let after = requirements_report(&s).unwrap();
+    assert_eq!(after.revision, 1);
+    let usb = after
+        .classification
+        .classes
+        .iter()
+        .find(|c| c.id == "usb_interface");
+    assert!(usb.is_some(), "a confirmed USB source is evidence");
+    assert!(!after.recorded_up_to_date, "not classified yet");
+    // A different value is kept beside the confirmed one.
+    let r = set("12 V adapter", 1);
+    assert!(r.accepted);
+    let view = requirements_report(&s).unwrap();
+    assert_eq!(view.record.fields["supply.sources"].conflicts.len(), 1);
+    let r = execute_command(&s, 2, C::ClassifyDomain).unwrap();
+    assert!(r.accepted, "{:?}", r.error);
+    assert!(requirements_report(&s).unwrap().recorded_up_to_date);
+    close_project(&s).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 #[test]
 fn domain_classification_is_revision_bound_and_needs_no_model() {
     let s = session();

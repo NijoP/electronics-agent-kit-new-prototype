@@ -408,6 +408,22 @@ export type Command =
   | { type: "DeleteBus"; bus_id: Id }
   | { type: "DeleteBusEntry"; entry_id: Id }
   | { type: "AddRequirement"; text: string }
+  | {
+      type: "SetRequirementField";
+      path: string;
+      status: ReqStatus;
+      value: ReqValue | null;
+      source: ReqSource | null;
+      derived_from: string[];
+      owner: string | null;
+      risk_if_wrong: string | null;
+      note: string | null;
+      supersede: boolean;
+    }
+  | { type: "ClearRequirementField"; path: string }
+  | { type: "ResolveRequirementConflict"; path: string; keep: number; owner: string; note: string | null }
+  | { type: "ClassifyDomain" }
+  | { type: "UpsertRequirementItem"; item_id: string | null; kind: ReqItemKind; name: string; parent: string | null }
   | { type: "Batch"; commands: Command[]; label?: string | null };
 
 export interface CommandError {
@@ -924,6 +940,133 @@ export interface DomainClassification {
   registry_classes: number;
   not_implemented: string[];
   limitations: string[];
+}
+
+// ---- structured requirements (schema v9 ADR-0057, v11 ADR-0060): the `requirements_report` IPC
+
+export type ReqStatus = "UNKNOWN" | "NEEDS_CONFIRMATION" | "CONFIRMED" | "DERIVED" | "NOT_APPLICABLE";
+export type ReqLevel = "missing" | "provisional" | "firm";
+export type ReqItemKind = "rail" | "interface";
+export type ReqValue =
+  | { kind: "number"; value: number; unit: string; tolerance_pct?: number }
+  | { kind: "range"; min?: number; nom?: number; max?: number; unit: string }
+  | { kind: "text"; text: string }
+  | { kind: "flag"; value: boolean };
+export type ReqSourceKind = "client" | "engineer" | "document" | "standard" | "datasheet" | "measurement" | "assumption" | "calculation" | "agent_proposal";
+export interface ReqSource {
+  kind: ReqSourceKind;
+  reference: string;
+}
+export interface ReqEntry {
+  status: ReqStatus;
+  value?: ReqValue | null;
+  source?: ReqSource | null;
+  derived_from?: string[];
+  owner?: string | null;
+  risk_if_wrong?: string | null;
+  note?: string | null;
+  updated_at_ms: number;
+  updated_revision: number;
+  conflicts?: ReqEntry[];
+}
+export interface ReqFieldReport {
+  path: string;
+  label: string;
+  section: string;
+  status: ReqStatus | null;
+  level: ReqLevel;
+  recorded: boolean;
+  value?: ReqValue;
+  source?: ReqSource;
+  derived_from?: string[];
+  items?: string[];
+  owner?: string;
+  risk_if_wrong?: string;
+  note?: string;
+  updated_revision?: number;
+  conflicts?: ReqEntry[];
+  material: boolean;
+  na_allowed: boolean;
+}
+export interface ReqCompleteness {
+  total: number;
+  unknown: number;
+  needs_confirmation: number;
+  confirmed: number;
+  derived: number;
+  not_applicable: number;
+  conflicts: number;
+  missing: number;
+  provisional: number;
+  firm: number;
+  percent_filled: number;
+  percent_firm: number;
+}
+export interface ReqOperation {
+  operation: string;
+  label: string;
+  ready: boolean;
+  blocked_by: { path: string; status: ReqStatus | null; level: ReqLevel; needs: ReqLevel }[];
+}
+export interface ReqFieldDef {
+  key: string;
+  section: string;
+  label: string;
+  kind: "number" | "range" | "number_or_range" | "text" | "flag" | { items: ReqItemKind };
+  measure: string | null;
+  na_allowed: boolean;
+  material: boolean;
+  question: string;
+}
+export interface DomainEvidence {
+  path: string;
+  label: string;
+  observed: string;
+  status: ReqStatus;
+  level: ReqLevel;
+  strength: "strong" | "weak";
+  rule: string;
+}
+export interface DomainClassResult {
+  id: string;
+  key: string;
+  kind: "archetype" | "overlay";
+  label: string;
+  desk: string;
+  verdict: "APPLIES" | "NEEDS_CONFIRMATION" | "CONFLICT";
+  reason: string;
+  supports: DomainEvidence[];
+  contradicts: DomainEvidence[];
+}
+export interface RequirementsView {
+  revision: number;
+  record: { fields?: Record<string, ReqEntry>; items?: Record<string, { id: string; kind: ReqItemKind; name: string; parent?: string; fields?: Record<string, ReqEntry> }> };
+  report: {
+    completeness: ReqCompleteness;
+    sections: { section: string; label: string; completeness: ReqCompleteness }[];
+    fields: ReqFieldReport[];
+    operations: ReqOperation[];
+    questions: { path: string; question: string; blocks: string[] }[];
+    domain: ReqFieldReport[];
+    issues: string[];
+    not_implemented: string[];
+    limitations: string[];
+  };
+  classification: {
+    evaluator: string;
+    classes: DomainClassResult[];
+    not_indicated: { id: string; key: string; kind: "archetype" | "overlay"; label: string; unknown_inputs: string[]; contradicts: DomainEvidence[] }[];
+    not_implemented: string[];
+    limitations: string[];
+  };
+  recorded_up_to_date: boolean;
+  catalogue: {
+    fields: ReqFieldDef[];
+    rail_fields: ReqFieldDef[];
+    interface_fields: ReqFieldDef[];
+    domain_classes: { id: string; kind: "archetype" | "overlay"; desk: string; risk_if_wrong: string; field: ReqFieldDef }[];
+    units: { symbol: string; measure: string }[];
+  };
 }
 
 export interface DomainReport {

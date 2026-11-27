@@ -11,7 +11,8 @@
 //! * `ir`       – project, schematic, PCB, constraints, manufacturing config.
 //! * `pcb_objects` – PCB arcs, keep-out and constraint regions, cut-outs, text, dimensions (schema v4, ADR-0042).
 //! * `requirements` – the structured requirement record, its catalogue and the completeness and
-//!   blocking evaluator (schema v9, ADR-0057).
+//!   blocking evaluator (schema v9, ADR-0057); conflicting values and the domain classification
+//!   entries (schema v11, ADR-0060).
 //! * `integrity`– structural validation of a whole project (dangling references etc.).
 //! * `migrate`  – schema version handling; unknown/newer schemas fail safely.
 //! * `builtin`  – the built-in, provenance-tagged starter component library.

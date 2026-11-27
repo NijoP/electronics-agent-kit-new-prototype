@@ -1,4 +1,5 @@
-//! Structured project requirements (schema v9, ADR-0057).
+//! Structured project requirements (schema v9, ADR-0057; conflicts and the domain
+//! classification, schema v11, ADR-0060).
 //!
 //! The requirement record is part of the authoritative project. Every value carries its unit,
 //! status, source, owner, the wall-clock time it was recorded and the revision whose command
@@ -18,7 +19,8 @@
 //! * `DERIVED` – computed from other requirement fields, which it names. It is firm only while
 //!   every input is firm and none changed after it was derived (otherwise it is stale); an UNKNOWN
 //!   input is reported as an issue. Only a deterministic evaluator records it, with a `calculation`
-//!   source naming it; none exists yet, so no command records DERIVED.
+//!   source naming it: the domain classifier (`ClassifyDomain`, `eak_engineering::domain`) is the
+//!   only one, and it writes only the `domain.*` classification entries.
 //! * `NOT_APPLICABLE` – the field does not apply to this product. It carries no value and needs a
 //!   reason. Only fields the catalogue allows may be not applicable, and only a person says so.
 //!
@@ -26,6 +28,12 @@
 //! downstream operations each missing or unconfirmed value blocks, and targeted questions for
 //! the missing values that materially change architecture or safety. The DESK requirement
 //! taxonomy (`docs/00_REQUIREMENTS.md`, ten dimensions) is the ten sections of [`Section`].
+//!
+//! Conflicts (schema v11). A value that differs from the recorded one never silently replaces it:
+//! [`RequirementSet::record`] keeps it beside the recorded entry in `conflicts` until a person
+//! resolves it ([`RequirementSet::resolve`]); a field in conflict is missing for every operation.
+//! The domain classification (archetypes and overlays, [`DOMAIN_CLASSES`]) is stored as `domain.*`
+//! flag entries in the same record, outside completeness.
 
 use crate::ir::{new_id, Id};
 use serde::{Deserialize, Serialize};
@@ -366,10 +374,15 @@ pub struct ReqEntry {
     pub updated_at_ms: u64,
     /// The project revision whose command recorded the entry (the journal names its actor).
     pub updated_revision: u64,
+    /// Competing values recorded against this one and not yet resolved (schema v11, ADR-0060).
+    /// Each is a whole entry with its own value, status, source and owner; none has conflicts of
+    /// its own. While any exists the field is missing for every operation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflicts: Vec<ReqEntry>,
 }
 
 impl ReqEntry {
-    /// Same content, ignoring when and at which revision it was recorded.
+    /// Same content, ignoring when and at which revision it (or a conflicting value) was recorded.
     pub fn same_content(&self, o: &ReqEntry) -> bool {
         self.status == o.status
             && self.value == o.value
@@ -378,6 +391,19 @@ impl ReqEntry {
             && self.owner == o.owner
             && self.risk_if_wrong == o.risk_if_wrong
             && self.note == o.note
+            && self.conflicts.len() == o.conflicts.len()
+            && self
+                .conflicts
+                .iter()
+                .zip(&o.conflicts)
+                .all(|(a, b)| a.same_content(b))
+    }
+
+    /// Requirement paths this entry and its conflicting values are derived from.
+    fn inputs(&self) -> impl Iterator<Item = &String> {
+        self.derived_from
+            .iter()
+            .chain(self.conflicts.iter().flat_map(|c| c.derived_from.iter()))
     }
 }
 
@@ -453,6 +479,9 @@ pub enum Section {
     ManufacturingTest,
     CostSupply,
     LifecycleFirmware,
+    /// The domain classification (`domain.*`, [`DOMAIN_CLASSES`]): not one of the ten
+    /// requirement sections, so it is not in [`Section::ALL`] and not counted in completeness.
+    Domain,
 }
 
 impl Section {
@@ -480,6 +509,7 @@ impl Section {
             Section::ManufacturingTest => "Quantity, fabrication, assembly, test and programming",
             Section::CostSupply => "BOM target, lifecycle and second source",
             Section::LifecycleFirmware => "Firmware, serviceability and expansion",
+            Section::Domain => "Domain classification",
         }
     }
 }
@@ -697,9 +727,129 @@ pub const INTERFACE_FIELDS: &[FieldDef] = &[
         "What ESD level must this interface withstand (for example 8 kV contact)?"),
 ];
 
-/// Catalogue definition of a project-level field.
+// ------------------------------------------------------------------ domain classification
+
+/// What a domain class says about the board (DESK study §3: an archetype is what the board is,
+/// an overlay a cross-cutting concern that adds rules to any archetype).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainKind {
+    Archetype,
+    Overlay,
+}
+
+/// One domain class of the classification. Its entry is the flag field `domain.<id>`: `true`
+/// = the class applies, `false` = it does not (a person's rejection).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct DomainClassDef {
+    pub id: &'static str,
+    pub kind: DomainKind,
+    /// The DESK domain or overlay id it starts from (`library/pcb_domains/taxonomy.json`).
+    pub desk: &'static str,
+    /// What goes wrong if the class is wrongly assumed or wrongly left out: the `risk_if_wrong`
+    /// of a NEEDS_CONFIRMATION classification.
+    pub risk_if_wrong: &'static str,
+    pub field: FieldDef,
+}
+
+/// Key prefix of the classification entries.
+pub const DOMAIN_PREFIX: &str = "domain.";
+
+const fn class(
+    id: &'static str,
+    key: &'static str,
+    kind: DomainKind,
+    desk: &'static str,
+    label: &'static str,
+    question: &'static str,
+    risk_if_wrong: &'static str,
+) -> DomainClassDef {
+    DomainClassDef {
+        id,
+        kind,
+        desk,
+        risk_if_wrong,
+        field: def(key, S::Domain, label, K::Flag, None, false, false, question),
+    }
+}
+
+use DomainKind::{Archetype as ARCH, Overlay as OVER};
+
+/// The domain classes, archetypes first (EAK's own set, started from the DESK taxonomy's domains
+/// and overlays; ADR-0060 lists what was merged, split and left out).
+#[rustfmt::skip]
+pub const DOMAIN_CLASSES: &[DomainClassDef] = &[
+    class("embedded_mcu", "domain.embedded_mcu", ARCH, "embedded_mcu", "Embedded controller",
+        "Is the board built around a programmable controller (MCU or SoC running firmware)?",
+        "controller support (reset, clock, programming and debug access) is missed, or demanded of a board without one"),
+    class("dcdc_power", "domain.dcdc_power", ARCH, "dcdc_power", "Power conversion",
+        "Is power conversion (a DC-DC or AC-DC converter) a main function of the board?",
+        "switching-converter layout, loop-area, inductor and thermal rules are missed"),
+    class("battery_bms", "domain.battery_bms", ARCH, "battery_bms", "Battery powered",
+        "Is the board powered from, or does it charge or protect, a battery?",
+        "charging, cell protection, fusing and battery transport rules are missed"),
+    class("motor_control", "domain.motor_control", ARCH, "motor_control", "Motor drive",
+        "Does the board drive a motor or another inductive actuator?",
+        "power-stage, current-sense, back-EMF and flyback rules are missed"),
+    class("ac_mains_hv", "domain.ac_mains_hv", ARCH, "ac_mains_hv", "Mains powered",
+        "Is the board connected to AC mains?",
+        "creepage, clearance, isolation, fusing and safety-standard rules for mains are missed"),
+    class("rf_wireless", "domain.rf_wireless", ARCH, "rf_wireless", "Radio (RF / wireless)",
+        "Does the board transmit or receive radio signals?",
+        "antenna keep-out, RF ground, matching and radio certification are missed"),
+    class("analog_sensors", "domain.analog_sensors", ARCH, "analog_sensors", "Sensor or precision analog",
+        "Does the board measure analog signals (sensors, an ADC front end, precision references)?",
+        "analog grounding, reference, guarding and noise rules are missed"),
+    class("high_voltage", "domain.high_voltage", OVER, "mains_safety_isolation", "High voltage (60 V or more)",
+        "Is there 60 V or more anywhere on the board?",
+        "creepage, clearance and insulation rules for high voltage are missed"),
+    class("galvanic_isolation", "domain.galvanic_isolation", OVER, "galvanic_isolation", "Galvanic isolation",
+        "Must any circuits on the board be galvanically isolated from each other?",
+        "the isolation barrier, its spacing and its parts are missed"),
+    class("high_current", "domain.high_current", OVER, "high_current", "High current (3 A or more)",
+        "Does any supply or path carry 3 A or more?",
+        "copper width, thermal relief, connector and fusing rules for high current are missed"),
+    class("high_speed_digital", "domain.high_speed_digital", OVER, "high_speed_digital", "High-speed digital",
+        "Does the board carry signals of 100 Mbps or more (USB 2 high speed, Ethernet, HDMI, PCIe, DDR, MIPI)?",
+        "impedance control, length matching, reference planes and stackup rules are missed"),
+    class("usb_interface", "domain.usb_interface", OVER, "usb_interface", "USB",
+        "Does the board have a USB connector or USB power input?",
+        "USB connector ESD, VBUS protection and differential-pair rules are missed"),
+    class("can_interface", "domain.can_interface", OVER, "can_interface", "CAN bus",
+        "Does the board connect to a CAN bus?",
+        "bus termination, common-mode protection and transceiver rules are missed"),
+    class("industrial_interfaces", "domain.industrial_interfaces", OVER, "industrial_interfaces", "Industrial interfaces",
+        "Does the board use an industrial interface (RS-485, RS-232, Modbus, 4-20 mA, IO-Link)?",
+        "surge, isolation and termination rules for industrial wiring are missed"),
+    class("low_power", "domain.low_power", OVER, "low_power", "Low power",
+        "Must the board sleep at 100 uA or less, or run for a year or more on one battery?",
+        "leakage, power-gating and sleep-current rules are missed"),
+    class("harsh_environment", "domain.harsh_environment", OVER, "harsh_environment", "Harsh environment",
+        "Does the board see 70 degC or more, condensation, or outdoor and wet exposure?",
+        "derating, coating, creepage-with-pollution and ingress rules are missed"),
+    class("automotive_environment", "domain.automotive_environment", OVER, "automotive_environment", "Automotive",
+        "Is the board used in or powered from a vehicle?",
+        "load-dump, reverse-battery, AEC-Q part grades and automotive EMC rules are missed"),
+];
+
+/// A domain class by id (`rf_wireless`) or by key (`domain.rf_wireless`).
+pub fn domain_class(id_or_key: &str) -> Option<&'static DomainClassDef> {
+    let id = id_or_key.strip_prefix(DOMAIN_PREFIX).unwrap_or(id_or_key);
+    DOMAIN_CLASSES.iter().find(|c| c.id == id)
+}
+
+/// Catalogue definition of a project-level field, or of a domain classification entry.
 pub fn field_def(key: &str) -> Option<&'static FieldDef> {
-    FIELDS.iter().find(|d| d.key == key)
+    FIELDS.iter().find(|d| d.key == key).or_else(|| {
+        key.strip_prefix(DOMAIN_PREFIX)
+            .and_then(domain_class)
+            .map(|c| &c.field)
+    })
+}
+
+/// Whether a path names a domain classification entry.
+pub fn is_domain_path(path: &str) -> bool {
+    path.starts_with(DOMAIN_PREFIX)
 }
 
 /// Catalogue definition of a field of an item kind.
@@ -740,6 +890,16 @@ pub enum ReqEditError {
     Precondition(String),
     /// The edit would change nothing.
     Unchanged(String),
+}
+
+/// What [`RequirementSet::record`] did with an entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Recorded {
+    /// The entry is now the recorded one.
+    Set,
+    /// Its value differs from the recorded one, so it is kept beside it as a conflicting value.
+    Conflict,
 }
 
 pub fn edit_message(e: &ReqEditError) -> String {
@@ -821,8 +981,123 @@ impl RequirementSet {
             })
     }
 
-    /// Record an entry at a path. The owner, risk and note are trimmed (blank = none).
-    pub fn set(&mut self, path: &str, mut entry: ReqEntry) -> Result<(), ReqEditError> {
+    /// Record an entry at a path, replacing whatever was there (conflicts included: they are part
+    /// of the entry). The owner, risk and note are trimmed (blank = none). The engine records
+    /// through [`RequirementSet::record`], which never lets a different value replace one silently.
+    pub fn set(&mut self, path: &str, entry: ReqEntry) -> Result<(), ReqEditError> {
+        let entry = self.checked(path, entry)?;
+        if self.entry(path).is_some_and(|old| old.same_content(&entry)) {
+            return Err(ReqEditError::Unchanged(format!(
+                "requirement {path} already has that content"
+            )));
+        }
+        let key = entry_key(path)?;
+        let slot = self
+            .slot(path)
+            .ok_or_else(|| ReqEditError::NotFound(format!("requirement {path}")))?;
+        slot.insert(key, entry);
+        Ok(())
+    }
+
+    /// Record an entry the way `SetRequirementField` does (schema v11, ADR-0060). A different
+    /// value never silently replaces a recorded one: unless `supersede` is given it is kept beside
+    /// the recorded entry as a conflicting value (an entry without a value is refused there, since
+    /// it would erase one) until a person resolves the conflict. The same value, or a value where
+    /// none was recorded, replaces the entry and keeps its open conflicts. `supersede` replaces the
+    /// entry and drops its conflicts (the journal and undo keep the earlier entry).
+    pub fn record(
+        &mut self,
+        path: &str,
+        mut entry: ReqEntry,
+        supersede: bool,
+    ) -> Result<Recorded, ReqEditError> {
+        entry.conflicts.clear();
+        let Some(old) = self.entry(path).filter(|_| !supersede).cloned() else {
+            self.set(path, entry)?;
+            return Ok(Recorded::Set);
+        };
+        let differs = old.value.is_some() && entry.value.is_some() && old.value != entry.value;
+        let erases = old.value.is_some() && entry.value.is_none();
+        if erases {
+            return Err(ReqEditError::Precondition(format!(
+                "requirement {path} holds a {} value; replace it with supersede, or clear it",
+                old.status.as_str()
+            )));
+        }
+        if !differs {
+            entry.conflicts = old.conflicts;
+            self.set(path, entry)?;
+            return Ok(Recorded::Set);
+        }
+        let candidate = self.checked(path, entry)?;
+        let mut kept = old;
+        match kept
+            .conflicts
+            .iter()
+            .position(|c| c.value == candidate.value)
+        {
+            Some(i) if kept.conflicts[i].same_content(&candidate) => {
+                return Err(ReqEditError::Unchanged(format!(
+                    "requirement {path} already records that conflicting value"
+                )));
+            }
+            Some(i) => kept.conflicts[i] = candidate,
+            None => kept.conflicts.push(candidate),
+        }
+        self.set(path, kept)?;
+        Ok(Recorded::Conflict)
+    }
+
+    /// Resolve the conflict at a path. `keep` 0 keeps the recorded value, `keep` n the n-th
+    /// conflicting value. Resolving is a person's decision, so the kept value becomes CONFIRMED
+    /// by `owner` with its own source; the other values are dropped (the journal and undo keep
+    /// them) and the note, when given, records why.
+    pub fn resolve(
+        &mut self,
+        path: &str,
+        keep: usize,
+        owner: &str,
+        note: Option<&str>,
+        at_ms: u64,
+        revision: u64,
+    ) -> Result<(), ReqEditError> {
+        let old = self
+            .entry(path)
+            .cloned()
+            .ok_or_else(|| ReqEditError::NotFound(format!("requirement {path} has no entry")))?;
+        let n = old.conflicts.len();
+        if n == 0 {
+            return Err(ReqEditError::Precondition(format!(
+                "requirement {path} has no conflicting values to resolve"
+            )));
+        }
+        let mut kept = match keep {
+            0 => old,
+            k => match old.conflicts.get(k - 1) {
+                Some(c) => c.clone(),
+                None => {
+                    return Err(ReqEditError::Invalid(format!(
+                        "requirement {path} has {n} conflicting value(s): keep is 0 (the recorded value) to {n}"
+                    )));
+                }
+            },
+        };
+        kept.conflicts.clear();
+        kept.status = ReqStatus::Confirmed;
+        kept.owner = Some(owner.to_string());
+        kept.risk_if_wrong = None;
+        kept.derived_from.clear();
+        if let Some(why) = clean(note) {
+            kept.note = Some(why);
+        }
+        kept.updated_at_ms = at_ms;
+        kept.updated_revision = revision;
+        self.set(path, kept)
+    }
+
+    /// Clean an entry for `path` and check it against its definition, its status rules and the
+    /// paths it names.
+    fn checked(&self, path: &str, mut entry: ReqEntry) -> Result<ReqEntry, ReqEditError> {
         let d = self.def_of(path)?;
         entry.owner = clean(entry.owner.as_deref());
         entry.risk_if_wrong = clean(entry.risk_if_wrong.as_deref());
@@ -836,7 +1111,7 @@ impl RequirementSet {
                 ));
             }
         }
-        for input in &entry.derived_from {
+        for input in entry.inputs() {
             if let Err(m) = self.def_of(input) {
                 problems.push(format!(
                     "{path}: derived from {input}: {}",
@@ -847,17 +1122,7 @@ impl RequirementSet {
         if !problems.is_empty() {
             return Err(ReqEditError::Invalid(problems.join("; ")));
         }
-        if self.entry(path).is_some_and(|old| old.same_content(&entry)) {
-            return Err(ReqEditError::Unchanged(format!(
-                "requirement {path} already has that content"
-            )));
-        }
-        let key = entry_key(path)?;
-        let slot = self
-            .slot(path)
-            .ok_or_else(|| ReqEditError::NotFound(format!("requirement {path}")))?;
-        slot.insert(key, entry);
-        Ok(())
+        Ok(entry)
     }
 
     /// Remove the entry at a path: the field is UNKNOWN again.
@@ -878,6 +1143,8 @@ impl RequirementSet {
     }
 
     /// Paths whose DERIVED value names `target` (a path, or an item id for any of its fields).
+    /// The domain classification never holds an edit up: it is re-derived by `ClassifyDomain`,
+    /// and until then [`evaluate`] reports it stale (ADR-0060).
     fn referrers(&self, target: &str) -> Vec<String> {
         let names = |input: &str| {
             input == target
@@ -886,7 +1153,7 @@ impl RequirementSet {
         };
         let mut out = vec![];
         for (path, e) in self.entries() {
-            if e.derived_from.iter().any(|i| names(i.as_str())) {
+            if !is_domain_path(&path) && e.inputs().any(|i| names(i.as_str())) {
                 out.push(path);
             }
         }
@@ -1078,8 +1345,13 @@ impl RequirementSet {
                 }
             }
         }
+        // A classification entry may name an input that was cleared or deleted since: that makes
+        // it stale (reported by `evaluate`), not invalid.
         for (path, entry) in self.entries() {
-            for input in &entry.derived_from {
+            if is_domain_path(&path) {
+                continue;
+            }
+            for input in entry.inputs() {
                 if let Err(m) = self.def_of(input) {
                     e.push(format!(
                         "{path}: derived from {input}: {}",
@@ -1173,6 +1445,42 @@ pub fn value_problem(d: &FieldDef, v: &ReqValue) -> Option<String> {
 
 /// Problems of one entry against its definition and its status rules.
 pub fn entry_problems(d: &FieldDef, path: &str, e: &ReqEntry) -> Vec<String> {
+    let mut found = own_problems(d, path, e);
+    if !e.conflicts.is_empty() && e.value.is_none() {
+        found.push("only an entry with a value has conflicting values".into());
+    }
+    for (i, c) in e.conflicts.iter().enumerate() {
+        let n = i + 1;
+        if c.value.is_none() {
+            found.push(format!("conflicting value {n} has no value"));
+        } else if c.value == e.value {
+            found.push(format!("conflicting value {n} equals the recorded value"));
+        } else if e.conflicts[..i].iter().any(|o| o.value == c.value) {
+            found.push(format!("conflicting value {n} repeats an earlier one"));
+        }
+        if !c.conflicts.is_empty() {
+            found.push(format!("conflicting value {n} has conflicts of its own"));
+        }
+        found.extend(
+            own_problems(d, path, c)
+                .into_iter()
+                .map(|m| format!("conflicting value {n}: {m}")),
+        );
+    }
+    found.into_iter().map(|m| format!("{path}: {m}")).collect()
+}
+
+/// A NEEDS_CONFIRMATION classification from the classifier names no owner: the classifier cannot
+/// know who reviews it, and the person who confirms it names themselves (ADR-0060).
+fn classifier_proposal(d: &FieldDef, e: &ReqEntry) -> bool {
+    d.section == Section::Domain
+        && e.source
+            .as_ref()
+            .is_some_and(|s| s.kind == SourceKind::Calculation)
+}
+
+/// Problems of one entry by itself (unprefixed), without its conflicting values.
+fn own_problems(d: &FieldDef, path: &str, e: &ReqEntry) -> Vec<String> {
     let mut found: Vec<String> = vec![];
     if matches!(d.kind, ValueKind::Items(_))
         && !matches!(e.status, ReqStatus::Unknown | ReqStatus::NotApplicable)
@@ -1200,7 +1508,7 @@ pub fn entry_problems(d: &FieldDef, path: &str, e: &ReqEntry) -> Vec<String> {
         ReqStatus::Confirmed if e.owner.is_none() => {
             found.push("CONFIRMED needs the owner who confirmed it".into())
         }
-        ReqStatus::NeedsConfirmation if e.owner.is_none() => {
+        ReqStatus::NeedsConfirmation if e.owner.is_none() && !classifier_proposal(d, e) => {
             found.push("NEEDS_CONFIRMATION needs the owner who must confirm it".into())
         }
         ReqStatus::Unknown if e.owner.is_none() => {
@@ -1253,7 +1561,7 @@ pub fn entry_problems(d: &FieldDef, path: &str, e: &ReqEntry) -> Vec<String> {
             .and_then(|s| text_problem("risk_if_wrong", s)),
     );
     found.extend(e.note.as_deref().and_then(|s| text_problem("note", s)));
-    found.into_iter().map(|m| format!("{path}: {m}")).collect()
+    found
 }
 
 // ------------------------------------------------------------------ evaluation
@@ -1457,6 +1765,8 @@ pub struct Completeness {
     pub not_applicable: usize,
     /// Item lists that have items: no status of their own (see [`FieldReport::status`]).
     pub item_lists: usize,
+    /// Fields with conflicting values not yet resolved (each is also counted as missing).
+    pub conflicts: usize,
     pub missing: usize,
     pub provisional: usize,
     pub firm: usize,
@@ -1467,8 +1777,11 @@ pub struct Completeness {
 }
 
 impl Completeness {
-    fn add(&mut self, status: Option<ReqStatus>, level: Level) {
+    fn add(&mut self, status: Option<ReqStatus>, level: Level, conflicted: bool) {
         self.total += 1;
+        if conflicted {
+            self.conflicts += 1;
+        }
         match status {
             None => self.item_lists += 1,
             Some(ReqStatus::Unknown) => self.unknown += 1,
@@ -1532,6 +1845,9 @@ pub struct FieldReport {
     pub updated_revision: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at_ms: Option<u64>,
+    /// Conflicting values not yet resolved: while any exists the field is missing.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub conflicts: Vec<ReqEntry>,
     pub material: bool,
     pub na_allowed: bool,
 }
@@ -1570,12 +1886,30 @@ pub struct RequirementsReport {
     pub fields: Vec<FieldReport>,
     pub operations: Vec<OperationReport>,
     pub questions: Vec<Question>,
+    /// The recorded domain classification entries (`domain.*`, in catalogue order). They are not
+    /// counted in completeness; once recorded, operations need them as [`DOMAIN_NEEDS`] says.
+    pub domain: Vec<FieldReport>,
     /// Consistency problems the record has but that do not refuse it (a DERIVED value from an
-    /// UNKNOWN input, a loop of derived values).
+    /// UNKNOWN input, a loop of derived values, a field in conflict).
     pub issues: Vec<String>,
     pub not_implemented: Vec<&'static str>,
     pub limitations: Vec<&'static str>,
 }
+
+/// What operations need of a recorded domain classification entry (ADR-0060). An entry is needed
+/// only once recorded: running the classifier is not yet a precondition of any operation.
+pub const DOMAIN_NEEDS: &[(Operation, Level)] = &[
+    (Operation::Architecture, Level::Provisional),
+    (Operation::PartSelection, Level::Provisional),
+    (Operation::ManufacturingRelease, Level::Firm),
+];
+
+/// Classification entries safety spacing needs firm once they are recorded.
+pub const SAFETY_CLASSES: &[&str] = &[
+    "domain.ac_mains_hv",
+    "domain.high_voltage",
+    "domain.galvanic_isolation",
+];
 
 pub const NOT_IMPLEMENTED: &[&str] = &[
     "cross-field consistency (rail currents against the power budget, rail voltages against the input range, battery life against capacity)",
@@ -1583,7 +1917,7 @@ pub const NOT_IMPLEMENTED: &[&str] = &[
     "requirement-to-constraint compilation (design profile) and requirement-to-block-to-net traceability",
     "scoped gates (a gate that passes for one variant or scope, such as a low-voltage prototype, while another stays blocked)",
     "domain-required fields from the classification (for example, NOT_APPLICABLE refused for safety under a mains or high-voltage classification)",
-    "a deterministic evaluator that writes DERIVED values; until one exists, no command records DERIVED",
+    "deterministic evaluators for requirement values: the domain classifier (ClassifyDomain) is the only one that records DERIVED, and only for the domain.* classification",
     "folding the harness design-flow spec (design-flow/spec.json) into this record",
 ];
 
@@ -1629,6 +1963,13 @@ impl<'a> Ctx<'a> {
         let Some(e) = set.entry(path) else {
             return Level::Missing;
         };
+        if !e.conflicts.is_empty() {
+            self.issues.insert(format!(
+                "{path} has {} conflicting value(s); it is missing until a person resolves them",
+                e.conflicts.len()
+            ));
+            return Level::Missing;
+        }
         if e.status != ReqStatus::Derived {
             return status_level(e.status);
         }
@@ -1644,8 +1985,9 @@ impl<'a> Ctx<'a> {
         for input in &e.derived_from {
             let l = self.level_of(input, stack);
             if l == Level::Missing {
-                self.issues
-                    .insert(format!("{path} is DERIVED from {input}, which is UNKNOWN"));
+                self.issues.insert(format!(
+                    "{path} is DERIVED from {input}, which is UNKNOWN or in conflict"
+                ));
             }
             if l < Level::Firm {
                 level = Level::Provisional;
@@ -1694,6 +2036,7 @@ impl<'a> Ctx<'a> {
             note: e.and_then(|e| e.note.clone()),
             updated_revision: e.map(|e| e.updated_revision),
             updated_at_ms: e.map(|e| e.updated_at_ms),
+            conflicts: e.map(|e| e.conflicts.clone()).unwrap_or_default(),
             material: d.material,
             na_allowed: d.na_allowed,
         }
@@ -1719,15 +2062,21 @@ pub fn evaluate(set: &RequirementSet) -> RequirementsReport {
             defs.push(d);
         }
     }
+    let domain: Vec<FieldReport> = DOMAIN_CLASSES
+        .iter()
+        .filter(|c| set.fields.contains_key(c.field.key))
+        .map(|c| cx.field(c.field.key.to_string(), c.field.label.to_string(), &c.field))
+        .collect();
 
     let mut all = Completeness::default();
     let mut by_section: BTreeMap<Section, Completeness> = BTreeMap::new();
     for f in &fields {
-        all.add(f.status, f.level);
+        let conflicted = !f.conflicts.is_empty();
+        all.add(f.status, f.level, conflicted);
         by_section
             .entry(f.section)
             .or_default()
-            .add(f.status, f.level);
+            .add(f.status, f.level, conflicted);
     }
     let sections = Section::ALL
         .iter()
@@ -1738,7 +2087,11 @@ pub fn evaluate(set: &RequirementSet) -> RequirementsReport {
         })
         .collect();
 
-    let index: BTreeMap<&str, &FieldReport> = fields.iter().map(|f| (f.path.as_str(), f)).collect();
+    let index: BTreeMap<&str, &FieldReport> = fields
+        .iter()
+        .chain(&domain)
+        .map(|f| (f.path.as_str(), f))
+        .collect();
     let mut operations = vec![];
     for op in OPERATIONS {
         let mut needs: Vec<(String, Level)> = vec![];
@@ -1749,6 +2102,15 @@ pub fn evaluate(set: &RequirementSet) -> RequirementsReport {
         for (kind, key, l) in op.item_needs {
             for item in set.items_of(*kind) {
                 needs.push((format!("{}/{key}", item.id), *l));
+            }
+        }
+        for d in &domain {
+            if let Some((_, l)) = DOMAIN_NEEDS.iter().find(|(o, _)| *o == op.operation) {
+                needs.push((d.path.clone(), *l));
+            }
+            let spacing = op.operation == Operation::SafetySpacing;
+            if spacing && SAFETY_CLASSES.contains(&d.path.as_str()) {
+                needs.push((d.path.clone(), Level::Firm));
             }
         }
         let mut seen = BTreeSet::new();
@@ -1797,6 +2159,14 @@ pub fn evaluate(set: &RequirementSet) -> RequirementsReport {
             }
             _ => d.question.to_string(),
         };
+        let question = if f.conflicts.is_empty() {
+            question
+        } else {
+            format!(
+                "Resolve the {} conflicting value(s): {question}",
+                f.conflicts.len()
+            )
+        };
         questions.push(Question {
             path: f.path.clone(),
             question,
@@ -1810,6 +2180,7 @@ pub fn evaluate(set: &RequirementSet) -> RequirementsReport {
         fields,
         operations,
         questions,
+        domain,
         issues: cx.issues.into_iter().collect(),
         not_implemented: NOT_IMPLEMENTED.to_vec(),
         limitations: LIMITATIONS.to_vec(),
@@ -1847,6 +2218,7 @@ mod tests {
             note: (status == ReqStatus::NotApplicable).then(|| "no battery".to_string()),
             updated_at_ms: 1,
             updated_revision: 1,
+            conflicts: vec![],
         }
     }
 
@@ -2281,5 +2653,261 @@ mod tests {
         let json = serde_json::to_string(&s).unwrap();
         let back: RequirementSet = serde_json::from_str(&json).unwrap();
         assert_eq!(back, s);
+    }
+
+    fn classified(status: ReqStatus, value: bool, inputs: &[&str]) -> ReqEntry {
+        ReqEntry {
+            status,
+            value: Some(ReqValue::Flag { value }),
+            source: Some(ReqSource {
+                kind: SourceKind::Calculation,
+                reference: "test classifier v0".into(),
+            }),
+            derived_from: inputs.iter().map(|s| s.to_string()).collect(),
+            owner: None,
+            risk_if_wrong: (status == ReqStatus::NeedsConfirmation)
+                .then(|| "spacing rules are missed".to_string()),
+            note: Some("evidence".into()),
+            updated_at_ms: 1,
+            updated_revision: 1,
+            conflicts: vec![],
+        }
+    }
+
+    /// Schema v11 (ADR-0060): a different value is kept beside the recorded one, never written
+    /// over it; the field is missing until a person resolves the conflict.
+    #[test]
+    fn a_different_value_is_a_conflict_until_a_person_resolves_it() {
+        let mut s = RequirementSet::default();
+        let path = "supply.input_voltage";
+        let five = entry(ReqStatus::NeedsConfirmation, Some(volts(4.5, 5.0, 5.5)));
+        assert_eq!(s.record(path, five.clone(), false), Ok(Recorded::Set));
+        let twelve = ReqEntry {
+            source: Some(ReqSource {
+                kind: SourceKind::Datasheet,
+                reference: "adapter datasheet table 2".into(),
+            }),
+            ..entry(ReqStatus::Confirmed, Some(volts(11.0, 12.0, 13.0)))
+        };
+        assert_eq!(
+            s.record(path, twelve.clone(), false),
+            Ok(Recorded::Conflict)
+        );
+        let kept = s.entry(path).unwrap();
+        assert_eq!(
+            kept.value, five.value,
+            "the recorded value is not overwritten"
+        );
+        assert_eq!(kept.conflicts.len(), 1);
+        assert!(s.problems().is_empty(), "{:?}", s.problems());
+        // The same conflicting value again changes nothing; erasing a value needs supersede.
+        assert!(matches!(
+            s.record(path, twelve.clone(), false),
+            Err(ReqEditError::Unchanged(_))
+        ));
+        assert!(matches!(
+            s.record(path, entry(ReqStatus::Unknown, None), false),
+            Err(ReqEditError::Precondition(_))
+        ));
+        // In conflict, the field is missing: it blocks, is asked about and is counted.
+        let r = evaluate(&s);
+        let f = r.fields.iter().find(|f| f.path == path).unwrap();
+        assert_eq!(f.level, Level::Missing);
+        assert_eq!(f.conflicts.len(), 1);
+        assert_eq!(r.completeness.conflicts, 1);
+        assert!(op(&r, Operation::Architecture)
+            .blocked_by
+            .iter()
+            .any(|b| b.path == path));
+        assert!(r
+            .questions
+            .iter()
+            .any(|q| q.path == path && q.question.starts_with("Resolve the 1 conflicting")));
+        assert!(r.issues.iter().any(|i| i.contains("conflicting value")));
+        // Confirming the recorded value keeps the conflict open.
+        let confirmed = entry(ReqStatus::Confirmed, Some(volts(4.5, 5.0, 5.5)));
+        assert_eq!(s.record(path, confirmed, false), Ok(Recorded::Set));
+        assert_eq!(s.entry(path).unwrap().conflicts.len(), 1);
+        // Resolution keeps one value, CONFIRMED by the person who resolved it.
+        assert!(matches!(
+            s.resolve(path, 2, "A. Engineer", None, 5, 5),
+            Err(ReqEditError::Invalid(_))
+        ));
+        assert!(matches!(
+            s.resolve(path, 1, " ", None, 5, 5),
+            Err(ReqEditError::Invalid(_))
+        ));
+        s.resolve(path, 1, "A. Engineer", Some("the adapter is fixed"), 5, 5)
+            .unwrap();
+        let e = s.entry(path).unwrap();
+        assert_eq!(e.value, twelve.value);
+        assert_eq!(e.status, ReqStatus::Confirmed);
+        assert_eq!(e.owner.as_deref(), Some("A. Engineer"));
+        assert_eq!(e.source, twelve.source);
+        assert_eq!(e.note.as_deref(), Some("the adapter is fixed"));
+        assert!(e.conflicts.is_empty());
+        assert_eq!(e.updated_revision, 5);
+        assert!(matches!(
+            s.resolve(path, 0, "A. Engineer", None, 6, 6),
+            Err(ReqEditError::Precondition(_))
+        ));
+        // Supersede replaces a value outright and drops open conflicts.
+        s.record(path, five.clone(), false).unwrap();
+        assert_eq!(s.entry(path).unwrap().conflicts.len(), 1);
+        assert_eq!(s.record(path, five.clone(), true), Ok(Recorded::Set));
+        assert!(s.entry(path).unwrap().conflicts.is_empty());
+        assert_eq!(s.entry(path).unwrap().value, five.value);
+    }
+
+    #[test]
+    fn integrity_refuses_malformed_conflicts() {
+        let base = entry(ReqStatus::Confirmed, Some(volts(4.5, 5.0, 5.5)));
+        let same = ReqEntry {
+            conflicts: vec![base.clone()],
+            ..base.clone()
+        };
+        let empty = ReqEntry {
+            conflicts: vec![entry(ReqStatus::Unknown, None)],
+            ..base.clone()
+        };
+        let nested = ReqEntry {
+            conflicts: vec![ReqEntry {
+                conflicts: vec![base.clone()],
+                ..entry(ReqStatus::Confirmed, Some(volts(11.0, 12.0, 13.0)))
+            }],
+            ..base.clone()
+        };
+        let no_value = ReqEntry {
+            conflicts: vec![entry(ReqStatus::Confirmed, Some(volts(11.0, 12.0, 13.0)))],
+            ..entry(ReqStatus::Unknown, None)
+        };
+        for bad in [same, empty, nested, no_value] {
+            let mut s = RequirementSet::default();
+            s.fields.insert("supply.input_voltage".into(), bad.clone());
+            assert!(!s.problems().is_empty(), "accepted {bad:?}");
+        }
+    }
+
+    #[test]
+    fn domain_catalogue_is_consistent() {
+        let mut ids = BTreeSet::new();
+        let mut overlays = false;
+        for c in DOMAIN_CLASSES {
+            assert!(ids.insert(c.id), "duplicate class {}", c.id);
+            assert_eq!(c.field.key, format!("{DOMAIN_PREFIX}{}", c.id));
+            assert_eq!(c.field.kind, ValueKind::Flag);
+            assert_eq!(c.field.section, Section::Domain);
+            assert!(c.field.question.ends_with('?'), "{}", c.id);
+            assert!(!c.desk.is_empty() && !c.risk_if_wrong.is_empty());
+            assert_eq!(field_def(c.field.key), Some(&c.field));
+            assert_eq!(domain_class(c.id).map(|d| d.id), Some(c.id));
+            // Archetypes are listed first.
+            if overlays {
+                assert_eq!(
+                    c.kind,
+                    DomainKind::Overlay,
+                    "{}: archetypes come first",
+                    c.id
+                );
+            }
+            overlays = c.kind == DomainKind::Overlay;
+        }
+        assert!(field_def("domain.not_a_class").is_none());
+        assert!(field_def("embedded_mcu").is_none());
+        for k in SAFETY_CLASSES {
+            assert!(domain_class(k).is_some(), "{k}");
+        }
+    }
+
+    /// ADR-0060: the classification sits outside completeness, blocks once recorded, needs no
+    /// owner for the classifier's own proposal, and never holds an edit of its inputs up.
+    #[test]
+    fn domain_entries_stay_out_of_completeness_and_block_once_recorded() {
+        let mut s = RequirementSet::default();
+        s.set(
+            "safety.max_working_voltage",
+            entry(
+                ReqStatus::Confirmed,
+                Some(ReqValue::Number {
+                    value: 230.0,
+                    unit: ReqUnit::Volt,
+                    tolerance_pct: None,
+                }),
+            ),
+        )
+        .unwrap();
+        let before = evaluate(&s).completeness;
+        s.set(
+            "domain.high_voltage",
+            classified(ReqStatus::Derived, true, &["safety.max_working_voltage"]),
+        )
+        .unwrap();
+        s.set(
+            "domain.rf_wireless",
+            classified(ReqStatus::NeedsConfirmation, true, &[]),
+        )
+        .unwrap();
+        assert!(s.problems().is_empty(), "{:?}", s.problems());
+        let r = evaluate(&s);
+        assert_eq!(r.completeness, before, "classification is not completeness");
+        assert_eq!(r.domain.len(), 2);
+        let hv = r
+            .domain
+            .iter()
+            .find(|f| f.path == "domain.high_voltage")
+            .unwrap();
+        assert_eq!(hv.level, Level::Firm);
+        let rf = r
+            .domain
+            .iter()
+            .find(|f| f.path == "domain.rf_wireless")
+            .unwrap();
+        assert_eq!(rf.level, Level::Provisional);
+        assert!(op(&r, Operation::ManufacturingRelease)
+            .blocked_by
+            .iter()
+            .any(|b| b.path == "domain.rf_wireless"));
+        assert!(!op(&r, Operation::Architecture)
+            .blocked_by
+            .iter()
+            .any(|b| b.path.starts_with(DOMAIN_PREFIX)));
+        // A person's NEEDS_CONFIRMATION still names its owner; only the classifier's may not.
+        let person = ReqEntry {
+            source: Some(ReqSource {
+                kind: SourceKind::Engineer,
+                reference: "review".into(),
+            }),
+            ..classified(ReqStatus::NeedsConfirmation, true, &[])
+        };
+        assert!(s.set("domain.usb_interface", person).is_err());
+        // A conflict on a classification blocks architecture.
+        let mut rf_conflict = s.entry("domain.rf_wireless").unwrap().clone();
+        rf_conflict
+            .conflicts
+            .push(classified(ReqStatus::NeedsConfirmation, false, &[]));
+        s.set("domain.rf_wireless", rf_conflict).unwrap();
+        let r = evaluate(&s);
+        assert!(op(&r, Operation::Architecture)
+            .blocked_by
+            .iter()
+            .any(|b| b.path == "domain.rf_wireless" && b.level == Level::Missing));
+        // Clearing an input is not held up; the derived class is then stale, not invalid.
+        s.clear("safety.max_working_voltage").unwrap();
+        assert!(s.problems().is_empty(), "{:?}", s.problems());
+        let r = evaluate(&s);
+        let hv = r
+            .domain
+            .iter()
+            .find(|f| f.path == "domain.high_voltage")
+            .unwrap();
+        assert_eq!(hv.level, Level::Provisional);
+        assert!(r
+            .issues
+            .iter()
+            .any(|i| i.starts_with("domain.high_voltage is DERIVED from")));
+        assert!(op(&r, Operation::SafetySpacing)
+            .blocked_by
+            .iter()
+            .any(|b| b.path == "domain.high_voltage"));
     }
 }

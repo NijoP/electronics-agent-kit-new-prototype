@@ -41,7 +41,7 @@ pub fn read_tools() -> Vec<ReadTool> {
         ),
         tool(
             "get_requirements",
-            "The structured requirement record (schema v9) and its deterministic evaluation: every catalogue field with value, unit, status (UNKNOWN / NEEDS_CONFIRMATION / CONFIRMED / DERIVED / NOT_APPLICABLE), source, owner and the revision that set it; rails and interfaces; completeness per section; which downstream operations each missing or unconfirmed value blocks; targeted questions for missing values that change architecture or safety; and the field catalogue with its paths and units. A missing value is never zero. Edit with SetRequirementField, ClearRequirementField, UpsertRequirementItem and DeleteRequirementItem.",
+            "The structured requirement record (schema v11) and its deterministic evaluation: every catalogue field with value, unit, status (UNKNOWN / NEEDS_CONFIRMATION / CONFIRMED / DERIVED / NOT_APPLICABLE), source, owner and the revision that set it; rails and interfaces; completeness per section; which downstream operations each missing or unconfirmed value blocks; targeted questions for missing values that change architecture or safety; and the field catalogue with its paths and units. A missing value is never zero. A value in conflict (`conflicts` on an entry) counts as missing until a person resolves it. `classification` is the deterministic domain classifier's live result (archetypes and overlays, each with its evidence for and against; `recorded_up_to_date` says whether the stored domain.* entries match it). Edit with SetRequirementField (a different value is recorded as a conflict unless supersede), ClearRequirementField, ResolveRequirementConflict (a person only), ClassifyDomain, UpsertRequirementItem and DeleteRequirementItem.",
             obj(&[], &[]),
             true,
         ),
@@ -209,6 +209,9 @@ const CALC_NOTE: &str = "computed by eak-engineering (deterministic); not a desi
 /// deterministic) and the catalogue an agent needs to address fields (ADR-0057).
 fn requirements(p: &Project) -> Value {
     use eak_core::requirements as rq;
+    use eak_engineering::domain;
+    let classification = domain::classify(&p.requirement_set);
+    let changes = domain::plan(&p.requirement_set, &classification, 0, 0);
     let units: Vec<Value> = eak_core::ReqUnit::ALL
         .iter()
         .map(|u| json!({"symbol": u.symbol(), "measures": u.measure()}))
@@ -217,7 +220,10 @@ fn requirements(p: &Project) -> Value {
         "revision": p.revision,
         "record": p.requirement_set,
         "report": rq::evaluate(&p.requirement_set),
+        "classification": classification,
+        "recorded_up_to_date": changes.is_empty(),
         "catalogue": {
+            "domain_classes": rq::DOMAIN_CLASSES,
             "fields": rq::FIELDS,
             "rail_fields": rq::RAIL_FIELDS,
             "interface_fields": rq::INTERFACE_FIELDS,

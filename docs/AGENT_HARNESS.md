@@ -102,7 +102,7 @@ Lengths are **integer nanometres** (1 mm = 1 000 000). Rotations are `R0|R90|R18
 | `weft` | `<project>/weft/journal.jsonl` only; never the design | `weft_register`, `weft_agents`, `weft_send`, `weft_inbox`, `weft_tasks`, `weft_conflicts`, `weft_history` (ADR-0053, see "WEFT orchestration") |
 | `project` / `discovery` | creates a folder / none | `create_project`, `list_tools`, `guide`, `design_spec_schema` |
 
-## Requirements (schema v9, ADR-0057)
+## Requirements (schema v9, ADR-0057; conflicts and domain classification v11, ADR-0060)
 
 `eak requirements --json` (tool `get_requirements`) returns the structured requirement record,
 its evaluation and the field catalogue: completeness per section, which operations (architecture,
@@ -117,9 +117,21 @@ A field with nothing recorded is `UNKNOWN`. Never put a number where nobody gave
   generated from).
 - As an agent you record `UNKNOWN` or `NEEDS_CONFIRMATION`; give a value you computed or proposed
   the source kind `calculation` or `agent_proposal`. Only a person records `CONFIRMED` or
-  `NOT_APPLICABLE`: the engine refuses them from an agent (`precondition`). No command records
-  `DERIVED` (only a deterministic evaluator will). A recorded `UNKNOWN` names its `owner`. A rail
+  `NOT_APPLICABLE`: the engine refuses them from an agent (`precondition`). Only `ClassifyDomain`
+  records `DERIVED`. A recorded `UNKNOWN` names its `owner`. A rail
   or interface list has no status of its own: it is as firm as its items' material fields. Ask the person, and quote the report's question for the field.
+- A different value never overwrites a recorded one: it is kept beside it in the entry's
+  `conflicts`, the response warns, and the field counts as missing until a person resolves it with
+  `ResolveRequirementConflict` (an agent's call is refused). `supersede: true` replaces a value
+  instead, but never a person's `CONFIRMED` or `NOT_APPLICABLE` value and never an entry in
+  conflict when you are an agent. Shortcut: `eak requirement set <REV> '<SetRequirementField
+  arguments>'`.
+- `ClassifyDomain` (`eak requirement classify <REV>`) runs the deterministic domain classifier
+  and records the `domain.*` classes: `DERIVED` only for strong evidence from firm values,
+  `NEEDS_CONFIRMATION` for weak evidence, and a conflict where evidence points both ways.
+  `get_requirements` shows `classification` with the evidence for and against each class, and
+  `recorded_up_to_date`. Do not record a class yourself as fact: propose it as
+  `NEEDS_CONFIRMATION`, or run the classifier.
 - Readiness is advisory: no tool refuses an operation on it yet. Say which operations are
   still blocked when you report.
 

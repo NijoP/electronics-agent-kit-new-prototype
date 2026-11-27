@@ -5,7 +5,7 @@
 //    tab, Library and Checks show the bottom dock's Library and Findings tabs, Manufacturing shows
 //    the manufacturing side view, Agents opens the Agents workspace (agent sessions, tasks,
 //    messages and reviews; ADR-0058), and Home / Terminal switch the app shell to that area;
-//  * project panels (Explorer, Overview, Design manager, Domain, Assets): each switches the left
+//  * project panels (Explorer, Overview, Requirements, Design manager, Domain, Assets): each switches the left
 //    dock, and pressing the active one collapses it. Library, Checks and Manufacturing toggle the
 //    same way;
 //  * theme and settings, at the foot.
@@ -16,11 +16,12 @@ import { Icons } from "./icons";
 import { NavRail, type NavItem } from "./NavRail";
 import type { WorkspaceEntry } from "./registry";
 
-export type SideView = "overview" | "project" | "design" | "domain" | "manufacturing" | "assets";
+export type SideView = "overview" | "project" | "requirements" | "design" | "domain" | "manufacturing" | "assets";
 
 export const SIDE_VIEWS: { id: SideView; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "project", label: "Explorer" },
+  { id: "requirements", label: "Requirements" },
   { id: "design", label: "Design manager" },
   { id: "domain", label: "Domain" },
   { id: "manufacturing", label: "Manufacturing" },
@@ -61,7 +62,7 @@ const SIDE_ACTIONS: Partial<Record<SideView, string>> = { project: "show-project
 const keyOf = (id: string | undefined) => (id ? effectiveKeys({ id })[0] : undefined);
 
 /** The side views listed as project panels (Manufacturing is an area of its own). */
-const PANEL_VIEWS: SideView[] = ["project", "overview", "design", "domain", "assets"];
+const PANEL_VIEWS: SideView[] = ["project", "overview", "requirements", "design", "domain", "assets"];
 
 interface Props {
   sideView: SideView;

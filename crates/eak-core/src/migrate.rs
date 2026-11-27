@@ -40,6 +40,11 @@
 //!   `constraints.plane_min_neck_width` are new and absent means undeclared: DRC-030 and the plane
 //!   neck check are UNKNOWN, never PASS, exactly the v9 meaning. Only the version number changes; a
 //!   v10 file is refused by v9 builds, which would silently drop the declared limits.
+//! * v10 → v11 (ADR-0060): a requirement entry's `conflicts` (competing values not yet resolved)
+//!   is new and absent means none, and the `domain.*` classification entries are new catalogue
+//!   keys; a v10 record has neither, exactly the v11 meaning. Only the version number changes; a
+//!   v11 file is refused by v10 builds, which would silently drop the conflicts and so show a
+//!   disputed value as settled.
 
 use crate::ir::{Stackup, FR4_ER, SCHEMA_VERSION};
 use crate::library::SymbolDef;
@@ -72,9 +77,10 @@ pub fn migrate(mut raw: Value) -> Result<Value, CoreError> {
     if found <= 5 {
         raw = v5_to_v6(raw);
     }
-    // v6 → v7 up to v9 → v10 only add optional data: the version number is all that changes.
-    if found <= 9 {
-        raw["schema_version"] = Value::from(10);
+    // v6 → v7 up to v9 → v10 and v10 → v11 only add optional data: the version number is all that
+    // changes.
+    if found <= 10 {
+        raw["schema_version"] = Value::from(11);
     }
     Ok(raw)
 }
@@ -816,6 +822,7 @@ mod tests {
             note: None,
             updated_at_ms: 1_795_000_000_000,
             updated_revision: 4,
+            conflicts: vec![],
         };
         let mut q = Project::new("recorded");
         let set = &mut q.requirement_set;
@@ -862,6 +869,80 @@ mod tests {
             panic!("integrity must refuse the requirement record");
         };
         assert_eq!(problems.len(), 2, "{problems:?}");
+    }
+
+    /// v9 → v11 (ADR-0060): a v9 file loads with no conflicts and no classification, an entry's
+    /// conflicting values and a `domain.*` entry round-trip, and a malformed conflict fails
+    /// integrity.
+    #[test]
+    fn v11_conflicts_and_classification_migrate_and_round_trip() {
+        use crate::requirements::SourceKind;
+        use crate::{ReqEntry, ReqSource, ReqStatus, ReqUnit, ReqValue};
+        let entry = |status: ReqStatus, value: ReqValue, kind: SourceKind| ReqEntry {
+            status,
+            value: Some(value),
+            source: Some(ReqSource {
+                kind,
+                reference: "kick-off call 2026-11-20".into(),
+            }),
+            derived_from: vec![],
+            owner: (kind != SourceKind::Calculation).then(|| "Client PM".to_string()),
+            risk_if_wrong: (status == ReqStatus::NeedsConfirmation)
+                .then(|| "the input stage is re-selected".to_string()),
+            note: None,
+            updated_at_ms: 1_795_000_000_000,
+            updated_revision: 3,
+            conflicts: vec![],
+        };
+        let volts = |nom: f64| ReqValue::Range {
+            min: None,
+            nom: Some(nom),
+            max: None,
+            unit: ReqUnit::Volt,
+        };
+        let mut q = Project::new("v11-board");
+        let mut disputed = entry(ReqStatus::Confirmed, volts(12.0), SourceKind::Client);
+        disputed.conflicts.push(entry(
+            ReqStatus::NeedsConfirmation,
+            volts(24.0),
+            SourceKind::Datasheet,
+        ));
+        let set = &mut q.requirement_set;
+        set.fields.insert("supply.input_voltage".into(), disputed);
+        set.fields.insert(
+            "domain.rf_wireless".into(),
+            entry(
+                ReqStatus::NeedsConfirmation,
+                ReqValue::Flag { value: true },
+                SourceKind::Calculation,
+            ),
+        );
+        let json = to_json(&q);
+        assert!(json.contains("\"conflicts\"") && json.contains("\"domain.rf_wireless\""));
+        let back = from_json(&json).expect("a v11 project loads");
+        assert_eq!(back, q);
+        assert_eq!(json, to_json(&back));
+
+        // A v9 file (no conflicts, no classification) loads unchanged at v11.
+        let plain = Project::new("v9-board");
+        let mut v: Value = serde_json::from_str(&to_json(&plain)).unwrap();
+        v["schema_version"] = Value::from(9);
+        let p = from_json(&v.to_string()).expect("v9 project loads");
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
+        assert_eq!(p, plain);
+
+        // A conflicting value equal to the recorded one is refused on load.
+        let mut bad = q.clone();
+        let e = bad
+            .requirement_set
+            .fields
+            .get_mut("supply.input_voltage")
+            .unwrap();
+        e.conflicts[0].value = e.value.clone();
+        let Err(CoreError::Integrity(problems)) = from_json(&to_json(&bad)) else {
+            panic!("integrity must refuse the conflict");
+        };
+        assert_eq!(problems.len(), 1, "{problems:?}");
     }
 
     #[test]

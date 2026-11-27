@@ -412,5 +412,42 @@ fn cli_records_requirements_and_an_agent_never_confirms_them() {
     assert_eq!(f["status"], "NEEDS_CONFIRMATION");
     assert_eq!(f["level"], "provisional");
     assert_eq!(f["value"]["unit"], "V");
+
+    // Schema v11 (ADR-0060): `eak requirement set` records a different value beside the old one
+    // as a conflict, and `eak requirement classify` runs the domain classifier.
+    let mut other = set("NEEDS_CONFIRMATION");
+    other["value"] = json!({"kind": "range", "min": 10.8, "nom": 12.0, "max": 13.2, "unit": "V"});
+    other.as_object_mut().unwrap().remove("type");
+    let (code, v) = eak(&dir, &["requirement", "set", "1", &other.to_string()]);
+    assert_eq!(code, 0, "{v}");
+    let warned = v["result"]["warnings"].to_string();
+    assert!(warned.contains("conflict"), "{v}");
+    let (_, r) = eak(&dir, &["requirements"]);
+    let fields = r["result"]["report"]["fields"].as_array().unwrap();
+    let f = fields
+        .iter()
+        .find(|f| f["path"] == "supply.input_voltage")
+        .unwrap();
+    assert_eq!(f["level"], "missing", "a value in conflict is missing");
+    assert_eq!(f["conflicts"].as_array().unwrap().len(), 1);
+    let usb = json!({
+        "path": "supply.sources",
+        "status": "NEEDS_CONFIRMATION",
+        "value": {"kind": "text", "text": "USB-C 5 V"},
+        "source": {"kind": "client", "reference": "kick-off call"},
+        "owner": "Client PM",
+        "risk_if_wrong": "the input stage is re-designed",
+    });
+    let (code, v) = eak(&dir, &["requirement", "set", "2", &usb.to_string()]);
+    assert_eq!(code, 0, "{v}");
+    let (_, r) = eak(&dir, &["requirements"]);
+    assert_eq!(r["result"]["recorded_up_to_date"], false, "{r}");
+    let (code, v) = eak(&dir, &["requirement", "classify", "3"]);
+    assert_eq!(code, 0, "{v}");
+    let (_, r) = eak(&dir, &["requirements"]);
+    assert_eq!(r["result"]["recorded_up_to_date"], true, "{r}");
+    let usb = &r["result"]["record"]["fields"]["domain.usb_interface"];
+    assert_eq!(usb["status"], "NEEDS_CONFIRMATION", "{r}");
+    assert_eq!(usb["source"]["kind"], "calculation", "{r}");
     let _ = std::fs::remove_dir_all(root);
 }

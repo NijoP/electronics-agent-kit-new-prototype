@@ -53,6 +53,7 @@ import type {
   PrepareResult,
   RecentProject,
   DomainReport,
+  RequirementsView,
   IntelligenceSummary,
   SimRequest,
   SimResult,
@@ -140,6 +141,7 @@ export const IPC_COMMANDS = [
   "library_footprint_candidates",
   "library_model_read",
   "domain_classification",
+  "requirements_report",
   "intelligence_summary",
   "export_manufacturing",
   "bom_table",
@@ -364,6 +366,7 @@ export const api = {
   /** Raw bytes of a component 3D model file (absolute path; .step/.stp/.wrl/.glb only). */
   libraryModelRead: (path: string) => call<ArrayBuffer>("library_model_read", { path }),
   domainClassification: () => call<DomainReport>("domain_classification"),
+  requirementsReport: () => call<RequirementsView>("requirements_report"),
   intelligenceSummary: () => call<IntelligenceSummary>("intelligence_summary"),
   exportManufacturing: () => call<ExportResult>("export_manufacturing"),
   // D3 outputs: the BOM dialog preview and export, and the schematic/netlist documents.

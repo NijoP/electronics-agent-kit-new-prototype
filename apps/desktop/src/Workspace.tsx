@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { api, describeError } from "./api";
 import { useRealtimeDrc } from "./realtimeDrc";
 import { DomainPanel } from "./DomainPanel";
+import { RequirementsPanel } from "./RequirementsPanel";
 import { ManufacturingPanel as FabricatorPrepPanel } from "./ManufacturingPanel";
 import { CommandPalette } from "./CommandPalette";
 import type { EditCtx } from "./EditContext";
@@ -813,7 +814,7 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
   const goStage = (id: StageId) => {
     switch (id) {
       case "requirements":
-        return showSide("overview");
+        return showSide("requirements");
       case "parts":
         return setBottomTab("library");
       case "schematic":
@@ -1144,6 +1145,11 @@ export function Workspace({ initial, visible, onClosed, onOpened, onSettings, th
           )}
           {sideView === "design" && (
             <DesignManager snapshot={snapshot} conn={conn} selected={selected} activeDoc={activeId} tab={dmTab} onTab={setDmTab} onNavigate={navigateManager} onCommand={execute} busy={busy} />
+          )}
+          {sideView === "requirements" && (
+            <div className="side-scroll">
+              <RequirementsPanel revision={revision} busy={busy} onCommand={executeChecked} />
+            </div>
           )}
           {sideView === "domain" && (
             <div className="panel-body">
