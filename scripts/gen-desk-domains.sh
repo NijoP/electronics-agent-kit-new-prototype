@@ -29,3 +29,38 @@ jq -n --slurpfile tax "$src/taxonomy.json" \
   }]
 }' > "$out"
 echo "wrote $out"
+
+# M4.5 (ADR-0062): the DESK rule catalogue, its references and the component families, carried as
+# knowledge with DESK's own evidence state. Nothing here is an EAK limit or a verified fact.
+desk="${1}"
+commit="$(git -C "$desk" rev-parse HEAD 2>/dev/null || echo unknown)"
+kout="$(dirname "$0")/../crates/eak-intelligence/data/desk_knowledge.json"
+jq -n --arg commit "$commit" \
+  --slurpfile rules <(jq -s '[.[].rules[]] | sort_by(.rule_id)' "$src"/rule_sets/*.json) \
+  --slurpfile refs "$src/references/references.json" \
+  --slurpfile fam "$src/component_families/families.json" '
+{
+  source: "https://github.com/NijoP/DESK library/pcb_domains (MIT; reference data re-expressed for EAK)",
+  licence: "MIT",
+  desk_commit: $commit,
+  rules: [$rules[0][] | {
+    rule_id, name, version, domain, category, scope, severity, applicability,
+    required_inputs: (.required_inputs // []),
+    evaluation_method: (.evaluation_method // ""),
+    parameters: (.parameters // {}),
+    source_references: (.source_references // []),
+    verification_method: (.verification_method // ""),
+    status, enforcement,
+    human_review_required: (.human_review_required // false),
+    rationale: (.rationale // "")
+  }],
+  references: [$refs[0].references[] | {id, title, organisation, kind, clause_notes: (.clause_notes // ""),
+    url: (.url // ""), derived_values_used: (.derived_values_used // []), verification_status,
+    copyrighted_text_stored}] | sort_by(.id),
+  families: [$fam[0].families[] | {family_id, name, group, description,
+    required_parameters: (.required_parameters // []),
+    datasheet_verification: (.datasheet_verification // []),
+    relevant_archetypes: (.relevant_archetypes // []),
+    aliases: (.aliases // [])}] | sort_by(.family_id)
+}' > "$kout"
+echo "wrote $kout"

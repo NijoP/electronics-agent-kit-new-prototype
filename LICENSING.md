@@ -88,6 +88,14 @@ datasheets; no datasheet content is redistributed.
 keywords, constraint and verification prompts, standard identifiers) with no standard text.
 DESK's Python code is not used; the classifier is re-implemented in Rust.
 
+`crates/eak-intelligence/data/desk_knowledge.json` (ADR-0062) is derived from the same library at
+DESK commit `9e44e7ca7d64b4997b5cf1c8afcd7f355b34c79b` (recorded in the file): the rule catalogue
+(66 rules), the bibliographic references they cite (46; ids, titles, clause pointers, no standard or
+datasheet text, all `REFERENCE_ONLY`) and the component families (206). Licensing review: DESK is
+MIT (`third_party/licenses/DESK/LICENSE`); the data is the owner's own work; no standard text,
+table reproduction, datasheet or third-party code is included; the loader refuses a reference
+marked as storing copyrighted text.
+
 ## ngspice (optional external tool, not bundled)
 `eak-simulation` runs a user-installed `ngspice` executable as a subprocess (ADR-0013). Nothing
 from ngspice is copied, linked or redistributed by EAK. The Debian package (ngspice 42,
