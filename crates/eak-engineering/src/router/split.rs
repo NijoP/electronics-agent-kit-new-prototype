@@ -11,7 +11,8 @@
 //!
 //! After routing, each high-speed layer change whose nearest reference planes differ but share a
 //! net gets a return via of that net (through, the net's via size) in a ring around it
-//! (`stitch` ring: 0.6–3.0 mm, 24 angles), checked like any routed copper (`violation`), unless
+//! (`stitch` ring: 0.6–3.0 mm, 24 angles, no wider than a declared `return_via_max_distance`),
+//! checked like any routed copper (`violation`), unless
 //! one is already within that ring. A change of reference net only gets a note: a stitching
 //! capacitor is a part, not copper the router may place. `eak-validation` judges the result
 //! (DRC-029..031), never this module.
@@ -168,7 +169,15 @@ pub(super) fn for_conn(env: &Env, conn: &Conn) -> Option<Mask> {
 pub(super) fn return_vias(env: &Env, placed: &[Placed]) -> (Vec<RoutedVia>, Vec<String>) {
     let model = Planes::new(env.p, env.geo);
     let st = &env.p.pcb.board.stackup;
-    let ring = RING_MAX_MM * 1e6;
+    // The stitch ring, no wider than the declared largest return-via distance (ADR-0059; 2 nm
+    // inside it, so the rounded via position never exceeds it).
+    let ring = env
+        .p
+        .constraints
+        .return_via_max_distance
+        .map_or(RING_MAX_MM * 1e6, |d| {
+            (d as f64 - 2.0).min(RING_MAX_MM * 1e6)
+        });
     let mut board: Vec<Placed> = placed.to_vec();
     let mut out: Vec<RoutedVia> = vec![];
     let mut notes = vec![];
@@ -203,7 +212,7 @@ pub(super) fn return_vias(env: &Env, placed: &[Placed]) -> (Vec<RoutedVia>, Vec<
                             if have {
                                 continue;
                             }
-                            match place(env, &model, &board, &net, planes, v) {
+                            match place(env, &model, &board, &net, planes, (v, ring)) {
                                 Some(ret) => {
                                     out.push(RoutedVia {
                                         position: ret.vias[0],
@@ -216,8 +225,9 @@ pub(super) fn return_vias(env: &Env, placed: &[Placed]) -> (Vec<RoutedVia>, Vec<
                                     board.push(ret);
                                 }
                                 None => notes.push(format!(
-                                    "{}: no room for a {net} return via within {RING_MAX_MM} mm of the layer change at {}",
+                                    "{}: no room for a {net} return via within {:.2} mm of the layer change at {}",
                                     pl.net,
+                                    ring / 1e6,
                                     at(env, i, v)
                                 )),
                             }
@@ -246,7 +256,7 @@ fn place(
     board: &[Placed],
     net: &str,
     planes: [CopperLayer; 2],
-    around: Point,
+    (around, ring): (Point, f64),
 ) -> Option<Placed> {
     let id = *env.net_ids.get(net)?;
     let spec = env.specs.get(net)?;
@@ -255,6 +265,9 @@ fn place(
     let steps = ((RING_MAX_MM - RING_MIN_MM) / RING_STEP_MM).round() as usize;
     for s in 0..=steps {
         let r = (RING_MIN_MM + s as f64 * RING_STEP_MM) * 1e6;
+        if r > ring + 1.0 {
+            break;
+        }
         for k in 0..RING_ANGLES {
             let a = k as f64 * std::f64::consts::TAU / RING_ANGLES as f64;
             let c = Point::new(

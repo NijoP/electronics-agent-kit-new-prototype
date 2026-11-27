@@ -107,7 +107,11 @@ fn without_declared_high_speed_nets_the_reference_rules_do_not_apply() {
         assert_eq!(r.state_of(rule), CheckState::NotApplicable, "{rule}");
         assert!(reason(&r, rule).contains("no declared high-speed net"));
     }
-    assert_eq!(r.state_of("DRC-032"), CheckState::Pass);
+    // Plane zones and no declared neck width: the neck check is UNKNOWN, naming the input.
+    assert_eq!(r.state_of("DRC-032"), CheckState::Unknown);
+    assert!(reason(&r, "DRC-032").contains("plane_min_neck_width"));
+    p.constraints.plane_min_neck_width = Some(500_000);
+    assert_eq!(drc::run(&p).state_of("DRC-032"), CheckState::Pass);
     let empty = Project::new("empty");
     let r = drc::run(&empty);
     assert_eq!(r.state_of("DRC-032"), CheckState::NotApplicable);
@@ -224,6 +228,7 @@ fn a_layer_change_onto_a_power_reference_warns_and_stays_unknown() {
 #[test]
 fn a_plane_zone_cut_in_two_is_reported() {
     let mut p = board("+3V3");
+    p.constraints.plane_min_neck_width = Some(500_000);
     // A +5V track on In2 cuts the left zone top to bottom; a second +3V3 via keeps both halves.
     via(&mut p, "vl2", (15.0, 5.0), "+3V3", THROUGH);
     p.pcb.tracks.insert(
@@ -243,4 +248,63 @@ fn a_plane_zone_cut_in_two_is_reported() {
     let f = r.findings.iter().find(|f| f.rule_id == "DRC-032").unwrap();
     assert_eq!(f.objects, vec!["left".to_string()]);
     assert!(f.message.contains("split into 2 islands"), "{}", f.message);
+}
+
+#[test]
+fn a_return_via_beyond_the_declared_distance_fails() {
+    // The nearest GND via joining In1 and In2 is vl at (5, 5) mm, 7.07 mm from the change.
+    let mut p = board("GND");
+    transition(&mut p);
+    p.constraints.return_via_max_distance = Some(8_000_000);
+    assert_eq!(drc::run(&p).state_of("DRC-031"), CheckState::Pass);
+    p.constraints.return_via_max_distance = Some(5_000_000);
+    let r = drc::run(&p);
+    assert_eq!(r.state_of("DRC-031"), CheckState::Fail);
+    let f = r.findings.iter().find(|f| f.rule_id == "DRC-031").unwrap();
+    assert_eq!(f.objects, vec!["sig".to_string(), "vl".to_string()]);
+    assert!(f.message.contains("7.07 mm away"), "{}", f.message);
+}
+
+#[test]
+fn a_plane_narrower_than_the_declared_neck_width_fails() {
+    // In1 GND: two 10 x 10 mm areas joined by a bridge 2 mm wide; a GND via keeps the fill.
+    let mut p = Project::new("neck");
+    p.pcb.board.outline = rect(0.0, 0.0, 32.0, 12.0);
+    p.pcb.board.stackup = Stackup::multilayer(4, 1_600_000, 1.0, 0.5, "FR-4", FR4_ER);
+    let dumbbell = [
+        (1.0, 1.0),
+        (11.0, 1.0),
+        (11.0, 5.0),
+        (21.0, 5.0),
+        (21.0, 1.0),
+        (31.0, 1.0),
+        (31.0, 11.0),
+        (21.0, 11.0),
+        (21.0, 7.0),
+        (11.0, 7.0),
+        (11.0, 11.0),
+        (1.0, 11.0),
+    ];
+    let outline = dumbbell.map(|(x, y)| Point::mm(x, y)).to_vec();
+    zone(&mut p, "gnd", IN1, "GND", outline);
+    via(&mut p, "vg", (5.0, 6.0), "GND", THROUGH);
+    p.constraints.plane_min_neck_width = Some(4_000_000);
+    let r = drc::run(&p);
+    assert_eq!(r.state_of("DRC-032"), CheckState::Fail);
+    let f = r
+        .findings
+        .iter()
+        .find(|f| f.rule_id == "DRC-032" && f.severity == Severity::Error)
+        .expect("a neck finding");
+    assert_eq!(f.objects, vec!["gnd".to_string()]);
+    assert!(
+        f.message.contains("narrows below the declared 4.00 mm"),
+        "{}",
+        f.message
+    );
+    let at = f.location.expect("the neck is located");
+    assert!((11_000_000..21_000_000).contains(&at.x), "{at:?}");
+    // The bridge is 2 mm wide: a 0.5 mm minimum passes.
+    p.constraints.plane_min_neck_width = Some(500_000);
+    assert_eq!(drc::run(&p).state_of("DRC-032"), CheckState::Pass);
 }

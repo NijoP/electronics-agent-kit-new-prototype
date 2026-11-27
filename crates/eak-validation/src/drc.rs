@@ -950,7 +950,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
     // DRC-028: DC voltage drop along the routed copper.
     let drop_unknown = voltage_drop(p, &mut f);
     // DRC-029..032: reference planes of declared high-speed nets, plane islands (M7.6).
-    let plane_gaps = crate::planes::check(p, geo, None, &mut f);
+    let plane_gaps = crate::planes::check(p, geo, &mut f);
 
     let mut rules = vec![
         rule("DRC-001", "Minimum / net-class track width", format!("min {}", mm(c.min_track_width as f64)), "Project constraints"),
@@ -1023,7 +1023,7 @@ pub fn run_with(p: &Project, geo: &BoardGeometry) -> Report {
         "Arc tracks and arc board edges are checked as chords with at most 10 µm error; the autorouter avoids keep-out regions, the auto-placer does not (DRC-021 reports what it puts there)".into(),
         "Text and dimensions on the documentation layer are not fabricated and not checked; silk text is not checked against other silk or the courtyards".into(),
         "Clearance-matrix cells are checked by DRC only: the interactive router keeps net classes, declared voltages and net-pair rules but not the matrix, and the autorouter keeps neither the matrix nor net-pair rules (ADR-0046)".into(),
-        "Reference planes (DRC-029..032): only declared high-speed nets are checked; a reference is an adjacent plane layer or a neighbour carrying a pour; two zones of one net are assumed joined; return vias are matched by net and layer span, not by the current path; plane neck width is not checked (no declared minimum)".into(),
+        "Reference planes (DRC-029..032): only declared high-speed nets are checked; a reference is an adjacent plane layer or a neighbour carrying a pour; two zones of one net are assumed joined; return vias are matched by net and layer span, not by the current path; plane necks are found on the 0.1 mm fill raster by eroding it by half the declared plane_min_neck_width (a neck is reported where that splits or removes an island; its exact width is not measured)".into(),
         "Differential pairs: skew counts track length only (no via barrels); the gap rule checks only the closest approach, not where the members run apart; impedance uses the positive member's width and is not checked on uncoupled segments".into(),
     ];
     limitations.extend(pathres::LIMITATIONS.iter().map(|l| l.to_string()));
