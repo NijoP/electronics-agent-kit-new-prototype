@@ -50,7 +50,7 @@ pub(crate) struct Gaps {
     pub not_applicable: Vec<(&'static str, String)>,
 }
 
-/// DRC-029..031 findings. `return_max` is the declared largest return-via distance (`None` =
+/// DRC-029..032 findings. `return_max` is the declared largest return-via distance (`None` =
 /// undeclared: DRC-031 is UNKNOWN wherever a return via is present).
 pub(crate) fn check(
     p: &Project,
