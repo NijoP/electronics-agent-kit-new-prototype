@@ -42,11 +42,14 @@ pub enum SourceState {
     CitedNotVerified,
 }
 
+/// A source is EAK's own only when it names nothing else: a second clause (after `;`) always
+/// cites something outside EAK (DRC-002: "Project constraints; IPC-2221B Table 6-1 ...").
 fn source_state(source: &str) -> SourceState {
-    let own = source == "EAK"
-        || source.starts_with("EAK (ADR-")
-        || source.starts_with("Project constraints")
-        || source.starts_with("Project enclosure declaration");
+    let own = !source.contains(';')
+        && (source == "EAK"
+            || source.starts_with("EAK (ADR-")
+            || source.starts_with("Project constraints")
+            || source.starts_with("Project enclosure declaration"));
     if own {
         SourceState::EakDefinition
     } else {
@@ -545,6 +548,9 @@ mod tests {
         // IPC-2221 based current capacity is cited, never presented as verified.
         let current = r.rule("DRC-008").unwrap();
         assert_eq!(current.source_state, SourceState::CitedNotVerified);
+        // Regression: a project limit with a cited table (DRC-002) is cited, not EAK's own.
+        let clearance = r.rule("DRC-002").unwrap();
+        assert_eq!(clearance.source_state, SourceState::CitedNotVerified);
         // Same build, same registry: the fingerprints are deterministic.
         assert_eq!(&build(), r);
     }
