@@ -9,12 +9,14 @@
 //! running (no local builds): CI decides.
 
 use eak_core::geom::segment_segment_distance;
+use eak_core::pcb_objects::{Region, RegionObject};
 use eak_core::{
-    CopperLayer, DiffPairRule, FootprintInstance, Insulation, InsulationStandard, NetClass, Point,
-    Project, Rotation, Side, Stackup, Track, Via, FR4_ER,
+    CopperLayer, DiffPairRule, FootprintInstance, Insulation, InsulationStandard, LayerKind,
+    NetClass, Point, Project, Rotation, Side, Stackup, Track, Via, FR4_ER,
 };
 use eak_engineering::clearance;
 use eak_engineering::copper::{self, ItemKind};
+use eak_engineering::impedance;
 use eak_engineering::router::{self, RouteResult, RouterOptions};
 use eak_validation::{drc, CheckState, Severity};
 
@@ -508,4 +510,77 @@ fn voltage_spacing_is_unknown_not_pass_while_an_input_is_undeclared() {
     let (s, why) = state(&no_v);
     assert_eq!(s, CheckState::Unknown, "{why}");
     assert!(why.contains("no declared voltage for: HV"), "{why}");
+}
+
+/// Top, In1 plane, In2 stripline, In3 plane, Bottom on a 3.2 mm board, a 0.3 mm declared gap and a
+/// target equal to the Top estimate; track keep-outs on Top and Bottom across x 20..30 mm leave
+/// In2 the only way from J1 to J2.
+fn stripline_board(tolerance_pct: f64) -> (Project, f64, f64) {
+    let mut st = Stackup::multilayer(5, 3_200_000, 1.0, 0.5, "FR-4", FR4_ER);
+    st.layers[3].kind = LayerKind::Plane;
+    let z = |layer| {
+        let g = impedance::geometry(&st, layer).expect("modelled layer");
+        impedance::zdiff(g, WIDTH, 300_000)
+            .ohm()
+            .expect("in the model")
+    };
+    let (top, in2) = (z(CopperLayer::Top), z(CopperLayer::Inner(2)));
+    let mut p = board(st);
+    let pair = &mut p.constraints.diff_pairs[0];
+    pair.gap = Some(300_000);
+    pair.target_zdiff_ohm = Some(top);
+    pair.zdiff_tolerance_pct = Some(tolerance_pct);
+    for (id, layer) in [
+        ("ko_top", CopperLayer::Top),
+        ("ko_bot", CopperLayer::Bottom),
+    ] {
+        let outline = [(20.0, 0.0), (30.0, 0.0), (30.0, 60.0), (20.0, 60.0)];
+        p.pcb.regions.insert(
+            id.into(),
+            Region {
+                id: id.into(),
+                name: id.into(),
+                outline: outline.map(|(x, y)| Point::mm(x, y)).to_vec(),
+                layers: vec![layer],
+                forbid: [RegionObject::Tracks].into(),
+                min_track_width: None,
+                max_track_width: None,
+            },
+        );
+    }
+    (p, top, in2)
+}
+
+#[test]
+fn a_pair_never_routes_coupled_on_a_layer_outside_its_impedance_band() {
+    // M7.7: the same width and gap are about 113 ohm on Top but about 88 ohm as In2 stripline.
+    let (p, top, in2) = stripline_board(10.0);
+    assert!(
+        (in2 - top).abs() > top * 0.1,
+        "precondition: {top} vs {in2}"
+    );
+    let res = router::route(&p, &RouterOptions::default());
+    let pair = res.pairs.iter().find(|r| r.positive == P).unwrap();
+    assert!(pair.declared && !pair.coupled, "{pair:?}");
+    assert!(
+        pair.note.contains("impedance band") && pair.note.contains("In2"),
+        "{}",
+        pair.note
+    );
+    assert_ne!(pair.impedance_within_tolerance, Some(true), "{pair:?}");
+
+    // With a band that takes In2 in, the pair routes coupled through In2 and is within it.
+    let (p, top, in2) = stripline_board(30.0);
+    assert!(
+        (in2 - top).abs() <= top * 0.3,
+        "precondition: {top} vs {in2}"
+    );
+    let res = router::route(&p, &RouterOptions::default());
+    let pair = res.pairs.iter().find(|r| r.positive == P).unwrap();
+    assert!(pair.coupled, "{pair:?}");
+    assert!(
+        pair.impedance.iter().any(|l| l.layer.starts_with("In2")),
+        "{pair:?}"
+    );
+    assert_eq!(pair.impedance_within_tolerance, Some(true), "{pair:?}");
 }
