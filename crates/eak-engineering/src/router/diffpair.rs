@@ -505,7 +505,13 @@ pub(super) fn attempt(
             .filter(|l| ly.contains(l))
             .collect()
     };
+    // Pair-aware layers: only layers where the pair's width and gap give the declared impedance.
+    let (layers, off_band) = in_band(env, rule)?;
     let (la, lb) = (common(cp.a, na), common(cp.b, nb));
+    let (la, lb): (Vec<usize>, Vec<usize>) = (
+        la.into_iter().filter(|l| layers.contains(l)).collect(),
+        lb.into_iter().filter(|l| layers.contains(l)).collect(),
+    );
     if la.is_empty() || lb.is_empty() {
         return Err("the members' pads share no routable layer at one end".into());
     }
@@ -514,11 +520,14 @@ pub(super) fn attempt(
         idp,
         (ba, &la),
         (bb, &lb),
-        env.routable,
+        &layers,
         env.opts,
         costs,
     )
-    .ok_or("NO_LEGAL_PATH: no corridor wide enough for both members")?;
+    .ok_or_else(|| match off_band.is_empty() {
+        true => "NO_LEGAL_PATH: no corridor wide enough for both members".to_string(),
+        false => format!("NO_LEGAL_PATH: no corridor wide enough for both members on the layers within the impedance band (not used: {})", off_band.join(", ")),
+    })?;
     let (mut centre, cvias) = path_to_segments(&grid, &path, ba, bb);
     let (l0, l1) = (path[0].0, path[path.len() - 1].0);
     centre.insert(0, (l0, ca, ba));
@@ -554,6 +563,12 @@ pub(super) fn attempt(
         rule.width as f64 / 1e6,
         rule.gap as f64 / 1e6
     );
+    if !off_band.is_empty() {
+        note.push_str(&format!(
+            "; layers outside the impedance band not used: {}",
+            off_band.join(", ")
+        ));
+    }
     match rule.max_skew {
         None => note.push_str(&format!(
             "; skew {:.3} mm (no max_skew declared: not length matched)",
@@ -623,6 +638,38 @@ pub(super) fn attempt(
         placed: [make(0, ip, cp, idp, sp), make(1, inn, cn, idn, sn)],
         note,
     })
+}
+
+/// The routing layers a coupled pair may use, and the layers left out with their estimate: with a
+/// declared target and tolerance, a layer whose estimated Zdiff at the pair's width and gap is
+/// outside the band is left out. A layer whose estimate is UNKNOWN stays in, and `impedance_on`
+/// reports it UNKNOWN. Without a target and tolerance every routing layer is used.
+fn in_band(env: &Env, rule: &Coupled) -> Result<(Vec<usize>, Vec<String>), String> {
+    let (Some(t), Some(tol)) = (rule.target_zdiff_ohm, rule.zdiff_tolerance_pct) else {
+        return Ok((env.routable.to_vec(), vec![]));
+    };
+    let (mut ok, mut off) = (vec![], vec![]);
+    for &l in env.routable {
+        let layer = env.layers[l];
+        let z = impedance::geometry(&env.p.pcb.board.stackup, layer)
+            .ok()
+            .and_then(|g| impedance::zdiff(g, rule.width, rule.gap).ohm());
+        match z {
+            Some(z) if (z - t).abs() > t * tol / 100.0 => {
+                off.push(format!("{} about {z:.1} ohm", layer.name()))
+            }
+            _ => ok.push(l),
+        }
+    }
+    if ok.is_empty() {
+        return Err(format!(
+            "NO_LAYER: no routing layer gives {t} ohm ± {tol} % at width {:.3} mm and gap {:.3} mm ({})",
+            rule.width as f64 / 1e6,
+            rule.gap as f64 / 1e6,
+            off.join(", ")
+        ));
+    }
+    Ok((ok, off))
 }
 
 /// Differential impedance of the routed pair on each router layer it uses, and whether every
