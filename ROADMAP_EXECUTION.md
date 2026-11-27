@@ -20,15 +20,15 @@ verification labels. Then fix the stale one.
 
 ## 0. Now / Next / Blocked / Recently completed
 
-**Completed goals (`*`): none.** No goal meets §1.2 today. Merged router and verification work is
+**Completed goals (`*`): M4.1, M7.4, M7.5.** M4.1: [#145](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/145), main [ci 45873336787](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45873336787). M7.4 and M7.5: [#142](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/142) and [#148](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/148), main [ci 45880446742](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45880446742). Each goal lists its limitations. Merged router and verification work is
 **CI VERIFIED**, not COMPLETE: its milestone acceptance (the constrained board, PR #142) has not passed review or merged.
 
 | | Items |
 |---|---|
-| **Now** | M7.4/M7.5: [PR #142](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/142), the constrained acceptance board, is IN REVIEW. Its merge is on hold: the independent reviewer requested changes (the per-segment width floor must be max(IPC-2221, net-class)). M8.3: [PR #143](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/143), DC voltage drop, has PR CI green at 72e8065 and is not yet reviewed. M3.8: [PR #130](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/130), WEFT review: changes requested (3 UI-truth bugs). M1.3: the DESK study is committed and IN REVIEW, waiting on the reviewer pass. M4.1: requirements model (worker `eak-req-model`). |
+| **Now** | M7.6 planes stack: [#158](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/158), [#150](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/150), [#151](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/151), [#153](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/153) and [#154](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/154) open. #155 (schema v10) landed. M4.2/M4.3: [#157](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/157) open (schema v11, ADR-0060). M8.3: [#143](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/143) open. M2.1/M2.2: CI VERIFIED (#152, #159), awaiting a desktop evaluation. M2.3/M2.4: detection landed (#160); no test yet against an installed official CLI. |
 | **Next** | M0.3 task contracts and M0.4 mutation authority (firstmate). M1.1 Traycer/REA and M1.2 Firstmate research. M1.4 surface map. M2.1 Agents workspace entry point (needs M1.5 UX spec). M7.11 diverse acceptance suite (after M7.4). |
 | **Blocked** | M9.6 fabricate a prototype and M9.7 assemble/test it: **BLOCKED, awaiting captain authorization** (standing restriction: no PCB fabrication, ordering or hardware testing until the captain allows it). M9.8 waits on M9.6/M9.7. Old hardware-board PRs [#9](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/9), [#10](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/10) and [#53](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/53) are held for the same reason. |
-| **Recently completed** | Nothing reached `*`. Merged and CI-green on `main` today: #133, #134, #135, #136, #137, #138, #139, #140, #141 (§7), and [#144](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/144) (this roadmap: M0.1/M0.2/M0.5/M0.6 CI VERIFIED). Merged, with main CI pending at 17:10Z: [#126](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/126) activity view and [#129](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/129) WEFT launch. Released: [v0.2.0-rc.1](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/tag/v0.2.0-rc.1) at 6b71bb2 (unsigned pre-release). |
+| **Recently completed** | **M7.4 and M7.5 `*`** (2026-11-27: #148 at 87af553, main CI 5/5). **M4.1 `*`** (#145 at 53e8313). Merged and CI-green on `main` today: #133, #134, #135, #136, #137, #138, #139, #140, #141 (§7), and [#144](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/144) (this roadmap: M0.1/M0.2/M0.5/M0.6 CI VERIFIED). Merged, with main CI pending at 17:10Z: [#126](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/126) activity view and [#129](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/129) WEFT launch. Released: [v0.2.0-rc.1](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/tag/v0.2.0-rc.1) at 6b71bb2 (unsigned pre-release). |
 
 ---
 
@@ -75,14 +75,16 @@ struck through, never deleted.
 
 | Owner | Scope |
 |---|---|
-| main firstmate (liaison) | dispatch, merge sequencing, M0.3, M0.4, captain escalations |
-| `eak-roadmap` (this worker) | this file: M0.1, M0.2, M0.5, M0.6, roadmap upkeep |
+| main firstmate (coordinator) | dispatch, merge sequencing, M0.3, M0.4, captain escalations |
+| `eak-roadmap` (this worker) | integration, roadmap and docs: this file, M0.1, M0.2, M0.5, M0.6, §16 docs |
 | electronics lead, secondmate `eak-electronics` | routing, verification, manufacturing: M7, M8, M9.1–M9.5 |
 | library lead `eak-library` | library and sourcing: M5 |
 | `eak-v2-proposal` | WEFT landing (#126/#129/#130), proposal work in M3 |
 | scout `eak-desk-study` | M1.3 DESK study |
 | `eak-req-model` | M4.1 requirements model |
 | captain (founder) | M9.6/M9.7 authorization, M10.10 release decision, M11.5 sign-off |
+| `eak-agents-ws` | agents workspace and provider integrations: M2 |
+| `eak-domain` | DESK workflow: M4 (from M4.2) |
 | `unassigned` | firstmate dispatches it. Not started until an owner is named here |
 
 ---
@@ -206,6 +208,15 @@ this roadmap (M0), M1.3 DESK study and M4.1 requirements model.
 
 ## 5. Milestones and goals
 
+**Row fields (firstmate msg 011).**
+- **acceptance:** the goal text, verbatim from the brief, plus its milestone's acceptance and §1.2.
+- **status:** the backticked state.
+- **owner:** the third field.
+- **branch/PR, test/CI evidence:** the `landed:`/`open:`/`ci:` sub-lines.
+- **remaining blockers:** `next:`/`limits:`/`gap:`.
+
+A `gap:` line marks a field with nothing recorded yet.
+
 The `Deps` lists use goal IDs. "groundwork" lists merged work that a goal builds on, which is not
 completion.
 
@@ -221,90 +232,143 @@ completion.
   - next: `*` only on firstmate confirmation
 - [ ] M0.3 — Define task contracts, ownership boundaries, scout/ship modes and safe branch/worktree discipline for the current fleet · `NOT STARTED` · main firstmate · deps: M0.1
   - groundwork: firstmate launch briefs (scout vs ship, one worktree per task, inbox steering)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M0.4 — Define EAK design mutation authority, project revision binding, single-writer policy, proposal lifecycle and approval semantics · `NOT STARTED` · main firstmate · deps: M0.1
   - groundwork: `AGENTS.md` non-negotiables, ADR-0039 engine boundary, ADR-0051 propose mode (stale apply refused), ADR-0020 TTY approval
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M0.5 — CI evidence convention and stable link format · `CI VERIFIED` · eak-roadmap · deps: M0.2
   - paths: §3 of this file; landed and ci: as M0.1
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M0.6 — Preserve and map router PRs #138–#142 (and #143) with owners and status · `CI VERIFIED` · eak-roadmap · deps: M0.1
   - paths: §7 of this file; landed and ci: as M0.1
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 
 **Gate M0:** the current system is understood, active work is safe, the canonical roadmap is
 running, and no destructive task has been performed. Gate state: **open** (M0.3 and M0.4 not started).
 
 ### M1 — Product and architecture discovery
-- [ ] M1.1 — Traycer research using REA; evidence-based report `docs/research/TRAYCER_REVERSE_ENGINEERING.md` · `NOT STARTED` · unassigned · deps: M0.1
-  - groundwork: firstmate-side Traycer review (§3, §8, §10, §11 of the eak-traycer-review report); not yet in the repo, not REA-based
+- [ ] M1.1 — Traycer research using REA; evidence-based report `docs/research/TRAYCER_REVERSE_ENGINEERING.md` · `IN REVIEW` · eak-traycer-rea · deps: M0.1
+  - landed: `docs/research/TRAYCER_REVERSE_ENGINEERING.md` (verbatim scout report; Traycer 4ad190d, REA 6.10.1 MCP handshake verified with 263 tools, EAK 641729a); committed by eak-roadmap in [#147](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/147) · [bf0d17a](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/bf0d17a) (PR CI 5/5 success); main [ci 45869350235](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45869350235) pending at 17:45Z
+  - limits: **runtime inspection of Traycer's closed Host was not performed** (closed signed binary, account sign-in, laptop limits); REA static analysis covered the desktop preload and IPC contracts only
+  - next: reviewer pass; IN REVIEW until firstmate confirms, not `*` before that
 - [ ] M1.2 — Deep Firstmate repository study; `docs/research/FIRSTMATE_REVERSE_ENGINEERING.md` · `NOT STARTED` · unassigned · deps: M0.1
+  - gap: no PR or main CI evidence yet · blocker: deps M0.1; no owner
 - [ ] M1.3 — DESK workflow/domain study; `docs/research/DESK_TO_EAK_DOMAIN_WORKFLOW.md` · `IN REVIEW` · eak-desk-study · deps: M0.1
-  - landed: `docs/research/DESK_TO_EAK_DOMAIN_WORKFLOW.md` (verbatim scout report; DESK `main` 9e44e7c read-only, EAK 500e938); committed by eak-roadmap
+  - landed: `docs/research/DESK_TO_EAK_DOMAIN_WORKFLOW.md` (verbatim scout report; DESK `main` 9e44e7c read-only, EAK 500e938); committed by eak-roadmap in [#146](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/146) · [3fdaea3](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/3fdaea3); main [ci 45866314914](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45866314914) success
   - limits: no DESK or EAK test was run; IPC-2221B/IEC 60664-1 readings in its §4.3 still need checking against the standard text
   - next: gate M1 needs the reviewer pass; IN REVIEW until firstmate confirms, then CI VERIFIED; not `*` before that
 - [ ] M1.4 — Map current EAK surfaces, user flows, feature status and technical debt from source · `NOT STARTED` · unassigned · deps: M0.1
   - groundwork: `STATUS.md`, `FEATURE_MATRIX.md` (older rows need a re-audit), `docs/qa/UI_INVENTORY.md`, the Phase-1 DoD audit
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M1.5 — Consolidated product architecture, design principles and staged UX spec · `NOT STARTED` · unassigned · deps: M1.1, M1.2, M1.3, M1.4
   - groundwork: accepted vision `docs/product/eak-product-vision.html`, design system `docs/product/README.md`
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M1.6 — Traceability from product requirements to roadmap features, tests and evidence · `NOT STARTED` · unassigned · deps: M0.2, M1.5
   - groundwork: `docs/REQUIREMENTS_TRACEABILITY.md` (source-of-truth spec rows)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 
 **Gate M1:** the reports separate direct observation from inference, cite concrete source paths,
 name the actual EAK gaps and give a feasible order. Gate state: **open**.
 
 ### M2 — Agent workspace foundation and real runtime integration
-- [ ] M2.1 — Real Agents workspace entry point separate from model/provider settings · `NOT STARTED` · unassigned · deps: M1.5
+- [ ] M2.1 — Real Agents workspace entry point separate from model/provider settings · `CI VERIFIED` · eak-agents-ws · deps: M1.5
+  - landed: [#152](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/152) · [74a8063](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/74a8063): the Agents workspace control room and durable sessions (ADR-0058). Fix [#159](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/159) · [2cca381](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/2cca381): a failed session-index write is surfaced. ci: [ci 45903734163](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45903734163) and [ci 45908713259](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45908713259) success; ui-evidence [45903734193](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45903734193) success. Not starred: no real-window (DESKTOP VERIFIED) evaluation done yet
   - groundwork: Settings › AI tools [#125](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/125), AI session view [#131](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/131), activity view [#126](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/126) (open)
-- [ ] M2.2 — Agent roster, durable sessions, task list/graph, activity timeline, session detail · `NOT STARTED` · unassigned · deps: M2.1, M3.5
-- [ ] M2.3 — Real Claude Code adapter, tested against an installed official CLI/account flow · `IN PROGRESS` · unassigned · deps: M2.9
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
+- [ ] M2.2 — Agent roster, durable sessions, task list/graph, activity timeline, session detail · `CI VERIFIED` · eak-agents-ws · deps: M2.1, M3.5
+  - landed: [#152](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/152) · [74a8063](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/74a8063): the Agents workspace control room and durable sessions (ADR-0058). Fix [#159](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/159) · [2cca381](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/2cca381): a failed session-index write is surfaced. ci: [ci 45903734163](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45903734163) and [ci 45908713259](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45908713259) success; ui-evidence [45903734193](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45903734193) success. Not starred: no real-window (DESKTOP VERIFIED) evaluation done yet
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
+- [ ] M2.3 — Real Claude Code adapter, tested against an installed official CLI/account flow · `IN PROGRESS` · eak-agents-ws · deps: M2.9
+  - detection: [#160](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/160) · [93fb197](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/93fb197) adds Kimi Code detection; Gemini CLI and Kimi sign-in are reported unknown, not signed in. [ci 45908722231](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45908722231) success. Blocker: no test yet against an installed official CLI/account flow
   - groundwork: `crates/eak-agents` probe and Connect (#125); CI-verified with fake binaries only `(fixture)`
   - limits: never run against a real installed CLI
-- [ ] M2.4 — Real Codex adapter, tested against an installed official CLI/account flow · `IN PROGRESS` · unassigned · deps: M2.9
+- [ ] M2.4 — Real Codex adapter, tested against an installed official CLI/account flow · `IN PROGRESS` · eak-agents-ws · deps: M2.9
+  - detection: [#160](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/160) · [93fb197](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/93fb197) adds Kimi Code detection; Gemini CLI and Kimi sign-in are reported unknown, not signed in. [ci 45908722231](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45908722231) success. Blocker: no test yet against an installed official CLI/account flow
   - groundwork and limits: as M2.3
 - [ ] M2.5 — Account login vs API-key connection profiles with secure keyring storage · `NOT STARTED` · unassigned · deps: M2.3
   - groundwork: keyring-backed distributor credentials (ADR-0032), model provider settings
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M2.6 — Provider/runtime/model discovery and a real connection test with billing/auth identity · `NOT STARTED` · unassigned · deps: M2.5
   - groundwork: staged provider connection test (code-reviewed only)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M2.7 — Terminal/session binding and native PTY interaction from the Agents workspace · `NOT STARTED` · unassigned · deps: M2.1
   - constraint: the Terminal workspace stays functional and visually unchanged; `terminal.test.tsx` is unchanged
+  - gap: no PR or main CI evidence yet · blocker: deps M2.1; no owner
 - [ ] M2.8 — Lifecycle start/stop/interrupt/resume/restart as supported, with real status and errors · `IN PROGRESS` · unassigned · deps: M2.3, M2.4
   - groundwork: Restart in the AI session view (#131)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M2.9 — Real integration tests and capability contracts (fake-binary tests stay unit coverage) · `NOT STARTED` · unassigned · deps: M1.1
+  - gap: no PR or main CI evidence yet · blocker: deps M1.1; no owner
 
 **Gate M2:** the founder can connect supported coding agents, start real sessions, see real output,
 inspect state, stop or interrupt them, and recover sessions, all without mock data. Gate state: **open**.
 
 ### M3 — Multi-agent task orchestration and review
 - [ ] M3.1 — Structured task contract and scout/ship modes · `NOT STARTED` · unassigned · deps: M0.3
+  - gap: no PR or main CI evidence yet · blocker: deps M0.3; no owner
 - [ ] M3.2 — Parent/child delegation, bounded workers and a single liaison · `NOT STARTED` · unassigned · deps: M3.1
+  - gap: no PR or main CI evidence yet · blocker: deps M3.1; no owner
 - [ ] M3.3 — Agent messaging with queued/delivered/reply/expiry semantics · `IN PROGRESS` · eak-v2-proposal · deps: M3.1
   - groundwork: WEFT [#117](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/117) (`eak-harness/src/weft.rs`, `tests/weft.rs` with two real `eak-mcp` clients)
-  - landed: WEFT launch integration [#129](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/129) · [4c2a79d](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/4c2a79d) (approved by firstmate review); main [ci 45864147947](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45864147947) queued at 17:10Z
+  - landed: WEFT launch integration [#129](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/129) · [4c2a79d](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/4c2a79d) (approved by firstmate review); main [ci 45864147947](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45864147947) success (main 4c2a79d)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M3.4 — Event-driven supervision and true runtime status classification · `IN PROGRESS` · eak-v2-proposal · deps: M3.3
-  - landed: activity view from project journals [#126](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/126) · [e4364f7](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/e4364f7) (approved by firstmate review); main [ci 45864029350](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45864029350) and [ui-evidence 45864029101](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45864029101) running at 17:10Z
+  - landed: activity view from project journals [#126](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/126) · [e4364f7](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/e4364f7) (approved by firstmate review); main [ci 45864029350](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45864029350) success; [ui-evidence 45864029101](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45864029101) still running at 17:30Z
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M3.5 — Persistent task/session/event ledger and restart reconciliation · `IN PROGRESS` · unassigned · deps: M3.4, M0.4
   - groundwork: `eak-harness` `agent_task`, `task_journal` (ADR-0036); code-reviewed in parts
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M3.6 — Project-scoped context, permissions and secrets boundary · `NOT STARTED` · unassigned · deps: M0.4, M2.5
+  - gap: no PR or main CI evidence yet · blocker: deps M0.4, M2.5; no owner
 - [ ] M3.7 — Artifact/result panel, transcript, tool-call trace and failure diagnostics · `NOT STARTED` · unassigned · deps: M2.2
+  - gap: no PR or main CI evidence yet · blocker: deps M2.2; no owner
 - [ ] M3.8 — Engineer approval/decision requests and escalation flows · `IN PROGRESS` · eak-v2-proposal · deps: M0.4
-  - groundwork: proposal review dialog [#111](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/111) (ui-evidence `scenarios/g4-proposal.json`); open [#130](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/130) WEFT conflicts and review: **changes requested** by firstmate review (3 UI-truth bugs); desktop approval (Traycer review slice S11) not started
+  - groundwork: proposal review dialog [#111](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/111) (ui-evidence `scenarios/g4-proposal.json`); WEFT conflicts and engineer review [#130](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/130) **merged** as [a284a7d](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/a284a7d) after its changes (the WEFT set #117/#126/#129/#130 is complete per firstmate); main [ci 45868840423](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45868840423) running at 17:45Z; desktop approval (Traycer review slice S11) not started
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M3.9 — Isolated code-worker branches/worktrees and conflict-aware integration · `NOT STARTED` · unassigned · deps: M3.2
+  - gap: no PR or main CI evidence yet · blocker: deps M3.2; no owner
 - [ ] M3.10 — Design proposal isolation, object-level diff and stale-revision conflict handling · `IN PROGRESS` · eak-v2-proposal · deps: M0.4
   - groundwork: propose mode [#106](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/106) refuses an apply at a stale revision (ADR-0051)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 
 **Gate M3:** a real multi-agent engineering task can be delegated, supervised, recovered and
 reviewed. No worker can silently mutate the authoritative design or exceed its authority. Gate state: **open**.
 
 ### M4 — Engineering requirements, knowledge and domain intelligence
-- [ ] M4.1 — Structured requirements model with units, source, status and completeness · `IN PROGRESS` · eak-req-model · deps: M1.3
-  - groundwork: `eak-intelligence::systems` typed requirements (ADR-0028, code-reviewed only)
-  - constraint: an IR change needs an ADR, a migration and a round-trip test
-- [ ] M4.2 — Requirements intake and project readiness/blocking UI · `NOT STARTED` · unassigned · deps: M4.1
-- [ ] M4.3 — Deterministic domain/archetype classifier and ambiguity review · `NOT STARTED` · unassigned · deps: M4.1, M1.3
+- * M4.1 — Structured requirements model with units, source, status and completeness · `COMPLETE (*)` · eak-req-model · deps: M1.3
+  - landed: [#145](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/145) · [53e8313](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/53e8313). Paths: `crates/eak-core/src/requirements.rs`, `ir.rs`, `migrate.rs` (schema v9), `crates/eak-runtime/src/command.rs` (`SetRequirementField`, `ClearRequirementField`, `UpsertRequirementItem`, `DeleteRequirementItem`, all through `Engine::execute`), and the harness CLI/MCP tools
+  - decision: [ADR-0057](docs/decisions/0057-schema-v9-structured-requirements.md) (schema v9, status semantics, completeness and blocking evaluator)
+  - review: independent review pullrequestreview-6078344803 (two concerns, both fixed) → re-review **approve** pullrequestreview-6078741471 at 7bf7917
+  - ci: [ci 45873336787](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45873336787) success (main 53e8313, all 5 jobs). Read by eak-roadmap in the `linux` log, each `... ok`:
+    - `requirements::tests::`: `an_empty_record_is_all_unknown_and_blocks_everything`, `status_rules_refuse_invented_values`, `derived_values_are_only_as_firm_as_their_inputs`, `not_applicable_needs_a_reason_and_counts_as_decided`, `rails_form_a_tree_and_gate_power_sizing`, `evaluation_is_deterministic_and_the_record_round_trips`, `catalogue_is_consistent`;
+    - `crates/eak-runtime/tests/requirements.rs`: `requirement_fields_are_set_stamped_undone_and_saved`, `an_agent_proposes_values_but_never_confirms_them`, `rails_and_interfaces_are_items_with_their_own_fields`;
+    - `migrate::tests::v9_requirement_record_migrates_and_round_trips`;
+    - e2e `cli_records_requirements_and_an_agent_never_confirms_them`
+  - ui: n/a. This is a data-model goal; per ADR-0057 no UI is part of the record. The readiness UI is M4.2
+  - negative: invented values refused; NOT_APPLICABLE needs a reason; an agent can never set CONFIRMED or NOT_APPLICABLE (engine and CLI); each refusal changes nothing (`refused_as`, including `CommandError::Precondition`); migration rejects a newer schema
+  - **limitations (ADR-0057):**
+    - **not implemented:** cross-field consistency (rail currents against the budget, rail voltages against the input range);
+    - **enforcement:** readiness is advisory; no engine refuses an operation on it yet (M4.2/M4.6);
+    - **traceability:** requirement-to-constraint compilation and traceability are missing (M4.6/M4.7);
+    - the operation table is EAK's own, not a standard;
+    - a CONFIRMED value is only as right as its source
+  - starred 2026-11-27 on firstmate approval (msg 009), after the main run read 5/5
+- [ ] M4.2 — Requirements intake and project readiness/blocking UI · `IN PROGRESS` · eak-domain · deps: M4.1
+  - open: [#157](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/157), conflicts, intake panel and deterministic domain classifier (schema v11, ADR-0060). Blocker: review, then main CI and ui-evidence
+- [ ] M4.3 — Deterministic domain/archetype classifier and ambiguity review · `IN PROGRESS` · eak-domain · deps: M4.1, M1.3
+  - open: [#157](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/157), conflicts, intake panel and deterministic domain classifier (schema v11, ADR-0060). Blocker: review, then main CI and ui-evidence
   - groundwork: domain registry (ADR-0028), `DomainPanel.tsx`
 - [ ] M4.4 — Composable domain overlays and a versioned engineering rule registry · `NOT STARTED` · unassigned · deps: M4.3
   - groundwork: rule configuration and the rule-ID registry (ADR-0046)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M4.5 — Port validated DESK taxonomy/knowledge with provenance and licensing review · `NOT STARTED` · unassigned · deps: M1.3
+  - gap: no PR or main CI evidence yet · blocker: deps M1.3; no owner
 - [ ] M4.6 — Design profile compiled from confirmed/derived values only · `NOT STARTED` · unassigned · deps: M4.1, M4.4
+  - gap: no PR or main CI evidence yet · blocker: deps M4.1, M4.4; no owner
 - [ ] M4.7 — Traceability requirements → constraints → parts → blocks → nets → checks · `NOT STARTED` · unassigned · deps: M4.6, M6.1
+  - gap: no PR or main CI evidence yet · blocker: deps M4.6, M6.1; no owner
 - [ ] M4.8 — Rules/knowledge editor or inspectable knowledge browser, with validation tooling · `NOT STARTED` · unassigned · deps: M4.4
+  - gap: no PR or main CI evidence yet · blocker: deps M4.4; no owner
 
 **Gate M4:** EAK classifies a real board request, exposes missing values, compiles a traceable
 profile and blocks unsafe or under-specified operations. Gate state: **open**.
@@ -312,33 +376,47 @@ profile and blocks unsafe or under-specified operations. Gate state: **open**.
 ### M5 — Component intelligence, datasheets and BOM
 - [ ] M5.1 — Component-family requirements and role-driven candidate search · `IN PROGRESS` · eak-library · deps: M4.1
   - groundwork: MPN discovery [#114](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/114), library DB search [#122](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/122)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M5.2 — Reliable LCSC source integration and matching with evidence/timestamps · `NOT STARTED` · eak-library · deps: M5.1
   - groundwork: LCSC not-connected slot [#120](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/120); constraint: no LCSC private APIs
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M5.3 — JLCPCB assembly-part mapping and provider status reporting · `NOT STARTED` · eak-library · deps: M5.2
   - groundwork: assembly classification from user attestation (ADR-0034)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M5.4 — Datasheet ingestion/parsing with source/page traceability and confidence · `IN PROGRESS` · eak-library · deps: M5.1
   - groundwork: datasheet references and typed specs [#116](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/116); no parsing yet
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M5.5 — Verified pin maps, symbol/footprint/pad mapping and package validation · `IN PROGRESS` · eak-library · deps: M5.4
   - groundwork: footprint verification FP-001..010 [#113](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/113); personal-library editing [#128](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/128)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M5.6 — Candidate comparison on electrical, mechanical, thermal, supply and cost criteria · `NOT STARTED` · eak-library · deps: M5.1, M5.4
+  - gap: no PR or main CI evidence yet · blocker: deps M5.1, M5.4
 - [ ] M5.7 — Safe alternative/equivalence checks with explicit unknown states · `NOT STARTED` · eak-library · deps: M5.6
+  - gap: no PR or main CI evidence yet · blocker: deps M5.6
 - [ ] M5.8 — Passive derivation/calculation records and structured BOM approvals · `NOT STARTED` · unassigned · deps: M4.6
   - groundwork: held [#6](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/6) (buck derivations, not ported)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M5.9 — Supplier stock/price freshness semantics, inventory states and sourcing report · `NOT STARTED` · eak-library · deps: M5.2
   - groundwork: `SupplierOffer` and stale labels (ADR-0028/0032, code-reviewed only)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 
 **Gate M5:** a real BOM is assembled from sourced candidate records, with datasheet, pin and
 footprint evidence, derived passives, procurement states and no fictional availability. Gate state: **open**.
 
 ### M6 — Requirements-driven schematic and design compilation
 - [ ] M6.1 — Functional block planning tied to requirements and chosen parts · `NOT STARTED` · unassigned · deps: M4.6, M5.6
+  - gap: no PR or main CI evidence yet · blocker: deps M4.6, M5.6; no owner
 - [ ] M6.2 — Machine-readable block specs and typed schematic compilation · `NOT STARTED` · unassigned · deps: M6.1
+  - gap: no PR or main CI evidence yet · blocker: deps M6.1; no owner
 - [ ] M6.3 — Pin/net-level verification against the intended block/netlist · `NOT STARTED` · unassigned · deps: M6.2
+  - gap: no PR or main CI evidence yet · blocker: deps M6.2; no owner
 - [ ] M6.4 — Schematic change proposals with readable object diffs and impact summaries · `IN PROGRESS` · eak-v2-proposal · deps: M3.10
   - groundwork: proposal review groups rows by object (#111)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M6.5 — Extend ERC coverage and gate traceability · `IN PROGRESS` · electronics lead · deps: M4.4
   - groundwork: ERC with `not_implemented`/`limitations` reporting; ERC-025 (#141)
 - [ ] M6.6 — Validate the complete workflow on representative embedded, power, RF and mixed-signal boards · `NOT STARTED` · unassigned · deps: M6.3, journeys A–C
+  - gap: no PR or main CI evidence yet · blocker: deps M6.3, journeys A–C; no owner
 
 **Gate M6:** a confirmed requirements/BOM set produces or guides a real schematic, with every
 part, pin and net traceable and all required ERC gates truly evaluated. Gate state: **open**.
@@ -357,29 +435,58 @@ part, pin and net traceable and all required ERC gates truly evaluated. Gate sta
   - landed: [#141](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/141) · [0df008b](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/0df008b) (DRC-027, ERC-025, DRC-002 per declared insulation)
   - ci: [ci 45855454190](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45855454190) success (main 0df008b)
   - limits: IPC/IEC tables not checked against the standard text; engineering cross-check not recorded
-- [ ] M7.4 — Complete the PR #142 constrained acceptance-board failure without weakening it · `IN REVIEW` · electronics lead · deps: M7.5
-  - review (2026-11-26): head 5e1a472, PR CI 5/5 success. **Merge on hold.** An independent review of its changed test expectation **requested changes**: the per-segment width floor must be max(IPC-2221, net-class)
-  - landed: open [#142](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/142) (`crates/eak-validation/tests/acceptance_route.rs`: a 4-layer USB device with ESP32-C3-MINI-1 at 0.8 mm pitch and 26 GND pads, a 90 Ω pair with 0.05 mm max skew, +5V 1 A / +3V3 0.5 A, and GND/+3V3 planes)
-  - limits: red by design. The router applied the widest net's clearance everywhere, and the spacing pre-check ignored declared insulation/creepage
-  - next: router fix lands, then the test passes **unchanged**
-- [ ] M7.5 — Per-net width and clearance semantics, including closely spaced module pads · `IN PROGRESS` · electronics lead · deps: none
-  - landed: [3c9901f](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/3c9901f) per-net inflation retry for fine-pitch escapes and insulation-aware routing spacing (in #140)
-  - next: proven by M7.4
+- * M7.4 — Complete the PR #142 constrained acceptance-board failure without weakening it · `COMPLETE (*)` · electronics lead · deps: M7.5
+  - landed: [#142](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/142) · [24a8789](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/24a8789) (the board), then [#148](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/148) · [87af553](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/87af553): the DRC-019 check moved into `via_spacing()` and got a regression test. Paths: `crates/eak-validation/tests/acceptance_route.rs`, `crates/eak-engineering/src/router/diffpair.rs`
+  - ci: main [ci 45868276462](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45868276462) (24a8789) and [ci 45880446742](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45880446742) (87af553), each 5/5 success. Read by eak-roadmap in the `linux` log, each `... ok`:
+    - `constrained_usb_device_is_auto_routed_complete_coupled_and_drc_clean`;
+    - `router::diffpair::tests::member_vias_closer_than_the_hole_spacing_are_a_drc_019_conflict`
+  - review: #142 was reviewed twice, then approved (6078057384). #148 was approved by independent review (6079030774)
+  - engineering: every power segment is ≥ max(IPC-2221, net class); +5V is > 0.25 mm; pair skew and Zdiff are within tolerance. Cross-check: IPC-2221 external, k = 0.048, gives 0.116 mm at 0.5 A and 0.302 mm at 1 A
+  - negative: centres 0.752 mm apart (0.452 mm edge to edge, against a 0.5 mm minimum) give `CLEARANCE_CONFLICT [DRC-019]`; 0.8 mm apart passes; covers any pair, not only the first, and a member with no vias. The board also asserts an empty ratsnest, no shorts and zero DRC errors
+  - **limitations:**
+    - IPC-2221B data is `VERIFIED_AGAINST_STANDARD = false`, and IPC-2152 is not implemented;
+    - one board only, and its inner layers are planes, so no inner-layer signal routing is proven;
+    - #148 nit 2: `pair_clearance` takes the largest matrix cell, including hole and outline cells. That is conservative, but stricter than `violation()`
+  - starred 2026-11-27 on the firstmate rule (msgs 007, 012, 013): main CI 5/5 at 87af553 on all platforms
+- * M7.5 — Per-net width and clearance semantics, including closely spaced module pads · `COMPLETE (*)` · electronics lead · deps: none
+  - landed:
+    - [#148](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/148) · [87af553](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/87af553): the per-net retry grid (`own_grid`) grows each obstacle by the pairwise rule `pair_clearance` (= `clearance::required`, raised to the matrix) instead of the routed net's largest clearance. Before, the retry could never fire when any class had a larger clearance. It also restores `routing_spacing_follows_the_declared_insulation` on `required`;
+    - earlier: #140 (`own_grid`/`inflate`) and #141 (`clearance::required`, DRC-002)
+  - ci: main [ci 45880446742](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45880446742) 5/5 success (87af553). Each `... ok` in the `linux` log:
+    - (a) `a_nets_own_larger_clearance_is_enforced_while_a_fine_net_routes_closer`;
+    - (b) `the_router_reports_a_connection_whose_own_clearance_cannot_be_met`;
+    - (c) `voltage_spacing_is_unknown_not_pass_while_an_input_is_undeclared`;
+    - `clearance::tests::routing_spacing_follows_the_declared_insulation`;
+    - `fine_pitch_escapes_route_next_to_a_wide_power_net` (ci 45868276462)
+  - review: #148 independent review **approve** (6079030774). Its IPC-2221B Table 6-1 reading (51–100 V B2 0.6 mm; 251–300 V B2 1.25 mm) matches `ipc.rs`
+  - negative: (a)–(c) above cover the PASS, FAIL/refusal and UNKNOWN paths
+  - **limitations:**
+    - as M7.4. Creepage only across declared barriers; clearance and creepage share the |V1−V2| basis;
+    - #148 nit 1: test (b) checks the WIDE net in the neck only by track endpoints. A single straight segment would slip past that check, but is still caught by `wide.len()==1`, the ratsnest entry and DRC-002 clean;
+    - #148 nit 2, as M7.4;
+    - #148 nit 3: the limitation text at `drc.rs:1009` still says the autorouter keeps neither the matrix nor the net-pair rules. That understates the router (no overclaim)
+  - starred 2026-11-27 on the firstmate rule (msgs 007, 012, 013): main CI 5/5 at 87af553 on all platforms
 - [ ] M7.6 — Real multilayer autorouting with layer transitions/via selection and robust rip-up/reroute · `IN PROGRESS` · electronics lead · deps: M7.2
+  - planes increments: inc 1, [#155](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/155) · [fed9a6d](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/fed9a6d): schema v10 reference-plane limits (ADR-0059), [ci 45882581969](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45882581969) success. Open: [#158](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/158) (a #155 review fix), [#150](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/150), [#151](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/151) (DRC-028..031), [#153](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/153) (split-plane routing and return vias) and [#154](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/154) (acceptance board, stacked). Blocker: that stack must land
   - landed: [#135](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/135) · [58f4fe3](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/58f4fe3), determinism [#136](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/136) · [cea00f7](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/cea00f7)
   - ci: [ci 45832122842](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45832122842) success; [ci 45847891125](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45847891125) success
   - limits: robustness on dense boards not shown (M7.4, M7.11)
 - [ ] M7.7 — Pair-aware differential routing, impedance and skew/length constraints across layers · `IN PROGRESS` · electronics lead · deps: M7.1
   - landed: [#133](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/133) · [73be8a3](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/73be8a3) (ADR-0055/0056); ci: [ci 45841440634](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45841440634) success
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M7.8 — RF keep-out/antenna/return-path checks and reference-plane awareness · `IN PROGRESS` · electronics lead · deps: M7.6
   - landed: RF keep-out test in [#137](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/137) · [969e3c5](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/969e3c5); ci: [ci 45849973705](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45849973705) success
   - limits: no return-path or reference-plane continuity check yet
 - [ ] M7.9 — High-speed rules where inputs/models are defined · `NOT STARTED` · electronics lead · deps: M7.7
+  - gap: no PR or main CI evidence yet · blocker: deps M7.7
 - [ ] M7.10 — Copper plane, connectivity, stitching, thermal and power-distribution checks · `IN PROGRESS` · electronics lead · deps: M7.6
   - groundwork: planes and stack-up (E5, ui-evidence `scenarios/e5-planes.json`); zone stitching and dead-copper removal (ADR-0030, code-reviewed only)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M7.11 — Diverse constrained-board acceptance suite (dense MCU pads, blind/buried, diff pair, RF, high-current, high-voltage, mixed-signal, multilayer) · `NOT STARTED` · electronics lead · deps: M7.4
+  - gap: no PR or main CI evidence yet · blocker: deps M7.4
 - [ ] M7.12 — Deterministic route quality and performance on measured boards; benchmark report · `NOT STARTED` · electronics lead · deps: M7.11
   - groundwork: determinism evidence in CI output (#136)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 
 **Gate M7:** all required nets route on supported stacks, constraints and keep-outs are respected,
 geometry and readback validate, the acceptance boards pass, and no rule was weakened. Gate state: **open** (#142 red).
@@ -392,18 +499,25 @@ geometry and readback validate, the acceptance boards pass, and no rule was weak
   - limits: tables not verified against the standard text
 - [ ] M8.3 — Current capacity, via capacity, voltage drop and power-distribution verification · `IN PROGRESS` · electronics lead · deps: M7.10
   - landed: DRC-027 via current (#141); open [#143](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/143) DRC-028 voltage drop, now at head 72e8065 with PR CI 5/5 success (17:10Z; not yet reviewed). It was red earlier ([run 45858036095](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45858036095): rule-ID registry test)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M8.4 — Thermal/junction-temperature and copper-heating analysis with defensible assumptions · `IN PROGRESS` · electronics lead · deps: M8.3
   - landed: ERC-025 junction temperature (#141)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M8.5 — Differential pair/impedance/SI checks for declared supported stack-ups · `IN PROGRESS` · electronics lead · deps: M7.7
   - landed: DRC-024..026 (#137)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M8.6 — Mechanical/3D/clearance/cutout/height/connector/enclosure checks · `IN PROGRESS` · electronics lead · deps: M4.1
   - groundwork: MECH checks; one board geometry for DRC/2D/3D [#107](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/107)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M8.7 — DFM/fabricator rule profiles and fabrication-output integrity checks · `IN PROGRESS` · electronics lead · deps: M9.3
   - groundwork: release integrity [#123](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/123) (ADR-0054)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M8.8 — Unified Checks workspace with object-linked findings and remediation workflow · `IN PROGRESS` · unassigned · deps: M8.1
   - groundwork: Findings panel (ui-evidence `scenarios/b5-findings.json`), Problems panel [#105](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/105) (`scenarios/g2-problems.json`)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M8.9 — Independent verification of agent-generated design proposals · `IN PROGRESS` · eak-v2-proposal · deps: M3.10
   - groundwork: proposals carry a check delta (ADR-0051)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 
 **Gate M8:** every applicable required check has a real evaluator and traceable evidence, missing
 inputs stay visibly UNKNOWN or BLOCKED, and negative tests prove fail-closed behaviour. Gate state: **open**.
@@ -411,18 +525,24 @@ inputs stay visibly UNKNOWN or BLOCKED, and negative tests prove fail-closed beh
 ### M9 — Simulation, manufacturing and real-board validation
 - [ ] M9.1 — Simulation workflow integration and documented supported model scope · `NOT STARTED` · electronics lead · deps: M1.4
   - groundwork: `crates/eak-simulation`, `SimulationPanel.tsx` (honesty pass F9)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M9.2 — Revision-bound BOM, Gerber, drill, CPL, netlist and documentation package · `IN PROGRESS` · electronics lead · deps: M8.7
   - groundwork: revision-bound packaging (#123); output documents D3 (ui-evidence `scenarios/d3-output.json`); outputs remain DRAFT
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M9.3 — Output parsing/readback and cross-file consistency checks · `IN PROGRESS` · electronics lead · deps: M9.2
   - groundwork: Gerber/drill parse-back (#123)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M9.4 — Manufacturing approval/release flow with an immutable evidence package · `IN PROGRESS` · electronics lead · deps: M9.3, M3.8
   - groundwork: release check surface (ui-evidence `scenarios/e7-release.json`)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M9.5 — Representative reference designs routed through EAK end to end · `NOT STARTED` · electronics lead · deps: M6.6, M7.11
+  - gap: no PR or main CI evidence yet · blocker: deps M6.6, M7.11
 - [ ] M9.6 — Fabricate at least one EAK-generated prototype through a real manufacturer · `BLOCKED` (awaiting captain authorization) · captain · deps: M9.5
 - [ ] M9.7 — Assemble, inspect and run documented electrical tests on the fabricated board · `BLOCKED` (awaiting captain authorization) · captain · deps: M9.6
 - [ ] M9.8 — Record rework/failure lessons and compare predictions with measurements · `BLOCKED` (waits on M9.6/M9.7) · unassigned · deps: M9.7
 - [ ] M9.9 — Prototype/manufacturing validation status separate from software test status · `NOT STARTED` · unassigned · deps: M0.5
   - groundwork: `STATUS.md` verification labels already separate CI from real-window evidence
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 
 **Gate M9:** a real board made from EAK outputs is inspected and measured, and discrepancies are
 recorded and fixed. One board does not prove universal hardware correctness. Gate state: **blocked** (captain authorization).
@@ -430,32 +550,47 @@ recorded and fixed. One board does not prove universal hardware correctness. Gat
 ### M10 — Product polish, installation, reliability and release
 - [ ] M10.1 — End-to-end journeys for first run, project, agent, schematic, PCB, checks, manufacturing · `IN PROGRESS` · unassigned · deps: M2.1, M8.8
   - groundwork: Project Home and first run [#108](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/108) (`scenarios/g1-home-firstrun.json`), real-window PCB flow (`scenarios/p1-pcb-flow.json`)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M10.2 — Every visible control functional, accessible and keyboard-operable · `IN PROGRESS` · unassigned · deps: M1.4
   - groundwork: dead-control sweep (`scenarios/a1-menus.json` e1 rows), honesty pass (`scenarios/f9-honesty.json`), keys (`scenarios/f8-keys.json`)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M10.3 — App restart/recovery, crash handling, log/export and project backup/restore · `IN PROGRESS` · unassigned · deps: M3.5
   - groundwork: journal recovery, persisted UNKNOWN_OUTCOME recovery block
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M10.4 — Supported platforms verified on real CI desktop environments; platform limits documented · `IN PROGRESS` · unassigned · deps: none
   - groundwork: `ci` cross-platform jobs (Windows, macOS arm64/x64); ui-evidence is Linux/Xvfb only; `docs/PLATFORM_SUPPORT.md`
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M10.5 — Reliable install/update/uninstall, checksums, provenance and release automation · `IN PROGRESS` · unassigned · deps: M10.4
   - groundwork: `release.yml` (SHA256SUMS, provenance.json, installer smoke tests); [v0.2.0-rc.1](https://github.com/NijoP/electronics-agent-kit-new-prototype/releases/tag/v0.2.0-rc.1)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M10.6 — Code-sign/notarize builds where credentials permit; disclose unsigned builds otherwise · `IN PROGRESS` · unassigned · deps: M10.5
   - limits: no signing credentials; releases are disclosed as unsigned pre-releases
+  - gap: no PR or main CI evidence yet · blocker: deps M10.5; no owner
 - [ ] M10.7 — Performance/memory benchmarks on modest hardware; optimize measured bottlenecks · `NOT STARTED` · unassigned · deps: M7.12
   - groundwork: resource profiles and bounded jobs (code-reviewed only)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M10.8 — Security review of secrets, provider login, MCP/tool execution, workspace access, agent isolation · `NOT STARTED` · unassigned · deps: M2.5, M3.6
+  - gap: no PR or main CI evidence yet · blocker: deps M2.5, M3.6; no owner
 - [ ] M10.9 — Documentation, tutorials, troubleshooting, architecture and feature status · `NOT STARTED` · unassigned · deps: Appendix B
+  - gap: no PR or main CI evidence yet · blocker: deps Appendix B; no owner
 - [ ] M10.10 — Release-candidate acceptance review and release decision · `NOT STARTED` · captain · deps: M10.1–M10.9
+  - gap: no PR or main CI evidence yet · blocker: deps M10.1–M10.9
 
 **Gate M10:** the release build is reproducible, verified, installable and documented, with no
 high-severity issues or misleading status claims. Gate state: **open**.
 
 ### M11 — Finished-product acceptance and ongoing quality
 - [ ] M11.1 — Full end-to-end product acceptance on representative projects and domains · `NOT STARTED` · unassigned · deps: Appendix A journeys
+  - gap: no PR or main CI evidence yet · blocker: deps Appendix A journeys; no owner
 - [ ] M11.2 — Failure/recovery tests for agents, provider auth, task persistence and project writes · `NOT STARTED` · unassigned · deps: M3.5, journey F
+  - gap: no PR or main CI evidence yet · blocker: deps M3.5, journey F; no owner
 - [ ] M11.3 — All engineering, DRC/ERC, routing, DFM and release gates on supported acceptance projects · `NOT STARTED` · unassigned · deps: M7.11, M8
+  - gap: no PR or main CI evidence yet · blocker: deps M7.11, M8; no owner
 - [ ] M11.4 — A precise feature matrix separating unit/CI/desktop/engineering/manufacturing/hardware evidence · `NOT STARTED` · unassigned · deps: M9.9
   - groundwork: `FEATURE_MATRIX.md` (older rows need a re-audit)
+  - gap: remaining: a §1.2 evaluation by firstmate before `*`
 - [ ] M11.5 — Founder sign-off on product readiness and documented limitations · `NOT STARTED` · captain · deps: M11.1–M11.4
+  - gap: no PR or main CI evidence yet · blocker: deps M11.1–M11.4
 
 **Gate M11:** every roadmap-critical goal has `*` with evidence, unresolved limitations are
 explicit, and the product completes its supported workflow reliably. Gate state: **open**.
@@ -490,7 +625,9 @@ explicit, and the product completes its supported workflow reliably. Gate state:
 | [#139](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/139) | diff-pair push-and-shove | electronics lead | merged [a202556](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/a202556); [ci 45853087718](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45853087718) success | M7.1 |
 | [#140](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/140) | blind/buried vias of an allowed span; per-net inflation retry | electronics lead | merged [500e938](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/500e938); [ci 45858355299](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45858355299) success | M7.2, M7.5 |
 | [#141](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/141) | via current DRC-027, junction temperature ERC-025, DRC-002 insulation | electronics lead | merged [0df008b](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/0df008b); [ci 45855454190](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45855454190) success | M7.3, M8.2–M8.4 |
-| [#142](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/142) | complex constrained acceptance board | electronics lead | **open, IN REVIEW, merge on hold**: PR CI green at 5e1a472. The independent reviewer requested changes (per-segment width floor = max(IPC-2221, net-class)). It was red by design at the per-net clearance gap. **Not to be weakened.** | M7.4, M7.5 |
+| [#142](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/142) | complex constrained acceptance board | electronics lead | **merged** [24a8789](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/24a8789); [ci 45868276462](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45868276462) success. CI VERIFIED; `*` waits on a DRC-019 regression test. **Not weakened** (two independent reviews). | M7.4, M7.5 |
+| [#148](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/148) | per-net retry grid keeps pairwise clearance, plus the M7.4/M7.5 regression tests | electronics lead | **merged** [87af553](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/87af553); [ci 45880446742](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45880446742) 5/5 success | M7.4, M7.5 |
+| [#155](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/155) | schema v10 reference-plane limits (ADR-0059) | electronics lead | **merged** [fed9a6d](https://github.com/NijoP/electronics-agent-kit-new-prototype/commit/fed9a6d); [ci 45882581969](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45882581969) success. Stack [#150](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/150)/[#151](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/151)/[#153](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/153)/[#154](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/154)/[#158](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/158) open | M7.6, M7.8 |
 | [#143](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/143) | DRC-028 DC voltage drop on a copper-network model | electronics lead | **open**: PR CI green at 72e8065 (earlier red on the rule-ID registry test) | M8.3 |
 | no PR | diff-pair and RF keep-out checks (screenshot task) | electronics lead | landed in #137; reference-plane/return-path part still open | M7.8 |
 
@@ -512,7 +649,7 @@ explicit, and the product completes its supported workflow reliably. Gate state:
 | ID | File | State | Goal |
 |---|---|---|---|
 | D1 | `ROADMAP_EXECUTION.md` | CI VERIFIED (#144) | M0.2 |
-| D2 | `docs/research/TRAYCER_REVERSE_ENGINEERING.md` | NOT STARTED | M1.1 |
+| D2 | `docs/research/TRAYCER_REVERSE_ENGINEERING.md` | IN REVIEW (committed; reviewer pass pending) | M1.1 |
 | D3 | `docs/research/FIRSTMATE_REVERSE_ENGINEERING.md` | NOT STARTED | M1.2 |
 | D4 | `docs/research/DESK_TO_EAK_DOMAIN_WORKFLOW.md` | IN REVIEW (committed; reviewer pass pending) | M1.3 |
 | D5 | `docs/product/EAK_PRODUCT_ARCHITECTURE.md` | NOT STARTED | M1.5 |
@@ -534,3 +671,18 @@ explicit, and the product completes its supported workflow reliably. Gate state:
 - 2026-11-26T16:45Z — eak-roadmap — Opened [#144](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/144) for M0.1/M0.2/M0.5/M0.6.
 - 2026-11-26T16:54Z — eak-roadmap — Merged [#144](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/144) as 641729a after firstmate approval and PR CI 5/5 success ([ci 45860988207](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45860988207)).
 - 2026-11-26T17:10Z — eak-roadmap — Main CI on 641729a succeeded ([ci 45863110358](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45863110358)). M0.1, M0.2, M0.5 and M0.6 moved to CI VERIFIED; no `*` until firstmate confirms. #142 is IN REVIEW with its merge on hold: the independent reviewer requested changes (per-segment width floor = max(IPC-2221, net-class)). #130: changes requested (3 UI-truth bugs). #126 and #129 were approved and merged (e4364f7, 4c2a79d), with main CI pending. #143's PR CI is now green at 72e8065. M1.3: the DESK study was committed to `docs/research/DESK_TO_EAK_DOMAIN_WORKFLOW.md` and set to IN REVIEW pending the reviewer pass.
+- 2026-11-26T17:30Z — eak-roadmap — [#146](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/146) merged as 3fdaea3 (main [ci 45866314914](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45866314914) success). Main CI also succeeded on #126 (e4364f7, [ci 45864029350](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45864029350); its ui-evidence run is still going) and #129 (4c2a79d, [ci 45864147947](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45864147947)). #142 was approved by the second independent review (pullrequestreview-6078057384) and is landing. #145 (M4.1) is in independent review. M1.1: the Traycer/REA study was committed to `docs/research/TRAYCER_REVERSE_ENGINEERING.md` and set to IN REVIEW; runtime inspection of Traycer's closed Host was not performed and is recorded as a limitation.
+- 2026-11-26T17:45Z — eak-roadmap — [#142](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/142) merged as 24a8789, with main [ci 45868276462](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45868276462) 5/5 success. Firstmate decided option A (strict): M7.4 and M7.5 are set to **CI VERIFIED, not `*`**. M7.4 is missing a dedicated DRC-019 pair-via regression test; M7.5 is missing three negative tests (listed under each goal). The M7.5 evidence was corrected: 3c9901f's `routing_required` was dropped in the #140 merge, and the shared `clearance::required` replaces it. [#130](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/130) merged as a284a7d, completing WEFT. [#147](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/147) merged as bf0d17a.
+- 2026-11-27 — eak-roadmap — **M4.1 starred** (first `*`). [#145](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/145) merged as 53e8313 after independent review (6078344803, then approval 6078741471). Main [ci 45873336787](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45873336787) completed 5/5 success, and the M4.1 tests are `ok` in its `linux` log. Firstmate approved the star (msg 009). Limitations stay listed under the goal. M4.2 and M4.3 are IN PROGRESS (eak-domain). Main CI also succeeded on a284a7d (#130, [ci 45868840423](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45868840423)), bf0d17a (#147, [ci 45869350235](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45869350235)) and e29179d (#149, [ci 45872919486](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45872919486)).
+- 2026-11-27T01:00Z — eak-roadmap — the single 06:30 IST update (firstmate msgs 010–013).
+  - **M7.4 and M7.5 starred.** [#148](https://github.com/NijoP/electronics-agent-kit-new-prototype/pull/148) merged as 87af553. Main [ci 45880446742](https://github.com/NijoP/electronics-agent-kit-new-prototype/actions/runs/45880446742) is 5/5 success on all platforms, macOS Intel included, which meets the msg 013 condition. The DRC-019 regression test and the three M7.5 negative tests are `ok` in its `linux` log. #148's 3 non-blocking nits are recorded as limitations.
+  - **Merged since #156:**
+    - #155 (fed9a6d, M7.6 schema v10, ci 45882581969);
+    - #152 (74a8063, M2.1/M2.2, ci 45903734163, ui-evidence 45903734193);
+    - #159 (2cca381, ci 45908713259);
+    - #160 (93fb197, M2.3/M2.4 detection, ci 45908722231).
+
+    All succeeded on main.
+  - **Goal states:** M2.1 and M2.2 → CI VERIFIED (eak-agents-ws).
+  - **Owners updated** per msg 011.
+  - **Rows:** every goal row now carries a `gap:` line where evidence or a blocker was missing.

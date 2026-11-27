@@ -207,6 +207,10 @@ mod tests {
             Some("0.148.0")
         );
         assert_eq!(parse_version("opencode v1.2.0").as_deref(), Some("1.2.0"));
+        assert_eq!(
+            parse_version("kimi, version 0.52.0").as_deref(),
+            Some("0.52.0")
+        );
         assert_eq!(parse_version("no version here"), None);
         assert_eq!(parse_version(""), None);
     }

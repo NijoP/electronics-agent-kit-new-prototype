@@ -10,6 +10,8 @@
 //! * `sexpr`    – bounded S-expression reader for library interchange files (import groundwork).
 //! * `ir`       – project, schematic, PCB, constraints, manufacturing config.
 //! * `pcb_objects` – PCB arcs, keep-out and constraint regions, cut-outs, text, dimensions (schema v4, ADR-0042).
+//! * `requirements` – the structured requirement record, its catalogue and the completeness and
+//!   blocking evaluator (schema v9, ADR-0057).
 //! * `integrity`– structural validation of a whole project (dangling references etc.).
 //! * `migrate`  – schema version handling; unknown/newer schemas fail safely.
 //! * `builtin`  – the built-in, provenance-tagged starter component library.
@@ -28,6 +30,7 @@ pub mod library;
 pub mod migrate;
 pub mod pcb_objects;
 pub mod pinmap;
+pub mod requirements;
 pub mod sexpr;
 pub mod units;
 
@@ -36,6 +39,9 @@ pub use graphic::{Graphic, LineStyle, Stroke};
 pub use ir::*;
 pub use library::*;
 pub use pcb_objects::*;
+pub use requirements::{
+    ReqEntry, ReqItem, ReqItemKind, ReqSource, ReqStatus, ReqUnit, ReqValue, RequirementSet,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
