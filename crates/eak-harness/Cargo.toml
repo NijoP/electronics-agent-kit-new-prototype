@@ -24,6 +24,7 @@ eak-validation.workspace = true
 eak-runtime.workspace = true
 eak-intelligence.workspace = true
 eak-manufacturing.workspace = true
+eak-library.workspace = true
 eak-simulation.workspace = true
 sha2.workspace = true
 serde.workspace = true

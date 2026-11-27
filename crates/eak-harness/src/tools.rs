@@ -263,6 +263,12 @@ pub fn tool_specs() -> Vec<ToolSpec> {
             .into_iter()
             .map(|(name, description, schema)| spec(name, Read, description, schema)),
     );
+    // Component selection (M5.1, M5.6, M5.7): never changes the project.
+    v.extend(
+        crate::library::tool_specs()
+            .into_iter()
+            .map(|(name, description, schema)| spec(name, Read, description, schema)),
+    );
     v.push(spec(
         "simulation_status",
         Simulation,
@@ -1232,6 +1238,9 @@ fn read(engine: &Engine, name: &str, args: &Value) -> Result<Value, Fail> {
         }
         n if n.starts_with("intel_") => {
             crate::intel::read(engine, n, args).map_err(|e| fail(ErrorCode::InvalidArguments, e))
+        }
+        n if n.starts_with("library_") => {
+            crate::library::read(engine, n, args).map_err(|e| fail(ErrorCode::InvalidArguments, e))
         }
         other => match readonly::run(other, args, p) {
             Some(r) => r.map_err(|e| fail(ErrorCode::InvalidArguments, e)),
