@@ -24,8 +24,10 @@ Two new `eak_core::Constraints` fields. Both are `#[serde(default)]` and left ou
 | `plane_min_neck_width` | `Option<Nm>` | not declared: the plane neck check is UNKNOWN, naming the missing width (never PASS) |
 
 - **Command.** `SetEngineeringInputs` gains `return_via_max_distance` and `plane_min_neck_width`
-  (both `#[serde(default)]`). As ADR-0055 says, it replaces the whole set: an omitted field is
-  cleared. It is one undo step, class `EngineeringImpacting`. The agent tool schema lists both
+  as `Option<Option<Nm>>`. Unlike the ADR-0055 inputs, an omitted field keeps its value, `null`
+  clears it and a number sets it. A caller written before v10 (the desktop, older agents) sends
+  the set without these keys, and replacing it must not silently drop limits it never knew about
+  (library-lead review of #155). It is one undo step, class `EngineeringImpacting`. The agent tool schema lists both
   fields as nullable nm, so the tool count is unchanged.
 - **Validation.** `eak_core::integrity` refuses a declared value that is not positive. The engine
   runs integrity after every apply, so nothing changes, and a file holding such a value fails to
