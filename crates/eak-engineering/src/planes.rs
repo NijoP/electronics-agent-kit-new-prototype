@@ -348,14 +348,14 @@ pub fn narrow_necks(f: &ZoneFill, min_width: Nm) -> Vec<(u32, Point)> {
         .collect();
     // Parts of the eroded fill (8-connected, so a diagonal joint is not a split).
     let mut part = vec![0u32; n];
-    let mut parts_of: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut island_of: Vec<u32> = vec![0];
     let mut next = 0u32;
     for s in 0..n {
         if !keep[s] || part[s] != 0 {
             continue;
         }
         next += 1;
-        *parts_of.entry(f.cells[s]).or_default() += 1;
+        island_of.push(f.cells[s]);
         part[s] = next;
         let mut stack = vec![s];
         while let Some(i) = stack.pop() {
@@ -377,6 +377,26 @@ pub fn narrow_necks(f: &ZoneFill, min_width: Nm) -> Vec<(u32, Point)> {
                     }
                 }
             }
+        }
+    }
+    // The copper at a thermal-relief pad (its spokes) is sized by the relief rule, not as plane: a
+    // part holding a relief pad's centre is not a plane area.
+    let relief: BTreeSet<u32> = f
+        .reliefs
+        .iter()
+        .filter_map(|t| {
+            let c = (t.center.x - f.origin.x).div_euclid(f.pitch);
+            let r = (t.center.y - f.origin.y).div_euclid(f.pitch);
+            at(c, r).map(|i| part[i]).filter(|&q| q != 0)
+        })
+        .collect();
+    for q in part.iter_mut().filter(|q| relief.contains(&**q)) {
+        *q = 0;
+    }
+    let mut parts_of: BTreeMap<u32, u32> = BTreeMap::new();
+    for (q, &island) in island_of.iter().enumerate().skip(1) {
+        if !relief.contains(&(q as u32)) {
+            *parts_of.entry(island).or_default() += 1;
         }
     }
     // Flood every part over its island's copper at once: where two floods meet is the middle of
@@ -631,7 +651,7 @@ mod tests {
                 u32::from(!(10..20).contains(&c) || (4..6).contains(&r))
             })
             .collect();
-        let f = ZoneFill {
+        let mut f = ZoneFill {
             zone_id: "gnd".into(),
             layer: CopperLayer::Inner(1),
             net: "GND".into(),
@@ -651,5 +671,14 @@ mod tests {
         assert!((1_000_000..2_000_000).contains(&at.x), "{at:?}");
         // The bridge is 0.2 mm wide: a 0.15 mm minimum keeps the plane whole.
         assert!(narrow_necks(&f, 150_000).is_empty());
+        // Regression (acceptance board): the right block is the copper inside a thermal-relief
+        // pad, joined by a spoke; spokes are sized by the relief rule, so it is no plane neck.
+        f.reliefs.push(crate::copper::ThermalRelief {
+            footprint_id: "J1".into(),
+            pad: "1".into(),
+            center: Point::new(2_500_000, 500_000),
+            spokes: vec![],
+        });
+        assert!(narrow_necks(&f, 500_000).is_empty());
     }
 }

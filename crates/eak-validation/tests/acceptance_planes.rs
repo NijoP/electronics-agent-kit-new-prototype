@@ -235,7 +235,7 @@ fn errors(p: &Project) -> Vec<String> {
         .findings
         .iter()
         .filter(|f| f.severity == Severity::Error)
-        .map(|f| format!("{}: {}", f.rule_id, f.message))
+        .map(|f| format!("{}: {} at {:?}", f.rule_id, f.message, f.location))
         .collect()
 }
 
