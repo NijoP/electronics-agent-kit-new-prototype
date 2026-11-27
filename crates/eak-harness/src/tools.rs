@@ -253,6 +253,12 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         ),
     ));
     v.push(spec(
+        "desk_knowledge",
+        Read,
+        "DESK engineering knowledge with provenance (MIT, pinned commit): the 66-rule catalogue with each rule's DESK evidence state, scope, inputs and the EAK rules that evaluate a related concern (or NOT_IMPLEMENTED_IN_EAK), the cited references (bibliographic only, none verified) and the component families. Knowledge, never EAK limits: DESK parameters are not applied.",
+        props(json!({"rule_id": str_schema("one DESK rule, e.g. ELEC-WIDTH-001"), "family_id": str_schema("one DESK component family, e.g. ldo_regulator")}), &[]),
+    ));
+    v.push(spec(
         "power_analysis",
         Read,
         "Track-only DC drop upper bound per net with a declared current, declared currents with no copper, and return-path continuity (signal tracks over gaps in the adjacent ground plane, split ground zones). Unknown entries are reported with the reason.",
@@ -1227,6 +1233,8 @@ fn read(engine: &Engine, name: &str, args: &Value) -> Result<Value, Fail> {
         "calc_copper_voltage_drop" => {
             crate::engineering::voltage_drop(args).map_err(|e| fail(ErrorCode::InvalidArguments, e))
         }
+        "desk_knowledge" => crate::engineering::desk_knowledge(args)
+            .map_err(|e| fail(ErrorCode::InvalidArguments, e)),
         "power_analysis" => {
             crate::engineering::power_analysis(p).map_err(|e| fail(ErrorCode::Internal, e))
         }

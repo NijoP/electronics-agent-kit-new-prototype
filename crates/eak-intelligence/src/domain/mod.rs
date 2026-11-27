@@ -3,6 +3,7 @@
 
 pub mod classify;
 pub mod features;
+pub mod knowledge;
 pub mod registry;
 
 pub use classify::{

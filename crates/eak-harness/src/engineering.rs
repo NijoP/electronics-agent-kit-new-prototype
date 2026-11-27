@@ -72,3 +72,56 @@ pub fn run_gates(p: &Project, args: &Value) -> Result<GateReport, String> {
     };
     Ok(gates::evaluate(p, fab.as_ref()))
 }
+
+/// `desk_knowledge`: the DESK rule catalogue, references and component families with their
+/// provenance and evidence state (ADR-0062). `rule_id` or `family_id` selects one record.
+pub fn desk_knowledge(args: &Value) -> Result<Value, String> {
+    use eak_intelligence::domain::knowledge::{knowledge, validate, view};
+    let k = knowledge();
+    let provenance = json!({
+        "source": k.source,
+        "licence": k.licence,
+        "desk_commit": k.desk_commit,
+        "loader_problems": validate(k),
+        "note": "knowledge, not EAK limits: DESK parameters are never applied, every claim is capped by its DESK evidence state, and no reference is verified against its source text",
+    });
+    if let Some(id) = args.get("rule_id").and_then(Value::as_str) {
+        let r = k.rule(id).ok_or_else(|| format!("no DESK rule {id}"))?;
+        let v = serde_json::to_value(view(r)).map_err(|e| e.to_string())?;
+        return Ok(json!({"provenance": provenance, "rule": v}));
+    }
+    if let Some(id) = args.get("family_id").and_then(Value::as_str) {
+        let f = k
+            .family(id)
+            .ok_or_else(|| format!("no DESK component family {id}"))?;
+        let v = serde_json::to_value(f).map_err(|e| e.to_string())?;
+        return Ok(json!({"provenance": provenance, "family": v}));
+    }
+    let rules: Vec<Value> = k
+        .rules
+        .iter()
+        .map(|r| {
+            let v = view(r);
+            json!({
+                "rule_id": r.rule_id,
+                "name": r.name,
+                "status": r.status,
+                "severity": r.severity,
+                "scope": r.scope,
+                "eak_rules": v.eak_rules,
+                "eak_state": v.eak_state,
+            })
+        })
+        .collect();
+    let families: Vec<Value> = k
+        .families
+        .iter()
+        .map(|f| json!({"family_id": f.family_id, "name": f.name, "group": f.group}))
+        .collect();
+    Ok(json!({
+        "provenance": provenance,
+        "rules": rules,
+        "references": k.references,
+        "families": families,
+    }))
+}

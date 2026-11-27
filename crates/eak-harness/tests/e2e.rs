@@ -451,3 +451,31 @@ fn cli_records_requirements_and_an_agent_never_confirms_them() {
     assert_eq!(usb["source"]["kind"], "calculation", "{r}");
     let _ = std::fs::remove_dir_all(root);
 }
+
+/// ADR-0062 (M4.5) through the real CLI: the DESK knowledge comes with its licence and commit,
+/// loads without problems, never claims a verified source, and says which DESK rules EAK does
+/// not implement.
+#[test]
+fn cli_reads_desk_knowledge_with_provenance() {
+    let root = temp_dir("desk");
+    let dir = root.join("desk.eak");
+    let (code, v) = eak(&dir, &["new", dir.to_str().unwrap(), "Desk"]);
+    assert_eq!(code, 0, "{v}");
+    let (code, r) = eak(&dir, &["call", "desk_knowledge"]);
+    assert_eq!(code, 0, "{r}");
+    let k = &r["result"];
+    assert_eq!(k["provenance"]["licence"], "MIT", "{r}");
+    assert_eq!(k["provenance"]["loader_problems"], json!([]), "{r}");
+    assert_eq!(k["rules"].as_array().unwrap().len(), 66);
+    let (code, r) = eak(
+        &dir,
+        &["call", "desk_knowledge", r#"{"rule_id":"ELEC-CREEP-004"}"#],
+    );
+    assert_eq!(code, 0, "{r}");
+    let rule = &r["result"]["rule"];
+    assert_eq!(rule["eak_state"], "NOT_IMPLEMENTED_IN_EAK", "{r}");
+    assert_eq!(rule["may_present_as_requirement"], false, "{r}");
+    let (code, r) = eak(&dir, &["call", "desk_knowledge", r#"{"rule_id":"NOPE"}"#]);
+    assert_ne!(code, 0, "{r}");
+    let _ = std::fs::remove_dir_all(root);
+}
