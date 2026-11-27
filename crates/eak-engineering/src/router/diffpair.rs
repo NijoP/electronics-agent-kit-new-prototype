@@ -156,7 +156,7 @@ fn offset(pts: &[Point], o: f64) -> Option<Vec<Point>> {
 }
 
 /// Grow `m` (a `cols` x `rows` mask) by `k` cells in every direction (square).
-fn dilate(m: &[bool], cols: usize, rows: usize, k: usize) -> Vec<bool> {
+pub(super) fn dilate(m: &[bool], cols: usize, rows: usize, k: usize) -> Vec<bool> {
     if k == 0 {
         return m.to_vec();
     }
@@ -509,6 +509,13 @@ pub(super) fn attempt(
     if la.is_empty() || lb.is_empty() {
         return Err("the members' pads share no routable layer at one end".into());
     }
+    // The members keep to the reference copper under the pair's ends (`split`).
+    let guard = o + w / 2.0 + env.margin;
+    let mask = split::for_net(env, &cp.net, [ca, cb], guard, reach + 2.0 * pitch);
+    let costs = &Costs {
+        split: mask.as_ref().or(costs.split),
+        ..*costs
+    };
     let path = astar(
         &grid,
         idp,
